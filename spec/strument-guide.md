@@ -29,7 +29,7 @@ The base-coder cannot be transliterated (it needs a live model) and cannot be ha
 
 ## 2. Settled decisions & the deviation protocol
 
-The specs hold the decisions. A few standalone ones, not to relitigate: tree-sitter via **gotreesitter** (pure Go, no cgo) using its low-level **`Query`** API, not the `Tagger`; CLI via **Kong**; config in **Starlark** (`go.starlark.net`); a **single OpenAI-compatible client** speaking OpenRouter's dialect (no litellm, no MCP, no function-calling); streaming markdown **hand-rolled by porting smd.js** (no Charm/bubbletea); git by **shelling out** (not go-git); `--no-git` is the **default**.
+The specs hold the decisions. A few standalone ones, not to relitigate: tree-sitter via **gotreesitter** (pure Go, no cgo) using its low-level **`Query`** API, not the `Tagger`; CLI via **Kong**; config in **Starlark** (`go.starlark.net`); a **single OpenAI-compatible client** speaking OpenRouter's dialect (no litellm, no MCP, no function-calling); streaming markdown **hand-rolled by porting smd.js** (no Charm/bubbletea); git by **shelling out** (not go-git).
 
 **Deviation protocol (verbatim instruction to the implementor):** *If you want to deviate from any decision in a spec or in §2, stop. Write a three-paragraph analysis in `STATUS.md` (what the spec says, why you'd deviate, what it costs), pick a different phase, and continue there until the human responds. Do not deviate silently. Do not relitigate a settled decision because a phase is hard.*
 
