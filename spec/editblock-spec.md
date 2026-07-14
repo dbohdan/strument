@@ -1,6 +1,6 @@
 # Spec: aider's editblock (SEARCH/REPLACE) edit format
 
-Source of truth: `aider/coders/editblock_coder.py` at v0.86.0 (main, Aug 2025), 657 lines.
+Source of truth: `aider/coders/editblock_coder.py` at 5dc9490bb35f9729ef2c95d00a19ccd30c26339c (0.86.3.dev), 657 lines.
 Companion prompt contract: `aider/coders/editblock_prompts.py`.
 Test oracle: `tests/basic/test_editblock.py` (618 lines) and `tests/basic/test_find_or_blocks.py`.
 

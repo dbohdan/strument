@@ -1,6 +1,6 @@
 # Spec: Strument base coder / chat loop — v4 (final)
 
-Source: `aider/coders/base_coder.py` @ `5dc9490` (0.86.3.dev), with `chat_chunks.py`, `reasoning_tags.py`, editblock coder + prompts (separate specs).
+Source: `aider/coders/base_coder.py` @ `5dc9490bb35f9729ef2c95d00a19ccd30c26339c` (0.86.3.dev), with `chat_chunks.py`, `reasoning_tags.py`, editblock coder + prompts (separate specs).
 
 **v4 changes:** fixes the H1 accumulator-reset bug (reset per-send, not per-message); recasts `sendMessage` as a phase table with explicit terminal returns for every outcome; defines the continuation cap, Failed-after-partial, and empty-response outcomes; corrects the reminder gate (sys/user paths + unknown-max); enumerates the fence list and the `chooseFence` drop-unreadable side effect; makes shell execution gate on config; inlines slot contents so this file is self-contained.
 
@@ -59,7 +59,7 @@ message = preproc ? preprocUserInput(userMessage) : userMessage   // "" -> retur
 for message != "":
     outcome, reflection = sendMessage(ctx, message)
     if outcome != Reflect: break
-    if numReflections >= 3: warn("Maximum of 3 follow-up attempts reached."); return
+    if numReflections >= 3: warn("Only 3 reflections allowed, stopping."); return [Divergence]
     numReflections++
     message = reflection
 ```

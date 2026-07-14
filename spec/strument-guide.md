@@ -29,11 +29,13 @@ The base-coder cannot be transliterated (it needs a live model) and cannot be ha
 
 ## 2. Settled decisions & the deviation protocol
 
-The specs hold the decisions. A few standalone ones, not to relitigate: tree-sitter via **gotreesitter** (pure Go, no cgo) using its low-level **`Query`** API, not the `Tagger`; CLI via **Kong**; config in **Starlark** (`go.starlark.net`); a **single OpenAI-compatible client** speaking OpenRouter's dialect (no litellm, no MCP, no function-calling); streaming markdown **hand-rolled by porting smd.js** (no Charm/bubbletea); git by **shelling out** (not go-git).
+The specs hold the decisions. A few standalone ones, not to relitigate: tree-sitter via **gotreesitter** (pure Go, no cgo) using its low-level **`Query`** API, not the `Tagger`; CLI via **Kong**; config in **Starlark** (`go.starlark.net`); a **single OpenAI-compatible client** speaking OpenRouter's dialect (no litellm, no MCP, no function-calling); streaming markdown **hand-rolled by porting smd.js** (no Charm/bubbletea); git by **shelling out** (not go-git); readline via **`github.com/ergochat/readline`**.
 
 **Deviation protocol (verbatim instruction to the implementor):** *If you want to deviate from any decision in a spec or in §2, stop. Write a three-paragraph analysis in `STATUS.md` (what the spec says, why you'd deviate, what it costs), pick a different phase, and continue there until the human responds. Do not deviate silently. Do not relitigate a settled decision because a phase is hard.*
 
 Two decisions are already **fix-and-declare deviations from aider** — implement the fix, not the bug: the compounding `sqrt` inside the repomap definer loop (compute once), and the tag double-append (emit once). Both are in `repomap-spec.md §3.4/§1.1`. Golden fixtures are regenerated from the corrected Go, and asserted on ranking + rendered skeleton, never raw tag-emission order.
+
+**Cross-cutting conventions:** *Silence means follow `reference/`; explicit `[Deferred]` means don't build it.* If a spec is silent on a detail, check the pinned aider source — that's the answer. If a feature is labeled `[Deferred]`, it is not v1 scope; do not implement it "while you're at it." Dependency versions are resolved at phase 0 by querying the module proxy, never asserted from a model's memory (two Opus sessions produced two different wrong version numbers for the same library).
 
 ## 3. Directory layout
 
@@ -48,7 +50,7 @@ strument/
     client/                OpenAI/OpenRouter client
     render/                streaming markdown (smd.js port)
     repl/                  readline, prompt, live render
-  reference/               aider @ 5dc9490 — READ-ONLY, for grep; excluded from build
+  reference/               aider @ 5dc9490bb35f9729ef2c95d00a19ccd30c26339c — READ-ONLY, for grep; excluded from build
   testdata/
     fixtures/              record/replay JSON-Lines
     transliterated/        Go ports of aider's pytest cases
@@ -56,7 +58,37 @@ strument/
   STATUS.md                the journal — memory across context compactions
 ```
 
-`reference/` is the aider clone pinned at **`5dc9490` (0.86.3.dev)** — pin the SHA, never the v0.86.0 tag; they differ, and several spec facts (the double-append, the compounding `sqrt`) exist only at the dev commit. `STATUS.md` is the phase journal and the deviation log; it is how the run survives context-window compaction, exactly as in starlark-py.
+`reference/` is the aider clone pinned at **`5dc9490bb35f9729ef2c95d00a19ccd30c26339c` (0.86.3.dev)** — pin the SHA, never the v0.86.0 tag; they differ, and several spec facts (the double-append, the compounding `sqrt`) exist only at the dev commit. `STATUS.md` is the phase journal and the deviation log; it is how the run survives context-window compaction, exactly as in starlark-py. Use the template below; update it each phase transition.
+
+**`STATUS.md` template:**
+```
+# Strument port — STATUS
+
+## Current phase
+Phase N — <name> — <started YYYY-MM-DD>
+
+## Phase log
+
+### Phase 0 — Scaffold — [done | in-progress | blocked]
+- Oracle: <e.g. builds + empty CI green>
+- Started: YYYY-MM-DD
+- Finished: YYYY-MM-DD
+- Deviations: (bullet list; each links to a Deviations entry below)
+- Notes: (running log)
+
+### Phase 1 — editblock — ...
+...
+
+## Deviations
+### D01: <one-line summary> (Phase N, YYYY-MM-DD)
+**What the spec says:** ...
+**Why deviate:** ...
+**What it costs:** ...
+**Resolution:** [pending human | applied unilaterally with justification | reverted]
+
+## Pending questions for human
+- [ ] <question>
+```
 
 ## 4. Build sequence & phase roadmap
 
@@ -79,7 +111,7 @@ Phase 5 is the hard one and everyone should know it going in: the base-coder is 
 
 ## 5. Stopping conditions (verbatim to the implementor)
 
-*Stop and write to `STATUS.md`, then switch phases, if: (a) a decision is genuinely Pending — the specs don't cover a case you've hit; (b) a spec claim contradicts what `reference/` actually says at `5dc9490` — quote the file:line, do not "fix" the spec silently; (c) an oracle can't be made deterministic without a live LLM — the automated suite must never call one. Do **not** stop because a phase is hard, because a test is tedious to port, or because you'd prefer a different design. Hardness is expected; pendingness is the only blocker.*
+*Stop and write to `STATUS.md`, then switch phases, if: (a) a decision is genuinely Pending — the specs don't cover a case you've hit; (b) a spec claim contradicts what `reference/` actually says at `5dc9490bb35f9729ef2c95d00a19ccd30c26339c` — quote the file:line, do not "fix" the spec silently; (c) an oracle can't be made deterministic without a live LLM — the automated suite must never call one. Do **not** stop because a phase is hard, because a test is tedious to port, or because you'd prefer a different design. Hardness is expected; pendingness is the only blocker.*
 
 ## 6. Runtime model standing order
 
@@ -98,3 +130,19 @@ From the specs' `[Deferred]` labels, so the run doesn't scope-creep: type-aware 
 ---
 
 *The conversations that produced the four specs were the work; this guide and those specs are the artifact. The autonomous run should be, as starlark-py was, comparatively mechanical — provided nothing settled here gets relitigated once code begins.*
+
+## 9. Dependency versions (resolved 2026-07-14)
+
+*Dependency versions are resolved at phase 0 by querying the module proxy, never asserted from a model's memory.*
+
+| Module | Pin |
+|---|---|
+| `github.com/odvcencio/gotreesitter` | v0.36.0 |
+| `github.com/alecthomas/kong` | v1.15.0 |
+| `github.com/alecthomas/chroma/v2` | v2.27.0 |
+| `go.starlark.net` | v0.0.0-20260708150628-5395d018f003 |
+| `github.com/multiformats/go-multihash` | v0.2.3 |
+| `github.com/ergochat/readline` | v0.1.3 |
+| `github.com/creack/pty` | v1.1.24 |
+| `github.com/Netflix/go-expect` | v0.0.0-20220104043353-73e0943537d2 |
+| Go toolchain | go1.26.5 |

@@ -1,7 +1,7 @@
 # Spec: Strument repo map (ranked tag map) — v2
 
 Source of truth: `aider/repomap.py` at **commit `5dc9490bb35f9729ef2c95d00a19ccd30c26339c` (0.86.3.dev)** and `grep_ast/grep_ast.py` (TreeContext, grep_ast ~0.9). Pin the SHA, not the release tag — the tagged v0.86.0 differs (it lacks the double-append and the compounding-`sqrt` quirks addressed below).
-Query assets: `aider/queries/tree-sitter-language-pack/<lang>-tags.scm` (69 files) — copied **verbatim** and executed through gotreesitter's low-level `Query` API (see §1.1; **not** the `Tagger`).
+Query assets: `aider/queries/tree-sitter-language-pack/<lang>-tags.scm` — **31 files** at `5dc9490` (a legacy `tree-sitter-languages/` dir with 27 more is selected only when `USING_TSL_PACK` is false; ignore it). Copy verbatim. **Coverage bound:** gotreesitter's grammar count is irrelevant to the map — a language yields tags only if a `-tags.scm` exists here.
 Runtime substrate: gotreesitter (pure Go, no cgo).
 
 Four stages: **extract tags → build reference graph → personalized PageRank → fit to budget and render.**
@@ -82,7 +82,7 @@ Emit **each qualifying capture once**. Do **not** replicate the upstream double-
 
 ### 1.2 The `.scm` queries
 
-Embed `aider/queries/tree-sitter-language-pack/*-tags.scm` verbatim. At startup-test time, compile every query in the Strument language set (Go, Python, Rust, Lua, Clojure, Crystal + config languages) under gotreesitter's `Query` and fail the build on any that don't compile — do not assume gotreesitter's reported 69/69 covers your exact set or that predicate support is identical.
+Strument's v1 tags languages are exactly those with a shipped query. Of the 31, the ones we care about are **Go, Python, Rust, Lua, Clojure** — all present and verified. **Crystal is deferred to v2** (no `crystal-tags.scm` in aider; would require vendoring one upstream). There are no config-language tags queries (no starlark/tcl/dhall/pkl/nickel), and none are needed — a def/ref graph of `.strument.star` has no value. Config and unsupported files appear as **bare entries** per §3.6, which is correct behavior. Adding a language in v2 = vendoring a `-tags.scm`, not flipping a flag.
 
 ### 1.3 Reference backfill (definitions-only languages)
 
