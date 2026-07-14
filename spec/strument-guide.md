@@ -10,6 +10,7 @@ This is the prompt, not the code. The methodological bet — proven once on star
 - `config-schema.md` — the Starlark config surface + the trust gate.
 - `repomap-spec.md` — ranked tag map (tags → graph → PageRank → TreeContext).
 - `basecoder-spec.md` — the orchestration spine (assemble → stream → reflect → apply → shell → commit → cost).
+- `fixture-harness-spec.md` — fixture capture & replay.
 
 Each was hardened through adversarial review against the pinned aider source. Treat them as frozen. This guide adds only the connective tissue: order, oracle, modes, deviation protocol, stopping conditions.
 
