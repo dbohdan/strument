@@ -33,7 +33,9 @@ The user config is never gated (it is the trust root). `env()` is not special-ca
 
 Trust records are keyed by hash in **go-multihash** format (`github.com/multiformats/go-multihash`): a self-describing digest, `varint(code) ‖ varint(length) ‖ digest`. Default function **sha2-256** (multihash code `0x12`), maximally portable.
 
-Self-description preempts hash migration. If Strument later moves to blake3 (code `0x1e`) or anything else, existing records stay unambiguously decodable and each is re-verified under **the algorithm it was written with** — no "all trust invalidated on upgrade," no out-of-band version field. blake3 rides the identical record format untouched; for a sub-kilobyte config the hash cost is noise, so sha2-256 is the default and speed is not a reason to change it. The record is `(abspath, multihash)`; store it under the user config dir (e.g. `$XDG_CONFIG_HOME/strument/trust`).
+Self-description preempts hash migration. If Strument later moves to blake3 (code `0x1e`) or anything else, existing records stay unambiguously decodable and each is re-verified under **the algorithm it was written with** — no "all trust invalidated on upgrade," no out-of-band version field. blake3 rides the identical record format untouched; for a sub-kilobyte config the hash cost is noise, so sha2-256 is the default and speed is not a reason to change it.
+
+The record is `(abspath, multihash)`; store it under the user **state** dir (`$XDG_STATE_HOME/strument/trust`, defaulting to `~/.local/state/strument/trust`). This file is machine-local and program-written; it must not be synced between hosts, since trust in a path on one machine says nothing about the file at that path on another.
 
 ## 3. The Starlark surface — three builtins
 
