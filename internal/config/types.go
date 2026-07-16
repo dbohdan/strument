@@ -5,6 +5,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/dbohdan/strument/internal/llm"
 )
@@ -76,12 +77,8 @@ func (m *Model) RequestExtraParams() map[string]any {
 		return nil
 	}
 	out := make(map[string]any, len(m.Provider.ExtraParams)+len(m.ExtraParams))
-	for k, v := range m.Provider.ExtraParams {
-		out[k] = v
-	}
-	for k, v := range m.ExtraParams {
-		out[k] = v
-	}
+	maps.Copy(out, m.Provider.ExtraParams)
+	maps.Copy(out, m.ExtraParams)
 	return out
 }
 
@@ -102,7 +99,7 @@ func validateExtraParams(where string, params map[string]any) error {
 		}
 	}
 	if _, err := json.Marshal(params); err != nil {
-		return fmt.Errorf("%s: extra_params must be JSON-serializable: %v", where, err)
+		return fmt.Errorf("%s: extra_params must be JSON-serializable: %w", where, err)
 	}
 	return nil
 }

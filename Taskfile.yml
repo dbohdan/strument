@@ -1,0 +1,78 @@
+version: '3'
+
+env:
+  CGO_ENABLED: 0
+
+tasks:
+  default:
+    deps:
+      - all
+
+  all:
+    desc: 'Build and test everything'
+    deps:
+      - build
+      - test
+
+  build:
+    desc: 'Build all components'
+    deps:
+      - build:strument
+      - build:strumentrec
+
+  build:strument:
+    desc: 'Build the strument binary'
+    run: once
+    cmds:
+      - go build -trimpath ./cmd/strument
+    sources:
+      - cmd/strument/**/*.go
+      - internal/**/*.go
+    generates:
+      - strument{{exeExt}}
+
+  build:strumentrec:
+    desc: 'Build the fixture recorder'
+    run: once
+    cmds:
+      - go build -trimpath ./cmd/strumentrec
+    sources:
+      - cmd/strumentrec/**/*.go
+      - internal/**/*.go
+    generates:
+      - strumentrec{{exeExt}}
+
+  check:
+    desc: 'Build, format, lint, and test everything'
+    deps:
+      - build
+      - format
+      - lint
+      - test
+
+  clean:
+    desc: 'Clean up binaries'
+    cmds:
+      - rm -f strument{{exeExt}} strumentrec{{exeExt}}
+
+  format:
+    desc: 'Format source code'
+    cmds:
+      - golangci-lint fmt ./...
+
+  lint:
+    desc: 'Run linters'
+    cmds:
+      - golangci-lint run
+
+  release:
+    desc: 'Prepare a release'
+    deps:
+      - build
+    cmds:
+      - VERSION=$(./strument{{exeExt}} --version) go run ./script/release
+
+  test:
+    desc: 'Run tests'
+    cmds:
+      - go test ./...

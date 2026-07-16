@@ -2,6 +2,7 @@ package fixture
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -101,7 +102,8 @@ func TestStreamStubReplaysAndErrors(t *testing.T) {
 	if len(texts) != 1 || texts[0] != "partial" {
 		t.Errorf("texts = %v", texts)
 	}
-	se, ok := gotErr.(*llm.StreamError)
+	se := &llm.StreamError{}
+	ok := errors.As(gotErr, &se)
 	if !ok || se.Class != llm.ErrNetwork || !se.Retryable() {
 		t.Errorf("err = %v", gotErr)
 	}

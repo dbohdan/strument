@@ -334,7 +334,7 @@ func (rm *RepoMap) renderTree(inv *invocation, absFname, relFname string, lois [
 
 	ctx, ok := inv.treeCtx[relFname]
 	if !ok {
-		ctx = rm.buildTreeContext(inv, absFname, relFname)
+		ctx = rm.buildTreeContext(absFname)
 		inv.treeCtx[relFname] = ctx
 	}
 	if ctx == nil {
@@ -349,7 +349,7 @@ func (rm *RepoMap) renderTree(inv *invocation, absFname, relFname string, lois [
 	return res
 }
 
-func (rm *RepoMap) buildTreeContext(inv *invocation, absFname, relFname string) *TreeContext {
+func (rm *RepoMap) buildTreeContext(absFname string) *TreeContext {
 	src, err := os.ReadFile(absFname)
 	if err != nil {
 		return nil

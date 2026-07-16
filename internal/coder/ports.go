@@ -105,9 +105,9 @@ func (RealClock) Now() time.Time        { return time.Now() }
 // deltas as they arrive; StreamReasoning receives reasoning deltas
 // (display-only, never parsed or persisted, §4).
 type Output interface {
-	Print(format string, args ...any)
-	Warning(format string, args ...any)
-	Error(format string, args ...any)
+	Printf(format string, args ...any)
+	Warningf(format string, args ...any)
+	Errorf(format string, args ...any)
 	StreamText(delta string)
 	StreamReasoning(delta string)
 	// FlushStream marks the end of a send's live rendering.

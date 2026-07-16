@@ -19,8 +19,6 @@ func newSequenceMatcher[T comparable](a, b []T) *sequenceMatcher[T] {
 	return m
 }
 
-func (m *sequenceMatcher[T]) setSeq1(a []T) { m.a = a }
-
 func (m *sequenceMatcher[T]) setSeq2(b []T) {
 	m.b = b
 	m.b2j = make(map[T][]int)

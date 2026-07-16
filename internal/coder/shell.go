@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"slices"
@@ -64,8 +65,8 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	}
 
 	command := strings.TrimSpace(block)
-	c.Out.Print("")
-	c.Out.Print("Running %s", command)
+	c.Out.Printf("")
+	c.Out.Printf("Running %s", command)
 
 	runner := c.Runner
 	if runner == nil {
@@ -73,7 +74,7 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	}
 	exitCode, output, err := runner.Run(ctx, command, c.Root)
 	if err != nil {
-		c.Out.Error("Error running command: %v", err)
+		c.Out.Errorf("Error running command: %v", err)
 	}
 
 	result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
@@ -91,7 +92,7 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	if numLines == 1 {
 		plural = "line"
 	}
-	c.Out.Print("Added %d %s of output to the chat.", numLines, plural)
+	c.Out.Printf("Added %d %s of output to the chat.", numLines, plural)
 	return result
 }
 
@@ -104,7 +105,7 @@ type PipeRunner struct {
 }
 
 func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, string, error) {
-	cmd := exec.CommandContext(ctx, shellPath(), "-c", block)
+	cmd := exec.CommandContext(ctx, shellPath(), "-c", block) //nolint:gosec // Running user-confirmed model shell commands is this feature.
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
 
@@ -119,7 +120,8 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 
 	exitCode := 0
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
+		ee := &exec.ExitError{}
+		if errors.As(err, &ee) {
 			exitCode = ee.ExitCode()
 			err = nil
 		} else {

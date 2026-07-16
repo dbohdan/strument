@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -23,13 +24,13 @@ import (
 var version = "0.0.0-dev"
 
 type chatCmd struct {
-	Message  string   `short:"m" help:"Send one message, apply the edits, and exit (script mode)."`
+	Message  string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
 	Model    string   `help:"Model alias from config; defaults to the config's default."`
-	NoGit    bool     `name:"no-git" help:"Disable git integration even inside a repository."`
-	DryRun   bool     `name:"dry-run" help:"Report edits without writing files or committing."`
+	NoGit    bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
+	DryRun   bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
 	Yes      bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
-	YesShell bool     `name:"yes-shell" help:"Also auto-run model-suggested shell commands."`
-	Files    []string `arg:"" optional:"" type:"existingfile" help:"Files to add to the chat."`
+	YesShell bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
+	Files    []string `arg:""                                                               help:"Files to add to the chat." optional:"" type:"existingfile"`
 }
 
 func (c *chatCmd) Run() error {
@@ -71,7 +72,7 @@ func (c *chatCmd) Run() error {
 	}
 
 	if c.Message == "" {
-		return fmt.Errorf("the interactive REPL arrives in phase 7; use --message for script mode")
+		return errors.New("the interactive REPL arrives in phase 7; use --message for script mode")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -104,7 +105,7 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
 }
 
 type trustCmd struct {
-	Path string `arg:"" optional:"" help:"Project directory containing .strument.star (default: cwd)."`
+	Path string `arg:"" help:"Project directory containing .strument.star (default: cwd)." optional:""`
 }
 
 func (c *trustCmd) Run() error {
@@ -124,8 +125,8 @@ func (c *trustCmd) Run() error {
 }
 
 type cli struct {
-	Chat    chatCmd          `cmd:"" default:"withargs" help:"Chat with a model about the given files (default command)."`
-	Trust   trustCmd         `cmd:"" help:"Trust the project's .strument.star config file."`
+	Chat    chatCmd          `cmd:""                         default:"withargs"                                     help:"Chat with a model about the given files (default command)."`
+	Trust   trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
 	Version kong.VersionFlag `help:"Print version and exit."`
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dbohdan/strument/internal/editblock"
@@ -34,8 +35,8 @@ func (c *Coder) applyWholeFileUpdates(answer string) ([]string, string) {
 	fen := editblock.Fence{Open: c.fence.open, Close: c.fence.close}
 	edits, err := editblock.ParseWholeFile(answer, fen, c.inchatRelativeFiles())
 	if err != nil {
-		c.Out.Error("The LLM did not conform to the edit format.")
-		c.Out.Print("%s", err.Error())
+		c.Out.Errorf("The LLM did not conform to the edit format.")
+		c.Out.Printf("%s", err.Error())
 		return nil, err.Error()
 	}
 	if len(edits) == 0 {
@@ -48,7 +49,7 @@ func (c *Coder) applyWholeFileUpdates(answer string) ([]string, string) {
 	var edited []string
 	for _, e := range edits {
 		if reason := c.unsafePath(e.Path); reason != "" {
-			c.Out.Error("Skipping edit to %s: %s", e.Path, reason)
+			c.Out.Errorf("Skipping edit to %s: %s", e.Path, reason)
 			continue
 		}
 		if !c.allowedToEdit(e.Path, needDirtyCommit) {
@@ -64,16 +65,16 @@ func (c *Coder) applyWholeFileUpdates(answer string) ([]string, string) {
 	}
 	if !c.DryRun {
 		if err := c.writeAtomically(plan); err != nil {
-			c.Out.Error("Exception while updating files:")
-			c.Out.Error("%s", err.Error())
+			c.Out.Errorf("Exception while updating files:")
+			c.Out.Errorf("%s", err.Error())
 			return nil, ""
 		}
 	}
 	for _, p := range edited {
 		if c.DryRun {
-			c.Out.Print("Did not apply edit to %s (--dry-run)", p)
+			c.Out.Printf("Did not apply edit to %s (--dry-run)", p)
 		} else {
-			c.Out.Print("Applied edit to %s", p)
+			c.Out.Printf("Applied edit to %s", p)
 		}
 	}
 	return edited, ""
@@ -86,8 +87,8 @@ func (c *Coder) applyWholeFileUpdates(answer string) ([]string, string) {
 func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 	blocks, err := editblock.FindBlocks(answer, editblock.Fence{Open: c.fence.open, Close: c.fence.close}, c.inchatRelativeFiles())
 	if err != nil {
-		c.Out.Error("The LLM did not conform to the edit format.")
-		c.Out.Print("%s", err.Error())
+		c.Out.Errorf("The LLM did not conform to the edit format.")
+		c.Out.Printf("%s", err.Error())
 		return nil, err.Error()
 	}
 
@@ -108,7 +109,7 @@ func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 	var safe []editblock.Edit
 	for _, e := range edits {
 		if reason := c.unsafePath(e.Path); reason != "" {
-			c.Out.Error("Skipping edit to %s: %s", e.Path, reason)
+			c.Out.Errorf("Skipping edit to %s: %s", e.Path, reason)
 			continue
 		}
 		safe = append(safe, e)
@@ -157,8 +158,8 @@ func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 
 	if !c.DryRun {
 		if err := c.writeAtomically(plan); err != nil {
-			c.Out.Error("Exception while updating files:")
-			c.Out.Error("%s", err.Error())
+			c.Out.Errorf("Exception while updating files:")
+			c.Out.Errorf("%s", err.Error())
 			return nil, ""
 		}
 	}
@@ -176,15 +177,15 @@ func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 
 	for _, p := range edited {
 		if c.DryRun {
-			c.Out.Print("Did not apply edit to %s (--dry-run)", p)
+			c.Out.Printf("Did not apply edit to %s (--dry-run)", p)
 		} else {
-			c.Out.Print("Applied edit to %s", p)
+			c.Out.Printf("Applied edit to %s", p)
 		}
 	}
 
 	if plan.Report != "" {
-		c.Out.Error("The LLM did not conform to the edit format.")
-		c.Out.Print("%s", plan.Report)
+		c.Out.Errorf("The LLM did not conform to the edit format.")
+		c.Out.Printf("%s", plan.Report)
 		return edited, plan.Report
 	}
 	return edited, ""
@@ -237,32 +238,26 @@ func (c *Coder) unsafePath(rel string) string {
 func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool {
 	full := c.absRootPath(rel)
 
-	inChat := false
-	for _, f := range c.absFnames {
-		if f == full {
-			inChat = true
-			break
-		}
-	}
+	inChat := slices.Contains(c.absFnames, full)
 	if inChat {
 		c.checkForDirtyCommit(rel, needDirtyCommit)
 		return true
 	}
 
 	if c.Repo != nil && c.Repo.GitIgnored(rel) {
-		c.Out.Warning("Skipping edits to %s that matches gitignore spec.", rel)
+		c.Out.Warningf("Skipping edits to %s that matches gitignore spec.", rel)
 		return false
 	}
 
 	if _, err := os.Stat(full); err != nil {
 		yes, _ := c.Confirm.Confirm(ConfirmRequest{Prompt: "Create new file?", Subject: rel})
 		if !yes {
-			c.Out.Print("Skipping edits to %s", rel)
+			c.Out.Printf("Skipping edits to %s", rel)
 			return false
 		}
 		if !c.DryRun {
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-				c.Out.Error("Unable to create %s, skipping edits.", rel)
+				c.Out.Errorf("Unable to create %s, skipping edits.", rel)
 				return false
 			}
 		}
@@ -275,7 +270,7 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool 
 		Subject: rel,
 	})
 	if !yes {
-		c.Out.Print("Skipping edits to %s", rel)
+		c.Out.Printf("Skipping edits to %s", rel)
 		return false
 	}
 	c.absFnames = append(c.absFnames, full)
@@ -287,7 +282,7 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	if c.Repo == nil || !c.Repo.IsDirty(rel) {
 		return
 	}
-	c.Out.Print("Committing %s before applying edits.", rel)
+	c.Out.Printf("Committing %s before applying edits.", rel)
 	needDirtyCommit[rel] = true
 }
 
@@ -303,7 +298,7 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 		files = append(files, f)
 	}
 	if _, _, _, err := c.Repo.Commit(files, "Committing dirty files before edits"); err != nil {
-		c.Out.Error("Unable to commit dirty files: %v", err)
+		c.Out.Errorf("Unable to commit dirty files: %v", err)
 	}
 }
 
@@ -322,7 +317,7 @@ func (c *Coder) writeAtomically(plan editblock.PlanResult) error {
 		for _, b := range backups {
 			full := filepath.Join(c.Root, filepath.FromSlash(b.path))
 			if b.existed {
-				_ = os.WriteFile(full, b.content, 0o644)
+				_ = os.WriteFile(full, b.content, 0o644) //nolint:gosec // Restoring a project file; sources are world-readable.
 			} else {
 				_ = os.Remove(full)
 			}

@@ -119,7 +119,7 @@ default = "evil"
 `
 	var warned []string
 	opts := harness(t, userConfig, project, testEnv)
-	opts.Warn = func(format string, args ...any) { warned = append(warned, format) }
+	opts.Warn = func(format string, _ ...any) { warned = append(warned, format) }
 	cfg, err := Load(opts)
 	if err != nil {
 		t.Fatal(err)

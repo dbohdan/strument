@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -162,15 +163,17 @@ data: [DONE]
 
 	var kinds []string
 	var answer string
+	var answerSb165 strings.Builder
 	for ev, err := range c.Send(context.Background(), llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")}}) {
 		if err != nil {
 			t.Fatal(err)
 		}
 		kinds = append(kinds, string(ev.Kind))
 		if ev.Kind == llm.EventAnswer {
-			answer += ev.Text
+			answerSb165.WriteString(ev.Text)
 		}
 	}
+	answer += answerSb165.String()
 	if strings.Join(kinds, ",") != "Reasoning,Answer,Finish,Usage" {
 		t.Errorf("kinds = %v", kinds)
 	}
@@ -212,7 +215,8 @@ func TestErrorClassification(t *testing.T) {
 			gotErr = err
 			break
 		}
-		se, ok := gotErr.(*llm.StreamError)
+		se := &llm.StreamError{}
+		ok := errors.As(gotErr, &se)
 		if !ok || se.Class != tc.want {
 			t.Errorf("status %d: err = %v (want class %s)", tc.status, gotErr, tc.want)
 			continue
@@ -240,7 +244,8 @@ data: {"error":{"message":"upstream failed","code":502}}
 	if len(events) != 1 || events[0].Text != "partial" {
 		t.Errorf("events = %+v", events)
 	}
-	if se, ok := gotErr.(*llm.StreamError); !ok || se.Class != llm.ErrServer {
+	var se *llm.StreamError
+	if !errors.As(gotErr, &se) || se.Class != llm.ErrServer {
 		t.Errorf("err = %v", gotErr)
 	}
 }
@@ -272,7 +277,8 @@ func TestMidStreamConnectionDrop(t *testing.T) {
 	if len(events) != 1 {
 		t.Errorf("events = %+v", events)
 	}
-	if se, ok := gotErr.(*llm.StreamError); !ok || se.Class != llm.ErrNetwork || !se.Retryable() {
+	var se *llm.StreamError
+	if !errors.As(gotErr, &se) || se.Class != llm.ErrNetwork || !se.Retryable() {
 		t.Errorf("err = %v", gotErr)
 	}
 }

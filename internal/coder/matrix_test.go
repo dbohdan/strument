@@ -1,6 +1,7 @@
 // The basecoder-spec §11 failure/invariant matrix, as inline fixture
 // scenarios plus targeted tests where a fixture can't drive the condition
 // (interrupts, clocks).
+
 package coder
 
 import (
@@ -24,12 +25,12 @@ func (f *fastClock) Now() time.Time        { return time.Unix(0, 0) }
 // fakeRepo provides tracked files so file mentions have addable targets.
 type fakeRepo struct{ tracked []string }
 
-func (r *fakeRepo) Root() string               { return "" }
-func (r *fakeRepo) TrackedFiles() []string     { return r.tracked }
-func (r *fakeRepo) PathInRepo(rel string) bool { return true }
-func (r *fakeRepo) IsDirty(rel string) bool    { return false }
-func (r *fakeRepo) GitIgnored(rel string) bool { return false }
-func (r *fakeRepo) HeadSHA() string            { return "deadbeef" }
+func (r *fakeRepo) Root() string             { return "" }
+func (r *fakeRepo) TrackedFiles() []string   { return r.tracked }
+func (r *fakeRepo) PathInRepo(_ string) bool { return true }
+func (r *fakeRepo) IsDirty(_ string) bool    { return false }
+func (r *fakeRepo) GitIgnored(_ string) bool { return false }
+func (r *fakeRepo) HeadSHA() string          { return "deadbeef" }
 func (r *fakeRepo) Commit([]string, string) (string, string, bool, error) {
 	return "", "", false, nil
 }
@@ -56,7 +57,7 @@ func TestContinuationStitch(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	var prefills []string
-	env.stub.OnRequest = func(turn int, req llm.Request, _ *fixture.Request) error {
+	env.stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
 		last := req.Messages[len(req.Messages)-1]
 		if last.Role == "assistant" {
 			prefills = append(prefills, last.Text())
@@ -83,7 +84,7 @@ func TestSecondContinuationReplacesPrefill(t *testing.T) {
 	env := setupScenario(t, sc, nil)
 	var prefills []string
 	var assistantCounts []int
-	env.stub.OnRequest = func(turn int, req llm.Request, _ *fixture.Request) error {
+	env.stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
 		count := 0
 		for _, m := range req.Messages {
 			if m.Role == "assistant" && strings.HasPrefix(m.Text(), "A") {
@@ -109,9 +110,11 @@ func TestSecondContinuationReplacesPrefill(t *testing.T) {
 
 func TestContinuationCapOutputExhausted(t *testing.T) {
 	rows := metaRow + "\n" + `{"kind":"user","text":"go"}` + "\n"
-	for i := 0; i < 6; i++ {
-		rows += `{"kind":"stream","events":[{"kind":"Answer","text":"x"},{"kind":"Finish","finish_reason":"length"}]}` + "\n"
+	var rowsSb112 strings.Builder
+	for range 6 {
+		rowsSb112.WriteString(`{"kind":"stream","events":[{"kind":"Answer","text":"x"},{"kind":"Finish","finish_reason":"length"}]}` + "\n")
 	}
+	rows += rowsSb112.String()
 	rows += `{"kind":"expect_outcome","outcome":"OutputExhausted","reflections":0}`
 	sc := inlineScenario(t, rows)
 	env := setupScenario(t, sc, nil)
@@ -266,11 +269,12 @@ func TestStaleAccumulatorRegression(t *testing.T) {
 // simulating Ctrl-C mid-stream.
 type cancelingOutput struct {
 	testOutput
+
 	cancel context.CancelFunc
 	fired  bool
 }
 
-func (o *cancelingOutput) StreamText(delta string) {
+func (o *cancelingOutput) StreamText(_ string) {
 	if !o.fired {
 		o.fired = true
 		o.cancel()
@@ -386,9 +390,11 @@ func TestReflectionCapFourSends(t *testing.T) {
 		`{"kind":"fs","path":"a.txt","content":"hello\n"}` + "\n" +
 		`{"kind":"chat","editable":["a.txt"]}` + "\n" +
 		`{"kind":"user","text":"go"}` + "\n"
-	for i := 0; i < 5; i++ {
-		rows += `{"kind":"stream","events":[{"kind":"Answer","text":"` + bad + `"},{"kind":"Finish","finish_reason":"stop"}]}` + "\n"
+	var rowsSb389 strings.Builder
+	for range 5 {
+		rowsSb389.WriteString(`{"kind":"stream","events":[{"kind":"Answer","text":"` + bad + `"},{"kind":"Finish","finish_reason":"stop"}]}` + "\n")
 	}
+	rows += rowsSb389.String()
 	sc := inlineScenario(t, rows)
 	env := setupScenario(t, sc, nil)
 	env.run(t)

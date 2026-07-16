@@ -1,10 +1,10 @@
-// Code extracted from aider @ 5dc9490bb35f9729ef2c95d00a19ccd30c26339c by
-// a mechanical dump of the prompt classes (see STATUS.md, phase 1); do not
-// hand-edit the string values. The prompt strings are [Exact] parity
-// surfaces: they keep aider's Python str.format placeholders ({fence[0]},
-// {final_reminders}, ...), substituted by the coder at message-assembly
-// time, and include upstream's warts verbatim (e.g. the stray
-// "<<<<<<< HEAD" in the fenced example).
+// Package prompts holds the aider prompt sets, extracted verbatim from
+// aider @ 5dc9490bb35f9729ef2c95d00a19ccd30c26339c by a mechanical dump of
+// the prompt classes (see STATUS.md, phase 1); do not hand-edit the string
+// values. The prompt strings are [Exact] parity surfaces: they keep aider's
+// Python str.format placeholders ({fence[0]}, {final_reminders}, ...),
+// substituted by the coder at message-assembly time, and include upstream's
+// warts verbatim (e.g. the stray "<<<<<<< HEAD" in the fenced example).
 package prompts
 
 // Example is one few-shot example message.

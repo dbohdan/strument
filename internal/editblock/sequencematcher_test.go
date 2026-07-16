@@ -2,6 +2,7 @@ package editblock
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -47,9 +48,11 @@ func TestLineRatioParity(t *testing.T) {
 func TestAutojunkParity(t *testing.T) {
 	rep := func(s string, n int) string {
 		out := ""
+		var outSb50 strings.Builder
 		for range n {
-			out += s
+			outSb50.WriteString(s)
 		}
+		out += outSb50.String()
 		return out
 	}
 	long := stringRatio(rep("ab", 150)+"Q", "Q"+rep("ab", 150))

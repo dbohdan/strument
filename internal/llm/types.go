@@ -6,6 +6,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Message roles. Plain strings on the wire.
@@ -32,6 +33,10 @@ func TextMessage(role, text string) Message {
 
 // Content is either a plain string or a list of blocks (needed once
 // cache-control decoration applies, basecoder-spec §3.2).
+//
+// Content by value); json.Unmarshaler requires a pointer receiver.
+//
+//nolint:recvcheck // json.Marshaler needs a value receiver (Message embeds
 type Content struct {
 	Text   *string
 	Blocks []ContentBlock
@@ -44,11 +49,11 @@ func (c Content) String() string {
 	if c.Text != nil {
 		return *c.Text
 	}
-	var out string
+	var out strings.Builder
 	for _, b := range c.Blocks {
-		out += b.Text
+		out.WriteString(b.Text)
 	}
-	return out
+	return out.String()
 }
 
 func (c Content) MarshalJSON() ([]byte, error) {

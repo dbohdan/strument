@@ -7,6 +7,7 @@ package fixture
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -265,12 +266,12 @@ func Read(r io.Reader) (*Scenario, error) {
 		return nil, err
 	}
 	if lineNo == 0 {
-		return nil, fmt.Errorf("empty fixture")
+		return nil, errors.New("empty fixture")
 	}
 	// An unfinished trailing turn (request with no stream) is an authoring
 	// error.
 	if n := len(sc.Turns); n > 0 && sc.Turns[n-1].Events == nil {
-		return nil, fmt.Errorf("trailing request row has no stream row")
+		return nil, errors.New("trailing request row has no stream row")
 	}
 	return sc, nil
 }

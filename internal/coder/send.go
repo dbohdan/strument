@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,18 +154,18 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			if errors.As(streamErr, &se) && se.Retryable() {
 				retryDelay *= 2
 				if retryDelay > retryTimeout {
-					c.Out.Error("%s", se.Error())
+					c.Out.Errorf("%s", se.Error())
 					failed = true
 					break
 				}
-				c.Out.Warning("%s", se.Error())
-				c.Out.Print("Retrying in %.1f seconds...", retryDelay.Seconds())
+				c.Out.Warningf("%s", se.Error())
+				c.Out.Printf("Retrying in %.1f seconds...", retryDelay.Seconds())
 				c.Clock.Sleep(retryDelay)
 				// Retry discards the partial (reset at loop top); the
 				// accumulated multiResponseContent is untouched.
 				continue
 			}
-			c.Out.Error("%v", streamErr)
+			c.Out.Errorf("%v", streamErr)
 			failed = true
 			break
 		}
@@ -236,7 +237,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	}
 	if !interrupted && answer == "" {
 		c.curMessages = c.curMessages[:len(c.curMessages)-1]
-		c.Out.Warning("Empty response received from LLM. Check your provider account?")
+		c.Out.Warningf("Empty response received from LLM. Check your provider account?")
 		return OutcomeFailed, ""
 	}
 
@@ -318,13 +319,13 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	if inputTokens < maxInput {
 		return true
 	}
-	c.Out.Error("Your estimated chat context of %d tokens exceeds the %d token limit for %s!",
+	c.Out.Errorf("Your estimated chat context of %d tokens exceeds the %d token limit for %s!",
 		inputTokens, maxInput, c.Model.Slug)
-	c.Out.Print("To reduce the chat context:")
-	c.Out.Print("- Use /drop to remove unneeded files from the chat")
-	c.Out.Print("- Use /clear to clear the chat history")
-	c.Out.Print("- Break your code into smaller files")
-	c.Out.Print("It's probably safe to try and send the request, most providers won't charge if the context limit is exceeded.")
+	c.Out.Printf("To reduce the chat context:")
+	c.Out.Printf("- Use /drop to remove unneeded files from the chat")
+	c.Out.Printf("- Use /clear to clear the chat history")
+	c.Out.Printf("- Break your code into smaller files")
+	c.Out.Printf("It's probably safe to try and send the request, most providers won't charge if the context limit is exceeded.")
 	yes, _ := c.Confirm.Confirm(ConfirmRequest{Prompt: "Try to proceed anyway?"})
 	return yes
 }
@@ -393,12 +394,12 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	}
 
 	c.lastUsageReport = report
-	c.Out.Print("%s", report)
+	c.Out.Printf("%s", report)
 }
 
 func formatTokens(n int) string {
 	if n < 1000 {
-		return fmt.Sprintf("%d", n)
+		return strconv.Itoa(n)
 	}
 	return fmt.Sprintf("%.1fk", float64(n)/1000.0)
 }
@@ -416,7 +417,7 @@ func formatCost(v float64) string {
 }
 
 func (c *Coder) showExhaustedError() {
-	c.Out.Error("The chat session exhausted the model's context window. Use /clear or /drop to reduce it.")
+	c.Out.Errorf("The chat session exhausted the model's context window. Use /clear or /drop to reduce it.")
 }
 
 // stripReasoning removes an inline reasoning tag from the answer before the

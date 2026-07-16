@@ -1,5 +1,6 @@
 // Assembly invariants: reminder gate paths, fence escalation, unreadable
 // chat files, cache breakpoints, reasoning strip (basecoder-spec §3, §5).
+
 package coder
 
 import (

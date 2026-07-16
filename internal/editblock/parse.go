@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -161,19 +162,17 @@ func parseEditBlock(lines []string, i int, fence Fence, validFnames []string, cu
 		i++
 	}
 	if i >= len(lines) || !dividerPattern.MatchString(strings.TrimSpace(lines[i])) {
-		return Edit{}, i, fmt.Errorf("Expected `%s`", dividerErr)
+		return Edit{}, i, fmt.Errorf("Expected `%s`", dividerErr) //nolint:staticcheck // [Exact] aider parity string.
 	}
 
 	var updatedText []string
 	i++
-	for i < len(lines) && !(updatedPattern.MatchString(strings.TrimSpace(lines[i])) ||
-		dividerPattern.MatchString(strings.TrimSpace(lines[i]))) {
+	for i < len(lines) && (!updatedPattern.MatchString(strings.TrimSpace(lines[i])) && !dividerPattern.MatchString(strings.TrimSpace(lines[i]))) {
 		updatedText = append(updatedText, lines[i])
 		i++
 	}
-	if i >= len(lines) || !(updatedPattern.MatchString(strings.TrimSpace(lines[i])) ||
-		dividerPattern.MatchString(strings.TrimSpace(lines[i]))) {
-		return Edit{}, i, fmt.Errorf("Expected `%s` or `%s`", updatedErr, dividerErr)
+	if i >= len(lines) || (!updatedPattern.MatchString(strings.TrimSpace(lines[i])) && !dividerPattern.MatchString(strings.TrimSpace(lines[i]))) {
+		return Edit{}, i, fmt.Errorf("Expected `%s` or `%s`", updatedErr, dividerErr) //nolint:staticcheck // [Exact] aider parity string.
 	}
 
 	return Edit{
@@ -244,10 +243,8 @@ func FindFilename(lines []string, fence Fence, validFnames []string) string {
 
 	// Exact match first.
 	for _, fn := range filenames {
-		for _, vfn := range validFnames {
-			if fn == vfn {
-				return fn
-			}
+		if slices.Contains(validFnames, fn) {
+			return fn
 		}
 	}
 

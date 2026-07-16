@@ -21,7 +21,7 @@ func perfectReplace(wholeLines, partLines, replaceLines []string) (string, bool)
 	n := len(partLines)
 	for i := 0; i+n <= len(wholeLines); i++ {
 		matched := true
-		for k := 0; k < n; k++ {
+		for k := range n {
 			if wholeLines[i+k] != partLines[k] {
 				matched = false
 				break
@@ -180,14 +180,14 @@ func replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines
 // maps partLines onto wholeLines, if there is exactly one.
 func matchButForLeadingWhitespace(wholeLines, partLines []string) (string, bool) {
 	num := len(wholeLines)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		if strings.TrimLeftFunc(wholeLines[i], unicode.IsSpace) != strings.TrimLeftFunc(partLines[i], unicode.IsSpace) {
 			return "", false
 		}
 	}
 	add := make(map[string]bool)
 	var prefix string
-	for i := 0; i < num; i++ {
+	for i := range num {
 		if strings.TrimSpace(wholeLines[i]) == "" {
 			continue
 		}

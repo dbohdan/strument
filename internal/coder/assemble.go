@@ -24,7 +24,9 @@ type chatChunks struct {
 }
 
 func (ch *chatChunks) allMessages() []llm.Message {
-	var out []llm.Message
+	out := make([]llm.Message, 0,
+		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+len(ch.repo)+
+			len(ch.done)+len(ch.chatFiles)+len(ch.cur)+len(ch.reminder))
 	out = append(out, ch.system...)
 	out = append(out, ch.examples...)
 	out = append(out, ch.readonlyFiles...)
@@ -105,7 +107,7 @@ func (c *Coder) chooseFence() {
 		}
 	}
 	c.fence = fence{allFences[0].Open, allFences[0].Close}
-	c.Out.Warning("Unable to find a fencing strategy! Falling back to: %s...%s", c.fence.open, c.fence.close)
+	c.Out.Warningf("Unable to find a fencing strategy! Falling back to: %s...%s", c.fence.open, c.fence.close)
 }
 
 // absFnamesContent reads chat files in order, dropping unreadable ones from
@@ -116,7 +118,7 @@ func (c *Coder) absFnamesContent() []string {
 	for _, fname := range c.absFnames {
 		data, err := os.ReadFile(fname)
 		if err != nil {
-			c.Out.Warning("Dropping %s from the chat.", c.relFname(fname))
+			c.Out.Warningf("Dropping %s from the chat.", c.relFname(fname))
 			continue
 		}
 		kept = append(kept, fname)
@@ -130,8 +132,8 @@ func (c *Coder) absFnamesContent() []string {
 // per file, sorted for determinism (§3.3 divergence; aider uses set order).
 func (c *Coder) filesContent() string {
 	type entry struct{ rel, content string }
-	var entries []entry
 	contents := c.absFnamesContent()
+	entries := make([]entry, 0, len(c.absFnames))
 	for i, fname := range c.absFnames {
 		entries = append(entries, entry{c.relFname(fname), contents[i]})
 	}
@@ -314,9 +316,11 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		if len(c.Prompts.ExampleMessages) > 0 {
 			mainSys += "\n# Example conversations:\n\n"
 		}
+		var mainSysSb317 strings.Builder
 		for _, msg := range c.Prompts.ExampleMessages {
-			mainSys += "## " + strings.ToUpper(msg.Role) + ": " + c.fmtSystemPrompt(msg.Content) + "\n\n"
+			mainSysSb317.WriteString("## " + strings.ToUpper(msg.Role) + ": " + c.fmtSystemPrompt(msg.Content) + "\n\n")
 		}
+		mainSys += mainSysSb317.String()
 		mainSys = strings.TrimSpace(mainSys)
 	} else {
 		for _, msg := range c.Prompts.ExampleMessages {
@@ -368,13 +372,14 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	}
 
 	var filesContent, filesReply string
-	if len(c.absFnames) > 0 {
+	switch {
+	case len(c.absFnames) > 0:
 		filesContent = c.Prompts.FilesContentPrefix + c.filesContent()
 		filesReply = c.Prompts.FilesContentAssistantReply
-	} else if len(chunks.repo) > 0 && c.Prompts.FilesNoFullFilesWithRepoMap != "" {
+	case len(chunks.repo) > 0 && c.Prompts.FilesNoFullFilesWithRepoMap != "":
 		filesContent = c.Prompts.FilesNoFullFilesWithRepoMap
 		filesReply = c.Prompts.FilesNoFullFilesWithRepoMapReply
-	} else {
+	default:
 		filesContent = c.Prompts.FilesNoFullFiles
 		filesReply = "Ok."
 	}
@@ -396,10 +401,8 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		candTokens := c.Tokens.Count(reminderText)
 		maxInput := c.Model.Context
 
-		add := false
-		if maxInput <= 0 {
-			add = true
-		} else {
+		add := maxInput <= 0
+		if !add {
 			margin := min(1024, maxInput/20)
 			add = baseTokens+candTokens < maxInput-margin
 		}

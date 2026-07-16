@@ -1,6 +1,7 @@
 // Transliterated from aider tests/basic/test_repomap.py @ 5dc9490. The
 // refresh-mode tests (refresh="files"/"auto") are N/A: Strument drops all
 // cross-call caches by design (repomap-spec §0.3).
+
 package repomap
 
 import (
@@ -226,7 +227,7 @@ func TestSampleCodeBaseGolden(t *testing.T) {
 		gotLines := strings.Split(generated, "\n")
 		wantLines := strings.Split(want, "\n")
 		n := min(len(gotLines), len(wantLines))
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if gotLines[i] != wantLines[i] {
 				t.Fatalf("first difference at line %d:\nwant: %q\n got: %q\n\nfull generated:\n%s",
 					i+1, wantLines[i], gotLines[i], generated)

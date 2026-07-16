@@ -1,6 +1,7 @@
 // Transliterated from aider tests/basic/test_find_or_blocks.py @ 5dc9490:
 // run the 4 MB chat-history corpus through the parser and compare
 // byte-for-byte against the gold output.
+
 package editblock
 
 import (
@@ -99,7 +100,7 @@ func TestProcessMarkdownGolden(t *testing.T) {
 		gotLines := strings.SplitAfter(got, "\n")
 		wantLines := strings.SplitAfter(string(want), "\n")
 		n := min(len(gotLines), len(wantLines))
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if gotLines[i] != wantLines[i] {
 				lo := max(0, i-3)
 				hi := min(n, i+4)

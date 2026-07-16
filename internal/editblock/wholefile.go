@@ -37,7 +37,8 @@ func ParseWholeFile(content string, fence Fence, chatFiles []string) ([]WholeFil
 	var newLines []string
 
 	for i, line := range lines {
-		if strings.HasPrefix(line, fence.Open) || strings.HasPrefix(line, fence.Close) {
+		switch {
+		case strings.HasPrefix(line, fence.Open) || strings.HasPrefix(line, fence.Close):
 			if haveBlock {
 				// Ending an existing block.
 				sawFname = ""
@@ -73,15 +74,15 @@ func ParseWholeFile(content string, fence Fence, chatFiles []string) ([]WholeFil
 					fname = chatFiles[0]
 					fnameSource = "chat"
 				default:
-					return nil, fmt.Errorf("No filename provided before %s in file listing", fence.Open)
+					return nil, fmt.Errorf("No filename provided before %s in file listing", fence.Open) //nolint:staticcheck // [Exact] aider parity string.
 				}
 			}
 			haveBlock = true
-		} else if haveBlock {
+		case haveBlock:
 			newLines = append(newLines, line)
-		} else {
+		default:
 			// Prose: notice quoted chat-file mentions for the "saw" fallback.
-			for _, word := range strings.Fields(strings.TrimSpace(line)) {
+			for word := range strings.FieldsSeq(strings.TrimSpace(line)) {
 				word = strings.TrimRight(word, ".:,;!")
 				for _, chatFile := range chatFiles {
 					if word == "`"+chatFile+"`" {
@@ -91,6 +92,7 @@ func ParseWholeFile(content string, fence Fence, chatFiles []string) ([]WholeFil
 			}
 		}
 	}
+
 	if haveBlock && fname != "" {
 		edits = append(edits, WholeFileEdit{Path: fname, Content: strings.Join(newLines, ""), source: fnameSource})
 	}

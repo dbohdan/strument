@@ -1,0 +1,171 @@
+version = "2"
+
+[linters]
+default = "standard"
+enable = [
+    # "arangolint",
+    "asasalint",
+    "asciicheck",
+    "bidichk",
+    "bodyclose",
+    "canonicalheader",
+    "containedctx",
+    "copyloopvar",
+    "decorder",
+    # "depguard",
+    "dogsled",
+    "dupword",
+    "durationcheck",
+    "embeddedstructfieldcheck",
+    "errcheck",
+    "errchkjson",
+    "errname",
+    "errorlint",
+    "exptostd",
+    "fatcontext",
+    # "forbidigo",
+    "forcetypeassert",
+    "ginkgolinter",
+    "gocheckcompilerdirectives",
+    "gochecksumtype",
+    "gocritic",
+    "godoclint",
+    "godot",
+    "goheader",
+    "gomoddirectives",
+    "gomodguard_v2",
+    "goprintffuncname",
+    "gosec",
+    "gosmopolitan",
+    "govet",
+    "grouper",
+    "iface",
+    "importas",
+    "inamedparam",
+    "ineffassign",
+    "interfacebloat",
+    "intrange",
+    "iotamixing",
+    # "lll",
+    "loggercheck",
+    "makezero",
+    "mirror",
+    "misspell",
+    "modernize",
+    "musttag",
+    "nakedret",
+    "nilerr",
+    "nilnesserr",
+    "nilnil",
+    "noctx",
+    # "noinlineerr",
+    "nolintlint",
+    "nosprintfhostport",
+    "perfsprint",
+    "prealloc",
+    "predeclared",
+    "promlinter",
+    "protogetter",
+    "reassign",
+    "recvcheck",
+    "revive",
+    "rowserrcheck",
+    "sloglint",
+    "spancheck",
+    "sqlclosecheck",
+    "staticcheck",
+    "tagalign",
+    "tagliatelle",
+    "testableexamples",
+    "testifylint",
+    "thelper",
+    "tparallel",
+    "unconvert",
+    "unparam",
+    "unqueryvet",
+    "unused",
+    "usestdlibvars",
+    "usetesting",
+    "wastedassign",
+    "whitespace",
+    "zerologlint",
+]
+
+[[linters.exclusions.rules]]
+path = "script/"
+linters = [
+    "gosec",
+    "noctx",
+]
+
+[[linters.exclusions.rules]]
+# The fixture recorder is a dev-only localhost proxy: SSRF/log-injection/
+# timeout findings describe its intended function.
+path = "cmd/strumentrec/"
+linters = [
+    "gosec",
+    "noctx",
+]
+
+[[linters.exclusions.rules]]
+# Tests write scratch files and scan committed testdata.
+path = "_test\\.go"
+linters = [
+    "gosec",
+    "godoclint",
+    "prealloc",
+]
+
+[linters.settings.exhaustive]
+default-signifies-exhaustive = true
+
+[linters.settings.lll]
+tab-width = 4
+line-length = 120
+
+[linters.settings.nestif]
+min-complexity = 6
+
+[linters.settings.tagliatelle.case.rules]
+json = "snake"
+toml = "snake"
+xml = "kebab"
+yaml = "snake"
+
+[linters.settings.wsl_v5]
+disable = [
+    "decl",
+]
+
+[linters.settings.wrapcheck]
+ignore-package-globs = [
+    "go.starlark.net/*"
+]
+
+[linters.exclusions]
+generated = "lax"
+paths = [
+    "reference",
+    "attic",
+]
+presets = [
+    "comments",
+    "common-false-positives",
+    "legacy",
+    "std-error-handling",
+]
+
+[formatters]
+enable = [
+    "gofmt",
+    "goimports",
+]
+
+[formatters.exclusions]
+generated = "lax"
+
+[output]
+sort-order = [
+    "file",
+    "linter",
+]

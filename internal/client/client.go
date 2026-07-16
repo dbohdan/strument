@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -60,9 +61,7 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 
 	// Fenced passthrough first: reserved keys were rejected at config
 	// load, and writing ours afterwards keeps ownership regardless.
-	for k, v := range req.ExtraParams {
-		body[k] = v
-	}
+	maps.Copy(body, req.ExtraParams)
 
 	msgs := make([]wireMessage, len(req.Messages))
 	for i, m := range req.Messages {

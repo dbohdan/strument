@@ -75,12 +75,11 @@ type Coder struct {
 	totalTokensReceived   int
 	lastUsageReport       string
 
-	fence                 fence
-	commitBeforeMessage   []string
-	lastCommitHash        string
-	ignoreMentions        map[string]bool
-	rejectedUrls          map[string]bool
-	lastKeyboardInterrupt time.Time
+	fence               fence
+	commitBeforeMessage []string
+	lastCommitHash      string
+	ignoreMentions      map[string]bool
+	rejectedUrls        map[string]bool
 }
 
 type fence struct{ open, close string }
@@ -263,7 +262,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 			break
 		}
 		if c.numReflections >= maxReflections {
-			c.Out.Warning("Only %d reflections allowed, stopping.", maxReflections)
+			c.Out.Warningf("Only %d reflections allowed, stopping.", maxReflections)
 			return
 		}
 		c.numReflections++
@@ -285,15 +284,15 @@ func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 // StdOutput writes to stdout/stderr.
 type StdOutput struct{}
 
-func (o *StdOutput) Print(format string, args ...any) {
+func (o *StdOutput) Printf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
-func (o *StdOutput) Warning(format string, args ...any) {
+func (o *StdOutput) Warningf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
-func (o *StdOutput) Error(format string, args ...any) {
+func (o *StdOutput) Errorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
-func (o *StdOutput) StreamText(delta string)      { fmt.Print(delta) }
-func (o *StdOutput) StreamReasoning(delta string) {}
-func (o *StdOutput) FlushStream()                 { fmt.Println() }
+func (o *StdOutput) StreamText(delta string)  { fmt.Print(delta) }
+func (o *StdOutput) StreamReasoning(_ string) {}
+func (o *StdOutput) FlushStream()             { fmt.Println() }

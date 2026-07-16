@@ -71,7 +71,7 @@ func (rm *RepoMap) getRankedTags(inv *invocation, chatFnames, otherFnames []stri
 		// against mentioned identifiers: add once on any match.
 		if len(mentionedIdents) > 0 {
 			components := map[string]bool{}
-			for _, part := range strings.Split(relFname, "/") {
+			for part := range strings.SplitSeq(relFname, "/") {
 				components[part] = true
 			}
 			base := path.Base(relFname)

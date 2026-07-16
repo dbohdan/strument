@@ -62,15 +62,13 @@ func NewTreeContext(code string, root *ts.Node) *TreeContext {
 			tc.scopes[i][startLine] = true
 		}
 
-		for _, child := range node.Children() {
-			stack = append(stack, child)
-		}
+		stack = append(stack, node.Children()...)
 	}
 
 	// Header finalization (§5.3, verified rule: > 1 candidates picks the
 	// smallest, capped at headerMax; zero or one uses the single line).
 	tc.header = make([][2]int, tc.numLines)
-	for i := 0; i < tc.numLines; i++ {
+	for i := range tc.numLines {
 		cands := headerCands[i]
 		sort.Slice(cands, func(a, b int) bool {
 			x, y := cands[a], cands[b]

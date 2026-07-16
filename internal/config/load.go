@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -108,16 +109,12 @@ func Load(opts Options) (*Config, error) {
 
 	// 4. Merge: models whole-key, project wins; default project-over-user.
 	cfg := &Config{Models: map[string]*Model{}}
-	for alias, m := range user.models {
-		cfg.Models[alias] = m
-	}
+	maps.Copy(cfg.Models, user.models)
 	if user.hasDefault {
 		cfg.Default = user.defaultVal
 	}
 	if project != nil {
-		for alias, m := range project.models {
-			cfg.Models[alias] = m
-		}
+		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
 			cfg.Default = project.defaultVal
 		}
@@ -145,10 +142,10 @@ func Load(opts Options) (*Config, error) {
 
 	// 6. Validate.
 	if len(cfg.Models) == 0 {
-		return nil, fmt.Errorf("config declares no models (the `models` dict is empty)")
+		return nil, errors.New("config declares no models (the `models` dict is empty)")
 	}
 	if cfg.Default == "" {
-		return nil, fmt.Errorf("config sets no `default` model alias")
+		return nil, errors.New("config sets no `default` model alias")
 	}
 	if _, ok := cfg.Models[cfg.Default]; !ok {
 		return nil, fmt.Errorf("default model alias %q is not a key of `models`", cfg.Default)

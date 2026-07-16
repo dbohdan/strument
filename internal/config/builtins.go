@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dbohdan/strument/internal/llm"
@@ -19,7 +20,7 @@ func (v *providerValue) String() string {
 func (v *providerValue) Type() string          { return "provider" }
 func (v *providerValue) Freeze()               {}
 func (v *providerValue) Truth() starlark.Bool  { return starlark.True }
-func (v *providerValue) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable type: provider") }
+func (v *providerValue) Hash() (uint32, error) { return 0, errors.New("unhashable type: provider") }
 
 type modelValue struct{ m *Model }
 
@@ -29,7 +30,7 @@ func (v *modelValue) String() string {
 func (v *modelValue) Type() string          { return "model" }
 func (v *modelValue) Freeze()               {}
 func (v *modelValue) Truth() starlark.Bool  { return starlark.True }
-func (v *modelValue) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable type: model") }
+func (v *modelValue) Hash() (uint32, error) { return 0, errors.New("unhashable type: model") }
 
 // starlarkToGo converts a Starlark value into a JSON-able Go value; opaque
 // values (functions, providers, models) are rejected (config-schema §5:
@@ -37,7 +38,7 @@ func (v *modelValue) Hash() (uint32, error) { return 0, fmt.Errorf("unhashable t
 func starlarkToGo(v starlark.Value) (any, error) {
 	switch v := v.(type) {
 	case starlark.NoneType:
-		return nil, nil
+		return nil, nil //nolint:nilnil // None maps to JSON null: a valid value.
 	case starlark.Bool:
 		return bool(v), nil
 	case starlark.Int:
@@ -90,13 +91,16 @@ func starlarkToGo(v starlark.Value) (any, error) {
 
 func dictToParams(where string, d *starlark.Dict) (map[string]any, error) {
 	if d == nil || d.Len() == 0 {
-		return nil, nil
+		return nil, nil //nolint:nilnil // No params is a valid, empty result.
 	}
 	g, err := starlarkToGo(d)
 	if err != nil {
-		return nil, fmt.Errorf("%s: extra_params: %v", where, err)
+		return nil, fmt.Errorf("%s: extra_params: %w", where, err)
 	}
-	params := g.(map[string]any)
+	params, ok := g.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: extra_params must be a dict", where)
+	}
 	if err := validateExtraParams(where, params); err != nil {
 		return nil, err
 	}
@@ -107,7 +111,7 @@ func dictToParams(where string, d *starlark.Dict) (map[string]any, error) {
 // provider(adapter, *, base_url=None, api_key=None, name=None, extra_params={}).
 func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 1 {
-		return nil, fmt.Errorf("provider: only 'adapter' may be positional")
+		return nil, errors.New("provider: only 'adapter' may be positional")
 	}
 	var adapter, baseURL, apiKey, name string
 	var extraParams *starlark.Dict
@@ -123,7 +127,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	switch adapter {
 	case AdapterOpenAI, AdapterOpenRouter:
 	case "anthropic":
-		return nil, fmt.Errorf("provider: adapter \"anthropic\" is reserved and not yet supported")
+		return nil, errors.New("provider: adapter \"anthropic\" is reserved and not yet supported")
 	default:
 		return nil, fmt.Errorf("provider: unknown adapter %q (want \"openai\" or \"openrouter\")", adapter)
 	}
@@ -147,7 +151,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 //	max_output=None, input_cost=None, output_cost=None, extra_params={}).
 func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 2 {
-		return nil, fmt.Errorf("model: only 'provider' and 'slug' may be positional")
+		return nil, errors.New("model: only 'provider' and 'slug' may be positional")
 	}
 	var providerV starlark.Value
 	var slug string
@@ -232,7 +236,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 func optFloat(name string, v starlark.Value) (*float64, error) {
 	switch v := v.(type) {
 	case nil, starlark.NoneType:
-		return nil, nil
+		return nil, nil //nolint:nilnil // Absent optional number.
 	case starlark.Float:
 		f := float64(v)
 		return &f, nil

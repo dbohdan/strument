@@ -15,7 +15,7 @@ const addedFilesPrompt = "I added these files to the chat: %s\nLet me know if th
 // to, by full relative path or unique basename (base_coder.py:1714).
 func (c *Coder) fileMentions(content string, ignoreCurrent bool) map[string]bool {
 	words := map[string]bool{}
-	for _, w := range strings.Fields(content) {
+	for w := range strings.FieldsSeq(content) {
 		w = strings.TrimRight(w, ",.!;:?")
 		w = strings.Trim(w, "\"'`*_")
 		words[w] = true
@@ -158,6 +158,7 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 		}
 	}
 	sort.Strings(urls)
+	var inpSb161 strings.Builder
 	for _, url := range urls {
 		if c.rejectedUrls[url] {
 			continue
@@ -172,13 +173,14 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 		if yes {
 			content, err := c.Scrape(ctx, trimmed)
 			if err != nil {
-				c.Out.Error("Unable to fetch %s: %v", trimmed, err)
+				c.Out.Errorf("Unable to fetch %s: %v", trimmed, err)
 				continue
 			}
-			inp += "\n\n" + content
+			inpSb161.WriteString("\n\n" + content)
 		} else {
 			c.rejectedUrls[url] = true
 		}
 	}
+	inp += inpSb161.String()
 	return inp
 }

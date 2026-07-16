@@ -1,5 +1,6 @@
 // Record/replay driver: fixture scenarios drive the coder end-to-end with
 // no network (basecoder-spec §11, fixture-harness-spec).
+
 package coder
 
 import (
@@ -52,12 +53,12 @@ func (s scriptRunner) Run(_ context.Context, block, _ string) (int, string, erro
 
 type testOutput struct{ t *testing.T }
 
-func (o testOutput) Print(format string, args ...any)   { o.t.Logf("out: "+format, args...) }
-func (o testOutput) Warning(format string, args ...any) { o.t.Logf("warn: "+format, args...) }
-func (o testOutput) Error(format string, args ...any)   { o.t.Logf("err: "+format, args...) }
-func (o testOutput) StreamText(string)                  {}
-func (o testOutput) StreamReasoning(string)             {}
-func (o testOutput) FlushStream()                       {}
+func (o testOutput) Printf(format string, args ...any)   { o.t.Logf("out: "+format, args...) }
+func (o testOutput) Warningf(format string, args ...any) { o.t.Logf("warn: "+format, args...) }
+func (o testOutput) Errorf(format string, args ...any)   { o.t.Logf("err: "+format, args...) }
+func (o testOutput) StreamText(string)                   {}
+func (o testOutput) StreamReasoning(string)              {}
+func (o testOutput) FlushStream()                        {}
 
 // replayEnv is one scenario wired up and ready to run.
 type replayEnv struct {

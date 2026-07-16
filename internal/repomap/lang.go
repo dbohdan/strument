@@ -137,13 +137,13 @@ func langFor(lang string) (*langEntry, error) {
 	reg := grammars.DetectLanguageByName(gname)
 	if reg == nil {
 		langCache[lang] = nil
-		return nil, nil
+		return nil, nil //nolint:nilnil // No grammar => bare entry (§3.6), not an error.
 	}
 
 	src, err := queriesFS.ReadFile("queries/" + lang + "-tags.scm")
 	if err != nil {
 		langCache[lang] = nil
-		return nil, nil
+		return nil, nil //nolint:nilnil // No query => bare entry (§3.6), not an error.
 	}
 	qsrc := preprocessQuery(string(src))
 

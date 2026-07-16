@@ -212,8 +212,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer f.Close()
 	rec := &recorder{out: f, upstream: u, client: &http.Client{Timeout: 10 * time.Minute}}
 	log.Printf("recording %s -> %s into %s", *listen, u, *out)
-	log.Fatal(http.ListenAndServe(*listen, rec))
+	err = http.ListenAndServe(*listen, rec)
+	_ = f.Close()
+	log.Fatal(err)
 }

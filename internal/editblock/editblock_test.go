@@ -2,6 +2,7 @@
 // The three coder-level cases (test_full_edit, test_full_edit_dry_run,
 // test_create_new_file_with_other_file_in_chat) are ported against
 // ApplyEdits here and re-exercised end-to-end in phase 5.
+
 package editblock
 
 import (
