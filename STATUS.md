@@ -1,7 +1,7 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 1 — editblock — started 2026-07-16
+Phase 2 — config — started 2026-07-16
 
 ## Standing notes
 - Git features are **on by default** when cwd is inside a git repository; `--no-git`
@@ -47,11 +47,37 @@ Phase 1 — editblock — started 2026-07-16
     being requested; litellm strips the `openai/` routing prefix so the wire
     model is the bare slug; aider sends `temperature: 0` by default.
 
-### Phase 1 — editblock — in-progress
-- Oracle: transliterated `test_editblock.py` + `test_find_or_blocks.py`
+### Phase 1 — editblock — done
+- Oracle: transliterated `test_editblock.py` + `test_find_or_blocks.py` — green
 - Started: 2026-07-16
+- Finished: 2026-07-16
 - Deviations: none
 - Notes:
+  - The `test_find_or_blocks.py` golden oracle (4 MB `chat-history.md` →
+    988 KB gold output) passes **byte-for-byte** on the ported parser.
+    Corpus copied to `testdata/transliterated/editblock/`.
+  - difflib.SequenceMatcher ported generically (autojunk included, junk
+    lists unused) with ratios pinned against CPython 3.11, including a
+    discriminating autojunk case at the ≥200-element threshold.
+  - `ApplyEdits` is a pure planner over a `FileReader` + overlay: dry-run
+    and real apply share one code path, and stacked edits against one file
+    compose (aider's real-run behavior; its dry_run path reads stale
+    content — we don't copy that artifact). Failure report strings are
+    byte-shaped per §5.
+  - Python-fidelity details preserved: negative-slice semantics in
+    `match_but_for_leading_whitespace`, `str.splitlines` boundary set,
+    `strip("`")`/`strip("*")` both-sided strip order, `get_close_matches`
+    tie-break toward the lexicographically larger string.
+  - Prompt strings extracted **mechanically** from the installed aider
+    classes into `internal/prompts` (editblock, editblock_fenced,
+    wholefile + base fields), pinned by sha256 in tests. Upstream wart
+    carried verbatim: `editblock_fenced_prompts.py` contains a leaked
+    `<<<<<<< HEAD` merge-conflict marker inside example[1]; kept for
+    [Exact] parity ("diff-fenced" is not the default format). Flag for
+    the human: we may want to declare a deviation and drop that line.
+  - Deferred to phase 5: the three coder-level tests (`test_full_edit`,
+    `test_full_edit_dry_run`, `test_create_new_file_with_other_file_in_chat`)
+    — ApplyEdits-level analogs are in place now.
 
 ## Deviations
 (none yet)

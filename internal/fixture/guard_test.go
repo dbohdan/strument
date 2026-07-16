@@ -9,16 +9,18 @@ import (
 )
 
 // Fixtures are committed; keys are not (fixture-harness §1, §5). This test
-// fails if anything under testdata/ smells like a credential.
+// fails if anything under testdata/fixtures/ smells like a credential.
+// (testdata/transliterated/ holds aider's own public test corpus, which
+// contains placeholder bearer tokens in code examples — out of scope.)
 var secretPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`sk-or-v1-[0-9a-f]{8}`),          // OpenRouter keys
-	regexp.MustCompile(`sk-[A-Za-z0-9_-]{20,}`),         // OpenAI-style keys
+	regexp.MustCompile(`sk-or-v1-[0-9a-f]{8}`),                // OpenRouter keys
+	regexp.MustCompile(`sk-[A-Za-z0-9_-]{20,}`),               // OpenAI-style keys
 	regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._~+/-]{16,}`), // bearer tokens
 	regexp.MustCompile(`(?i)"(authorization|api-key|x-api-key|cookie|set-cookie)"\s*:`),
 }
 
 func TestNoSecretsInTestdata(t *testing.T) {
-	root := filepath.Join("..", "..", "testdata")
+	root := filepath.Join("..", "..", "testdata", "fixtures")
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		t.Skip("no testdata directory yet")
 	}
