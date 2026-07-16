@@ -1,7 +1,50 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 3 — repomap — started 2026-07-16
+Phase 4 — client — started 2026-07-16
+
+### Phase 3 — repomap — done
+- Oracle: transliterated `test_repomap.py` + sample-code-base golden — green
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: only the two pre-declared ones (sqrt-once, single tag
+  emission). Notably, **the sample-code-base golden matches aider's own
+  golden byte-for-byte** — for that corpus the declared deviations don't
+  perturb the final map, so we kept upstream's golden file unmodified.
+- Notes:
+  - **Spec-vs-reference finding (documented, not acted on):**
+    `repomap-spec.md` §1.2/§Query-assets says the legacy
+    `tree-sitter-languages/` query dir "is selected only when
+    `USING_TSL_PACK` is false; ignore it." The pinned source disagrees:
+    `reference/aider/repomap.py:805-829` (`get_scm_fname`) falls back to the
+    legacy dir **per language** whenever the pack lacks a `<lang>-tags.scm`,
+    even with USING_TSL_PACK true. That is how aider's language tests for
+    haskell/kotlin/php/typescript/tsx/zig/scala/hcl pass. The spec's
+    *decision* (v1 = the 31 pack queries only; adding a language = vendoring
+    a query) is unambiguous, so we followed it; those legacy-fallback
+    languages are out of v1 scope and their aider tests were not
+    transliterated. Flagged under "Pending questions".
+  - **gotreesitter engine limitation + workaround:** the anchored
+    doc-comment pattern `((comment)* @doc . (X))` matches only once per
+    parent in gotreesitter v0.36.0 (upstream tree-sitter matches at every
+    position). Minimal repro: 3 commented JS functions -> upstream yields
+    3 defs, gotreesitter yields 1. Since `(comment)*` matches zero comments
+    upstream, the prefix never constrains which definitions match; the
+    mapper never reads `@doc`. So `preprocessQuery` strips the
+    `(comment)*@doc`+anchor prefix and all `@doc` directives
+    (`#strip!`/`#select-adjacent!`) at load. It also strips
+    `(#set-adjacent! ...)` (go-tags.scm), a tags-crate directive
+    py-tree-sitter ignores but gotreesitter rejects at compile.
+  - Coverage: 28 of the 31 pack languages have gotreesitter grammars
+    (missing: ocaml_interface, pony, udev — those files fall back to bare
+    entries per §3.6); `csharp` maps to registry name `c_sharp`.
+  - PageRank parity pinned against networkx 3.x (personalized incl.
+    dangling redistribution + unpersonalized); TreeContext goldens pinned
+    against grep_ast (nested headers via enclosing block, multiline
+    signature via parameters-node header, blank-line pickup, line-0
+    suppression); ranker multiplier tests via a `TagsOverride` test seam.
+  - Float determinism: PageRank adjacency and all accumulations iterate in
+    sorted order (map-order float summation would flip near-ties).
 
 ### Phase 2 — config — done
 - Oracle: hand-written table tests per config-schema §9 — green
@@ -103,4 +146,14 @@ Phase 3 — repomap — started 2026-07-16
 (none yet)
 
 ## Pending questions for human
-- [ ] (none)
+- [ ] `repomap-spec.md` §1.2 mis-states `get_scm_fname`
+  (`reference/aider/repomap.py:805-829` falls back to the legacy query dir
+  per-language even when USING_TSL_PACK is true). We followed the spec's
+  decision (31 pack queries only). If parity with aider's *effective*
+  language coverage is wanted later, vendoring legacy queries
+  (haskell/kotlin/php/typescript/tsx/zig/scala/hcl, subject to gotreesitter
+  grammar availability) is the v2 path. OK?
+- [ ] `editblock_fenced_prompts.py` @ 5dc9490 contains a leaked
+  `<<<<<<< HEAD` merge-conflict marker inside example[1]; we carry it
+  verbatim per [Exact] parity ("diff-fenced" is not the default format).
+  Declare a deviation and drop that line instead?
