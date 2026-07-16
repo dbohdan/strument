@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+
+	"github.com/dbohdan/strument/internal/config"
 )
 
 var version = "0.0.0-dev"
@@ -31,8 +33,19 @@ type trustCmd struct {
 }
 
 func (c *trustCmd) Run() error {
-	// Wired up in phase 2 (config trust gate).
-	return fmt.Errorf("not implemented yet: the trust gate arrives in phase 2")
+	root := c.Path
+	if root == "" {
+		var err error
+		if root, err = os.Getwd(); err != nil {
+			return err
+		}
+	}
+	absPath, err := config.TrustProject(root, "")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Trusted %s. Re-run `strument trust` after every edit to it.\n", absPath)
+	return nil
 }
 
 type cli struct {

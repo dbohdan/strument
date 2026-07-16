@@ -1,7 +1,27 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 2 — config — started 2026-07-16
+Phase 3 — repomap — started 2026-07-16
+
+### Phase 2 — config — done
+- Oracle: hand-written table tests per config-schema §9 — green
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: none
+- Notes:
+  - `internal/config`: `provider`/`model`/`env` builtins over
+    `go.starlark.net` (Set literals + top-level control on; while/recursion
+    off), whole-key merge, post-merge weak_model resolution (None→self
+    permanent, cross-file string refs), validation.
+  - Trust gate: JSONL store at `$XDG_STATE_HOME/strument/trust`, hex
+    multihash records verified under **their own** recorded algorithm
+    (sha2-512 round-trip test simulates a default-hash migration).
+  - Interpretation settled: `models`/`default` are optional **per file**
+    and required on the **merged** result, so a project config may
+    override only `default` or only aliases.
+  - Reserved extra_params keys: model, messages, stream, stream_options,
+    usage (the OpenRouter usage/cost control).
+  - `strument trust` CLI subcommand wired.
 
 ## Standing notes
 - Git features are **on by default** when cwd is inside a git repository; `--no-git`
