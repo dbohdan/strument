@@ -1,7 +1,36 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 4 — client — started 2026-07-16
+Phase 5 — base-coder script mode — started 2026-07-16
+
+### Phase 4 — client — done
+- Oracle: replay fixtures, no live LLM in the suite — green
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: none
+- Notes:
+  - `internal/client`: request building per adapter dialect (OpenRouter
+    `reasoning:{effort}` vs OpenAI `reasoning_effort`; extra_params written
+    beneath the owned transport keys; `stream_options.include_usage` always
+    sent — harmless on OpenRouter, required on OpenAI), SSE parsing to
+    StreamEvents, HTTP error classification onto the §2.1 classes. Tests
+    use a RoundTripper stub; no sockets.
+  - `client.ParseSSE` is the single source of dialect truth: the new
+    `strumentrec -distill` mode uses it to turn raw captures into fixture
+    rows, and the smoke fixture's stream row was regenerated through it.
+  - Wire canon fact: OpenRouter repeats `finish_reason:"stop"` on both the
+    finish chunk and the trailing usage chunk, so a stream carries TWO
+    Finish events; the parser reflects the wire and the coder must treat
+    repeated Finish as idempotent (phase-5 note).
+  - Captured raw fixtures committed under `testdata/fixtures/raw/`:
+    edit-success, edit-multifile, no-edit-conversational, edit-plus-shell,
+    repo-map-present. The repo-map capture is a 2-request run that also
+    exercises the real **file-mention flow** (aider auto-added `bye.go` and
+    re-sent) and shows the reminder concatenated into the final user
+    message. `openrouter-usage-cost` is covered by every capture;
+    `reflection-search-not-found` and `reasoning-model-inline-think` will
+    be authored/mutated in phase 5 (capture can't reliably force them —
+    fixture-harness §0 corollary 2).
 
 ### Phase 3 — repomap — done
 - Oracle: transliterated `test_repomap.py` + sample-code-base golden — green

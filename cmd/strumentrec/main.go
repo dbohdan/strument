@@ -14,6 +14,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dbohdan/strument/internal/client"
+	"github.com/dbohdan/strument/internal/fixture"
 )
 
 // stripHeaders never appear in captured rows (fixture-harness §1).
@@ -134,11 +138,68 @@ func (rec *recorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s -> %d (%d bytes)", r.Method, r.URL.Path, resp.StatusCode, captured.Len())
 }
 
+// distill converts a raw capture (raw_request/raw_response rows) into
+// fixture-schema request/stream rows on stdout, using the production SSE
+// parser as the single source of dialect truth (fixture-harness §2).
+func distill(rawPath string) error {
+	f, err := os.Open(rawPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(os.Stdout)
+	scan := bufio.NewScanner(f)
+	scan.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
+	for scan.Scan() {
+		if len(scan.Bytes()) == 0 {
+			continue
+		}
+		var row rawRow
+		if err := json.Unmarshal(scan.Bytes(), &row); err != nil {
+			return err
+		}
+		switch row.Kind {
+		case "raw_request":
+			var body any
+			if err := json.Unmarshal([]byte(row.Body), &body); err != nil {
+				return fmt.Errorf("request body: %w", err)
+			}
+			if err := enc.Encode(map[string]any{"kind": "request", "body": body, "assert": "subset"}); err != nil {
+				return err
+			}
+		case "raw_response":
+			var events []fixture.Event
+			for ev, err := range client.ParseSSE(strings.NewReader(row.Body)) {
+				if err != nil {
+					events = append(events, fixture.Event{Kind: "Error", Class: "server", Message: err.Error()})
+					break
+				}
+				events = append(events, fixture.Event{
+					Kind: string(ev.Kind), Text: ev.Text,
+					Usage: ev.Usage, FinishReason: ev.FinishReason,
+				})
+			}
+			if err := enc.Encode(map[string]any{"kind": "stream", "events": events}); err != nil {
+				return err
+			}
+		}
+	}
+	return scan.Err()
+}
+
 func main() {
 	out := flag.String("out", "", "output JSONL file (appended)")
 	upstream := flag.String("upstream", "https://openrouter.ai", "upstream scheme+host")
 	listen := flag.String("listen", "127.0.0.1:8484", "listen address")
+	distillPath := flag.String("distill", "", "distill a raw capture to fixture rows on stdout, then exit")
 	flag.Parse()
+	if *distillPath != "" {
+		if err := distill(*distillPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if *out == "" {
 		fmt.Fprintln(os.Stderr, "strumentrec: -out is required")
 		os.Exit(2)
