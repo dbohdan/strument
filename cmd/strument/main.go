@@ -3,12 +3,21 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
+	"maps"
 	"os"
+	"os/signal"
+	"slices"
+	"strings"
 
 	"github.com/alecthomas/kong"
 
+	"github.com/dbohdan/strument/internal/client"
+	"github.com/dbohdan/strument/internal/coder"
 	"github.com/dbohdan/strument/internal/config"
+	"github.com/dbohdan/strument/internal/repomap"
 )
 
 var version = "0.0.0-dev"
@@ -24,8 +33,74 @@ type chatCmd struct {
 }
 
 func (c *chatCmd) Run() error {
-	// Wired up in phase 5 (script mode) and phase 7 (REPL).
-	return fmt.Errorf("not implemented yet: the chat loop arrives in phase 5")
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(config.Options{ProjectRoot: root})
+	if err != nil {
+		return err
+	}
+	alias := c.Model
+	if alias == "" {
+		alias = cfg.Default
+	}
+	model, ok := cfg.Models[alias]
+	if !ok {
+		return fmt.Errorf("unknown model alias %q (aliases: %s)", alias, strings.Join(slices.Sorted(maps.Keys(cfg.Models)), ", "))
+	}
+
+	cdr := coder.New(root, model)
+	cdr.DryRun = c.DryRun
+	cdr.Client = client.New(model.Provider)
+	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
+	cdr.Scrape = coder.SimpleScraper
+	if model.RepoMap {
+		rm := repomap.New(root)
+		rm.MaxContextWindow = model.Context
+		rm.RepoContentPrefix = cdr.Prompts.RepoContentPrefix
+		cdr.RepoMap = rm
+	}
+	// Git integration (Repo port) arrives in phase 8; --no-git is honored
+	// implicitly until then.
+	_ = c.NoGit
+
+	for _, f := range c.Files {
+		cdr.AddFile(f)
+	}
+
+	if c.Message == "" {
+		return fmt.Errorf("the interactive REPL arrives in phase 7; use --message for script mode")
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	cdr.Run(ctx, c.Message)
+	return nil
+}
+
+// terminalConfirmer asks y/n questions on the terminal.
+type terminalConfirmer struct{}
+
+func (terminalConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
+	if req.Subject != "" {
+		fmt.Println(req.Subject)
+	}
+	fmt.Printf("%s (y/N) ", req.Prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false, false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, false
+	case "d", "never":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 type trustCmd struct {

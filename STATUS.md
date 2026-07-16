@@ -1,7 +1,45 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 5 — base-coder script mode — started 2026-07-16
+Phase 6 — render (smd.js port) — started 2026-07-16
+
+### Phase 5 — base-coder script mode — done
+- Oracle: record/replay + the §11 failure matrix — green; live smoke passed
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: none beyond those the spec declares. Notable notes:
+  - **The assembled request byte-matches Python aider's captured request**
+    (TestReplayEditSuccess compares every message's role+content against the
+    live capture with PlatformInfo pinned) — system prompt, examples, reset
+    pair, chat_files, and the reminder-in-user-message all identical.
+  - §11 matrix covered as inline fixture scenarios + targeted tests:
+    continuation stitch/replace/cap, retry-discards-partial (first sleep
+    0.25s), Failed-after-partial bytes, empty stream, context-exhausted
+    empty/with-partial, checkTokens-declined, H1 stale-accumulator
+    regression, interrupt shape [Exact] + interrupt-then-mention no-reflect,
+    dup shell blocks, suggest-shell-off gating, shell-from-failed-attempt
+    cross-reflection, reflection cap 4 sends/3 follow-ups, no-edit
+    lifecycle, dry-run, path traversal/absolute rejection, declined-mention
+    memory, mention reflect message, reminder sys/user/skip-on-assistant/
+    unknown-max, fence escalation + quad reminder, unreadable-chat-file
+    drop, cache breakpoints (≤3, never done/cur, no history mutation),
+    native+inline reasoning separation, reasoning-tag metachars.
+  - Interpretations settled from reference reading (documented here, not
+    deviations): usage from length-terminated attempts IS accumulated (aider
+    loses it — spec §8 wins); repeated Finish events (OpenRouter sends
+    "stop" twice) are idempotent; `edited` includes allowed-but-failed paths
+    (aider parity); apply-report reflection returns AFTER history rotation.
+  - Small declared choices pending human review (see Pending questions):
+    TokenCounter is runes/4 for all models in v1 (no tiktoken dep pinned;
+    counts are advisory §10); URL scraping is a minimal GET+strip
+    (`SimpleScraper`) vs aider's browser-based scraper; `ReminderPlacement`/
+    `PrefillSupported`/`ExamplesAsSysMsg` are Coder options with aider's
+    defaults ("user", true, false) since config-schema doesn't model them.
+  - Edit formats: diff (editblock), diff-fenced (prompt swap), whole
+    (ParseWholeFile ported from wholefile_coder.py) all wired.
+  - CLI script mode wired end-to-end; **live smoke**: `strument --yes -m
+    'add a hello() function…' main.go` against OpenRouter DeepSeek V4 Flash
+    edited the file and reported $0.00043 in-band cost.
 
 ### Phase 4 — client — done
 - Oracle: replay fixtures, no live LLM in the suite — green
@@ -186,3 +224,9 @@ Phase 5 — base-coder script mode — started 2026-07-16
   `<<<<<<< HEAD` merge-conflict marker inside example[1]; we carry it
   verbatim per [Exact] parity ("diff-fenced" is not the default format).
   Declare a deviation and drop that line instead?
+- [ ] basecoder-spec §10 says "tiktoken port for OpenAI-family"; the pinned
+  dependency list has no tiktoken, so v1 uses runes/4 for all models
+  (advisory-conservative consumers only). OK, or should we add
+  a tiktoken-go dependency?
+- [ ] URL scraping (§1.4 checkForUrls) is a minimal HTTP GET + tag strip in
+  v1 (`coder.SimpleScraper`), not aider's browser-based scraper. OK?
