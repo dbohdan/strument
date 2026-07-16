@@ -1,7 +1,7 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 0 — Scaffold — started 2026-07-16
+Phase 1 — editblock — started 2026-07-16
 
 ## Standing notes
 - Git features are **on by default** when cwd is inside a git repository; `--no-git`
@@ -19,9 +19,10 @@ Phase 0 — Scaffold — started 2026-07-16
 
 ## Phase log
 
-### Phase 0 — Scaffold — in-progress
-- Oracle: builds + empty CI green
+### Phase 0 — Scaffold — done
+- Oracle: builds + empty CI green — `go build/vet/test ./...` green locally
 - Started: 2026-07-16
+- Finished: 2026-07-16
 - Deviations: none
 - Notes:
   - `reference/` cloned at `5dc9490bb35f9729ef2c95d00a19ccd30c26339c`.
@@ -35,6 +36,22 @@ Phase 0 — Scaffold — started 2026-07-16
     client's SSE parser, so the dialect has a single source of truth. The
     harness spec's schema (§2) is the *scenario* format, which the loader and
     replay stubs implement now.
+  - Python aider 0.86.3.dev53+g5dc9490bb installs and runs from the reference
+    clone (`attic/venv`). The phase-0 smoke fixture
+    `testdata/fixtures/basecoder/edit-success.jsonl` was **captured live**
+    (aider `--edit-format diff --no-git` → strumentrec → OpenRouter,
+    `deepseek/deepseek-v4-flash`) and distilled from the raw wire log.
+    Dialect facts learned: OpenRouter emits native reasoning on
+    `delta.reasoning` (124 chunks in this capture); the final chunk carries a
+    `usage` object including in-band `cost` **without** `stream_options`
+    being requested; litellm strips the `openai/` routing prefix so the wire
+    model is the bare slug; aider sends `temperature: 0` by default.
+
+### Phase 1 — editblock — in-progress
+- Oracle: transliterated `test_editblock.py` + `test_find_or_blocks.py`
+- Started: 2026-07-16
+- Deviations: none
+- Notes:
 
 ## Deviations
 (none yet)

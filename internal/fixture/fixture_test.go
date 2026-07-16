@@ -136,3 +136,39 @@ func TestConfirmAndCommandScripts(t *testing.T) {
 		t.Error("want error on unscripted command")
 	}
 }
+
+func TestLoadCapturedSmokeFixture(t *testing.T) {
+	sc, err := Load("../../testdata/fixtures/basecoder/edit-success.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Meta.Source != "captured" || sc.Meta.AiderSHA == "" {
+		t.Errorf("meta = %+v", sc.Meta)
+	}
+	if len(sc.Turns) != 1 || sc.Turns[0].Request == nil {
+		t.Fatalf("want 1 turn with request, got %d", len(sc.Turns))
+	}
+	var answer strings.Builder
+	stub := NewStreamStub(sc)
+	sawUsage := false
+	for ev, err := range stub.Send(context.Background(), llm.Request{}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch ev.Kind {
+		case llm.EventAnswer:
+			answer.WriteString(ev.Text)
+		case llm.EventUsage:
+			sawUsage = true
+			if ev.Usage.Cost == nil || *ev.Usage.Cost == 0 {
+				t.Error("captured fixture should carry in-band cost")
+			}
+		}
+	}
+	if !strings.Contains(answer.String(), "<<<<<<< SEARCH") {
+		t.Errorf("assembled answer lacks an edit block:\n%s", answer.String())
+	}
+	if !sawUsage {
+		t.Error("no usage event replayed")
+	}
+}
