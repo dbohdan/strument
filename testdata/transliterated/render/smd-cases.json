@@ -1,0 +1,9417 @@
+[
+ {
+  "title": "Heading_1",
+  "markdown": "# foo",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_1 with Line Italic",
+  "markdown": "# foo *bar*",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_1 after line break",
+  "markdown": "\n# foo",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_1 ended after newline",
+  "markdown": "# foo\nbar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_1 after heading",
+  "markdown": "# foo\n# bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_2",
+  "markdown": "## foo",
+  "expected": [
+   {
+    "type": 4,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_2 with Line Italic",
+  "markdown": "## foo *bar*",
+  "expected": [
+   {
+    "type": 4,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_2 after line break",
+  "markdown": "\n## foo",
+  "expected": [
+   {
+    "type": 4,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_2 ended after newline",
+  "markdown": "## foo\nbar",
+  "expected": [
+   {
+    "type": 4,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_2 after heading",
+  "markdown": "# foo\n## bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_3",
+  "markdown": "### foo",
+  "expected": [
+   {
+    "type": 5,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_3 with Line Italic",
+  "markdown": "### foo *bar*",
+  "expected": [
+   {
+    "type": 5,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_3 after line break",
+  "markdown": "\n### foo",
+  "expected": [
+   {
+    "type": 5,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_3 ended after newline",
+  "markdown": "### foo\nbar",
+  "expected": [
+   {
+    "type": 5,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_3 after heading",
+  "markdown": "# foo\n### bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 5,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_4",
+  "markdown": "#### foo",
+  "expected": [
+   {
+    "type": 6,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_4 with Line Italic",
+  "markdown": "#### foo *bar*",
+  "expected": [
+   {
+    "type": 6,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_4 after line break",
+  "markdown": "\n#### foo",
+  "expected": [
+   {
+    "type": 6,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_4 ended after newline",
+  "markdown": "#### foo\nbar",
+  "expected": [
+   {
+    "type": 6,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_4 after heading",
+  "markdown": "# foo\n#### bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 6,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_5",
+  "markdown": "##### foo",
+  "expected": [
+   {
+    "type": 7,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_5 with Line Italic",
+  "markdown": "##### foo *bar*",
+  "expected": [
+   {
+    "type": 7,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_5 after line break",
+  "markdown": "\n##### foo",
+  "expected": [
+   {
+    "type": 7,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_5 ended after newline",
+  "markdown": "##### foo\nbar",
+  "expected": [
+   {
+    "type": 7,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_5 after heading",
+  "markdown": "# foo\n##### bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 7,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_6",
+  "markdown": "###### foo",
+  "expected": [
+   {
+    "type": 8,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_6 with Line Italic",
+  "markdown": "###### foo *bar*",
+  "expected": [
+   {
+    "type": 8,
+    "children": [
+     "foo ",
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_6 after line break",
+  "markdown": "\n###### foo",
+  "expected": [
+   {
+    "type": 8,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_6 ended after newline",
+  "markdown": "###### foo\nbar",
+  "expected": [
+   {
+    "type": 8,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Heading_6 after heading",
+  "markdown": "# foo\n###### bar",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 8,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Newline",
+  "markdown": "foo\nbar",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo",
+     {
+      "type": 21,
+      "children": []
+     },
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Newline with Italic",
+  "markdown": "*a\nb*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped Newline",
+  "markdown": "a\\\nb",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a",
+     {
+      "type": 21,
+      "children": []
+     },
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break (<br>)",
+  "markdown": "a<br>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a",
+     {
+      "type": 21,
+      "children": []
+     },
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break with Italic (<br>)",
+  "markdown": "*a<br>b*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped Line Break (<br>)",
+  "markdown": "a\\<br>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<br>b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break (<br/>)",
+  "markdown": "a<br/>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a",
+     {
+      "type": 21,
+      "children": []
+     },
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break with Italic (<br/>)",
+  "markdown": "*a<br/>b*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped Line Break (<br/>)",
+  "markdown": "a\\<br/>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<br/>b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break (<br />)",
+  "markdown": "a<br />b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a",
+     {
+      "type": 21,
+      "children": []
+     },
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Line Break with Italic (<br />)",
+  "markdown": "*a<br />b*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped Line Break (<br />)",
+  "markdown": "a\\<br />b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<br />b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Wrong Line Break (<bra>)",
+  "markdown": "a<bra>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<bra>b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Wrong Line Break (<br//>)",
+  "markdown": "a<br//>b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<br//>b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Wrong Line Break (<b)",
+  "markdown": "a<bb",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a<bb"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Paragraphs",
+  "markdown": "foo\n\nbar",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Paragraph trim leading spaces",
+  "markdown": "  foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Trim too many spaces",
+  "markdown": "foo       bar",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Trim too many spaces in italic",
+  "markdown": "*foo       bar*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "foo bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" ** *\"",
+  "markdown": " ** *",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " ** *\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n ** *",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" ** **\"",
+  "markdown": " ** **",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " ** **\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n ** **",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" ** ** *\"",
+  "markdown": " ** ** *",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " ** ** *\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n ** ** *",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" ** ** **\"",
+  "markdown": " ** ** **",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " ** ** **\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n ** ** **",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" -- -\"",
+  "markdown": " -- -",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " -- -\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n -- -",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" -- --\"",
+  "markdown": " -- --",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " -- --\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n -- --",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" -- -- -\"",
+  "markdown": " -- -- -",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " -- -- -\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n -- -- -",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" -- -- --\"",
+  "markdown": " -- -- --",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " -- -- --\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n -- -- --",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" __ _\"",
+  "markdown": " __ _",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " __ _\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n __ _",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" __ __\"",
+  "markdown": " __ __",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " __ __\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n __ __",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" __ __ _\"",
+  "markdown": " __ __ _",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " __ __ _\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n __ __ _",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule \" __ __ __\"",
+  "markdown": " __ __ __",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Text after Horizontal Rule",
+  "markdown": " __ __ __\nfoo",
+  "expected": [
+   {
+    "type": 22,
+    "children": []
+   },
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Horizontal Rule after list",
+  "markdown": "- foo\n __ __ __",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 22,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Code Inline - 1 backticks",
+  "markdown": "`a`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline trims spaces - 1 backticks",
+  "markdown": "` a `",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline x2 - 1 backticks",
+  "markdown": "`a` `b`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     " ",
+     {
+      "type": 11,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped backtick before Code Inline - 1 backticks",
+  "markdown": "\\``a`b`c`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "`",
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline - 2 backticks",
+  "markdown": "``a``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline trims spaces - 2 backticks",
+  "markdown": "`` a ``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline x2 - 2 backticks",
+  "markdown": "``a`` ``b``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     " ",
+     {
+      "type": 11,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped backtick before Code Inline - 2 backticks",
+  "markdown": "\\```a``b`c`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "`",
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code ` Inline - 2 backticks",
+  "markdown": "``a`b``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a`b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline - 3 backticks",
+  "markdown": "```a```",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline trims spaces - 3 backticks",
+  "markdown": "``` a ```",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline x2 - 3 backticks",
+  "markdown": "```a``` ```b```",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     " ",
+     {
+      "type": 11,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped backtick before Code Inline - 3 backticks",
+  "markdown": "\\````a```b`c`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "`",
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code ` Inline - 3 backticks",
+  "markdown": "```a``b```",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a``b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline - 4 backticks",
+  "markdown": "````a````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline trims spaces - 4 backticks",
+  "markdown": "```` a ````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code Inline x2 - 4 backticks",
+  "markdown": "````a```` ````b````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     " ",
+     {
+      "type": 11,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped backtick before Code Inline - 4 backticks",
+  "markdown": "\\`````a````b`c`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "`",
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     },
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code ` Inline - 4 backticks",
+  "markdown": "````a```b````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a```b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code with newline - 1 backticks",
+  "markdown": "`a\nb`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code with two newlines - 1 backticks",
+  "markdown": "`a\n\nb`c`",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Unfinished code in a list - 1 backticks",
+  "markdown": "- `a\n- `b`c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "a"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "b"
+        ]
+       },
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code with newline - 2 backticks",
+  "markdown": "``a\nb``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code with two newlines - 2 backticks",
+  "markdown": "``a\n\nb``c``",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 11,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b",
+     {
+      "type": 11,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Unfinished code in a list - 2 backticks",
+  "markdown": "- ``a\n- ``b``c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "a"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "b"
+        ]
+       },
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Empty Code_Fence:3",
+  "markdown": "```\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3",
+  "markdown": "```\nfoo\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after paragraph",
+  "markdown": "a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after heading",
+  "markdown": "# a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 space before close",
+  "markdown": "```\nfoo\n ```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 with language",
+  "markdown": "```js\nfoo\n```",
+  "expected": [
+   {
+    "type": 10,
+    "attrs": {
+     "4": "js"
+    },
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 escaped backticks",
+  "markdown": "```\n``\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "``"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 - bad_end_fence:less",
+  "markdown": "```\n``\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "``"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 - bad_end_fence:more",
+  "markdown": "```\n````\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 - bad_end_fence:char",
+  "markdown": "```\n```b\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "```b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 - bad_end_fence:space",
+  "markdown": "```\n  `\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "  `"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Multiple Code Fence:3 should be separated",
+  "markdown": "```\nFoo\n```\n\nBar\n\n```\nBaz\n```",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "Foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "Bar"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "Baz"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Nested Code Fence:3",
+  "markdown": "````\nbefore\n```js\nsome js\n```\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "before\n```js\nsome js\n```"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Empty Code_Fence:4",
+  "markdown": "````\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4",
+  "markdown": "````\nfoo\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after paragraph",
+  "markdown": "a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after heading",
+  "markdown": "# a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 space before close",
+  "markdown": "````\nfoo\n ````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 with language",
+  "markdown": "````js\nfoo\n````",
+  "expected": [
+   {
+    "type": 10,
+    "attrs": {
+     "4": "js"
+    },
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 escaped backticks",
+  "markdown": "````\n```\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "```"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 - bad_end_fence:less",
+  "markdown": "````\n```\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "```"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 - bad_end_fence:more",
+  "markdown": "````\n`````\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "`````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 - bad_end_fence:char",
+  "markdown": "````\n````b\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "````b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 - bad_end_fence:space",
+  "markdown": "````\n   `\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "   `"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Multiple Code Fence:4 should be separated",
+  "markdown": "````\nFoo\n````\n\nBar\n\n````\nBaz\n````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "Foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "Bar"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "Baz"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Nested Code Fence:4",
+  "markdown": "`````\nbefore\n````js\nsome js\n````\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "before\n````js\nsome js\n````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Empty Code_Fence:5",
+  "markdown": "`````\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": []
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5",
+  "markdown": "`````\nfoo\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after paragraph",
+  "markdown": "a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after heading",
+  "markdown": "# a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 space before close",
+  "markdown": "`````\nfoo\n `````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 with language",
+  "markdown": "`````js\nfoo\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "attrs": {
+     "4": "js"
+    },
+    "children": [
+     "foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 escaped backticks",
+  "markdown": "`````\n````\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 - bad_end_fence:less",
+  "markdown": "`````\n````\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 - bad_end_fence:more",
+  "markdown": "`````\n``````\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "``````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 - bad_end_fence:char",
+  "markdown": "`````\n`````b\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "`````b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 - bad_end_fence:space",
+  "markdown": "`````\n    `\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "    `"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Multiple Code Fence:5 should be separated",
+  "markdown": "`````\nFoo\n`````\n\nBar\n\n`````\nBaz\n`````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "Foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "Bar"
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "Baz"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Nested Code Fence:5",
+  "markdown": "``````\nbefore\n`````js\nsome js\n`````\n``````",
+  "expected": [
+   {
+    "type": 10,
+    "children": [
+     "before\n`````js\nsome js\n`````"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block; indent: '    '",
+  "markdown": "      foo",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "  foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block multiple lines; indent: '    '",
+  "markdown": "    foo\n    bar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo\nbar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block end; indent: '    '",
+  "markdown": "    foo\nbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block; indent: '   \\t'",
+  "markdown": "   \t  foo",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "  foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block multiple lines; indent: '   \\t'",
+  "markdown": "   \tfoo\n   \tbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo\nbar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block end; indent: '   \\t'",
+  "markdown": "   \tfoo\nbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block; indent: '  \\t'",
+  "markdown": "  \t  foo",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "  foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block multiple lines; indent: '  \\t'",
+  "markdown": "  \tfoo\n  \tbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo\nbar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block end; indent: '  \\t'",
+  "markdown": "  \tfoo\nbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block; indent: ' \\t'",
+  "markdown": " \t  foo",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "  foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block multiple lines; indent: ' \\t'",
+  "markdown": " \tfoo\n \tbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo\nbar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block end; indent: ' \\t'",
+  "markdown": " \tfoo\nbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block; indent: '\\t'",
+  "markdown": "\t  foo",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "  foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block multiple lines; indent: '\\t'",
+  "markdown": "\tfoo\n\tbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo\nbar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Block end; indent: '\\t'",
+  "markdown": "\tfoo\nbar",
+  "expected": [
+   {
+    "type": 9,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"**bold*bold>em***'",
+  "markdown": "**bold*bold>em***",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       "bold",
+       {
+        "type": 12,
+        "children": [
+         "bold>em"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"***bold>em*bold**'",
+  "markdown": "***bold>em*bold**",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "bold>em"
+        ]
+       },
+       "bold"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"*em**em>bold***'",
+  "markdown": "*em**em>bold***",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "em",
+       {
+        "type": 14,
+        "children": [
+         "em>bold"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"***bold>em**em*'",
+  "markdown": "***bold>em**em*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "bold>em"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 12,
+      "children": [
+       "em"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"__bold_bold>em___'",
+  "markdown": "__bold_bold>em___",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       "bold",
+       {
+        "type": 13,
+        "children": [
+         "bold>em"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"___bold>em_bold__'",
+  "markdown": "___bold>em_bold__",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       {
+        "type": 13,
+        "children": [
+         "bold>em"
+        ]
+       },
+       "bold"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"_em__em>bold___'",
+  "markdown": "_em__em>bold___",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 13,
+      "children": [
+       "em",
+       {
+        "type": 15,
+        "children": [
+         "em>bold"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic & Bold \"___bold>em__em_'",
+  "markdown": "___bold>em__em_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       {
+        "type": 13,
+        "children": [
+         "bold>em"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 13,
+      "children": [
+       "em"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Ast",
+  "markdown": "*foo*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Ast space after begin",
+  "markdown": "a * b*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a * b*"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Ast with Code",
+  "markdown": "*`foo`*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Ast new Paragraph",
+  "markdown": "foo\n\n*bar*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Italic_Ast Begin",
+  "markdown": "\\*foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "*foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Italic_Ast End",
+  "markdown": "*foo\\*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 12,
+      "children": [
+       "foo*"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Und",
+  "markdown": "_foo_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 13,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Und space after begin",
+  "markdown": "a _ b_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a _ b_"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Und with Code",
+  "markdown": "_`foo`_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 13,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Italic_Und new Paragraph",
+  "markdown": "foo\n\n_bar_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 13,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Italic_Und Begin",
+  "markdown": "\\_foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "_foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Italic_Und End",
+  "markdown": "_foo\\_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 13,
+      "children": [
+       "foo_"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Ast",
+  "markdown": "**foo**",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Ast space after begin",
+  "markdown": "a ** b**",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a ** b**"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Ast with Code",
+  "markdown": "**`foo`**",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Ast new Paragraph",
+  "markdown": "foo\n\n**bar**",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strong_Ast Begin",
+  "markdown": "\\*\\*foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "**foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strong_Ast End",
+  "markdown": "**foo\\*\\*",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 14,
+      "children": [
+       "foo**"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Und",
+  "markdown": "__foo__",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Und space after begin",
+  "markdown": "a __ b__",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a __ b__"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Und with Code",
+  "markdown": "__`foo`__",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strong_Und new Paragraph",
+  "markdown": "foo\n\n__bar__",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strong_Und Begin",
+  "markdown": "\\_\\_foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "__foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strong_Und End",
+  "markdown": "__foo\\_\\_",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 15,
+      "children": [
+       "foo__"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strike",
+  "markdown": "~~foo~~",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 16,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strike space after begin",
+  "markdown": "a ~~ b~~",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a ~~ b~~"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strike with Code",
+  "markdown": "~~`foo`~~",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 16,
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Strike new Paragraph",
+  "markdown": "foo\n\n~~bar~~",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 16,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strike Begin",
+  "markdown": "\\~\\~foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "~~foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Strike End",
+  "markdown": "~~foo\\~\\~",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 16,
+      "children": [
+       "foo~~"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Backtick",
+  "markdown": "\\`foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "`foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape Backslash",
+  "markdown": "\\\\foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "\\foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escape normal char",
+  "markdown": "\\a",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "\\a"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Raw URL http://example.com/page",
+  "markdown": "http://example.com/page",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 18,
+      "attrs": {
+       "1": "http://example.com/page"
+      },
+      "children": [
+       "http://example.com/page"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Raw URL in text http://example.com/page",
+  "markdown": "foo http://example.com/page bar",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo ",
+     {
+      "type": 18,
+      "attrs": {
+       "1": "http://example.com/page"
+      },
+      "children": [
+       "http://example.com/page"
+      ]
+     },
+     " bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Doesn't match urls in text",
+  "markdown": "foohttp://example.com/page",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foohttp://example.com/page"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Raw URL https://example.com/page",
+  "markdown": "https://example.com/page",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 18,
+      "attrs": {
+       "1": "https://example.com/page"
+      },
+      "children": [
+       "https://example.com/page"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Raw URL in text https://example.com/page",
+  "markdown": "foo https://example.com/page bar",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo ",
+     {
+      "type": 18,
+      "attrs": {
+       "1": "https://example.com/page"
+      },
+      "children": [
+       "https://example.com/page"
+      ]
+     },
+     " bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Doesn't match urls in text",
+  "markdown": "foohttps://example.com/page",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foohttps://example.com/page"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Doesn't match not_urls as urls",
+  "markdown": "http:/wrong.com",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "http:/wrong.com"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Link",
+  "markdown": "[title](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 17,
+      "attrs": {
+       "1": "url"
+      },
+      "children": [
+       "title"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Link with code",
+  "markdown": "[`title`](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 17,
+      "attrs": {
+       "1": "url"
+      },
+      "children": [
+       {
+        "type": 11,
+        "children": [
+         "title"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Link new paragraph",
+  "markdown": "foo\n\n[title](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "foo"
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 17,
+      "attrs": {
+       "1": "url"
+      },
+      "children": [
+       "title"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Image",
+  "markdown": "![title](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 19,
+      "attrs": {
+       "2": "url"
+      },
+      "children": [
+       "title"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Image with code",
+  "markdown": "![`title`](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 19,
+      "attrs": {
+       "2": "url"
+      },
+      "children": [
+       "`title`"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Link with Image",
+  "markdown": "[![title](src)](href)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 17,
+      "attrs": {
+       "1": "href"
+      },
+      "children": [
+       {
+        "type": 19,
+        "attrs": {
+         "2": "src"
+        },
+        "children": [
+         "title"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped link Begin",
+  "markdown": "\\[foo](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "[foo](url)"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped link End",
+  "markdown": "[foo\\](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 17,
+      "children": [
+       "foo](url)"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Un-Escaped link Both",
+  "markdown": "\\\\[foo\\\\](url)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "\\",
+     {
+      "type": 17,
+      "attrs": {
+       "1": "url"
+      },
+      "children": [
+       "foo\\"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote",
+  "markdown": "> foo",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote no-space",
+  "markdown": ">foo",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote Escape",
+  "markdown": "\\> foo",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "> foo"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote line break",
+  "markdown": "> foo\nbar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo",
+       {
+        "type": 21,
+        "children": []
+       },
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote continued",
+  "markdown": "> foo\n> bar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo",
+       {
+        "type": 21,
+        "children": []
+       },
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote end",
+  "markdown": "> foo\n\nbar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "bar"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote heading",
+  "markdown": "> # foo",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 3,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote codeblock",
+  "markdown": "> ```\nfoo\n```",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 10,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote blockquote",
+  "markdown": "> > foo",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote up blockquote",
+  "markdown": "> foo\n> > bar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 2,
+      "children": [
+       "foo"
+      ]
+     },
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "bar"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote blockquote down",
+  "markdown": "> > foo\n> \n> bar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 2,
+      "children": [
+       "bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote blockquote continued",
+  "markdown": "> > foo\n> >\n> > bar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "foo"
+        ]
+       },
+       {
+        "type": 2,
+        "children": [
+         "bar"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote up down",
+  "markdown": "> > foo\n>\n> > bar",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     },
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "bar"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Blockquote with code and line break",
+  "markdown": "> > `a\nb`\n>\n> > c",
+  "expected": [
+   {
+    "type": 20,
+    "children": [
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         {
+          "type": 11,
+          "children": [
+           "a",
+           {
+            "type": 21,
+            "children": []
+           },
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 20,
+      "children": [
+       {
+        "type": 2,
+        "children": [
+         "c"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Ordered list",
+  "markdown": "1. hello\n2. world\n3. wave",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "hello"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "world"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "wave"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered; prefix: *",
+  "markdown": "* foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with italic; prefix: *",
+  "markdown": "* *foo*",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered two items; prefix: *",
+  "markdown": "* a\n* b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with line break; prefix: *",
+  "markdown": "* a\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two newlines; prefix: *",
+  "markdown": "* a\n\n* b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with three newlines; prefix: *",
+  "markdown": "* a\n\n\n* b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered end; prefix: *",
+  "markdown": "* a\n\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after line break; prefix: *",
+  "markdown": "a\n* b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with unchecked task; prefix: *",
+  "markdown": "* [ ] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with checked task; prefix: *",
+  "markdown": "* [x] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two tasks; prefix: *",
+  "markdown": "* [ ] foo\n* [x] bar\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with link; prefix: *",
+  "markdown": "* [x](url)",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 17,
+        "attrs": {
+         "1": "url"
+        },
+        "children": [
+         "x"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested list; prefix: *",
+  "markdown": "* a\n  * b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered failed nested list; prefix: *",
+  "markdown": "* a\n * b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested ul multiple items; prefix: *",
+  "markdown": "* a\n  * b\n  * c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         },
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested and un-nested; prefix: *",
+  "markdown": "* a\n  * b\n* c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 in List Unordered; prefix: *",
+  "markdown": "* a\n  ```\n  b\n  c\n  ```\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after List Unordered; prefix: *",
+  "markdown": "* a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 in List Unordered; prefix: *",
+  "markdown": "* a\n  ````\n  b\n  c\n  ````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after List Unordered; prefix: *",
+  "markdown": "* a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 in List Unordered; prefix: *",
+  "markdown": "* a\n  `````\n  b\n  c\n  `````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after List Unordered; prefix: *",
+  "markdown": "* a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; prefix: *",
+  "markdown": "# a\n* b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; prefix: *",
+  "markdown": "# a\n* b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; prefix: *",
+  "markdown": "* a\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; prefix: *",
+  "markdown": "* a\n  - b\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; newline; prefix: *",
+  "markdown": "# a\n\n* b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; newline; prefix: *",
+  "markdown": "# a\n\n* b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; newline; prefix: *",
+  "markdown": "* a\n\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; newline; prefix: *",
+  "markdown": "* a\n  - b\n\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; indent newline; prefix: *",
+  "markdown": "# a\n  \n* b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; indent newline; prefix: *",
+  "markdown": "# a\n  \n* b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; indent newline; prefix: *",
+  "markdown": "* a\n  \n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; indent newline; prefix: *",
+  "markdown": "* a\n  - b\n  \n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered; prefix: -",
+  "markdown": "- foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with italic; prefix: -",
+  "markdown": "- *foo*",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered two items; prefix: -",
+  "markdown": "- a\n- b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with line break; prefix: -",
+  "markdown": "- a\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two newlines; prefix: -",
+  "markdown": "- a\n\n- b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with three newlines; prefix: -",
+  "markdown": "- a\n\n\n- b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered end; prefix: -",
+  "markdown": "- a\n\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after line break; prefix: -",
+  "markdown": "a\n- b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with unchecked task; prefix: -",
+  "markdown": "- [ ] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with checked task; prefix: -",
+  "markdown": "- [x] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two tasks; prefix: -",
+  "markdown": "- [ ] foo\n- [x] bar\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with link; prefix: -",
+  "markdown": "- [x](url)",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 17,
+        "attrs": {
+         "1": "url"
+        },
+        "children": [
+         "x"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested list; prefix: -",
+  "markdown": "- a\n  - b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered failed nested list; prefix: -",
+  "markdown": "- a\n - b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested ul multiple items; prefix: -",
+  "markdown": "- a\n  * b\n  * c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         },
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested and un-nested; prefix: -",
+  "markdown": "- a\n  * b\n- c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 in List Unordered; prefix: -",
+  "markdown": "- a\n  ```\n  b\n  c\n  ```\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after List Unordered; prefix: -",
+  "markdown": "- a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 in List Unordered; prefix: -",
+  "markdown": "- a\n  ````\n  b\n  c\n  ````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after List Unordered; prefix: -",
+  "markdown": "- a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 in List Unordered; prefix: -",
+  "markdown": "- a\n  `````\n  b\n  c\n  `````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after List Unordered; prefix: -",
+  "markdown": "- a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; prefix: -",
+  "markdown": "# a\n- b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; prefix: -",
+  "markdown": "# a\n- b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; prefix: -",
+  "markdown": "- a\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; prefix: -",
+  "markdown": "- a\n  - b\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; newline; prefix: -",
+  "markdown": "# a\n\n- b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; newline; prefix: -",
+  "markdown": "# a\n\n- b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; newline; prefix: -",
+  "markdown": "- a\n\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; newline; prefix: -",
+  "markdown": "- a\n  - b\n\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; indent newline; prefix: -",
+  "markdown": "# a\n  \n- b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; indent newline; prefix: -",
+  "markdown": "# a\n  \n- b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; indent newline; prefix: -",
+  "markdown": "- a\n  \n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; indent newline; prefix: -",
+  "markdown": "- a\n  - b\n  \n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered; prefix: +",
+  "markdown": "+ foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with italic; prefix: +",
+  "markdown": "+ *foo*",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered two items; prefix: +",
+  "markdown": "+ a\n+ b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with line break; prefix: +",
+  "markdown": "+ a\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two newlines; prefix: +",
+  "markdown": "+ a\n\n+ b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with three newlines; prefix: +",
+  "markdown": "+ a\n\n\n+ b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered end; prefix: +",
+  "markdown": "+ a\n\nb",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after line break; prefix: +",
+  "markdown": "a\n+ b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with unchecked task; prefix: +",
+  "markdown": "+ [ ] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with checked task; prefix: +",
+  "markdown": "+ [x] foo",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with two tasks; prefix: +",
+  "markdown": "+ [ ] foo\n+ [x] bar\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered with link; prefix: +",
+  "markdown": "+ [x](url)",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 17,
+        "attrs": {
+         "1": "url"
+        },
+        "children": [
+         "x"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested list; prefix: +",
+  "markdown": "+ a\n  + b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered failed nested list; prefix: +",
+  "markdown": "+ a\n + b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested ul multiple items; prefix: +",
+  "markdown": "+ a\n  * b\n  * c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         },
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested and un-nested; prefix: +",
+  "markdown": "+ a\n  * b\n+ c\n",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 in List Unordered; prefix: +",
+  "markdown": "+ a\n  ```\n  b\n  c\n  ```\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after List Unordered; prefix: +",
+  "markdown": "+ a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 in List Unordered; prefix: +",
+  "markdown": "+ a\n  ````\n  b\n  c\n  ````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after List Unordered; prefix: +",
+  "markdown": "+ a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 in List Unordered; prefix: +",
+  "markdown": "+ a\n  `````\n  b\n  c\n  `````\nd",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after List Unordered; prefix: +",
+  "markdown": "+ a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; prefix: +",
+  "markdown": "# a\n+ b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; prefix: +",
+  "markdown": "# a\n+ b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; prefix: +",
+  "markdown": "+ a\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; prefix: +",
+  "markdown": "+ a\n  - b\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; newline; prefix: +",
+  "markdown": "# a\n\n+ b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; newline; prefix: +",
+  "markdown": "# a\n\n+ b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; newline; prefix: +",
+  "markdown": "+ a\n\n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; newline; prefix: +",
+  "markdown": "+ a\n  - b\n\n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered after heading; indent newline; prefix: +",
+  "markdown": "# a\n  \n+ b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested after heading; indent newline; prefix: +",
+  "markdown": "# a\n  \n+ b\n  * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered before heading; indent newline; prefix: +",
+  "markdown": "+ a\n  \n# b",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Unordered nested before heading; indent newline; prefix: +",
+  "markdown": "+ a\n  - b\n  \n## c",
+  "expected": [
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered; prefix: 1.",
+  "markdown": "1. foo",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with italic; prefix: 1.",
+  "markdown": "1. *foo*",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered two items; prefix: 1.",
+  "markdown": "1. a\n1. b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with line break; prefix: 1.",
+  "markdown": "1. a\nb",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with two newlines; prefix: 1.",
+  "markdown": "1. a\n\n1. b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with three newlines; prefix: 1.",
+  "markdown": "1. a\n\n\n1. b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered end; prefix: 1.",
+  "markdown": "1. a\n\nb",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after line break; prefix: 1.",
+  "markdown": "a\n1. b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with unchecked task; prefix: 1.",
+  "markdown": "1. [ ] foo",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with checked task; prefix: 1.",
+  "markdown": "1. [x] foo",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with two tasks; prefix: 1.",
+  "markdown": "1. [ ] foo\n1. [x] bar\n",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with link; prefix: 1.",
+  "markdown": "1. [x](url)",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 17,
+        "attrs": {
+         "1": "url"
+        },
+        "children": [
+         "x"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested list; prefix: 1.",
+  "markdown": "1. a\n   1. b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 24,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered failed nested list; prefix: 1.",
+  "markdown": "1. a\n  1. b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested ul multiple items; prefix: 1.",
+  "markdown": "1. a\n   * b\n   * c\n",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         },
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested and un-nested; prefix: 1.",
+  "markdown": "1. a\n   * b\n1. c\n",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 in List Ordered; prefix: 1.",
+  "markdown": "1. a\n   ```\n   b\n   c\n   ```\nd",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after List Ordered; prefix: 1.",
+  "markdown": "1. a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 in List Ordered; prefix: 1.",
+  "markdown": "1. a\n   ````\n   b\n   c\n   ````\nd",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after List Ordered; prefix: 1.",
+  "markdown": "1. a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 in List Ordered; prefix: 1.",
+  "markdown": "1. a\n   `````\n   b\n   c\n   `````\nd",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after List Ordered; prefix: 1.",
+  "markdown": "1. a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; prefix: 1.",
+  "markdown": "# a\n1. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; prefix: 1.",
+  "markdown": "# a\n1. b\n   * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; prefix: 1.",
+  "markdown": "1. a\n# b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; prefix: 1.",
+  "markdown": "1. a\n   - b\n## c",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; newline; prefix: 1.",
+  "markdown": "# a\n\n1. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; newline; prefix: 1.",
+  "markdown": "# a\n\n1. b\n   * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; newline; prefix: 1.",
+  "markdown": "1. a\n\n# b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; newline; prefix: 1.",
+  "markdown": "1. a\n   - b\n\n## c",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; indent newline; prefix: 1.",
+  "markdown": "# a\n   \n1. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; indent newline; prefix: 1.",
+  "markdown": "# a\n   \n1. b\n   * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; indent newline; prefix: 1.",
+  "markdown": "1. a\n   \n# b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; indent newline; prefix: 1.",
+  "markdown": "1. a\n   - b\n   \n## c",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered; prefix: 420.",
+  "markdown": "420. foo",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with italic; prefix: 420.",
+  "markdown": "420. *foo*",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 12,
+        "children": [
+         "foo"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered two items; prefix: 420.",
+  "markdown": "420. a\n420. b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with line break; prefix: 420.",
+  "markdown": "420. a\nb",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 21,
+        "children": []
+       },
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with two newlines; prefix: 420.",
+  "markdown": "420. a\n\n420. b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with three newlines; prefix: 420.",
+  "markdown": "420. a\n\n\n420. b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered end; prefix: 420.",
+  "markdown": "420. a\n\nb",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after line break; prefix: 420.",
+  "markdown": "a\n420. b",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with unchecked task; prefix: 420.",
+  "markdown": "420. [ ] foo",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with checked task; prefix: 420.",
+  "markdown": "420. [x] foo",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " foo"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with two tasks; prefix: 420.",
+  "markdown": "420. [ ] foo\n420. [x] bar\n",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "children": []
+       },
+       " foo"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 26,
+        "attrs": {
+         "8": ""
+        },
+        "children": []
+       },
+       " bar"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered with link; prefix: 420.",
+  "markdown": "420. [x](url)",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       {
+        "type": 17,
+        "attrs": {
+         "1": "url"
+        },
+        "children": [
+         "x"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested list; prefix: 420.",
+  "markdown": "420. a\n     420. b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 24,
+        "attrs": {
+         "16": "420"
+        },
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered failed nested list; prefix: 420.",
+  "markdown": "420. a\n    420. b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested ul multiple items; prefix: 420.",
+  "markdown": "420. a\n     * b\n     * c\n",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         },
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested and un-nested; prefix: 420.",
+  "markdown": "420. a\n     * b\n420. c\n",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": 25,
+      "children": [
+       "c"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 in List Ordered; prefix: 420.",
+  "markdown": "420. a\n     ```\n     b\n     c\n     ```\nd",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:3 after List Ordered; prefix: 420.",
+  "markdown": "420. a\n```\nb\n```",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 in List Ordered; prefix: 420.",
+  "markdown": "420. a\n     ````\n     b\n     c\n     ````\nd",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:4 after List Ordered; prefix: 420.",
+  "markdown": "420. a\n````\nb\n````",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 in List Ordered; prefix: 420.",
+  "markdown": "420. a\n     `````\n     b\n     c\n     `````\nd",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 10,
+        "children": [
+         "b\nc"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Code_Fence:5 after List Ordered; prefix: 420.",
+  "markdown": "420. a\n`````\nb\n`````",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 10,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; prefix: 420.",
+  "markdown": "# a\n420. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; prefix: 420.",
+  "markdown": "# a\n420. b\n     * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; prefix: 420.",
+  "markdown": "420. a\n# b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; prefix: 420.",
+  "markdown": "420. a\n     - b\n## c",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; newline; prefix: 420.",
+  "markdown": "# a\n\n420. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; newline; prefix: 420.",
+  "markdown": "# a\n\n420. b\n     * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; newline; prefix: 420.",
+  "markdown": "420. a\n\n# b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; newline; prefix: 420.",
+  "markdown": "420. a\n     - b\n\n## c",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered after heading; indent newline; prefix: 420.",
+  "markdown": "# a\n     \n420. b",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested after heading; indent newline; prefix: 420.",
+  "markdown": "# a\n     \n420. b\n     * c",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "a"
+    ]
+   },
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "c"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered before heading; indent newline; prefix: 420.",
+  "markdown": "420. a\n     \n# b",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 3,
+    "children": [
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "List Ordered nested before heading; indent newline; prefix: 420.",
+  "markdown": "420. a\n     - b\n     \n## c",
+  "expected": [
+   {
+    "type": 24,
+    "attrs": {
+     "16": "420"
+    },
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a",
+       {
+        "type": 23,
+        "children": [
+         {
+          "type": 25,
+          "children": [
+           "b"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 4,
+    "children": [
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Failed nesting of ul in ol",
+  "markdown": "1. a\n  * b",
+  "expected": [
+   {
+    "type": 24,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "a"
+      ]
+     }
+    ]
+   },
+   {
+    "type": 23,
+    "children": [
+     {
+      "type": 25,
+      "children": [
+       "b"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Simple Table",
+  "markdown": "| Foo | Bar |\n| -- | -- |\n| A\\|a | Bb |\n| aA| bB |",
+  "expected": [
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " Foo "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " Bar "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " A|a "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " Bb "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " aA"
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " bB "
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table after heading",
+  "markdown": "# Heading\n| Foo | Bar |\n| -- | -- |\n| a | b |",
+  "expected": [
+   {
+    "type": 3,
+    "children": [
+     "Heading"
+    ]
+   },
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " Foo "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " Bar "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " a "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " b "
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table after paragraph",
+  "markdown": "paragraph\n| Foo | Bar |\n| -- | -- |\n| a | b |",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "paragraph"
+    ]
+   },
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " Foo "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " Bar "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " a "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " b "
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table Empty Cells",
+  "markdown": "||\n|-|\n||",
+  "expected": [
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": []
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": []
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table Escaped Pipe",
+  "markdown": "\\| a | b | c |",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "| a | b | c |"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Paragraph after table",
+  "markdown": "| A | B |\n| -- | -- |\n| a | b |\n\nHello",
+  "expected": [
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " A "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " B "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " a "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " b "
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 2,
+    "children": [
+     "Hello"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table after table",
+  "markdown": "| A | B |\n| - | - |\n| a | b |\n\n| C | D |\n| - | - |\n| c | d |",
+  "expected": [
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " A "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " B "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " a "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " b "
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " C "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " D "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " c "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " d "
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Table with nested elements",
+  "markdown": "| *Aa* | B<br>b |\n| -- | -- |\n| `aA` | bB |",
+  "expected": [
+   {
+    "type": 27,
+    "children": [
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " ",
+         {
+          "type": 12,
+          "children": [
+           "Aa"
+          ]
+         },
+         " "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " B",
+         {
+          "type": 21,
+          "children": []
+         },
+         "b "
+        ]
+       }
+      ]
+     },
+     {
+      "type": 28,
+      "children": [
+       {
+        "type": 29,
+        "children": [
+         " ",
+         {
+          "type": 11,
+          "children": [
+           "aA"
+          ]
+         },
+         " "
+        ]
+       },
+       {
+        "type": 29,
+        "children": [
+         " bB "
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Inline Equation ()",
+  "markdown": "\\(equation\\)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 31,
+      "children": [
+       "equation"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Inline Equation () no escape",
+  "markdown": "(equation)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "(equation)"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Inline Equation $ prevented by spaces",
+  "markdown": "$ equation $",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$ equation $"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Inline Equation () with spaces",
+  "markdown": "\\( equation \\)",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 31,
+      "children": [
+       " equation "
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Inline Equation $",
+  "markdown": "$equation$",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 31,
+      "children": [
+       "equation"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Block Equation $$",
+  "markdown": "$$\nequation\n$$",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 30,
+      "children": [
+       "equation\n"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Block Equation []",
+  "markdown": "\\[\nequation\n\\]",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     {
+      "type": 30,
+      "children": [
+       "equation\n"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Equation_Block [] in Code_Inline",
+  "markdown": "a`\\[b\\]`c",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "a",
+     {
+      "type": 11,
+      "children": [
+       "\\[b\\]"
+      ]
+     },
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Equation in text",
+  "markdown": "some text $equation$ more text",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "some text ",
+     {
+      "type": 31,
+      "children": [
+       "equation"
+      ]
+     },
+     " more text"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Equation in text ()",
+  "markdown": "some text \\(equation\\) more text",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "some text ",
+     {
+      "type": 31,
+      "children": [
+       "equation"
+      ]
+     },
+     " more text"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Equation in text $ no closing",
+  "markdown": "some text $equation more text",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "some text ",
+     {
+      "type": 31,
+      "children": [
+       "equation more text"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Dollar sign followed by digit is not equation",
+  "markdown": "$123 is not an equation",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$123 is not an equation"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Dollar sign followed by comma is not equation",
+  "markdown": "$,000 is not an equation",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$,000 is not an equation"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Dollar sign followed by period is not equation",
+  "markdown": "$.99 is not an equation",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$.99 is not an equation"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Multiple currency values in text",
+  "markdown": "The items cost $10, $20, and $30 respectively.",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "The items cost $10, $20, and $30 respectively."
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Mixed currency and equation usage",
+  "markdown": "Price: $50 where $x^2$ is the formula",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "Price: $50 where ",
+     {
+      "type": 31,
+      "children": [
+       "x^2"
+      ]
+     },
+     " is the formula"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Currency at end of line",
+  "markdown": "Total cost: $99\nNext line",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "Total cost: $99",
+     {
+      "type": 21,
+      "children": []
+     },
+     "Next line"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Dollar sign followed by various delimiters",
+  "markdown": "$: a, $; b, $) c, $? d, $] e",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$: a, $; b, $) c, $? d, $] e"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Valid equation after text without space",
+  "markdown": "Value$x=y$formula",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "Value",
+     {
+      "type": 31,
+      "children": [
+       "x=y"
+      ]
+     },
+     "formula"
+    ]
+   }
+  ]
+ },
+ {
+  "title": "Escaped dollar sign",
+  "markdown": "\\$foo$",
+  "expected": [
+   {
+    "type": 2,
+    "children": [
+     "$foo$"
+    ]
+   }
+  ]
+ }
+]

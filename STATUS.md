@@ -1,7 +1,43 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 6 — render (smd.js port) — started 2026-07-16
+Phase 7 — REPL — started 2026-07-16
+
+### Phase 6 — render (smd.js port) — done
+- Oracle: smd.js's own test suite, ported — green (435 cases × 2 modes)
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: none.
+- Notes:
+  - Upstream cloned to `attic/smd` (thetarnav/streaming-markdown @ HEAD,
+    MIT; credited in README). The 435 `test_single_write` invocations in
+    `smd_test.js` were extracted verbatim to
+    `testdata/transliterated/render/smd-cases.json` by a node shim
+    (`attic/smd/dump_cases.mjs`) that stubs the setup module and collects
+    `(title, markdown, expected_children)`; the expected trees serialize as
+    `{type, attrs?, children}` with smd.js's numeric Token/Attr values.
+  - `internal/render/parser.go` is a line-faithful transliteration of the
+    smd.js character state machine (`Parser.Write`/`End`, `Renderer`
+    interface = add_token/end_token/add_text/set_attr). The full ported
+    suite passed on the first run, in both single-write and char-by-char
+    modes (the harness was mutation-checked: it detects type and text
+    mismatches).
+  - JS-semantics traps handled explicitly: iteration is by code point
+    (`for _, r := range`), `.length` checks compare byte length only where
+    content is provably ASCII, and the two checks that can see arbitrary
+    text (CodeFence/CodeInline close) use `jsLen` (UTF-16 units) so astral
+    characters can't false-close a fence; out-of-range indexing uses a
+    `charAtIs` helper mirroring JS's undefined semantics. The
+    Uint32Array(24) token stack became a growable slice (JS silently
+    drops writes past the cap; nesting >23 deep is broken upstream anyway).
+  - `internal/render/ansi.go` is the terminal Renderer for the phase 7
+    live render (smd.js's default renderer is DOM-only, so the texture
+    here is ours to hand-validate): styled headings/emphasis/code, "│ "
+    blockquote prefixes, bullet/ordinal lists with hanging indent,
+    " │ "-joined table cells with an underlined header row, links as
+    "label (url)". Tests pin plain-mode layout, chunk-granularity
+    invariance (byte-identical output whole-string vs char-by-char), and
+    color output stripping back to the plain output exactly.
 
 ### Phase 5 — base-coder script mode — done
 - Oracle: record/replay + the §11 failure matrix — green; live smoke passed
