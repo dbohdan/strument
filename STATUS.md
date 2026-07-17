@@ -400,7 +400,12 @@ Outstanding: phase 7 REPL hand-validation by the human.
   chat transcript `history/<basename>-<hash8>.md` (markdown, one block per
   turn with a model/tokens/cost header — improving on aider's bare
   transcript) keyed by the absolute project root, and a **global**
-  `input-history` for readline (every REPL keeps input history global).
+  `input-history` for readline (every REPL keeps input history global). The
+  REPL records input history itself (readline auto-save disabled) so every
+  substantive line is kept — prompts, `/ask`, `/add`, `/model`, `/run` — and
+  only the pure session-enders `/exit`/`/quit` are dropped (recalling them
+  helps nobody, and they'd otherwise sit as the newest entry). Confirm y/n
+  answers stay out of history.
   `history_file` in `config.star` overrides the chat path; `--no-history`
   disables writing; `strument history` prints the resolved path (XDG's one
   cost is discoverability). **Unbounded growth** is the same failure mode

@@ -117,6 +117,10 @@ func New(opts Options) (*REPL, error) {
 		Stdin:           opts.Stdin,
 		Stdout:          opts.Stdout,
 		Stderr:          opts.Stderr,
+		// We record input history ourselves (saveHistory) so we can keep
+		// every substantive line — prompts, /ask, /add, /model — but drop
+		// the pure session-enders that recalling would never help with.
+		DisableAutoSaveHistory: true,
 	}
 	if opts.IsTerminal != nil {
 		cfg.FuncIsTerminal = opts.IsTerminal
@@ -169,6 +173,22 @@ func (r *REPL) chord() bool {
 	return second
 }
 
+// historyExcluded is the set of commands not worth recalling: the pure
+// session-enders. Everything else — prompts, /ask, /add, /model, /run —
+// is saved so up-arrow can bring it back.
+var historyExcluded = map[string]bool{"/exit": true, "/quit": true}
+
+// saveHistory records a submitted line in the input history unless it is a
+// session-ender. The command word is matched exactly (so "/exit now" and a
+// message beginning "exit" are still saved).
+func (r *REPL) saveHistory(line string) {
+	cmd, _, _ := strings.Cut(line, " ")
+	if historyExcluded[cmd] {
+		return
+	}
+	_ = r.rl.SaveToHistory(line)
+}
+
 // Run is the main loop: getInput -> dispatch/runOne -> undo hint (§1.2).
 // It returns when the user exits (/exit, Ctrl-D, or a Ctrl-C chord at the
 // prompt).
@@ -193,6 +213,7 @@ func (r *REPL) Run(ctx context.Context) error {
 		if line == "" {
 			continue
 		}
+		r.saveHistory(line)
 
 		if strings.HasPrefix(line, "/") {
 			msg, quit := r.dispatch(ctx, line)
