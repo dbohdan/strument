@@ -4,6 +4,8 @@
 All phases (0–9) complete, 2026-07-17. Outstanding: phase 7 REPL
 hand-validation by the human, and the "Pending questions for human" below.
 
+## Phase log
+
 ### Phase 9 — packaging — done
 - Oracle: binary size + smoke run — green
 - Started: 2026-07-17
@@ -183,10 +185,21 @@ hand-validation by the human, and the "Pending questions for human" below.
     drop, cache breakpoints (≤3, never done/cur, no history mutation),
     native+inline reasoning separation, reasoning-tag metachars.
   - Interpretations settled from reference reading (documented here, not
-    deviations): usage from length-terminated attempts IS accumulated (aider
-    loses it — spec §8 wins); repeated Finish events (OpenRouter sends
-    "stop" twice) are idempotent; `edited` includes allowed-but-failed paths
-    (aider parity); apply-report reflection returns AFTER history rotation.
+    deviations): repeated Finish events (OpenRouter sends "stop" twice) are
+    idempotent. (Usage-on-length-terminated is now Deviation D3; the
+    `edited` semantics are Deviation D4; the rotation-order item was a spec
+    conflict, resolved below — none of the three were plain interpretations.)
+  - **Resolved spec conflict — apply-report reflection vs history
+    rotation.** The basecoder-spec phase table orders the reflect-return
+    *before* `moveBackCurMessages`; `reference/base_coder.py:1588-1597`
+    does the opposite — rotation is inside `if edited:`, and
+    `if self.reflected_message: return` comes after. Under the document-
+    precedence rule this was a spec-vs-reference conflict and should have
+    been a Pending question, not filed as an "interpretation". It is moot
+    under Strument's atomic apply: a reflectable error comes from
+    parse/dry-run, so `edited` is empty and the ordering is unreachable
+    either way. We follow aider (rotate, then return) for parity. Recorded
+    rather than silently resolved.
   - Small declared choices pending human review (see Pending questions):
     TokenCounter is runes/4 for all models in v1 (no tiktoken dep pinned;
     counts are advisory §10); URL scraping is a minimal GET+strip
@@ -291,51 +304,6 @@ hand-validation by the human, and the "Pending questions for human" below.
     usage (the OpenRouter usage/cost control).
   - `strument trust` CLI subcommand wired.
 
-## Standing notes
-- Git features are **on by default** when cwd is inside a git repository; `--no-git`
-  opts out. Confirmed with the human 2026-07-16 (guide commit `ef7c8d3` is
-  authoritative). The stale "`--no-git` default" wording in
-  `basecoder-spec.md` has been corrected to match (2026-07-17), and the
-  guide now carries an explicit document-precedence rule (guide wins over a
-  subsystem spec) for exactly this class of conflict.
-- `reference/` (aider @ `5dc9490`) and any other reference clones are
-  **gitignored**, never committed. Committed aider content is limited to the
-  31 `*-tags.scm` query files and verbatim prompt strings, covered by the
-  Apache-2.0 LICENSE + README credit.
-- Verified 2026-07-16: aider upstream HEAD == pinned SHA `5dc9490…`; go1.26.5
-  toolchain auto-downloads in this container; proxy.golang.org and
-  openrouter.ai reachable; Python 3.11.15 available for fixture capture.
-
-## Phase log
-
-### Phase 0 — Scaffold — done
-- Oracle: builds + empty CI green — `go build/vet/test ./...` green locally
-- Started: 2026-07-16
-- Finished: 2026-07-16
-- Deviations: none
-- Notes:
-  - `reference/` cloned at `5dc9490bb35f9729ef2c95d00a19ccd30c26339c`.
-    A stub `reference/go.mod` carve-out (uncommitted, inside the gitignored
-    clone) stops `go build ./...` from walking aider's Go test fixtures —
-    recreate it if the clone is redone.
-  - LICENSE copied from aider (Apache-2.0). README credits aider + smd.js.
-  - Recorder design: `strumentrec` captures the wire **raw** (verbatim request
-    body, verbatim SSE response, secret-stripped headers). Distillation into
-    the fixture schema's `StreamEvent` rows happens in phase 4 using the real
-    client's SSE parser, so the dialect has a single source of truth. The
-    harness spec's schema (§2) is the *scenario* format, which the loader and
-    replay stubs implement now.
-  - Python aider 0.86.3.dev53+g5dc9490bb installs and runs from the reference
-    clone (`attic/venv`). The phase-0 smoke fixture
-    `testdata/fixtures/basecoder/edit-success.jsonl` was **captured live**
-    (aider `--edit-format diff --no-git` → strumentrec → OpenRouter,
-    `deepseek/deepseek-v4-flash`) and distilled from the raw wire log.
-    Dialect facts learned: OpenRouter emits native reasoning on
-    `delta.reasoning` (124 chunks in this capture); the final chunk carries a
-    `usage` object including in-band `cost` **without** `stream_options`
-    being requested; litellm strips the `openai/` routing prefix so the wire
-    model is the bare slug; aider sends `temperature: 0` by default.
-
 ### Phase 1 — editblock — done
 - Oracle: transliterated `test_editblock.py` + `test_find_or_blocks.py` — green
 - Started: 2026-07-16
@@ -368,8 +336,91 @@ hand-validation by the human, and the "Pending questions for human" below.
     `test_full_edit_dry_run`, `test_create_new_file_with_other_file_in_chat`)
     — ApplyEdits-level analogs are in place now.
 
+### Phase 0 — Scaffold — done
+- Oracle: builds + empty CI green — `go build/vet/test ./...` green locally
+- Started: 2026-07-16
+- Finished: 2026-07-16
+- Deviations: none
+- Notes:
+  - `reference/` cloned at `5dc9490bb35f9729ef2c95d00a19ccd30c26339c`.
+    A stub `reference/go.mod` carve-out (uncommitted, inside the gitignored
+    clone) stops `go build ./...` from walking aider's Go test fixtures —
+    recreate it if the clone is redone.
+  - LICENSE copied from aider (Apache-2.0). README credits aider + smd.js.
+  - Recorder design: `strumentrec` captures the wire **raw** (verbatim request
+    body, verbatim SSE response, secret-stripped headers). Distillation into
+    the fixture schema's `StreamEvent` rows happens in phase 4 using the real
+    client's SSE parser, so the dialect has a single source of truth. The
+    harness spec's schema (§2) is the *scenario* format, which the loader and
+    replay stubs implement now.
+  - Python aider 0.86.3.dev53+g5dc9490bb installs and runs from the reference
+    clone (`attic/venv`). The phase-0 smoke fixture
+    `testdata/fixtures/basecoder/edit-success.jsonl` was **captured live**
+    (aider `--edit-format diff --no-git` → strumentrec → OpenRouter,
+    `deepseek/deepseek-v4-flash`) and distilled from the raw wire log.
+    Dialect facts learned: OpenRouter emits native reasoning on
+    `delta.reasoning` (124 chunks in this capture); the final chunk carries a
+    `usage` object including in-band `cost` **without** `stream_options`
+    being requested; litellm strips the `openai/` routing prefix so the wire
+    model is the bare slug; aider sends `temperature: 0` by default.
+
+## Standing notes
+- Git features are **on by default** when cwd is inside a git repository; `--no-git`
+  opts out. Confirmed with the human 2026-07-16 (guide commit `ef7c8d3` is
+  authoritative). The stale "`--no-git` default" wording in
+  `basecoder-spec.md` has been corrected to match (2026-07-17), and the
+  guide now carries an explicit document-precedence rule (guide wins over a
+  subsystem spec) for exactly this class of conflict.
+- `reference/` (aider @ `5dc9490`) and any other reference clones are
+  **gitignored**, never committed. Committed aider content is limited to the
+  31 `*-tags.scm` query files and verbatim prompt strings, covered by the
+  Apache-2.0 LICENSE + README credit.
+- Verified 2026-07-16: aider upstream HEAD == pinned SHA `5dc9490…`; go1.26.5
+  toolchain auto-downloads in this container; proxy.golang.org and
+  openrouter.ai reachable; Python 3.11.15 available for fixture capture.
+
 ## Deviations
-(none yet)
+
+Numbered divergences from aider's *behavior* (not the settled
+[Divergence]/[Deferred] scope calls the specs already make). Each was
+decided during implementation and is recorded here so a future session can
+`grep Deviations` and see them — the register was wrongly "(none yet)"
+through phase 9 while these lived in per-phase Notes prose (Opus review,
+2026-07-17).
+
+- **D1 — dry-run reads current file content, not aider's stale-read
+  artifact.** aider's `dry_run` apply path reads pre-edit content and can
+  report against stale bytes; Strument's `ApplyEdits` is one pure planner
+  over a `FileReader` + overlay, so dry-run and real apply share a code
+  path and stacked edits compose (its real-run behavior). Improvement, not
+  parity. Cost: the dry-run report can differ from aider's when a response
+  stacks edits on one file. (Phase 1; `internal/editblock`,
+  `internal/coder/apply.go`.)
+
+- **D2 — the embedded tags queries are rewritten at load, not executed
+  verbatim.** gotreesitter matches the anchored doc-comment pattern
+  `((comment)* @doc . (X))` only once per parent (upstream tree-sitter
+  matches at every position), which silently drops most definitions;
+  gotreesitter also rejects the `#set-adjacent!` directive at compile time.
+  `preprocessQuery` strips the `(comment)* @doc` + `.` anchor prefix, the
+  `@doc` directives, and `#set-adjacent!`. Behavior-preserving for the
+  `name.*` captures the mapper consumes (it never reads `@doc`), but it
+  means "copy the `.scm` verbatim" holds for the committed files, not for
+  what actually runs. Cost: a future grammar/query change must re-verify
+  `preprocessQuery` still yields the intended captures. (Phase 3;
+  `internal/repomap/lang.go`.)
+
+- **D3 — usage from length-terminated attempts is accumulated; aider loses
+  it.** On a `finish_reason:"length"` attempt that is then continued or
+  reflected, Strument sums the usage/cost across attempts (basecoder-spec
+  §8 directs this); aider discards the interrupted attempt's usage. Cost:
+  reported cost is higher than aider would show for the same multi-attempt
+  turn — but it is the true cost. Guided by the spec, recorded here as a
+  behavioral divergence from aider. (Phase 5; `internal/coder/send.go`
+  `finalizeUsage`.)
+
+(D4 — `edited` semantics at the atomic-apply seam — is added with its
+pinning test in the next commit.)
 
 ## Pending questions for human
 - [ ] `repomap-spec.md` §1.2 mis-states `get_scm_fname`
