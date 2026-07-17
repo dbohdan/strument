@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dbohdan/strument/internal/editblock"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/editblock"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is

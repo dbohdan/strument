@@ -32,6 +32,7 @@ plan, scope, and the list of features deliberately deferred or dropped.
 Go 1.26 or later; no cgo, no C toolchain.
 
 ```sh
+go install dbohdan.com/strument/cmd/strument@latest  # install the latest release
 go build ./cmd/strument            # full build: every bundled tree-sitter grammar
 task build:strument:subset         # release variant: only the grammars strument uses
 ```

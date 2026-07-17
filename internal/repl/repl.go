@@ -13,10 +13,10 @@ import (
 
 	"github.com/ergochat/readline"
 
-	"github.com/dbohdan/strument/internal/coder"
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/gitrepo"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // ctrlCWindow is the double-Ctrl-C chord window (§1.2).

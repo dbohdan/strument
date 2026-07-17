@@ -11,7 +11,7 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
 
-	"github.com/dbohdan/strument/internal/coder"
+	"dbohdan.com/strument/internal/coder"
 )
 
 // TestInteractivePty drives the REPL through a real pty in readline's

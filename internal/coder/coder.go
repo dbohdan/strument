@@ -9,10 +9,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/llm"
-	"github.com/dbohdan/strument/internal/prompts"
-	"github.com/dbohdan/strument/internal/repomap"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
+	"dbohdan.com/strument/internal/repomap"
 )
 
 const maxReflections = 3

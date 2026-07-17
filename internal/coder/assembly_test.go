@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
 )
 
 func testCoder(t *testing.T) *Coder {

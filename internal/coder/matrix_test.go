@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dbohdan/strument/internal/fixture"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // fastClock never sleeps; it records requested delays.

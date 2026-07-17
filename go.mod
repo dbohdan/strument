@@ -1,4 +1,4 @@
-module github.com/dbohdan/strument
+module dbohdan.com/strument
 
 go 1.26.5
 

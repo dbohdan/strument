@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/fixture"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // The production SSE parser must produce exactly the event sequence that the

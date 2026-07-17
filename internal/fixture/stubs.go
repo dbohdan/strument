@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // StreamStub replays a scenario's turns as an llm.ModelClient. Each Send

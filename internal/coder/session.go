@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // This file is the REPL-facing session surface (basecoder-spec §1.2, §1.4):

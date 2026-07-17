@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 	"go.starlark.net/starlark"
 )
 

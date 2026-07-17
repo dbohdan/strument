@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // SendOutcome is the terminal state of one sendMessage (basecoder-spec §2).

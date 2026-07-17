@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dbohdan/strument/internal/coder"
-	"github.com/dbohdan/strument/internal/fixture"
-	"github.com/dbohdan/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/gitrepo"
 )
 
 func initScratchRepo(t *testing.T) string {

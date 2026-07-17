@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dbohdan/strument/internal/render"
+	"dbohdan.com/strument/internal/render"
 )
 
 // termOutput implements coder.Output for a terminal: assistant answer

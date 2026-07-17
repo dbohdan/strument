@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // Default endpoints per adapter.

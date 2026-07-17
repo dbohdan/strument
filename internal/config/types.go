@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // Adapters recognized by provider(). "anthropic" is reserved (deferred).

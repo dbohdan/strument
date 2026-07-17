@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dbohdan/strument/internal/client"
-	"github.com/dbohdan/strument/internal/fixture"
+	"dbohdan.com/strument/internal/client"
+	"dbohdan.com/strument/internal/fixture"
 )
 
 // stripHeaders never appear in captured rows (fixture-harness §1).

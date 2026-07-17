@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dbohdan/strument/internal/editblock"
+	"dbohdan.com/strument/internal/editblock"
 )
 
 // diskReader reads current file contents for the edit planner.

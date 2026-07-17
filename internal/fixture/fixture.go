@@ -12,7 +12,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // Version is the fixture schema version checked on load.

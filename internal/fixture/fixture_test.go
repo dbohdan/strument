@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 const sample = `{"v":1,"kind":"meta","scenario":"edit-success","source":"authored","model":"deepseek/deepseek-v4-flash"}

@@ -7,7 +7,7 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/dbohdan/strument/internal/llm"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // sseChunk is one OpenAI-dialect streaming chunk.

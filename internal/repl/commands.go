@@ -12,7 +12,7 @@ import (
 
 	"github.com/ergochat/readline"
 
-	"github.com/dbohdan/strument/internal/coder"
+	"dbohdan.com/strument/internal/coder"
 )
 
 // command is one slash command. run returns a message to send to the model

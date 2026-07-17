@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dbohdan/strument/internal/config"
-	"github.com/dbohdan/strument/internal/llm"
-	"github.com/dbohdan/strument/internal/prompts"
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // autoCommit commits edited files in git mode (§7.3); a no-op without a
