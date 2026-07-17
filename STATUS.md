@@ -1,7 +1,37 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 9 — packaging — started 2026-07-17
+All phases (0–9) complete, 2026-07-17. Outstanding: phase 7 REPL
+hand-validation by the human, and the "Pending questions for human" below.
+
+### Phase 9 — packaging — done
+- Oracle: binary size + smoke run — green
+- Started: 2026-07-17
+- Finished: 2026-07-17
+- Deviations: none.
+- Notes:
+  - gotreesitter ships native `grammar_subset` build tags: with
+    `-tags grammar_subset,grammar_subset_<lang>,...` only the named
+    grammars register. The canonical tag list (28 grammars — every
+    language the repo map supports; ocaml_interface/pony/udev have no
+    gotreesitter grammar in the full build either, so nothing is lost)
+    lives in `script/grammar-tags.txt`;
+    `internal/repomap/subset_test.go` keeps it in sync with
+    `SupportedLanguages()`, and the full test suite passes under the
+    subset tags.
+  - Sizes (linux/amd64, CGO_ENABLED=0, -trimpath -ldflags "-s -w"):
+    full build 43 MB, subset build 30 MB; both statically linked and
+    stripped (`file`: "statically linked, stripped").
+  - Build plumbing: `task build:strument:subset` builds the release
+    variant; `script/release/main.go` now cross-compiles all release
+    targets with the subset tags and -s -w; CI builds and tests the
+    subset variant (repomap package under tags).
+  - **Smoke run** of the subset binary: `--version` OK, and a second live
+    OpenRouter run in the phase 8 scratch repo applied an edit,
+    auto-committed with the weak-model message and the Assisted-by
+    trailer, and the edited program runs. Cost $0.00080.
+  - "zipapp-equivalent distribution" is the static binary itself; no
+    extra packaging format needed.
 
 ### Phase 8 — git mode — done
 - Oracle: scratch-repo integration tests — green; live smoke passed

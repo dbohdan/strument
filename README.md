@@ -27,6 +27,22 @@ plan, scope, and the list of features deliberately deferred or dropped.
   git auto-commit with `/undo`. Architect mode, voice, GUI, analytics,
   summarization, and the other long-tail features are out of scope for v1.
 
+## Building
+
+Go 1.26 or later; no cgo, no C toolchain.
+
+```sh
+go build ./cmd/strument            # full build: every bundled tree-sitter grammar
+task build:strument:subset         # release variant: only the grammars strument uses
+```
+
+The subset build (about 30 MB instead of 43 MB, statically linked and
+stripped) compiles in just the 28 grammars the repo map supports, via
+gotreesitter's `grammar_subset` build tags; the tag list lives in
+[`script/grammar-tags.txt`](script/grammar-tags.txt) and a test keeps it in
+sync with the supported-language set. `task release` cross-compiles subset
+binaries for the release platforms.
+
 ## Credits and license
 
 Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul

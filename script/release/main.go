@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -79,7 +80,17 @@ func build(dir string, target BuildTarget, version string) error {
 	filename := fmt.Sprintf("%s-v%s-%s-%s%s", projectName, version, target.os, target.arch, ext)
 	outputPath := filepath.Join(dir, filename)
 
-	cmd := exec.Command("go", "build", "-trimpath", "-o", outputPath, "./cmd/strument")
+	// Release binaries carry only the grammars strument uses (guide phase
+	// 9: grammar_subset build tags) and are stripped.
+	tags, err := os.ReadFile(filepath.Join("script", "grammar-tags.txt"))
+	if err != nil {
+		return fmt.Errorf("failed to read grammar tags: %w", err)
+	}
+
+	cmd := exec.Command("go", "build", "-trimpath",
+		"-ldflags", "-s -w",
+		"-tags", strings.TrimSpace(string(tags)),
+		"-o", outputPath, "./cmd/strument")
 
 	cmd.Env = append(os.Environ(),
 		"GOOS="+target.os,

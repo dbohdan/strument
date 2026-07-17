@@ -16,6 +16,9 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: go test ./...
+      # The release variant: only the grammars strument uses compile in.
+      - run: go build -tags "$(cat script/grammar-tags.txt)" ./cmd/strument
+      - run: go test -tags "$(cat script/grammar-tags.txt)" ./internal/repomap/
 
   lint:
     runs-on: ubuntu-latest

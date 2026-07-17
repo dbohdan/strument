@@ -31,6 +31,18 @@ tasks:
     generates:
       - strument{{exeExt}}
 
+  build:strument:subset:
+    desc: 'Build strument with only the tree-sitter grammars it uses (release variant)'
+    run: once
+    cmds:
+      - go build -trimpath -ldflags '-s -w' -tags "$(cat script/grammar-tags.txt)" -o strument-subset{{exeExt}} ./cmd/strument
+    sources:
+      - cmd/strument/**/*.go
+      - internal/**/*.go
+      - script/grammar-tags.txt
+    generates:
+      - strument-subset{{exeExt}}
+
   build:strumentrec:
     desc: 'Build the fixture recorder'
     run: once
@@ -53,7 +65,7 @@ tasks:
   clean:
     desc: 'Clean up binaries'
     cmds:
-      - rm -f strument{{exeExt}} strumentrec{{exeExt}}
+      - rm -f strument{{exeExt}} strument-subset{{exeExt}} strumentrec{{exeExt}}
 
   format:
     desc: 'Format source code'

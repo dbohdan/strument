@@ -1,5 +1,8 @@
-attic/
-reference/
+/dist/
+/release
 /strument
+/strument-subset
 /strumentrec
+attic/
 dist/
+reference/
