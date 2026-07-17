@@ -22,6 +22,9 @@ func TestPromptParityHashes(t *testing.T) {
 		{"editblock system_reminder", EditBlock.SystemReminder, "c4dcb982dabef440"},
 		{"editblock example[1]", EditBlock.ExampleMessages[1].Content, "d4d39fbabea3c429"},
 		{"fenced system_reminder", EditBlockFenced.SystemReminder, "3272161841f387f4"},
+		// Fenced example[1] with the leaked "<<<<<<< HEAD" marker removed
+		// (Deviation D5). Pins the corrected string.
+		{"fenced example[1]", EditBlockFenced.ExampleMessages[1].Content, "4e08bacc735dd5fe"},
 		{"wholefile main_system", WholeFile.MainSystem, "8b75d2534efc3659"},
 	}
 	for _, c := range cases {
@@ -45,10 +48,11 @@ func TestPromptSlotsPresent(t *testing.T) {
 			t.Errorf("system_reminder missing slot %s", slot)
 		}
 	}
-	// The upstream wart carried verbatim: a leaked merge-conflict marker in
-	// the fenced example (editblock_fenced_prompts.py @ 5dc9490).
-	if !strings.Contains(EditBlockFenced.ExampleMessages[1].Content, "<<<<<<< HEAD") {
-		t.Error("fenced example[1] lost the verbatim '<<<<<<< HEAD' wart; parity broken")
+	// Deviation D5: the leaked merge-conflict marker upstream left at the
+	// end of the diff-fenced example (editblock_fenced_prompts.py @ 5dc9490)
+	// is dropped. It must not reappear.
+	if strings.Contains(EditBlockFenced.ExampleMessages[1].Content, "<<<<<<< HEAD") {
+		t.Error("fenced example[1] still carries the leaked '<<<<<<< HEAD' marker (Deviation D5)")
 	}
 	if WholeFile.RedactedEditMessage != "No changes are needed." {
 		t.Errorf("redacted_edit_message = %q", WholeFile.RedactedEditMessage)

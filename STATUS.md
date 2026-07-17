@@ -327,11 +327,11 @@ hand-validation by the human, and the "Pending questions for human" below.
     tie-break toward the lexicographically larger string.
   - Prompt strings extracted **mechanically** from the installed aider
     classes into `internal/prompts` (editblock, editblock_fenced,
-    wholefile + base fields), pinned by sha256 in tests. Upstream wart
-    carried verbatim: `editblock_fenced_prompts.py` contains a leaked
-    `<<<<<<< HEAD` merge-conflict marker inside example[1]; kept for
-    [Exact] parity ("diff-fenced" is not the default format). Flag for
-    the human: we may want to declare a deviation and drop that line.
+    wholefile + base fields), pinned by sha256 in tests. One prompt is
+    **not** verbatim: the leaked `<<<<<<< HEAD` merge-conflict marker
+    upstream left at the end of `editblock_fenced_prompts.py` example[1] is
+    dropped (Deviation D5, 2026-07-17; originally carried verbatim, then
+    fixed after the human agreed).
   - Deferred to phase 5: the three coder-level tests (`test_full_edit`,
     `test_full_edit_dry_run`, `test_create_new_file_with_other_file_in_chat`)
     — ApplyEdits-level analogs are in place now.
@@ -436,6 +436,20 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   (`TestApplyRollbackReturnsEmptyEdited`, `TestWriteAtomicallyRollsBackBatch`,
   `TestCleanWriteEditedIsWrittenSet`). (Phase 1/5; `internal/coder/apply.go`.)
 
+- **D5 — the leaked `<<<<<<< HEAD` marker in the diff-fenced example is
+  dropped.** `editblock_fenced_prompts.py` example[1] @ 5dc9490 ends with a
+  stray `<<<<<<< HEAD` — a merge-conflict resolution someone left behind,
+  now the last line of a prompt that teaches the SEARCH/REPLACE format.
+  Carried verbatim through phase 9, then removed (human-agreed). Same
+  fix-and-declare class as the sqrt-once and single-tag-emission deviations
+  the guide already settles: `[Exact]` prevents unintentional drift from
+  behavior aider tuned, not the sanctification of upstream accidents.
+  Rationale: a malformed exemplar can nudge the model toward
+  `<<<<<<< HEAD`, which fails the `^<{5,9} SEARCH>?\s*$` block regex and
+  burns a reflection. All other prompt strings remain verbatim and
+  hash-pinned. (Phase 1; `internal/prompts/prompts.go`,
+  `prompts_test.go`.)
+
 ## Pending questions for human
 - [ ] `repomap-spec.md` §1.2 mis-states `get_scm_fname`
   (`reference/aider/repomap.py:805-829` falls back to the legacy query dir
@@ -444,10 +458,11 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   language coverage is wanted later, vendoring legacy queries
   (haskell/kotlin/php/typescript/tsx/zig/scala/hcl, subject to gotreesitter
   grammar availability) is the v2 path. OK?
-- [ ] `editblock_fenced_prompts.py` @ 5dc9490 contains a leaked
-  `<<<<<<< HEAD` merge-conflict marker inside example[1]; we carry it
-  verbatim per [Exact] parity ("diff-fenced" is not the default format).
-  Declare a deviation and drop that line instead?
+- [x] **Resolved 2026-07-17 (Deviation D5): drop the leaked `<<<<<<< HEAD`
+  marker** from `editblock_fenced_prompts.py` example[1]. The human agreed
+  it is an upstream accident, not tuned behavior — a malformed block shown
+  as an exemplar in the format-teaching prompt, which could nudge the model
+  toward `<<<<<<< HEAD` over `<<<<<<< SEARCH` and burn a reflection.
 - [ ] basecoder-spec §10 says "tiktoken port for OpenAI-family"; the pinned
   dependency list has no tiktoken, so v1 uses runes/4 for all models
   (advisory-conservative consumers only). OK, or should we add
