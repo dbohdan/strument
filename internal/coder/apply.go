@@ -22,12 +22,21 @@ func (d diskReader) ReadFile(rel string) (string, bool) {
 	return string(data), true
 }
 
-// applyUpdates dispatches on the model's edit format (§7.1).
+// applyUpdates dispatches on the active edit format (§7.1).
 func (c *Coder) applyUpdates(answer string) ([]string, string) {
-	if c.Model.EditFormat == "whole" {
+	switch c.editFormat {
+	case "ask":
+		// Ask mode's engine parses nothing (aider's base get_edits returns
+		// []): no edits, no shell collection, so everything downstream —
+		// auto-commit, history rotation, edit-failure reflection — no-ops
+		// by construction. A well-formed SEARCH/REPLACE block in an ask
+		// answer is left as prose.
+		return nil, ""
+	case "whole":
 		return c.applyWholeFileUpdates(answer)
+	default:
+		return c.applyEditBlockUpdates(answer)
 	}
-	return c.applyEditBlockUpdates(answer)
 }
 
 // applyWholeFileUpdates handles the trivial "whole" format: fenced full-file

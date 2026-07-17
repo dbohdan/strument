@@ -66,10 +66,26 @@ func (c *Coder) AppendExchange(user, assistant string) {
 }
 
 // SetModel switches the chat to a different model (/model). The caller
-// swaps the Client to match the model's provider.
+// swaps the Client to match the model's provider. Switching models resets
+// the active edit format to the new model's default (leaving ask mode, if
+// any).
 func (c *Coder) SetModel(m *config.Model) {
 	c.Model = m
-	c.Prompts = promptsForFormat(m.EditFormat)
+	c.SetEditFormat(m.EditFormat)
+}
+
+// EditFormat returns the active edit format.
+func (c *Coder) EditFormat() string { return c.editFormat }
+
+// SetEditFormat switches the active edit format and its prompt set without
+// changing the model — the mechanism behind /ask and /code. An empty
+// format restores the model's default.
+func (c *Coder) SetEditFormat(format string) {
+	if format == "" {
+		format = c.Model.EditFormat
+	}
+	c.editFormat = format
+	c.Prompts = promptsForFormat(format)
 }
 
 // LastCommitHash is the short hash of the session's last auto-commit ("" if

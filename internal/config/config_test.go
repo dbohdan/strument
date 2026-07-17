@@ -122,6 +122,19 @@ func TestHistoryFileOptionalAndOverridable(t *testing.T) {
 	}
 }
 
+func TestAskEditFormatRejectedInConfig(t *testing.T) {
+	// "ask" is a runtime-only format; a config that sets it must fail.
+	src := `
+p = provider("openrouter", api_key = env("OPENROUTER_API_KEY"))
+models = {"m": model(p, "slug", edit_format = "ask")}
+default = "m"
+`
+	_, err := Load(harness(t, src, "", testEnv))
+	if err == nil || !strings.Contains(err.Error(), "edit_format") {
+		t.Fatalf("edit_format=ask should be rejected, got err=%v", err)
+	}
+}
+
 func TestEnvRequiredUnsetFailsLoad(t *testing.T) {
 	_, err := Load(harness(t, userConfig, "", nil))
 	if err == nil || !strings.Contains(err.Error(), "OPENROUTER_API_KEY") {

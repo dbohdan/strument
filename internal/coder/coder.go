@@ -49,6 +49,12 @@ type Coder struct {
 
 	Prompts prompts.Set
 
+	// editFormat is the active format ("diff"/"diff-fenced"/"whole"/"ask").
+	// It starts as the model's EditFormat but /ask and /code switch it at
+	// runtime without changing the model, so the apply dispatch and prompt
+	// set read this, not Model.EditFormat.
+	editFormat string
+
 	// Chat state (§0).
 	absFnames         []string // ordered, deduped
 	absReadOnlyFnames []string
@@ -92,6 +98,8 @@ func promptsForFormat(format string) prompts.Set {
 		return prompts.WholeFile
 	case "diff-fenced":
 		return prompts.EditBlockFenced
+	case "ask":
+		return prompts.Ask
 	default:
 		return prompts.EditBlock
 	}
@@ -122,6 +130,7 @@ func New(root string, model *config.Model) *Coder {
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
 		Prompts:              promptsForFormat(model.EditFormat),
+		editFormat:           model.EditFormat,
 		ignoreMentions:       map[string]bool{},
 		rejectedUrls:         map[string]bool{},
 		turnEditedFiles:      map[string]bool{},

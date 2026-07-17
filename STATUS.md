@@ -370,6 +370,25 @@ hand-validation by the human, and the "Pending questions for human" below.
     model is the bare slug; aider sends `temperature: 0` by default.
 
 ## Standing notes
+- **`/ask` mode** (added 2026-07-17, post-phase-9). Ported from aider's
+  AskCoder, which is nine lines: `edit_format="ask"` + `AskPrompts`, with
+  base `get_edits` returning `[]`. Strument's idiom: ask is an **edit
+  format whose engine parses nothing**, not a mode with branches. A runtime
+  `Coder.editFormat` (separate from `Model.EditFormat`) drives both the
+  prompt set and the apply dispatch; `applyUpdates` returns `(nil, "")` for
+  ask before any parsing, so no edits, no shell collection, no auto-commit,
+  no rotation, no edit-failure reflection — all by construction, zero
+  branching in the phase machine. `AskPrompts` extracted verbatim into
+  `prompts.Ask` (hash-pinned): `example_messages` empty (cache breakpoint
+  falls back to system), `system_reminder="{final_reminders}"` (reminder
+  gate still runs), `files_no_full_files_with_repo_map=""` (a falsy
+  sentinel that disables that branch — not an empty pair). `/ask [q]` and
+  `/code [r]` in the REPL: bare = persistent switch (prompt shows `ask> `),
+  with args = one-shot (run once, then revert), history shared both ways so
+  an ask answer is in context for the next code turn. `edit_format="ask"`
+  is rejected in `config.star` (runtime-only). File-mention reflection,
+  repo map, cost, streaming all stay on. Live smoke 2026-07-17: `/ask`
+  answered analytically, wrote history, $0.000063.
 - **Session history** (`internal/history`, added 2026-07-17, post-phase-9).
   Two files under `$XDG_STATE_HOME/strument`, matching the trust store's
   state-dir precedent (XDG names history as canonical state): a per-project

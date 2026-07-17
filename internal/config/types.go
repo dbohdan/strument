@@ -16,7 +16,9 @@ const (
 	AdapterOpenRouter = "openrouter"
 )
 
-// Edit formats recognized by model().
+// Edit formats recognized by model(). "ask" is deliberately absent: it is
+// a runtime-only format (the /ask command), not a configurable one — a
+// model whose default format was "ask" could never edit anything.
 var knownEditFormats = map[string]bool{
 	"diff":        true,
 	"diff-fenced": true,

@@ -73,6 +73,10 @@ type REPL struct {
 
 	mu        sync.Mutex
 	lastCtrlC time.Time
+
+	// One-shot /ask and /code restore the previous format after one turn.
+	oneShotPending bool
+	oneShotRestore string
 }
 
 // New builds the REPL, wires the coder's Out to the live renderer, and
@@ -139,10 +143,14 @@ func (r *REPL) Close() error { return r.rl.Close() }
 func (r *REPL) Confirmer() coder.Confirmer { return rlConfirmer{r} }
 
 func (r *REPL) prompt() string {
-	if r.opts.Color {
-		return "\x1b[1m> \x1b[0m"
+	label := "> "
+	if r.coder.EditFormat() == "ask" {
+		label = "ask> "
 	}
-	return "> "
+	if r.opts.Color {
+		return "\x1b[1m" + label + "\x1b[0m"
+	}
+	return label
 }
 
 func (r *REPL) printf(format string, args ...any) {
@@ -198,6 +206,11 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		r.runTurn(ctx, line)
+		if r.oneShotPending {
+			r.coder.SetEditFormat(r.oneShotRestore)
+			r.rl.SetPrompt(r.prompt())
+			r.oneShotPending = false
+		}
 		r.showUndoHint()
 	}
 }

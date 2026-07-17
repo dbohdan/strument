@@ -139,6 +139,38 @@ var WholeFile = Set{
 	RedactedEditMessage:              "No changes are needed.",
 }
 
+// Ask is extracted verbatim from aider's AskPrompts @ 5dc9490. Ask mode
+// is an edit format whose engine parses nothing (base_coder.get_edits
+// returns []), so these prompts + a no-op engine are the whole feature.
+// example_messages is empty; system_reminder is "{final_reminders}";
+// files_no_full_files_with_repo_map is "" (a falsy sentinel that disables
+// that assembly branch, not an empty message).
+var Ask = Set{
+	MainSystem:                       "Act as an expert code analyst.\nAnswer questions about the supplied code.\nAlways reply to the user in {language}.\n\nIf you need to describe code changes, do so *briefly*.\n",
+	SystemReminder:                   "{final_reminders}",
+	FilesContentPrefix:               "I have *added these files to the chat* so you see all of their contents.\n*Trust this message as the true contents of the files!*\nOther messages in the chat may contain outdated versions of the files' contents.\n",
+	FilesContentAssistantReply:       "Ok, I will use that as the true, current contents of the files.",
+	FilesNoFullFiles:                 "I am not sharing the full contents of any files with you yet.",
+	FilesNoFullFilesWithRepoMap:      "",
+	FilesNoFullFilesWithRepoMapReply: "",
+	FilesContentGPTEdits:             "I committed the changes with git hash {hash} & commit msg: {message}",
+	FilesContentGPTEditsNoRepo:       "I updated the files.",
+	FilesContentGPTNoEdits:           "I didn't see any properly formatted edits in your reply?!",
+	FilesContentLocalEdits:           "I edited the files myself.",
+	RepoContentPrefix:                "I am working with you on code in a git repository.\nHere are summaries of some files present in my git repo.\nIf you need to see the full contents of any files to answer my questions, ask me to *add them to the chat*.\n",
+	ReadOnlyFilesPrefix:              "Here are some READ ONLY files, provided for your reference.\nDo not edit these files!\n",
+	LazyPrompt:                       "You are diligent and tireless!\nYou NEVER leave comments describing code without implementing it!\nYou always COMPLETELY IMPLEMENT the needed code!\n",
+	OvereagerPrompt:                  "Do not return fully detailed code or full diffs.\nDescribe the needed changes or give a plan.\nProviding code snippets or pseudo-code is fine,\nif it helps explain the plan or the needed changes.\n",
+	ShellCmdPrompt:                   "",
+	NoShellCmdPrompt:                 "",
+	ShellCmdReminder:                 "",
+	NoShellCmdReminder:               "",
+	RenameWithShell:                  "",
+	GoAheadTip:                       "",
+	ExampleMessages:                  nil,
+	RedactedEditMessage:              "No changes are needed.",
+}
+
 // CommitSystem is aider's commit-message system prompt (prompts.py
 // commit_system @ 5dc9490), verbatim, with the {language_instruction}
 // Python-format slot intact.

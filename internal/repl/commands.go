@@ -35,7 +35,9 @@ var commands []command
 func init() {
 	commands = []command{
 		{"add", "<file> [file ...]", "Add files to the chat (globs allowed)", cmdAdd},
+		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"clear", "", "Clear the conversation history", cmdClear},
+		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
 		{"drop", "[file ...]", "Remove files from the chat (all files if none given)", cmdDrop},
 		{"exit", "", "Exit strument", cmdExit},
@@ -137,6 +139,38 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 }
 
 func cmdExit(_ context.Context, _ *REPL, _ string) string { return quitSentinel }
+
+// cmdAsk / cmdCode switch the active edit format (commands.py:1182-1229).
+// Bare = persistent switch until the mirror command; with args = one-shot
+// (run once in the target format, then restore). History is shared by
+// construction, so an /ask answer is in context for the next /code turn —
+// the whole point.
+func cmdAsk(_ context.Context, r *REPL, args string) string {
+	return r.switchFormat("ask", args)
+}
+
+func cmdCode(_ context.Context, r *REPL, args string) string {
+	return r.switchFormat("", args) // "" restores the model's default format
+}
+
+func (r *REPL) switchFormat(target, args string) string {
+	if args == "" {
+		r.coder.SetEditFormat(target)
+		r.rl.SetPrompt(r.prompt())
+		if r.coder.EditFormat() == "ask" {
+			r.printf("Ask mode: I will answer questions without editing files. Use /code to switch back.")
+		} else {
+			r.printf("Code mode: I will edit files again.")
+		}
+		return ""
+	}
+	// One-shot: remember the current format, switch, send the args, and
+	// restore after the turn (in REPL.Run).
+	r.oneShotRestore = r.coder.EditFormat()
+	r.oneShotPending = true
+	r.coder.SetEditFormat(target)
+	return args
+}
 
 // expandPatterns resolves glob patterns relative to the coder root,
 // returning root-relative paths of existing regular files.
