@@ -18,6 +18,7 @@ import (
 	"github.com/dbohdan/strument/internal/client"
 	"github.com/dbohdan/strument/internal/coder"
 	"github.com/dbohdan/strument/internal/config"
+	"github.com/dbohdan/strument/internal/gitrepo"
 	"github.com/dbohdan/strument/internal/llm"
 	"github.com/dbohdan/strument/internal/repl"
 	"github.com/dbohdan/strument/internal/repomap"
@@ -26,20 +27,31 @@ import (
 var version = "0.0.0-dev"
 
 type chatCmd struct {
-	Message  string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
-	Model    string   `help:"Model alias from config; defaults to the config's default."`
-	NoGit    bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
-	NoColor  bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
-	DryRun   bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
-	Yes      bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
-	YesShell bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
-	Files    []string `arg:""                                                               help:"Files to add to the chat." optional:"" type:"existingfile"`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
+	Model         string   `help:"Model alias from config; defaults to the config's default."`
+	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."            name:"no-auto-commits"`
+	DryRun        bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
+	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
+	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
+	Files         []string `arg:""                                                               help:"Files to add to the chat." optional:"" type:"existingfile"`
 }
 
 func (c *chatCmd) Run() error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
+	}
+
+	// Git is on by default inside a repository; the worktree root becomes
+	// the project root, like aider (--no-git opts out).
+	var repo *gitrepo.Repo
+	if !c.NoGit {
+		if g, err := gitrepo.Discover(root); err == nil {
+			repo = g
+			root = g.Root()
+		}
 	}
 
 	cfg, err := config.Load(config.Options{ProjectRoot: root})
@@ -66,16 +78,21 @@ func (c *chatCmd) Run() error {
 		rm.RepoContentPrefix = cdr.Prompts.RepoContentPrefix
 		cdr.RepoMap = rm
 	}
-	// Git integration (Repo port) arrives in phase 8; --no-git is honored
-	// implicitly until then.
-	_ = c.NoGit
+	if repo != nil {
+		weak := model.WeakModel
+		repo.CommitTrailer = gitrepo.Trailer(model.Slug)
+		repo.Message = coder.CommitMessenger(client.New(weak.Provider), weak, cdr.Platform.Language)
+		cdr.Repo = repo
+		cdr.AutoCommits = !c.NoAutoCommits
+		cdr.Platform.InGit = true
+	}
 
 	for _, f := range c.Files {
 		cdr.AddFile(f)
 	}
 
 	if c.Message == "" {
-		return c.runREPL(cfg, cdr, alias)
+		return c.runREPL(cfg, cdr, repo, alias)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -85,10 +102,11 @@ func (c *chatCmd) Run() error {
 }
 
 // runREPL starts the interactive session (basecoder-spec §1.2).
-func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, alias string) error {
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, alias string) error {
 	r, err := repl.New(repl.Options{
 		Coder:      cdr,
 		Config:     cfg,
+		Git:        repo,
 		ModelAlias: alias,
 		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
 		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",

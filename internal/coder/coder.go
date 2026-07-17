@@ -78,6 +78,7 @@ type Coder struct {
 	fence               fence
 	commitBeforeMessage []string
 	lastCommitHash      string
+	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
 	ignoreMentions      map[string]bool
 	rejectedUrls        map[string]bool
 }

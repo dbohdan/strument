@@ -85,8 +85,10 @@ type Repo interface {
 	GitIgnored(rel string) bool
 	HeadSHA() string
 	// Commit commits fnames with a generated message; returns hash and
-	// message, or ok=false when there was nothing to commit.
-	Commit(fnames []string, context string) (hash, message string, ok bool, err error)
+	// message, or ok=false when there was nothing to commit. attributed
+	// marks auto-commits of model edits, which get the §7.3 trailer;
+	// dirty commits of user changes stay unattributed.
+	Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error)
 }
 
 // Clock injects time so retry/continuation tests don't sleep.

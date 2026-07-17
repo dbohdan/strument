@@ -2,6 +2,7 @@ package coder
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -286,18 +287,15 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	needDirtyCommit[rel] = true
 }
 
-// dirtyCommit commits dirty files before edits so /undo has a base
-// (§7.3 contract); a failure here aborts nothing in script mode without
-// git. Fleshed out with the git port in phase 8.
+// dirtyCommit commits dirty files before edits so /undo has a clean base
+// (§7.3 contract). These are user changes: no trailer. Files sort for
+// deterministic commits (§3.3).
 func (c *Coder) dirtyCommit(need map[string]bool) {
 	if c.Repo == nil || len(need) == 0 {
 		return
 	}
-	var files []string
-	for f := range need {
-		files = append(files, f)
-	}
-	if _, _, _, err := c.Repo.Commit(files, "Committing dirty files before edits"); err != nil {
+	files := slices.Sorted(maps.Keys(need))
+	if _, _, _, err := c.Repo.Commit(files, "", false); err != nil {
 		c.Out.Errorf("Unable to commit dirty files: %v", err)
 	}
 }

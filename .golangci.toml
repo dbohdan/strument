@@ -108,11 +108,22 @@ linters = [
 ]
 
 [[linters.exclusions.rules]]
-# Tests write scratch files and scan committed testdata.
+# The git port runs local plumbing commands; the coder.Repo port is
+# deliberately context-free (fast local operations, like aider's GitPython
+# calls).
+path = "internal/gitrepo/"
+linters = [
+    "noctx",
+]
+
+[[linters.exclusions.rules]]
+# Tests write scratch files, scan committed testdata, and shell out to git
+# to set up scratch repositories.
 path = "_test\\.go"
 linters = [
     "gosec",
     "godoclint",
+    "noctx",
     "prealloc",
 ]
 

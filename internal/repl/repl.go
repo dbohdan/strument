@@ -15,6 +15,7 @@ import (
 
 	"github.com/dbohdan/strument/internal/coder"
 	"github.com/dbohdan/strument/internal/config"
+	"github.com/dbohdan/strument/internal/gitrepo"
 	"github.com/dbohdan/strument/internal/llm"
 )
 
@@ -28,6 +29,9 @@ type Options struct {
 	Coder      *coder.Coder
 	Config     *config.Config
 	ModelAlias string // alias of the active model, for /model display
+
+	// Git enables /undo and /diff; nil outside a repository (--no-git).
+	Git *gitrepo.Repo
 
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
@@ -224,11 +228,15 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 	r.coder.Run(tctx, message)
 }
 
-// showUndoHint mentions /undo after a turn that auto-committed (§1.2;
-// meaningful once git mode lands in phase 8).
+// showUndoHint mentions /undo after a message that moved HEAD (aider's
+// show_undo_hint: compare the pre-message HEAD with the current one).
 func (r *REPL) showUndoHint() {
-	if hash := r.coder.LastCommitHash(); hash != "" {
-		r.printf("You can use /undo to undo and discard the last commit (%s).", hash)
+	if r.coder.Repo == nil {
+		return
+	}
+	cbm := r.coder.CommitsBeforeMessage()
+	if len(cbm) > 0 && cbm[len(cbm)-1] != r.coder.Repo.HeadSHA() {
+		r.printf("You can use /undo to undo and discard each strument commit.")
 	}
 }
 

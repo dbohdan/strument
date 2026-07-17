@@ -1,7 +1,57 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 8 — git mode — started 2026-07-17
+Phase 9 — packaging — started 2026-07-17
+
+### Phase 8 — git mode — done
+- Oracle: scratch-repo integration tests — green; live smoke passed
+- Started: 2026-07-17
+- Finished: 2026-07-17
+- Deviations: none. §7.3 is itself a declared divergence from aider and is
+  implemented as specified: no GIT_AUTHOR_*/GIT_COMMITTER_* overrides and
+  no "(aider)" name mangling — attribution is one sanitized
+  `Assisted-by: {model} via Strument` trailer passed via argv
+  (`git commit --trailer`), auto-commits only; dirty commits stay
+  unattributed.
+- Notes:
+  - `internal/gitrepo`: the coder.Repo port over the git binary (argv
+    only, never a shell string): Discover/TrackedFiles/PathInRepo/IsDirty
+    (GitPython semantics: untracked ≠ dirty)/GitIgnored/HeadSHA/Commit,
+    plus the /undo–/diff plumbing (HeadInfo, ChangedInHead, InCommit,
+    CurrentBranch, RevParse, CheckoutFileFrom, ResetSoft, DiffWorktree).
+    The Repo port's Commit gained an `attributed bool` (trailer gate).
+  - Commit messages: `coder.CommitMessenger` packages the §7.3 weak-model
+    call as the repo's Message func (prompts.CommitSystem extracted
+    verbatim from prompts.py and verified byte-equal to the evaluated
+    Python string; quote-stripping and the "(no commit message provided)"
+    fallback per repo.py). Fixtures stay deterministic: tests inject
+    canned Message funcs; the LLM never enters the git port.
+  - /undo is a faithful port of raw_cmd_undo: first-commit gate, session
+    -commit gate (sessionCommits set on the coder, aider's
+    aider_commit_hashes), single-parent, per-file dirty and
+    present-in-parent checks, already-pushed check against
+    origin/<branch>, checkout HEAD~1 per file, reset --soft, Removed/Now
+    at output. aider's send_undo_reply message is default-off upstream
+    and not implemented. /diff diffs the worktree against the §1.3
+    pre-message HEAD; because our slash dispatch runs before runOne
+    (aider dispatches inside it), the base is the last
+    commitBeforeMessage entry, not [-2].
+  - CLI: git is on by default (standing note), cwd's worktree root
+    becomes the project/config root like aider; `--no-git` opts out,
+    `--no-auto-commits` keeps git but skips auto-commits. The REPL undo
+    hint follows aider's show_undo_hint (pre-message HEAD vs current).
+  - Tests: gitrepo plumbing + commit contract on scratch repos (trailer
+    body, untouched author/committer identity, quote stripping, no-op
+    commit, new-file commit), coder auto-commit integration (edit → file
+    content, attributed commit, session tracking, clean tree), dirty
+    -commit-before-edits (unattributed dirty commit preserving user
+    changes under the attributed edit commit), and a REPL session test
+    driving /undo gates, /diff output, and a full undo restore.
+  - **Live smoke** (real binary, OpenRouter DeepSeek V4 Flash, scratch
+    repo): edit applied, weak-model message "feat: add greet function and
+    use it in main", trailer `Assisted-by: deepseek/deepseek-v4-flash via
+    Strument`, author/committer stayed "Smoke Tester", worktree clean,
+    edited program compiles and runs. Cost $0.00046.
 
 ### Phase 7 — REPL — done (code + automated slice); **hand-validation by the human pending**
 - Oracle: hand-validate vs aider's feel (collab). The automatable slice is

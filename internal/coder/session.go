@@ -76,6 +76,15 @@ func (c *Coder) SetModel(m *config.Model) {
 // none); the REPL uses it for the undo hint.
 func (c *Coder) LastCommitHash() string { return c.lastCommitHash }
 
+// IsSessionCommit reports whether the short hash is one of this session's
+// auto-commits (/undo refuses anything else, like aider's
+// aider_commit_hashes gate).
+func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[short] }
+
+// CommitsBeforeMessage returns the HEAD hashes captured at the start of
+// each message (§1.3); /diff uses the last one as its base.
+func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
+
 // RepoMapNow renders the repo map as the next send would see it (/map).
 func (c *Coder) RepoMapNow() string { return c.repoMapContent() }
 

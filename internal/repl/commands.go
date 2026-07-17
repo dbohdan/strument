@@ -36,7 +36,7 @@ func init() {
 	commands = []command{
 		{"add", "<file> [file ...]", "Add files to the chat (globs allowed)", cmdAdd},
 		{"clear", "", "Clear the conversation history", cmdClear},
-		{"diff", "", "Show the diff of the last change (git mode, phase 8)", cmdDiff},
+		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
 		{"drop", "[file ...]", "Remove files from the chat (all files if none given)", cmdDrop},
 		{"exit", "", "Exit strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
@@ -48,7 +48,7 @@ func init() {
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
-		{"undo", "", "Undo the last strument commit (git mode, phase 8)", cmdUndo},
+		{"undo", "", "Undo the last strument auto-commit", cmdUndo},
 	}
 }
 
@@ -327,15 +327,5 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		r.coder.AppendExchange(result, "Ok")
 		r.printf("Added the command output to the chat.")
 	}
-	return ""
-}
-
-func cmdUndo(_ context.Context, r *REPL, _ string) string {
-	r.out.Warningf("/undo arrives with git mode (phase 8).")
-	return ""
-}
-
-func cmdDiff(_ context.Context, r *REPL, _ string) string {
-	r.out.Warningf("/diff arrives with git mode (phase 8).")
 	return ""
 }
