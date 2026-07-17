@@ -49,6 +49,12 @@ gotreesitter's `grammar_subset` build tags; the tag list lives in
 sync with the supported-language set. `task release` cross-compiles subset
 binaries for the release platforms.
 
+Strument builds and tests without any extra setup. To consult or re-verify
+the port against the original aider source, `task setup:reference` (or
+`sh script/setup-reference.sh`) clones aider at the pinned commit into a
+gitignored `reference/` directory; it is a read-only grep target, never
+committed.
+
 ## Credits and license
 
 Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul

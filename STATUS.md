@@ -344,8 +344,13 @@ hand-validation by the human, and the "Pending questions for human" below.
 - Notes:
   - `reference/` cloned at `5dc9490bb35f9729ef2c95d00a19ccd30c26339c`.
     A stub `reference/go.mod` carve-out (uncommitted, inside the gitignored
-    clone) stops `go build ./...` from walking aider's Go test fixtures —
-    recreate it if the clone is redone.
+    clone) stops `go build ./...` from walking aider's Go test fixtures.
+    Both the clone and the stub are now produced by
+    `script/setup-reference.sh` (Task `setup:reference`), so the
+    spec-verification environment is reproducible — a fresh Strument clone
+    builds and tests without `reference/`; run the script only to consult
+    or re-verify against upstream (2026-07-17; was previously a manual
+    recreate-it-yourself note).
   - LICENSE copied from aider (Apache-2.0). README credits aider + smd.js.
   - Recorder design: `strumentrec` captures the wire **raw** (verbatim request
     body, verbatim SSE response, secret-stripped headers). Distillation into
