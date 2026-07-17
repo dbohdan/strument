@@ -38,6 +38,8 @@ Two decisions are already **fix-and-declare deviations from aider** — implemen
 
 **Cross-cutting conventions:** *Silence means follow `reference/`; explicit `[Deferred]` means don't build it.* If a spec is silent on a detail, check the pinned aider source — that's the answer. If a feature is labeled `[Deferred]`, it is not v1 scope; do not implement it "while you're at it." Dependency versions are resolved at phase 0 by querying the module proxy, never asserted from a model's memory (two Opus sessions produced two different wrong version numbers for the same library).
 
+**Document precedence:** *Where this guide and a subsystem spec disagree, the guide wins* — it is edited later and captures decisions the frozen specs cannot. A contradiction between them is a spec bug, not an implementor's judgment call: apply the guide, and file the conflict as a numbered `STATUS.md` entry (with `file:line` for both sides) so the subsystem spec gets corrected. This is how the git-default reversal should have been handled: the guide (commit `ef7c8d3`) turned git on by default, and `basecoder-spec.md`'s surviving "`--no-git` default" wording was stale — the guide governed, and the spec text has since been fixed to match.
+
 ## 3. Directory layout
 
 ```

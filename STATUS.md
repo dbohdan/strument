@@ -294,9 +294,10 @@ hand-validation by the human, and the "Pending questions for human" below.
 ## Standing notes
 - Git features are **on by default** when cwd is inside a git repository; `--no-git`
   opts out. Confirmed with the human 2026-07-16 (guide commit `ef7c8d3` is
-  authoritative; the "`--no-git` default" wording surviving in
-  `basecoder-spec.md` §Parity/§7.4 is stale). Build order is unchanged:
-  script mode without git first, git mode in phase 8.
+  authoritative). The stale "`--no-git` default" wording in
+  `basecoder-spec.md` has been corrected to match (2026-07-17), and the
+  guide now carries an explicit document-precedence rule (guide wins over a
+  subsystem spec) for exactly this class of conflict.
 - `reference/` (aider @ `5dc9490`) and any other reference clones are
   **gitignored**, never committed. Committed aider content is limited to the
   31 `*-tags.scm` query files and verbatim prompt strings, covered by the
