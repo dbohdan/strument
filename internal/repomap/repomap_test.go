@@ -118,11 +118,12 @@ func TestGetRepoMapExcludesAddedFiles(t *testing.T) {
 	}
 }
 
-// Language coverage matrix, from TestRepoMapAllLanguages. Languages whose
-// grammars gotreesitter lacks (ocaml_interface, pony, udev) and languages
-// aider only reaches through its legacy query fallback (haskell, kotlin,
-// php, typescript, tsx, zig, scala, hcl, ql, ruby's...) are out of v1 scope
-// (repomap-spec §1.2); see STATUS.md.
+// Language coverage matrix, from TestRepoMapAllLanguages. The first block is
+// the 28 language-pack languages; the second is the legacy
+// tree-sitter-languages fallback (repomap-spec §1.2). Languages whose
+// gotreesitter grammar is missing (ocaml_interface, pony, udev) or has
+// diverged from aider's legacy query (julia: scoped_identifier; zig:
+// FnProto) are out of scope and covered as bare entries; see STATUS.md.
 var languageCases = []struct {
 	lang, ext, symbol string
 }{
@@ -154,6 +155,16 @@ var languageCases = []struct {
 	{"rust", "rs", "Person"},
 	{"solidity", "sol", "SimpleStorage"},
 	{"swift", "swift", "Greeter"},
+
+	// Legacy tree-sitter-languages fallback (Q1).
+	{"fortran", "f90", "greet"},
+	{"haskell", "hs", "add"},
+	{"hcl", "tf", "aws_region"},
+	{"kotlin", "kt", "greet"},
+	{"php", "php", "greet"},
+	{"scala", "scala", "greet"},
+	{"typescript", "ts", "greet"},
+	{"tsx", "tsx", "UserProps"},
 }
 
 func TestAllLanguages(t *testing.T) {

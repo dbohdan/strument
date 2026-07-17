@@ -250,18 +250,18 @@ hand-validation by the human, and the "Pending questions for human" below.
   golden byte-for-byte** — for that corpus the declared deviations don't
   perturb the final map, so we kept upstream's golden file unmodified.
 - Notes:
-  - **Spec-vs-reference finding (documented, not acted on):**
-    `repomap-spec.md` §1.2/§Query-assets says the legacy
+  - **Spec-vs-reference finding — resolved 2026-07-17 (Q1):**
+    `repomap-spec.md` §1.2/§Query-assets said the legacy
     `tree-sitter-languages/` query dir "is selected only when
-    `USING_TSL_PACK` is false; ignore it." The pinned source disagrees:
+    `USING_TSL_PACK` is false; ignore it." The pinned source disagreed:
     `reference/aider/repomap.py:805-829` (`get_scm_fname`) falls back to the
     legacy dir **per language** whenever the pack lacks a `<lang>-tags.scm`,
-    even with USING_TSL_PACK true. That is how aider's language tests for
-    haskell/kotlin/php/typescript/tsx/zig/scala/hcl pass. The spec's
-    *decision* (v1 = the 31 pack queries only; adding a language = vendoring
-    a query) is unambiguous, so we followed it; those legacy-fallback
-    languages are out of v1 scope and their aider tests were not
-    transliterated. Flagged under "Pending questions".
+    even with USING_TSL_PACK true — aider's effective coverage is the union.
+    Phase 3 followed the spec's (mistaken) decision and flagged it; the
+    legacy fallback was later implemented (see the Q1 resolution below and
+    the §1.2 correction). 7 legacy languages added (TypeScript/PHP/Kotlin/
+    Scala/Haskell/HCL/Fortran); julia and zig excluded on grammar
+    divergence.
   - **gotreesitter engine limitation + workaround:** the anchored
     doc-comment pattern `((comment)* @doc . (X))` matches only once per
     parent in gotreesitter v0.36.0 (upstream tree-sitter matches at every
@@ -488,13 +488,23 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   `prompts_test.go`.)
 
 ## Pending questions for human
-- [ ] `repomap-spec.md` §1.2 mis-states `get_scm_fname`
-  (`reference/aider/repomap.py:805-829` falls back to the legacy query dir
-  per-language even when USING_TSL_PACK is true). We followed the spec's
-  decision (31 pack queries only). If parity with aider's *effective*
-  language coverage is wanted later, vendoring legacy queries
-  (haskell/kotlin/php/typescript/tsx/zig/scala/hcl, subject to gotreesitter
-  grammar availability) is the v2 path. OK?
+- [x] **Resolved 2026-07-17 (Q1): implement the legacy fallback.** The
+  spec errata was wrong (Fable's finding, confirmed): `get_scm_fname`
+  (`repomap.py:805-829`) gates only the *pack lookup* on `USING_TSL_PACK`;
+  the legacy `tree-sitter-languages` fallback is unconditional, so aider's
+  effective coverage is the **union**. v1 shipping 31-pack-only was a
+  silent regression that dropped **TypeScript, PHP, Kotlin, Scala** from an
+  aider fork. Now fixed: `queries-legacy/` embeds the 7 legacy queries that
+  compile against gotreesitter's grammars — fortran, haskell, hcl, kotlin,
+  php, scala, typescript (`.ts` and `.tsx`, both via the typescript
+  grammar); `langFor` tries pack then legacy. **julia** (`scoped_identifier`)
+  and **zig** (`FnProto`) are excluded: gotreesitter's grammars have
+  diverged from aider's legacy queries, so they don't compile
+  (`TestAllEmbeddedQueriesCompile` guards this) and fall back to bare
+  entries. `ql` is skipped: no extension in grep_ast's PARSERS, dead
+  upstream too. Matrix rows added for all 7 (aider fixtures for 6, an
+  authored fortran fixture); `grammar-tags.txt` regenerated (35 grammars);
+  subset binary 32 MB; `repomap-spec.md §1.2` corrected.
 - [x] **Resolved 2026-07-17 (Deviation D5): drop the leaked `<<<<<<< HEAD`
   marker** from `editblock_fenced_prompts.py` example[1]. The human agreed
   it is an upstream accident, not tuned behavior — a malformed block shown

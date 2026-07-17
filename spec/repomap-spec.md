@@ -1,7 +1,7 @@
 # Spec: Strument repo map (ranked tag map) — v2
 
 Source of truth: `aider/repomap.py` at **commit `5dc9490bb35f9729ef2c95d00a19ccd30c26339c` (0.86.3.dev)** and `grep_ast/grep_ast.py` (TreeContext, grep_ast ~0.9). Pin the SHA, not the release tag — the tagged v0.86.0 differs (it lacks the double-append and the compounding-`sqrt` quirks addressed below).
-Query assets: `aider/queries/tree-sitter-language-pack/<lang>-tags.scm` — **31 files** at `5dc9490` (a legacy `tree-sitter-languages/` dir with 27 more is selected only when `USING_TSL_PACK` is false; ignore it). Copy verbatim. **Coverage bound:** gotreesitter's grammar count is irrelevant to the map — a language yields tags only if a `-tags.scm` exists here.
+Query assets: `aider/queries/tree-sitter-language-pack/<lang>-tags.scm` — **31 files** at `5dc9490`, plus a legacy `tree-sitter-languages/` dir. **Errata (corrected 2026-07-17):** `get_scm_fname` (`reference/aider/repomap.py:805-829`) gates only the *pack lookup* on `USING_TSL_PACK`; the legacy fallback is **unconditional and per-language**, so aider's effective coverage is the **union** — the original "selected only when `USING_TSL_PACK` is false; ignore it" was wrong. Copy both verbatim; try pack first, then legacy (aider's order). **Coverage bound:** a language yields tags only if a `-tags.scm` exists *and* gotreesitter has a compatible grammar — julia and zig ship a legacy query but gotreesitter's grammars have diverged (unknown node types), so they fall back to bare entries. See STATUS.md for the implemented set.
 Runtime substrate: gotreesitter (pure Go, no cgo).
 
 Four stages: **extract tags → build reference graph → personalized PageRank → fit to budget and render.**

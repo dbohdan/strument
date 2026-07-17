@@ -15,8 +15,18 @@ import (
 //go:embed queries/*-tags.scm
 var queriesFS embed.FS
 
-// extToLang is grep_ast's PARSERS map filtered to the 31 languages that ship
-// a tags query in aider's tree-sitter-language-pack directory (repomap-spec
+// legacyQueriesFS holds the tree-sitter-languages tags queries for the
+// languages that ship a query there but not in the language-pack directory
+// (repomap-spec §1.2). aider's get_scm_fname falls back to these
+// unconditionally, so aider's effective coverage is the union — chiefly
+// TypeScript/TSX, PHP, Kotlin, and Scala. `ql` is skipped: it has no
+// extension in grep_ast's PARSERS, so it is unreachable upstream too.
+//
+//go:embed queries-legacy/*-tags.scm
+var legacyQueriesFS embed.FS
+
+// extToLang is grep_ast's PARSERS map filtered to the languages with both a
+// tags query (pack or legacy) and a gotreesitter grammar (repomap-spec
 // §1.2). Lookup is by exact extension, case-sensitive, like grep_ast's
 // filename_to_lang.
 var extToLang = map[string]string{
@@ -51,6 +61,18 @@ var extToLang = map[string]string{
 	".sol":   "solidity",
 	".swift": "swift",
 	".rules": "udev",
+
+	// Legacy tree-sitter-languages fallback (grep_ast PARSERS extensions).
+	// julia and zig are omitted: gotreesitter's grammars for them have
+	// diverged from aider's queries (unknown node types scoped_identifier /
+	// FnProto), so the queries do not compile — see STATUS.md.
+	".f": "fortran", ".f03": "fortran", ".f08": "fortran", ".f90": "fortran", ".f95": "fortran",
+	".hs":  "haskell",
+	".hcl": "hcl", ".tf": "hcl", ".tfvars": "hcl",
+	".kt": "kotlin", ".kts": "kotlin",
+	".php":   "php",
+	".scala": "scala", ".sc": "scala",
+	".ts": "typescript", ".tsx": "typescript",
 }
 
 // grammarName maps aider/grep_ast language names to gotreesitter registry
@@ -140,7 +162,7 @@ func langFor(lang string) (*langEntry, error) {
 		return nil, nil //nolint:nilnil // No grammar => bare entry (§3.6), not an error.
 	}
 
-	src, err := queriesFS.ReadFile("queries/" + lang + "-tags.scm")
+	src, err := readTagsQuery(lang)
 	if err != nil {
 		langCache[lang] = nil
 		return nil, nil //nolint:nilnil // No query => bare entry (§3.6), not an error.
@@ -157,21 +179,41 @@ func langFor(lang string) (*langEntry, error) {
 	return entry, entry.err
 }
 
+// readTagsQuery reads a language's tags query, trying the language-pack
+// directory first and the tree-sitter-languages legacy directory second —
+// aider's get_scm_fname order (repomap-spec §1.2).
+func readTagsQuery(lang string) ([]byte, error) {
+	if src, err := queriesFS.ReadFile("queries/" + lang + "-tags.scm"); err == nil {
+		return src, nil
+	}
+	return legacyQueriesFS.ReadFile("queries-legacy/" + lang + "-tags.scm")
+}
+
 // SupportedLanguages returns the language names with both an embedded query
-// and a gotreesitter grammar; used by the startup self-test.
+// (pack or legacy) and a gotreesitter grammar; used by the startup
+// self-test.
 func SupportedLanguages() []string {
-	entries, _ := queriesFS.ReadDir("queries")
+	seen := map[string]bool{}
 	var langs []string
-	for _, e := range entries {
-		name := e.Name()
-		lang := name[:len(name)-len("-tags.scm")]
-		gname := lang
-		if n, ok := grammarName[lang]; ok {
-			gname = n
-		}
-		if grammars.DetectLanguageByName(gname) != nil {
-			langs = append(langs, lang)
+	add := func(fsys embed.FS, dir string) {
+		entries, _ := fsys.ReadDir(dir)
+		for _, e := range entries {
+			name := e.Name()
+			lang := name[:len(name)-len("-tags.scm")]
+			if seen[lang] {
+				continue
+			}
+			gname := lang
+			if n, ok := grammarName[lang]; ok {
+				gname = n
+			}
+			if grammars.DetectLanguageByName(gname) != nil {
+				seen[lang] = true
+				langs = append(langs, lang)
+			}
 		}
 	}
+	add(queriesFS, "queries")
+	add(legacyQueriesFS, "queries-legacy")
 	return langs
 }

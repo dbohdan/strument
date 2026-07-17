@@ -43,8 +43,8 @@ go build ./cmd/strument            # full build: every bundled tree-sitter gramm
 task build:strument:subset         # release variant: only the grammars strument uses
 ```
 
-The subset build (about 30 MB instead of 43 MB, statically linked and
-stripped) compiles in just the 28 grammars the repo map supports, via
+The subset build (about 32 MB instead of 43 MB, statically linked and
+stripped) compiles in just the 35 grammars the repo map supports, via
 gotreesitter's `grammar_subset` build tags; the tag list lives in
 [`script/grammar-tags.txt`](script/grammar-tags.txt) and a test keeps it in
 sync with the supported-language set. `task release` cross-compiles subset
@@ -61,9 +61,10 @@ committed.
 Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul
 Gauthier and the aider contributors, licensed under the
 [Apache License 2.0](LICENSE). Strument carries the same license. The
-tree-sitter tag queries under `internal/repomap/queries/` and the prompt
-strings are copied verbatim from aider; the rest is a reimplementation
-against the specs in `spec/`.
+tree-sitter tag queries under `internal/repomap/queries/` and
+`internal/repomap/queries-legacy/` and the prompt strings are copied
+verbatim from aider; the rest is a reimplementation against the specs in
+`spec/`.
 
 The streaming markdown renderer (`internal/render/`) is a port of
 [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by
