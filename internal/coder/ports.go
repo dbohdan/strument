@@ -14,8 +14,13 @@ type TokenCounter interface {
 	Count(text string) int
 }
 
-// RuneCounter is the default estimator: code points / 4 (the non-OpenAI
-// path of §10; see STATUS.md on the tiktoken question).
+// RuneCounter is the default estimator: code points / 4 (§10). Measured
+// against the phase-0 captures, runes/4 lands within ~0.5% of the
+// provider's real prompt_tokens for the primary model (DeepSeek: 3.99–4.02
+// chars/token; est/real ≈ 1.00 over five requests — see STATUS.md, Q3).
+// It can under-count unusually code-dense payloads (code runs closer to
+// 3.3 chars/token), so the count is advisory, not a guarantee; consumers
+// never gate irreversibly on it (§3.4 margin, unknown-max→always-add).
 type RuneCounter struct{}
 
 func (RuneCounter) Count(text string) int {

@@ -463,9 +463,17 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   it is an upstream accident, not tuned behavior — a malformed block shown
   as an exemplar in the format-teaching prompt, which could nudge the model
   toward `<<<<<<< HEAD` over `<<<<<<< SEARCH` and burn a reflection.
-- [ ] basecoder-spec §10 says "tiktoken port for OpenAI-family"; the pinned
-  dependency list has no tiktoken, so v1 uses runes/4 for all models
-  (advisory-conservative consumers only). OK, or should we add
-  a tiktoken-go dependency?
+- [x] **Resolved 2026-07-17 (Q3): keep `runes/4`, no tiktoken.** Measured
+  the estimator against the five phase-0 captures (raw request body vs the
+  provider's real `usage.prompt_tokens`): content runes / real tokens =
+  3.99–4.02 for the primary model (DeepSeek V4 Flash), and `runes/4` vs
+  real `prompt_tokens` = **1.00** (51475 runes / 4 = 12869 est vs 12856
+  real, +0.1%). So `runes/4` is accurate for the primary model, not the
+  "advisory-conservative" the spec claimed — it is dead-on, and would
+  *under*-count only unusually code-dense payloads (~3.3 chars/token).
+  tiktoken would be a wrong-for-the-primary-case dependency (DeepSeek is
+  not OpenAI-family) and the consumers never gate irreversibly, so it stays
+  out. §10 and the `RuneCounter` doc are corrected to "advisory (accurate),
+  not conservative". Analysis script: `attic/token-calibration.py` (local).
 - [ ] URL scraping (§1.4 checkForUrls) is a minimal HTTP GET + tag strip in
   v1 (`coder.SimpleScraper`), not aider's browser-based scraper. OK?
