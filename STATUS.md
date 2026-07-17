@@ -419,8 +419,22 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   behavioral divergence from aider. (Phase 5; `internal/coder/send.go`
   `finalizeUsage`.)
 
-(D4 — `edited` semantics at the atomic-apply seam — is added with its
-pinning test in the next commit.)
+- **D4 — `edited` is the batch that was actually written, not aider's
+  pre-write set.** aider computes `edited` from `prepare_to_edit` *before*
+  writing, so a mid-batch failure can leave paths in `edited` that were
+  never touched (then auto-committed as no-ops). Strument writes the whole
+  plan atomically (temp + rename, `writeAtomically`) and rolls the batch
+  back on any failure; on that path `applyUpdates` returns an empty
+  `edited`, so the turn does not auto-commit and does not rotate history
+  (`send.go` gates both on `len(edited) > 0`). Two aider-parity nuances are
+  kept and now pinned: (a) on a *successful* write, `edited` still includes
+  allowed-but-search-failed paths — they commit as git no-ops and the turn
+  reflects on them, matching aider; (b) filesystem errors are reported, not
+  reflected (§7.2). Cost: on a genuine write failure Strument reports the
+  turn as applied-nothing where aider might commit a partial batch — the
+  safer behavior. Pinned by `internal/coder/rollback_test.go`
+  (`TestApplyRollbackReturnsEmptyEdited`, `TestWriteAtomicallyRollsBackBatch`,
+  `TestCleanWriteEditedIsWrittenSet`). (Phase 1/5; `internal/coder/apply.go`.)
 
 ## Pending questions for human
 - [ ] `repomap-spec.md` §1.2 mis-states `get_scm_fname`
