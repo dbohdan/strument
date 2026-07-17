@@ -88,6 +88,18 @@ func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
 // RepoMapNow renders the repo map as the next send would see it (/map).
 func (c *Coder) RepoMapNow() string { return c.repoMapContent() }
 
+// SessionCost returns the running session cost and whether any cost was
+// priced this session; the history writer diffs it across a turn.
+func (c *Coder) SessionCost() (usd float64, known bool) {
+	return c.totalCost, c.sessionKnown
+}
+
+// SessionTokens returns the running session token totals; the history
+// writer diffs them across a turn.
+func (c *Coder) SessionTokens() (sent, received int) {
+	return c.totalTokensSent, c.totalTokensReceived
+}
+
 // TokensReport summarizes approximate context usage per assembly section
 // (§10: counts are advisory; the default counter is runes/4).
 func (c *Coder) TokensReport() string {

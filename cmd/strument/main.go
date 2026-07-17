@@ -19,6 +19,7 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
@@ -32,6 +33,7 @@ type chatCmd struct {
 	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."            name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."            name:"no-history"`
 	DryRun        bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
 	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
 	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
@@ -91,32 +93,65 @@ func (c *chatCmd) Run() error {
 		cdr.AddFile(f)
 	}
 
+	var hist *history.Writer
+	if !c.NoHistory {
+		if p, err := resolveHistoryPath(cfg, root); err == nil {
+			hist = history.New(p)
+		}
+	}
+
 	if c.Message == "" {
-		return c.runREPL(cfg, cdr, repo, alias)
+		return c.runREPL(cfg, cdr, repo, hist, alias)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	cdr.Run(ctx, c.Message)
+	sentBefore, recvBefore := cdr.SessionTokens()
+	costBefore, _ := cdr.SessionCost()
+	answer := cdr.Run(ctx, c.Message)
+	if hist != nil {
+		sentAfter, recvAfter := cdr.SessionTokens()
+		costAfter, known := cdr.SessionCost()
+		if err := hist.Append(history.Turn{
+			Model:          model.Slug,
+			TokensSent:     sentAfter - sentBefore,
+			TokensReceived: recvAfter - recvBefore,
+			Cost:           costAfter - costBefore,
+			CostKnown:      known,
+			User:           c.Message,
+			Assistant:      answer,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
+		}
+	}
 	return nil
 }
 
+// resolveHistoryPath is the config override (absolute, or relative to the
+// project root) or the XDG default.
+func resolveHistoryPath(cfg *config.Config, projectRoot string) (string, error) {
+	if cfg.HistoryFile != "" {
+		p := cfg.HistoryFile
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(projectRoot, p)
+		}
+		return p, nil
+	}
+	return history.DefaultPath(projectRoot)
+}
+
 // runREPL starts the interactive session (basecoder-spec §1.2).
-func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, alias string) error {
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
+	inputHistory, _ := history.InputHistoryPath()
 	r, err := repl.New(repl.Options{
-		Coder:      cdr,
-		Config:     cfg,
-		Git:        repo,
-		ModelAlias: alias,
-		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
-		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
-		HistoryFile: func() string {
-			p, err := config.DefaultTrustStorePath()
-			if err != nil {
-				return ""
-			}
-			return filepath.Join(filepath.Dir(p), "history")
-		}(),
+		Coder:       cdr,
+		Config:      cfg,
+		Git:         repo,
+		History:     hist,
+		ModelAlias:  alias,
+		MakeClient:  func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
+		HistoryFile: inputHistory,
 	})
 	if err != nil {
 		return err
@@ -175,9 +210,38 @@ func (c *trustCmd) Run() error {
 	return nil
 }
 
+// historyCmd prints the chat-history file for the current project (the one
+// XDG makes hard to discover). It resolves the same path chat mode writes.
+type historyCmd struct{}
+
+func (*historyCmd) Run() error {
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if g, err := gitrepo.Discover(root); err == nil {
+		root = g.Root()
+	}
+	// Honor a config override when the config loads; otherwise fall back to
+	// the default path so "where is my history" always answers.
+	if cfg, err := config.Load(config.Options{ProjectRoot: root}); err == nil {
+		if p, err := resolveHistoryPath(cfg, root); err == nil {
+			fmt.Println(p)
+			return nil
+		}
+	}
+	p, err := history.DefaultPath(root)
+	if err != nil {
+		return err
+	}
+	fmt.Println(p)
+	return nil
+}
+
 type cli struct {
-	Chat    chatCmd          `cmd:""                         default:"withargs"                                     help:"Chat with a model about the given files (default command)."`
+	Chat    chatCmd          `cmd:""                         default:"withargs"                                         help:"Chat with a model about the given files (default command)."`
 	Trust   trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
+	History historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Version kong.VersionFlag `help:"Print version and exit."`
 }
 

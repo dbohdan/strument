@@ -73,10 +73,11 @@ Reads an environment variable — **the sole impurity**. `required=True` and uns
 
 ## 4. Required globals and resolution
 
-After executing the merged config, the host reads two module globals:
+After executing the merged config, the host reads these module globals:
 
 - **`models: dict[str, Model]`** — **required**. Keys are the **aliases** used with `--model` / `/model`; values are Model objects. The dict is simultaneously the registry and the alias table.
 - **`default: str`** — **required**. The alias used when none is given; must be a key in `models`.
+- **`history_file: str`** — **optional**. Overrides the chat-history path; an absolute path is used as-is, a relative path resolves against the project root. Empty/unset uses the XDG default (`$XDG_STATE_HOME/strument/history/<basename>-<hash8>.md`). Merged project-over-user, like `default`.
 
 Resolution runs once, after the cascade merge:
 - A `weak_model` given as a **string** is resolved against the merged `models` dict (this is why resolution is post-merge — cross-file references work).

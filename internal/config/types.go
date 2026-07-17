@@ -86,6 +86,9 @@ func (m *Model) RequestExtraParams() map[string]any {
 type Config struct {
 	Models  map[string]*Model // alias -> model
 	Default string            // must be a key of Models
+	// HistoryFile overrides the chat-history path ("" => the XDG default).
+	// A relative path is resolved against the project root by the caller.
+	HistoryFile string
 }
 
 // DefaultModel returns the model for the default alias.

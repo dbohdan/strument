@@ -370,6 +370,19 @@ hand-validation by the human, and the "Pending questions for human" below.
     model is the bare slug; aider sends `temperature: 0` by default.
 
 ## Standing notes
+- **Session history** (`internal/history`, added 2026-07-17, post-phase-9).
+  Two files under `$XDG_STATE_HOME/strument`, matching the trust store's
+  state-dir precedent (XDG names history as canonical state): a per-project
+  chat transcript `history/<basename>-<hash8>.md` (markdown, one block per
+  turn with a model/tokens/cost header — improving on aider's bare
+  transcript) keyed by the absolute project root, and a **global**
+  `input-history` for readline (every REPL keeps input history global).
+  `history_file` in `config.star` overrides the chat path; `--no-history`
+  disables writing; `strument history` prints the resolved path (XDG's one
+  cost is discoverability). **Unbounded growth** is the same failure mode
+  as the coder's `doneMessages` (basecoder-spec §10): no rotation in v1;
+  first v2 step if it bites. Nothing is keyed into cwd, so the tool never
+  scatters dotfiles a user must gitignore.
 - Git features are **on by default** when cwd is inside a git repository; `--no-git`
   opts out. Confirmed with the human 2026-07-16 (guide commit `ef7c8d3` is
   authoritative). The stale "`--no-git` default" wording in

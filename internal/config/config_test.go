@@ -89,6 +89,39 @@ func TestLoadUserConfig(t *testing.T) {
 	}
 }
 
+func TestHistoryFileOptionalAndOverridable(t *testing.T) {
+	// Absent by default.
+	cfg, err := Load(harness(t, userConfig, "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HistoryFile != "" {
+		t.Errorf("history_file should default to empty, got %q", cfg.HistoryFile)
+	}
+
+	// Set in the user config; a trusted project overrides it
+	// (project-over-user).
+	userSrc := userConfig + "\nhistory_file = \"user.md\"\n"
+	projSrc := "history_file = \"project.md\"\n"
+	opts := harness(t, userSrc, projSrc, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HistoryFile != "project.md" {
+		t.Errorf("history_file = %q, want project override", cfg.HistoryFile)
+	}
+
+	// A non-string history_file is rejected.
+	if _, err := Load(harness(t, userConfig+"\nhistory_file = 42\n", "", testEnv)); err == nil ||
+		!strings.Contains(err.Error(), "history_file") {
+		t.Errorf("non-string history_file should fail: %v", err)
+	}
+}
+
 func TestEnvRequiredUnsetFailsLoad(t *testing.T) {
 	_, err := Load(harness(t, userConfig, "", nil))
 	if err == nil || !strings.Contains(err.Error(), "OPENROUTER_API_KEY") {

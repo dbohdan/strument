@@ -16,6 +16,7 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -32,6 +33,10 @@ type Options struct {
 
 	// Git enables /undo and /diff; nil outside a repository (--no-git).
 	Git *gitrepo.Repo
+
+	// History records each turn to a markdown transcript; nil disables it
+	// (--no-history).
+	History *history.Writer
 
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
@@ -225,7 +230,26 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 		}
 	}()
 
-	r.coder.Run(tctx, message)
+	sentBefore, recvBefore := r.coder.SessionTokens()
+	costBefore, _ := r.coder.SessionCost()
+
+	answer := r.coder.Run(tctx, message)
+
+	if r.opts.History != nil {
+		sentAfter, recvAfter := r.coder.SessionTokens()
+		costAfter, known := r.coder.SessionCost()
+		if err := r.opts.History.Append(history.Turn{
+			Model:          r.coder.Model.Slug,
+			TokensSent:     sentAfter - sentBefore,
+			TokensReceived: recvAfter - recvBefore,
+			Cost:           costAfter - costBefore,
+			CostKnown:      known,
+			User:           message,
+			Assistant:      answer,
+		}); err != nil {
+			r.out.Warningf("Could not write chat history: %v", err)
+		}
+	}
 }
 
 // showUndoHint mentions /undo after a message that moved HEAD (aider's

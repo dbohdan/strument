@@ -35,9 +35,11 @@ func DefaultUserConfigPath() (string, error) {
 
 // fileGlobals is the result of executing one config file.
 type fileGlobals struct {
-	models     map[string]*Model
-	hasDefault bool
-	defaultVal string
+	models         map[string]*Model
+	hasDefault     bool
+	defaultVal     string
+	hasHistoryFile bool
+	historyFile    string
 }
 
 // Load runs the pipeline of config-schema §8: user config, gated project
@@ -107,16 +109,23 @@ func Load(opts Options) (*Config, error) {
 		}
 	}
 
-	// 4. Merge: models whole-key, project wins; default project-over-user.
+	// 4. Merge: models whole-key, project wins; default and history_file
+	// project-over-user.
 	cfg := &Config{Models: map[string]*Model{}}
 	maps.Copy(cfg.Models, user.models)
 	if user.hasDefault {
 		cfg.Default = user.defaultVal
 	}
+	if user.hasHistoryFile {
+		cfg.HistoryFile = user.historyFile
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
 			cfg.Default = project.defaultVal
+		}
+		if project.hasHistoryFile {
+			cfg.HistoryFile = project.historyFile
 		}
 	}
 
@@ -210,6 +219,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		}
 		out.hasDefault = true
 		out.defaultVal = s
+	}
+
+	if hv, ok := globals["history_file"]; ok {
+		s, ok := starlark.AsString(hv)
+		if !ok {
+			return nil, fmt.Errorf("%s: `history_file` must be a string path, got %s", path, hv.Type())
+		}
+		out.hasHistoryFile = true
+		out.historyFile = s
 	}
 
 	return out, nil
