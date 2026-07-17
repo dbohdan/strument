@@ -1,8 +1,13 @@
 # Strument port — STATUS
 
 ## Current phase
-All phases (0–9) complete, 2026-07-17. Outstanding: phase 7 REPL
-hand-validation by the human, and the "Pending questions for human" below.
+All phases (0–9) complete. Post-v1 follow-up batch complete 2026-07-17
+(module rename to `dbohdan.com/strument`; spec-precedence rule + stale
+wording fix; Deviations register populated D1–D5; token-estimate
+calibration; reference/ setup script; session history files; `/ask` mode;
+legacy tags-query fallback recovering TypeScript/PHP/Kotlin/Scala/Haskell/
+HCL/Fortran). All four original pending questions (Q1–Q4) resolved.
+Outstanding: phase 7 REPL hand-validation by the human.
 
 ## Phase log
 
