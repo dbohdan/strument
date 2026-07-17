@@ -26,6 +26,11 @@ plan, scope, and the list of features deliberately deferred or dropped.
   formats, repo map, reflection on failed edits, shell-command suggestions,
   git auto-commit with `/undo`. Architect mode, voice, GUI, analytics,
   summarization, and the other long-tail features are out of scope for v1.
+- **Plain-HTTP URL scraping.** URLs you mention are fetched with a plain
+  HTTP GET and reduced to text — no headless browser (a static binary can't
+  embed one), so JavaScript-rendered pages, which is most modern docs
+  sites, come back empty. aider ships a Playwright-based scraper; Strument
+  trades that reach for the single-binary distribution.
 
 ## Building
 

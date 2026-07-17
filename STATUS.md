@@ -475,5 +475,9 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   not OpenAI-family) and the consumers never gate irreversibly, so it stays
   out. §10 and the `RuneCounter` doc are corrected to "advisory (accurate),
   not conservative". Analysis script: `attic/token-calibration.py` (local).
-- [ ] URL scraping (§1.4 checkForUrls) is a minimal HTTP GET + tag strip in
-  v1 (`coder.SimpleScraper`), not aider's browser-based scraper. OK?
+- [x] **Resolved 2026-07-17 (Q4): keep the plain-HTTP scraper.** It was
+  never a real choice — a Go static binary can't embed a headless browser,
+  so aider's Playwright scraper is off the table by construction (the
+  single-binary decision already decided it). The honest cost, now noted in
+  the README: JS-rendered docs sites return nothing useful.
+  `coder.SimpleScraper` stays: plain GET + tag strip.
