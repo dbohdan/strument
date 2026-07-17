@@ -5,11 +5,11 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -18,6 +18,8 @@ import (
 	"github.com/dbohdan/strument/internal/client"
 	"github.com/dbohdan/strument/internal/coder"
 	"github.com/dbohdan/strument/internal/config"
+	"github.com/dbohdan/strument/internal/llm"
+	"github.com/dbohdan/strument/internal/repl"
 	"github.com/dbohdan/strument/internal/repomap"
 )
 
@@ -27,6 +29,7 @@ type chatCmd struct {
 	Message  string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
 	Model    string   `help:"Model alias from config; defaults to the config's default."`
 	NoGit    bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
+	NoColor  bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
 	DryRun   bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
 	Yes      bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
 	YesShell bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
@@ -72,13 +75,43 @@ func (c *chatCmd) Run() error {
 	}
 
 	if c.Message == "" {
-		return errors.New("the interactive REPL arrives in phase 7; use --message for script mode")
+		return c.runREPL(cfg, cdr, alias)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	cdr.Run(ctx, c.Message)
 	return nil
+}
+
+// runREPL starts the interactive session (basecoder-spec §1.2).
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, alias string) error {
+	r, err := repl.New(repl.Options{
+		Coder:      cdr,
+		Config:     cfg,
+		ModelAlias: alias,
+		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
+		HistoryFile: func() string {
+			p, err := config.DefaultTrustStorePath()
+			if err != nil {
+				return ""
+			}
+			return filepath.Join(filepath.Dir(p), "history")
+		}(),
+	})
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	// Route confirms through readline; --yes/--yes-shell answer first.
+	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: r.Confirmer()}
+	return r.Run(context.Background())
+}
+
+func stdoutIsTerminal() bool {
+	st, err := os.Stdout.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
 // terminalConfirmer asks y/n questions on the terminal.

@@ -1,7 +1,49 @@
 # Strument port — STATUS
 
 ## Current phase
-Phase 7 — REPL — started 2026-07-16
+Phase 8 — git mode — started 2026-07-17
+
+### Phase 7 — REPL — done (code + automated slice); **hand-validation by the human pending**
+- Oracle: hand-validate vs aider's feel (collab). The automatable slice is
+  green: scripted pipe sessions, both double-Ctrl-C chords, and a real-pty
+  round trip (prompt → /ls → rendered turn → ^C^C exit).
+- Started: 2026-07-16
+- Finished (code): 2026-07-17
+- Deviations: none. One planned-tooling note: the plan named creack/pty +
+  go-expect for automation; creack/pty alone sufficed (the pty test answers
+  readline's cursor-position query ESC[6n itself), so go-expect was
+  dropped by `go mod tidy` rather than kept unused.
+- Notes:
+  - `internal/repl`: ergochat/readline v0.1.3 behind seams (Stdin/Stdout,
+    IsTerminal, MakeRaw/ExitRaw, Notify, Exit, Now) so tests can drive it
+    over pipes and a pty. `strument` (no --message) now starts the REPL;
+    `--no-color` and NO_COLOR are honored; input history lands next to the
+    trust store ($XDG_STATE_HOME/strument/history).
+  - §1.2 chords: one shared 2s window like aider's last_keyboard_interrupt.
+    At the prompt, readline clears the line, we print "^C again to exit",
+    a second ^C within 2s returns cleanly. During a turn, SIGINT cancels
+    the send context (the coder's §2.11 interrupt shape takes over) and a
+    second within 2s exits 130 via the injected Exit.
+  - §1.4 dispatch: slash commands run before preproc and return either a
+    message to send or ""; the table: /add /read-only /drop /ls /clear
+    /reset /tokens /model /map /run /help /exit /quit, plus /undo /diff
+    stubs that point at phase 8. /run reuses the §6.3 result shape and
+    appends {user,result}+{assistant,"Ok"} on confirm, like §6.2 output.
+    Tab completion covers commands, addable files, chat files, and model
+    aliases.
+  - Live render: coder.Out streams answer deltas through
+    render.Parser+ANSI (phase 6); reasoning deltas print dim and unparsed
+    under a "· thinking ·" header. Confirms route through readline
+    (ReadLineWithConfig on a cloned config) so prompt and confirm input
+    share one reader; aider's defaults kept (Enter=yes, except
+    explicit-yes prompts).
+  - New REPL-facing coder surface in `internal/coder/session.go`:
+    ChatFiles/ReadOnlyFiles/DropFile/DropAll/ClearHistory/AppendExchange/
+    SetModel/LastCommitHash/RepoMapNow/TokensReport.
+  - **For the human to hand-validate** (guide §5 collab): REPL feel vs
+    aider — prompt texture, streaming render pacing, ^C behavior, confirm
+    wording. `go build ./cmd/strument && ./strument` in a repo with a
+    config.star. Proceeding to phase 8 per the plan while this waits.
 
 ### Phase 6 — render (smd.js port) — done
 - Oracle: smd.js's own test suite, ported — green (435 cases × 2 modes)
