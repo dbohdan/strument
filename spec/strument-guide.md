@@ -148,4 +148,4 @@ From the specs' `[Deferred]` labels, so the run doesn't scope-creep: type-aware 
 | `github.com/ergochat/readline` | v0.1.3 |
 | `github.com/creack/pty` | v1.1.24 |
 | `github.com/Netflix/go-expect` | v0.0.0-20220104043353-73e0943537d2 |
-| Go toolchain | go1.26.5 |
+| Go toolchain | go1.26 |
