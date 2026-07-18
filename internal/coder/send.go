@@ -55,6 +55,9 @@ type sendUsage struct {
 	cost                                      float64
 	costKnown                                 bool
 	finalized                                 bool
+	// estSent is the pre-send token estimate, the fallback when the turn is
+	// aborted before the provider's usage arrives.
+	estSent int
 }
 
 func (u *sendUsage) add(usage *llm.Usage) {
@@ -88,7 +91,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// --- Stream ---
 	c.multiResponseContent = "" // per-send reset (H1)
 
-	usage := &sendUsage{}
+	usage := &sendUsage{estSent: c.countMessages(messages)}
 	defer c.finalizeUsage(usage)
 
 	type streamResult int
@@ -353,10 +356,24 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	u.finalized = true
 
 	sent := u.prompt + u.cacheWrite
+	received := u.completion
+	estimated := false
+
+	// No usage arrived — the turn was aborted before the provider's final
+	// usage chunk (or the provider sends none). The request still went out
+	// and may have streamed a partial reply, so report our own estimate
+	// instead of a misleading zero, and mark it so a guess is never shown as
+	// the provider's ground truth.
+	if sent == 0 && received == 0 && !u.costKnown && (u.estSent > 0 || c.streamedText() != "") {
+		estimated = true
+		sent = u.estSent
+		received = c.Tokens.Count(c.streamedText())
+	}
+
 	c.messageTokensSent = sent
-	c.messageTokensReceived = u.completion
+	c.messageTokensReceived = received
 	c.totalTokensSent += sent
-	c.totalTokensReceived += u.completion
+	c.totalTokensReceived += received
 
 	report := fmt.Sprintf("Tokens: %s sent", formatTokens(sent))
 	if u.cacheWrite > 0 {
@@ -365,7 +382,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	if u.cacheRead > 0 {
 		report += fmt.Sprintf(", %s cache hit", formatTokens(u.cacheRead))
 	}
-	report += fmt.Sprintf(", %s received.", formatTokens(u.completion))
+	report += fmt.Sprintf(", %s received.", formatTokens(received))
 
 	cost := 0.0
 	known := false
@@ -376,12 +393,16 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	case c.Model.InputCost != nil && c.Model.OutputCost != nil:
 		pin := c.Model.InputCost.USD
 		pout := c.Model.OutputCost.USD
-		// Anthropic-style cache pricing adjustments; no-ops at zero counts
-		// (DeepSeek's cache-read discount uses the same 0.10 factor, §8).
-		cost = float64(u.cacheWrite)*pin*1.25 +
-			float64(u.cacheRead)*pin*0.10 +
-			float64(u.prompt)*pin +
-			float64(u.completion)*pout
+		if estimated {
+			cost = float64(sent)*pin + float64(received)*pout
+		} else {
+			// Anthropic-style cache pricing adjustments; no-ops at zero counts
+			// (DeepSeek's cache-read discount uses the same 0.10 factor, §8).
+			cost = float64(u.cacheWrite)*pin*1.25 +
+				float64(u.cacheRead)*pin*0.10 +
+				float64(u.prompt)*pin +
+				float64(u.completion)*pout
+		}
 		known = true
 	}
 
@@ -392,9 +413,19 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 		c.sessionKnown = true
 		report += fmt.Sprintf(" Cost: $%s message, $%s session.", formatCost(c.messageCost), formatCost(c.totalCost))
 	}
+	if estimated {
+		report += " (estimated)"
+	}
 
 	c.lastUsageReport = report
 	c.Out.Printf("%s", report)
+}
+
+// streamedText is everything received this send — stitched continuations plus
+// the current partial answer and reasoning — used to estimate received tokens
+// when the provider's usage never arrived.
+func (c *Coder) streamedText() string {
+	return c.multiResponseContent + c.partialResponseContent + c.partialReasoningContent
 }
 
 func formatTokens(n int) string {
