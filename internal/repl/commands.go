@@ -319,6 +319,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		return ""
 	}
 	r.coder.SetModel(m)
+	r.refreshTrailer(m)
 	if r.opts.MakeClient != nil {
 		r.coder.Client = r.opts.MakeClient(m)
 	}

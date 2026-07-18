@@ -86,7 +86,7 @@ func (c *chatCmd) Run() error {
 	}
 	if repo != nil {
 		weak := model.WeakModel
-		repo.CommitTrailer = gitrepo.Trailer(model.Slug)
+		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.New(weak.Provider), weak, cdr.Platform.Language)
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits

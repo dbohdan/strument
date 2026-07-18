@@ -170,6 +170,15 @@ func (r *REPL) prompt() string {
 	return r.sgr(r.opts.Theme.UserInput) + label + r.sgr("0")
 }
 
+// refreshTrailer recomputes the commit trailer for the given model so a
+// /model switch is reflected in later auto-commits. opts.Git and the coder's
+// repo are the same object, so this reaches the commit path.
+func (r *REPL) refreshTrailer(m *config.Model) {
+	if r.opts.Git != nil {
+		r.opts.Git.CommitTrailer = gitrepo.Trailer(m.ReadableName())
+	}
+}
+
 // sgr wraps an SGR parameter string, honoring --no-color and skipping empty
 // codes (which would otherwise emit a bare reset).
 func (r *REPL) sgr(codes string) string {

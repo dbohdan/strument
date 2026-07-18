@@ -64,6 +64,52 @@ func editResponseStub() *fixture.StreamStub {
 	}}}}
 }
 
+func TestModelSwitchUpdatesTrailer(t *testing.T) {
+	root := initScratchRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	small := testModel()
+	small.Slug = "vendor/small:nitro" // readable name drops prefix + :nitro
+	big := testModel()
+	big.Slug = "vendor/big-model"
+	big.DisplayName = "Big Model"
+
+	g.CommitTrailer = gitrepo.Trailer(small.ReadableName())
+
+	cdr := coder.New(root, small)
+	cdr.Client = &fixture.StreamStub{}
+	cdr.Repo = g
+
+	cfg := testConfig(small)
+	cfg.Models["big"] = big
+
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:      cdr,
+		Config:     cfg,
+		Git:        g,
+		ModelAlias: "test",
+		Stdin:      strings.NewReader("/model big\n/exit\n"),
+		Stdout:     out,
+		Stderr:     out,
+		IsTerminal: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := gitrepo.Trailer("Big Model"); g.CommitTrailer != want {
+		t.Errorf("trailer after /model = %q, want %q", g.CommitTrailer, want)
+	}
+}
+
 func TestDiffAndUndoSession(t *testing.T) {
 	root := initScratchRepo(t)
 	g, err := gitrepo.Discover(root)
