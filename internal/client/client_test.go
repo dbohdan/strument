@@ -293,3 +293,37 @@ func TestOpenAIDefaultBase(t *testing.T) {
 		t.Errorf("base = %s", got)
 	}
 }
+
+func TestOpenRouterAppHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		adapter string
+		wantApp bool
+	}{
+		{config.AdapterOpenRouter, true},
+		{config.AdapterOpenAI, false},
+	} {
+		var gotReq *http.Request
+		c := New(config.Provider{Adapter: tc.adapter, APIKey: "k"})
+		c.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			gotReq = r
+			return respond(200, "text/event-stream", "data: [DONE]\n"), nil
+		})
+		for _, err := range c.Send(context.Background(), llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")}}) {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		title := gotReq.Header.Get("X-Title")
+		referer := gotReq.Header.Get("Http-Referer")
+		if tc.wantApp {
+			if title != "Strument" {
+				t.Errorf("%s: X-Title = %q, want Strument", tc.adapter, title)
+			}
+			if referer == "" {
+				t.Errorf("%s: HTTP-Referer should be set", tc.adapter)
+			}
+		} else if title != "" || referer != "" {
+			t.Errorf("%s: app headers should be absent, got X-Title=%q HTTP-Referer=%q", tc.adapter, title, referer)
+		}
+	}
+}

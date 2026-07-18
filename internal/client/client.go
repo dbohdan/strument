@@ -25,6 +25,13 @@ const (
 	defaultOpenRouterBase = "https://openrouter.ai/api/v1"
 )
 
+// OpenRouter app-attribution headers, so requests show as this app in the
+// provider's logs and rankings instead of "Unknown".
+const (
+	appName = "Strument"
+	appURL  = "https://dbohdan.com/strument"
+)
+
 // Client speaks to one endpoint. Transport may be overridden for tests —
 // the automated suite never opens a socket.
 type Client struct {
@@ -105,6 +112,13 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		httpReq.Header.Set("Content-Type", "application/json")
 		if c.Provider.APIKey != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+c.Provider.APIKey)
+		}
+		if c.Provider.Adapter == config.AdapterOpenRouter {
+			// OpenRouter's app-attribution headers. Its docs write
+			// "HTTP-Referer"; Go canonicalizes it to "Http-Referer" and
+			// header names are case-insensitive (RFC 9110), so it matches.
+			httpReq.Header.Set("Http-Referer", appURL)
+			httpReq.Header.Set("X-Title", appName)
 		}
 
 		httpClient := &http.Client{Transport: c.Transport}
