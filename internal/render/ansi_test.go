@@ -89,8 +89,8 @@ func TestANSIColorMatchesPlain(t *testing.T) {
 	if got := sgrRe.ReplaceAllString(color, ""); got != plain {
 		t.Errorf("stripped color output differs from plain:\n%q\nvs\n%q", got, plain)
 	}
-	if !strings.Contains(color, "\x1b[1m") || !strings.Contains(color, "\x1b[36m") {
-		t.Error("expected bold and cyan styles in color output")
+	if !strings.Contains(color, "\x1b[1m") || !strings.Contains(color, "\x1b[37m") {
+		t.Error("expected bold and white styles in color output")
 	}
 }
 
@@ -123,7 +123,7 @@ func TestANSIAssistantBaseColor(t *testing.T) {
 	if strings.Count(got, base) < 2 {
 		t.Errorf("base color not restored after a nested style pop:\n%q", got)
 	}
-	if !strings.Contains(got, "\x1b[36m") {
+	if !strings.Contains(got, "\x1b[37m") {
 		t.Errorf("distinct code color missing:\n%q", got)
 	}
 }

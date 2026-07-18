@@ -10,7 +10,7 @@ type Theme struct {
 	Assistant string // base color for all assistant (markdown) output
 	Error     string // tool errors
 	Warning   string // tool warnings
-	Code      string // the one distinct color kept for code (no highlighting)
+	Code      string // color for inline code and code blocks (defaults to white / "37")
 }
 
 // DefaultTheme is aider's default palette: green input, blue assistant,
@@ -21,7 +21,7 @@ func DefaultTheme() Theme {
 		Assistant: "38;2;0;136;255", // #0088ff
 		Error:     "38;2;255;34;34", // #FF2222
 		Warning:   "38;2;255;165;0", // #FFA500
-		Code:      "36",             // cyan, kept distinct from prose
+		Code:      "37",             // white
 	}
 }
 
@@ -32,7 +32,7 @@ func DarkTheme() Theme {
 		Assistant: "38;2;0;255;255", // #00FFFF
 		Error:     "38;2;255;51;51", // #FF3333
 		Warning:   "38;2;255;255;0", // #FFFF00
-		Code:      "36",
+		Code:      "37",
 	}
 }
 
@@ -45,6 +45,6 @@ func LightTheme() Theme {
 		Assistant: "34",             // blue
 		Error:     "31",             // red
 		Warning:   "38;2;255;165;0", // #FFA500
-		Code:      "36",
+		Code:      "37",
 	}
 }
