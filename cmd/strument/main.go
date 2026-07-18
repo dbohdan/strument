@@ -31,7 +31,7 @@ var version = "0.0.0-dev"
 
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."`
+	Model         string   `help:"Model alias from config; defaults to the config's default."    short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
 	DarkMode      bool     `help:"Use colors suited to a dark terminal background."              name:"dark-mode"                 xor:"palette"`
