@@ -51,10 +51,11 @@ Declares an endpoint + wire dialect.
 
 Returns an opaque **Provider value with value semantics**: identity is by field-value, not object identity. Two `provider(...)` calls with identical fields are the same provider. At runtime Strument groups models by `(adapter, base_url)` to share one client/connection pool per endpoint. There is **no provider→model behavior inheritance** (rejected, §6) — a provider is a pure carrier of `(adapter, base_url, api_key, name, extra_params)`.
 
-### `model(provider, slug, *, edit_format="diff", weak_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, edit_format="diff", weak_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 Declares a usable model.
 - `provider` — a Provider value.
 - `slug` — the id sent to the API (e.g. `"deepseek/deepseek-v4-flash"`).
+- `display_name` — a human-readable label used in the git commit trailer (`Assisted-by: <name> via Strument`), following the Anthropic/Google `display_name` convention. `None` → derived from the slug: the segment after the last `/` and before the first `:`, dropping the provider prefix and any `:variant` suffix (which can name a private endpoint), e.g. `"deepseek/deepseek-v4-pro:nitro"` → `"deepseek-v4-pro"`.
 - `edit_format` — `"diff"` (editblock, the default), `"diff-fenced"`, or `"whole"`. Matches the editblock-default decision.
 - `weak_model` — a Model value **or** an alias string for cheap tasks (commit messages, summaries); `None` → **self** (§4).
 - `reasoning` — request-side reasoning effort (e.g. `"low"` — the standing low-effort decision). Adapter-translated.

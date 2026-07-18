@@ -145,16 +145,18 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 }
 
 // builtinModel implements
-// model(provider, slug, *, edit_format="diff", weak_model=None, reasoning=None,
+// model(provider, slug, *, display_name=None, edit_format="diff",
 //
-//	reasoning_tag=None, temperature=None, repo_map=True, context=None,
-//	max_output=None, input_cost=None, output_cost=None, extra_params={}).
+//	weak_model=None, reasoning=None, reasoning_tag=None, temperature=None,
+//	repo_map=True, context=None, max_output=None, input_cost=None,
+//	output_cost=None, extra_params={}).
 func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 2 {
 		return nil, errors.New("model: only 'provider' and 'slug' may be positional")
 	}
 	var providerV starlark.Value
 	var slug string
+	var displayName string
 	editFormat := "diff"
 	var weakModel starlark.Value
 	var reasoning, reasoningTag string
@@ -166,6 +168,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"provider", &providerV,
 		"slug", &slug,
+		"display_name?", &displayName,
 		"edit_format?", &editFormat,
 		"weak_model?", &weakModel,
 		"reasoning?", &reasoning,
@@ -192,6 +195,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	m := &Model{
 		Provider:     pv.p,
 		Slug:         slug,
+		DisplayName:  displayName,
 		EditFormat:   editFormat,
 		Reasoning:    reasoning,
 		ReasoningTag: reasoningTag,

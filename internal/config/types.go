@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -55,6 +56,7 @@ func (p Provider) GroupKey() string {
 type Model struct {
 	Provider     Provider
 	Slug         string
+	DisplayName  string // human-readable label; "" => derived from Slug
 	EditFormat   string // "diff" | "diff-fenced" | "whole"
 	WeakModel    *Model // non-nil after resolution (self if unset)
 	Reasoning    string // request-side effort, e.g. "low"; "" => omit
@@ -70,6 +72,28 @@ type Model struct {
 	// weakRef holds an unresolved string alias or inline model between
 	// construction and resolution.
 	weakRef any
+}
+
+// ReadableName is the human-facing model name used in commit trailers: the
+// configured display_name, or the slug reduced to its core — everything
+// after the last "/" (dropping the provider prefix) and before the first ":"
+// (dropping a ":variant" suffix, which can name a private endpoint). Falls
+// back to the full slug when that reduction is empty.
+func (m *Model) ReadableName() string {
+	if m.DisplayName != "" {
+		return m.DisplayName
+	}
+	s := m.Slug
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	if i := strings.Index(s, ":"); i >= 0 {
+		s = s[:i]
+	}
+	if s == "" {
+		return m.Slug
+	}
+	return s
 }
 
 // RequestExtraParams merges provider-scoped and model-scoped extra_params,
