@@ -77,7 +77,7 @@ func (o *termOutput) StreamReasoning(delta string) {
 	o.hideCursor()
 	if !o.inReasoning {
 		o.inReasoning = true
-		fmt.Fprint(o.w, o.sgr("2")+"· thinking ·\n")
+		fmt.Fprint(o.w, o.sgr(o.theme.Assistant)+"\n► THINKING\n\n")
 	}
 	o.streamed = true
 	fmt.Fprint(o.w, delta)
