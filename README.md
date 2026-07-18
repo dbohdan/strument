@@ -12,7 +12,8 @@ by reverse-engineering aider at commit
 [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c)
 (0.86.3.dev). See [`spec/strument-guide.md`](spec/strument-guide.md) for the
 plan, scope, and the list of features deliberately deferred or dropped.
-`STATUS.md` is the running journal of the port.
+`STATUS.md` is the running journal of the port, and
+[`doc/README.md`](doc/README.md) is the developer overview.
 
 ## What's different from aider
 
