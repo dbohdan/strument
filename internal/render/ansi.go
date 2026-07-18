@@ -20,6 +20,8 @@ import (
 type ANSI struct {
 	w     io.Writer
 	color bool
+	theme Theme
+	width int // terminal width for full-width rules; <=0 falls back to 80
 
 	stack      []ansiFrame
 	styles     []string
@@ -38,9 +40,31 @@ type ansiFrame struct {
 }
 
 // NewANSI returns an ANSI renderer writing to w. With color false it emits
-// plain text with the same layout and no escape codes.
-func NewANSI(w io.Writer, color bool) *ANSI {
-	return &ANSI{w: w, color: color, stack: []ansiFrame{{tok: Document}}}
+// plain text with the same layout and no escape codes. theme supplies the
+// palette (the assistant base color and the code color); width sets the
+// horizontal-rule length (<=0 falls back to 80).
+//
+// The assistant base color is seeded as the permanent bottom of the style
+// stack: token styles push on top and pop off, but the base is never popped,
+// so reapplyStyles (reset, then re-enter open styles) always restores it and
+// every line of assistant output carries the color. The caller resets the
+// terminal (SGR 0) once the stream ends.
+func NewANSI(w io.Writer, color bool, theme Theme, width int) *ANSI {
+	r := &ANSI{w: w, color: color, theme: theme, width: width, stack: []ansiFrame{{tok: Document}}}
+	if color && theme.Assistant != "" {
+		r.styles = []string{theme.Assistant}
+		r.esc(r.sgr(theme.Assistant))
+	}
+	return r
+}
+
+// ruleWidth is the horizontal-rule length: the terminal width, or 80 when
+// unknown.
+func (r *ANSI) ruleWidth() int {
+	if r.width > 0 {
+		return r.width
+	}
+	return 80
 }
 
 // out writes visible output and tracks trailing newlines for separator
@@ -110,7 +134,7 @@ func (r *ANSI) sgr(codes string) string {
 	return "\x1b[" + codes + "m"
 }
 
-func styleFor(t Token) string {
+func (r *ANSI) styleFor(t Token) string {
 	switch t {
 	case Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
 		StrongAst, StrongUnd:
@@ -120,7 +144,9 @@ func styleFor(t Token) string {
 	case Strike:
 		return "9"
 	case CodeInline, CodeBlock, CodeFence:
-		return "36"
+		// One distinct color for code — no background, no syntax
+		// highlighting (deliberately excluded, per the guide's oracle).
+		return r.theme.Code
 	case Link, RawURL:
 		return "4;34"
 	case EquationBlock, EquationInline:
@@ -199,7 +225,7 @@ func (r *ANSI) AddToken(t Token) {
 		r.out("\n")
 	case Rule:
 		r.lineStart()
-		r.out(strings.Repeat("─", 40))
+		r.out(strings.Repeat("─", r.ruleWidth()))
 	case ListItem:
 		r.ensureNewlines(1)
 		r.lineStart()
@@ -228,13 +254,13 @@ func (r *ANSI) AddToken(t Token) {
 	}
 
 	r.stack = append(r.stack, ansiFrame{tok: t})
-	r.pushStyle(styleFor(t))
+	r.pushStyle(r.styleFor(t))
 }
 
 // EndToken implements Renderer.
 func (r *ANSI) EndToken() {
 	f := r.stack[len(r.stack)-1]
-	r.popStyle(styleFor(f.tok))
+	r.popStyle(r.styleFor(f.tok))
 	r.stack = r.stack[:len(r.stack)-1]
 
 	switch f.tok {

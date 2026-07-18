@@ -16,6 +16,8 @@ import (
 type termOutput struct {
 	w     io.Writer
 	color bool
+	theme render.Theme
+	width int // terminal width, for the markdown renderer's full-width rules
 
 	parser      *render.Parser
 	inReasoning bool
@@ -23,7 +25,7 @@ type termOutput struct {
 }
 
 func (o *termOutput) sgr(codes string) string {
-	if !o.color {
+	if !o.color || codes == "" {
 		return ""
 	}
 	return "\x1b[" + codes + "m"
@@ -34,17 +36,17 @@ func (o *termOutput) Printf(format string, args ...any) {
 }
 
 func (o *termOutput) Warningf(format string, args ...any) {
-	fmt.Fprintf(o.w, o.sgr("33")+format+o.sgr("0")+"\n", args...)
+	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)
 }
 
 func (o *termOutput) Errorf(format string, args ...any) {
-	fmt.Fprintf(o.w, o.sgr("31")+format+o.sgr("0")+"\n", args...)
+	fmt.Fprintf(o.w, o.sgr(o.theme.Error)+format+o.sgr("0")+"\n", args...)
 }
 
 func (o *termOutput) StreamText(delta string) {
 	o.endReasoning()
 	if o.parser == nil {
-		o.parser = render.NewParser(render.NewANSI(o.w, o.color))
+		o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.theme, o.width))
 	}
 	o.streamed = true
 	o.parser.Write(delta)
@@ -72,6 +74,9 @@ func (o *termOutput) FlushStream() {
 	o.endReasoning()
 	if o.parser != nil {
 		o.parser.End()
+		// The renderer keeps the assistant base color open on every line;
+		// reset once here so it does not bleed into the next prompt.
+		fmt.Fprint(o.w, o.sgr("0"))
 		o.parser = nil
 	}
 	if o.streamed {

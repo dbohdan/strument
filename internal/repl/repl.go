@@ -18,6 +18,7 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 )
 
 // ctrlCWindow is the double-Ctrl-C chord window (§1.2).
@@ -105,7 +106,7 @@ func New(opts Options) (*REPL, error) {
 	}
 
 	r := &REPL{opts: opts, coder: opts.Coder}
-	r.out = &termOutput{w: opts.Stdout, color: opts.Color}
+	r.out = &termOutput{w: opts.Stdout, color: opts.Color, theme: render.DefaultTheme()}
 	r.coder.Out = r.out
 
 	cfg := &readline.Config{

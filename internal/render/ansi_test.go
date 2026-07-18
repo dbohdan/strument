@@ -25,9 +25,13 @@ const ansiSampleDoc = "# Title\n" +
 	"\n" +
 	"---\n"
 
+// testRuleWidth keeps the horizontal rule at 40 columns so the layout
+// assertions below stay stable regardless of the real terminal.
+const testRuleWidth = 40
+
 func renderANSI(doc string, color bool, byChar bool) string {
 	var sb strings.Builder
-	p := NewParser(NewANSI(&sb, color))
+	p := NewParser(NewANSI(&sb, color, DefaultTheme(), testRuleWidth))
 	if byChar {
 		for _, c := range doc {
 			p.Write(string(c))
@@ -100,6 +104,39 @@ func TestANSITable(t *testing.T) {
 	}
 	if !strings.Contains(got, "─") {
 		t.Errorf("missing header underline:\n%q", got)
+	}
+}
+
+func TestANSIAssistantBaseColor(t *testing.T) {
+	var sb strings.Builder
+	p := NewParser(NewANSI(&sb, true, DefaultTheme(), testRuleWidth))
+	p.Write("text `code` more\n")
+	p.End()
+	got := sb.String()
+
+	base := "\x1b[38;2;0;136;255m" // DefaultTheme assistant, #0088ff
+	if !strings.HasPrefix(got, base) {
+		t.Errorf("assistant base color not emitted before the first byte:\n%q", got)
+	}
+	// The base is re-applied after the code span's style is popped, so it
+	// appears at least twice (initial + reapply).
+	if strings.Count(got, base) < 2 {
+		t.Errorf("base color not restored after a nested style pop:\n%q", got)
+	}
+	if !strings.Contains(got, "\x1b[36m") {
+		t.Errorf("distinct code color missing:\n%q", got)
+	}
+}
+
+func TestANSIRuleWidth(t *testing.T) {
+	for _, tc := range []struct{ width, want int }{{20, 20}, {0, 80}} {
+		var sb strings.Builder
+		p := NewParser(NewANSI(&sb, false, Theme{}, tc.width))
+		p.Write("---\n")
+		p.End()
+		if !strings.Contains(sb.String(), strings.Repeat("─", tc.want)) {
+			t.Errorf("width %d: rule not %d columns:\n%q", tc.width, tc.want, sb.String())
+		}
 	}
 }
 
