@@ -18,9 +18,10 @@ plan, scope, and the list of features deliberately deferred or dropped.
 ## What's different from aider
 
 - **One binary, no Python.** Pure Go, including tree-sitter (no cgo).
-- **Starlark configuration.** A single `config.star` replaces layered
-  YAML/`.env`/model-database configuration; project-local `.strument.star`
-  files are inert until explicitly trusted (direnv-style content-hash gate).
+- **Starlark configuration.**
+  A single `config.star` replaces layered YAML/`.env`/model-database
+  [configuration](#configuration); project-local `.strument.star` files are inert until
+  explicitly trusted (direnv-style content-hash gate).
 - **One model dialect.** OpenAI-compatible chat completions with OpenRouter
   extensions; no litellm, no function calling, no MCP.
 - **Essentials only.** SEARCH/REPLACE (plus fenced and whole-file) edit
@@ -62,6 +63,71 @@ the port against the original aider source, `task setup:reference` (or
 `sh script/setup-reference.sh`) clones aider at the pinned commit into a
 gitignored `reference/` directory; it is a read-only grep target, never
 committed.
+
+## Configuration
+
+Strument is configured using [Starlark](https://starlark-lang.org/), a sandboxed dialect of Python.
+It reads model and provider definitions from a `config.star` file (typically `~/.config/strument/config.star`).
+Here is an example configuration demonstrating providers, reusable model factories, and aliases:
+
+```python
+openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
+local_llm = provider(
+    "openai",
+    name="local",
+    base_url="http://localhost:8000/v1",
+)
+
+def deepseek(variant):
+    return model(
+        openrouter,
+        "deepseek/deepseek-v4-%s:nitro" % variant.lower(),
+        context=128 * 1024,
+        display_name="DeepSeek V4 %s" % variant.title(),
+        edit_format="diff",
+        max_output=8192,
+        reasoning="low",
+        reasoning_tag="think",  # Strip reasoning in the response body before the diff parser sees it.
+        temperature=None,
+        weak_model="deepseek-flash",
+    )
+
+def flex(m):
+    return m.with_extra_params(service_tier="flex")
+
+models = {
+    "deepseek-flash": deepseek("flash"),
+    "deepseek-pro": deepseek("pro"),
+    "ds": None,  # A placeholder for the alias below.
+    "gemini-flash": flex(
+        model(openrouter, "google/gemini-3.5-flash", display_name="Gemini 3.5 Flash")
+    ),
+    "gpt": flex(model(openrouter, "openai/gpt-5.4", display_name="GPT-5.4")),
+    "haiku": model(
+        openrouter, "anthropic/claude-haiku-4.5", display_name="Claude Haiku 4.5"
+    ),
+    "k3": flex(model(openrouter, "moonshotai/kimi-k3", display_name="Kimi K3")),
+    "sonnet": model(
+        openrouter, "anthropic/claude-sonnet-5", display_name="Claude Sonnet 5"
+    ),
+    "qwen": model(
+        local_llm,
+        "qwen/qwen3.6-27b",
+        display_name="Qwen3.6 27B",
+        edit_format="diff",
+        reasoning="max",
+        reasoning_tag="think",
+        weak_model="qwen",  # Self-as-weak; only strings express this.
+    ),
+}
+
+models["ds"] = models["deepseek-pro"]  # One struct under both keys.
+
+default = "deepseek-pro"
+```
+
+Project-local `.strument.star` files can override or extend this, but
+require explicit trust (`/trust`) before they take effect.
 
 ## Credits and license
 
