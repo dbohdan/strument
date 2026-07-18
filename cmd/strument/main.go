@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"golang.org/x/term"
 
 	"dbohdan.com/strument/internal/client"
 	"dbohdan.com/strument/internal/coder"
@@ -21,6 +22,7 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
 )
@@ -32,12 +34,14 @@ type chatCmd struct {
 	Model         string   `help:"Model alias from config; defaults to the config's default."`
 	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."              name:"dark-mode"                 xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."             name:"light-mode"                xor:"palette"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."            name:"no-auto-commits"`
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."            name:"no-history"`
 	DryRun        bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
 	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
 	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
-	Files         []string `arg:""                                                               help:"Files to add to the chat." optional:"" type:"existingfile"`
+	Files         []string `arg:""                                                               help:"Files to add to the chat." optional:""   type:"existingfile"`
 }
 
 func (c *chatCmd) Run() error {
@@ -140,6 +144,28 @@ func resolveHistoryPath(cfg *config.Config, projectRoot string) (string, error) 
 	return history.DefaultPath(projectRoot)
 }
 
+// paletteTheme picks the color palette from the --dark-mode/--light-mode
+// flags (mutually exclusive), defaulting to aider's default palette.
+func (c *chatCmd) paletteTheme() render.Theme {
+	switch {
+	case c.DarkMode:
+		return render.DarkTheme()
+	case c.LightMode:
+		return render.LightTheme()
+	default:
+		return render.DefaultTheme()
+	}
+}
+
+// terminalSize reports stdout's width and height for the horizontal rules,
+// falling back to 80x24 when stdout is not a terminal.
+func terminalSize() (int, int) {
+	if w, h, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		return w, h
+	}
+	return 80, 24
+}
+
 // runREPL starts the interactive session (basecoder-spec §1.2).
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
 	inputHistory, _ := history.InputHistoryPath()
@@ -152,6 +178,9 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		MakeClient:  func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		HistoryFile: inputHistory,
+		Version:     version,
+		Theme:       c.paletteTheme(),
+		GetSize:     terminalSize,
 	})
 	if err != nil {
 		return err
