@@ -45,6 +45,15 @@ type Options struct {
 	Color       bool
 	HistoryFile string
 
+	// Version fills the opening banner's "Strument v…" line.
+	Version string
+	// Theme is the color palette; the zero value defaults to DefaultTheme.
+	Theme render.Theme
+	// GetSize reports the terminal width for the horizontal rules (and is
+	// shared with readline so its completion grid wraps at the same width).
+	// nil falls back to 80 columns.
+	GetSize func() (width, height int)
+
 	Stdin  io.Reader // default os.Stdin
 	Stdout io.Writer // default os.Stdout
 	Stderr io.Writer // default os.Stderr
@@ -104,9 +113,12 @@ func New(opts Options) (*REPL, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	if opts.Theme == (render.Theme{}) {
+		opts.Theme = render.DefaultTheme()
+	}
 
 	r := &REPL{opts: opts, coder: opts.Coder}
-	r.out = &termOutput{w: opts.Stdout, color: opts.Color, theme: render.DefaultTheme()}
+	r.out = &termOutput{w: opts.Stdout, color: opts.Color, theme: opts.Theme, width: r.termWidth()}
 	r.coder.Out = r.out
 
 	cfg := &readline.Config{
@@ -132,6 +144,9 @@ func New(opts Options) (*REPL, error) {
 	if opts.ExitRaw != nil {
 		cfg.FuncExitRaw = opts.ExitRaw
 	}
+	if opts.GetSize != nil {
+		cfg.FuncGetSize = opts.GetSize
+	}
 	rl, err := readline.NewFromConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -152,10 +167,71 @@ func (r *REPL) prompt() string {
 	if r.coder.EditFormat() == "ask" {
 		label = "ask> "
 	}
-	if r.opts.Color {
-		return "\x1b[1m" + label + "\x1b[0m"
+	return r.sgr(r.opts.Theme.UserInput) + label + r.sgr("0")
+}
+
+// sgr wraps an SGR parameter string, honoring --no-color and skipping empty
+// codes (which would otherwise emit a bare reset).
+func (r *REPL) sgr(codes string) string {
+	if !r.opts.Color || codes == "" {
+		return ""
 	}
-	return label
+	return "\x1b[" + codes + "m"
+}
+
+// termWidth reports the terminal width for the rules, or 80 when unknown.
+func (r *REPL) termWidth() int {
+	if r.opts.GetSize != nil {
+		if w, _ := r.opts.GetSize(); w > 0 {
+			return w
+		}
+	}
+	return 80
+}
+
+// interactive reports whether we are driving a real terminal (the banner,
+// rules, and file listing are shown only then, like aider's pretty mode).
+func (r *REPL) interactive() bool {
+	return r.opts.IsTerminal == nil || r.opts.IsTerminal()
+}
+
+// announce prints the opening banner once at session start, mirroring
+// aider's get_announcements: version, model + edit format, git repo, repo
+// map, and the initially-added files.
+func (r *REPL) announce() {
+	if !r.interactive() {
+		return
+	}
+	r.printf("Strument v%s", r.opts.Version)
+	r.printf("Model: %s with %s edit format", r.coder.Model.Slug, r.coder.EditFormat())
+	if r.opts.Git != nil {
+		r.printf("Git repo: .git with %d files", len(r.opts.Git.TrackedFiles()))
+	} else {
+		r.printf("Git repo: none")
+	}
+	if n := r.coder.RepoMapTokens(); n > 0 {
+		r.printf("Repo-map: using %d tokens", n)
+	} else {
+		r.printf("Repo-map: disabled")
+	}
+	for _, f := range r.coder.ChatFiles() {
+		r.printf("Added %s to the chat.", f)
+	}
+}
+
+// renderPromptHeader draws the full-width rule and the in-chat file listing
+// above each prompt (aider's io.rule + format_files_for_input).
+func (r *REPL) renderPromptHeader() {
+	if !r.interactive() {
+		return
+	}
+	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("─", r.termWidth()), r.sgr("0"))
+	for _, f := range r.coder.ReadOnlyFiles() {
+		r.printf("%s (read-only)", f)
+	}
+	for _, f := range r.coder.ChatFiles() {
+		r.printf("%s", f)
+	}
 }
 
 func (r *REPL) printf(format string, args ...any) {
@@ -194,7 +270,9 @@ func (r *REPL) saveHistory(line string) {
 // It returns when the user exits (/exit, Ctrl-D, or a Ctrl-C chord at the
 // prompt).
 func (r *REPL) Run(ctx context.Context) error {
+	r.announce()
 	for {
+		r.renderPromptHeader()
 		line, err := r.rl.ReadLine()
 		switch {
 		case errors.Is(err, readline.ErrInterrupt):

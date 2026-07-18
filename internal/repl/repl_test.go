@@ -137,6 +137,65 @@ func TestScriptedSession(t *testing.T) {
 	}
 }
 
+func TestBannerAndPromptHeader(t *testing.T) {
+	for _, color := range []bool{true, false} {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hi\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		model := testModel()
+		cdr := coder.New(root, model)
+		cdr.Client = answerStub("ok\n")
+		cdr.AddFile("hello.txt")
+
+		out := &syncBuffer{}
+		r, err := New(Options{
+			Coder:      cdr,
+			Config:     testConfig(model),
+			ModelAlias: "test",
+			Version:    "9.9.9",
+			Color:      color,
+			Stdin:      strings.NewReader(""),
+			Stdout:     out,
+			Stderr:     out,
+			IsTerminal: func() bool { return true },
+			MakeRaw:    func() error { return nil },
+			ExitRaw:    func() error { return nil },
+			GetSize:    func() (int, int) { return 24, 80 }, // width 24
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+
+		r.announce()
+		r.renderPromptHeader()
+		got := out.String()
+
+		for _, want := range []string{
+			"Strument v9.9.9",
+			"Model: test-model with diff edit format",
+			"Git repo: none",
+			"Repo-map: disabled",
+			"Added hello.txt to the chat.", // banner
+			strings.Repeat("─", 24),        // rule honors GetSize width
+			"hello.txt",                    // file listing
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("color=%v: output missing %q:\n%q", color, want, got)
+			}
+		}
+
+		greenRule := "\x1b[38;2;0;204;0m"
+		if color && !strings.Contains(got, greenRule) {
+			t.Errorf("color: rule not in user-input color:\n%q", got)
+		}
+		if !color && strings.Contains(got, "\x1b") {
+			t.Errorf("no-color: must not emit escape codes:\n%q", got)
+		}
+	}
+}
+
 func TestSlashCommandReturnsNoSend(t *testing.T) {
 	// A session of only slash commands must never touch the client.
 	input := strings.NewReader("/ls\n/clear\n/model\n/model other\n/model bogus\n/exit\n")

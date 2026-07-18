@@ -104,6 +104,15 @@ func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
 // RepoMapNow renders the repo map as the next send would see it (/map).
 func (c *Coder) RepoMapNow() string { return c.repoMapContent() }
 
+// RepoMapTokens is the repo-map token budget, or 0 when the map is off; the
+// opening banner reports it.
+func (c *Coder) RepoMapTokens() int {
+	if c.RepoMap == nil {
+		return 0
+	}
+	return c.RepoMap.MapTokens
+}
+
 // SessionCost returns the running session cost and whether any cost was
 // priced this session; the history writer diffs it across a turn.
 func (c *Coder) SessionCost() (usd float64, known bool) {
