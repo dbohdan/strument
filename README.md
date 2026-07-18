@@ -33,6 +33,12 @@ plan, scope, and the list of features deliberately deferred or dropped.
   sites, come back empty. aider ships a Playwright-based scraper; Strument
   trades that reach for the single-binary distribution.
 
+The terminal interface, on the other hand, deliberately stays close to
+aider's: the same green/blue palette (with `--dark-mode` and `--light-mode`),
+a horizontal rule and the in-chat file list before each prompt, and an
+opening banner — so a returning aider user feels no seam. Syntax highlighting
+and the code-block background are the intentional omissions.
+
 ## Building
 
 Go 1.26 or later; no cgo, no C toolchain.

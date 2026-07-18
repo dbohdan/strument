@@ -7,7 +7,16 @@ wording fix; Deviations register populated D1–D5; token-estimate
 calibration; reference/ setup script; session history files; `/ask` mode;
 legacy tags-query fallback recovering TypeScript/PHP/Kotlin/Scala/Haskell/
 HCL/Fortran). All four original pending questions (Q1–Q4) resolved.
-Outstanding: phase 7 REPL hand-validation by the human.
+
+aider-look imitation complete 2026-07-18: the REPL mirrors aider's palette
+(green input, blue assistant, orange/red tool messages; default plus
+`--dark-mode`/`--light-mode`), draws a full-width rule and the in-chat file
+list before each prompt, and prints an opening banner — code-block inversion
+and syntax highlighting deliberately excluded. The fish-style column-major
+completion grid is deferred (see Standing notes).
+
+Outstanding: phase 7 REPL hand-validation by the human (now including the
+aider-look chrome).
 
 ## Phase log
 
@@ -375,6 +384,42 @@ Outstanding: phase 7 REPL hand-validation by the human.
     model is the bare slug; aider sends `temperature: 0` by default.
 
 ## Standing notes
+- **aider-look imitation** (added 2026-07-18, post-phase-9). The REPL copies
+  aider's terminal chrome for visual continuity — a returning aider user
+  should feel no seam. `render.Theme` holds aider's exact palette from
+  `args.py` (user/prompt `#00cc00`, assistant `#0088ff`, error `#FF2222`,
+  warning `#FFA500`) behind default/`--dark-mode`/`--light-mode`, via
+  truecolor SGRs (the named light-mode colors map to the 16-color codes). The
+  assistant base color is seeded at the bottom of the ANSI renderer's style
+  stack so every line is colored and `reapplyStyles` restores it after nested
+  styles pop; `termOutput.FlushStream` resets SGR once the stream ends so the
+  color never bleeds into the prompt. A full-width horizontal rule (`─` at the
+  terminal width via `golang.org/x/term`, the same function handed to
+  readline's `FuncGetSize`) and the in-chat file listing print before each
+  prompt; an opening banner (version, model + edit format, git repo + file
+  count, repo-map budget, added files) prints once, mirroring aider's
+  `get_announcements`. **Deliberately excluded** (guide oracle + the user's
+  instruction): the code-block background inversion (`ESC[48;5;255m`) and
+  syntax highlighting — code keeps one distinct color (cyan). Shown only on a
+  real terminal, so scripted pipe sessions stay plain. Pty smoke 2026-07-18:
+  banner, green rule, file list, and end-reset all render; `--light-mode`
+  swaps the rule to `\e[32m`.
+- **Deferred: fish-style column-major completion grid** (2026-07-18). The
+  user wanted Tab completion laid out down the columns (ls/fish) with Tab
+  advancing down a row, for `/add`, `/model`, and the other selectors. It is
+  deferred after a survey rather than half-built. Every grid-capable Go line
+  editor — ergochat (current), reeflective, lmorg, maxlandon/readline — fills
+  **row-major** and advances Tab **across** a row, and none exposes a public
+  hook to change the fill order or the Tab direction (go-prompt-style libs
+  only do a single vertical dropdown). readline ties display order and Tab
+  order to one array index, both rendered row-major, so a no-fork "transpose"
+  cannot work: readline can only leave blank cells at the end of a short last
+  *row*, whereas a column-major grid has a short last *column* — the two
+  shapes coincide only when the item count is an exact multiple of the column
+  count, so a transpose silently misplaces items otherwise. The clean fixes
+  (vendor + patch readline, ~6k lines; or a hand-rolled completion pager) are
+  disproportionate for a secondary readability preference, so `completer()` is
+  unchanged. Revisit if it becomes worth the fork.
 - **`/ask` mode** (added 2026-07-17, post-phase-9). Ported from aider's
   AskCoder, which is nine lines: `edit_format="ask"` + `AskPrompts`, with
   base `get_edits` returning `[]`. Strument's idiom: ask is an **edit
