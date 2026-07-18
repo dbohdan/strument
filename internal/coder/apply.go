@@ -202,10 +202,19 @@ func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 }
 
 // unsafePath rejects absolute paths, traversal outside the root, and
-// symlink escapes.
+// symlink escapes — except for files the user explicitly added to the chat,
+// which are sanctioned targets wherever they live.
 func (c *Coder) unsafePath(rel string) string {
 	if rel == "" {
 		return "empty path"
+	}
+	// A file already in the chat was chosen by the user, so it may live
+	// outside the project root (a sibling project reached through a symlinked
+	// directory, an out-of-tree file added by relative path). The containment
+	// boundary below guards against the model inventing new out-of-root
+	// paths, not against editing what the user deliberately added.
+	if slices.Contains(c.absFnames, c.absRootPath(rel)) {
+		return ""
 	}
 	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") {
 		return "absolute paths are not allowed"

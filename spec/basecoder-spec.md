@@ -168,7 +168,7 @@ Whole accepted block through **one shell** (`sh -c`/`cmd /c`). `CommandResult` m
 
 ## 7. Applying edits + reflection
 ### 7.1 Pipeline [Divergence — path-safe + atomic]
-`Parse → reject out-of-root/absolute/symlink-escape paths BEFORE any FS read → ApplyDryRun → prepareToEdit (permission/add-file confirm; git dirtyCommit) → build in-memory plan → write atomically (temp+rename; roll back batch on any failure) → edited={e.Path}`. **`--dry-run` suppresses the writes themselves** (not just commits). Path containment is the first security boundary.
+`Parse → reject out-of-root/absolute/symlink-escape paths BEFORE any FS read → ApplyDryRun → prepareToEdit (permission/add-file confirm; git dirtyCommit) → build in-memory plan → write atomically (temp+rename; roll back batch on any failure) → edited={e.Path}`. **`--dry-run` suppresses the writes themselves** (not just commits). Path containment is the first security boundary — but it guards against paths the *model* invents, not against what the *user* chose: a file already in the chat is a sanctioned target and is exempt from the out-of-root/symlink-escape rejection, so a user-added file outside the root (e.g. a sibling project reached through a symlinked directory) stays editable (D6).
 ### 7.2 Reflectable errors [Divergence]
 `ReflectableEditError.ReflectionText()`. Only malformed-syntax / search-not-found / ambiguous-match reflect (editblock §5 report). Internal/fs/git errors reported, **not** reflected (leak + not model-repairable).
 ### 7.3 Auto-commit — git mode [Divergence]

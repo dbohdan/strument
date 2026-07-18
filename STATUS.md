@@ -542,6 +542,20 @@ through phase 9 while these lived in per-phase Notes prose (Opus review,
   hash-pinned. (Phase 1; `internal/prompts/prompts.go`,
   `prompts_test.go`.)
 
+- **D6 — path containment exempts files the user added to the chat.** §7.1's
+  reject-out-of-root/absolute/symlink-escape boundary is a Strument hardening
+  aider lacks (aider edits any in-chat or confirmed path, wherever it lives).
+  Applied to *every* edit path it was too strict: a file the user
+  deliberately added that sits outside the project root — a sibling project
+  reached through a symlinked directory, or added by a `../` relative path —
+  was rejected with "path escapes the project root," so the edit could never
+  land (user report, 2026-07-18). `unsafePath` now returns early for any path
+  resolving to a file already in `absFnames`: the user sanctioned it, so it
+  is editable wherever it lives. The boundary still stops the *model* from
+  inventing a new out-of-root path (not in chat → rejected before any FS
+  read), which is the actual §7.1 threat. Pinned by
+  `internal/coder/unsafepath_test.go`. (Post-phase-9; `internal/coder/apply.go`.)
+
 ## Pending questions for human
 - [x] **Resolved 2026-07-17 (Q1): implement the legacy fallback.** The
   spec errata was wrong (Fable's finding, confirmed): `get_scm_fname`
