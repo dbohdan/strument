@@ -40,17 +40,17 @@ func init() {
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
 		{"drop", "[file ...]", "Remove files from the chat (all files if none given)", cmdDrop},
-		{"exit", "", "Exit strument", cmdExit},
+		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List files in the chat", cmdLs},
 		{"map", "", "Print the current repository map", cmdMap},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
-		{"quit", "", "Exit strument", cmdExit},
+		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Add reference files the model must not edit", cmdReadOnly},
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
-		{"undo", "", "Undo the last strument auto-commit", cmdUndo},
+		{"undo", "", "Undo the last Strument auto-commit", cmdUndo},
 	}
 }
 

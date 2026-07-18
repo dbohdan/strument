@@ -26,7 +26,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 		return ""
 	}
 	if !r.coder.IsSessionCommit(short) {
-		r.out.Errorf("The last commit was not made by strument in this chat session.")
+		r.out.Errorf("The last commit was not made by Strument in this chat session.")
 		r.printf("You could try `git reset --hard HEAD^` but be aware that this is a destructive command!")
 		return ""
 	}

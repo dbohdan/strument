@@ -382,7 +382,7 @@ func (r *REPL) showUndoHint() {
 	}
 	cbm := r.coder.CommitsBeforeMessage()
 	if len(cbm) > 0 && cbm[len(cbm)-1] != r.coder.Repo.HeadSHA() {
-		r.printf("You can use /undo to undo and discard each strument commit.")
+		r.printf("You can use /undo to undo and discard each Strument commit.")
 	}
 }
 
