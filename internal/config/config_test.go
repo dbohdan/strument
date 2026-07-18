@@ -408,3 +408,69 @@ default = "main"
 		t.Error("inline weak model should self-resolve")
 	}
 }
+
+func TestModelWithExtraParamsMethod(t *testing.T) {
+	// Overrides merge over existing params and win; a model with no params
+	// starts from an empty dict. The receiver is left unchanged.
+	src := `
+p = provider("openrouter", api_key = "k")
+base = model(p, "slug", extra_params = {"seed": 1, "service_tier": "default"})
+models = {
+    "base": base,
+    "overridden": base.with_extra_params(seed = 2, extra = True),
+    "plain": model(p, "slug2").with_extra_params(thinking = "on"),
+}
+default = "overridden"
+`
+	cfg, err := Load(harness(t, src, "", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	baseParams := cfg.Models["base"].RequestExtraParams()
+	if len(baseParams) != 2 || baseParams["seed"] != int64(1) {
+		t.Errorf("the receiver must be unchanged: %v", baseParams)
+	}
+
+	over := cfg.Models["overridden"]
+	if over.Slug != "slug" {
+		t.Errorf("the copy must keep the model's fields: slug = %q", over.Slug)
+	}
+	overParams := over.RequestExtraParams()
+	if overParams["seed"] != int64(2) {
+		t.Errorf("override should win: %v", overParams["seed"])
+	}
+	if overParams["service_tier"] != "default" {
+		t.Errorf("existing param lost: %v", overParams)
+	}
+	if overParams["extra"] != true {
+		t.Errorf("new param missing: %v", overParams)
+	}
+
+	plain := cfg.Models["plain"].RequestExtraParams()
+	if len(plain) != 1 || plain["thinking"] != "on" {
+		t.Errorf("plain = %v", plain)
+	}
+
+	// Reserved transport keys are fenced through the method, too.
+	bad := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s").with_extra_params(stream = False)}
+default = "m"
+`
+	if _, err := Load(harness(t, bad, "", nil)); err == nil ||
+		!strings.Contains(err.Error(), "reserved transport key") {
+		t.Errorf("reserved key should fail: %v", err)
+	}
+
+	// Positional arguments are rejected.
+	pos := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s").with_extra_params({"seed": 1})}
+default = "m"
+`
+	if _, err := Load(harness(t, pos, "", nil)); err == nil ||
+		!strings.Contains(err.Error(), "keyword") {
+		t.Errorf("positional args should fail: %v", err)
+	}
+}

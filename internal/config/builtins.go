@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"dbohdan.com/strument/internal/llm"
 	"go.starlark.net/starlark"
@@ -31,6 +32,23 @@ func (v *modelValue) Type() string          { return "model" }
 func (v *modelValue) Freeze()               {}
 func (v *modelValue) Truth() starlark.Bool  { return starlark.True }
 func (v *modelValue) Hash() (uint32, error) { return 0, errors.New("unhashable type: model") }
+
+var _ starlark.HasAttrs = (*modelValue)(nil)
+
+// modelMethods is the Starlark method table for model values.
+var modelMethods = map[string]*starlark.Builtin{
+	"with_extra_params": starlark.NewBuiltin("with_extra_params", modelWithExtraParams),
+}
+
+// Attr implements starlark.HasAttrs, binding methods to the receiver.
+func (v *modelValue) Attr(name string) (starlark.Value, error) {
+	if m, ok := modelMethods[name]; ok {
+		return m.BindReceiver(v), nil
+	}
+	return nil, nil //nolint:nilnil // No such attribute.
+}
+
+func (v *modelValue) AttrNames() []string { return []string{"with_extra_params"} }
 
 // starlarkToGo converts a Starlark value into a JSON-able Go value; opaque
 // values (functions, providers, models) are rejected (config-schema §5:
@@ -235,6 +253,41 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		return nil, err
 	}
 	return &modelValue{m: m}, nil
+}
+
+// modelWithExtraParams implements model.with_extra_params(**overrides): it
+// returns a copy of the receiver model whose extra_params are the current
+// ones (or an empty dict) overridden by the keyword arguments. The receiver
+// is unchanged; the copy keeps an unresolved weak_model ref.
+func modelWithExtraParams(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 0 {
+		return nil, errors.New("with_extra_params: extra params must be passed by keyword")
+	}
+	v, ok := b.Receiver().(*modelValue)
+	if !ok {
+		return nil, errors.New("with_extra_params: not bound to a model value")
+	}
+
+	merged := make(map[string]any, len(v.m.ExtraParams)+len(kwargs))
+	maps.Copy(merged, v.m.ExtraParams)
+	for _, kw := range kwargs {
+		name, ok := starlark.AsString(kw[0])
+		if !ok {
+			return nil, fmt.Errorf("with_extra_params: keyword name %s is not a string", kw[0].String())
+		}
+		g, err := starlarkToGo(kw[1])
+		if err != nil {
+			return nil, fmt.Errorf("with_extra_params: %s: %w", name, err)
+		}
+		merged[name] = g
+	}
+	if err := validateExtraParams("with_extra_params", merged); err != nil {
+		return nil, err
+	}
+
+	copied := *v.m
+	copied.ExtraParams = merged
+	return &modelValue{m: &copied}, nil
 }
 
 func optFloat(name string, v starlark.Value) (*float64, error) {
