@@ -19,9 +19,29 @@ type termOutput struct {
 	theme render.Theme
 	width int // terminal width, for the markdown renderer's full-width rules
 
-	parser      *render.Parser
-	inReasoning bool
-	streamed    bool
+	parser       *render.Parser
+	inReasoning  bool
+	streamed     bool
+	cursorHidden bool
+}
+
+// hideCursor blanks the terminal cursor for the duration of a streaming
+// render — aider's touch: the blinking caret chasing the text is
+// distracting. Emitted once per stream (gated on color, like the styling).
+func (o *termOutput) hideCursor() {
+	if o.color && !o.cursorHidden {
+		fmt.Fprint(o.w, "\x1b[?25l")
+		o.cursorHidden = true
+	}
+}
+
+// showCursor restores the cursor. Idempotent, so FlushStream and the
+// runTurn safety-net defer can both call it.
+func (o *termOutput) showCursor() {
+	if o.cursorHidden {
+		fmt.Fprint(o.w, "\x1b[?25h")
+		o.cursorHidden = false
+	}
 }
 
 func (o *termOutput) sgr(codes string) string {
@@ -44,6 +64,7 @@ func (o *termOutput) Errorf(format string, args ...any) {
 }
 
 func (o *termOutput) StreamText(delta string) {
+	o.hideCursor()
 	o.endReasoning()
 	if o.parser == nil {
 		o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.theme, o.width))
@@ -53,6 +74,7 @@ func (o *termOutput) StreamText(delta string) {
 }
 
 func (o *termOutput) StreamReasoning(delta string) {
+	o.hideCursor()
 	if !o.inReasoning {
 		o.inReasoning = true
 		fmt.Fprint(o.w, o.sgr("2")+"· thinking ·\n")
@@ -83,4 +105,5 @@ func (o *termOutput) FlushStream() {
 		fmt.Fprintln(o.w)
 		o.streamed = false
 	}
+	o.showCursor()
 }

@@ -330,6 +330,11 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// The cursor is hidden while output streams (termOutput); restore it on
+	// the way out even if the turn panics. FlushStream already restores it on
+	// the normal and single-Ctrl-C paths, so this is a no-op there.
+	defer r.out.showCursor()
+
 	sig := make(chan os.Signal, 1)
 	stop := r.opts.Notify(sig)
 	defer stop()
@@ -341,6 +346,11 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 			select {
 			case <-sig:
 				if r.chord() {
+					// os.Exit skips the defer above, so restore the cursor
+					// here before the hard exit (aider's on-exit guard).
+					if r.opts.Color {
+						fmt.Fprint(r.opts.Stderr, "\x1b[?25h")
+					}
 					r.opts.Exit(130)
 					return
 				}

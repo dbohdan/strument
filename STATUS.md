@@ -403,7 +403,10 @@ aider-look chrome).
   syntax highlighting — code keeps one distinct color (cyan). Shown only on a
   real terminal, so scripted pipe sessions stay plain. Pty smoke 2026-07-18:
   banner, green rule, file list, and end-reset all render; `--light-mode`
-  swaps the rule to `\e[32m`.
+  swaps the rule to `\e[32m`. The cursor is also hidden while output streams
+  (`\e[?25l` on the first delta, `\e[?25h` at FlushStream) — aider's touch, so
+  the caret does not chase the text; restored on every exit path including the
+  double-Ctrl-C hard exit (added 2026-07-18).
 - **Deferred: fish-style column-major completion grid** (2026-07-18). The
   user wanted Tab completion laid out down the columns (ls/fish) with Tab
   advancing down a row, for `/add`, `/model`, and the other selectors. It is
