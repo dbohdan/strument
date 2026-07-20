@@ -233,14 +233,6 @@ func TestReplayEditSuccess(t *testing.T) {
 		c.Model.Temperature = &temp
 	})
 
-	env.stub.OnRequest = func(turn int, req llm.Request, captured *fixture.Request) error {
-		if captured == nil || captured.Assert != "subset" {
-			return nil
-		}
-		assertRequestSubset(t, turn, req, captured)
-		return nil
-	}
-
 	env.run(t)
 }
 

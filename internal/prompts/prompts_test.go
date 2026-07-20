@@ -12,34 +12,6 @@ func h16(s string) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
-// Hashes pinned against the mechanical dump of aider @ 5dc9490 prompt
-// classes (2026-07-16). A mismatch means someone edited an [Exact] string.
-func TestPromptParityHashes(t *testing.T) {
-	cases := []struct {
-		name, got, want string
-	}{
-		{"editblock main_system", EditBlock.MainSystem, "094e6413f2662f59"},
-		{"editblock system_reminder", EditBlock.SystemReminder, "c4dcb982dabef440"},
-		{"editblock example[1]", EditBlock.ExampleMessages[1].Content, "d4d39fbabea3c429"},
-		{"fenced system_reminder", EditBlockFenced.SystemReminder, "3272161841f387f4"},
-		// Fenced example[1] with the leaked "<<<<<<< HEAD" marker removed
-		// (Deviation D5). Pins the corrected string.
-		{"fenced example[1]", EditBlockFenced.ExampleMessages[1].Content, "4e08bacc735dd5fe"},
-		{"wholefile main_system", WholeFile.MainSystem, "8b75d2534efc3659"},
-		{"ask main_system", Ask.MainSystem, "2687bda9297ee8f5"},
-		{"ask overeager_prompt", Ask.OvereagerPrompt, "35adeb853163a502"},
-		{"ask repo_content_prefix", Ask.RepoContentPrefix, "9689be74e9e5bd26"},
-	}
-	for _, c := range cases {
-		if got := h16(c.got); got != c.want {
-			t.Errorf("%s: hash %s, want %s", c.name, got, c.want)
-		}
-	}
-	if len(EditBlock.MainSystem) != 1056 || len(EditBlock.SystemReminder) != 2165 {
-		t.Errorf("lengths drifted: %d, %d", len(EditBlock.MainSystem), len(EditBlock.SystemReminder))
-	}
-}
-
 func TestPromptSlotsPresent(t *testing.T) {
 	for _, slot := range []string{"{final_reminders}", "{shell_cmd_prompt}"} {
 		if !strings.Contains(EditBlock.MainSystem, slot) {

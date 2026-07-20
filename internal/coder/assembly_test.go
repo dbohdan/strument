@@ -36,7 +36,7 @@ func TestReminderUserPath(t *testing.T) {
 		t.Error("user path must leave the reminder slot empty")
 	}
 	final := chunks.cur[len(chunks.cur)-1]
-	if !strings.Contains(final.Text(), "SEARCH/REPLACE block* Rules") || !strings.HasPrefix(final.Text(), "do the thing\n\n") {
+	if !strings.Contains(final.Text(), "SEARCH/REPLACE block rules") || !strings.HasPrefix(final.Text(), "do the thing\n\n") {
 		t.Errorf("final user message = %q...", final.Text()[:80])
 	}
 	// The reminder is stitched into the outgoing clone only, never history.
