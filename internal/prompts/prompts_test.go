@@ -1,16 +1,9 @@
 package prompts
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
 	"testing"
 )
-
-func h16(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])[:16]
-}
 
 func TestPromptSlotsPresent(t *testing.T) {
 	for _, slot := range []string{"{final_reminders}", "{shell_cmd_prompt}"} {

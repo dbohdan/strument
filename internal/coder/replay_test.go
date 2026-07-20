@@ -5,7 +5,6 @@ package coder
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,60 +233,4 @@ func TestReplayEditSuccess(t *testing.T) {
 	})
 
 	env.run(t)
-}
-
-// assertRequestSubset compares model/stream/temperature and every message's
-// role+content against the captured body, printing a focused diff.
-func assertRequestSubset(t *testing.T, turn int, req llm.Request, captured *fixture.Request) {
-	t.Helper()
-	var body struct {
-		Model       string   `json:"model"`
-		Temperature *float64 `json:"temperature"`
-		Messages    []struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(captured.Body, &body); err != nil {
-		t.Fatalf("turn %d: captured body: %v", turn, err)
-	}
-	if req.Model != body.Model {
-		t.Errorf("turn %d: model = %q, want %q", turn, req.Model, body.Model)
-	}
-	if body.Temperature != nil {
-		if req.Temperature == nil || *req.Temperature != *body.Temperature {
-			t.Errorf("turn %d: temperature = %v, want %v", turn, req.Temperature, *body.Temperature)
-		}
-	}
-	if len(req.Messages) != len(body.Messages) {
-		var roles []string
-		for _, m := range req.Messages {
-			roles = append(roles, m.Role)
-		}
-		t.Fatalf("turn %d: %d messages, want %d (roles: %v)", turn, len(req.Messages), len(body.Messages), roles)
-	}
-	for i := range body.Messages {
-		if req.Messages[i].Role != body.Messages[i].Role {
-			t.Errorf("turn %d msg %d: role %q, want %q", turn, i, req.Messages[i].Role, body.Messages[i].Role)
-			continue
-		}
-		got := req.Messages[i].Text()
-		want := body.Messages[i].Content
-		if got != want {
-			t.Errorf("turn %d msg %d (%s): first diff at %q", turn, i, req.Messages[i].Role, firstDiff(got, want))
-		}
-	}
-}
-
-// firstDiff shows the first differing region between two strings.
-func firstDiff(got, want string) string {
-	n := min(len(got), len(want))
-	i := 0
-	for i < n && got[i] == want[i] {
-		i++
-	}
-	lo := max(0, i-40)
-	gEnd := min(len(got), i+80)
-	wEnd := min(len(want), i+80)
-	return "got ..." + got[lo:gEnd] + "... want ..." + want[lo:wEnd] + "..."
 }
