@@ -7,12 +7,8 @@ essentials. It talks to LLMs through a single OpenAI-compatible client
 ranked repository map with tree-sitter, and — in a git repository —
 auto-commits each change so every edit is one `git undo` away.
 
-The port follows a set of frozen specifications in [`spec/`](spec/), produced
-by reverse-engineering aider at commit
-[`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c)
-(0.86.3.dev). See [`spec/strument-guide.md`](spec/strument-guide.md) for the
-plan, scope, and the list of features deliberately deferred or dropped.
-`STATUS.md` is the running journal of the port, and
+The port followed a set of frozen specifications in [`doc/port/spec/`](doc/port/spec/), produced by reverse-engineering aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev).
+See [`doc/port/spec/strument-guide.md`](doc/port/spec/strument-guide.md) for the plan, scope, and the list of features deliberately deferred or dropped.
 [`doc/README.md`](doc/README.md) is the developer overview.
 
 ## What's different from aider
