@@ -134,6 +134,30 @@ func TestToolDiffTrailingNoNewline(t *testing.T) {
 	}
 }
 
+// TestToolDiffPathLast reproduces a provider (Qwen3.6) that streams search
+// and replace before path: the header must still print first, above the diff
+// lines, not spliced into the middle.
+func TestToolDiffPathLast(t *testing.T) {
+	args := `{"search":"old line","replace":"new line","path":"a.go"}`
+	want := "a.go\n- old line\n+ new line\n"
+	if got := renderDiff(t, "replace_in_file", false, []string{args}); got != want {
+		t.Errorf("one blob:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+	if got := renderDiff(t, "replace_in_file", false, splitBytes(args)); got != want {
+		t.Errorf("byte by byte:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffPathMiddle covers path arriving between search and replace, the
+// exact order seen live against Qwen3.6.
+func TestToolDiffPathMiddle(t *testing.T) {
+	args := `{"search":"a\nb","path":"a.go","replace":"c\nd"}`
+	want := "a.go\n- a\n- b\n+ c\n+ d\n"
+	if got := renderDiff(t, "replace_in_file", false, splitBytes(args)); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestToolDiffCommand renders a suggest_command call: no header (no path),
 // the command on a "$" line, and the purpose ignored.
 func TestToolDiffCommand(t *testing.T) {
@@ -161,5 +185,23 @@ func TestToolDiffSet(t *testing.T) {
 	want := "a.go\n- x\n+ y\nb.go (new file)\n+ new\n"
 	if sb.String() != want {
 		t.Errorf("got:\n%q\nwant:\n%q", sb.String(), want)
+	}
+}
+
+// TestToolDiffSetNoInterleave reproduces a provider streaming a second tool
+// call's argument in the middle of the first's (seen live against DeepSeek):
+// the create_file diff must stay contiguous, with the suggested command after
+// it rather than spliced between its lines.
+func TestToolDiffSetNoInterleave(t *testing.T) {
+	var sb strings.Builder
+	s := NewToolDiffSet(&sb, false)
+	s.Write(0, "create_file", `{"path":"hello.sh","content":"#!/bin/bash\n`)
+	s.Write(1, "suggest_command", `{"command":"bash hello.sh"`)
+	s.Write(0, "", `echo Hi"}`)
+	s.Write(1, "", `,"purpose":"run it"}`)
+	s.Flush()
+	want := "hello.sh (new file)\n+ #!/bin/bash\n+ echo Hi\n$ bash hello.sh\n"
+	if sb.String() != want {
+		t.Errorf("interleaved streams garbled:\ngot:\n%q\nwant:\n%q", sb.String(), want)
 	}
 }

@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -159,6 +160,7 @@ type ToolDiff struct {
 	line        strings.Builder
 	curField    string
 	wroteHeader bool
+	pending     []string // diff lines held until the header (path) is known
 }
 
 // NewToolDiff builds a diff renderer for one edit tool call writing to w.
@@ -174,9 +176,15 @@ func (d *ToolDiff) Write(frag string) { d.scan.Write(frag) }
 // Flush emits any buffered partial line; call once the tool call is complete.
 func (d *ToolDiff) Flush() {
 	d.flushLine()
-	if !d.wroteHeader && d.path.Len() > 0 {
-		d.header() // an empty create/replace still names the file
+	if !d.wroteHeader && (d.path.Len() > 0 || len(d.pending) > 0) {
+		d.header() // resolve the header (path may have streamed after the diff)
 	}
+}
+
+// expectsPath reports whether the tool has a path/header, so its diff lines
+// must wait for it. suggest_command has none — its command line streams live.
+func (d *ToolDiff) expectsPath() bool {
+	return d.tool == "replace_in_file" || d.tool == "create_file"
 }
 
 // isLineField reports whether a field's value renders as diff/command lines.
@@ -192,6 +200,12 @@ func isLineField(field string) bool {
 func (d *ToolDiff) onArg(field, chunk string) {
 	if field != d.curField {
 		d.flushLine()
+		// The header can go out once the path field is complete — which is
+		// when a later field begins — so diff lines that streamed before the
+		// path (some providers order arguments that way) stay under it.
+		if d.curField == "path" && !d.wroteHeader && d.path.Len() > 0 {
+			d.header()
+		}
 		d.curField = field
 	}
 	if field == "path" {
@@ -225,14 +239,28 @@ func (d *ToolDiff) header() {
 		label += " (new file)"
 	}
 	fmt.Fprintf(d.w, "%s\n", label)
+	for _, line := range d.pending {
+		fmt.Fprint(d.w, line)
+	}
+	d.pending = nil
 }
 
 func (d *ToolDiff) emitLine(field, text string) {
-	// A path-bearing edit tool prints a header first; command lines
-	// (suggest_command) have no path and print on their own.
 	if !d.wroteHeader && d.path.Len() > 0 {
 		d.header()
 	}
+	line := d.formatLine(field, text)
+	// An edit tool's diff lines wait for the header even if the path streams
+	// after them; a command line (no header) prints straight away.
+	if !d.wroteHeader && d.expectsPath() {
+		d.pending = append(d.pending, line)
+		return
+	}
+	fmt.Fprint(d.w, line)
+}
+
+// formatLine renders one diff/command line with its prefix and optional color.
+func (d *ToolDiff) formatLine(field, text string) string {
 	prefix, color := "-", "31" // search: removed, red
 	switch field {
 	case "replace", "content":
@@ -241,26 +269,32 @@ func (d *ToolDiff) emitLine(field, text string) {
 		prefix, color = "$", "36" // suggested command, cyan
 	}
 	if d.color {
-		fmt.Fprintf(d.w, "\x1b[%sm%s %s\x1b[0m\n", color, prefix, text)
-	} else {
-		fmt.Fprintf(d.w, "%s %s\n", prefix, text)
+		return fmt.Sprintf("\x1b[%sm%s %s\x1b[0m\n", color, prefix, text)
 	}
+	return fmt.Sprintf("%s %s\n", prefix, text)
 }
 
 // ToolDiffSet fans a send's streamed tool-call fragments out to a ToolDiff
 // per call index, so an Output can forward fragments without tracking indexes
 // itself. A non-edit tool (no path/search/replace/content fields) simply
 // renders nothing.
+//
+// Providers may stream several tool calls' arguments interleaved, so only the
+// first call renders live; later calls buffer and are appended, each
+// contiguous, in first-seen order on Flush. This keeps each diff whole
+// instead of interleaving their lines.
 type ToolDiffSet struct {
 	w     io.Writer
 	color bool
 	order []int
 	diffs map[int]*ToolDiff
+	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
+	live  int                   // the index streaming to w; -1 until the first is seen
 }
 
 // NewToolDiffSet builds a diff fan-out writing to w.
 func NewToolDiffSet(w io.Writer, color bool) *ToolDiffSet {
-	return &ToolDiffSet{w: w, color: color, diffs: map[int]*ToolDiff{}}
+	return &ToolDiffSet{w: w, color: color, diffs: map[int]*ToolDiff{}, bufs: map[int]*bytes.Buffer{}, live: -1}
 }
 
 // Write forwards an argument fragment for the tool call at index, opening a
@@ -269,18 +303,35 @@ func NewToolDiffSet(w io.Writer, color bool) *ToolDiffSet {
 func (s *ToolDiffSet) Write(index int, name, frag string) {
 	d, ok := s.diffs[index]
 	if !ok {
-		d = NewToolDiff(s.w, s.color, name)
+		var out io.Writer
+		if s.live == -1 {
+			s.live = index
+			out = s.w
+		} else {
+			buf := &bytes.Buffer{}
+			s.bufs[index] = buf
+			out = buf
+		}
+		d = NewToolDiff(out, s.color, name)
 		s.diffs[index] = d
 		s.order = append(s.order, index)
 	}
 	d.Write(frag)
 }
 
-// Flush closes every open diff, in call order, and resets the set.
+// Flush closes every open diff and appends the buffered ones after the live
+// one, each whole, in first-seen order; then resets the set.
 func (s *ToolDiffSet) Flush() {
 	for _, i := range s.order {
 		s.diffs[i].Flush()
 	}
+	for _, i := range s.order {
+		if buf := s.bufs[i]; buf != nil {
+			_, _ = s.w.Write(buf.Bytes())
+		}
+	}
 	s.order = nil
 	clear(s.diffs)
+	clear(s.bufs)
+	s.live = -1
 }
