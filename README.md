@@ -3,9 +3,9 @@
 Strument is an AI pair-programming tool for the terminal: a ground-up Go port
 of [aider](https://github.com/Aider-AI/aider), trimmed to the improved
 essentials. It talks to LLMs through a single OpenAI-compatible client
-(OpenRouter dialect), applies SEARCH/REPLACE edits to your files, builds a
-ranked repository map with tree-sitter, and — in a git repository —
-auto-commits each change so every edit is one `git undo` away.
+(OpenRouter dialect), applies the model's edits to your files through native
+tool calls, builds a ranked repository map with tree-sitter, and — in a git
+repository — auto-commits each change so every edit is one `git undo` away.
 
 Strument began as a close reverse-engineering of aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev), reimplemented in Go. It now follows its own direction — closer to aider in some places, further in others. [`doc/README.md`](doc/README.md) is the developer overview.
 
@@ -17,12 +17,13 @@ Strument began as a close reverse-engineering of aider at commit [`5dc9490`](htt
   [configuration](#configuration); project-local `.strument.star` files are inert until
   explicitly trusted (direnv-style content-hash gate).
 - **One model dialect.** OpenAI-compatible chat completions with OpenRouter
-  extensions; no litellm, no function calling, no MCP.
-- **Essentials only.** SEARCH/REPLACE (plus fenced and whole-file) edit
-  formats, repo map, reflection on failed edits, shell-command suggestions,
-  git auto-commit with `/undo`, and `/ask` mode for questions that should
-  not touch files. Architect mode, voice, GUI, analytics, summarization,
-  and the other long-tail features are out of scope for v1.
+  extensions and native tool calls; no litellm, no MCP.
+- **Essentials only.** Tool-call edits by default (with SEARCH/REPLACE,
+  fenced, and whole-file as fallbacks), repo map, reflection on failed edits,
+  shell-command suggestions, git auto-commit with `/undo`, and `/ask` mode
+  for questions that should not touch files. Architect mode, voice, GUI,
+  analytics, summarization, and the other long-tail features are out of scope
+  for v1.
 - **Plain-HTTP URL scraping.** URLs you mention are fetched with a plain
   HTTP GET and reduced to text — no headless browser (a static binary can't
   embed one), so JavaScript-rendered pages, which is most modern docs
@@ -77,10 +78,10 @@ def deepseek(variant):
         "deepseek/deepseek-v4-%s:nitro" % variant.lower(),
         context=128 * 1024,
         display_name="DeepSeek V4 %s" % variant.title(),
-        edit_format="diff",
+        edit_format="tool",  # The default; "diff"/"diff-fenced"/"whole" fall back for weaker tool calling.
         max_output=8192,
         reasoning="low",
-        reasoning_tag="think",  # Strip reasoning in the response body before the diff parser sees it.
+        reasoning_tag="think",  # Strip reasoning from the response body before it is processed.
         temperature=None,
         weak_model="deepseek-flash",
     )
@@ -106,8 +107,7 @@ models = {
     "qwen": model(
         local_llm,
         "qwen/qwen3.6-27b",
-        display_name="Qwen3.6 27B",
-        edit_format="diff",
+        display_name="Qwen3.6 27B",  # Handles tool calls, so it uses the default "tool" format.
         reasoning="max",
         reasoning_tag="think",
         weak_model="qwen",  # Self-as-weak; only strings express this.
