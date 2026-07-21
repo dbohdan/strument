@@ -12,8 +12,8 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 )
 
-// RepoMap generates the ranked repository map. There is no cross-call cache
-// (repomap-spec §0.3): every GetRepoMap call re-tags and re-ranks; compiled
+// RepoMap generates the ranked repository map. There is no cross-call cache:
+// every GetRepoMap call re-tags and re-ranks; compiled
 // queries are process-lifetime; parses and TreeContexts are memoized only
 // within one call.
 type RepoMap struct {
@@ -25,7 +25,7 @@ type RepoMap struct {
 	Warn              func(format string, args ...any)
 
 	// TagsOverride, when non-nil, replaces tree-sitter tag extraction; a
-	// test seam for exercising the ranker with injected tags (spec §9.2).
+	// test seam for exercising the ranker with injected tags.
 	TagsOverride func(fname, relFname string) []Tag
 
 	warnedFiles map[string]bool
@@ -50,7 +50,7 @@ func (rm *RepoMap) warnf(format string, args ...any) {
 	}
 }
 
-// relFname is the centralized path canonicalization (repomap-spec §2.1):
+// relFname is the centralized path canonicalization:
 // root-relative, forward-slashed; cross-mount falls back to the absolute
 // path.
 func (rm *RepoMap) relFname(fname string) string {
@@ -61,7 +61,7 @@ func (rm *RepoMap) relFname(fname string) string {
 	return filepath.ToSlash(rel)
 }
 
-// invocation carries the per-call memoization (§0.3): parse trees, tags,
+// invocation carries the per-call memoization: parse trees, tags,
 // sources, and built TreeContexts, discarded when the call returns.
 type invocation struct {
 	parsed   map[string]*parsedFile
@@ -135,7 +135,7 @@ func (inv *invocation) tags(rm *RepoMap, fname, relFname string) []Tag {
 	return t
 }
 
-// tokenEstimate is the cheap estimator of repomap-spec §4.3: code points/4.
+// tokenEstimate is the cheap estimator: code points/4.
 func tokenEstimate(text string) float64 {
 	return float64(utf8.RuneCountInString(text)) / 4.0
 }
@@ -153,8 +153,7 @@ func (rm *RepoMap) GetRepoMap(chatFiles, otherFiles []string, mentionedFnames, m
 
 	maxMapTokens := rm.MapTokens
 
-	// With no chat files, widen — only when the context window is known
-	// (§4.0).
+	// With no chat files, widen — only when the context window is known.
 	const padding = 4096
 	target := 0
 	if maxMapTokens > 0 && rm.MaxContextWindow > 0 {
@@ -178,7 +177,7 @@ func (rm *RepoMap) GetRepoMap(chatFiles, otherFiles []string, mentionedFnames, m
 }
 
 // rankedTagsMap ports get_ranked_tags_map_uncached: important-files prepend
-// and the binary search over the ranked prefix (§4.1-4.2).
+// and the binary search over the ranked prefix.
 func (rm *RepoMap) rankedTagsMap(chatFnames, otherFnames []string, maxMapTokens int, mentionedFnames, mentionedIdents map[string]bool) string {
 	if mentionedFnames == nil {
 		mentionedFnames = map[string]bool{}
@@ -192,7 +191,7 @@ func (rm *RepoMap) rankedTagsMap(chatFnames, otherFnames []string, maxMapTokens 
 	rankedTags := rm.getRankedTags(inv, chatFnames, otherFnames, mentionedFnames, mentionedIdents)
 
 	// Important files among other_files not already ranked, prepended bare
-	// so they survive truncation (§4.1).
+	// so they survive truncation.
 	otherRel := map[string]bool{}
 	for _, f := range otherFnames {
 		otherRel[rm.relFname(f)] = true
@@ -253,7 +252,7 @@ func abs(f float64) float64 {
 	return f
 }
 
-// toTree ports to_tree (§5.1): group sorted items by file, render tag files
+// toTree ports to_tree: group sorted items by file, render tag files
 // through TreeContext, emit bare files as a name line, skip chat files,
 // truncate lines to 100 runes.
 func (rm *RepoMap) toTree(inv *invocation, items []MapItem, chatRelFnames map[string]bool) string {
@@ -322,7 +321,7 @@ func (rm *RepoMap) toTree(inv *invocation, items []MapItem, chatRelFnames map[st
 	return b.String()
 }
 
-// renderTree ports render_tree (§5.2): normalize the source, build (or
+// renderTree ports render_tree: normalize the source, build (or
 // reuse, per invocation) the TreeContext, select lines of interest, format.
 func (rm *RepoMap) renderTree(inv *invocation, absFname, relFname string, lois []int) string {
 	sortedLois := append([]int(nil), lois...)

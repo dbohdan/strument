@@ -10,8 +10,7 @@ import (
 )
 
 // providerValue and modelValue are the opaque Starlark values returned by
-// the constructors. Constructors are pure; env() is the sole impurity
-// (config-schema §3).
+// the constructors. Constructors are pure; env() is the sole impurity.
 
 type providerValue struct{ p Provider }
 
@@ -51,8 +50,7 @@ func (v *modelValue) Attr(name string) (starlark.Value, error) {
 func (v *modelValue) AttrNames() []string { return []string{"with_extra_params"} }
 
 // starlarkToGo converts a Starlark value into a JSON-able Go value; opaque
-// values (functions, providers, models) are rejected (config-schema §5:
-// JSON-only).
+// values (functions, providers, models) are rejected (JSON-only).
 func starlarkToGo(v starlark.Value) (any, error) {
 	switch v := v.(type) {
 	case starlark.NoneType:
@@ -306,7 +304,7 @@ func optFloat(name string, v starlark.Value) (*float64, error) {
 }
 
 // builtinEnv implements env(name, default=None, required=True) — the sole
-// impurity (config-schema §3). The lookup function is injected for tests.
+// impurity. The lookup function is injected for tests.
 func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
 	return starlark.NewBuiltin("env", func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var name string

@@ -1,5 +1,5 @@
 // Record/replay driver: fixture scenarios drive the coder end-to-end with
-// no network (basecoder-spec §11, fixture-harness-spec).
+// no network.
 
 package coder
 
@@ -222,8 +222,8 @@ func capturePlatform() PlatformInfo {
 }
 
 // TestReplayEditSuccess replays the captured smoke scenario end-to-end and
-// asserts the assembled request against aider's real request (fixture-
-// harness §3: parsed-JSON subset, message content not normalized).
+// asserts the assembled request against aider's real request (parsed-JSON
+// subset, message content not normalized).
 func TestReplayEditSuccess(t *testing.T) {
 	sc := loadScenario(t, "edit-success.jsonl")
 	temp := 0.0

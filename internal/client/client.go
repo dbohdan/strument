@@ -1,6 +1,6 @@
 // Package client is Strument's single OpenAI-compatible chat client,
-// speaking OpenRouter's dialect where the adapter says so (basecoder-spec
-// §8; config-schema §3). One Client serves one endpoint; the runtime groups
+// speaking OpenRouter's dialect where the adapter says so. One Client
+// serves one endpoint; the runtime groups
 // models by (adapter, base_url).
 package client
 
@@ -154,7 +154,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 	}
 }
 
-// classifyHTTPError maps a non-200 response onto the §2.1 error classes.
+// classifyHTTPError maps a non-200 response onto the error classes.
 func classifyHTTPError(resp *http.Response) *llm.StreamError {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	msg := extractErrorMessage(body)

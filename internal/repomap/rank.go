@@ -12,12 +12,12 @@ import (
 )
 
 // edgeKey identifies one (src, dst, ident) edge; weights per key are summed
-// while retaining ident identity for rank distribution (repomap-spec §3.4).
+// while retaining ident identity for rank distribution.
 type edgeKey struct {
 	src, dst, ident string
 }
 
-// getRankedTags ports get_ranked_tags (repomap-spec §3): collect tags,
+// getRankedTags ports get_ranked_tags: collect tags,
 // build the weighted graph with the exact multipliers (sqrt computed once
 // per referencer — declared deviation), run personalized PageRank,
 // distribute rank across out-edges, and return the ranked MapItem list.
@@ -170,7 +170,7 @@ func (rm *RepoMap) getRankedTags(inv *invocation, chatFnames, otherFnames []stri
 		}
 		for _, referencer := range slices.Sorted(maps.Keys(counts)) {
 			// sqrt once per referencer (declared deviation from the
-			// upstream compounding sqrt inside the definer loop, §3.4).
+			// upstream compounding sqrt inside the definer loop).
 			w := math.Sqrt(float64(counts[referencer]))
 			useMul := mul
 			if chatRelFnames[referencer] {
@@ -182,7 +182,7 @@ func (rm *RepoMap) getRankedTags(inv *invocation, chatFnames, otherFnames []stri
 		}
 	}
 
-	// Node set: files touched by an edge, sorted (§3.4: a file becomes a
+	// Node set: files touched by an edge, sorted (a file becomes a
 	// node only when an edge touches it).
 	nodeSet := map[string]bool{}
 	for _, k := range edgeOrder {
@@ -216,7 +216,7 @@ func (rm *RepoMap) getRankedTags(inv *invocation, chatFnames, otherFnames []stri
 		outWeights[nodeIdx[k.src]][nodeIdx[k.dst]] += edgeWeights[k]
 	}
 
-	// PageRank with the failure taxonomy of §3.5.
+	// PageRank with the failure taxonomy.
 	var ranked map[string]float64
 	if len(nodes) == 0 {
 		ranked = map[string]float64{}
@@ -302,7 +302,7 @@ func (rm *RepoMap) getRankedTags(inv *invocation, chatFnames, otherFnames []stri
 	}
 
 	// Bare-node pass over all graph nodes (chat files included; they are
-	// skipped later in toTree but still count toward truncation, §3.6):
+	// skipped later in toTree but still count toward truncation):
 	// (rank desc, node desc).
 	relOtherWithoutTags := map[string]bool{}
 	for _, f := range otherFnames {

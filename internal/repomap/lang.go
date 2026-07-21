@@ -16,8 +16,8 @@ import (
 var queriesFS embed.FS
 
 // legacyQueriesFS holds the tree-sitter-languages tags queries for the
-// languages that ship a query there but not in the language-pack directory
-// (repomap-spec §1.2). aider's get_scm_fname falls back to these
+// languages that ship a query there but not in the language-pack directory.
+// aider's get_scm_fname falls back to these
 // unconditionally, so aider's effective coverage is the union — chiefly
 // TypeScript/TSX, PHP, Kotlin, and Scala. `ql` is skipped: it has no
 // extension in grep_ast's PARSERS, so it is unreachable upstream too.
@@ -26,8 +26,8 @@ var queriesFS embed.FS
 var legacyQueriesFS embed.FS
 
 // extToLang is grep_ast's PARSERS map filtered to the languages with both a
-// tags query (pack or legacy) and a gotreesitter grammar (repomap-spec
-// §1.2). Lookup is by exact extension, case-sensitive, like grep_ast's
+// tags query (pack or legacy) and a gotreesitter grammar. Lookup is by
+// exact extension, case-sensitive, like grep_ast's
 // filename_to_lang.
 var extToLang = map[string]string{
 	".ino":  "arduino",
@@ -65,7 +65,7 @@ var extToLang = map[string]string{
 	// Legacy tree-sitter-languages fallback (grep_ast PARSERS extensions).
 	// julia and zig are omitted: gotreesitter's grammars for them have
 	// diverged from aider's queries (unknown node types scoped_identifier /
-	// FnProto), so the queries do not compile — see STATUS.md.
+	// FnProto), so the queries do not compile.
 	".f": "fortran", ".f03": "fortran", ".f08": "fortran", ".f90": "fortran", ".f95": "fortran",
 	".hs":  "haskell",
 	".hcl": "hcl", ".tf": "hcl", ".tfvars": "hcl",
@@ -94,7 +94,7 @@ var setAdjacentRe = regexp.MustCompile(`\(#set-adjacent![^)]*\)`)
 
 // preprocessQuery adapts aider's tags queries to gotreesitter's query
 // engine. Two adjustments, both behavior-preserving for the name.* captures
-// the mapper consumes (see STATUS.md, phase 3):
+// the mapper consumes:
 //
 //  1. Remove `(#set-adjacent! ...)` — unsupported directive (see above).
 //  2. Remove the `(comment)* @doc` + `.` anchor prefix and the @doc
@@ -129,7 +129,7 @@ func preprocessQuery(src string) string {
 }
 
 // langEntry is the process-lifetime compiled state for one language
-// (repomap-spec §0.3: compiled queries live for the process).
+// (compiled queries live for the process).
 type langEntry struct {
 	language *ts.Language
 	query    *ts.Query
@@ -143,8 +143,8 @@ var (
 
 // langFor returns the grammar and compiled tags query for a language name,
 // or nil when the language has no grammar in gotreesitter (the file then
-// becomes a bare entry, repomap-spec §3.6). A query compile failure is an
-// error: the query is embedded, so failure means a build problem (§7).
+// becomes a bare entry). A query compile failure is an
+// error: the query is embedded, so failure means a build problem.
 func langFor(lang string) (*langEntry, error) {
 	langMu.Lock()
 	defer langMu.Unlock()
@@ -159,13 +159,13 @@ func langFor(lang string) (*langEntry, error) {
 	reg := grammars.DetectLanguageByName(gname)
 	if reg == nil {
 		langCache[lang] = nil
-		return nil, nil //nolint:nilnil // No grammar => bare entry (§3.6), not an error.
+		return nil, nil //nolint:nilnil // No grammar => bare entry, not an error.
 	}
 
 	src, err := readTagsQuery(lang)
 	if err != nil {
 		langCache[lang] = nil
-		return nil, nil //nolint:nilnil // No query => bare entry (§3.6), not an error.
+		return nil, nil //nolint:nilnil // No query => bare entry, not an error.
 	}
 	qsrc := preprocessQuery(string(src))
 
@@ -181,7 +181,7 @@ func langFor(lang string) (*langEntry, error) {
 
 // readTagsQuery reads a language's tags query, trying the language-pack
 // directory first and the tree-sitter-languages legacy directory second —
-// aider's get_scm_fname order (repomap-spec §1.2).
+// aider's get_scm_fname order.
 func readTagsQuery(lang string) ([]byte, error) {
 	if src, err := queriesFS.ReadFile("queries/" + lang + "-tags.scm"); err == nil {
 		return src, nil

@@ -17,7 +17,7 @@ var (
 )
 
 // SimpleScraper fetches a URL and reduces HTML to plain text — the minimal
-// v1 stand-in for aider's scraper (basecoder-spec §1.4; see STATUS.md).
+// v1 stand-in for aider's scraper.
 func SimpleScraper(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

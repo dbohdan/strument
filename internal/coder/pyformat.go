@@ -5,7 +5,7 @@ import "strings"
 // pyFormat substitutes Python str.format-style placeholders: {key},
 // indexed forms like {fence[0]} (passed as literal keys), and the {{ }}
 // escapes. Unknown placeholders are left verbatim (Python would raise;
-// the prompt templates are [Exact] and the slot set is closed, so an
+// the prompt templates are fixed and the slot set is closed, so an
 // unknown key here is a template we don't own slots for).
 func pyFormat(template string, vars map[string]string) string {
 	var b strings.Builder

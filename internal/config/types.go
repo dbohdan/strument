@@ -1,5 +1,5 @@
 // Package config implements Strument's Starlark configuration surface and
-// the direnv-style trust gate for project configs. See config-schema.md.
+// the direnv-style trust gate for project configs.
 package config
 
 import (
@@ -27,7 +27,7 @@ var knownEditFormats = map[string]bool{
 }
 
 // reservedParamKeys are transport keys Strument owns; extra_params cannot
-// override them (config-schema §5).
+// override them.
 var reservedParamKeys = map[string]bool{
 	"model":          true,
 	"messages":       true,
@@ -36,8 +36,7 @@ var reservedParamKeys = map[string]bool{
 	"usage":          true,
 }
 
-// Provider is a pure carrier of endpoint + dialect; no behavior inheritance
-// (config-schema §3, §6).
+// Provider is a pure carrier of endpoint + dialect; no behavior inheritance.
 type Provider struct {
 	Adapter     string // "openai" | "openrouter"
 	BaseURL     string // "" => adapter default
@@ -47,7 +46,7 @@ type Provider struct {
 }
 
 // GroupKey groups models onto one runtime client/connection pool per
-// endpoint (config-schema §3: value semantics; grouping by adapter+base_url).
+// endpoint (value semantics; grouping by adapter+base_url).
 func (p Provider) GroupKey() string {
 	return p.Adapter + "\x00" + p.BaseURL
 }
@@ -97,7 +96,7 @@ func (m *Model) ReadableName() string {
 }
 
 // RequestExtraParams merges provider-scoped and model-scoped extra_params,
-// model over provider (config-schema §5).
+// model over provider.
 func (m *Model) RequestExtraParams() map[string]any {
 	if len(m.Provider.ExtraParams) == 0 && len(m.ExtraParams) == 0 {
 		return nil

@@ -9,17 +9,17 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 )
 
-// parsedFile is the invocation-local parse memo entry (repomap-spec §0.3).
+// parsedFile is the invocation-local parse memo entry.
 type parsedFile struct {
 	src  []byte
 	tree *ts.Tree
 	lang *langEntry
 }
 
-// extractTags ports get_tags_raw over gotreesitter's low-level Query API
-// (repomap-spec §1.1): emit one Tag per qualifying capture — no upstream
-// double-append — then chroma-backfill refs for definitions-only languages
-// (§1.3). Returns nil for unsupported or unparseable files (bare entries).
+// extractTags ports get_tags_raw over gotreesitter's low-level Query API:
+// emit one Tag per qualifying capture — no upstream
+// double-append — then chroma-backfill refs for definitions-only languages.
+// Returns nil for unsupported or unparseable files (bare entries).
 func extractTags(relFname, absFname string, pf *parsedFile) []Tag {
 	if pf == nil || pf.lang == nil || pf.lang.query == nil || pf.tree == nil {
 		return nil
@@ -87,8 +87,7 @@ func extractTags(relFname, absFname string, pf *parsedFile) []Tag {
 	return tags
 }
 
-// isNameToken mirrors pygments' hierarchical `token in Token.Name` check
-// (repomap-spec §1.3).
+// isNameToken mirrors pygments' hierarchical `token in Token.Name` check.
 func isNameToken(t chroma.TokenType) bool {
 	return t == chroma.Name || strings.HasPrefix(t.String(), "Name.")
 }

@@ -10,14 +10,14 @@ import (
 )
 
 // addShellCommand collects a model-proposed shell block, deduped by first
-// occurrence in response order (§6.1).
+// occurrence in response order.
 func (c *Coder) addShellCommand(block string) {
 	if !slices.Contains(c.shellCommands, block) {
 		c.shellCommands = append(c.shellCommands, block)
 	}
 }
 
-// runShellCommands offers and runs the collected blocks (§6.2-6.4).
+// runShellCommands offers and runs the collected blocks.
 // suggest_shell_commands=false gates execution, not just the prompt
 // variant. shellCommands resets only in initBeforeMessage, so blocks from a
 // failed attempt run after a later reflected attempt succeeds.
@@ -38,7 +38,7 @@ func (c *Coder) runShellCommands(ctx context.Context) string {
 }
 
 // handleShellBlock confirms and runs one block through a single shell
-// (§6.3 [Divergence]: whole block, one shell, merged output with exit
+// (whole block, one shell, merged output with exit
 // status visible to the model even when empty).
 func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	lines := strings.Split(strings.TrimSpace(block), "\n")
@@ -96,7 +96,7 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	return result
 }
 
-// PipeRunner is the default deterministic CommandRunner (§6.3): the whole
+// PipeRunner is the default deterministic CommandRunner: the whole
 // block through one shell, stdout+stderr merged. PTY execution is opt-in
 // elsewhere.
 type PipeRunner struct {

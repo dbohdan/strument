@@ -10,7 +10,7 @@ import (
 
 // StreamStub replays a scenario's turns as an llm.ModelClient. Each Send
 // consumes the next turn; OnRequest, when set, receives the outgoing request
-// and the fixture's captured request row for assertion (fixture-harness §3).
+// and the fixture's captured request row for assertion.
 type StreamStub struct {
 	Turns     []Turn
 	OnRequest func(turn int, req llm.Request, captured *Request) error

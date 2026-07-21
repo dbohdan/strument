@@ -1,5 +1,5 @@
-// Command strumentrec is the dev-only fixture recorder of
-// fixture-harness-spec.md §1: an HTTP reverse proxy that sits between a
+// Command strumentrec is the dev-only fixture recorder: an HTTP reverse
+// proxy that sits between a
 // client (Python aider, or Strument itself) and an OpenAI-compatible
 // upstream, logging both directions verbatim while re-emitting the upstream
 // SSE unchanged.
@@ -31,7 +31,7 @@ import (
 	"dbohdan.com/strument/internal/fixture"
 )
 
-// stripHeaders never appear in captured rows (fixture-harness §1).
+// stripHeaders never appear in captured rows.
 var stripHeaders = []string{"Authorization", "Api-Key", "X-Api-Key", "Cookie", "Set-Cookie", "Proxy-Authorization"}
 
 type recorder struct {
@@ -140,7 +140,7 @@ func (rec *recorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // distill converts a raw capture (raw_request/raw_response rows) into
 // fixture-schema request/stream rows on stdout, using the production SSE
-// parser as the single source of dialect truth (fixture-harness §2).
+// parser as the single source of dialect truth.
 func distill(rawPath string) error {
 	f, err := os.Open(rawPath)
 	if err != nil {

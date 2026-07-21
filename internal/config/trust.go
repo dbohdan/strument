@@ -15,7 +15,7 @@ import (
 )
 
 // The trust store records (abspath, multihash) pairs for project configs the
-// user has explicitly trusted, direnv-style (config-schema §1-2). Records
+// user has explicitly trusted, direnv-style. Records
 // are self-describing multihashes: each is re-verified under the algorithm
 // it was written with, so a future default-hash migration invalidates
 // nothing.
@@ -30,7 +30,7 @@ type trustRecord struct {
 }
 
 // TrustStore is a file-backed trust database. The file lives in the user
-// state dir and must not be synced between hosts (config-schema §2).
+// state dir and must not be synced between hosts.
 type TrustStore struct {
 	path    string
 	records map[string]string // abspath -> multihash hex

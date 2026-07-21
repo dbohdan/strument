@@ -51,7 +51,7 @@ func perfectOrWhitespace(wholeLines, partLines, replaceLines []string) (string, 
 	return replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines)
 }
 
-// ReplaceMostSimilarChunk is the matching ladder (editblock-spec §4.4):
+// ReplaceMostSimilarChunk is the matching ladder:
 // perfect match, uniform-leading-whitespace match, the two again without a
 // spurious leading blank line, then "..." elision. The upstream fuzzy step
 // is dead code and is not ported.
@@ -279,7 +279,7 @@ type strError string
 func (e strError) Error() string { return string(e) }
 
 // StripQuotedWrapping removes a redundant filename line and fence pair the
-// model sometimes wraps around a section (editblock-spec §4.3).
+// model sometimes wraps around a section.
 func StripQuotedWrapping(res, fname string, fence Fence) string {
 	if res == "" {
 		return res
@@ -327,8 +327,8 @@ func splitLinesNoEnds(s string) []string {
 	return out
 }
 
-// DoReplace ports do_replace: strip wrapping, then create/append/replace
-// (editblock-spec §4.2). exists says whether the target file already exists;
+// DoReplace ports do_replace: strip wrapping, then create/append/replace.
+// exists says whether the target file already exists;
 // content is its current text ("" for a new file).
 func DoReplace(fname string, content string, exists bool, beforeText, afterText string, fence Fence) (string, bool) {
 	beforeText = StripQuotedWrapping(beforeText, fname, fence)

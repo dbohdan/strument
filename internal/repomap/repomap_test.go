@@ -1,6 +1,6 @@
 // Transliterated from aider tests/basic/test_repomap.py @ 5dc9490. The
 // refresh-mode tests (refresh="files"/"auto") are N/A: Strument drops all
-// cross-call caches by design (repomap-spec §0.3).
+// cross-call caches by design.
 
 package repomap
 
@@ -120,10 +120,10 @@ func TestGetRepoMapExcludesAddedFiles(t *testing.T) {
 
 // Language coverage matrix, from TestRepoMapAllLanguages. The first block is
 // the 28 language-pack languages; the second is the legacy
-// tree-sitter-languages fallback (repomap-spec §1.2). Languages whose
+// tree-sitter-languages fallback. Languages whose
 // gotreesitter grammar is missing (ocaml_interface, pony, udev) or has
 // diverged from aider's legacy query (julia: scoped_identifier; zig:
-// FnProto) are out of scope and covered as bare entries; see STATUS.md.
+// FnProto) are out of scope and covered as bare entries.
 var languageCases = []struct {
 	lang, ext, symbol string
 }{
@@ -198,8 +198,8 @@ func TestAllLanguages(t *testing.T) {
 // The sample-code-base golden. The fixture layout reproduces aider's
 // relative paths (tests/fixtures/sample-code-base/...) inside a temp root.
 // The golden is regenerated from the corrected Go implementation when it
-// differs from upstream only through the two declared deviations
-// (repomap-spec §3.4/§1.1); the upstream golden is tried first.
+// differs from upstream only through the two known differences from upstream
+// (sqrt-once and single-tag emission); the upstream golden is tried first.
 func TestSampleCodeBaseGolden(t *testing.T) {
 	src := filepath.Join("..", "..", "testdata", "transliterated", "repomap", "sample-code-base")
 	goldenPath := filepath.Join("..", "..", "testdata", "transliterated", "repomap", "sample-code-base-repo-map.txt")
@@ -248,8 +248,7 @@ func TestSampleCodeBaseGolden(t *testing.T) {
 	}
 }
 
-// Startup self-test: every embedded query for a supported language compiles
-// (repomap-spec §7).
+// Startup self-test: every embedded query for a supported language compiles.
 func TestAllQueriesCompile(t *testing.T) {
 	langs := SupportedLanguages()
 	if len(langs) < 28 {

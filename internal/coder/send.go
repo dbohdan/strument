@@ -12,7 +12,7 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
-// SendOutcome is the terminal state of one sendMessage (basecoder-spec §2).
+// SendOutcome is the terminal state of one sendMessage.
 type SendOutcome int
 
 const (
@@ -41,7 +41,7 @@ func (o SendOutcome) String() string {
 	}
 }
 
-// Retry/continuation constants (§2.1). RETRY_TIMEOUT matches aider;
+// Retry/continuation constants. RETRY_TIMEOUT matches aider;
 // the continuation cap is a declared divergence (aider is unbounded).
 const (
 	retryTimeout    = 60 * time.Second
@@ -49,7 +49,7 @@ const (
 )
 
 // sendUsage is the per-send accumulator; sendMessage owns it and a defer
-// finalizes it so a mid-send panic can't lose accounting (§8).
+// finalizes it so a mid-send panic can't lose accounting.
 type sendUsage struct {
 	prompt, completion, cacheWrite, cacheRead int
 	cost                                      float64
@@ -74,7 +74,7 @@ func (u *sendUsage) add(usage *llm.Usage) {
 	}
 }
 
-// sendMessage is the phase machine (§2). It returns the outcome and, for
+// sendMessage is the phase machine. It returns the outcome and, for
 // OutcomeReflect, the next message to send.
 func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, string) {
 	// --- Setup ---
@@ -188,7 +188,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			}
 			continuations++
 			if continuations > continuationCap {
-				exhaustedOutput = true // cap hit [Divergence]
+				exhaustedOutput = true // cap hit
 				break
 			}
 			// Stitch: accumulated + current partial becomes the prefill.
@@ -254,7 +254,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	}
 
 	if interrupted {
-		// Interrupt shape [Exact] (§2.11).
+		// Interrupt shape.
 		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
 			c.curMessages[n-1] = llm.TextMessage("user", c.curMessages[n-1].Text()+"\n^C KeyboardInterrupt")
 		} else {
@@ -283,7 +283,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		return OutcomeReflect, reflection
 	}
 
-	// [lint reflection re-enters here in v2, §9]
+	// [lint reflection re-enters here in v2]
 
 	if output := c.runShellCommands(ctx); output != "" {
 		c.curMessages = append(c.curMessages,
@@ -292,12 +292,12 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		)
 	}
 
-	// [test reflection re-enters here in v2, §9]
+	// [test reflection re-enters here in v2]
 
 	return OutcomeSuccess, ""
 }
 
-// replyCompleted is the no-op v1 hook; a truthy return ends the turn (§2).
+// replyCompleted is the no-op v1 hook; a truthy return ends the turn.
 func (c *Coder) replyCompleted() bool { return false }
 
 // buildRequest translates state into an llm.Request.
@@ -312,7 +312,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 }
 
 // checkTokens warns when the estimate reaches the input window and asks to
-// proceed (§2 Setup).
+// proceed.
 func (c *Coder) checkTokens(messages []llm.Message) bool {
 	maxInput := c.Model.Context
 	if maxInput <= 0 {
@@ -333,7 +333,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	return yes
 }
 
-// moveBackCurMessages rotates cur into done on edited turns (§7.4).
+// moveBackCurMessages rotates cur into done on edited turns.
 func (c *Coder) moveBackCurMessages(saved string) {
 	c.doneMessages = append(c.doneMessages, c.curMessages...)
 	if saved != "" {
@@ -345,7 +345,7 @@ func (c *Coder) moveBackCurMessages(saved string) {
 	c.curMessages = nil
 }
 
-// finalizeUsage resolves cost per §8 — (1) in-band cost, (2) config
+// finalizeUsage resolves cost — (1) in-band cost, (2) config
 // pricing, (3) tokens only, never a fabricated $0 — merges into session
 // totals, and emits the immutable report. Idempotent; also deferred so a
 // mid-send panic can't lose accounting.
@@ -397,7 +397,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 			cost = float64(sent)*pin + float64(received)*pout
 		} else {
 			// Anthropic-style cache pricing adjustments; no-ops at zero counts
-			// (DeepSeek's cache-read discount uses the same 0.10 factor, §8).
+			// (DeepSeek's cache-read discount uses the same 0.10 factor).
 			cost = float64(u.cacheWrite)*pin*1.25 +
 				float64(u.cacheRead)*pin*0.10 +
 				float64(u.prompt)*pin +
@@ -452,7 +452,7 @@ func (c *Coder) showExhaustedError() {
 }
 
 // stripReasoning removes an inline reasoning tag from the answer before the
-// edit parser sees it (§5).
+// edit parser sees it.
 func stripReasoning(answer, tag string) string {
 	if tag == "" {
 		return answer

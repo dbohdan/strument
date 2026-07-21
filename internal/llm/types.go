@@ -1,6 +1,6 @@
 // Package llm holds the wire-neutral chat types shared by the client, the
 // base coder, and the fixture replay harness: messages, stream events, usage,
-// and money. See basecoder-spec.md §0, §2, §8.
+// and money.
 package llm
 
 import (
@@ -16,8 +16,7 @@ const (
 	RoleAssistant = "assistant"
 )
 
-// Message is one chat message. Content is structured, not any
-// (basecoder-spec §0).
+// Message is one chat message. Content is structured, not any.
 type Message struct {
 	Role    string
 	Content Content
@@ -32,7 +31,7 @@ func TextMessage(role, text string) Message {
 }
 
 // Content is either a plain string or a list of blocks (needed once
-// cache-control decoration applies, basecoder-spec §3.2).
+// cache-control decoration applies).
 //
 // Content by value); json.Unmarshaler requires a pointer receiver.
 //
@@ -101,8 +100,8 @@ const (
 	EventFinish    EventKind = "Finish"
 )
 
-// StreamEvent is one event from a model response stream
-// (basecoder-spec §2). Errors travel on the error side of
+// StreamEvent is one event from a model response stream.
+// Errors travel on the error side of
 // iter.Seq2[StreamEvent, error], not as events.
 type StreamEvent struct {
 	Kind         EventKind `json:"kind"`
@@ -111,8 +110,8 @@ type StreamEvent struct {
 	FinishReason string    `json:"finish_reason,omitempty"`
 }
 
-// Usage is token/cost accounting for one request. Tracked independently per
-// basecoder-spec §8.
+// Usage is token/cost accounting for one request, with each token class
+// tracked independently.
 type Usage struct {
 	PromptTokens     int      `json:"prompt_tokens"`
 	CompletionTokens int      `json:"completion_tokens"`
@@ -140,8 +139,7 @@ func (u *Usage) Add(u2 Usage) {
 	}
 }
 
-// Money is an amount that may be unknown. Never fabricate $0 for unknown
-// (basecoder-spec §8).
+// Money is an amount that may be unknown. Never fabricate $0 for unknown.
 type Money struct {
 	Known bool
 	USD   float64
@@ -155,7 +153,7 @@ func (m Money) String() string {
 }
 
 // ErrorClass classifies a provider/stream failure; it drives the retry table
-// in basecoder-spec §2.1 and the fixture error rows (fixture-harness §4).
+// and the fixture error rows.
 type ErrorClass string
 
 const (
@@ -177,7 +175,7 @@ func (e *StreamError) Error() string {
 }
 
 // Retryable reports whether the retry loop should retry this failure
-// (basecoder-spec §2.1: transient errors retry with doubling delay).
+// (transient errors retry with doubling delay).
 func (e *StreamError) Retryable() bool {
 	switch e.Class {
 	case ErrNetwork, ErrRateLimit, ErrServer:

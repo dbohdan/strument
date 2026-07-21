@@ -1,4 +1,4 @@
-// The basecoder-spec §11 failure/invariant matrix, as inline fixture
+// The failure/invariant matrix, as inline fixture
 // scenarios plus targeted tests where a fixture can't drive the condition
 // (interrupts, clocks).
 
@@ -157,7 +157,7 @@ func TestRetryDiscardsPartialAndSumsUsage(t *testing.T) {
 	if env.coder.partialResponseContent != "clean" {
 		t.Errorf("answer = %q (retry must discard the partial)", env.coder.partialResponseContent)
 	}
-	// First real sleep is 0.25s (delay doubles before sleeping, §2.1).
+	// First real sleep is 0.25s (delay doubles before sleeping).
 	if len(clock.slept) != 1 || clock.slept[0] != 250*time.Millisecond {
 		t.Errorf("slept = %v", clock.slept)
 	}
@@ -242,7 +242,7 @@ func TestCheckTokensDeclined(t *testing.T) {
 	}
 }
 
-// H1 regression: a reflection after a continuation-bearing send must not
+// Regression: a reflection after a continuation-bearing send must not
 // carry a stale accumulator prefix into the next send's answer.
 func TestStaleAccumulatorRegression(t *testing.T) {
 	badEdit := "a.txt\\n<<<<<<< SEARCH\\nno such line\\n=======\\nnew\\n>>>>>>> REPLACE\\n"
@@ -295,7 +295,7 @@ func TestInterruptMidStream(t *testing.T) {
 		t.Errorf("outcome = %s", env.coder.lastSendOutcome)
 	}
 	hist := env.coder.curMessages
-	// [Exact] shape: user, assistant partial, user ^C, assistant notice.
+	// Shape: user, assistant partial, user ^C, assistant notice.
 	if len(hist) != 4 ||
 		hist[1].Role != "assistant" || hist[1].Text() != "partial answer" ||
 		hist[2].Role != "user" || hist[2].Text() != "^C KeyboardInterrupt" ||

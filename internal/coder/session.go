@@ -10,7 +10,7 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
-// This file is the REPL-facing session surface (basecoder-spec §1.2, §1.4):
+// This file is the REPL-facing session surface:
 // slash commands own their I/O and mutate chat state through these methods.
 
 // ChatFiles returns the editable chat files, root-relative and sorted.
@@ -57,7 +57,7 @@ func (c *Coder) ClearHistory() {
 
 // AppendExchange records a user/assistant pair in the current history
 // without sending anything — the /run command's "add output to the chat"
-// path, mirroring the §6.2 shape for model-proposed shell output.
+// path, mirroring the shape for model-proposed shell output.
 func (c *Coder) AppendExchange(user, assistant string) {
 	c.curMessages = append(c.curMessages,
 		llm.TextMessage("user", user),
@@ -98,7 +98,7 @@ func (c *Coder) LastCommitHash() string { return c.lastCommitHash }
 func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[short] }
 
 // CommitsBeforeMessage returns the HEAD hashes captured at the start of
-// each message (§1.3); /diff uses the last one as its base.
+// each message; /diff uses the last one as its base.
 func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
 
 // RepoMapNow renders the repo map as the next send would see it (/map).
@@ -126,7 +126,7 @@ func (c *Coder) SessionTokens() (sent, received int) {
 }
 
 // TokensReport summarizes approximate context usage per assembly section
-// (§10: counts are advisory; the default counter is runes/4).
+// (counts are advisory; the default counter is runes/4).
 func (c *Coder) TokensReport() string {
 	chunks := c.formatMessages()
 

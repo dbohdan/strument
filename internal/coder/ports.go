@@ -1,5 +1,5 @@
 // Package coder is the orchestration spine: assemble -> stream -> reflect ->
-// apply -> shell -> commit -> cost (basecoder-spec.md).
+// apply -> shell -> commit -> cost.
 package coder
 
 import (
@@ -8,19 +8,18 @@ import (
 )
 
 // TokenCounter estimates token counts. Consumers treat counts as
-// advisory-conservative and never gate irreversibly on an estimate
-// (basecoder-spec §10).
+// advisory-conservative and never gate irreversibly on an estimate.
 type TokenCounter interface {
 	Count(text string) int
 }
 
-// RuneCounter is the default estimator: code points / 4 (§10). Measured
+// RuneCounter is the default estimator: code points / 4. Measured
 // against the phase-0 captures, runes/4 lands within ~0.5% of the
 // provider's real prompt_tokens for the primary model (DeepSeek: 3.99–4.02
-// chars/token; est/real ≈ 1.00 over five requests — see STATUS.md, Q3).
+// chars/token; est/real ≈ 1.00 over five requests).
 // It can under-count unusually code-dense payloads (code runs closer to
 // 3.3 chars/token), so the count is advisory, not a guarantee; consumers
-// never gate irreversibly on it (§3.4 margin, unknown-max→always-add).
+// never gate irreversibly on it (margin: unknown-max→always-add).
 type RuneCounter struct{}
 
 func (RuneCounter) Count(text string) int {
@@ -41,13 +40,13 @@ type Confirmer interface {
 type ConfirmRequest struct {
 	Prompt              string
 	Subject             string
-	ExplicitYesRequired bool // --yes must NOT auto-answer (model shell, §6.4)
+	ExplicitYesRequired bool // --yes must NOT auto-answer (model shell)
 	AllowNever          bool
 	Group               string // ConfirmGroup key ("all"/"skip" scope)
 }
 
-// AutoConfirmer implements --yes / --yes-shell (basecoder-spec §6.4:
-// --yes never auto-runs model shell; that needs YesShell).
+// AutoConfirmer implements --yes / --yes-shell (--yes never auto-runs
+// model shell; that needs YesShell).
 type AutoConfirmer struct {
 	Yes      bool
 	YesShell bool
@@ -74,8 +73,8 @@ func (a AutoConfirmer) Confirm(req ConfirmRequest) (bool, bool) {
 	return false, false
 }
 
-// CommandRunner executes one accepted shell block through a single shell
-// (basecoder-spec §6.3). Output merges stdout and stderr.
+// CommandRunner executes one accepted shell block through a single shell.
+// Output merges stdout and stderr.
 type CommandRunner interface {
 	Run(ctx context.Context, block string, cwd string) (exitCode int, output string, err error)
 }
@@ -91,7 +90,7 @@ type Repo interface {
 	HeadSHA() string
 	// Commit commits fnames with a generated message; returns hash and
 	// message, or ok=false when there was nothing to commit. attributed
-	// marks auto-commits of model edits, which get the §7.3 trailer;
+	// marks auto-commits of model edits, which get the trailer;
 	// dirty commits of user changes stay unattributed.
 	Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error)
 }
@@ -110,7 +109,7 @@ func (RealClock) Now() time.Time        { return time.Now() }
 
 // Output is where the coder talks to the user. StreamText receives answer
 // deltas as they arrive; StreamReasoning receives reasoning deltas
-// (display-only, never parsed or persisted, §4).
+// (display-only, never parsed or persisted).
 type Output interface {
 	Printf(format string, args ...any)
 	Warningf(format string, args ...any)

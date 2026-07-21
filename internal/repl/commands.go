@@ -16,7 +16,7 @@ import (
 )
 
 // command is one slash command. run returns a message to send to the model
-// ("" for none) — the §1.4 contract: commands own their I/O and may just
+// ("" for none) — the contract: commands own their I/O and may just
 // mutate state.
 type command struct {
 	name string
@@ -356,7 +356,7 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		Group:      "add-output",
 	})
 	if yes {
-		// The §6.2/§6.3 result shape, so /run context reads like
+		// The result shape, so /run context reads like
 		// model-proposed shell output.
 		result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", args, exitCode, output)
 		r.coder.AppendExchange(result, "Ok")

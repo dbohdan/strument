@@ -25,7 +25,7 @@ type Block struct {
 	Edit    Edit
 }
 
-// Marker regexes, matched against the stripped line (editblock-spec §1).
+// Marker regexes, matched against the stripped line.
 var (
 	headPattern    = regexp.MustCompile(`^<{5,9} SEARCH>?\s*$`)
 	dividerPattern = regexp.MustCompile(`^={5,9}\s*$`)
@@ -80,7 +80,7 @@ var missingFilenameErr = "Bad/missing filename. The filename must be alone on th
 // FindBlocks ports find_original_update_blocks: it scans an LLM response
 // for shell blocks and SEARCH/REPLACE blocks. A malformed block returns an
 // error whose message embeds everything processed so far plus the cause —
-// that text goes straight back to the model (editblock-spec §2).
+// that text goes straight back to the model.
 func FindBlocks(content string, fence Fence, validFnames []string) ([]Block, error) {
 	lines := splitLines(content)
 	i := 0
@@ -162,7 +162,7 @@ func parseEditBlock(lines []string, i int, fence Fence, validFnames []string, cu
 		i++
 	}
 	if i >= len(lines) || !dividerPattern.MatchString(strings.TrimSpace(lines[i])) {
-		return Edit{}, i, fmt.Errorf("Expected `%s`", dividerErr) //nolint:staticcheck // [Exact] aider parity string.
+		return Edit{}, i, fmt.Errorf("Expected `%s`", dividerErr) //nolint:staticcheck // aider-compatible error string.
 	}
 
 	var updatedText []string
@@ -172,7 +172,7 @@ func parseEditBlock(lines []string, i int, fence Fence, validFnames []string, cu
 		i++
 	}
 	if i >= len(lines) || (!updatedPattern.MatchString(strings.TrimSpace(lines[i])) && !dividerPattern.MatchString(strings.TrimSpace(lines[i]))) {
-		return Edit{}, i, fmt.Errorf("Expected `%s` or `%s`", updatedErr, dividerErr) //nolint:staticcheck // [Exact] aider parity string.
+		return Edit{}, i, fmt.Errorf("Expected `%s` or `%s`", updatedErr, dividerErr) //nolint:staticcheck // aider-compatible error string.
 	}
 
 	return Edit{
@@ -183,7 +183,7 @@ func parseEditBlock(lines []string, i int, fence Fence, validFnames []string, cu
 }
 
 // StripFilename ports strip_filename: extract a filename candidate from a
-// line, or "" (editblock-spec §3.1).
+// line, or "".
 func StripFilename(line string, fence Fence) string {
 	filename := strings.TrimSpace(line)
 
@@ -218,7 +218,7 @@ func StripFilename(line string, fence Fence) string {
 
 // FindFilename ports find_filename: scan the (up to 3) preceding lines,
 // nearest first, hopping over fence-opening lines, then pick the best
-// candidate (editblock-spec §3). Lines are raw (may keep line endings).
+// candidate. Lines are raw (may keep line endings).
 func FindFilename(lines []string, fence Fence, validFnames []string) string {
 	// Reverse (nearest first) and keep at most 3.
 	rev := make([]string, 0, 3)

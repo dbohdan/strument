@@ -12,11 +12,11 @@ type Request struct {
 	Messages        []Message
 	Temperature     *float64
 	ReasoningEffort string         // request-side effort, e.g. "low"; "" => omit
-	ExtraParams     map[string]any // fenced passthrough (config-schema §5)
+	ExtraParams     map[string]any // fenced passthrough
 }
 
-// ModelClient is the port the coder streams a model response through
-// (basecoder-spec §0). Implementations: the HTTP client (internal/client)
+// ModelClient is the port the coder streams a model response through.
+// Implementations: the HTTP client (internal/client)
 // and the fixture replay stub (internal/fixture).
 type ModelClient interface {
 	Send(ctx context.Context, req Request) iter.Seq2[StreamEvent, error]

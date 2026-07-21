@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// rootImportantFiles is aider special.py's ROOT_IMPORTANT_FILES, verbatim
-// (repomap-spec §4.1). Matching is exact against the normalized
+// rootImportantFiles is aider special.py's ROOT_IMPORTANT_FILES.
+// Matching is exact against the normalized
 // root-relative path, plus the single glob special-case for GitHub Actions
 // workflow .yml files.
 var rootImportantFiles = []string{

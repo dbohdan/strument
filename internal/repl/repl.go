@@ -21,7 +21,7 @@ import (
 	"dbohdan.com/strument/internal/render"
 )
 
-// ctrlCWindow is the double-Ctrl-C chord window (§1.2).
+// ctrlCWindow is the double-Ctrl-C chord window.
 const ctrlCWindow = 2 * time.Second
 
 // Options configures a REPL. Zero values mean production defaults; the
@@ -275,7 +275,7 @@ func (r *REPL) saveHistory(line string) {
 	_ = r.rl.SaveToHistory(line)
 }
 
-// Run is the main loop: getInput -> dispatch/runOne -> undo hint (§1.2).
+// Run is the main loop: getInput -> dispatch/runOne -> undo hint.
 // It returns when the user exits (/exit, Ctrl-D, or a Ctrl-C chord at the
 // prompt).
 func (r *REPL) Run(ctx context.Context) error {

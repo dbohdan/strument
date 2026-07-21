@@ -1,5 +1,4 @@
-// The automatable slice of phase 7 (guide §5: the REPL's oracle is
-// hand-validation; automate what's automatable): scripted sessions over a
+// Automated coverage of the REPL: scripted sessions over a
 // pipe in readline's non-interactive mode, the double-Ctrl-C chords, and a
 // pty round trip for the interactive path.
 

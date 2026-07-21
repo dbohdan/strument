@@ -74,7 +74,7 @@ func ParseWholeFile(content string, fence Fence, chatFiles []string) ([]WholeFil
 					fname = chatFiles[0]
 					fnameSource = "chat"
 				default:
-					return nil, fmt.Errorf("No filename provided before %s in file listing", fence.Open) //nolint:staticcheck // [Exact] aider parity string.
+					return nil, fmt.Errorf("No filename provided before %s in file listing", fence.Open) //nolint:staticcheck // aider-compatible error string.
 				}
 			}
 			haveBlock = true

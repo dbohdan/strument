@@ -1,4 +1,4 @@
-// Package repl is the interactive layer (basecoder-spec §1.2): readline
+// Package repl is the interactive layer: readline
 // input with slash commands, double-Ctrl-C chords, and live-rendered
 // markdown streaming via internal/render.
 package repl
@@ -12,7 +12,7 @@ import (
 
 // termOutput implements coder.Output for a terminal: assistant answer
 // deltas stream through the markdown renderer as they arrive; reasoning
-// deltas print dim and unparsed (display-only, §4).
+// deltas print dim and unparsed (display-only).
 type termOutput struct {
 	w     io.Writer
 	color bool

@@ -6,7 +6,7 @@ import (
 )
 
 // reasoningTagRe compiles `(?s)<tag>.*?</tag>` with the tag quoted
-// (basecoder-spec §5: DOTALL, regexp.QuoteMeta). Cached per tag.
+// (DOTALL, regexp.QuoteMeta). Cached per tag.
 var (
 	reasoningReMu    sync.Mutex
 	reasoningReCache = map[string]*regexp.Regexp{}

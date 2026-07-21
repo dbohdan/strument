@@ -17,7 +17,7 @@ import (
 
 const maxReflections = 3
 
-// Coder is the chat loop state (basecoder-spec §0).
+// Coder is the chat loop state.
 type Coder struct {
 	Root  string
 	Model *config.Model
@@ -26,10 +26,10 @@ type Coder struct {
 	DryRun               bool
 	AutoCommits          bool
 	CacheHeaders         bool
-	SuggestShellCommands bool // false gates execution too (§6.4)
+	SuggestShellCommands bool // false gates execution too
 	Stream               bool
 	ReminderPlacement    string // "sys" | "user" (aider model default: "user")
-	PrefillSupported     bool   // continuation on finish_reason=length (§2.1)
+	PrefillSupported     bool   // continuation on finish_reason=length
 	ExamplesAsSysMsg     bool
 	UseSystemPrompt      bool
 	SystemPromptPrefix   string
@@ -55,7 +55,7 @@ type Coder struct {
 	// set read this, not Model.EditFormat.
 	editFormat string
 
-	// Chat state (§0).
+	// Chat state.
 	absFnames         []string // ordered, deduped
 	absReadOnlyFnames []string
 	doneMessages      []llm.Message
@@ -66,7 +66,7 @@ type Coder struct {
 	numReflections  int
 	lastSendOutcome SendOutcome // observability for tests/REPL status
 
-	// Send-scoped buffers (lifecycles in §2).
+	// Send-scoped buffers.
 	partialResponseContent  string
 	partialReasoningContent string
 	multiResponseContent    string
@@ -236,7 +236,7 @@ func (c *Coder) addableRelativeFiles() []string {
 	return out
 }
 
-// initBeforeMessage resets per-top-level-message state (§1.3).
+// initBeforeMessage resets per-top-level-message state.
 func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.numReflections = 0
@@ -248,14 +248,14 @@ func (c *Coder) initBeforeMessage() {
 	}
 }
 
-// Run executes one scripted message (script mode, §1.1) and returns the
+// Run executes one scripted message (script mode) and returns the
 // last send's content regardless of outcome.
 func (c *Coder) Run(ctx context.Context, withMessage string) string {
 	c.runOne(ctx, withMessage, true)
 	return c.multiResponseContent + c.partialResponseContent
 }
 
-// runOne is the reflection loop (§1.3): up to 4 sends (initial + 3
+// runOne is the reflection loop: up to 4 sends (initial + 3
 // follow-ups).
 func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	c.initBeforeMessage()
@@ -280,7 +280,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	}
 }
 
-// preprocUserInput handles empty input, file mentions, and URLs (§1.4).
+// preprocUserInput handles empty input, file mentions, and URLs.
 // Slash commands are dispatched by the REPL layer before this.
 func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 	if inp == "" {

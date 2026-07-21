@@ -9,8 +9,8 @@ type Fence struct {
 // DefaultFence is triple backticks.
 var DefaultFence = Fence{"```", "```"}
 
-// AllFences is the 7-entry escalation list from base_coder.py, in order
-// (basecoder-spec §3.0 [Exact]). chooseFence walks it; the golden parser
+// AllFences is the 7-entry escalation list from base_coder.py, in order.
+// chooseFence walks it; the golden parser
 // test uses it to pick a fence per section.
 var AllFences = []Fence{
 	{"```", "```"},

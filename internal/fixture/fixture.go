@@ -1,7 +1,7 @@
-// Package fixture implements the record/replay harness of
-// fixture-harness-spec.md: the JSON-Lines scenario schema (§2), a loader that
+// Package fixture implements the record/replay harness: the JSON-Lines
+// scenario schema, a loader that
 // fails loudly on a version mismatch, and replay stubs for the coder's
-// ModelClient / Confirmer / CommandRunner ports (§6).
+// ModelClient / Confirmer / CommandRunner ports.
 package fixture
 
 import (
@@ -60,8 +60,7 @@ type Command struct {
 	Output string `json:"output"`
 }
 
-// Request is a captured provider request plus its assertion policy
-// (fixture-harness §3).
+// Request is a captured provider request plus its assertion policy.
 type Request struct {
 	Body            json.RawMessage `json:"body"`
 	Assert          string          `json:"assert,omitempty"` // "" or "subset"

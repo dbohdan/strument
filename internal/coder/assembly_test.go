@@ -1,5 +1,5 @@
 // Assembly invariants: reminder gate paths, fence escalation, unreadable
-// chat files, cache breakpoints, reasoning strip (basecoder-spec §3, §5).
+// chat files, cache breakpoints, reasoning strip.
 
 package coder
 

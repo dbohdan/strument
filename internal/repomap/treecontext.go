@@ -9,7 +9,7 @@ import (
 )
 
 // TreeContext is the ~150-line subset of grep_ast's TreeContext that the
-// repo map uses (repomap-spec §5.3): lines of interest plus the headers of
+// repo map uses: lines of interest plus the headers of
 // their enclosing scopes, small gaps closed, hidden runs elided with "⋮".
 // Config is fixed to the repo-map settings: color=false, line_number=false,
 // child_context=false, last_line=false, margin=0, mark_lois=false,
@@ -65,7 +65,7 @@ func NewTreeContext(code string, root *ts.Node) *TreeContext {
 		stack = append(stack, node.Children()...)
 	}
 
-	// Header finalization (§5.3, verified rule: > 1 candidates picks the
+	// Header finalization (verified rule: > 1 candidates picks the
 	// smallest, capped at headerMax; zero or one uses the single line).
 	tc.header = make([][2]int, tc.numLines)
 	for i := range tc.numLines {
@@ -118,7 +118,7 @@ func (tc *TreeContext) AddContext() {
 	// loi_pad=0, last_line=false, child_context=false, margin=0: skipped.
 
 	// parent_context: sorted for determinism (set iteration only feeds
-	// commutative set-union, but pin it anyway, §6).
+	// commutative set-union, but pin it anyway).
 	for _, i := range sortedKeys(tc.lois) {
 		tc.addParentScopes(i)
 	}

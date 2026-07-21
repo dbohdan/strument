@@ -13,7 +13,7 @@ type Example struct {
 }
 
 // Set is one edit format's prompt set: the CoderPrompts surface that the
-// message assembler consumes (basecoder-spec §3).
+// message assembler consumes.
 type Set struct {
 	MainSystem                       string
 	SystemReminder                   string

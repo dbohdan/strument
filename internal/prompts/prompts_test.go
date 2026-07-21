@@ -16,11 +16,11 @@ func TestPromptSlotsPresent(t *testing.T) {
 			t.Errorf("system_reminder missing slot %s", slot)
 		}
 	}
-	// Deviation D5: the leaked merge-conflict marker upstream left at the
+	// The leaked merge-conflict marker upstream left at the
 	// end of the diff-fenced example (editblock_fenced_prompts.py @ 5dc9490)
 	// is dropped. It must not reappear.
 	if strings.Contains(EditBlockFenced.ExampleMessages[1].Content, "<<<<<<< HEAD") {
-		t.Error("fenced example[1] still carries the leaked '<<<<<<< HEAD' marker (Deviation D5)")
+		t.Error("fenced example[1] still carries the leaked '<<<<<<< HEAD' marker")
 	}
 	if WholeFile.RedactedEditMessage != "No changes are needed." {
 		t.Errorf("redacted_edit_message = %q", WholeFile.RedactedEditMessage)

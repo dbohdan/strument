@@ -1,5 +1,5 @@
 // Scratch-repo tests for the git port (guide phase 8 oracle): plumbing,
-// the §7.3 commit contract (trailer via argv, untouched author identity),
+// the commit contract (trailer via argv, untouched author identity),
 // and an end-to-end coder auto-commit integration.
 
 package gitrepo_test
@@ -165,7 +165,7 @@ func TestCommitContract(t *testing.T) {
 	if !strings.Contains(body, "Assisted-by: test-model via Strument") {
 		t.Errorf("trailer missing: %q", body)
 	}
-	// §7.3: author and committer identity untouched.
+	// author and committer identity untouched.
 	ids := run(t, root, "git", "log", "-1", "--format=%an|%ae|%cn")
 	if strings.TrimSpace(ids) != "Scratch User|scratch@example.com|Scratch User" {
 		t.Errorf("identity overridden: %q", ids)

@@ -1,5 +1,5 @@
 // Package gitrepo implements the coder's git port by shelling out to the
-// git binary — always argv, never a shell string (basecoder-spec §7.3).
+// git binary — always argv, never a shell string.
 // Author and committer identity are left alone: attribution is a single
 // sanitized "Assisted-by: <model> via Strument" trailer on auto-commits.
 package gitrepo
@@ -20,7 +20,7 @@ type Repo struct {
 	CommitTrailer string
 
 	// Message generates a commit message from staged diffs and chat
-	// context (the weak-model call, §7.3); nil or an empty result falls
+	// context (the weak-model call); nil or an empty result falls
 	// back to aider's "(no commit message provided)".
 	Message func(diffs, context string) string
 }
@@ -35,7 +35,7 @@ func Discover(dir string) (*Repo, error) {
 	return &Repo{root: strings.TrimSpace(string(out))}, nil
 }
 
-// Trailer renders the §7.3 attribution trailer for a model name, stripping
+// Trailer renders the attribution trailer for a model name, stripping
 // newlines and control characters so it stays one well-formed trailer.
 func Trailer(modelName string) string {
 	clean := strings.Map(func(r rune) rune {
@@ -54,7 +54,7 @@ func Trailer(modelName string) string {
 // git runs one git command in the repo and returns its stdout; errors
 // carry stderr for diagnostics.
 func (r *Repo) git(args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", r.root}, args...)...) //nolint:gosec // Argv-only git invocation is this package (§7.3).
+	cmd := exec.Command("git", append([]string{"-C", r.root}, args...)...) //nolint:gosec // Argv-only git invocation, never a shell string.
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -118,7 +118,7 @@ func (r *Repo) HeadSHA() string {
 	return strings.TrimSpace(out)
 }
 
-// Commit stages fnames and commits them (§7.3). attributed adds the
+// Commit stages fnames and commits them. attributed adds the
 // trailer (auto-commits of model edits); dirty commits stay unattributed.
 // ok=false means there was nothing to commit. GIT_AUTHOR_* and
 // GIT_COMMITTER_* are never overridden; hooks run normally.

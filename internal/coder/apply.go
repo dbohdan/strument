@@ -22,7 +22,7 @@ func (d diskReader) ReadFile(rel string) (string, bool) {
 	return string(data), true
 }
 
-// applyUpdates dispatches on the active edit format (§7.1).
+// applyUpdates dispatches on the active edit format.
 func (c *Coder) applyUpdates(answer string) ([]string, string) {
 	switch c.editFormat {
 	case "ask":
@@ -115,7 +115,7 @@ func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
 	}
 
 	// Path containment is the first security boundary: reject before any
-	// FS read (§7.1). Unsafe paths are reported, not reflected (§7.2).
+	// FS read. Unsafe paths are reported, not reflected.
 	var safe []editblock.Edit
 	for _, e := range edits {
 		if reason := c.unsafePath(e.Path); reason != "" {
@@ -305,9 +305,9 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	needDirtyCommit[rel] = true
 }
 
-// dirtyCommit commits dirty files before edits so /undo has a clean base
-// (§7.3 contract). These are user changes: no trailer. Files sort for
-// deterministic commits (§3.3).
+// dirtyCommit commits dirty files before edits so /undo has a clean base.
+// These are user changes: no trailer. Files sort for
+// deterministic commits.
 func (c *Coder) dirtyCommit(need map[string]bool) {
 	if c.Repo == nil || len(need) == 0 {
 		return
@@ -319,7 +319,7 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 }
 
 // writeAtomically writes the plan's files via temp+rename, rolling the
-// batch back on any failure (§7.1).
+// batch back on any failure.
 func (c *Coder) writeAtomically(plan editblock.PlanResult) error {
 	type backup struct {
 		path    string

@@ -16,8 +16,8 @@ type FileReader interface {
 }
 
 // PlanResult is the outcome of planning a batch of edits against a file
-// state, without touching the filesystem (basecoder-spec §7.1 wants an
-// in-memory plan; the coder writes it atomically).
+// state, without touching the filesystem: an in-memory plan the coder
+// writes atomically.
 type PlanResult struct {
 	// Writes maps each touched path to its final content, and WriteOrder
 	// records first-touch order for deterministic application.
@@ -27,7 +27,7 @@ type PlanResult struct {
 	// Failed are the ones that didn't.
 	Applied []Edit
 	Failed  []Edit
-	// Report is the model-facing failure report (editblock-spec §5);
+	// Report is the model-facing failure report;
 	// empty when nothing failed.
 	Report string
 }
@@ -104,8 +104,8 @@ func ApplyEdits(edits []Edit, chatFiles []string, files FileReader, fence Fence)
 	return res
 }
 
-// failureReport builds the model-facing report, byte-for-byte with aider
-// (editblock-spec §5). File contents are read post-application so
+// failureReport builds the model-facing failure report.
+// File contents are read post-application so
 // did-you-mean reflects successful edits to the same file.
 func failureReport(failed []Edit, passedCount int, files FileReader, fence Fence) string {
 	blocks := "block"
@@ -159,7 +159,7 @@ Just reply with fixed versions of the %s above that failed to match.
 
 // FindSimilarLines ports find_similar_lines: the best window of content
 // lines resembling the search lines at ratio >= threshold, expanded by 5
-// lines each way unless the endpoints already line up (editblock-spec §5).
+// lines each way unless the endpoints already line up.
 func FindSimilarLines(search, content string, threshold float64) string {
 	searchLines := splitLinesNoEnds(search)
 	contentLines := splitLinesNoEnds(content)

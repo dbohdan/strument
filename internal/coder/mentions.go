@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// addedFilesPrompt is aider prompts.added_files [Exact].
+// addedFilesPrompt is aider's prompts.added_files.
 const addedFilesPrompt = "I added these files to the chat: %s\nLet me know if there are others we should add."
 
 // fileMentions ports get_file_mentions: filenames the text plausibly refers
@@ -64,7 +64,7 @@ func (c *Coder) fileMentions(content string, ignoreCurrent bool) map[string]bool
 }
 
 // checkForFileMentions offers to add mentioned files (minus ignoreMentions)
-// and returns the added_files reflection message, or "" (§1.4, §2).
+// and returns the added_files reflection message, or "".
 func (c *Coder) checkForFileMentions(content string) string {
 	mentioned := c.fileMentions(content, false)
 
@@ -144,7 +144,7 @@ func (c *Coder) identFilenameMatches(idents map[string]bool) map[string]bool {
 var urlRe = regexp.MustCompile(`(https?://[^\s/$.?#].[^\s"]*[^\s,.])`)
 
 // checkForUrls offers to scrape URLs in the input (minus rejectedUrls) and
-// appends the content (§1.4).
+// appends the content.
 func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 	if c.Scrape == nil {
 		return inp

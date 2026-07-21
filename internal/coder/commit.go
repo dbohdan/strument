@@ -10,7 +10,7 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 )
 
-// autoCommit commits edited files in git mode (§7.3); a no-op without a
+// autoCommit commits edited files in git mode; a no-op without a
 // repo, with auto-commits off, or in dry-run. Returns the rotation message
 // for moveBackCurMessages ("" => the no-git default path applies).
 func (c *Coder) autoCommit(edited []string) string {
@@ -19,7 +19,7 @@ func (c *Coder) autoCommit(edited []string) string {
 	}
 	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), true)
 	if err != nil {
-		// Commit failure after write leaves the edits in place (§7.3).
+		// Commit failure after write leaves the edits in place.
 		c.Out.Errorf("Unable to commit: %v", err)
 		return ""
 	}
@@ -53,7 +53,7 @@ func (c *Coder) commitContext() string {
 const commitMessageTimeout = 60 * time.Second
 
 // CommitMessenger returns a commit-message generator backed by a model —
-// the §7.3 weak-model call, packaged as the git port's Message func. An
+// the weak-model call, packaged as the git port's Message func. An
 // empty return means "no message" and the caller falls back.
 func CommitMessenger(cl llm.ModelClient, model *config.Model, language string) func(diffs, context string) string {
 	return func(diffs, chatContext string) string {

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Fixtures are committed; keys are not (fixture-harness §1, §5). This test
+// Fixtures are committed; keys are not. This test
 // fails if anything under testdata/fixtures/ smells like a credential.
 // (testdata/transliterated/ holds aider's own public test corpus, which
 // contains placeholder bearer tokens in code examples — out of scope.)

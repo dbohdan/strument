@@ -1,5 +1,5 @@
 // Command strument is an AI pair-programming tool for the terminal — a Go
-// port of aider trimmed to the essentials. See spec/strument-guide.md.
+// port of aider trimmed to the essentials.
 package main
 
 import (
@@ -166,7 +166,7 @@ func terminalSize() (int, int) {
 	return 80, 24
 }
 
-// runREPL starts the interactive session (basecoder-spec §1.2).
+// runREPL starts the interactive session.
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
 	inputHistory, _ := history.InputHistoryPath()
 	r, err := repl.New(repl.Options{

@@ -1,5 +1,5 @@
 // Pins the `edited`-vs-rollback invariant at the atomic-apply seam
-// (Deviation D4): when a multi-file batch write fails, writeAtomically
+// When a multi-file batch write fails, writeAtomically
 // rolls the whole batch back and applyUpdates returns an empty `edited`,
 // so the turn neither auto-commits nor rotates history. This is the
 // safety-critical divergence from aider, whose pre-write `edited` can name

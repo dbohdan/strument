@@ -5,8 +5,8 @@ import (
 	"slices"
 )
 
-// pageRank is power iteration matching networkx defaults (repomap-spec
-// §3.5): alpha 0.85, max 100 iterations, uniform start, L1 convergence
+// pageRank is power iteration matching networkx defaults: alpha 0.85, max
+// 100 iterations, uniform start, L1 convergence
 // against nodeCount*1e-6, personalization and dangling vectors L1-normalized
 // with absent nodes at 0, parallel edges pre-summed by the caller.
 //
@@ -47,7 +47,7 @@ func pageRank(nodes []string, outWeights []map[int]float64, personalization map[
 		return pvec[i]
 	}
 
-	// Sorted adjacency: float accumulation order must be pinned (§6).
+	// Sorted adjacency: float accumulation order must be pinned.
 	type arc struct {
 		j int
 		w float64
@@ -106,7 +106,7 @@ func pageRank(nodes []string, outWeights []map[int]float64, personalization map[
 			break
 		}
 	}
-	// Non-convergence uses the last iterate rather than throwing (§3.5).
+	// Non-convergence uses the last iterate rather than throwing.
 
 	out := make(map[string]float64, n)
 	for i, name := range nodes {

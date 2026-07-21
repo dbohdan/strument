@@ -24,7 +24,7 @@ type Options struct {
 }
 
 // DefaultUserConfigPath resolves the user config location via
-// os.UserConfigDir, which honors XDG_CONFIG_HOME (config-schema §0).
+// os.UserConfigDir, which honors XDG_CONFIG_HOME.
 func DefaultUserConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -42,7 +42,7 @@ type fileGlobals struct {
 	historyFile    string
 }
 
-// Load runs the pipeline of config-schema §8: user config, gated project
+// Load runs the config pipeline: user config, gated project
 // config, whole-key merge, post-merge weak_model resolution, validation.
 func Load(opts Options) (*Config, error) {
 	warn := opts.Warn

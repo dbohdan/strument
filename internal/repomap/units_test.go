@@ -1,4 +1,4 @@
-// Layered unit tests per repomap-spec §9: PageRank parity against networkx
+// Layered unit tests: PageRank parity against networkx
 // 3.x fixtures, ranker multiplier behavior with injected tags, and
 // TreeContext goldens pinned against grep_ast.
 
@@ -219,7 +219,7 @@ func TestRankerChatFilesExcludedButPresentAsBareNodes(t *testing.T) {
 		}
 	}
 	// The chat file still appears as a bare node (skipped later in toTree
-	// but counted for truncation, §3.6).
+	// but counted for truncation).
 	found := false
 	for _, it := range items {
 		if it.Tag == nil && it.RelFname == "chat.py" {
@@ -334,7 +334,7 @@ func TestImportantFiles(t *testing.T) {
 }
 
 // Budget behavior: a tiny budget yields a truncated but non-empty map; a
-// huge budget includes everything (soft target, §4.2).
+// huge budget includes everything (soft target).
 func TestBudgetTruncation(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{}

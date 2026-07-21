@@ -11,7 +11,7 @@ import (
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
 // system + examples + readonly_files + repo + done + chat_files + cur +
-// reminder (basecoder-spec §3.1).
+// reminder.
 type chatChunks struct {
 	system        []llm.Message
 	examples      []llm.Message
@@ -40,7 +40,7 @@ func (ch *chatChunks) allMessages() []llm.Message {
 
 // addCacheControl decorates the last message of a slot with a cache
 // breakpoint, on a clone (the source mutates in place; we keep history
-// read-only through the alias, §3.2).
+// read-only through the alias).
 func addCacheControl(messages []llm.Message) {
 	if len(messages) == 0 {
 		return
@@ -58,7 +58,7 @@ func addCacheControl(messages []llm.Message) {
 }
 
 // addCacheControlHeaders places at most 3 breakpoints: examples-else-system,
-// repo-else-readonly, chat_files (§3.2). Never on done/cur.
+// repo-else-readonly, chat_files. Never on done/cur.
 func (ch *chatChunks) addCacheControlHeaders() {
 	if len(ch.examples) > 0 {
 		addCacheControl(ch.examples)
@@ -73,12 +73,12 @@ func (ch *chatChunks) addCacheControlHeaders() {
 	addCacheControl(ch.chatFiles)
 }
 
-// allFences is the escalation list (§3.0 [Exact]); shared with editblock.
+// allFences is the escalation list; shared with editblock.
 var allFences = editblock.AllFences
 
 // chooseFence scans chat + read-only content and picks the first fence
 // whose open/close begins no line; unreadable chat files are dropped with a
-// warning — an observable state mutation during assembly (§3.0).
+// warning — an observable state mutation during assembly.
 func (c *Coder) chooseFence() {
 	var allContent strings.Builder
 	for _, content := range c.absFnamesContent() {
@@ -111,7 +111,7 @@ func (c *Coder) chooseFence() {
 }
 
 // absFnamesContent reads chat files in order, dropping unreadable ones from
-// the chat with a warning (§3.0).
+// the chat with a warning.
 func (c *Coder) absFnamesContent() []string {
 	var contents []string
 	var kept []string
@@ -129,7 +129,7 @@ func (c *Coder) absFnamesContent() []string {
 }
 
 // filesContent renders editable files: "\n{rel}\n{fence0}\n{content}{fence1}\n"
-// per file, sorted for determinism (§3.3 divergence; aider uses set order).
+// per file, sorted for determinism (a divergence from aider, which uses set order).
 func (c *Coder) filesContent() string {
 	type entry struct{ rel, content string }
 	contents := c.absFnamesContent()
@@ -197,7 +197,7 @@ func (c *Coder) platformText() string {
 	return b.String()
 }
 
-// fmtSystemPrompt substitutes the [Exact] template slots (§3.0).
+// fmtSystemPrompt substitutes the template slots.
 func (c *Coder) fmtSystemPrompt(prompt string) string {
 	var finalReminders []string
 	if c.Platform.Language != "" {
@@ -302,7 +302,7 @@ func (c *Coder) curMessageText() string {
 	return b.String()
 }
 
-// formatChatChunks builds the canonical slots (§3.1).
+// formatChatChunks builds the canonical slots.
 func (c *Coder) formatChatChunks() *chatChunks {
 	c.chooseFence()
 
@@ -393,7 +393,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)
 	chunks.reminder = nil
 
-	// Reminder gate (§3.4, corrected): unknown max => always add; else add
+	// Reminder gate: unknown max => always add; else add
 	// iff base + candidate < max - margin, margin = min(1024, 5%).
 	if c.Prompts.SystemReminder != "" {
 		reminderText := c.fmtSystemPrompt(c.Prompts.SystemReminder)
@@ -422,7 +422,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	return chunks
 }
 
-// formatMessages = formatChatChunks + cache decoration (§3.2); decoration
+// formatMessages = formatChatChunks + cache decoration; decoration
 // applies only when the provider supports caching.
 func (c *Coder) formatMessages() *chatChunks {
 	chunks := c.formatChatChunks()
@@ -434,7 +434,7 @@ func (c *Coder) formatMessages() *chatChunks {
 
 // cacheHeadersEnabled: v1 keeps explicit cache-control decoration off by
 // default (OpenAI-dialect endpoints cache implicitly; the placement logic
-// stays tested for when a config toggle lands, config-schema §6 deferred).
+// stays tested for when a config toggle lands).
 func (c *Coder) cacheHeadersEnabled() bool { return c.CacheHeaders }
 
 func (c *Coder) countMessages(msgs []llm.Message) int {
