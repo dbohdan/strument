@@ -13,6 +13,16 @@ type Request struct {
 	Temperature     *float64
 	ReasoningEffort string         // request-side effort, e.g. "low"; "" => omit
 	ExtraParams     map[string]any // fenced passthrough
+	Tools           []ToolDef      // function tools offered to the model; nil => none
+	ToolChoice      string         // "auto" | "none" | ""; "" => omit
+}
+
+// ToolDef is a function tool offered to the model. Parameters is a JSON
+// Schema object.
+type ToolDef struct {
+	Name        string
+	Description string
+	Parameters  map[string]any
 }
 
 // ModelClient is the port the coder streams a model response through.

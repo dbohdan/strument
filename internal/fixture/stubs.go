@@ -61,6 +61,15 @@ func (s *StreamStub) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.St
 				}, nil) {
 					return
 				}
+			case string(llm.EventToolCall):
+				if !yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: &llm.ToolCallDelta{
+					Index: ev.ToolIndex,
+					ID:    ev.ToolID,
+					Name:  ev.ToolName,
+					Args:  ev.ToolArgs,
+				}}, nil) {
+					return
+				}
 			default:
 				yield(llm.StreamEvent{}, fmt.Errorf("fixture: unknown event kind %q", ev.Kind))
 				return

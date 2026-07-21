@@ -56,8 +56,22 @@ func (c *Client) baseURL() string {
 
 // wireMessage is one message on the wire.
 type wireMessage struct {
-	Role    string      `json:"role"`
-	Content llm.Content `json:"content"`
+	Role       string         `json:"role"`
+	Content    llm.Content    `json:"content"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+}
+
+// wireToolCall is the OpenAI tool-call shape on an assistant message.
+type wireToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"` // always "function"
+	Function wireToolFunction `json:"function"`
+}
+
+type wireToolFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 // BuildBody translates an llm.Request into the provider dialect
@@ -72,7 +86,15 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 
 	msgs := make([]wireMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		msgs[i] = wireMessage{Role: m.Role, Content: m.Content}
+		wm := wireMessage{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID}
+		for _, tc := range m.ToolCalls {
+			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{
+				ID:       tc.ID,
+				Type:     "function",
+				Function: wireToolFunction{Name: tc.Name, Arguments: tc.Arguments},
+			})
+		}
+		msgs[i] = wm
 	}
 	body["model"] = req.Model
 	body["messages"] = msgs
@@ -87,6 +109,23 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 			body["reasoning"] = map[string]any{"effort": req.ReasoningEffort}
 		default:
 			body["reasoning_effort"] = req.ReasoningEffort
+		}
+	}
+	if len(req.Tools) > 0 {
+		tools := make([]map[string]any, len(req.Tools))
+		for i, t := range req.Tools {
+			tools[i] = map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        t.Name,
+					"description": t.Description,
+					"parameters":  t.Parameters,
+				},
+			}
+		}
+		body["tools"] = tools
+		if req.ToolChoice != "" {
+			body["tool_choice"] = req.ToolChoice
 		}
 	}
 	return body

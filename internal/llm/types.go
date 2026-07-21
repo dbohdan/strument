@@ -14,12 +14,30 @@ const (
 	RoleSystem    = "system"
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleTool      = "tool"
 )
 
-// Message is one chat message. Content is structured, not any.
+// Message is one chat message. Content is structured, not any. An assistant
+// message may carry ToolCalls; a RoleTool message carries the result of one
+// call, keyed by ToolCallID.
 type Message struct {
-	Role    string
-	Content Content
+	Role       string
+	Content    Content
+	ToolCalls  []ToolCall // assistant tool calls
+	ToolCallID string     // set on RoleTool result messages
+}
+
+// ToolCall is one function call the model requested. Arguments is the raw
+// JSON string as the model produced it (parsed by the caller).
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments string
+}
+
+// ToolResult builds a RoleTool result message for a given call id.
+func ToolResult(callID, text string) Message {
+	return Message{Role: RoleTool, Content: TextContent(text), ToolCallID: callID}
 }
 
 // Text returns the message content flattened to a string.
@@ -98,16 +116,27 @@ const (
 	EventReasoning EventKind = "Reasoning"
 	EventUsage     EventKind = "Usage"
 	EventFinish    EventKind = "Finish"
+	EventToolCall  EventKind = "ToolCall"
 )
 
 // StreamEvent is one event from a model response stream.
 // Errors travel on the error side of
 // iter.Seq2[StreamEvent, error], not as events.
 type StreamEvent struct {
-	Kind         EventKind `json:"kind"`
-	Text         string    `json:"text,omitempty"`
-	Usage        *Usage    `json:"usage,omitempty"`
-	FinishReason string    `json:"finish_reason,omitempty"`
+	Kind         EventKind      `json:"kind"`
+	Text         string         `json:"text,omitempty"`
+	Usage        *Usage         `json:"usage,omitempty"`
+	FinishReason string         `json:"finish_reason,omitempty"`
+	ToolCall     *ToolCallDelta `json:"tool_call,omitempty"`
+}
+
+// ToolCallDelta is a streamed fragment of a tool call. ID and Name arrive on
+// the first fragment for an index; later fragments carry only Args chunks.
+type ToolCallDelta struct {
+	Index int    `json:"index"`
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Args  string `json:"args,omitempty"`
 }
 
 // Usage is token/cost accounting for one request, with each token class

@@ -77,6 +77,11 @@ type Event struct {
 	FinishReason string     `json:"finish_reason,omitempty"`
 	Class        string     `json:"class,omitempty"`
 	Message      string     `json:"message,omitempty"`
+	// "ToolCall" rows carry a streamed tool-call fragment.
+	ToolIndex int    `json:"tool_index,omitempty"`
+	ToolID    string `json:"tool_id,omitempty"`
+	ToolName  string `json:"tool_name,omitempty"`
+	ToolArgs  string `json:"tool_args,omitempty"`
 }
 
 // Turn is one request/stream pair. Multi-send scenarios repeat turns in

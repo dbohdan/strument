@@ -327,3 +327,93 @@ func TestOpenRouterAppHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestParseSSEToolCalls(t *testing.T) {
+	sse := "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"replace_in_file\",\"arguments\":\"\"}}]}}]}\n" +
+		"\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"path\\\":\\\"a.py\\\",\"}}]}}]}\n" +
+		"\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"search\\\":\\\"x\\\"}\"}}]}}]}\n" +
+		"\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n" +
+		"\ndata: [DONE]\n"
+
+	var id, name, args, finish string
+	var n int
+	for ev, err := range ParseSSE(strings.NewReader(sse)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch ev.Kind {
+		case llm.EventToolCall:
+			n++
+			if ev.ToolCall.ID != "" {
+				id = ev.ToolCall.ID
+			}
+			if ev.ToolCall.Name != "" {
+				name = ev.ToolCall.Name
+			}
+			args += ev.ToolCall.Args
+		case llm.EventFinish:
+			finish = ev.FinishReason
+		}
+	}
+	if n != 3 {
+		t.Errorf("tool-call fragments = %d, want 3", n)
+	}
+	if id != "call_1" || name != "replace_in_file" {
+		t.Errorf("id/name = %q/%q, want call_1/replace_in_file", id, name)
+	}
+	if args != `{"path":"a.py","search":"x"}` {
+		t.Errorf("accumulated args = %q", args)
+	}
+	if finish != "tool_calls" {
+		t.Errorf("finish = %q, want tool_calls", finish)
+	}
+}
+
+func TestBuildBodyTools(t *testing.T) {
+	c := New(config.Provider{Adapter: config.AdapterOpenRouter})
+	req := llm.Request{
+		Model:      "m",
+		ToolChoice: "auto",
+		Tools: []llm.ToolDef{{
+			Name:        "replace_in_file",
+			Description: "edit a file",
+			Parameters:  map[string]any{"type": "object"},
+		}},
+		Messages: []llm.Message{
+			{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "replace_in_file", Arguments: `{"path":"a"}`}}},
+			llm.ToolResult("call_1", "applied"),
+		},
+	}
+	raw, err := json.Marshal(c.BuildBody(req))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["tools"]; !ok {
+		t.Error("body missing tools")
+	}
+	if body["tool_choice"] != "auto" {
+		t.Errorf("tool_choice = %v", body["tool_choice"])
+	}
+	msgs, ok := body["messages"].([]any)
+	if !ok || len(msgs) != 2 {
+		t.Fatalf("messages = %v", body["messages"])
+	}
+	asst, ok := msgs[0].(map[string]any)
+	if !ok {
+		t.Fatalf("assistant message = %v", msgs[0])
+	}
+	if _, ok := asst["tool_calls"]; !ok {
+		t.Errorf("assistant message missing tool_calls: %v", asst)
+	}
+	toolMsg, ok := msgs[1].(map[string]any)
+	if !ok {
+		t.Fatalf("tool message = %v", msgs[1])
+	}
+	if toolMsg["role"] != "tool" || toolMsg["tool_call_id"] != "call_1" {
+		t.Errorf("tool result malformed: %v", toolMsg)
+	}
+}

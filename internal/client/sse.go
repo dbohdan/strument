@@ -17,6 +17,14 @@ type sseChunk struct {
 			Content          string `json:"content"`
 			Reasoning        string `json:"reasoning"`         // OpenRouter native reasoning
 			ReasoningContent string `json:"reasoning_content"` // OpenAI-compat variant
+			ToolCalls        []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -75,6 +83,16 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 				}
 				if choice.Delta.Content != "" {
 					if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: choice.Delta.Content}, nil) {
+						return
+					}
+				}
+				for _, tc := range choice.Delta.ToolCalls {
+					if !yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: &llm.ToolCallDelta{
+						Index: tc.Index,
+						ID:    tc.ID,
+						Name:  tc.Function.Name,
+						Args:  tc.Function.Arguments,
+					}}, nil) {
 						return
 					}
 				}
