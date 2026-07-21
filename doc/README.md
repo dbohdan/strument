@@ -57,10 +57,10 @@ inherited from aider.
 
 ## Relationship to aider
 
-- **Scope.** Essentials only: SEARCH/REPLACE (plus fenced and whole-file)
-  edits, repo map, reflection, shell suggestions, git auto-commit with
-  `/undo`, `/ask`. Architect mode, voice, GUI, analytics, and summarization
-  are out of scope for v1.
+- **Scope.** Essentials only: tool-call edits by default (SEARCH/REPLACE,
+  fenced, and whole-file as fallbacks), repo map, reflection, shell
+  suggestions, git auto-commit with `/undo`, `/ask`. Architect mode, voice,
+  GUI, analytics, and summarization are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
   YAML/`.env`/model-database configuration.
@@ -142,6 +142,72 @@ The REPL has the same philosophy: `repl.Options` exposes seams
 (`Stdin/Stdout`, `IsTerminal`, `MakeRaw/ExitRaw`, `Notify`, `Exit`, `Now`,
 `GetSize`) so the whole interactive loop runs under tests over pipes and a
 real pty.
+
+## Tool calls (the default edit format)
+
+The default `edit_format` is `"tool"`: the model edits, suggests commands,
+and asks for files through native function calls instead of text blocks. The
+API schema enforces the format, so the whole class of format-parse failures
+disappears, the prompts shrink (the schema carries the rules), and a file
+that contains `<<<<<<< SEARCH` is just data — which is what lets the harness
+edit its own prompt strings. `diff`, `diff-fenced`, and `whole` remain
+selectable per model as the fallback for a model with weaker function
+calling.
+
+Four tools, in two shapes that match the harness's nature:
+
+- **`replace_in_file(path, search, replace)`** and **`create_file(path,
+  content)`** — *direct*. Exactly like a SEARCH/REPLACE block: the edit
+  applies and auto-commits the moment the call arrives, with `/undo` as the
+  safety net. Not a proposal.
+- **`suggest_command(command, purpose)`** — a *proposal*. Runs only after the
+  user confirms (the existing run-shell gate); its output returns as the tool
+  result.
+- **`request_files(paths, reason)`** — a *request*. The user confirms each
+  file before it joins the chat.
+
+The tools live in `internal/coder/tools.go`; `applyToolCalls` dispatches a
+captured turn. Every tool call gets a `tool` result message, always, so the
+next request stays well-formed. Edits reuse the same replace primitive,
+atomic-write, and auto-commit machinery as the SEARCH/REPLACE path — the tool
+format changes how edits *arrive*, not how they apply.
+
+**Reflection is a tool error, not a synthetic user turn.** When a `search`
+doesn't match, its call's tool result carries the failure (with a
+did-you-mean) and the turn re-sends on those results — no injected "please
+fix" user message. `runOne` is outcome-driven so a text-free tool reflection
+still loops, bounded by `maxReflections`.
+
+**"Code scrolls by" with tool calls.** Providers stream a call's arguments as
+JSON-escaped string fragments, so raw rendering would show escaped JSON.
+`internal/render/toolargs.go` decodes them live: `ArgScanner` is a streaming
+JSON string-field extractor (escape- and UTF-8-boundary-safe) and `ToolDiff`
+turns the decoded `search`/`replace`/`content`/`command` fields into a
+red-green Git-style diff as they arrive. `ToolDiffSet` fans a turn's calls
+out by index. There are two decoders by design: `ArgScanner` for streaming
+*display* (best-effort) and `json.Unmarshal` on the complete arguments for
+the authoritative *apply*.
+
+### Cross-provider streaming quirks
+
+Live testing against DeepSeek V4 Flash, GLM 5.2, and Qwen3.6 27B (the ~27B
+floor) confirmed all three drive the format cleanly — and surfaced two
+provider-specific *streaming* quirks the renderer now absorbs. They are
+display-only; the authoritative parse was never affected. Both have
+regression tests in `toolargs_test.go`.
+
+- **Interleaved calls (DeepSeek).** With two tool calls in one turn, DeepSeek
+  streams their argument fragments interleaved, which spliced one diff's lines
+  into another's. `ToolDiffSet` now streams only the first call live and
+  buffers later ones, appending each whole, in first-seen order, on flush.
+- **`path` not first (Qwen3.6).** Qwen streams `search`/`replace` before
+  `path`, so the file header printed in the middle of the diff. `ToolDiff`
+  now holds an edit's diff lines until the header is known and emits the
+  header the instant the `path` field completes, so it always leads.
+
+The lesson worth keeping: JSON object field order and multi-call fragment
+interleaving are provider-specific and not guaranteed. A streaming renderer
+must not assume field order or that one call's fragments arrive contiguously.
 
 ## Configuration
 
