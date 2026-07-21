@@ -228,3 +228,41 @@ func (d *ToolDiff) emitLine(field, text string) {
 		fmt.Fprintf(d.w, "%s %s\n", prefix, text)
 	}
 }
+
+// ToolDiffSet fans a send's streamed tool-call fragments out to a ToolDiff
+// per call index, so an Output can forward fragments without tracking indexes
+// itself. A non-edit tool (no path/search/replace/content fields) simply
+// renders nothing.
+type ToolDiffSet struct {
+	w     io.Writer
+	color bool
+	order []int
+	diffs map[int]*ToolDiff
+}
+
+// NewToolDiffSet builds a diff fan-out writing to w.
+func NewToolDiffSet(w io.Writer, color bool) *ToolDiffSet {
+	return &ToolDiffSet{w: w, color: color, diffs: map[int]*ToolDiff{}}
+}
+
+// Write forwards an argument fragment for the tool call at index, opening a
+// fresh diff the first time an index is seen. name is read from the first
+// fragment (later fragments carry only args).
+func (s *ToolDiffSet) Write(index int, name, frag string) {
+	d, ok := s.diffs[index]
+	if !ok {
+		d = NewToolDiff(s.w, s.color, name)
+		s.diffs[index] = d
+		s.order = append(s.order, index)
+	}
+	d.Write(frag)
+}
+
+// Flush closes every open diff, in call order, and resets the set.
+func (s *ToolDiffSet) Flush() {
+	for _, i := range s.order {
+		s.diffs[i].Flush()
+	}
+	s.order = nil
+	clear(s.diffs)
+}

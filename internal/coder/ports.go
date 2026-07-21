@@ -116,6 +116,10 @@ type Output interface {
 	Errorf(format string, args ...any)
 	StreamText(delta string)
 	StreamReasoning(delta string)
+	// StreamToolCall receives a streamed tool-call argument fragment for the
+	// call at index (name on the first fragment for an index), so edit tools
+	// render as a live red-green diff. FlushStream closes any open render.
+	StreamToolCall(index int, name, argsFragment string)
 	// FlushStream marks the end of a send's live rendering.
 	FlushStream()
 }

@@ -133,3 +133,20 @@ func TestToolDiffTrailingNoNewline(t *testing.T) {
 		t.Errorf("got:\n%q\nwant:\n%q", got, want)
 	}
 }
+
+// TestToolDiffSet fans two interleaved tool calls out to separate diffs and
+// flushes them in call order.
+func TestToolDiffSet(t *testing.T) {
+	var sb strings.Builder
+	s := NewToolDiffSet(&sb, false)
+	// Two calls arriving interleaved by index, name only on the first frag.
+	s.Write(0, "replace_in_file", `{"path":"a.go",`)
+	s.Write(1, "create_file", `{"path":"b.go",`)
+	s.Write(0, "", `"search":"x","replace":"y"}`)
+	s.Write(1, "", `"content":"new"}`)
+	s.Flush()
+	want := "a.go\n- x\n+ y\nb.go (new file)\n+ new\n"
+	if sb.String() != want {
+		t.Errorf("got:\n%q\nwant:\n%q", sb.String(), want)
+	}
+}

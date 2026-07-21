@@ -57,6 +57,7 @@ func (o testOutput) Warningf(format string, args ...any) { o.t.Logf("warn: "+for
 func (o testOutput) Errorf(format string, args ...any)   { o.t.Logf("err: "+format, args...) }
 func (o testOutput) StreamText(string)                   {}
 func (o testOutput) StreamReasoning(string)              {}
+func (o testOutput) StreamToolCall(int, string, string)  {}
 func (o testOutput) FlushStream()                        {}
 
 // replayEnv is one scenario wired up and ready to run.

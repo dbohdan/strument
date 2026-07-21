@@ -78,13 +78,24 @@ func (u *sendUsage) add(usage *llm.Usage) {
 // OutcomeReflect, the next message to send.
 func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, string) {
 	// --- Setup ---
-	c.curMessages = append(c.curMessages, llm.TextMessage("user", inp))
+	// A tool continuation re-enters on the tool result messages already
+	// appended to curMessages (reflection-as-tool-error), so it adds no user
+	// turn; inp is unused on that path.
+	appendedUser := false
+	if c.toolContinuation {
+		c.toolContinuation = false
+	} else {
+		c.curMessages = append(c.curMessages, llm.TextMessage("user", inp))
+		appendedUser = true
+	}
 
 	chunks := c.formatMessages()
 	messages := chunks.allMessages()
 
 	if !c.checkTokens(messages) {
-		c.curMessages = c.curMessages[:len(c.curMessages)-1]
+		if appendedUser {
+			c.curMessages = c.curMessages[:len(c.curMessages)-1]
+		}
 		return OutcomeFailed, ""
 	}
 
@@ -114,6 +125,8 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	for {
 		c.partialResponseContent = ""
 		c.partialReasoningContent = ""
+		c.partialToolCalls = nil
+		c.toolCallIndex = map[int]int{}
 
 		res, streamErr := func() (streamResult, error) {
 			finishReason := ""
@@ -140,6 +153,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 				case llm.EventReasoning:
 					c.partialReasoningContent += ev.Text
 					c.Out.StreamReasoning(ev.Text)
+				case llm.EventToolCall:
+					c.accumulateToolCall(ev.ToolCall)
+					if ev.ToolCall != nil {
+						c.Out.StreamToolCall(ev.ToolCall.Index, ev.ToolCall.Name, ev.ToolCall.Args)
+					}
 				case llm.EventFinish:
 					finishReason = ev.FinishReason
 				case llm.EventUsage:
@@ -213,8 +231,12 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// --- Post-stream dispatch ---
 	c.finalizeUsage(usage)
 
-	if answer != "" {
-		c.curMessages = append(c.curMessages, llm.TextMessage("assistant", answer))
+	if answer != "" || len(c.partialToolCalls) > 0 {
+		msg := llm.TextMessage("assistant", answer)
+		if len(c.partialToolCalls) > 0 {
+			msg.ToolCalls = c.partialToolCalls
+		}
+		c.curMessages = append(c.curMessages, msg)
 	}
 
 	if exhaustedContext {
@@ -238,13 +260,16 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		}
 		return OutcomeFailed, ""
 	}
-	if !interrupted && answer == "" {
+	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
 		c.curMessages = c.curMessages[:len(c.curMessages)-1]
 		c.Out.Warningf("Empty response received from LLM. Check your provider account?")
 		return OutcomeFailed, ""
 	}
 
 	if !interrupted {
+		if c.editFormat == "tool" {
+			return c.applyToolCalls(ctx), ""
+		}
 		if msg := c.checkForFileMentions(answer); msg != "" {
 			return OutcomeReflect, msg
 		}
@@ -302,13 +327,18 @@ func (c *Coder) replyCompleted() bool { return false }
 
 // buildRequest translates state into an llm.Request.
 func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
-	return llm.Request{
+	req := llm.Request{
 		Model:           c.Model.Slug,
 		Messages:        messages,
 		Temperature:     c.Model.Temperature,
 		ReasoningEffort: c.Model.Reasoning,
 		ExtraParams:     c.Model.RequestExtraParams(),
 	}
+	if c.editFormat == "tool" {
+		req.Tools = c.toolDefs()
+		req.ToolChoice = "auto"
+	}
+	return req
 }
 
 // checkTokens warns when the estimate reaches the input window and asks to

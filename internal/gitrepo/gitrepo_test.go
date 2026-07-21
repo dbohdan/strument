@@ -241,6 +241,7 @@ func (o quietOutput) Warningf(format string, args ...any) { o.Logf(format, args.
 func (o quietOutput) Errorf(format string, args ...any)   { o.Logf(format, args...) }
 func (o quietOutput) StreamText(string)                   {}
 func (o quietOutput) StreamReasoning(string)              {}
+func (o quietOutput) StreamToolCall(int, string, string)  {}
 func (o quietOutput) FlushStream()                        {}
 
 func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Coder {

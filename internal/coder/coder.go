@@ -12,6 +12,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
 )
 
@@ -70,6 +71,13 @@ type Coder struct {
 	partialResponseContent  string
 	partialReasoningContent string
 	multiResponseContent    string
+
+	// Send-scoped tool-call accumulation ("tool" edit format), in first-seen
+	// index order. toolContinuation makes the next send re-enter on the tool
+	// results already appended to curMessages, without adding a user turn.
+	partialToolCalls []llm.ToolCall
+	toolCallIndex    map[int]int
+	toolContinuation bool
 
 	messageCost           float64
 	totalCost             float64
@@ -264,8 +272,13 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	if preproc {
 		message = c.preprocUserInput(ctx, userMessage)
 	}
+	if message == "" {
+		return
+	}
 
-	for message != "" {
+	// Outcome-driven so a tool-error reflection (which carries no reflection
+	// text — it re-sends on the appended tool results) keeps the loop going.
+	for {
 		outcome, reflection := c.sendMessage(ctx, message)
 		c.lastSendOutcome = outcome
 		if outcome != OutcomeReflect {
@@ -292,7 +305,9 @@ func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 }
 
 // StdOutput writes to stdout/stderr.
-type StdOutput struct{}
+type StdOutput struct {
+	diffs *render.ToolDiffSet
+}
 
 func (o *StdOutput) Printf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
@@ -305,4 +320,18 @@ func (o *StdOutput) Errorf(format string, args ...any) {
 }
 func (o *StdOutput) StreamText(delta string)  { fmt.Print(delta) }
 func (o *StdOutput) StreamReasoning(_ string) {}
-func (o *StdOutput) FlushStream()             { fmt.Println() }
+
+func (o *StdOutput) StreamToolCall(index int, name, args string) {
+	if o.diffs == nil {
+		o.diffs = render.NewToolDiffSet(os.Stdout, false)
+	}
+	o.diffs.Write(index, name, args)
+}
+
+func (o *StdOutput) FlushStream() {
+	if o.diffs != nil {
+		o.diffs.Flush()
+		o.diffs = nil
+	}
+	fmt.Println()
+}

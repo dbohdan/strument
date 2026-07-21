@@ -20,6 +20,7 @@ type termOutput struct {
 	width int // terminal width, for the markdown renderer's full-width rules
 
 	parser       *render.Parser
+	diffs        *render.ToolDiffSet
 	inReasoning  bool
 	streamed     bool
 	cursorHidden bool
@@ -73,6 +74,23 @@ func (o *termOutput) StreamText(delta string) {
 	o.parser.Write(delta)
 }
 
+func (o *termOutput) StreamToolCall(index int, name, args string) {
+	o.hideCursor()
+	o.endReasoning()
+	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
+	// so close the parser before the diff begins; they never interleave.
+	if o.parser != nil {
+		o.parser.End()
+		fmt.Fprint(o.w, o.sgr("0"))
+		o.parser = nil
+	}
+	if o.diffs == nil {
+		o.diffs = render.NewToolDiffSet(o.w, o.color)
+	}
+	o.streamed = true
+	o.diffs.Write(index, name, args)
+}
+
 func (o *termOutput) StreamReasoning(delta string) {
 	o.hideCursor()
 	if !o.inReasoning {
@@ -100,6 +118,10 @@ func (o *termOutput) FlushStream() {
 		// reset once here so it does not bleed into the next prompt.
 		fmt.Fprint(o.w, o.sgr("0"))
 		o.parser = nil
+	}
+	if o.diffs != nil {
+		o.diffs.Flush()
+		o.diffs = nil
 	}
 	if o.streamed {
 		fmt.Fprintln(o.w)
