@@ -7,9 +7,7 @@ essentials. It talks to LLMs through a single OpenAI-compatible client
 ranked repository map with tree-sitter, and — in a git repository —
 auto-commits each change so every edit is one `git undo` away.
 
-The port followed a set of frozen specifications in [`doc/port/spec/`](doc/port/spec/), produced by reverse-engineering aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev).
-See [`doc/port/spec/strument-guide.md`](doc/port/spec/strument-guide.md) for the plan, scope, and the list of features deliberately deferred or dropped.
-[`doc/README.md`](doc/README.md) is the developer overview.
+Strument began as a close reverse-engineering of aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev), reimplemented in Go. It now follows its own direction — closer to aider in some places, further in others. [`doc/README.md`](doc/README.md) is the developer overview.
 
 ## What's different from aider
 
@@ -54,11 +52,10 @@ gotreesitter's `grammar_subset` build tags; the tag list lives in
 sync with the supported-language set. `task release` cross-compiles subset
 binaries for the release platforms.
 
-Strument builds and tests without any extra setup. To consult or re-verify
-the port against the original aider source, `task setup:reference` (or
-`sh script/setup-reference.sh`) clones aider at the pinned commit into a
-gitignored `reference/` directory; it is a read-only grep target, never
-committed.
+Strument builds and tests without any extra setup. To consult the original
+aider source, `task setup:reference` (or `sh script/setup-reference.sh`)
+clones aider at commit `5dc9490` into a gitignored `reference/` directory;
+it is a read-only grep target, never committed.
 
 ## Configuration
 
@@ -131,9 +128,8 @@ Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul
 Gauthier and the aider contributors, licensed under the
 [Apache License 2.0](LICENSE). Strument carries the same license. The
 tree-sitter tag queries under `internal/repomap/queries/` and
-`internal/repomap/queries-legacy/` and the prompt strings are copied
-verbatim from aider; the rest is a reimplementation against the specs in
-`spec/`.
+`internal/repomap/queries-legacy/` are copied from aider, and the built-in
+prompts began as aider's; the rest is an independent reimplementation.
 
 The streaming markdown renderer (`internal/render/`) is a port of
 [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by
