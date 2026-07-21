@@ -12,6 +12,49 @@ own direction: closer to aider in some places, further in others. A read-only
 clone of aider is still handy when you want to compare (`task setup:reference`
 drops it in a gitignored `reference/`).
 
+## Philosophy
+
+The positions below are the ones worth knowing before you change anything
+substantive. They are the project's own, arrived at deliberately — not
+inherited from aider.
+
+- **A propose/direct-apply tool, not an agent.** Strument is in the aider
+  lineage: the model responds, the harness acts, the human drives the next
+  turn. There is no self-continuing loop where the model calls tools, reads
+  results, and keeps going on its own. Concretely: **file edits apply
+  directly** (with git auto-commit and `/undo` as the safety net); **shell
+  commands are suggested** and only run after the user confirms; **files are
+  added on request**, not reached for. Keep that shape. Adding an autonomous
+  loop would make it a different program.
+
+- **The code is the source of truth.** The written port specs and their
+  journal are retired. Don't re-introduce a parallel spec that the code must
+  "conform to"; document decisions in the code, the commit, and these docs.
+  Where we differ from aider, that is on purpose — say why in the comment.
+
+- **Tool calls are the default edit path.** Every model in scope has solid
+  function calling, so edits, shell suggestions, and file requests go through
+  native tool calls; text SEARCH/REPLACE and whole-file are the fallback for
+  weaker models. Beyond reliability, tool calls remove the SEARCH/REPLACE
+  delimiter-collision problem — a file that itself contains `<<<<<<< SEARCH`
+  is just data — which is what makes the harness usable on its own source,
+  including its prompt strings. The user still sees code scroll by, rendered
+  as red-green Git-style diffs.
+
+- **Prompts you'd hand a competent colleague.** Calm, specific, one clear
+  statement per rule; explain the *why* where a mid-size model benefits and a
+  frontier model doesn't mind. No shouting, no pre-escalation, no manufactured
+  stakes. For this model class (floor ~27B, up to frontier) the
+  welfare-respecting register and the performance-maximizing one are the same
+  register; a single prompt set serves all of them.
+
+- **Small, honest, self-contained.** One static binary, no cgo. One
+  OpenAI-compatible dialect (OpenRouter). Starlark configuration behind a
+  direnv-style trust gate. Never fabricate cost or token counts; mark
+  estimates as estimates. Git is the safety model: auto-commit each edit,
+  `/undo`, atomic batch writes that roll back on failure, path containment.
+  Never commit secrets.
+
 ## Relationship to aider
 
 - **Scope.** Essentials only: SEARCH/REPLACE (plus fenced and whole-file)
