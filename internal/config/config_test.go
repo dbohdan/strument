@@ -73,7 +73,7 @@ func TestLoadUserConfig(t *testing.T) {
 	if flash.Provider.Adapter != "openrouter" || flash.Provider.APIKey != "test-key-not-real" {
 		t.Errorf("provider = %+v", flash.Provider)
 	}
-	if !flash.RepoMap || flash.EditFormat != "diff" {
+	if !flash.RepoMap || flash.EditFormat != "tool" {
 		t.Errorf("defaults wrong: %+v", flash)
 	}
 	// weak_model resolution: string ref and None->self.

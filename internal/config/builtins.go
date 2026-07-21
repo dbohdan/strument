@@ -161,7 +161,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 }
 
 // builtinModel implements
-// model(provider, slug, *, display_name=None, edit_format="diff",
+// model(provider, slug, *, display_name=None, edit_format="tool",
 //
 //	weak_model=None, reasoning=None, reasoning_tag=None, temperature=None,
 //	repo_map=True, context=None, max_output=None, input_cost=None,
@@ -173,7 +173,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var providerV starlark.Value
 	var slug string
 	var displayName string
-	editFormat := "diff"
+	editFormat := "tool"
 	var weakModel starlark.Value
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
@@ -205,7 +205,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		return nil, fmt.Errorf("model: provider must be a provider value, got %s", providerV.Type())
 	}
 	if !knownEditFormats[editFormat] {
-		return nil, fmt.Errorf("model: unknown edit_format %q (want \"diff\", \"diff-fenced\", or \"whole\")", editFormat)
+		return nil, fmt.Errorf("model: unknown edit_format %q (want \"tool\", \"diff\", \"diff-fenced\", or \"whole\")", editFormat)
 	}
 
 	m := &Model{

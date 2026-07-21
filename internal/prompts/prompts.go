@@ -360,6 +360,73 @@ var EditBlockFenced = Set{
 	RedactedEditMessage:              "No changes are needed.",
 }
 
+// toolMainSystem is the system prompt for the tool-calling format. The API
+// schema enforces the edit format, so this is much shorter than the
+// SEARCH/REPLACE prompts: it explains the tools' natures — edits apply
+// directly, commands and file requests are proposals — and the scope
+// discipline, and leaves the mechanics to the schema.
+const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
+	"Follow the conventions, style, and libraries already present in the codebase.\n" +
+	overeagerPrompt +
+	lazyPrompt +
+	"{final_reminders}\n" +
+	"The user will request changes to the supplied code.\n" +
+	"If a request is ambiguous, ask clarifying questions before making changes.\n\n" +
+	"Make changes by calling the provided tools:\n\n" +
+	"- replace_in_file and create_file edit files directly: the change is applied and committed to git " +
+	"the moment you call them, with no separate confirmation step — exactly like an ordinary edit. " +
+	"Call them only when you are ready to make the change.\n" +
+	"- suggest_command proposes a shell command, such as one to run the tests or build. " +
+	"Unlike an edit, it does not run until the user approves it, and its output is returned to you.\n" +
+	"- request_files asks the user to add existing files to the chat. Only files in the chat can be " +
+	"edited, so if a change needs a file that isn't present, call request_files and then stop and " +
+	"wait — don't guess at the file's contents.\n\n" +
+	"Explain your changes briefly in prose alongside the tool calls.\n\n" +
+	"Keep in mind these details about the user's platform and environment:\n" +
+	"{platform}\n"
+
+// toolSystemReminder is the trailing reminder for the tool format: the
+// exact-match rule for search and the one-change-per-call discipline.
+const toolSystemReminder = "# Editing rules\n\n" +
+	"- replace_in_file's search must match the file's current contents exactly, character for " +
+	"character, including all whitespace, comments, and docstrings. An inexact match is the most " +
+	"common reason an edit is rejected, so double-check it.\n" +
+	"- Include enough surrounding lines in search to identify the location uniquely, and keep each " +
+	"call to one small, self-contained change. Use several calls for several changes.\n" +
+	"- To move code, use two calls: one to remove it, one to add it in the new place.\n" +
+	"- Only edit files that are in the chat. To edit any other file, call request_files first.\n\n" +
+	"{final_reminders}"
+
+// Tool is the tool-calling edit format: the model edits, suggests commands,
+// and requests files through native function calls instead of text blocks.
+// It is the default format. The schema does the format-parsing work, so the
+// prompt only conveys the tools' natures and the exact-match discipline.
+var Tool = Set{
+	MainSystem:                       toolMainSystem,
+	SystemReminder:                   toolSystemReminder,
+	ExampleMessages:                  nil,
+	FilesContentPrefix:               filesContentPrefix,
+	FilesContentAssistantReply:       filesContentAssistantReply,
+	FilesNoFullFiles:                 filesNoFullFiles,
+	FilesNoFullFilesWithRepoMap:      filesNoFullFilesWithRepoMap,
+	FilesNoFullFilesWithRepoMapReply: filesNoFullFilesWithRepoMapReply,
+	FilesContentGPTEdits:             filesContentGPTEdits,
+	FilesContentGPTEditsNoRepo:       filesContentGPTEditsNoRepo,
+	FilesContentGPTNoEdits:           "I didn't find any tool calls to apply in your reply.",
+	FilesContentLocalEdits:           filesContentLocalEdits,
+	RepoContentPrefix:                repoContentPrefix,
+	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
+	LazyPrompt:                       lazyPrompt,
+	OvereagerPrompt:                  overeagerPrompt,
+	ShellCmdPrompt:                   "",
+	NoShellCmdPrompt:                 "",
+	ShellCmdReminder:                 "",
+	NoShellCmdReminder:               "",
+	RenameWithShell:                  "",
+	GoAheadTip:                       "",
+	RedactedEditMessage:              "No changes are needed.",
+}
+
 // WholeFile is the edit format where the model returns complete updated
 // files. Token-expensive, but it has no exact-match failure mode, which
 // makes it the most reliable format for smaller local models.

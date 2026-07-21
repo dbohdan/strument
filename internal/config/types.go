@@ -21,6 +21,7 @@ const (
 // a runtime-only format (the /ask command), not a configurable one — a
 // model whose default format was "ask" could never edit anything.
 var knownEditFormats = map[string]bool{
+	"tool":        true,
 	"diff":        true,
 	"diff-fenced": true,
 	"whole":       true,
@@ -56,7 +57,7 @@ type Model struct {
 	Provider     Provider
 	Slug         string
 	DisplayName  string // human-readable label; "" => derived from Slug
-	EditFormat   string // "diff" | "diff-fenced" | "whole"
+	EditFormat   string // "tool" | "diff" | "diff-fenced" | "whole"
 	WeakModel    *Model // non-nil after resolution (self if unset)
 	Reasoning    string // request-side effort, e.g. "low"; "" => omit
 	ReasoningTag string // response-side inline tag to strip; "" => none

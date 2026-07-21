@@ -5,11 +5,46 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
 
 // toolMode sets the coder to the "tool" edit format for a replay.
 func toolMode(c *Coder) { c.editFormat = "tool" }
+
+// TestToolRequestCarriesTools asserts the outgoing request advertises the
+// tool set with tool_choice "auto", and that suggest_command is gated on
+// whether shell commands are enabled.
+func TestToolRequestCarriesTools(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-request-schema","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"hi"}
+{"kind":"stream","events":[{"kind":"Answer","text":"hello"},{"kind":"Finish","finish_reason":"stop"}]}
+`)
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.SuggestShellCommands = false
+	})
+	var names []string
+	var choice string
+	env.stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		choice = req.ToolChoice
+		for _, td := range req.Tools {
+			names = append(names, td.Name)
+		}
+		return nil
+	}
+	env.coder.Run(t.Context(), sc.User)
+
+	if choice != "auto" {
+		t.Errorf("tool_choice = %q, want auto", choice)
+	}
+	want := []string{"replace_in_file", "create_file", "request_files"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Errorf("tools = %v, want %v (suggest_command gated off)", names, want)
+	}
+}
 
 // committingRepo is a Repo whose Commit succeeds with a fixed hash, so the
 // auto-commit path (and its message) can be asserted.

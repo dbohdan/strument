@@ -27,6 +27,40 @@ func TestPromptSlotsPresent(t *testing.T) {
 	}
 }
 
+func TestToolPromptShape(t *testing.T) {
+	// The tool format's system prompt uses only the {final_reminders} and
+	// {platform} slots (the schema does the rest); no other braces may linger
+	// to survive substitution as a literal.
+	for _, slot := range []string{"{final_reminders}", "{platform}"} {
+		if !strings.Contains(Tool.MainSystem, slot) {
+			t.Errorf("tool main_system missing slot %s", slot)
+		}
+	}
+	stripped := Tool.MainSystem
+	for _, slot := range []string{"{final_reminders}", "{platform}"} {
+		stripped = strings.ReplaceAll(stripped, slot, "")
+	}
+	if strings.ContainsAny(stripped, "{}") {
+		t.Errorf("tool main_system has an unexpected brace: %q", stripped)
+	}
+	if !strings.Contains(Tool.SystemReminder, "{final_reminders}") {
+		t.Errorf("tool system_reminder missing {final_reminders}")
+	}
+
+	// The prompt must convey the tools' differing natures: edits are direct,
+	// commands are suggestions the user approves.
+	if !strings.Contains(Tool.MainSystem, "directly") {
+		t.Error("tool main_system should state that edits apply directly")
+	}
+	if !strings.Contains(Tool.MainSystem, "does not run until the user approves") {
+		t.Error("tool main_system should state that suggested commands need approval")
+	}
+	// The schema carries the format, so no few-shot examples are needed.
+	if len(Tool.ExampleMessages) != 0 {
+		t.Errorf("tool example_messages should be empty, got %d", len(Tool.ExampleMessages))
+	}
+}
+
 func TestAskPromptShape(t *testing.T) {
 	// Ask has no few-shot examples: the examples chunk is absent, so the
 	// cache-placement breakpoint falls back to system (assembly test).

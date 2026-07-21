@@ -102,6 +102,8 @@ type fence struct{ open, close string }
 // promptsForFormat picks the prompt set for an edit format.
 func promptsForFormat(format string) prompts.Set {
 	switch format {
+	case "tool":
+		return prompts.Tool
 	case "whole":
 		return prompts.WholeFile
 	case "diff-fenced":
