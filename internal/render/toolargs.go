@@ -179,6 +179,16 @@ func (d *ToolDiff) Flush() {
 	}
 }
 
+// isLineField reports whether a field's value renders as diff/command lines.
+func isLineField(field string) bool {
+	switch field {
+	case "search", "replace", "content", "command":
+		return true
+	default:
+		return false
+	}
+}
+
 func (d *ToolDiff) onArg(field, chunk string) {
 	if field != d.curField {
 		d.flushLine()
@@ -187,6 +197,9 @@ func (d *ToolDiff) onArg(field, chunk string) {
 	if field == "path" {
 		d.path.WriteString(chunk)
 		return
+	}
+	if !isLineField(field) {
+		return // purpose/reason/etc. don't render
 	}
 	for _, r := range chunk {
 		if r == '\n' {
@@ -199,7 +212,7 @@ func (d *ToolDiff) onArg(field, chunk string) {
 }
 
 func (d *ToolDiff) flushLine() {
-	if d.line.Len() > 0 && (d.curField == "search" || d.curField == "replace" || d.curField == "content") {
+	if d.line.Len() > 0 && isLineField(d.curField) {
 		d.emitLine(d.curField, d.line.String())
 		d.line.Reset()
 	}
@@ -215,12 +228,17 @@ func (d *ToolDiff) header() {
 }
 
 func (d *ToolDiff) emitLine(field, text string) {
-	if !d.wroteHeader {
+	// A path-bearing edit tool prints a header first; command lines
+	// (suggest_command) have no path and print on their own.
+	if !d.wroteHeader && d.path.Len() > 0 {
 		d.header()
 	}
 	prefix, color := "-", "31" // search: removed, red
-	if field == "replace" || field == "content" {
+	switch field {
+	case "replace", "content":
 		prefix, color = "+", "32" // added, green
+	case "command":
+		prefix, color = "$", "36" // suggested command, cyan
 	}
 	if d.color {
 		fmt.Fprintf(d.w, "\x1b[%sm%s %s\x1b[0m\n", color, prefix, text)

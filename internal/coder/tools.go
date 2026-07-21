@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"dbohdan.com/strument/internal/editblock"
@@ -12,17 +13,32 @@ import (
 
 // Tool names for the "tool" edit format.
 const (
-	toolReplaceInFile = "replace_in_file"
-	toolCreateFile    = "create_file"
+	toolReplaceInFile  = "replace_in_file"
+	toolCreateFile     = "create_file"
+	toolSuggestCommand = "suggest_command"
+	toolRequestFiles   = "request_files"
 )
 
-// editTools is the function-tool set offered to the model in the "tool" edit
-// format. These edits apply directly — like a SEARCH/REPLACE block, not a
-// proposal — with git auto-commit and /undo as the safety net.
-func editTools() []llm.ToolDef {
-	strProp := func(desc string) map[string]any {
-		return map[string]any{"type": "string", "description": desc}
+// strProp is a JSON-Schema string property with a description.
+func strProp(desc string) map[string]any {
+	return map[string]any{"type": "string", "description": desc}
+}
+
+// toolDefs is the function-tool set offered to the model this turn: the two
+// direct-apply edit tools, plus suggest_command (when shell commands are
+// enabled) and request_files.
+func (c *Coder) toolDefs() []llm.ToolDef {
+	defs := editTools()
+	if c.SuggestShellCommands {
+		defs = append(defs, commandTool())
 	}
+	defs = append(defs, requestFilesTool())
+	return defs
+}
+
+// editTools are the direct-apply edit tools — like a SEARCH/REPLACE block,
+// not a proposal — with git auto-commit and /undo as the safety net.
+func editTools() []llm.ToolDef {
 	return []llm.ToolDef{
 		{
 			Name: toolReplaceInFile,
@@ -57,6 +73,49 @@ func editTools() []llm.ToolDef {
 	}
 }
 
+// commandTool proposes a shell command for the user to run — a suggestion,
+// not a direct action: the user confirms before it runs and its output comes
+// back as the tool result.
+func commandTool() llm.ToolDef {
+	return llm.ToolDef{
+		Name: toolSuggestCommand,
+		Description: "Suggest a single shell command for the user to run — for example to run tests, " +
+			"a build, or the program. The user is asked to confirm before it runs, and its output is " +
+			"returned to you. Commands run from the project's root directory.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": strProp("The complete command, ready to execute, with no placeholders."),
+				"purpose": strProp("A short note on what running the command is for."),
+			},
+			"required": []any{"command"},
+		},
+	}
+}
+
+// requestFilesTool asks the user to add existing files to the chat — a
+// request, not a direct action: the user confirms each one before it joins.
+func requestFilesTool() llm.ToolDef {
+	return llm.ToolDef{
+		Name: toolRequestFiles,
+		Description: "Ask the user to add existing files to the chat so you can edit them. Use this when " +
+			"a change needs a file that isn't in the chat yet, then stop and wait — don't propose edits " +
+			"to files that haven't been added.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"paths": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Project-relative paths of the files to add.",
+				},
+				"reason": strProp("A short note on why these files are needed."),
+			},
+			"required": []any{"paths"},
+		},
+	}
+}
+
 // accumulateToolCall folds a streamed tool-call fragment into
 // partialToolCalls. ID and Name arrive on the first fragment for an index;
 // later fragments append Args chunks.
@@ -80,12 +139,6 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	tc.Arguments += d.Args
 }
 
-// toolDefs is the function-tool set offered to the model this turn. Commit 5
-// adds suggest_command and request_files here.
-func (c *Coder) toolDefs() []llm.ToolDef {
-	return editTools()
-}
-
 // toolEdit is one edit-tool call resolved to an editblock edit plus the call
 // id it answers.
 type toolEdit struct {
@@ -93,6 +146,18 @@ type toolEdit struct {
 	path    string
 	search  string
 	replace string
+}
+
+// toolCommand is one suggest_command call.
+type toolCommand struct {
+	callID  string
+	command string
+}
+
+// toolFileReq is one request_files call.
+type toolFileReq struct {
+	callID string
+	paths  []string
 }
 
 // editArgs is the decoded argument object shared by the edit tools.
@@ -124,18 +189,21 @@ func parseEditArgs(tc llm.ToolCall) (toolEdit, string) {
 
 // applyToolCalls dispatches the captured tool calls of a "tool"-format turn.
 // Every call gets a tool result message appended to curMessages so the wire
-// protocol stays well-formed on the next send. Edits apply directly through
-// the same replace primitive as SEARCH/REPLACE; a call whose search does not
-// match gets its error as that call's tool result and the turn re-sends
-// (reflection) without a synthetic user turn.
-func (c *Coder) applyToolCalls(_ context.Context) SendOutcome {
+// protocol stays well-formed on the next send. Edits apply directly (like a
+// SEARCH/REPLACE block); suggest_command and request_files are proposals the
+// user confirms. A call the model can fix — a search that didn't match, a
+// malformed argument — records its error as the tool result and the turn
+// re-sends (reflection) without a synthetic user turn.
+func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	if len(c.partialToolCalls) == 0 {
 		return OutcomeSuccess
 	}
 
 	var edits []toolEdit
+	var commands []toolCommand
+	var fileReqs []toolFileReq
 	results := map[string]string{} // call id -> result text
-	matchFailure := false
+	needsReflection := false
 
 	for _, tc := range c.partialToolCalls {
 		switch tc.Name {
@@ -143,19 +211,34 @@ func (c *Coder) applyToolCalls(_ context.Context) SendOutcome {
 			e, msg := parseEditArgs(tc)
 			if msg != "" {
 				results[tc.ID] = msg
-				matchFailure = true
+				needsReflection = true
 				continue
 			}
 			edits = append(edits, e)
+		case toolSuggestCommand:
+			cmd, msg := parseCommandArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			commands = append(commands, cmd)
+		case toolRequestFiles:
+			req, msg := parseFileReqArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			fileReqs = append(fileReqs, req)
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
 		}
 	}
 
-	edited := c.applyToolEdits(edits, results, &matchFailure)
-
-	// Commit applied edits so /undo has a clean base and the tool result can
-	// name the commit.
+	// Edits apply directly, then commit — so /undo has a clean base and the
+	// tool result can name the commit.
+	edited := c.applyToolEdits(edits, results, &needsReflection)
 	saved := ""
 	if len(edited) > 0 {
 		for _, f := range edited {
@@ -166,17 +249,25 @@ func (c *Coder) applyToolCalls(_ context.Context) SendOutcome {
 			saved = c.Prompts.FilesContentGPTEditsNoRepo
 		}
 	}
-	// Fill in the success results now that the commit (if any) is known.
 	for id, text := range results {
 		if text == appliedPlaceholder {
 			results[id] = saved
 		}
 	}
 
+	// Proposals: run confirmed commands (edits first, matching the text
+	// flow), then add requested files.
+	for _, cmd := range commands {
+		results[cmd.callID] = c.runSuggestedCommand(ctx, cmd)
+	}
+	for _, req := range fileReqs {
+		results[req.callID] = c.addRequestedFiles(req)
+	}
+
 	// Append one tool result per call, in call order, then rotate or reflect.
 	c.appendToolResults(results)
 
-	if matchFailure {
+	if needsReflection {
 		c.toolContinuation = true
 		return OutcomeReflect
 	}
@@ -184,6 +275,124 @@ func (c *Coder) applyToolCalls(_ context.Context) SendOutcome {
 		c.moveBackCurMessages("")
 	}
 	return OutcomeSuccess
+}
+
+// parseCommandArgs decodes a suggest_command call. The second return is a
+// model-facing failure message, "" on success.
+func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
+	var a struct {
+		Command string `json:"command"`
+		Purpose string `json:"purpose"`
+	}
+	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
+		return toolCommand{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
+	}
+	if strings.TrimSpace(a.Command) == "" {
+		return toolCommand{}, "The required \"command\" argument was missing."
+	}
+	return toolCommand{callID: tc.ID, command: a.Command}, ""
+}
+
+// parseFileReqArgs decodes a request_files call. The second return is a
+// model-facing failure message, "" on success.
+func parseFileReqArgs(tc llm.ToolCall) (toolFileReq, string) {
+	var a struct {
+		Paths  []string `json:"paths"`
+		Reason string   `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
+		return toolFileReq{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
+	}
+	if len(a.Paths) == 0 {
+		return toolFileReq{}, "No file paths were provided."
+	}
+	return toolFileReq{callID: tc.ID, paths: a.Paths}, ""
+}
+
+// runSuggestedCommand confirms and runs a proposed shell command, returning
+// its output as the tool result. The command output always returns to the
+// model (it answers the tool call); there is no separate add-to-chat step.
+func (c *Coder) runSuggestedCommand(ctx context.Context, cmd toolCommand) string {
+	if !c.SuggestShellCommands {
+		return "Shell commands are disabled in this session; the command was not run."
+	}
+	command := strings.TrimSpace(cmd.command)
+	yes, _ := c.Confirm.Confirm(ConfirmRequest{
+		Prompt:              "Run shell command?",
+		Subject:             command,
+		ExplicitYesRequired: true,
+		AllowNever:          true,
+		Group:               "run-shell",
+	})
+	if !yes {
+		return "The user chose not to run the command."
+	}
+
+	c.Out.Printf("")
+	c.Out.Printf("Running %s", command)
+	runner := c.Runner
+	if runner == nil {
+		runner = PipeRunner{}
+	}
+	exitCode, output, err := runner.Run(ctx, command, c.Root)
+	if err != nil {
+		c.Out.Errorf("Error running command: %v", err)
+	}
+	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
+}
+
+// addRequestedFiles confirms and adds requested files to the chat, returning
+// a summary as the tool result. Files already in the chat or missing on disk
+// are reported without a prompt.
+func (c *Coder) addRequestedFiles(req toolFileReq) string {
+	inChat := map[string]bool{}
+	for _, f := range c.inchatRelativeFiles() {
+		inChat[f] = true
+	}
+
+	var added, skipped []string
+	for _, p := range req.paths {
+		rel := strings.TrimSpace(p)
+		if rel == "" {
+			continue
+		}
+		switch {
+		case inChat[rel]:
+			skipped = append(skipped, rel+" (already in the chat)")
+		case !c.fileExists(rel):
+			skipped = append(skipped, rel+" (not found)")
+		default:
+			yes, _ := c.Confirm.Confirm(ConfirmRequest{
+				Prompt:     "Add file to the chat?",
+				Subject:    rel,
+				AllowNever: true,
+				Group:      "add-file",
+			})
+			if yes {
+				c.AddFile(rel)
+				added = append(added, rel)
+			} else {
+				skipped = append(skipped, rel+" (the user declined)")
+			}
+		}
+	}
+
+	var b strings.Builder
+	if len(added) > 0 {
+		fmt.Fprintf(&b, "Added to the chat: %s.", strings.Join(added, ", "))
+	} else {
+		b.WriteString("No files were added to the chat.")
+	}
+	if len(skipped) > 0 {
+		fmt.Fprintf(&b, " Not added: %s.", strings.Join(skipped, ", "))
+	}
+	return b.String()
+}
+
+// fileExists reports whether rel resolves to a readable file under the root.
+func (c *Coder) fileExists(rel string) bool {
+	info, err := os.Stat(c.absRootPath(rel))
+	return err == nil && !info.IsDir()
 }
 
 // appliedPlaceholder marks a success result until the commit message is

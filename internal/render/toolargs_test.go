@@ -134,6 +134,19 @@ func TestToolDiffTrailingNoNewline(t *testing.T) {
 	}
 }
 
+// TestToolDiffCommand renders a suggest_command call: no header (no path),
+// the command on a "$" line, and the purpose ignored.
+func TestToolDiffCommand(t *testing.T) {
+	args := `{"command":"go test ./...","purpose":"run the tests"}`
+	want := "$ go test ./...\n"
+	if got := renderDiff(t, "suggest_command", false, []string{args}); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+	if got := renderDiff(t, "suggest_command", false, splitBytes(args)); got != want {
+		t.Errorf("split got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestToolDiffSet fans two interleaved tool calls out to separate diffs and
 // flushes them in call order.
 func TestToolDiffSet(t *testing.T) {

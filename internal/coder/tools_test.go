@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,6 +92,93 @@ func TestToolEditCommits(t *testing.T) {
 	result := env.coder.doneMessages[2].Text()
 	if !strings.Contains(result, "abc1234") {
 		t.Errorf("tool result = %q, want it to name commit abc1234", result)
+	}
+}
+
+// TestToolSuggestCommand replays a suggest_command call: the user confirms,
+// the command runs, and its output comes back as the tool result.
+func TestToolSuggestCommand(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-command","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"run the tests"}
+{"kind":"confirm","prompt":"Run shell command?","answer":"yes"}
+{"kind":"command","block":"go test ./...","exit":0,"output":"ok\n"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"run the tests\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	if result.Role != llm.RoleTool || result.ToolCallID != "call_1" {
+		t.Fatalf("last message = %s/%s, want tool/call_1", result.Role, result.ToolCallID)
+	}
+	if !strings.Contains(result.Text(), "Exit status: 0") || !strings.Contains(result.Text(), "ok") {
+		t.Errorf("command result = %q, want it to carry exit status and output", result.Text())
+	}
+}
+
+// TestToolSuggestCommandDeclined confirms a declined command reports back
+// without running.
+func TestToolSuggestCommandDeclined(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-command-no","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"run the tests"}
+{"kind":"confirm","prompt":"Run shell command?","answer":"no"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"rm -rf /\",\"purpose\":\"oops\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	if !strings.Contains(result.Text(), "chose not to run") {
+		t.Errorf("declined result = %q, want a not-run message", result.Text())
+	}
+}
+
+// TestToolRequestFiles replays a request_files call: the user confirms and the
+// file joins the chat.
+func TestToolRequestFiles(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-request","source":"authored"}
+{"kind":"fs","path":"lib.go","content":"package lib\n"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"edit the library"}
+{"kind":"confirm","prompt":"Add file to the chat?","answer":"yes"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"lib.go\"],\"reason\":\"need to edit it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	if !slices.Contains(env.coder.inchatRelativeFiles(), "lib.go") {
+		t.Errorf("lib.go not added to chat; chat = %v", env.coder.inchatRelativeFiles())
+	}
+	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	if !strings.Contains(result.Text(), "Added to the chat: lib.go") {
+		t.Errorf("request result = %q, want an added-files summary", result.Text())
+	}
+}
+
+// TestToolRequestMissingFile confirms a request for a file that doesn't exist
+// reports it without prompting.
+func TestToolRequestMissingFile(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-request-missing","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"edit ghost.go"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"ghost.go\"],\"reason\":\"need it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	if !strings.Contains(result.Text(), "not found") {
+		t.Errorf("missing-file result = %q, want a not-found note", result.Text())
 	}
 }
 
