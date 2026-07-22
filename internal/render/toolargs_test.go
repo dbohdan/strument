@@ -80,7 +80,7 @@ func TestArgScannerSkipsNested(t *testing.T) {
 func renderDiff(t *testing.T, tool string, color bool, fragments []string) string {
 	t.Helper()
 	var sb strings.Builder
-	d := NewToolDiff(&sb, color, tool)
+	d := NewToolDiff(&sb, color, DefaultTheme(), tool)
 	for _, f := range fragments {
 		d.Write(f)
 	}
@@ -199,7 +199,7 @@ func TestToolDiffCommand(t *testing.T) {
 // flushes them in call order.
 func TestToolDiffSet(t *testing.T) {
 	var sb strings.Builder
-	s := NewToolDiffSet(&sb, false)
+	s := NewToolDiffSet(&sb, false, DefaultTheme())
 	// Two calls arriving interleaved by index, name only on the first frag.
 	s.Write(0, "replace_in_file", `{"path":"a.go",`)
 	s.Write(1, "create_file", `{"path":"b.go",`)
@@ -218,7 +218,7 @@ func TestToolDiffSet(t *testing.T) {
 // it rather than spliced between its lines.
 func TestToolDiffSetNoInterleave(t *testing.T) {
 	var sb strings.Builder
-	s := NewToolDiffSet(&sb, false)
+	s := NewToolDiffSet(&sb, false, DefaultTheme())
 	s.Write(0, "create_file", `{"path":"hello.sh","content":"#!/bin/bash\n`)
 	s.Write(1, "suggest_command", `{"command":"bash hello.sh"`)
 	s.Write(0, "", `echo Hi"}`)

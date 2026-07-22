@@ -336,7 +336,7 @@ func (o *StdOutput) StreamToolCall(index int, name, args string) {
 		if o.wroteText {
 			fmt.Println()
 		}
-		o.diffs = render.NewToolDiffSet(os.Stdout, false)
+		o.diffs = render.NewToolDiffSet(os.Stdout, false, render.DefaultTheme())
 	}
 	o.diffs.Write(index, name, args)
 }

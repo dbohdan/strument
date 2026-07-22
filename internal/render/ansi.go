@@ -148,7 +148,7 @@ func (r *ANSI) styleFor(t Token) string {
 		// highlighting (deliberately excluded, per the guide's oracle).
 		return r.theme.Code
 	case Link, RawURL:
-		return "4;34"
+		return r.theme.Link
 	case EquationBlock, EquationInline:
 		return "2"
 	default:

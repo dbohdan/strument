@@ -153,6 +153,7 @@ func (s *ArgScanner) put(r rune) {
 type ToolDiff struct {
 	w     io.Writer
 	color bool
+	theme Theme
 	tool  string
 
 	scan        *ArgScanner
@@ -166,8 +167,8 @@ type ToolDiff struct {
 }
 
 // NewToolDiff builds a diff renderer for one edit tool call writing to w.
-func NewToolDiff(w io.Writer, color bool, tool string) *ToolDiff {
-	d := &ToolDiff{w: w, color: color, tool: tool}
+func NewToolDiff(w io.Writer, color bool, theme Theme, tool string) *ToolDiff {
+	d := &ToolDiff{w: w, color: color, theme: theme, tool: tool}
 	d.scan = NewArgScanner(d.onArg)
 	return d
 }
@@ -284,16 +285,16 @@ func (d *ToolDiff) holdsAdded(field string) bool {
 	return field == "replace" && d.tool == "replace_in_file" && !d.sawSearch
 }
 
-// formatLine renders one diff/command line with its prefix and optional color.
+// formatLine renders one diff/command line with its prefix and themed color.
 func (d *ToolDiff) formatLine(field, text string) string {
-	prefix, color := "-", "31" // search: removed, red
+	prefix, color := "-", d.theme.DiffRemoved // search: removed
 	switch field {
 	case "replace", "content":
-		prefix, color = "+", "32" // added, green
+		prefix, color = "+", d.theme.DiffAdded // added
 	case "command":
-		prefix, color = "$", "36" // suggested command, cyan
+		prefix, color = "$", d.theme.Command // suggested command
 	}
-	if d.color {
+	if d.color && color != "" {
 		return fmt.Sprintf("\x1b[%sm%s %s\x1b[0m\n", color, prefix, text)
 	}
 	return fmt.Sprintf("%s %s\n", prefix, text)
@@ -311,6 +312,7 @@ func (d *ToolDiff) formatLine(field, text string) string {
 type ToolDiffSet struct {
 	w     io.Writer
 	color bool
+	theme Theme
 	order []int
 	diffs map[int]*ToolDiff
 	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
@@ -318,8 +320,8 @@ type ToolDiffSet struct {
 }
 
 // NewToolDiffSet builds a diff fan-out writing to w.
-func NewToolDiffSet(w io.Writer, color bool) *ToolDiffSet {
-	return &ToolDiffSet{w: w, color: color, diffs: map[int]*ToolDiff{}, bufs: map[int]*bytes.Buffer{}, live: -1}
+func NewToolDiffSet(w io.Writer, color bool, theme Theme) *ToolDiffSet {
+	return &ToolDiffSet{w: w, color: color, theme: theme, diffs: map[int]*ToolDiff{}, bufs: map[int]*bytes.Buffer{}, live: -1}
 }
 
 // Write forwards an argument fragment for the tool call at index, opening a
@@ -337,7 +339,7 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 			s.bufs[index] = buf
 			out = buf
 		}
-		d = NewToolDiff(out, s.color, name)
+		d = NewToolDiff(out, s.color, s.theme, name)
 		s.diffs[index] = d
 		s.order = append(s.order, index)
 	}

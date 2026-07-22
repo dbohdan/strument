@@ -89,7 +89,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 		o.parser = nil
 	}
 	if o.diffs == nil {
-		o.diffs = render.NewToolDiffSet(o.w, o.color)
+		o.diffs = render.NewToolDiffSet(o.w, o.color, o.theme)
 	}
 	o.streamed = true
 	o.diffs.Write(index, name, args)
