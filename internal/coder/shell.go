@@ -65,18 +65,7 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	}
 
 	command := strings.TrimSpace(block)
-	c.Out.Printf("")
-	c.Out.Printf("Running %s", command)
-
-	runner := c.Runner
-	if runner == nil {
-		runner = PipeRunner{}
-	}
-	exitCode, output, err := runner.Run(ctx, command, c.Root)
-	if err != nil {
-		c.Out.Errorf("Error running command: %v", err)
-	}
-
+	exitCode, output := c.runAndShow(ctx, command)
 	result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
 
 	addYes, _ := c.Confirm.Confirm(ConfirmRequest{
@@ -94,6 +83,30 @@ func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
 	}
 	c.Out.Printf("Added %d %s of output to the chat.", numLines, plural)
 	return result
+}
+
+// runAndShow runs a confirmed command through the configured runner, echoing
+// "Running <cmd>" and then the captured output to the user — the output
+// otherwise only reaches the model (as a tool result or chat addition), never
+// the terminal. Returns the exit code and captured output.
+func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
+	c.Out.Printf("")
+	c.Out.Printf("Running %s", command)
+
+	runner := c.Runner
+	if runner == nil {
+		runner = PipeRunner{}
+	}
+	exitCode, output, err := runner.Run(ctx, command, c.Root)
+	if err != nil {
+		c.Out.Errorf("Error running command: %v", err)
+	}
+	if output != "" {
+		// Printf adds the trailing newline; trim the runner's so output that
+		// already ends in one doesn't print a blank line.
+		c.Out.Printf("%s", strings.TrimRight(output, "\n"))
+	}
+	return exitCode, output
 }
 
 // PipeRunner is the default deterministic CommandRunner: the whole

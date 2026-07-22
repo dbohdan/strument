@@ -328,16 +328,7 @@ func (c *Coder) runSuggestedCommand(ctx context.Context, cmd toolCommand) string
 		return "The user chose not to run the command."
 	}
 
-	c.Out.Printf("")
-	c.Out.Printf("Running %s", command)
-	runner := c.Runner
-	if runner == nil {
-		runner = PipeRunner{}
-	}
-	exitCode, output, err := runner.Run(ctx, command, c.Root)
-	if err != nil {
-		c.Out.Errorf("Error running command: %v", err)
-	}
+	exitCode, output := c.runAndShow(ctx, command)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
 }
 

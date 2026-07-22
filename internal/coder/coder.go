@@ -308,7 +308,8 @@ func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 
 // StdOutput writes to stdout/stderr.
 type StdOutput struct {
-	diffs *render.ToolDiffSet
+	diffs     *render.ToolDiffSet
+	wroteText bool
 }
 
 func (o *StdOutput) Printf(format string, args ...any) {
@@ -320,11 +321,21 @@ func (o *StdOutput) Warningf(format string, args ...any) {
 func (o *StdOutput) Errorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
-func (o *StdOutput) StreamText(delta string)  { fmt.Print(delta) }
+func (o *StdOutput) StreamText(delta string) {
+	if delta != "" {
+		o.wroteText = true
+	}
+	fmt.Print(delta)
+}
 func (o *StdOutput) StreamReasoning(_ string) {}
 
 func (o *StdOutput) StreamToolCall(index int, name, args string) {
 	if o.diffs == nil {
+		// Break to a fresh line so the first diff header isn't glued to the
+		// answer text (which need not end in a newline).
+		if o.wroteText {
+			fmt.Println()
+		}
 		o.diffs = render.NewToolDiffSet(os.Stdout, false)
 	}
 	o.diffs.Write(index, name, args)
@@ -335,5 +346,6 @@ func (o *StdOutput) FlushStream() {
 		o.diffs.Flush()
 		o.diffs = nil
 	}
+	o.wroteText = false
 	fmt.Println()
 }

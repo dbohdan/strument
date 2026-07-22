@@ -161,6 +161,8 @@ type ToolDiff struct {
 	curField    string
 	wroteHeader bool
 	pending     []string // diff lines held until the header (path) is known
+	sawSearch   bool     // the search field has begun streaming
+	addedBuf    []string // "+" lines held back until after the "-" lines
 }
 
 // NewToolDiff builds a diff renderer for one edit tool call writing to w.
@@ -173,12 +175,17 @@ func NewToolDiff(w io.Writer, color bool, tool string) *ToolDiff {
 // Write feeds the next raw arguments fragment.
 func (d *ToolDiff) Write(frag string) { d.scan.Write(frag) }
 
-// Flush emits any buffered partial line; call once the tool call is complete.
+// Flush emits any buffered partial line, then the held "+" lines; call once
+// the tool call is complete.
 func (d *ToolDiff) Flush() {
 	d.flushLine()
-	if !d.wroteHeader && (d.path.Len() > 0 || len(d.pending) > 0) {
+	if !d.wroteHeader && (d.path.Len() > 0 || len(d.pending) > 0 || len(d.addedBuf) > 0) {
 		d.header() // resolve the header (path may have streamed after the diff)
 	}
+	for _, line := range d.addedBuf {
+		fmt.Fprint(d.w, line)
+	}
+	d.addedBuf = nil
 }
 
 // expectsPath reports whether the tool has a path/header, so its diff lines
@@ -211,6 +218,9 @@ func (d *ToolDiff) onArg(field, chunk string) {
 	if field == "path" {
 		d.path.WriteString(chunk)
 		return
+	}
+	if field == "search" {
+		d.sawSearch = true
 	}
 	if !isLineField(field) {
 		return // purpose/reason/etc. don't render
@@ -246,10 +256,18 @@ func (d *ToolDiff) header() {
 }
 
 func (d *ToolDiff) emitLine(field, text string) {
+	line := d.formatLine(field, text)
+	// A replace field that streams before search must wait so the removed (-)
+	// lines still print first, whatever order the provider sent the fields in.
+	// This is held separately from the header's pending buffer and appended
+	// after every "-" line on Flush.
+	if d.holdsAdded(field) {
+		d.addedBuf = append(d.addedBuf, line)
+		return
+	}
 	if !d.wroteHeader && d.path.Len() > 0 {
 		d.header()
 	}
-	line := d.formatLine(field, text)
 	// An edit tool's diff lines wait for the header even if the path streams
 	// after them; a command line (no header) prints straight away.
 	if !d.wroteHeader && d.expectsPath() {
@@ -257,6 +275,13 @@ func (d *ToolDiff) emitLine(field, text string) {
 		return
 	}
 	fmt.Fprint(d.w, line)
+}
+
+// holdsAdded reports whether an added ("+") line must be buffered because it
+// arrived before the search field it should follow. Only replace_in_file
+// reverses this way; create_file's content is the whole diff and streams live.
+func (d *ToolDiff) holdsAdded(field string) bool {
+	return field == "replace" && d.tool == "replace_in_file" && !d.sawSearch
 }
 
 // formatLine renders one diff/command line with its prefix and optional color.

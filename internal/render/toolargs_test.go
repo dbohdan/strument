@@ -158,6 +158,30 @@ func TestToolDiffPathMiddle(t *testing.T) {
 	}
 }
 
+// TestToolDiffReplaceBeforeSearch reproduces a provider (GLM-5.2) that streams
+// the replace field before search: the removed (-) lines must still print
+// above the added (+) lines, in canonical git-diff order.
+func TestToolDiffReplaceBeforeSearch(t *testing.T) {
+	args := `{"path":"a.go","replace":"new one\nnew two","search":"old one\nold two"}`
+	want := "a.go\n- old one\n- old two\n+ new one\n+ new two\n"
+	if got := renderDiff(t, "replace_in_file", false, []string{args}); got != want {
+		t.Errorf("one blob:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+	if got := renderDiff(t, "replace_in_file", false, splitBytes(args)); got != want {
+		t.Errorf("byte by byte:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffReplaceBeforeSearchPathLast combines both reversals seen live:
+// replace and search stream before path, and replace before search.
+func TestToolDiffReplaceBeforeSearchPathLast(t *testing.T) {
+	args := `{"replace":"new","search":"old","path":"a.go"}`
+	want := "a.go\n- old\n+ new\n"
+	if got := renderDiff(t, "replace_in_file", false, splitBytes(args)); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestToolDiffCommand renders a suggest_command call: no header (no path),
 // the command on a "$" line, and the purpose ignored.
 func TestToolDiffCommand(t *testing.T) {

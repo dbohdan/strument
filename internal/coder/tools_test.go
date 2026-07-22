@@ -1,6 +1,8 @@
 package coder
 
 import (
+	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -258,5 +260,48 @@ func TestToolEditReflects(t *testing.T) {
 	// message.
 	if !strings.Contains(history[2].Text(), "was not found") {
 		t.Errorf("first tool result = %q, want a search-failure message", history[2].Text())
+	}
+}
+
+// captureOut records Printf lines so a test can assert on user-facing output;
+// the other Output methods are no-ops.
+type captureOut struct{ lines []string }
+
+func (o *captureOut) Printf(format string, args ...any) {
+	o.lines = append(o.lines, fmt.Sprintf(format, args...))
+}
+func (o *captureOut) Warningf(format string, args ...any) { o.Printf(format, args...) }
+func (o *captureOut) Errorf(format string, args ...any)   { o.Printf(format, args...) }
+func (o *captureOut) StreamText(string)                   {}
+func (o *captureOut) StreamReasoning(string)              {}
+func (o *captureOut) StreamToolCall(int, string, string)  {}
+func (o *captureOut) FlushStream()                        {}
+
+// echoRunner returns fixed output for any command.
+type echoRunner struct {
+	exit   int
+	output string
+}
+
+func (r echoRunner) Run(context.Context, string, string) (int, string, error) {
+	return r.exit, r.output, nil
+}
+
+// TestRunAndShowDisplaysOutput confirms a run command's captured output is
+// echoed to the user (bug #3), not only returned to the model as the result.
+func TestRunAndShowDisplaysOutput(t *testing.T) {
+	out := &captureOut{}
+	c := &Coder{Out: out, Runner: echoRunner{exit: 0, output: "hello\nworld\n"}}
+	exit, output := c.runAndShow(context.Background(), "echo stuff")
+
+	if exit != 0 || output != "hello\nworld\n" {
+		t.Fatalf("runAndShow = (%d, %q), want (0, %q)", exit, output, "hello\nworld\n")
+	}
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "Running echo stuff") {
+		t.Errorf("missing the Running line:\n%s", joined)
+	}
+	if !strings.Contains(joined, "hello\nworld") {
+		t.Errorf("command output not shown to the user:\n%s", joined)
 	}
 }

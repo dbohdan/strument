@@ -81,7 +81,11 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	// so close the parser before the diff begins; they never interleave.
 	if o.parser != nil {
 		o.parser.End()
+		// The markdown renderer leaves the cursor mid-line after a paragraph,
+		// so break to a fresh line (after resetting the answer color) before
+		// the first diff header — otherwise it glues onto the answer text.
 		fmt.Fprint(o.w, o.sgr("0"))
+		fmt.Fprintln(o.w)
 		o.parser = nil
 	}
 	if o.diffs == nil {
