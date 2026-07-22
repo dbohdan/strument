@@ -190,24 +190,48 @@ the authoritative *apply*.
 
 ### Cross-provider streaming quirks
 
-Live testing against DeepSeek V4 Flash, GLM 5.2, and Qwen3.6 27B (the ~27B
-floor) confirmed all three drive the format cleanly — and surfaced two
-provider-specific *streaming* quirks the renderer now absorbs. They are
-display-only; the authoritative parse was never affected. Both have
-regression tests in `toolargs_test.go`.
+Tool-call *edits* work across the current model field — but the way providers
+*stream* a call's arguments diverges, so the clean, uniform UX is the
+renderer's doing, not the wire's. A 16-model live sweep (via OpenRouter, one
+`replace_in_file` edit + one `suggest_command` + one `create_file` per model)
+made this concrete. Fourteen models drove all three tools cleanly and rendered
+byte-identical canonical diffs. The two that stumbled did so only on the *edit*
+— they still handled `suggest_command` and `create_file` — and both were the
+smallest, most reasoning-heavy models (gpt-oss-120b, qwen3-14b), which spent a
+modest output budget thinking and never emitted the call. The ~27B floor holds.
 
-- **Interleaved calls (DeepSeek).** With two tool calls in one turn, DeepSeek
-  streams their argument fragments interleaved, which spliced one diff's lines
-  into another's. `ToolDiffSet` now streams only the first call live and
-  buffers later ones, appending each whole, in first-seen order, on flush.
-- **`path` not first (Qwen3.6).** Qwen streams `search`/`replace` before
-  `path`, so the file header printed in the middle of the diff. `ToolDiff`
-  now holds an edit's diff lines until the header is known and emits the
-  header the instant the `path` field completes, so it always leads.
+Underneath that uniform surface, the wire order of an edit's JSON fields is
+all over the map:
 
-The lesson worth keeping: JSON object field order and multi-call fragment
-interleaving are provider-specific and not guaranteed. A streaming renderer
-must not assume field order or that one call's fragments arrive contiguously.
+| Wire order of `replace_in_file` fields | Models |
+| --- | --- |
+| `path, search, replace` (schema order) | Claude Haiku 4.5 / Opus 4.8 / Sonnet 5, Cohere North-mini-code, Kimi K3, Laguna-S-2.1, Step-3.7-flash, MiMo v2.5 |
+| `path, replace, search` (replace first) | Gemma-4-31b, MiniMax-M3, Kimi K2.6, GPT-5.6-sol, Inkling |
+| `replace, search, path` (path last *and* replace first) | Gemini 3.5 Flash |
+
+Only eight of the fourteen keep schema order. Gemini streams `path` **last**,
+so nothing in the arguments even names the file until the end. The renderer
+absorbs all of it — every row above renders header-first, removed lines above
+added — because it never assumes field order. Three display-only
+normalizations, each with a regression test in `toolargs_test.go`:
+
+- **`replace` before `search`.** Held added (`+`) lines wait until the removed
+  (`-`) lines are known, so a diff always reads in canonical git order. (Seen
+  first with GLM 5.2; confirmed on six models in the sweep, Gemini included.)
+- **`path` not first (Gemini, Qwen3.6).** An edit's diff lines are buffered
+  until the `path`/header resolves, then the header leads.
+- **Interleaved calls (DeepSeek).** With two calls in one turn, fragments
+  arrive interleaved; `ToolDiffSet` streams the first call live and buffers
+  later ones, appending each whole in first-seen order. (Single-call sweep
+  turns didn't re-trigger this; the regression test stands.)
+
+The authoritative `json.Unmarshal` parse is order-independent, so none of this
+touches correctness — only display. The lesson worth keeping: **field order
+and fragment contiguity are provider-specific and not guaranteed; a streaming
+renderer must assume neither.** The per-hunk `replace_in_file` shape itself
+needed no change — every capable model produced well-formed single-hunk calls
+(some with more surrounding context than others), so batching stays
+unnecessary.
 
 ## Configuration
 
