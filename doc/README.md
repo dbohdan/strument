@@ -104,9 +104,13 @@ inherited from aider.
   - `render/` — streaming markdown renderer (a Go port of
     thetarnav/streaming-markdown) plus the ANSI terminal renderer and the
     color `Theme`.
-  - `repl/` — the interactive layer: ergochat/readline, slash commands,
-    double-Ctrl-C chords, live streaming render, chat/input history
-    wiring.
+  - `repl/` — the interactive layer: line editing (via `readline/`), slash
+    commands, double-Ctrl-C chords, live streaming render, chat/input
+    history wiring.
+  - `readline/` — the terminal line editor: a vendored fork of
+    ergochat/readline (MIT, taken at v0.1.3) with a flicker-free single-write
+    redraw adapted from jart/bestline and Ctrl+arrow word motion. Kept in
+    upstream style and excluded from Strument's linters; see its `NOTICE`.
   - `gitrepo/` — the git port; always argv, never a shell string.
   - `history/` — per-project markdown chat transcripts under
     `$XDG_STATE_HOME/strument`.

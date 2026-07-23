@@ -134,3 +134,10 @@ prompts began as aider's; the rest is an independent reimplementation.
 The streaming markdown renderer (`internal/render/`) is a port of
 [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by
 Damian Tarnawski, MIT licensed.
+
+The terminal line editor (`internal/readline/`) is a vendored fork of
+[ergochat/readline](https://github.com/ergochat/readline) (MIT), taken at
+v0.1.3. Its redraw was reworked to be flicker-free using the in-place,
+single-write technique from [bestline](https://github.com/jart/bestline) by
+Justine Tunney (2-clause BSD), and Ctrl+arrow now moves by word. See
+[`internal/readline/NOTICE`](internal/readline/NOTICE) for details.

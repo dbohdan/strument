@@ -1,0 +1,27 @@
+internal/readline is a vendored fork of ergochat/readline v0.1.3
+(https://github.com/ergochat/readline), itself a fork of chzyer/readline. It is
+distributed under the MIT License in the adjacent LICENSE file
+(Copyright (c) 2015 Chzyer).
+
+Strument's changes to the vendored copy:
+
+  * Non-destructive, single-write redraw (runebuf.go). Each refresh overwrites
+    the prompt and buffer cells in place and only then clears the remainder
+    with \e[K / \e[J, instead of clearing before repainting — so the prompt no
+    longer flickers on slow or remote terminals. The technique is adapted from
+    bestline by Justine Tunney (https://github.com/jart/bestline), a descendant
+    of antirez's linenoise. No bestline code is copied; only its redraw
+    algorithm is reused. bestline is distributed under the 2-clause BSD License:
+
+        Copyright (c) 2018-2021 Justine Tunney <jtunney@gmail.com>
+        Copyright (c) 2010-2016 Salvatore Sanfilippo <antirez@gmail.com>
+        Copyright (c) 2010-2013 Pieter Noordhuis <pcnoordhuis@gmail.com>
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that redistributions retain the
+        above copyright notice, this list of conditions, and the following
+        disclaimer. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+        KIND, EXPRESS OR IMPLIED.
+
+  * Ctrl+Left / Ctrl+Right move by word (terminal.go), matching Alt+arrow and
+    aider's prompt_toolkit bindings.
