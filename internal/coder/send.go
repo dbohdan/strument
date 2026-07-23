@@ -448,6 +448,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	}
 
 	c.lastUsageReport = report
+	c.Out.Printf("") // blank line before the token/cost report, like aider
 	c.Out.Printf("%s", report)
 }
 
