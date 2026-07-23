@@ -6,6 +6,7 @@ package coder
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,17 +110,38 @@ func TestFenceEscalationWhenChatFileHasBackticks(t *testing.T) {
 	}
 }
 
-func TestUnreadableChatFileDroppedDuringChooseFence(t *testing.T) {
+func TestChatFileRetentionDuringChooseFence(t *testing.T) {
 	c := testCoder(t)
-	good := filepath.Join(c.Root, "good.txt")
-	if err := os.WriteFile(good, []byte("fine\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(c.Root, "good.txt"), []byte("fine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(c.Root, "adir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	c.AddFile("good.txt")
-	c.AddFile("gone.txt") // never created
+	c.AddFile("gone.txt") // never created: a to-be-created file, kept as empty
+	c.AddFile("adir")     // a directory reads as a non-ENOENT error: dropped
 	c.chooseFence()
-	if len(c.absFnames) != 1 || c.relFname(c.absFnames[0]) != "good.txt" {
-		t.Errorf("absFnames = %v", c.absFnames)
+
+	kept := map[string]bool{}
+	for _, f := range c.absFnames {
+		kept[c.relFname(f)] = true
+	}
+	if !kept["good.txt"] || !kept["gone.txt"] || kept["adir"] {
+		t.Errorf("absFnames = %v (want good.txt + gone.txt, not adir)", c.absFnames)
+	}
+}
+
+func TestNonexistentChatFileRendersEmpty(t *testing.T) {
+	c := testCoder(t)
+	c.AddFile("new.go") // never created
+	content := c.filesContent()
+	// The file is listed for the model with an empty body, so it can create it.
+	if !strings.Contains(content, "new.go") {
+		t.Errorf("nonexistent file not listed for creation:\n%q", content)
+	}
+	if !slices.Contains(c.absFnames, c.absRootPath("new.go")) {
+		t.Errorf("nonexistent file was dropped from the chat: %v", c.absFnames)
 	}
 }
 

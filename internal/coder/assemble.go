@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"strings"
@@ -110,19 +111,27 @@ func (c *Coder) chooseFence() {
 	c.Out.Warningf("Unable to find a fencing strategy! Falling back to: %s...%s", c.fence.open, c.fence.close)
 }
 
-// absFnamesContent reads chat files in order, dropping unreadable ones from
-// the chat with a warning.
+// absFnamesContent reads chat files in order. A file that does not exist yet is
+// kept with empty content (a to-be-created file); other read failures drop the
+// file from the chat with a warning.
 func (c *Coder) absFnamesContent() []string {
 	var contents []string
 	var kept []string
 	for _, fname := range c.absFnames {
 		data, err := os.ReadFile(fname)
-		if err != nil {
+		switch {
+		case err == nil:
+			kept = append(kept, fname)
+			contents = append(contents, string(data))
+		case errors.Is(err, os.ErrNotExist):
+			// A file that does not exist yet is a to-be-created file: keep it in
+			// the chat with empty content so the model can write it. It is
+			// created on apply, never here.
+			kept = append(kept, fname)
+			contents = append(contents, "")
+		default:
 			c.Out.Warningf("Dropping %s from the chat.", c.relFname(fname))
-			continue
 		}
-		kept = append(kept, fname)
-		contents = append(contents, string(data))
 	}
 	c.absFnames = kept
 	return contents
