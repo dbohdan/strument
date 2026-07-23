@@ -362,13 +362,13 @@ func (t *terminal) consumeANSIEscape(buf *bufio.Reader, ansiBuf *bytes.Buffer) (
 			}
 		}
 	case 'D':
-		if altModifierEnabled(ansiBuf.Bytes()) {
+		if wordModifierEnabled(ansiBuf.Bytes()) {
 			r = MetaBackward
 		} else {
 			r = CharBackward
 		}
 	case 'C':
-		if altModifierEnabled(ansiBuf.Bytes()) {
+		if wordModifierEnabled(ansiBuf.Bytes()) {
 			r = MetaForward
 		} else {
 			r = CharForward
@@ -426,12 +426,14 @@ func consumeAltSequence(buf *bufio.Reader) (result readResult, err error) {
 	}
 }
 
-func altModifierEnabled(payload []byte) bool {
-	// https://www.xfree86.org/current/ctlseqs.html ; modifier keycodes
-	// go after the semicolon, e.g. Alt-LeftArrow is `\x1b[1;3D` in VTE
-	// terminals, where 3 indicates Alt
+func wordModifierEnabled(payload []byte) bool {
+	// https://www.xfree86.org/current/ctlseqs.html ; the modifier keycode
+	// follows the semicolon, e.g. Alt-LeftArrow is `\x1b[1;3D` in VTE terminals.
+	// 3 is Alt (Meta) and 5 is Ctrl; both drive word-wise motion, matching
+	// aider's prompt_toolkit (c-left/c-right and escape-b/f all move by word).
 	if semicolonIdx := bytes.IndexByte(payload, ';'); semicolonIdx != -1 {
-		if string(payload[semicolonIdx+1:]) == "3" {
+		switch string(payload[semicolonIdx+1:]) {
+		case "3", "5": // Alt, Ctrl
 			return true
 		}
 	}
