@@ -135,6 +135,25 @@ func New(opts Options) (*REPL, error) {
 		// the pure session-enders that recalling would never help with.
 		DisableAutoSaveHistory: true,
 	}
+	// Paint the typed line in the user-input color, like aider (the "> "
+	// prompt is already colored). The escapes are zero-width and cursor math
+	// is computed from the buffer, so end-of-line typing stays aligned. A
+	// fresh slice is returned so the buffer readline passes in is never
+	// mutated.
+	if opts.Color && opts.Theme.UserInput != "" {
+		green := []rune("\x1b[" + opts.Theme.UserInput + "m")
+		reset := []rune("\x1b[0m")
+		cfg.Painter = func(line []rune, _ int) []rune {
+			if len(line) == 0 {
+				return line
+			}
+			out := make([]rune, 0, len(green)+len(line)+len(reset))
+			out = append(out, green...)
+			out = append(out, line...)
+			out = append(out, reset...)
+			return out
+		}
+	}
 	if opts.IsTerminal != nil {
 		cfg.FuncIsTerminal = opts.IsTerminal
 	}
