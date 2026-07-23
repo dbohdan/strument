@@ -55,7 +55,10 @@ func (o *operation) write(target io.Writer, b []byte) (int, error) {
 		n   int
 		err error
 	)
-	o.buf.Refresh(func() {
+	// refreshWrite (not Refresh): b is output that must appear above the
+	// prompt, so the line has to be erased before b is written and the prompt
+	// repainted below it — the erase-first order Refresh no longer uses.
+	o.buf.refreshWrite(func() {
 		n, err = target.Write(b)
 		// Adjust the prompt start position by b
 		rout := runes.ColorFilter([]rune(string(b[:])))

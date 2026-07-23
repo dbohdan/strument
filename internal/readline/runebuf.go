@@ -444,11 +444,69 @@ func (r *runeBuffer) refresh(f func()) {
 		return
 	}
 
+	// Non-destructive, single-write redraw (bestline's model). The row the
+	// cursor sits on within the currently drawn block is captured *before* the
+	// mutation, so redraw knows how far up to move to reach the block's top —
+	// exactly what the old clean() computed. Reposition, overwrite, trailing
+	// erase, and cursor move then go out in one Write, so there is no blank
+	// frame between an erase and the repaint. This replaces a clean()+print()
+	// pair that erased (\e[J) in one write and repainted in a second, which
+	// flickered on slow or remote terminals (see redraw).
+	tWidth, _ := r.w.GetWidthHeight()
+	idxLine := r.idxLine(tWidth)
+	if f != nil {
+		f()
+	}
+	r.w.Write(r.redraw(idxLine, tWidth))
+}
+
+// refreshWrite erases the current line, runs f — which writes output that
+// should land above the prompt, e.g. an async log line — then repaints the
+// prompt below it. Here the erase must precede f's output, so this keeps the
+// original two-write clean()+print() order. It backs only the Stdout
+// interleaving hook, not the hot editing path, so its redraw is not
+// flicker-sensitive.
+func (r *runeBuffer) refreshWrite(f func()) {
+	r.Lock()
+	defer r.Unlock()
+	if !r.isInteractive() {
+		if f != nil {
+			f()
+		}
+		return
+	}
 	r.clean()
 	if f != nil {
 		f()
 	}
 	r.print()
+}
+
+// redraw builds the single-write, non-destructive repaint. It repositions to
+// the top-left of the block the previous render drew (idxLine is the cursor's
+// row within it), overwrites the prompt and buffer in place, then erases
+// whatever a previously longer render left below. Emitting \e[J *after* the
+// content — rather than clearing first — is bestline's anti-flicker technique
+// (bestline.c bestlineRefreshLineImpl: "overwrite cells, and then use \e[K and
+// \e[J to clear everything else"). The caller must hold the lock.
+func (r *runeBuffer) redraw(idxLine, tWidth int) []byte {
+	buf := bytes.NewBuffer(nil)
+	if tWidth == 0 {
+		// No width info: walk back over the whole wrapped line (mirrors the old
+		// cleanOutput fallback), then draw.
+		buf.WriteString(strings.Repeat("\r\b", len(r.buf)+r.promptLen()))
+	} else {
+		if idxLine > 0 {
+			fmt.Fprintf(buf, "\033[%dA", idxLine) // up to the block's top row
+		}
+		fmt.Fprintf(buf, "\033[%dG", r.ppos+1) // to the prompt's start column
+	}
+	r.writeContent(buf)
+	buf.WriteString("\033[J") // trim rows/cells a longer previous render left
+	if len(r.buf) > r.idx {
+		buf.Write(r.getBackspaceSequence())
+	}
+	return buf.Bytes()
 }
 
 func (r *runeBuffer) SetOffset(position cursorPosition) {
@@ -517,6 +575,19 @@ func (r *runeBuffer) print() {
 
 func (r *runeBuffer) output() []byte {
 	buf := bytes.NewBuffer(nil)
+	r.writeContent(buf)
+	// cursor position
+	if len(r.buf) > r.idx {
+		buf.Write(r.getBackspaceSequence())
+	}
+	return buf.Bytes()
+}
+
+// writeContent writes the prompt and the painted, tab-expanded (optionally
+// masked) buffer, clearing the first line's tail and adding the line-edge
+// space fix — everything the on-screen line shows except the final cursor
+// repositioning. Shared by output (for Print) and redraw.
+func (r *runeBuffer) writeContent(buf *bytes.Buffer) {
 	buf.WriteString(r.prompt())
 	buf.WriteString("\x1b[0K") // VT100 "Clear line from cursor right", see #38
 	cfg := r.getConfig()
@@ -541,11 +612,6 @@ func (r *runeBuffer) output() []byte {
 	if r.isInLineEdge() {
 		buf.WriteString(" \b")
 	}
-	// cursor position
-	if len(r.buf) > r.idx {
-		buf.Write(r.getBackspaceSequence())
-	}
-	return buf.Bytes()
 }
 
 func (r *runeBuffer) getBackspaceSequence() []byte {
