@@ -158,6 +158,10 @@ generated = "lax"
 paths = [
     "reference",
     "attic",
+    # Vendored fork of ergochat/readline (MIT), with Strument's own redraw and
+    # key-handling changes. It is not held to Strument's lint ruleset; go vet
+    # and go test still cover it.
+    "internal/readline",
 ]
 presets = [
     "comments",
@@ -174,6 +178,9 @@ enable = [
 
 [formatters.exclusions]
 generated = "lax"
+paths = [
+    "internal/readline",
+]
 
 [output]
 sort-order = [

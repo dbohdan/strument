@@ -10,9 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ergochat/readline"
-
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/readline"
 )
 
 // command is one slash command. run returns a message to send to the model

@@ -11,13 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ergochat/readline"
-
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
 )
 
