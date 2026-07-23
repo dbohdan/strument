@@ -241,6 +241,22 @@ func TestRunCommandAddsExchange(t *testing.T) {
 	_ = cdr
 }
 
+func TestRunEmptySuccessSkipsConfirm(t *testing.T) {
+	// A command that succeeds with no output has nothing to add, so the
+	// "add output?" prompt must not appear (it would also swallow /exit).
+	input := strings.NewReader("/run true\n/exit\n")
+	stub := &fixture.StreamStub{}
+	r, _, out := newTestREPL(t, stub, input)
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if strings.Contains(out.String(), "Add command output to the chat?") {
+		t.Errorf("empty successful /run should not prompt to add output:\n%s", out.String())
+	}
+}
+
 func TestPromptCtrlCChordExits(t *testing.T) {
 	// Two ^C at the prompt within the window: first prints the hint,
 	// second exits. Readline maps \x03 to ErrInterrupt in non-interactive

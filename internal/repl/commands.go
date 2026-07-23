@@ -349,6 +349,13 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		r.out.Warningf("Exit status: %d", exitCode)
 	}
 
+	// A successful command that produced no output has nothing to add, so
+	// don't bother asking. A non-zero exit still offers — the status is
+	// informative context even without output.
+	if strings.TrimSpace(output) == "" && exitCode == 0 {
+		return ""
+	}
+
 	yes, _ := r.Confirmer().Confirm(coder.ConfirmRequest{
 		Prompt:     "Add command output to the chat?",
 		AllowNever: true,
