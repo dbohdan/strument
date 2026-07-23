@@ -228,27 +228,13 @@ func (c *Coder) unsafePath(rel string) string {
 	if err != nil || relBack == ".." || strings.HasPrefix(relBack, ".."+string(filepath.Separator)) {
 		return "path escapes the project root"
 	}
-	// Symlink escape: resolve the deepest existing ancestor.
-	dir := filepath.Dir(full)
-	for {
-		resolved, err := filepath.EvalSymlinks(dir)
-		if err == nil {
-			rootResolved, rerr := filepath.EvalSymlinks(rootAbs)
-			if rerr != nil {
-				rootResolved = rootAbs
-			}
-			rel2, err2 := filepath.Rel(rootResolved, resolved)
-			if err2 != nil || rel2 == ".." || strings.HasPrefix(rel2, ".."+string(filepath.Separator)) {
-				return "path resolves outside the project root (symlink escape)"
-			}
-			return ""
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
+	// Symlink escape: compare the fully resolved file and root (resolvePath
+	// handles not-yet-created files by resolving the deepest existing ancestor).
+	rel2, err := filepath.Rel(resolvePath(rootAbs), resolvePath(full))
+	if err != nil || rel2 == ".." || strings.HasPrefix(rel2, ".."+string(filepath.Separator)) {
+		return "path resolves outside the project root (symlink escape)"
 	}
+	return ""
 }
 
 // allowedToEdit ports allowed_to_edit (base_coder.py:2191): chat files are

@@ -8,8 +8,36 @@ package coder
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
+
+// TestAddFileThroughSymlinkedRootStaysRelative reproduces a symlinked checkout:
+// the coder's Root is git's resolved path, but a file added by an absolute path
+// in the symlink namespace (as the CLI's existingfile arg arrives) must still
+// resolve to a clean repo-relative path — not "../link/..." — so the chat
+// listing and git commits stay in-repo.
+func TestAddFileThroughSymlinkedRootStaysRelative(t *testing.T) {
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.MkdirAll(filepath.Join(realDir, "internal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realDir, "internal", "foo.go"), []byte("package foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	c := wholeModelCoder(t, realDir)
+	c.AddFile(filepath.Join(link, "internal", "foo.go"))
+
+	if got, want := c.inchatRelativeFiles(), []string{"internal/foo.go"}; !slices.Equal(got, want) {
+		t.Errorf("in-chat files = %v, want %v (clean repo-relative, no symlink escape)", got, want)
+	}
+}
 
 func TestUnsafePathExemptsAddedFiles(t *testing.T) {
 	base := t.TempDir()
