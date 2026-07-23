@@ -365,6 +365,12 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 	sentBefore, recvBefore := r.coder.SessionTokens()
 	costBefore, _ := r.coder.SessionCost()
 
+	// Show "Waiting for <model>" until the first streamed byte, so a
+	// slow-to-wake model doesn't look hung (aider's WaitingSpinner). Only
+	// interactively; the first stream event erases it.
+	if r.interactive() {
+		r.out.startWaiting(r.coder.Model.ReadableName())
+	}
 	answer := r.coder.Run(tctx, message)
 
 	if r.opts.History != nil {

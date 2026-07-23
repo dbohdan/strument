@@ -44,6 +44,24 @@ type termOutput struct {
 	phase        streamPhase
 	streamed     bool
 	cursorHidden bool
+	waiting      bool
+}
+
+// startWaiting shows a "Waiting for <model>" line (no newline) while the
+// request is in flight — aider's cue so a slow-to-wake model doesn't look
+// hung. clearWaiting erases it before the first output.
+func (o *termOutput) startWaiting(name string) {
+	o.waiting = true
+	fmt.Fprintf(o.w, "Waiting for %s", name)
+}
+
+// clearWaiting erases the waiting line if one is showing, returning the cursor
+// to the start of the (now blank) line so streamed output starts cleanly.
+func (o *termOutput) clearWaiting() {
+	if o.waiting {
+		o.waiting = false
+		fmt.Fprint(o.w, "\r\x1b[K")
+	}
 }
 
 // hideCursor blanks the terminal cursor for the duration of a streaming
@@ -73,14 +91,17 @@ func (o *termOutput) sgr(codes string) string {
 }
 
 func (o *termOutput) Printf(format string, args ...any) {
+	o.clearWaiting()
 	fmt.Fprintf(o.w, format+"\n", args...)
 }
 
 func (o *termOutput) Warningf(format string, args ...any) {
+	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)
 }
 
 func (o *termOutput) Errorf(format string, args ...any) {
+	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Error)+format+o.sgr("0")+"\n", args...)
 }
 
@@ -92,6 +113,7 @@ func (o *termOutput) ensureParser() {
 }
 
 func (o *termOutput) StreamReasoning(delta string) {
+	o.clearWaiting()
 	o.hideCursor()
 	o.ensureParser()
 	if o.phase != phaseReasoning {
@@ -103,6 +125,7 @@ func (o *termOutput) StreamReasoning(delta string) {
 }
 
 func (o *termOutput) StreamText(delta string) {
+	o.clearWaiting()
 	o.hideCursor()
 	o.ensureParser()
 	if o.phase == phaseReasoning {
@@ -114,6 +137,7 @@ func (o *termOutput) StreamText(delta string) {
 }
 
 func (o *termOutput) StreamToolCall(index int, name, args string) {
+	o.clearWaiting()
 	o.hideCursor()
 	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
 	// so close the parser before the diff begins; they never interleave.
@@ -138,6 +162,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 }
 
 func (o *termOutput) FlushStream() {
+	o.clearWaiting()
 	if o.parser != nil {
 		o.parser.End()
 		// The renderer keeps the assistant base color open on every line;
