@@ -19,7 +19,7 @@ func TestReasoningHeaders(t *testing.T) {
 	o.FlushStream()
 	got := buf.String()
 
-	rule := strings.Repeat("─", 40)
+	rule := strings.Repeat("-", 40)
 	for _, want := range []string{"► THINKING", "► ANSWER", "weighing options", "here is the answer", rule} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%q", want, got)

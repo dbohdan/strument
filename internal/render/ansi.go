@@ -67,6 +67,13 @@ func (r *ANSI) ruleWidth() int {
 	return 80
 }
 
+// AtLineStart reports whether the cursor is at the start of a fresh line —
+// nothing written yet, or the last output ended in a newline. Callers mixing
+// direct writes with the renderer use it to avoid double blank lines.
+func (r *ANSI) AtLineStart() bool {
+	return !r.wrote || r.trailingNL > 0
+}
+
 // out writes visible output and tracks trailing newlines for separator
 // logic.
 func (r *ANSI) out(s string) {
@@ -225,7 +232,8 @@ func (r *ANSI) AddToken(t Token) {
 		r.out("\n")
 	case Rule:
 		r.lineStart()
-		r.out(strings.Repeat("─", r.ruleWidth()))
+		// Dashed hyphens, like aider's rules (not a solid box-drawing line).
+		r.out(strings.Repeat("-", r.ruleWidth()))
 	case ListItem:
 		r.ensureNewlines(1)
 		r.lineStart()

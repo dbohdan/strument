@@ -177,7 +177,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Git repo: none",
 			"Repo-map: disabled",
 			"Added hello.txt to the chat.", // banner
-			strings.Repeat("─", 24),        // rule honors GetSize width
+			strings.Repeat("-", 24),        // rule honors GetSize width
 			"hello.txt",                    // file listing
 		} {
 			if !strings.Contains(got, want) {

@@ -57,7 +57,7 @@ func TestANSIPlainLayout(t *testing.T) {
 		"4. fourth",
 		"func main() {}",
 		"label (https://x.example) and https://z.example plain.",
-		strings.Repeat("─", 40),
+		strings.Repeat("-", 40),
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)
@@ -134,7 +134,7 @@ func TestANSIRuleWidth(t *testing.T) {
 		p := NewParser(NewANSI(&sb, false, Theme{}, tc.width))
 		p.Write("---\n")
 		p.End()
-		if !strings.Contains(sb.String(), strings.Repeat("─", tc.want)) {
+		if !strings.Contains(sb.String(), strings.Repeat("-", tc.want)) {
 			t.Errorf("width %d: rule not %d columns:\n%q", tc.width, tc.want, sb.String())
 		}
 	}

@@ -253,7 +253,7 @@ func (r *REPL) renderPromptHeader() {
 	if !r.interactive() {
 		return
 	}
-	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("─", r.termWidth()), r.sgr("0"))
+	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("-", r.termWidth()), r.sgr("0"))
 	for _, f := range r.coder.ReadOnlyFiles() {
 		r.printf("%s (read-only)", f)
 	}

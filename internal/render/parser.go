@@ -67,6 +67,16 @@ func (p *Parser) End() {
 	}
 }
 
+// AtLineStart reports whether the renderer's cursor is at the start of a fresh
+// line. Meaningful after End (once pending text is flushed); renderers that
+// don't track it are assumed to be at a line start.
+func (p *Parser) AtLineStart() bool {
+	if a, ok := p.renderer.(interface{ AtLineStart() bool }); ok {
+		return a.AtLineStart()
+	}
+	return true
+}
+
 func (p *Parser) addText() {
 	if len(p.text) == 0 {
 		return

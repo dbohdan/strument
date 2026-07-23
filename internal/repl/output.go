@@ -6,6 +6,7 @@ package repl
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"dbohdan.com/strument/internal/render"
 )
@@ -18,16 +19,6 @@ const (
 	phaseNone streamPhase = iota
 	phaseReasoning
 	phaseAnswer
-)
-
-// The reasoning headers, mirroring aider's reasoning_tags.py: markdown fed
-// into the same renderer as the answer, so the "---" becomes a full-width
-// rule and THINKING/ANSWER render bold. The ANSWER header leads with a blank
-// line so the rule is a thematic break, not a setext underline of the last
-// reasoning line.
-const (
-	thinkingHeader = "---\n► **THINKING**\n\n"
-	answerHeader   = "\n\n---\n► **ANSWER**\n\n"
 )
 
 // termOutput implements coder.Output for a terminal: reasoning and answer
@@ -112,14 +103,42 @@ func (o *termOutput) ensureParser() {
 	}
 }
 
+// closeParser flushes and closes the markdown renderer, resetting its color
+// and leaving the cursor on a fresh line so what follows starts cleanly.
+func (o *termOutput) closeParser() {
+	if o.parser == nil {
+		return
+	}
+	o.parser.End()
+	fmt.Fprint(o.w, o.sgr("0")) // the renderer keeps the base color open
+	if !o.parser.AtLineStart() {
+		fmt.Fprintln(o.w)
+	}
+	o.parser = nil
+}
+
+// header renders a THINKING/ANSWER separator directly (not through the markdown
+// renderer, so the spacing is exact): a blank line, a full-width dashed rule, a
+// blank line, a bold "► LABEL", and a blank line — matching aider. The caller
+// guarantees the cursor is at column 0.
+func (o *termOutput) header(label string) {
+	width := o.width
+	if width <= 0 {
+		width = 80
+	}
+	fmt.Fprintf(o.w, "\n%s%s%s\n\n%s► %s%s\n\n",
+		o.sgr(o.theme.Assistant), strings.Repeat("-", width), o.sgr("0"),
+		o.sgr(o.theme.Assistant)+o.sgr("1"), label, o.sgr("0"))
+}
+
 func (o *termOutput) StreamReasoning(delta string) {
 	o.clearWaiting()
 	o.hideCursor()
-	o.ensureParser()
 	if o.phase != phaseReasoning {
-		o.parser.Write(thinkingHeader)
+		o.header("THINKING") // cursor is at column 0 after clearWaiting
 		o.phase = phaseReasoning
 	}
+	o.ensureParser()
 	o.streamed = true
 	o.parser.Write(delta)
 }
@@ -127,11 +146,12 @@ func (o *termOutput) StreamReasoning(delta string) {
 func (o *termOutput) StreamText(delta string) {
 	o.clearWaiting()
 	o.hideCursor()
-	o.ensureParser()
 	if o.phase == phaseReasoning {
-		o.parser.Write(answerHeader) // close THINKING, open ANSWER
+		o.closeParser() // end THINKING, land on a fresh line
+		o.header("ANSWER")
 	}
 	o.phase = phaseAnswer
+	o.ensureParser()
 	o.streamed = true
 	o.parser.Write(delta)
 }
@@ -141,18 +161,14 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	o.hideCursor()
 	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
 	// so close the parser before the diff begins; they never interleave.
+	if o.phase == phaseReasoning {
+		o.closeParser()
+		o.header("ANSWER") // reasoning gave way to edits: mark the boundary
+		o.phase = phaseAnswer
+	}
 	if o.parser != nil {
-		if o.phase == phaseReasoning {
-			o.parser.Write(answerHeader) // reasoning gave way to edits: mark it
-			o.phase = phaseAnswer
-		}
-		o.parser.End()
-		// The markdown renderer leaves the cursor mid-line after a paragraph,
-		// so break to a fresh line (after resetting the answer color) before
-		// the first diff header — otherwise it glues onto the answer text.
-		fmt.Fprint(o.w, o.sgr("0"))
-		fmt.Fprintln(o.w)
-		o.parser = nil
+		o.closeParser()
+		fmt.Fprintln(o.w) // separate the answer text from the first diff header
 	}
 	if o.diffs == nil {
 		o.diffs = render.NewToolDiffSet(o.w, o.color, o.theme)
@@ -163,13 +179,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 
 func (o *termOutput) FlushStream() {
 	o.clearWaiting()
-	if o.parser != nil {
-		o.parser.End()
-		// The renderer keeps the assistant base color open on every line;
-		// reset once here so it does not bleed into the next prompt.
-		fmt.Fprint(o.w, o.sgr("0"))
-		o.parser = nil
-	}
+	o.closeParser()
 	if o.diffs != nil {
 		o.diffs.Flush()
 		o.diffs = nil
