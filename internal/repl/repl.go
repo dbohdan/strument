@@ -253,7 +253,10 @@ func (r *REPL) renderPromptHeader() {
 	if !r.interactive() {
 		return
 	}
-	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("-", r.termWidth()), r.sgr("0"))
+	// A solid box-drawing rule, matching aider's io.rule (Rich console.rule,
+	// which uses "─"). The dashed hyphen is reserved for markdown rules — aider
+	// draws those through Rich's Markdown, whose thematic break is "-".
+	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("─", r.termWidth()), r.sgr("0"))
 	for _, f := range r.coder.ReadOnlyFiles() {
 		r.printf("%s (read-only)", f)
 	}

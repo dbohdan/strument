@@ -232,7 +232,9 @@ func (r *ANSI) AddToken(t Token) {
 		r.out("\n")
 	case Rule:
 		r.lineStart()
-		// Dashed hyphens, like aider's rules (not a solid box-drawing line).
+		// Dashed hyphens: aider renders markdown through Rich, whose thematic
+		// break is Rule(characters="-"). (The REPL's prompt separator is a
+		// solid "─" instead — that comes from Rich's console.rule, not markdown.)
 		r.out(strings.Repeat("-", r.ruleWidth()))
 	case ListItem:
 		r.ensureNewlines(1)

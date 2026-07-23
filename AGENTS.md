@@ -33,6 +33,31 @@ task format           # gofmt/golangci-lint fmt; run before committing
 `task setup:reference` clones aider at the pinned commit into a gitignored
 `reference/` for comparison; the build never needs it.
 
+## Comparing the terminal UI to aider
+
+Both Strument and aider need a real TTY (readline / prompt_toolkit), so piping
+their output or reading their source is not enough to judge how a screen
+actually looks. When a UI detail should match aider, **observe both, don't
+reason from source** — the byte you capture beats the byte you predicted.
+
+Drive each tool through a pty with `pexpect` (`pip install pexpect`; answer the
+`\x1b[6n` cursor query with `\x1b[1;1R` or readline blocks), pin the width with
+`dimensions=(rows, cols)`, capture raw bytes, strip ANSI, and diff. For startup
+chrome (banner, the per-prompt rule, the file list) no API key is needed —
+launch, let it reach the prompt, send `/exit`. For streamed answers and
+reasoning, run against a live model with `OPENROUTER_API_KEY` in the
+environment (never in a file). aider installs in its own venv
+(`python -m venv … && pip install aider-chat`).
+
+A worked example of why this matters: aider draws **two different horizontal
+rules**. The per-prompt separator is Rich's `console.rule`, a solid `─`
+(U+2500); every markdown rule in an answer — including the `--------------`
+reasoning-tag headers — is Rich's Markdown thematic break, which is
+`Rule(characters="-")`, a dashed hyphen. Reading `reasoning_tags.py` alone
+suggests dashes everywhere; rendering aider's own `NoInsetMarkdown` (or just
+`rich.markdown`) shows the split. Strument mirrors it: `renderPromptHeader`
+uses `─`, the ANSI renderer's `Rule` and the THINKING/ANSWER headers use `-`.
+
 ## Conventions
 
 - **Commits**: conventional-commit style (`feat:`, `fix:`, `refactor:`,
