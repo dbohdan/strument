@@ -89,15 +89,26 @@ func (r *REPL) completer() readline.AutoCompleter {
 		var sub []*readline.PrefixCompleter
 		switch c.name {
 		case "add", "read-only":
-			sub = append(sub, readline.PcItemDynamic(r.completeAddable))
+			sub = append(sub, recursiveDynamic(r.completeAddable))
 		case "drop":
-			sub = append(sub, readline.PcItemDynamic(chatFiles))
+			sub = append(sub, recursiveDynamic(chatFiles))
 		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
 		}
 		items = append(items, readline.PcItem("/"+c.name, sub...))
 	}
 	return readline.NewPrefixCompleter(items...)
+}
+
+// recursiveDynamic builds a dynamic completer that re-offers itself for each
+// subsequent argument. Without a child to descend into, the prefix-completer
+// tree stops after one token, so /add and /drop could only complete a single
+// file; making the node its own child lets completion continue across all
+// whitespace-separated arguments.
+func recursiveDynamic(cb func(string) []string) *readline.PrefixCompleter {
+	d := readline.PcItemDynamic(cb)
+	d.SetChildren([]*readline.PrefixCompleter{d})
+	return d
 }
 
 func (r *REPL) completeAddable(string) []string {
@@ -206,7 +217,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Usage: /add <file> [file ...]")
 		return ""
 	}
-	for _, rel := range r.expandPatterns(strings.Fields(args)) {
+	for _, rel := range r.expandPatterns(splitArgs(args)) {
 		r.coder.AddFile(rel)
 		r.printf("Added %s to the chat.", rel)
 	}
@@ -218,7 +229,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Usage: /read-only <file> [file ...]")
 		return ""
 	}
-	for _, rel := range r.expandPatterns(strings.Fields(args)) {
+	for _, rel := range r.expandPatterns(splitArgs(args)) {
 		r.coder.AddReadOnlyFile(rel)
 		r.printf("Added %s to the chat (read-only).", rel)
 	}
@@ -233,7 +244,7 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 	}
 
 	inChat := append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...)
-	for pat := range strings.FieldsSeq(args) {
+	for _, pat := range splitArgs(args) {
 		dropped := false
 		for _, rel := range inChat {
 			if ok, _ := filepath.Match(pat, rel); ok || rel == pat {
