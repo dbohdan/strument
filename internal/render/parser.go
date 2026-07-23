@@ -33,6 +33,7 @@ type Parser struct {
 	hrChar        byte
 	hrChars       int
 	tableState    int
+	underBefore   rune // the character just before the current "_" run (0 = line/token boundary)
 }
 
 const tokenArrayCap = 24
@@ -270,8 +271,23 @@ func (p *Parser) writeChar(char rune) {
 	}
 
 	// No check hit.
+	if char == '_' {
+		// Capture the character before a "_" run so emphasis parsing can apply
+		// CommonMark's intraword rule. Captured here (as the "_" enters
+		// pending) it survives chunk splits like "ansi" | "_text".
+		p.underBefore = lastRune(p.pending)
+	}
 	p.text += p.pending
 	p.pending = string(char)
+}
+
+// lastRune returns the final rune of s, or 0 if s is empty.
+func lastRune(s string) rune {
+	last := rune(0)
+	for _, r := range s {
+		last = r
+	}
+	return last
 }
 
 // tokenChecks runs the token-specific arm of the state machine and reports
@@ -966,6 +982,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			italic, strong = ItalicUnd, StrongUnd
 		}
 
+		// An intraword "_" is not emphasis (CommonMark: "_" needs a
+		// non-word char before it to open). "*" has no such restriction, so
+		// this gates "_" only. `ansi_text.go` stays literal.
+		underword := symbol == '_' && isAlnum(p.underBefore)
+
 		if len(p.pending) == 1 {
 			//	**Strong**
 			//	 ^
@@ -976,6 +997,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			//	*Em*
 			//	 ^
 			if char != ' ' && char != '\n' {
+				if underword {
+					p.text += p.pending // the "_" is literal text
+					p.pending = string(char)
+					return true
+				}
 				p.addText()
 				p.addToken(italic)
 				p.pending = string(char)
@@ -985,6 +1011,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			//	***Strong->Em***
 			//	  ^
 			if symbol == char {
+				if underword {
+					p.text += pendingWithChar // "___" literal
+					p.pending = ""
+					return true
+				}
 				p.addText()
 				p.addToken(strong)
 				p.addToken(italic)
@@ -994,6 +1025,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			//	**Strong**
 			//	  ^
 			if char != ' ' && char != '\n' {
+				if underword {
+					p.text += p.pending // "__" literal
+					p.pending = string(char)
+					return true
+				}
 				p.addText()
 				p.addToken(strong)
 				p.pending = string(char)

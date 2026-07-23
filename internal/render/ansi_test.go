@@ -146,3 +146,45 @@ func TestANSICheckbox(t *testing.T) {
 		t.Errorf("checkbox output wrong:\n%q", got)
 	}
 }
+
+// TestANSIUnderscoreInWord confirms an intraword underscore (common in
+// filenames and identifiers) is literal, not emphasis — CommonMark forbids
+// intraword "_" emphasis. byChar exercises the fix across chunk boundaries.
+func TestANSIUnderscoreInWord(t *testing.T) {
+	// Note: __init__ is deliberately absent — its underscores are at word
+	// boundaries, so CommonMark renders it as bold "init" (a known gotcha).
+	// The rule only blocks underscores *between* word characters.
+	for _, doc := range []string{
+		"ansi_text.go\n",
+		"a_b_c\n",
+		"snake_case_name\n",
+		"path/to/my_file_v2.py\n",
+		"var_1 x_2\n",
+	} {
+		want := strings.TrimRight(doc, "\n")
+		if got := renderANSI(doc, false, false); !strings.Contains(got, want) {
+			t.Errorf("whole: %q rendered %q, want the underscores kept literal", doc, got)
+		}
+		if got := renderANSI(doc, false, true); !strings.Contains(got, want) {
+			t.Errorf("by char: %q rendered %q, want the underscores kept literal", doc, got)
+		}
+	}
+}
+
+// TestANSIEmphasisStillWorks confirms boundary underscores and all asterisk
+// emphasis (including intraword "*", which CommonMark allows) still render.
+// color is on so the italic ("3") / bold ("1") SGR is observable.
+func TestANSIEmphasisStillWorks(t *testing.T) {
+	cases := map[string]string{
+		"_em_\n":      "\x1b[3m", // underscore italic at a word boundary
+		"foo _bar_\n": "\x1b[3m", // underscore italic after a space
+		"a *b* c\n":   "\x1b[3m", // asterisk italic
+		"x*y*z\n":     "\x1b[3m", // intraword asterisk IS emphasis
+		"__b__\n":     "\x1b[1m", // underscore bold at a boundary
+	}
+	for doc, want := range cases {
+		if got := renderANSI(doc, true, false); !strings.Contains(got, want) {
+			t.Errorf("%q rendered %q, want emphasis SGR %q", doc, got, want)
+		}
+	}
+}
