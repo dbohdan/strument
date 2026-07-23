@@ -107,6 +107,31 @@ func TestToolCreateFile(t *testing.T) {
 	env.run(t)
 }
 
+// TestToolCreateFileOverwrites confirms create_file on an existing path
+// replaces the whole file (not the old silent append) and tells the model it
+// overwrote, so it doesn't assume the prior contents survived.
+func TestToolCreateFileOverwrites(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-overwrite","source":"authored"}
+{"kind":"fs","path":"cfg.txt","content":"old line 1\nold line 2\n"}
+{"kind":"chat","editable":["cfg.txt"]}
+{"kind":"user","text":"rewrite cfg.txt from scratch"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"create_file","tool_args":"{\"path\":\"cfg.txt\",\"content\":\"brand new\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_fs","path":"cfg.txt","content":"brand new\n"}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	result := env.coder.doneMessages[len(env.coder.doneMessages)-1]
+	if result.Role != llm.RoleTool {
+		t.Fatalf("last message role = %s, want tool", result.Role)
+	}
+	if !strings.Contains(result.Text(), "Overwrote") {
+		t.Errorf("result = %q, want it to note the overwrite", result.Text())
+	}
+}
+
 // TestToolEditCommits asserts that with git auto-commit on, the applied
 // edit's tool result names the commit hash — the direct-apply safety net.
 func TestToolEditCommits(t *testing.T) {

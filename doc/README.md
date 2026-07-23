@@ -159,7 +159,9 @@ Four tools, in two shapes that match the harness's nature:
 - **`replace_in_file(path, search, replace)`** and **`create_file(path,
   content)`** — *direct*. Exactly like a SEARCH/REPLACE block: the edit
   applies and auto-commits the moment the call arrives, with `/undo` as the
-  safety net. Not a proposal.
+  safety net. Not a proposal. `create_file` writes the whole file — creating
+  it, or fully overwriting an existing one (the outcome line and tool result
+  say which) — so a total rewrite doesn't need a hunk diff.
 - **`suggest_command(command, purpose)`** — a *proposal*. Runs only after the
   user confirms (the existing run-shell gate); its output returns as the tool
   result.

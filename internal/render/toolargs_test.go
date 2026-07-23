@@ -106,7 +106,7 @@ func TestToolDiffRedGreen(t *testing.T) {
 
 func TestToolDiffCreateFile(t *testing.T) {
 	args := `{"path":"new.go","content":"package main\n\nfunc main() {}"}`
-	want := "new.go (new file)\n+ package main\n+ \n+ func main() {}\n"
+	want := "new.go (whole file)\n+ package main\n+ \n+ func main() {}\n"
 	if got := renderDiff(t, "create_file", false, []string{args}); got != want {
 		t.Errorf("got:\n%q\nwant:\n%q", got, want)
 	}
@@ -206,7 +206,7 @@ func TestToolDiffSet(t *testing.T) {
 	s.Write(0, "", `"search":"x","replace":"y"}`)
 	s.Write(1, "", `"content":"new"}`)
 	s.Flush()
-	want := "a.go\n- x\n+ y\nb.go (new file)\n+ new\n"
+	want := "a.go\n- x\n+ y\nb.go (whole file)\n+ new\n"
 	if sb.String() != want {
 		t.Errorf("got:\n%q\nwant:\n%q", sb.String(), want)
 	}
@@ -224,7 +224,7 @@ func TestToolDiffSetNoInterleave(t *testing.T) {
 	s.Write(0, "", `echo Hi"}`)
 	s.Write(1, "", `,"purpose":"run it"}`)
 	s.Flush()
-	want := "hello.sh (new file)\n+ #!/bin/bash\n+ echo Hi\n$ bash hello.sh\n"
+	want := "hello.sh (whole file)\n+ #!/bin/bash\n+ echo Hi\n$ bash hello.sh\n"
 	if sb.String() != want {
 		t.Errorf("interleaved streams garbled:\ngot:\n%q\nwant:\n%q", sb.String(), want)
 	}

@@ -59,8 +59,10 @@ func editTools() []llm.ToolDef {
 		},
 		{
 			Name: toolCreateFile,
-			Description: "Create a new file with the given contents. The file is created " +
-				"immediately and committed to git.",
+			Description: "Write a file with the given full contents, creating it — or " +
+				"completely overwriting it if it already exists. Applies immediately and " +
+				"commits to git. To change part of an existing file, use replace_in_file " +
+				"instead; use this only when you are providing the whole file.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -140,12 +142,14 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 }
 
 // toolEdit is one edit-tool call resolved to an editblock edit plus the call
-// id it answers.
+// id it answers. create marks a create_file call, whose content is the file's
+// whole text (written fresh, or overwriting an existing file).
 type toolEdit struct {
 	callID  string
 	path    string
 	search  string
 	replace string
+	create  bool
 }
 
 // toolCommand is one suggest_command call.
@@ -181,7 +185,7 @@ func parseEditArgs(tc llm.ToolCall) (toolEdit, string) {
 	}
 	switch tc.Name {
 	case toolCreateFile:
-		return toolEdit{callID: tc.ID, path: a.Path, search: "", replace: a.Content}, ""
+		return toolEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
 	default: // toolReplaceInFile
 		return toolEdit{callID: tc.ID, path: a.Path, search: a.Search, replace: a.Replace}, ""
 	}
@@ -238,7 +242,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 
 	// Edits apply directly, then commit — so /undo has a clean base and the
 	// tool result can name the commit.
-	edited := c.applyToolEdits(edits, results, &needsReflection)
+	overwrote := map[string]string{} // call id -> path, for create_file over an existing file
+	edited := c.applyToolEdits(edits, results, overwrote, &needsReflection)
 	saved := ""
 	if len(edited) > 0 {
 		for _, f := range edited {
@@ -251,7 +256,13 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	}
 	for id, text := range results {
 		if text == appliedPlaceholder {
-			results[id] = saved
+			if p, ok := overwrote[id]; ok {
+				// Tell the model it replaced an existing file, not created a new
+				// one, so it doesn't assume the old contents survived.
+				results[id] = fmt.Sprintf("Overwrote the existing file %s. %s", p, saved)
+			} else {
+				results[id] = saved
+			}
 		}
 	}
 
@@ -407,7 +418,7 @@ func (c *Coder) appendToolResults(results map[string]string) {
 // results, and returns the edited relative paths. A search that doesn't match
 // sets *matchFailure and records a focused error (with a did-you-mean) for
 // that call.
-func (c *Coder) applyToolEdits(edits []toolEdit, results map[string]string, matchFailure *bool) []string {
+func (c *Coder) applyToolEdits(edits []toolEdit, results, overwrote map[string]string, matchFailure *bool) []string {
 	if len(edits) == 0 {
 		return nil
 	}
@@ -416,6 +427,7 @@ func (c *Coder) applyToolEdits(edits []toolEdit, results map[string]string, matc
 	reader := diskReader{root: c.Root}
 	pending := map[string]string{}
 	needDirtyCommit := map[string]bool{}
+	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
 	var writeOrder []string
 	editedSet := map[string]bool{}
 	var edited []string
@@ -439,11 +451,28 @@ func (c *Coder) applyToolEdits(edits []toolEdit, results map[string]string, matc
 		}
 
 		content, exists := read(e.path)
-		newContent, ok := editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
-		if !ok || newContent == "" {
-			results[e.callID] = toolMatchFailure(e, content, fen)
-			*matchFailure = true
-			continue
+		var newContent string
+		if e.create {
+			// create_file writes the whole file: create it fresh, or overwrite
+			// an existing one — never the old append-on-empty-search behavior.
+			newContent = e.replace
+			if exists {
+				overwrote[e.callID] = e.path
+				writeVerb[e.path] = "Overwrote"
+			} else if writeVerb[e.path] == "" {
+				writeVerb[e.path] = "Created"
+			}
+		} else {
+			var ok bool
+			newContent, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
+			if !ok || newContent == "" {
+				results[e.callID] = toolMatchFailure(e, content, fen)
+				*matchFailure = true
+				continue
+			}
+			if writeVerb[e.path] == "" {
+				writeVerb[e.path] = "Applied edit to"
+			}
 		}
 
 		if _, seen := pending[e.path]; !seen {
@@ -478,10 +507,14 @@ func (c *Coder) applyToolEdits(edits []toolEdit, results map[string]string, matc
 		}
 	}
 	for _, p := range edited {
+		verb := writeVerb[p]
+		if verb == "" {
+			verb = "Applied edit to"
+		}
 		if c.DryRun {
-			c.Out.Printf("Did not apply edit to %s (--dry-run)", p)
+			c.Out.Printf("Did not write %s (--dry-run)", p)
 		} else {
-			c.Out.Printf("Applied edit to %s", p)
+			c.Out.Printf("%s %s", verb, p)
 		}
 	}
 	return edited

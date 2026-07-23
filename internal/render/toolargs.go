@@ -247,7 +247,10 @@ func (d *ToolDiff) header() {
 	d.wroteHeader = true
 	label := d.path.String()
 	if d.tool == "create_file" {
-		label += " (new file)"
+		// "whole file" is honest whether the file is new or overwritten; the
+		// stream can't tell (no filesystem access). The coder's outcome line
+		// and tool result carry the created-vs-overwrote truth.
+		label += " (whole file)"
 	}
 	fmt.Fprintf(d.w, "%s\n", label)
 	for _, line := range d.pending {
