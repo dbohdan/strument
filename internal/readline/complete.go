@@ -84,84 +84,88 @@ func (o *opCompleter) nextCandidate() {
 	}
 }
 
-// Move selection to the next ith col in the current line, wrapping to the line start/end if needed
+// Move selection i columns along the current row (column-major), wrapping
+// within the columns that actually reach this row.
 func (o *opCompleter) nextCol(i int) {
-	// If o.candidateColNum == 1 or 0, there is only one col per line and this is a noop
-	if o.candidateColNum > 1 {
-		idxWithinPage := o.candidateChoiceWithinPage()
-		curLine := idxWithinPage / o.candidateColNum
-		offsetInLine := idxWithinPage % o.candidateColNum
-		nextOffset := offsetInLine + i
-		nextOffset %= o.candidateColNum
-		if nextOffset < 0 {
-			nextOffset += o.candidateColNum
-		}
-
-		nextIdxWithinPage := curLine*o.candidateColNum + nextOffset
-		o.updateAbsolutechoice(nextIdxWithinPage)
+	// Single column (candidateColNum 0 or 1): no horizontal move.
+	if o.candidateColNum <= 1 {
+		return
 	}
+	rows := o.getMatrixNumRows()
+	n := o.numCandidateCurPage()
+	k := o.candidateChoiceWithinPage()
+	row := k % rows
+	colsInRow := (n - row + rows - 1) / rows // columns with a cell in this row (a prefix)
+	col := ((k/rows+i)%colsInRow + colsInRow) % colsInRow
+	o.updateAbsolutechoice(col*rows + row)
 }
 
-// Move selection to the line below
+// Move selection one row down, within the current column (column-major).
 func (o *opCompleter) nextLine() {
-	colNum := 1
 	if o.candidateColNum > 1 {
-		colNum = o.candidateColNum
+		rows := o.getMatrixNumRows()
+		n := o.numCandidateCurPage()
+		k := o.candidateChoiceWithinPage()
+		col, row := k/rows, k%rows
+		h := rows
+		if rem := n - col*rows; rem < h {
+			h = rem // the last column is short
+		}
+		o.updateAbsolutechoice(col*rows + (row+1)%h)
+		return
 	}
-
-	idxWithinPage := o.candidateChoiceWithinPage()
-
-	idxWithinPage += colNum
+	// Single column: down one, wrapping within the page.
+	idxWithinPage := o.candidateChoiceWithinPage() + 1
 	if idxWithinPage >= o.getMatrixSize() {
 		idxWithinPage -= o.getMatrixSize()
 	} else if idxWithinPage >= o.numCandidateCurPage() {
-		idxWithinPage += colNum
+		idxWithinPage++
 		idxWithinPage -= o.getMatrixSize()
 	}
-
 	o.updateAbsolutechoice(idxWithinPage)
 }
 
-// Move selection to the line above
+// Move selection one row up, within the current column (column-major).
 func (o *opCompleter) prevLine() {
-	colNum := 1
 	if o.candidateColNum > 1 {
-		colNum = o.candidateColNum
+		rows := o.getMatrixNumRows()
+		n := o.numCandidateCurPage()
+		k := o.candidateChoiceWithinPage()
+		col, row := k/rows, k%rows
+		h := rows
+		if rem := n - col*rows; rem < h {
+			h = rem
+		}
+		o.updateAbsolutechoice(col*rows + (row-1+h)%h)
+		return
 	}
-
-	idxWithinPage := o.candidateChoiceWithinPage()
-
-	idxWithinPage -= colNum
+	// Single column: up one, wrapping within the page.
+	idxWithinPage := o.candidateChoiceWithinPage() - 1
 	if idxWithinPage < 0 {
 		idxWithinPage += o.getMatrixSize()
 		if idxWithinPage >= o.numCandidateCurPage() {
-			idxWithinPage -= colNum
+			idxWithinPage--
 		}
 	}
-
 	o.updateAbsolutechoice(idxWithinPage)
 }
 
-// Move selection to the start of the current line
+// Move selection to the first column of the current row (column-major).
 func (o *opCompleter) lineStart() {
 	if o.candidateColNum > 1 {
-		idxWithinPage := o.candidateChoiceWithinPage()
-		lineOffset := idxWithinPage % o.candidateColNum
-		idxWithinPage -= lineOffset
-		o.updateAbsolutechoice(idxWithinPage)
+		rows := o.getMatrixNumRows()
+		o.updateAbsolutechoice(o.candidateChoiceWithinPage() % rows) // col 0, same row
 	}
 }
 
-// Move selection to the end of the current line
+// Move selection to the last populated column of the current row (column-major).
 func (o *opCompleter) lineEnd() {
 	if o.candidateColNum > 1 {
-		idxWithinPage := o.candidateChoiceWithinPage()
-		offsetToLineEnd := o.candidateColNum - idxWithinPage%o.candidateColNum - 1
-		idxWithinPage += offsetToLineEnd
-		o.updateAbsolutechoice(idxWithinPage)
-		if o.candidateChoice >= len(o.candidate) {
-			o.candidateChoice = len(o.candidate) - 1
-		}
+		rows := o.getMatrixNumRows()
+		n := o.numCandidateCurPage()
+		row := o.candidateChoiceWithinPage() % rows
+		colsInRow := (n - row + rows - 1) / rows
+		o.updateAbsolutechoice((colsInRow-1)*rows + row)
 	}
 }
 
@@ -368,6 +372,15 @@ func (o *opCompleter) CompleteRefresh() {
 		return
 	}
 
+	// A multi-column listing fills down columns (fish/zsh style), so Tab walks
+	// down a column instead of across a row. A single-column layout (candidates
+	// too wide to pair up, possibly multi-line) is one-per-line either way, so
+	// it keeps the original renderer below.
+	if o.candidateColNum > 1 {
+		o.completeRefreshColMajor()
+		return
+	}
+
 	buf := bufio.NewWriter(o.w)
 	// calculate num lines from cursor pos to where choices should be written
 	lineCnt := o.op.buf.CursorLineCount()
@@ -459,6 +472,72 @@ func (o *opCompleter) CompleteRefresh() {
 
 	// wrote out choices over "lines", move back to cursor (positioned at index)
 	fmt.Fprintf(buf, "\033[%dA", lines)
+	buf.Write(o.op.buf.getBackspaceSequence())
+	buf.Flush()
+}
+
+// completeRefreshColMajor renders the candidates column-major: candidate k on
+// the page sits at row k%numRows, column k/numRows, so reading down a column is
+// consecutive and Tab (the next candidate) moves down a column. Only reached
+// when candidateColNum > 1, where every candidate is single-line. The cursor
+// bookkeeping mirrors the row-major CompleteRefresh.
+func (o *opCompleter) completeRefreshColMajor() {
+	buf := bufio.NewWriter(o.w)
+	lineCnt := o.op.buf.CursorLineCount()
+	buf.Write(bytes.Repeat([]byte("\n"), lineCnt)) // down to the start of the candidate area
+	buf.WriteString("\033[J")
+
+	same := o.op.buf.RuneSlice(-o.candidateOff)
+	sameWidth := runes.WidthAll(same)
+	colNum := o.candidateColNum
+
+	// A page holds at most linesAvail rows * colNum columns of single-line
+	// candidates; record the next page's start the first time we render this one.
+	pageStart := o.pageStartIdx[o.curPage]
+	pageEnd := pageStart + o.linesAvail*colNum
+	if pageEnd > len(o.candidate) {
+		pageEnd = len(o.candidate)
+	}
+	if o.curPage == len(o.pageStartIdx)-1 {
+		o.pageStartIdx = append(o.pageStartIdx, pageEnd)
+	}
+	pageCount := pageEnd - pageStart
+	numRows := (pageCount + colNum - 1) / colNum
+
+	lines := 0
+	for row := 0; row < numRows; row++ {
+		if row > 0 {
+			buf.WriteString("\n")
+		}
+		for col := 0; col < colNum; col++ {
+			k := col*numRows + row
+			if k >= pageCount {
+				break // trailing short columns have no cell in this row
+			}
+			idx := pageStart + k
+			c := o.candidate[idx]
+			cWidth := sameWidth + runes.WidthAll(c)
+			inSelect := idx == o.candidateChoice && o.IsInCompleteSelectMode()
+			if inSelect {
+				buf.WriteString("\033[30;47m")
+			}
+			buf.WriteString(string(same))
+			buf.WriteString(string(c))
+			if inSelect {
+				buf.WriteString("\033[0m")
+			}
+			buf.Write(bytes.Repeat([]byte(" "), o.candidateColWidth-cWidth))
+		}
+		lines++
+	}
+
+	// Guidance line when there is more than one page.
+	if pageEnd != len(o.candidate) || o.curPage > 0 {
+		buf.WriteString("\n-- (j: prev page) (k: next page) --")
+		lines++
+	}
+
+	fmt.Fprintf(buf, "\033[%dA", lines) // back up to the prompt line
 	buf.Write(o.op.buf.getBackspaceSequence())
 	buf.Flush()
 }
