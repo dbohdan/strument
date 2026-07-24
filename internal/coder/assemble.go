@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/editblock"
@@ -48,9 +49,11 @@ func addCacheControl(messages []llm.Message) {
 	}
 	last := messages[len(messages)-1]
 	block := llm.ContentBlock{
-		Type:         "text",
-		Text:         last.Content.String(),
-		CacheControl: &llm.CacheControl{Type: "ephemeral"},
+		Type: "text",
+		Text: last.Content.String(),
+		// The 1-hour TTL matches Strument's cadence: bursts of turns separated
+		// by think-time gaps that the default ~5-minute cache would let expire.
+		CacheControl: &llm.CacheControl{Type: "ephemeral", TTL: "1h"},
 	}
 	messages[len(messages)-1] = llm.Message{
 		Role:    last.Role,
@@ -302,6 +305,38 @@ func (c *Coder) repoMapContent() string {
 	return content
 }
 
+// repoMapForPrompt returns the repo map for the assembled prompt. With caching
+// off it is the live per-turn map (repoMapContent). With caching on it is
+// frozen: computed once and reused until the chat file set changes, so the
+// cached prefix stays byte-stable across turns. A file add/drop refreshes it
+// (invalidating the cache once, as expected); between refreshes the map
+// reflects the mentions present at the last file-set change rather than the
+// current turn's — the tradeoff caching accepts, matching aider's
+// map_refresh="files". RepoMapNow still calls repoMapContent, so the on-demand
+// map display stays live.
+func (c *Coder) repoMapForPrompt() string {
+	if !c.cacheHeadersEnabled() {
+		return c.repoMapContent()
+	}
+	key := repoMapCacheKey(c.absFnames, c.absReadOnlyFnames)
+	if key != c.cachedRepoMapKey {
+		c.cachedRepoMap = c.repoMapContent()
+		c.cachedRepoMapKey = key
+	}
+	return c.cachedRepoMap
+}
+
+// repoMapCacheKey is the chat-file-set signature the frozen map is keyed on:
+// the sorted editable and read-only paths. Sorting makes it order-independent,
+// so re-adding a dropped file does not force a needless recompute.
+func repoMapCacheKey(absFnames, absReadOnlyFnames []string) string {
+	edit := slices.Clone(absFnames)
+	slices.Sort(edit)
+	ro := slices.Clone(absReadOnlyFnames)
+	slices.Sort(ro)
+	return strings.Join(edit, "\n") + "\x00" + strings.Join(ro, "\n")
+}
+
 func (c *Coder) curMessageText() string {
 	var b strings.Builder
 	for _, m := range c.curMessages {
@@ -361,7 +396,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
-	if repoContent := c.repoMapContent(); repoContent != "" {
+	if repoContent := c.repoMapForPrompt(); repoContent != "" {
 		other := ""
 		if len(c.absFnames) > 0 {
 			other = "other "
@@ -441,10 +476,14 @@ func (c *Coder) formatMessages() *chatChunks {
 	return chunks
 }
 
-// cacheHeadersEnabled: v1 keeps explicit cache-control decoration off by
-// default (OpenAI-dialect endpoints cache implicitly; the placement logic
-// stays tested for when a config toggle lands).
-func (c *Coder) cacheHeadersEnabled() bool { return c.CacheHeaders }
+// cacheHeadersEnabled reports whether the active model opts into prompt
+// caching (the per-model `cache` config setting). It reads the model live so
+// the gate follows a /model switch. When on, formatMessages decorates the
+// slots with cache-control breakpoints and repoMapForPrompt freezes the map to
+// keep the cached prefix byte-stable. Explicit breakpoints matter on
+// Anthropic-family models; on implicit-caching providers they are inert but the
+// frozen prefix still helps, so the flag is worth setting for any caching model.
+func (c *Coder) cacheHeadersEnabled() bool { return c.Model != nil && c.Model.Cache }
 
 func (c *Coder) countMessages(msgs []llm.Message) int {
 	n := 0

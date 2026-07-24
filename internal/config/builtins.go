@@ -164,8 +164,8 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 // model(provider, slug, *, display_name=None, edit_format="tool",
 //
 //	weak_model=None, reasoning=None, reasoning_tag=None, temperature=None,
-//	repo_map=True, context=None, max_output=None, input_cost=None,
-//	output_cost=None, extra_params={}).
+//	repo_map=True, cache=False, context=None, max_output=None,
+//	input_cost=None, output_cost=None, extra_params={}).
 func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 2 {
 		return nil, errors.New("model: only 'provider' and 'slug' may be positional")
@@ -178,6 +178,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
 	repoMap := true
+	var cache bool
 	var contextTokens, maxOutput int
 	var inputCost, outputCost starlark.Value
 	var extraParams *starlark.Dict
@@ -191,6 +192,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"reasoning_tag?", &reasoningTag,
 		"temperature?", &temperature,
 		"repo_map?", &repoMap,
+		"cache?", &cache,
 		"context?", &contextTokens,
 		"max_output?", &maxOutput,
 		"input_cost?", &inputCost,
@@ -216,6 +218,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		Reasoning:    reasoning,
 		ReasoningTag: reasoningTag,
 		RepoMap:      repoMap,
+		Cache:        cache,
 		Context:      contextTokens,
 		MaxOutput:    maxOutput,
 	}

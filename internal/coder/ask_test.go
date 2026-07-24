@@ -60,7 +60,7 @@ func TestAskAssemblyNoExamplesReminderPresent(t *testing.T) {
 
 func TestAskCacheBreakpointFallsBackToSystem(t *testing.T) {
 	c := askCoder(t, t.TempDir())
-	c.CacheHeaders = true
+	c.Model.Cache = true
 	p := filepath.Join(c.Root, "a.txt")
 	if err := os.WriteFile(p, []byte("content\n"), 0o644); err != nil {
 		t.Fatal(err)

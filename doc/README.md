@@ -63,7 +63,11 @@ inherited from aider.
   GUI, analytics, and summarization are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
-  YAML/`.env`/model-database configuration.
+  YAML/`.env`/model-database configuration. Prompt caching follows from this:
+  with no model database to declare capability, it is a per-model `cache`
+  setting that decorates the prompt with cache-control breakpoints (1h TTL) and
+  freezes the repo map to hold the prefix stable — aider's `--cache-prompts`
+  plus `map_refresh="files"`, minus the cache-warming pings, which we omit.
 - **Where we differ.** Some behavior is deliberately not aider's — atomic
   batch writes with rollback, a single pure apply planner shared by dry and
   real runs, usage accounting that survives an aborted turn, an in-chat-file

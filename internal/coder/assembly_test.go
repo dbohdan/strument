@@ -147,7 +147,7 @@ func TestNonexistentChatFileRendersEmpty(t *testing.T) {
 
 func TestCacheBreakpointsSnapshot(t *testing.T) {
 	c := testCoder(t)
-	c.CacheHeaders = true
+	c.Model.Cache = true
 	p := filepath.Join(c.Root, "a.txt")
 	if err := os.WriteFile(p, []byte("content\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -189,6 +189,90 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 		if m.Content.Blocks != nil {
 			t.Error("doneMessages mutated by cache decoration")
 		}
+	}
+}
+
+func TestCacheBreakpointTTL(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = true
+	p := filepath.Join(c.Root, "a.txt")
+	if err := os.WriteFile(p, []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddFile("a.txt")
+	c.curMessages = []llm.Message{llm.TextMessage("user", "new")}
+
+	chunks := c.formatMessages()
+
+	found := 0
+	for _, m := range chunks.allMessages() {
+		for _, b := range m.Content.Blocks {
+			if b.CacheControl == nil {
+				continue
+			}
+			found++
+			if b.CacheControl.Type != "ephemeral" || b.CacheControl.TTL != "1h" {
+				t.Errorf("cache_control = %+v, want ephemeral/1h", *b.CacheControl)
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("no cache breakpoints were decorated")
+	}
+}
+
+// TestRepoMapFreezeReusesUntilFileSetChanges proves the freeze mechanics
+// without a live repo map: it poisons the cache with a sentinel and confirms a
+// second call returns the stored value (no recompute), while a file-set change
+// invalidates it. repoMapContent returns "" with no RepoMap port, which is all
+// the freeze logic needs — it caches whatever repoMapContent produces.
+func TestRepoMapFreezeReusesUntilFileSetChanges(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = true
+	c.Model.RepoMap = true
+
+	_ = c.repoMapForPrompt() // first call computes and caches (empty; no port)
+	keyBefore := c.cachedRepoMapKey
+
+	// A second call must return the stored value, not recompute.
+	c.cachedRepoMap = "SENTINEL"
+	if got := c.repoMapForPrompt(); got != "SENTINEL" {
+		t.Errorf("frozen map recomputed instead of reusing the cache: got %q", got)
+	}
+	if c.cachedRepoMapKey != keyBefore {
+		t.Errorf("key changed without a file-set change: %q -> %q", keyBefore, c.cachedRepoMapKey)
+	}
+
+	// Changing the chat file set invalidates the freeze and recomputes.
+	p := filepath.Join(c.Root, "a.txt")
+	if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddFile("a.txt")
+	if got := c.repoMapForPrompt(); got == "SENTINEL" {
+		t.Error("map not refreshed after a file-set change")
+	}
+	if c.cachedRepoMapKey == keyBefore {
+		t.Error("cache key did not change after AddFile")
+	}
+}
+
+// TestRepoMapNotFrozenWhenCacheOff guards the coupling: the default (cache off)
+// keeps the live per-turn map and never populates the freeze cache.
+func TestRepoMapNotFrozenWhenCacheOff(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = false
+	c.Model.RepoMap = true
+
+	_ = c.repoMapForPrompt()
+	if c.cachedRepoMapKey != "" || c.cachedRepoMap != "" {
+		t.Errorf("cache-off path populated the freeze cache: key=%q map=%q", c.cachedRepoMapKey, c.cachedRepoMap)
+	}
+
+	// A poisoned cache is ignored: the cache-off path recomputes live.
+	c.cachedRepoMap = "SENTINEL"
+	if got := c.repoMapForPrompt(); got == "SENTINEL" {
+		t.Error("cache-off path returned a frozen value")
 	}
 }
 

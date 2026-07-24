@@ -102,7 +102,10 @@ models = {
     ),
     "k3": flex(model(openrouter, "moonshotai/kimi-k3", display_name="Kimi K3")),
     "sonnet": model(
-        openrouter, "anthropic/claude-sonnet-5", display_name="Claude Sonnet 5"
+        openrouter,
+        "anthropic/claude-sonnet-5",
+        display_name="Claude Sonnet 5",
+        cache=True,  # Cache the prompt prefix (Anthropic honors this); freezes the repo map.
     ),
     "qwen": model(
         local_llm,
@@ -118,6 +121,17 @@ models["ds"] = models["deepseek-pro"]  # One struct under both keys.
 
 default = "deepseek-pro"
 ```
+
+The `cache` option (default off) turns on prompt caching for a model: Strument
+attaches cache-control breakpoints with a one-hour TTL and freezes the repo map
+so the cached prefix stays byte-stable across turns. Explicit breakpoints are
+honored by Anthropic models (reached through OpenRouter); other providers cache
+automatically and ignore them, but the frozen prefix still helps their implicit
+caching, so it is worth setting on any cache-capable model. There is no
+automatic default — set it per model where you know it pays off. Freezing the
+map is the tradeoff caching accepts: the map refreshes when you add or drop
+files, not on every message, so mid-conversation file mentions no longer re-rank
+it while caching is on.
 
 Project-local `.strument.star` files can override or extend this, but
 require explicit trust (`/trust`) before they take effect.

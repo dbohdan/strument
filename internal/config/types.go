@@ -63,7 +63,8 @@ type Model struct {
 	ReasoningTag string // response-side inline tag to strip; "" => none
 	Temperature  *float64
 	RepoMap      bool
-	Context      int // input window tokens; 0 => unknown
+	Cache        bool // enable prompt-cache breakpoints (1h TTL) + freeze the repo map
+	Context      int  // input window tokens; 0 => unknown
 	MaxOutput    int
 	InputCost    *llm.Money // per-token; nil => unknown (never fabricate cost)
 	OutputCost   *llm.Money

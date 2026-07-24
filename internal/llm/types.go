@@ -105,7 +105,8 @@ type ContentBlock struct {
 
 // CacheControl marks a prompt-cache breakpoint.
 type CacheControl struct {
-	Type string `json:"type"` // "ephemeral"
+	Type string `json:"type"`          // "ephemeral"
+	TTL  string `json:"ttl,omitempty"` // "1h" extended cache; "" => provider default (~5m)
 }
 
 // EventKind tags a StreamEvent.

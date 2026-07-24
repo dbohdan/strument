@@ -26,7 +26,6 @@ type Coder struct {
 	// Options.
 	DryRun               bool
 	AutoCommits          bool
-	CacheHeaders         bool
 	SuggestShellCommands bool // false gates execution too
 	Stream               bool
 	ReminderPlacement    string // "sys" | "user" (aider model default: "user")
@@ -95,6 +94,11 @@ type Coder struct {
 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
 	ignoreMentions      map[string]bool
 	rejectedUrls        map[string]bool
+
+	// Frozen repo map (caching only): computed once per chat-file set and reused
+	// until the set changes, so the cached prompt prefix stays byte-stable.
+	cachedRepoMap    string
+	cachedRepoMapKey string
 }
 
 type fence struct{ open, close string }
