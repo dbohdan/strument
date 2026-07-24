@@ -44,8 +44,9 @@ func (o SendOutcome) String() string {
 // Retry/continuation constants. RETRY_TIMEOUT matches aider;
 // the continuation cap is a declared divergence (aider is unbounded).
 const (
-	retryTimeout    = 60 * time.Second
-	continuationCap = 4
+	retryTimeout      = 60 * time.Second
+	continuationCap   = 4
+	initialRetryDelay = 125 * time.Millisecond
 )
 
 // sendUsage is the per-send accumulator; sendMessage owns it and a defer
@@ -72,6 +73,89 @@ func (u *sendUsage) add(usage *llm.Usage) {
 		u.cost += *usage.Cost
 		u.costKnown = true
 	}
+}
+
+// streamResult classifies how one streamOnce call ended.
+type streamResult int
+
+const (
+	resDone streamResult = iota
+	resContinuation
+	resContextExhausted
+	resOutputExhausted
+	resInterrupted
+	resFailed
+)
+
+// streamOnce runs one request through the client, dispatching stream events to
+// the output and accumulating into the partial* fields and usage. It returns a
+// coarse classification of how the stream ended. The caller resets the partial*
+// fields before each call and decides whether to retry or continue.
+func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage) (streamResult, error) {
+	finishReason := ""
+	for ev, err := range c.Client.Send(ctx, req) {
+		if err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return resInterrupted, nil
+			}
+			var se *llm.StreamError
+			if errors.As(err, &se) {
+				if se.Class == llm.ErrContextWindow {
+					return resContextExhausted, nil
+				}
+				if se.Retryable() {
+					return resFailed, se // maybe retried by the caller
+				}
+			}
+			return resFailed, err
+		}
+		switch ev.Kind {
+		case llm.EventAnswer:
+			c.partialResponseContent += ev.Text
+			c.Out.StreamText(ev.Text)
+		case llm.EventReasoning:
+			c.partialReasoningContent += ev.Text
+			c.Out.StreamReasoning(ev.Text)
+		case llm.EventToolCall:
+			c.accumulateToolCall(ev.ToolCall)
+			if ev.ToolCall != nil {
+				c.Out.StreamToolCall(ev.ToolCall.Index, ev.ToolCall.Name, ev.ToolCall.Args)
+			}
+		case llm.EventFinish:
+			finishReason = ev.FinishReason
+		case llm.EventUsage:
+			usage.add(ev.Usage)
+		}
+	}
+	if finishReason == "length" {
+		return resContinuation, nil
+	}
+	return resDone, nil
+}
+
+// retryBackoff carries the doubling delay for transient stream errors across a
+// send's retry loop.
+type retryBackoff struct{ delay time.Duration }
+
+// retry reports whether to retry a failed stream. A retryable error backs off —
+// doubling the delay (capped at retryTimeout) and sleeping — then returns true;
+// a non-retryable error, or one past the cap, reports the failure and returns
+// false. Shared by sendMessage and RunAside so /btw retries like a normal turn.
+func (rb *retryBackoff) retry(c *Coder, streamErr error) bool {
+	var se *llm.StreamError
+	if !errors.As(streamErr, &se) || !se.Retryable() {
+		c.Out.Errorf("%v", streamErr)
+		return false
+	}
+	rb.delay *= 2
+	if rb.delay > retryTimeout {
+		c.Out.Errorf("%s", se.Error())
+		return false
+	}
+	c.Out.Warningf("%s", se.Error())
+	c.Out.Printf("Retrying in %.1f seconds...", rb.delay.Seconds())
+	c.Clock.Sleep(rb.delay)
+	return true
 }
 
 // sendMessage is the phase machine. It returns the outcome and, for
@@ -105,17 +189,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	usage := &sendUsage{estSent: c.countMessages(messages)}
 	defer c.finalizeUsage(usage)
 
-	type streamResult int
-	const (
-		resDone streamResult = iota
-		resContinuation
-		resContextExhausted
-		resOutputExhausted
-		resInterrupted
-		resFailed
-	)
-
-	retryDelay := 125 * time.Millisecond
+	backoff := retryBackoff{delay: initialRetryDelay}
 	continuations := 0
 	interrupted := false
 	exhaustedContext := false
@@ -128,65 +202,15 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.partialToolCalls = nil
 		c.toolCallIndex = map[int]int{}
 
-		res, streamErr := func() (streamResult, error) {
-			finishReason := ""
-			for ev, err := range c.Client.Send(ctx, c.buildRequest(messages)) {
-				if err != nil {
-					if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-						return resInterrupted, nil
-					}
-					var se *llm.StreamError
-					if errors.As(err, &se) {
-						if se.Class == llm.ErrContextWindow {
-							return resContextExhausted, nil
-						}
-						if se.Retryable() {
-							return resFailed, se // maybe retried below
-						}
-					}
-					return resFailed, err
-				}
-				switch ev.Kind {
-				case llm.EventAnswer:
-					c.partialResponseContent += ev.Text
-					c.Out.StreamText(ev.Text)
-				case llm.EventReasoning:
-					c.partialReasoningContent += ev.Text
-					c.Out.StreamReasoning(ev.Text)
-				case llm.EventToolCall:
-					c.accumulateToolCall(ev.ToolCall)
-					if ev.ToolCall != nil {
-						c.Out.StreamToolCall(ev.ToolCall.Index, ev.ToolCall.Name, ev.ToolCall.Args)
-					}
-				case llm.EventFinish:
-					finishReason = ev.FinishReason
-				case llm.EventUsage:
-					usage.add(ev.Usage)
-				}
-			}
-			if finishReason == "length" {
-				return resContinuation, nil
-			}
-			return resDone, nil
-		}()
+		res, streamErr := c.streamOnce(ctx, c.buildRequest(messages), usage)
 
 		if res == resFailed {
-			var se *llm.StreamError
-			if errors.As(streamErr, &se) && se.Retryable() {
-				retryDelay *= 2
-				if retryDelay > retryTimeout {
-					c.Out.Errorf("%s", se.Error())
-					failed = true
-					break
-				}
-				c.Out.Warningf("%s", se.Error())
-				c.Out.Printf("Retrying in %.1f seconds...", retryDelay.Seconds())
-				c.Clock.Sleep(retryDelay)
-				// Retry discards the partial (reset at loop top); the
-				// accumulated multiResponseContent is untouched.
+			// A retryable error backs off and retries (the partial is discarded
+			// at the loop top; accumulated multiResponseContent is untouched);
+			// anything else is a hard failure.
+			if backoff.retry(c, streamErr) {
 				continue
 			}
-			c.Out.Errorf("%v", streamErr)
 			failed = true
 			break
 		}

@@ -21,6 +21,44 @@ func (asideStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEven
 	}
 }
 
+// retryOnceStub fails the first send with a retryable server error (the local
+// Qwen "Loading model" 503), then answers on the retry.
+type retryOnceStub struct{ calls int }
+
+func (s *retryOnceStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		if s.calls == 1 {
+			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: "HTTP 503: Loading model"})
+			return
+		}
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "42"}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+func TestRunAsideRetriesTransientError(t *testing.T) {
+	c := testCoder(t)
+	clock := &fastClock{}
+	c.Clock = clock
+	c.Client = &retryOnceStub{}
+	c.curMessages = []llm.Message{llm.TextMessage("user", "prior turn")}
+
+	ans := c.RunAside(context.Background(), "what is 6 times 7?")
+
+	if ans != "42" {
+		t.Errorf("answer = %q, want 42 (after one retry)", ans)
+	}
+	if len(clock.slept) != 1 {
+		t.Errorf("expected exactly one backoff sleep, got %v", clock.slept)
+	}
+	if len(c.curMessages) != 1 {
+		t.Errorf("RunAside changed context during retry: cur len %d, want 1", len(c.curMessages))
+	}
+}
+
 func TestRunAsideIsolatedFromContext(t *testing.T) {
 	c := testCoder(t)
 	c.Client = asideStub{}

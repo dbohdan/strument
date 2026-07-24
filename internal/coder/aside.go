@@ -2,7 +2,6 @@ package coder
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
@@ -15,8 +14,10 @@ import (
 // conversation. It returns the answer text.
 //
 // This backs the REPL's /btw. Unlike sendMessage it never touches curMessages
-// or doneMessages, sends no tools, and does not reflect or retry — a throwaway
-// question deserves a single, isolated exchange.
+// or doneMessages, sends no tools, and does not continue or reflect — a
+// throwaway question stays a single, isolated exchange. It does share the same
+// stream + transient-error backoff, so /btw retries a slow-to-wake server (a
+// 503 "Loading model") exactly like a normal turn.
 func (c *Coder) RunAside(ctx context.Context, question string) string {
 	if strings.TrimSpace(question) == "" {
 		return ""
@@ -33,31 +34,26 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 	}
 
 	// The stream writes through the same transient fields finalizeUsage reads
-	// for its aborted-turn estimate; clear them first and again at the end so a
+	// for its aborted-turn estimate; clear them here and again at the end so a
 	// /btw never leaks state into the next real turn.
 	c.multiResponseContent = ""
-	c.partialResponseContent = ""
-	c.partialReasoningContent = ""
 
 	usage := &sendUsage{estSent: c.countMessages(messages)}
-	for ev, err := range c.Client.Send(ctx, req) {
-		if err != nil {
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-				break // interrupted: stop quietly, like a normal turn's Ctrl-C
+	backoff := retryBackoff{delay: initialRetryDelay}
+	for {
+		c.partialResponseContent = ""
+		c.partialReasoningContent = ""
+		c.partialToolCalls = nil
+		c.toolCallIndex = map[int]int{}
+
+		res, streamErr := c.streamOnce(ctx, req, usage)
+		if res == resFailed {
+			if backoff.retry(c, streamErr) {
+				continue // transient error: retry with the same backoff as a turn
 			}
-			c.Out.Errorf("%v", err)
 			break
 		}
-		switch ev.Kind {
-		case llm.EventAnswer:
-			c.partialResponseContent += ev.Text
-			c.Out.StreamText(ev.Text)
-		case llm.EventReasoning:
-			c.partialReasoningContent += ev.Text
-			c.Out.StreamReasoning(ev.Text)
-		case llm.EventUsage:
-			usage.add(ev.Usage)
-		}
+		break // done, interrupted, or truncated: a one-off does not continue
 	}
 	c.Out.FlushStream()
 
