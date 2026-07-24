@@ -46,6 +46,7 @@ func init() {
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Add reference files the model must not edit", cmdReadOnly},
+		{"reload", "", "Reload config.star (new models become available)", cmdReload},
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
@@ -394,6 +395,35 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	}
 	r.opts.ModelAlias = args
 	r.printf("Switched to model %s (%s).", args, m.Slug)
+	return ""
+}
+
+func cmdReload(_ context.Context, r *REPL, _ string) string {
+	if r.opts.ReloadConfig == nil {
+		r.out.Errorf("Config reload is unavailable.")
+		return ""
+	}
+	cfg, err := r.opts.ReloadConfig()
+	if err != nil {
+		// Keep the running config; a half-loaded session is worse than a stale
+		// one.
+		r.out.Errorf("Config not reloaded (keeping the current one): %v", err)
+		return ""
+	}
+	r.opts.Config = cfg
+
+	// Re-resolve the active alias so edits to that model take effect; if it was
+	// removed, keep the running model rather than stranding the session.
+	if m, ok := cfg.Models[r.opts.ModelAlias]; ok {
+		r.coder.SetModel(m)
+		r.refreshTrailer(m)
+		if r.opts.MakeClient != nil {
+			r.coder.Client = r.opts.MakeClient(m)
+		}
+	} else {
+		r.out.Warningf("Active model %q is no longer in the config; keeping the running model.", r.opts.ModelAlias)
+	}
+	r.printf("Config reloaded. Models: %s.", strings.Join(slices.Sorted(maps.Keys(cfg.Models)), ", "))
 	return ""
 }
 

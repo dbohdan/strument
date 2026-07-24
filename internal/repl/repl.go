@@ -41,6 +41,10 @@ type Options struct {
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
+	// ReloadConfig re-reads config.star for /reload, using the same options as
+	// the initial load. nil disables /reload.
+	ReloadConfig func() (*config.Config, error)
+
 	Color       bool
 	HistoryFile string
 

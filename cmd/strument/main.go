@@ -178,12 +178,15 @@ func terminalSize() (int, int) {
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
 	inputHistory, _ := history.InputHistoryPath()
 	r, err := repl.New(repl.Options{
-		Coder:       cdr,
-		Config:      cfg,
-		Git:         repo,
-		History:     hist,
-		ModelAlias:  alias,
-		MakeClient:  func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		Coder:      cdr,
+		Config:     cfg,
+		Git:        repo,
+		History:    hist,
+		ModelAlias: alias,
+		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		ReloadConfig: func() (*config.Config, error) {
+			return config.Load(config.Options{ProjectRoot: cdr.Root})
+		},
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		HistoryFile: inputHistory,
 		Version:     version,

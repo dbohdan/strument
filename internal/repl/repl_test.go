@@ -7,6 +7,7 @@ package repl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"iter"
 	"os"
@@ -239,6 +240,50 @@ func TestRunCommandAddsExchange(t *testing.T) {
 		t.Errorf("confirm flow failed:\n%s", got)
 	}
 	_ = cdr
+}
+
+func TestReloadConfig(t *testing.T) {
+	// A reload that adds a model makes it selectable without a restart.
+	input := strings.NewReader("/reload\n/model newmodel\n/exit\n")
+	r, _, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	r.opts.ReloadConfig = func() (*config.Config, error) {
+		cfg := testConfig(testModel())
+		cfg.Models["newmodel"] = testModel()
+		return cfg, nil
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "Config reloaded.") {
+		t.Errorf("no reload confirmation:\n%s", got)
+	}
+	if !strings.Contains(got, "Switched to model newmodel") {
+		t.Errorf("model added by reload should be selectable:\n%s", got)
+	}
+}
+
+func TestReloadConfigErrorKeepsConfig(t *testing.T) {
+	// A failed reload reports the error and leaves the session usable.
+	input := strings.NewReader("/reload\n/model other\n/exit\n")
+	r, _, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	r.opts.ReloadConfig = func() (*config.Config, error) {
+		return nil, errors.New("boom in config.star")
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "Config not reloaded") {
+		t.Errorf("error path not reported:\n%s", got)
+	}
+	if !strings.Contains(got, "Switched to model other") {
+		t.Errorf("session should stay usable on the old config after a failed reload:\n%s", got)
+	}
 }
 
 func TestAddDropDirectory(t *testing.T) {
