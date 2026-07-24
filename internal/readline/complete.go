@@ -523,10 +523,18 @@ func (o *opCompleter) completeRefreshColMajor() {
 			}
 			buf.WriteString(string(same))
 			buf.WriteString(string(c))
+			// Highlight the whole cell (candidate + its padding), leaving one
+			// plain space as the column separator, so the selected entry reads
+			// as a full inverted bar. The pad is >=0 (setColumnInfo makes
+			// candidateColWidth > every cWidth), but clamp defensively — that
+			// invariant lives elsewhere and bytes.Repeat panics on a negative.
+			if pad := o.candidateColWidth - cWidth - 1; pad > 0 {
+				buf.Write(bytes.Repeat([]byte(" "), pad))
+			}
 			if inSelect {
 				buf.WriteString("\033[0m")
 			}
-			buf.Write(bytes.Repeat([]byte(" "), o.candidateColWidth-cWidth))
+			buf.WriteString(" ")
 		}
 		lines++
 	}
