@@ -241,6 +241,38 @@ func TestRunCommandAddsExchange(t *testing.T) {
 	_ = cdr
 }
 
+func TestAddDropDirectory(t *testing.T) {
+	// The test root is not a git repo, so /add <dir> uses the filesystem walk.
+	input := strings.NewReader("/add sub\n/ls\n/drop sub\n/ls\n/exit\n")
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+
+	sub := filepath.Join(cdr.Root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(filepath.Join(sub, n), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"Added sub/a.txt to the chat.",
+		"Added sub/b.txt to the chat.",
+		"Dropped sub/a.txt from the chat.",
+		"Dropped sub/b.txt from the chat.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRunEmptySuccessSkipsConfirm(t *testing.T) {
 	// A command that succeeds with no output has nothing to add, so the
 	// "add output?" prompt must not appear (it would also swallow /exit).

@@ -2,6 +2,7 @@ package coder
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -46,6 +47,39 @@ func (c *Coder) DropFile(path string) bool {
 func (c *Coder) DropAll() {
 	c.absFnames = nil
 	c.absReadOnlyFnames = nil
+}
+
+// DropUnder removes the exact file at path and every chat/read-only file
+// beneath it when path is a directory, resolving path the same way AddFile
+// does. It returns the root-relative names dropped, sorted.
+func (c *Coder) DropUnder(path string) []string {
+	dir := c.absRootPath(path)
+	prefix := dir + string(filepath.Separator)
+	var dropped []string
+	filter := func(list []string) []string {
+		kept := make([]string, 0, len(list))
+		for _, abs := range list {
+			if abs == dir || strings.HasPrefix(abs, prefix) {
+				dropped = append(dropped, c.relFname(abs))
+			} else {
+				kept = append(kept, abs)
+			}
+		}
+		return kept
+	}
+	c.absFnames = filter(c.absFnames)
+	c.absReadOnlyFnames = filter(c.absReadOnlyFnames)
+	sort.Strings(dropped)
+	return dropped
+}
+
+// TrackedFiles returns the git-tracked files (repo-root-relative), or nil
+// outside a repository — the file set /add expands a directory to.
+func (c *Coder) TrackedFiles() []string {
+	if c.Repo == nil {
+		return nil
+	}
+	return c.Repo.TrackedFiles()
 }
 
 // ClearHistory forgets the conversation (both rotated and current

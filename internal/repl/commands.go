@@ -197,7 +197,12 @@ func (r *REPL) expandPatterns(patterns []string) []string {
 			continue
 		}
 		for _, m := range matches {
-			if st, err := os.Stat(m); err != nil || st.IsDir() {
+			st, err := os.Stat(m)
+			if err != nil {
+				continue
+			}
+			if st.IsDir() {
+				out = append(out, r.expandDir(m)...)
 				continue
 			}
 			rel, err := filepath.Rel(r.coder.Root, m)
@@ -209,6 +214,57 @@ func (r *REPL) expandPatterns(patterns []string) []string {
 		}
 	}
 	sort.Strings(out)
+	return slices.Compact(out)
+}
+
+// expandDir returns the root-relative files under directory abs. In a git repo
+// it uses the tracked files (so .gitignore is honored, like aider); without git
+// it walks regular, non-hidden files and warns that the set is unfiltered.
+func (r *REPL) expandDir(abs string) []string {
+	relDir, err := filepath.Rel(r.coder.Root, abs)
+	if err != nil || strings.HasPrefix(relDir, "..") {
+		r.out.Warningf("Skipping %s: outside the project root.", abs)
+		return nil
+	}
+	relDir = filepath.ToSlash(relDir)
+
+	if tracked := r.coder.TrackedFiles(); tracked != nil {
+		prefix := relDir + "/"
+		if relDir == "." {
+			prefix = ""
+		}
+		var out []string
+		for _, f := range tracked {
+			if prefix == "" || strings.HasPrefix(f, prefix) {
+				out = append(out, f)
+			}
+		}
+		if len(out) == 0 {
+			r.out.Warningf("No tracked files under %s.", relDir)
+		}
+		return out
+	}
+
+	r.out.Warningf("Adding %s without a git repo: files are not gitignore-filtered.", relDir)
+	var out []string
+	_ = filepath.WalkDir(abs, func(p string, de os.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			// Skip an unreadable entry and keep walking the rest.
+		case de.IsDir():
+			if p != abs && strings.HasPrefix(de.Name(), ".") {
+				return filepath.SkipDir
+			}
+		case strings.HasPrefix(de.Name(), "."):
+			// Skip hidden files.
+		default:
+			if rel, relErr := filepath.Rel(r.coder.Root, p); relErr == nil && !strings.HasPrefix(rel, "..") {
+				out = append(out, filepath.ToSlash(rel))
+			}
+		}
+		//nolint:nilerr // a per-entry walk error is intentionally skipped, not propagated
+		return nil
+	})
 	return out
 }
 
@@ -243,18 +299,21 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 		return ""
 	}
 
-	inChat := append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...)
 	for _, pat := range splitArgs(args) {
-		dropped := false
-		for _, rel := range inChat {
-			if ok, _ := filepath.Match(pat, rel); ok || rel == pat {
+		// DropUnder handles an exact path or a whole directory subtree; the glob
+		// loop then handles wildcard patterns against what remains.
+		dropped := r.coder.DropUnder(pat)
+		for _, rel := range append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...) {
+			if ok, _ := filepath.Match(pat, rel); ok {
 				if r.coder.DropFile(rel) {
-					r.printf("Dropped %s from the chat.", rel)
-					dropped = true
+					dropped = append(dropped, rel)
 				}
 			}
 		}
-		if !dropped {
+		for _, rel := range dropped {
+			r.printf("Dropped %s from the chat.", rel)
+		}
+		if len(dropped) == 0 {
 			r.out.Warningf("No chat files matched %q.", pat)
 		}
 	}
