@@ -349,9 +349,11 @@ func (r *REPL) Run(ctx context.Context) error {
 	}
 }
 
-// runTurn runs one user message through the coder with in-turn Ctrl-C
-// handling: the first cancels the send, the second within 2s exits.
-func (r *REPL) runTurn(ctx context.Context, message string) {
+// withinTurn runs fn with the in-turn scaffolding shared by a normal turn and a
+// one-off /btw: a cancelable context, cursor restore, the double-Ctrl-C chord
+// (first cancels the send, the second within 2s exits), and the "Waiting for
+// <model>" cue. It returns fn's result.
+func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) string {
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -387,16 +389,32 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 		}
 	}()
 
-	sentBefore, recvBefore := r.coder.SessionTokens()
-	costBefore, _ := r.coder.SessionCost()
-
 	// Show "Waiting for <model>" until the first streamed byte, so a
 	// slow-to-wake model doesn't look hung (aider's WaitingSpinner). Only
 	// interactively; the first stream event erases it.
 	if r.interactive() {
 		r.out.startWaiting(r.coder.Model.ReadableName())
 	}
-	answer := r.coder.Run(tctx, message)
+	return fn(tctx)
+}
+
+// runAside runs a /btw one-off question with the same in-turn scaffolding as a
+// normal turn, but records no history — the exchange is not part of the chat.
+func (r *REPL) runAside(ctx context.Context, question string) {
+	r.withinTurn(ctx, func(tctx context.Context) string {
+		return r.coder.RunAside(tctx, question)
+	})
+}
+
+// runTurn runs one user message through the coder with in-turn Ctrl-C
+// handling: the first cancels the send, the second within 2s exits.
+func (r *REPL) runTurn(ctx context.Context, message string) {
+	sentBefore, recvBefore := r.coder.SessionTokens()
+	costBefore, _ := r.coder.SessionCost()
+
+	answer := r.withinTurn(ctx, func(tctx context.Context) string {
+		return r.coder.Run(tctx, message)
+	})
 
 	if r.opts.History != nil {
 		sentAfter, recvAfter := r.coder.SessionTokens()

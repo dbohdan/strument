@@ -35,6 +35,7 @@ func init() {
 	commands = []command{
 		{"add", "<file> [file ...]", "Add files to the chat (globs allowed)", cmdAdd},
 		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
+		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
 		{"clear", "", "Clear the conversation history", cmdClear},
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
@@ -395,6 +396,17 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	}
 	r.opts.ModelAlias = args
 	r.printf("Switched to model %s (%s).", args, m.Slug)
+	return ""
+}
+
+func cmdBtw(ctx context.Context, r *REPL, args string) string {
+	if args == "" {
+		r.out.Errorf("Usage: /btw <question>")
+		return ""
+	}
+	// A one-off, general-assistant question: the coder answers it outside the
+	// chat (no files, no history, no dev prompt) and nothing is recorded.
+	r.runAside(ctx, args)
 	return ""
 }
 
