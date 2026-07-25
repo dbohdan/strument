@@ -77,6 +77,7 @@ func (c *chatCmd) Run() error {
 	cdr := coder.New(root, model)
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.New(model.Provider)
+	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	cdr.Scrape = coder.SimpleScraper
 	if model.RepoMap {

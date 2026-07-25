@@ -1,0 +1,176 @@
+package coder
+
+import (
+	"context"
+	"iter"
+	"strings"
+	"testing"
+
+	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
+)
+
+// summaryStub returns a fixed condensed summary for any request, counting calls.
+type summaryStub struct{ calls int }
+
+func (s *summaryStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "CONDENSED"}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+// summaryErrStub always fails the weak-model call.
+type summaryErrStub struct{}
+
+func (summaryErrStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: "boom"})
+	}
+}
+
+// msgTok builds a message of exactly `tokens` tokens under RuneCounter (runes/4).
+func msgTok(role string, tokens int) llm.Message {
+	return llm.TextMessage(role, strings.Repeat("x", tokens*4))
+}
+
+func TestMaxChatHistoryTokens(t *testing.T) {
+	for _, c := range []struct{ ctx, want int }{
+		{0, 1024},         // unknown => floor
+		{8000, 1024},      // 500 -> clamped up
+		{16384, 1024},     // exactly the floor
+		{100000, 6250},    // within range
+		{200000, 8192},    // 12500 -> clamped down
+		{1_000_000, 8192}, // clamped down
+	} {
+		if got := maxChatHistoryTokens(c.ctx); got != c.want {
+			t.Errorf("maxChatHistoryTokens(%d) = %d, want %d", c.ctx, got, c.want)
+		}
+	}
+}
+
+func TestChatSummaryTooBig(t *testing.T) {
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{})
+	msgs := []llm.Message{msgTok("user", 60), msgTok("assistant", 60)} // 120 tokens
+	if !s.tooBig(msgs, 100) {
+		t.Error("120 tokens should exceed budget 100")
+	}
+	if s.tooBig(msgs, 200) {
+		t.Error("120 tokens should fit budget 200")
+	}
+}
+
+func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
+	stub := &summaryStub{}
+	weak := &config.Model{Slug: "weak", Context: 100000}
+	s := NewChatSummary(stub, weak, RuneCounter{})
+
+	// Six big older messages + two small recent ones; budget 200 (half 100)
+	// keeps the two small recent messages and collapses the rest.
+	msgs := []llm.Message{
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 10), msgTok("assistant", 10),
+	}
+	tailU, tailA := msgs[6], msgs[7]
+
+	out, err := s.summarize(msgs, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) >= len(msgs) {
+		t.Fatalf("no compaction: %d -> %d", len(msgs), len(out))
+	}
+	if out[0].Role != llm.RoleUser ||
+		!strings.Contains(out[0].Text(), prompts.SummaryPrefix) ||
+		!strings.Contains(out[0].Text(), "CONDENSED") {
+		t.Errorf("first message is not the summary: %q", out[0].Text())
+	}
+	// The recent tail survives verbatim.
+	if out[len(out)-2].Text() != tailU.Text() || out[len(out)-1].Text() != tailA.Text() {
+		t.Errorf("recent tail not preserved: %+v", out)
+	}
+	if stub.calls != 1 {
+		t.Errorf("weak model called %d times, want 1", stub.calls)
+	}
+}
+
+func TestChatSummarizeErrorLeavesHistoryIntact(t *testing.T) {
+	s := NewChatSummary(summaryErrStub{}, &config.Model{Slug: "w", Context: 100000}, RuneCounter{})
+	msgs := []llm.Message{
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+	}
+	out, err := s.summarize(msgs, 100)
+	if err == nil {
+		t.Error("expected an error from the failing weak model")
+	}
+	if len(out) != len(msgs) {
+		t.Errorf("history changed on error: %d -> %d", len(msgs), len(out))
+	}
+}
+
+func TestMaybeSummarizeGating(t *testing.T) {
+	// ~1900 tokens of settled history, so it clears the 1024 floor threshold.
+	bigHistory := func() []llm.Message {
+		return []llm.Message{
+			msgTok("user", 300), msgTok("assistant", 300),
+			msgTok("user", 300), msgTok("assistant", 300),
+			msgTok("user", 300), msgTok("assistant", 300),
+			msgTok("user", 50), msgTok("assistant", 50),
+		}
+	}
+
+	t.Run("unknown context is a no-op", func(t *testing.T) {
+		c := testCoder(t)
+		c.Model.Context = 0
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
+		c.doneMessages = bigHistory()
+		c.maybeSummarize()
+		if len(c.doneMessages) != 8 {
+			t.Errorf("summarized despite an unknown window: %d", len(c.doneMessages))
+		}
+	})
+
+	t.Run("no summarizer is a no-op", func(t *testing.T) {
+		c := testCoder(t)
+		c.Model.Context = 16384
+		c.doneMessages = bigHistory()
+		c.maybeSummarize()
+		if len(c.doneMessages) != 8 {
+			t.Errorf("summarized without a summarizer wired: %d", len(c.doneMessages))
+		}
+	})
+
+	t.Run("under budget is a no-op", func(t *testing.T) {
+		c := testCoder(t)
+		c.Model.Context = 1_000_000 // threshold 8192; ~1900 tokens fits
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
+		c.doneMessages = bigHistory()
+		c.maybeSummarize()
+		if len(c.doneMessages) != 8 {
+			t.Errorf("summarized while under budget: %d", len(c.doneMessages))
+		}
+	})
+
+	t.Run("over budget compacts", func(t *testing.T) {
+		c := testCoder(t)
+		c.Model.Context = 16384 // threshold 1024; ~1900 tokens overflows
+		stub := &summaryStub{}
+		c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens)
+		c.doneMessages = bigHistory()
+		c.maybeSummarize()
+		if len(c.doneMessages) >= 8 {
+			t.Errorf("did not compact over-budget history: %d", len(c.doneMessages))
+		}
+		if stub.calls == 0 {
+			t.Error("weak model was never called")
+		}
+	})
+}

@@ -36,16 +36,17 @@ type Coder struct {
 	ChatLanguage         string
 
 	// Ports.
-	Client   llm.ModelClient
-	Tokens   TokenCounter
-	Confirm  Confirmer
-	Runner   CommandRunner
-	Repo     Repo
-	Clock    Clock
-	Out      Output
-	RepoMap  *repomap.RepoMap
-	Scrape   Scraper
-	Platform PlatformInfo
+	Client     llm.ModelClient
+	Summarizer *ChatSummary // nil => chat-history summarization disabled
+	Tokens     TokenCounter
+	Confirm    Confirmer
+	Runner     CommandRunner
+	Repo       Repo
+	Clock      Clock
+	Out        Output
+	RepoMap    *repomap.RepoMap
+	Scrape     Scraper
+	Platform   PlatformInfo
 
 	Prompts prompts.Set
 

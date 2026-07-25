@@ -397,6 +397,35 @@ func (c *Coder) moveBackCurMessages(saved string) {
 		)
 	}
 	c.curMessages = nil
+	c.maybeSummarize()
+}
+
+// maxChatHistoryTokens is the settled-history budget: aider's
+// min(max(context/16, 1024), 8192), derived from the main model's window.
+func maxChatHistoryTokens(context int) int {
+	return min(max(context/16, 1024), 8192)
+}
+
+// maybeSummarize compacts the settled history when it outgrows the chat-history
+// budget. It runs only when a summarizer is wired and the model's window is
+// known (Context > 0) — mirroring checkTokens, which treats an unknown window
+// as "no limit to enforce". Synchronous: the weak-model call happens here,
+// before the next prompt is assembled. On failure the history is left intact.
+func (c *Coder) maybeSummarize() {
+	if c.Summarizer == nil || c.Model.Context <= 0 {
+		return
+	}
+	budget := maxChatHistoryTokens(c.Model.Context)
+	if !c.Summarizer.tooBig(c.doneMessages, budget) {
+		return
+	}
+	c.Out.Printf("Summarizing chat history to fit the context window...")
+	out, err := c.Summarizer.summarize(c.doneMessages, budget)
+	if err != nil {
+		c.Out.Warningf("Could not summarize chat history: %v", err)
+		return
+	}
+	c.doneMessages = out
 }
 
 // finalizeUsage resolves cost — (1) in-band cost, (2) config

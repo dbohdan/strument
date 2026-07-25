@@ -59,8 +59,9 @@ inherited from aider.
 
 - **Scope.** Essentials only: tool-call edits by default (SEARCH/REPLACE,
   fenced, and whole-file as fallbacks), repo map, reflection, shell
-  suggestions, git auto-commit with `/undo`, `/ask`. Architect mode, voice,
-  GUI, analytics, and summarization are out of scope for v1.
+  suggestions, git auto-commit with `/undo`, `/ask`, chat-history
+  summarization. Architect mode, voice, GUI, and analytics are out of scope
+  for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
   YAML/`.env`/model-database configuration. Prompt caching follows from this:
@@ -71,7 +72,12 @@ inherited from aider.
 - **Where we differ.** Some behavior is deliberately not aider's — atomic
   batch writes with rollback, a single pure apply planner shared by dry and
   real runs, usage accounting that survives an aborted turn, an in-chat-file
-  exemption on path containment. When you diverge, say why in the code
+  exemption on path containment. Chat-history summarization is aider's
+  algorithm ported closely, but it runs **synchronously** (aider uses a
+  background thread) and only when the model's context window is declared
+  (`context=`), where aider always summarizes; the summarize prompt is
+  modernized from aider's shouty original for effectiveness and model welfare,
+  like the other built-in prompts. When you diverge, say why in the code
   comment and the commit message.
 - **Borrowed material.** The tree-sitter tag queries under
   `internal/repomap/queries*/` are copied from aider. The built-in prompts in

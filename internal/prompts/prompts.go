@@ -553,3 +553,23 @@ const CommitSystem = "You are an expert software engineer who writes concise, on
 	"- Is in the imperative mood (e.g., \"add feature\" not \"added feature\" or \"adding feature\").\n" +
 	"- Does not exceed 72 characters.\n\n" +
 	"Reply only with the one-line commit message, without any additional text, explanations, or line breaks.\n"
+
+// Summarize is the system prompt for chat-history compaction: the weak model
+// condenses older conversation so a long session stays within the context
+// window. Modernized from aider's GPT-4-Turbo-era version — all-caps and
+// "*MUST*"/"*DO NOT*" emphasis — into calm, colleague-style prose in the manner
+// of the built-in-prompt revision (commit 6448353), keeping every functional
+// requirement.
+const Summarize = "Briefly summarize this partial conversation about programming. " +
+	"Give more detail to the most recent messages and less to the older ones. " +
+	"Start a new paragraph whenever the topic changes.\n\n" +
+	"This is only part of a longer conversation, so don't end with a wrap-up phrase " +
+	"like \"Finally, ...\"; the conversation continues after your summary.\n\n" +
+	"Include the function, library, and package names under discussion, along with the " +
+	"filenames the assistant references inside fenced code blocks. Leave the fenced code " +
+	"blocks themselves out of the summary.\n\n" +
+	"Write as the user, in the first person, telling the assistant about the conversation, " +
+	"and refer to the assistant as \"you\". Begin with \"I asked you...\"."
+
+// SummaryPrefix opens the compacted history the weak model returns.
+const SummaryPrefix = "I spoke to you previously about a number of things.\n"
