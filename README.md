@@ -133,6 +133,22 @@ map is the tradeoff caching accepts: the map refreshes when you add or drop
 files, not on every message, so mid-conversation file mentions no longer re-rank
 it while caching is on.
 
+Writing out `context`, costs, and `cache` by hand for every model is tedious, so
+`strument model-config` fetches them for you and prints copy-pastable `model()`
+blocks:
+
+```sh
+strument model-config anthropic/claude-haiku-4.5 openai/gpt-5.4
+```
+
+It fills the objective fields from OpenRouter's catalog (context size, max
+output, per-token costs, and `cache=True` when the model supports caching) and
+leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
+commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
+sets the provider variable emitted in the call (default `openrouter`); output
+goes to stdout, so redirect or pipe it wherever you like. It maintains no model
+database — the catalog is fetched on demand and frozen into your own config.
+
 Project-local `.strument.star` files can override or extend this, but
 require explicit trust (`/trust`) before they take effect.
 

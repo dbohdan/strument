@@ -22,6 +22,7 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/modelconfig"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
@@ -279,11 +280,46 @@ func (*historyCmd) Run() error {
 	return nil
 }
 
+// modelConfigCmd scaffolds model() blocks from a provider's live catalog, so
+// the tedious fields (context size, costs, cache capability) don't have to be
+// looked up by hand. Output is copy-pastable Starlark on stdout — the user
+// reviews it and pastes it into their config.
+type modelConfigCmd struct {
+	Source       string   `default:"openrouter" help:"Metadata source (currently only \"openrouter\")."    short:"s"`
+	ProviderName string   `default:"openrouter" help:"Provider variable name emitted in the model() call." name:"provider-name"`
+	Models       []string `arg:""               help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
+}
+
+func (c *modelConfigCmd) Run() error {
+	if c.Source != "openrouter" {
+		return fmt.Errorf("unknown source %q (only \"openrouter\" is supported)", c.Source)
+	}
+	src := &modelconfig.OpenRouterSource{}
+	found, missing, err := src.Lookup(c.Models)
+	if err != nil {
+		return err
+	}
+	for i, info := range found {
+		if i > 0 {
+			fmt.Println()
+		}
+		fmt.Print(modelconfig.EmitStarlark(info, c.ProviderName))
+	}
+	for _, m := range missing {
+		fmt.Fprintf(os.Stderr, "strument: model %q not found on %s\n", m, c.Source)
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%d model(s) not found", len(missing))
+	}
+	return nil
+}
+
 type cli struct {
-	Chat    chatCmd          `cmd:""                         default:"withargs"                                         help:"Chat with a model about the given files (default command)."`
-	Trust   trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
-	History historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
-	Version kong.VersionFlag `help:"Print version and exit."`
+	Chat        chatCmd          `cmd:""                         default:"withargs"                                                 help:"Chat with a model about the given files (default command)."`
+	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
+	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider." name:"model-config"`
+	Version     kong.VersionFlag `help:"Print version and exit."`
 }
 
 func main() {
