@@ -9,6 +9,8 @@ import (
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
+
+	"dbohdan.com/strument/internal/httpx"
 )
 
 // ProjectConfigName is the project-root dotfile, untrusted by default.
@@ -40,6 +42,8 @@ type fileGlobals struct {
 	defaultVal     string
 	hasHistoryFile bool
 	historyFile    string
+	hasProxy       bool
+	proxyVal       string
 }
 
 // Load runs the config pipeline: user config, gated project
@@ -119,6 +123,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasHistoryFile {
 		cfg.HistoryFile = user.historyFile
 	}
+	if user.hasProxy {
+		cfg.Proxy = user.proxyVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -126,6 +133,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasHistoryFile {
 			cfg.HistoryFile = project.historyFile
+		}
+		if project.hasProxy {
+			cfg.Proxy = project.proxyVal
 		}
 	}
 
@@ -147,6 +157,42 @@ func Load(opts Options) (*Config, error) {
 			m.WeakModel = ref
 		}
 		m.weakRef = nil
+	}
+
+	// 5b. Resolve each provider's proxy against the global fallback, once per
+	// distinct *Model — aliases and inline weak models repeat pointers, and the
+	// "direct"->inherit rewrite is not idempotent. "direct" forces a direct
+	// connection; an unset provider proxy inherits the global one.
+	if cfg.Proxy == "direct" {
+		return nil, errors.New("global `proxy` cannot be \"direct\" (leave it unset for no proxy)")
+	}
+	if _, err := httpx.ProxyTransport(cfg.Proxy); err != nil {
+		return nil, fmt.Errorf("global %w", err)
+	}
+	resolvedProxy := map[*Model]bool{}
+	resolveProxy := func(alias string, m *Model) error {
+		if m == nil || resolvedProxy[m] {
+			return nil
+		}
+		resolvedProxy[m] = true
+		switch m.Provider.Proxy {
+		case "direct":
+			m.Provider.Proxy = ""
+		case "":
+			m.Provider.Proxy = cfg.Proxy
+		}
+		if _, err := httpx.ProxyTransport(m.Provider.Proxy); err != nil {
+			return fmt.Errorf("model %q provider %w", alias, err)
+		}
+		return nil
+	}
+	for alias, m := range cfg.Models {
+		if err := resolveProxy(alias, m); err != nil {
+			return nil, err
+		}
+		if err := resolveProxy(alias, m.WeakModel); err != nil {
+			return nil, err
+		}
 	}
 
 	// 6. Validate.
@@ -228,6 +274,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		}
 		out.hasHistoryFile = true
 		out.historyFile = s
+	}
+
+	if pv, ok := globals["proxy"]; ok {
+		s, ok := starlark.AsString(pv)
+		if !ok {
+			return nil, fmt.Errorf("%s: `proxy` must be a string URL, got %s", path, pv.Type())
+		}
+		out.hasProxy = true
+		out.proxyVal = s
 	}
 
 	return out, nil

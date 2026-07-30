@@ -21,6 +21,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
+	"dbohdan.com/strument/internal/httpx"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/modelconfig"
 	"dbohdan.com/strument/internal/render"
@@ -80,7 +81,10 @@ func (c *chatCmd) Run() error {
 	cdr.Client = client.New(model.Provider)
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
-	cdr.Scrape = coder.SimpleScraper
+	// URL scraping is a non-provider egress action, so it uses the global proxy
+	// (validated at load, so the error is dead; nil transport => direct).
+	scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
+	cdr.Scrape = coder.NewSimpleScraper(scrapeTransport)
 	if model.RepoMap {
 		rm := repomap.New(root)
 		rm.MaxContextWindow = model.Context
@@ -285,16 +289,30 @@ func (*historyCmd) Run() error {
 // looked up by hand. Output is copy-pastable Starlark on stdout — the user
 // reviews it and pastes it into their config.
 type modelConfigCmd struct {
-	Source       string   `default:"openrouter" help:"Metadata source (currently only \"openrouter\")."    short:"s"`
-	ProviderName string   `default:"openrouter" help:"Provider variable name emitted in the model() call." name:"provider-name"`
-	Models       []string `arg:""               help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
+	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."    short:"s"`
+	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name emitted in the model() call." name:"provider-name"`
+	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"`
+	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
 }
 
 func (c *modelConfigCmd) Run() error {
 	if c.Source != "openrouter" {
 		return fmt.Errorf("unknown source %q (only \"openrouter\" is supported)", c.Source)
 	}
-	src := &modelconfig.OpenRouterSource{}
+	// --proxy wins; otherwise fall back to the config's global proxy,
+	// best-effort — the config may not exist yet on a restricted network's
+	// first run, in which case only --proxy (or a direct connection) applies.
+	proxy := c.Proxy
+	if proxy == "" {
+		if cfg, err := config.Load(config.Options{}); err == nil {
+			proxy = cfg.Proxy
+		}
+	}
+	transport, err := httpx.ProxyTransport(proxy)
+	if err != nil {
+		return err
+	}
+	src := &modelconfig.OpenRouterSource{Transport: transport}
 	found, missing, err := src.Lookup(c.Models)
 	if err != nil {
 		return err

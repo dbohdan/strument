@@ -43,13 +43,14 @@ type Provider struct {
 	BaseURL     string // "" => adapter default
 	APIKey      string
 	Name        string
+	Proxy       string         // resolved SOCKS5 proxy URL; "" => direct (no proxy)
 	ExtraParams map[string]any // JSON-only, reserved keys rejected
 }
 
 // GroupKey groups models onto one runtime client/connection pool per
-// endpoint (value semantics; grouping by adapter+base_url).
+// endpoint (value semantics; grouping by adapter+base_url+proxy).
 func (p Provider) GroupKey() string {
-	return p.Adapter + "\x00" + p.BaseURL
+	return p.Adapter + "\x00" + p.BaseURL + "\x00" + p.Proxy
 }
 
 // Model is one usable model declaration.
@@ -116,6 +117,10 @@ type Config struct {
 	// HistoryFile overrides the chat-history path ("" => the XDG default).
 	// A relative path is resolved against the project root by the caller.
 	HistoryFile string
+	// Proxy is the global fallback SOCKS5 proxy URL: it applies to
+	// model-config, URL scraping, and any provider that sets no proxy of its
+	// own ("" => no global proxy).
+	Proxy string
 }
 
 // DefaultModel returns the model for the default alias.

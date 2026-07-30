@@ -133,6 +133,32 @@ map is the tradeoff caching accepts: the map refreshes when you add or drop
 files, not on every message, so mid-conversation file mentions no longer re-rank
 it while caching is on.
 
+On a network that can't reach a provider directly, set a SOCKS5 `proxy` on the
+`provider()` call (`socks5://`, or `socks5h://` to resolve DNS at the proxy):
+
+```python
+openrouter = provider(
+    "openrouter",
+    api_key=env("OPENROUTER_API_KEY"),
+    proxy="socks5://127.0.0.1:1080",
+)
+```
+
+A top-level `proxy` is the default for every provider that doesn't set its own,
+and it also covers `strument model-config` and URL scraping — every outbound
+HTTPS action:
+
+```python
+proxy = "socks5://127.0.0.1:1080"
+```
+
+A provider bypasses that global proxy and connects directly with
+`proxy="direct"` — the case for a LAN-local model server when the proxy is only
+for external traffic. Credentials go in the URL
+(`socks5://user:pass@host:1080`); keep them out of the file with
+`proxy=env("STRUMENT_PROXY")`, exactly as with `api_key`. Only `socks5://` and
+`socks5h://` are supported.
+
 Writing out `context`, costs, and `cache` by hand for every model is tedious, so
 `strument model-config` fetches them for you and prints copy-pastable `model()`
 blocks:
@@ -162,8 +188,10 @@ output, per-token costs, and `cache=True` when the model supports caching) and
 leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
 commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output
-goes to stdout, so redirect or pipe it wherever you like. It maintains no model
-database — the catalog is fetched on demand and frozen into your own config.
+goes to stdout, so redirect or pipe it wherever you like. When the catalog fetch
+itself must go through a proxy, pass `--proxy socks5://…`; otherwise it uses your
+config's global `proxy`. It maintains no model database — the catalog is fetched
+on demand and frozen into your own config.
 Because `config.star` is almost Python, you can tidy the pasted blocks with a
 Python formatter such as `ruff format` or `black`.
 

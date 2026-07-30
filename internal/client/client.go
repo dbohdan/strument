@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/httpx"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -39,9 +40,15 @@ type Client struct {
 	Transport http.RoundTripper
 }
 
-// New builds a client for a provider endpoint.
+// New builds a client for a provider endpoint. A resolved provider proxy
+// becomes the transport; the URL was validated at config load, so the error is
+// dead here and a nil transport (no proxy) falls back to the default.
 func New(p config.Provider) *Client {
-	return &Client{Provider: p}
+	c := &Client{Provider: p}
+	if t, err := httpx.ProxyTransport(p.Proxy); err == nil {
+		c.Transport = t
+	}
+	return c
 }
 
 func (c *Client) baseURL() string {

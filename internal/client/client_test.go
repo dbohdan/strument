@@ -148,6 +148,26 @@ func TestBuildBodyReasoningControl(t *testing.T) {
 	}
 }
 
+// TestNewAppliesProxy: a resolved provider proxy becomes the client's
+// transport; no proxy leaves it nil (the default transport).
+func TestNewAppliesProxy(t *testing.T) {
+	const raw = "socks5://127.0.0.1:1080"
+	c := New(config.Provider{Adapter: config.AdapterOpenRouter, Proxy: raw})
+	tr, ok := c.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport = %T, want *http.Transport", c.Transport)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://openrouter.ai/api/v1", nil)
+	pu, err := tr.Proxy(req)
+	if err != nil || pu == nil || pu.String() != raw {
+		t.Errorf("proxy url = %v (err %v), want %q", pu, err, raw)
+	}
+
+	if c := New(config.Provider{Adapter: config.AdapterOpenRouter}); c.Transport != nil {
+		t.Errorf("no proxy: Transport = %v, want nil", c.Transport)
+	}
+}
+
 func TestMessageSerialization(t *testing.T) {
 	blocks := llm.Content{Blocks: []llm.ContentBlock{
 		{Type: "text", Text: "cached prefix", CacheControl: &llm.CacheControl{Type: "ephemeral"}},

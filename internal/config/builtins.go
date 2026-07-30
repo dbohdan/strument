@@ -124,18 +124,21 @@ func dictToParams(where string, d *starlark.Dict) (map[string]any, error) {
 }
 
 // builtinProvider implements
-// provider(adapter, *, base_url=None, api_key=None, name=None, extra_params={}).
+// provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None,
+// extra_params={}). proxy takes a socks5:// URL, or "direct" to force a direct
+// connection when a global proxy is set; unset inherits the global proxy.
 func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 1 {
 		return nil, errors.New("provider: only 'adapter' may be positional")
 	}
-	var adapter, baseURL, apiKey, name string
+	var adapter, baseURL, apiKey, name, proxy string
 	var extraParams *starlark.Dict
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"adapter", &adapter,
 		"base_url?", &baseURL,
 		"api_key?", &apiKey,
 		"name?", &name,
+		"proxy?", &proxy,
 		"extra_params?", &extraParams,
 	); err != nil {
 		return nil, err
@@ -156,6 +159,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		BaseURL:     baseURL,
 		APIKey:      apiKey,
 		Name:        name,
+		Proxy:       proxy,
 		ExtraParams: params,
 	}}, nil
 }

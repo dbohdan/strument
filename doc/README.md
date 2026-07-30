@@ -257,6 +257,17 @@ it but is **inert until trusted** (`strument trust`, content-hash gated,
 direnv-style). The `README.md` has a worked example covering providers,
 model factories, `with_extra_params`, and aliases.
 
+Outbound HTTPS can be routed through a **SOCKS5 proxy** (`socks5://` or
+`socks5h://`) for restricted networks, and it covers *every* outbound HTTPS
+action. A per-provider `proxy` handles that provider's chat/completions; a
+top-level `proxy` is the fallback for providers that set none and also drives
+the two non-provider egress paths — `strument model-config`'s catalog fetch and
+URL scraping. A provider opts out of the global proxy with `proxy="direct"`. The
+URL is resolved and validated at config load (once per `*Model`, in
+`config.Load`) and turned into an `http.Transport` by the leaf `internal/httpx`
+package; Go's `net/http` speaks SOCKS5 natively, including `user:pass@` auth, so
+no external dependency is needed.
+
 ## Testing
 
 - `go test ./...` runs everything without network, sockets, or API keys.
