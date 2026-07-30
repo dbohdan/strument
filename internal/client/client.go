@@ -103,12 +103,26 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
-	if req.ReasoningEffort != "" {
-		switch c.Provider.Adapter {
-		case config.AdapterOpenRouter:
-			body["reasoning"] = map[string]any{"effort": req.ReasoningEffort}
-		default:
-			body["reasoning_effort"] = req.ReasoningEffort
+	// Reasoning control. "" and "default" defer to the provider's own
+	// default (send nothing). "off" turns reasoning off where the provider
+	// can express it — OpenRouter via reasoning:{enabled:false}, Ollama-style
+	// OpenAI endpoints via reasoning_effort:"none". Any other value is an
+	// uninterpreted effort passed straight through, so a newly minted effort
+	// works without a change here.
+	switch effort := req.ReasoningEffort; {
+	case effort == "" || effort == "default":
+		// Defer to the provider default; send nothing.
+	case c.Provider.Adapter == config.AdapterOpenRouter:
+		if effort == "off" {
+			body["reasoning"] = map[string]any{"enabled": false}
+		} else {
+			body["reasoning"] = map[string]any{"effort": effort}
+		}
+	default:
+		if effort == "off" {
+			body["reasoning_effort"] = "none"
+		} else {
+			body["reasoning_effort"] = effort
 		}
 	}
 	if len(req.Tools) > 0 {

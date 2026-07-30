@@ -59,7 +59,7 @@ type Model struct {
 	DisplayName  string // human-readable label; "" => derived from Slug
 	EditFormat   string // "tool" | "diff" | "diff-fenced" | "whole"
 	WeakModel    *Model // non-nil after resolution (self if unset)
-	Reasoning    string // request-side effort, e.g. "low"; "" => omit
+	Reasoning    string // request-side effort: "low"/"medium"/"high"; "off" disables; "" or "default" => provider default
 	ReasoningTag string // response-side inline tag to strip; "" => none
 	Temperature  *float64
 	RepoMap      bool

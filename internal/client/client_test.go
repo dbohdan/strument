@@ -105,6 +105,49 @@ func TestBuildBodyDialects(t *testing.T) {
 	}
 }
 
+// TestBuildBodyReasoningControl covers the interpreted sentinels: "off"
+// disables reasoning per adapter, and "" / "default" send nothing so the
+// provider's own default stands.
+func TestBuildBodyReasoningControl(t *testing.T) {
+	or := New(config.Provider{Adapter: config.AdapterOpenRouter})
+	oa := New(config.Provider{Adapter: config.AdapterOpenAI})
+	base := llm.Request{Messages: []llm.Message{llm.TextMessage("user", "hi")}}
+
+	// "off": OpenRouter disables via reasoning:{enabled:false}; the OpenAI
+	// dialect (Ollama-compatible) via reasoning_effort:"none".
+	req := base
+	req.ReasoningEffort = "off"
+	body := or.BuildBody(req)
+	if r, ok := body["reasoning"].(map[string]any); !ok || r["enabled"] != false {
+		t.Errorf("openrouter off reasoning = %v", body["reasoning"])
+	}
+	if _, ok := body["reasoning_effort"]; ok {
+		t.Error("openrouter off must not use reasoning_effort")
+	}
+	body = oa.BuildBody(req)
+	if body["reasoning_effort"] != "none" {
+		t.Errorf("openai off reasoning_effort = %v", body["reasoning_effort"])
+	}
+	if _, ok := body["reasoning"]; ok {
+		t.Error("openai off must not use the reasoning object")
+	}
+
+	// "" and "default" both defer: no reasoning key on either dialect.
+	for _, effort := range []string{"", "default"} {
+		req := base
+		req.ReasoningEffort = effort
+		for name, c := range map[string]*Client{"openrouter": or, "openai": oa} {
+			body := c.BuildBody(req)
+			if _, ok := body["reasoning"]; ok {
+				t.Errorf("%s %q must not set reasoning", name, effort)
+			}
+			if _, ok := body["reasoning_effort"]; ok {
+				t.Errorf("%s %q must not set reasoning_effort", name, effort)
+			}
+		}
+	}
+}
+
 func TestMessageSerialization(t *testing.T) {
 	blocks := llm.Content{Blocks: []llm.ContentBlock{
 		{Type: "text", Text: "cached prefix", CacheControl: &llm.CacheControl{Type: "ephemeral"}},

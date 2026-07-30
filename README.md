@@ -80,7 +80,7 @@ def deepseek(variant):
         display_name="DeepSeek V4 %s" % variant.title(),
         edit_format="tool",  # The default; "diff"/"diff-fenced"/"whole" fall back for weaker tool calling.
         max_output=8192,
-        reasoning="low",
+        reasoning="low",  # Effort "low"/"medium"/"high" (effect varies by model); "off" disables; "" or "default" defers to the model.
         reasoning_tag="think",  # Strip reasoning from the response body before it is processed.
         temperature=None,
         weak_model="deepseek-flash",
