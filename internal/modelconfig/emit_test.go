@@ -21,10 +21,10 @@ func TestEmitStarlarkFull(t *testing.T) {
     max_output=64000,
     input_cost=0.000001,
     output_cost=0.000005,
-    cache=True,  # OpenRouter reports prompt caching for this model
-    # reasoning="low",       # supported; choose "low"/"medium"/"high"
-    # reasoning_tag="think", # if it wraps reasoning in inline tags
-    # weak_model="...",      # alias of a cheaper model for summaries/commits
+    cache=True,  # OpenRouter reports prompt caching for this model.
+    # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
+    # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
+    # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
 ),
 `
 	if got := EmitStarlark(info, "openrouter"); got != want {
@@ -49,7 +49,7 @@ func TestEmitStarlarkPlain(t *testing.T) {
     context=32768,
     input_cost=0,
     output_cost=0,
-    # weak_model="...",      # alias of a cheaper model for summaries/commits
+    # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
 ),
 `
 	if got := EmitStarlark(info, "local"); got != want {

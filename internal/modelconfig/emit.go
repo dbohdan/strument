@@ -33,13 +33,13 @@ func EmitStarlark(info ModelInfo, providerName string) string {
 		fmt.Fprintf(&b, "    output_cost=%s,\n", info.OutputCost)
 	}
 	if info.CacheCapable {
-		b.WriteString("    cache=True,  # OpenRouter reports prompt caching for this model\n")
+		b.WriteString("    cache=True,  # OpenRouter reports prompt caching for this model.\n")
 	}
 	if info.Reasoning {
-		b.WriteString("    # reasoning=\"low\",       # supported; choose \"low\"/\"medium\"/\"high\"\n")
-		b.WriteString("    # reasoning_tag=\"think\", # if it wraps reasoning in inline tags\n")
+		b.WriteString("    # reasoning=\"low\",  # Uncomment and set the effort: \"low\", \"medium\", or \"high\".\n")
+		b.WriteString("    # reasoning_tag=\"think\",  # Uncomment if the model emits reasoning in inline tags.\n")
 	}
-	b.WriteString("    # weak_model=\"...\",      # alias of a cheaper model for summaries/commits\n")
+	b.WriteString("    # weak_model=\"...\",  # Uncomment to use a cheaper model for summaries and commits.\n")
 	b.WriteString("),\n")
 	return b.String()
 }

@@ -138,7 +138,23 @@ Writing out `context`, costs, and `cache` by hand for every model is tedious, so
 blocks:
 
 ```sh
-strument model-config anthropic/claude-haiku-4.5 openai/gpt-5.4
+strument model-config anthropic/claude-haiku-4.5
+```
+
+```python
+model(
+    openrouter,
+    "anthropic/claude-haiku-4.5",
+    display_name="Claude Haiku 4.5",
+    context=200000,
+    max_output=64000,
+    input_cost=0.000001,
+    output_cost=0.000005,
+    cache=True,  # OpenRouter reports prompt caching for this model.
+    # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
+    # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
+    # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+),
 ```
 
 It fills the objective fields from OpenRouter's catalog (context size, max
@@ -148,6 +164,8 @@ commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output
 goes to stdout, so redirect or pipe it wherever you like. It maintains no model
 database — the catalog is fetched on demand and frozen into your own config.
+Because `config.star` is almost Python, you can tidy the pasted blocks with a
+Python formatter such as `ruff format` or `black`.
 
 Project-local `.strument.star` files can override or extend this, but
 require explicit trust (`/trust`) before they take effect.
