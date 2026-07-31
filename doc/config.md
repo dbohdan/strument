@@ -84,8 +84,13 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   disables the context-limit warning.
 - **`max_output`** — the maximum output tokens.
 - **`input_cost`, `output_cost`** — price in **US dollars per million tokens**
-  (e.g. `input_cost=3`). Used for the per-turn cost estimate; unset means
-  unknown, and no cost is shown. `strument model-config` fills these in for you.
+  (e.g. `input_cost=3`), used as a *fallback estimate*. The per-turn cost line
+  prefers the cost the provider reports for each request and falls back to these
+  only when none is reported. OpenRouter reports it in-band — so any live
+  discount is reflected and these go unused — while a plain OpenAI-compatible
+  endpoint may not. Treat them as an approximate snapshot, not the source of
+  truth. `strument model-config` fills them in; unset means no cost is shown when
+  the provider reports none.
 - **`extra_params`** — as on `provider()`, but per model; on a key clash the
   model's value wins over the provider's.
 
