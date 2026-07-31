@@ -379,7 +379,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	}
 	aliases := slices.Sorted(maps.Keys(r.opts.Config.Models))
 	if args == "" {
-		r.printf("Active model: %s (%s).", r.opts.ModelAlias, r.coder.Model.Slug)
+		r.printf("Active model: %s (%s).", r.opts.ModelAlias, r.coder.Model.QualifiedSlug())
 		r.printf("Available aliases: %s.", strings.Join(aliases, ", "))
 		return ""
 	}
@@ -396,7 +396,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens)
 	}
 	r.opts.ModelAlias = args
-	r.printf("Switched to model %s (%s).", args, m.Slug)
+	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
 	return ""
 }
 

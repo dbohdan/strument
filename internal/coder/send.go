@@ -377,7 +377,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 		return true
 	}
 	c.Out.Errorf("Your estimated chat context of %d tokens exceeds the %d token limit for %s!",
-		inputTokens, maxInput, c.Model.Slug)
+		inputTokens, maxInput, c.Model.QualifiedSlug())
 	c.Out.Printf("To reduce the chat context:")
 	c.Out.Printf("- Use /drop to remove unneeded files from the chat")
 	c.Out.Printf("- Use /clear to clear the chat history")

@@ -98,6 +98,19 @@ func (m *Model) ReadableName() string {
 	return s
 }
 
+// QualifiedSlug is the provider-qualified model slug: the provider's name (its
+// adapter when unnamed) joined to the slug, e.g. "openrouter/xiaomi/mimo-v2.5"
+// or "local/qwen/qwen3.6-27b". Shown wherever the user sees a slug, it makes an
+// endpoint diagnosable at a glance — which provider is this model on? — and
+// converges on aider's provider-prefixed model names.
+func (m *Model) QualifiedSlug() string {
+	prov := m.Provider.Name
+	if prov == "" {
+		prov = m.Provider.Adapter
+	}
+	return prov + "/" + m.Slug
+}
+
 // RequestExtraParams merges provider-scoped and model-scoped extra_params,
 // model over provider.
 func (m *Model) RequestExtraParams() map[string]any {

@@ -174,7 +174,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 
 		for _, want := range []string{
 			"Strument v9.9.9",
-			"Model: test-model with diff edit format",
+			"Model: openrouter/test-model with diff edit format",
 			"Git repo: none",
 			"Repo-map: disabled",
 			"Added hello.txt to the chat.", // banner
@@ -208,8 +208,8 @@ func TestSlashCommandReturnsNoSend(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"Active model: test (test-model).",
-		"Switched to model other (test-model).",
+		"Active model: test (openrouter/test-model).",
+		"Switched to model other (openrouter/test-model).",
 		`Unknown model alias "bogus"`,
 	} {
 		if !strings.Contains(got, want) {

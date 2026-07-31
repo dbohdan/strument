@@ -234,7 +234,7 @@ func (r *REPL) announce() {
 		return
 	}
 	r.printf("Strument v%s", r.opts.Version)
-	r.printf("Model: %s with %s edit format", r.coder.Model.Slug, r.coder.EditFormat())
+	r.printf("Model: %s with %s edit format", r.coder.Model.QualifiedSlug(), r.coder.EditFormat())
 	if r.opts.Git != nil {
 		r.printf("Git repo: .git with %d files", len(r.opts.Git.TrackedFiles()))
 	} else {
@@ -393,7 +393,7 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 	// slow-to-wake model doesn't look hung (aider's WaitingSpinner). Only
 	// interactively; the first stream event erases it.
 	if r.interactive() {
-		r.out.startWaiting(r.coder.Model.ReadableName())
+		r.out.startWaiting(r.coder.Model.QualifiedSlug())
 	}
 	return fn(tctx)
 }

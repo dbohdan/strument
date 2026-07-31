@@ -26,6 +26,27 @@ func TestModelReadableName(t *testing.T) {
 	}
 }
 
+func TestModelQualifiedSlug(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		adapter  string
+		provName string
+		slug     string
+		want     string
+	}{
+		{"unnamed provider uses adapter", AdapterOpenRouter, "", "xiaomi/mimo-v2.5", "openrouter/xiaomi/mimo-v2.5"},
+		{"named provider uses name", AdapterOpenAI, "local", "qwen/qwen3.6-27b", "local/qwen/qwen3.6-27b"},
+		{"bare slug still qualified", AdapterOpenRouter, "", "gpt-4o", "openrouter/gpt-4o"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &Model{Provider: Provider{Adapter: tc.adapter, Name: tc.provName}, Slug: tc.slug}
+			if got := m.QualifiedSlug(); got != tc.want {
+				t.Errorf("QualifiedSlug() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDisplayNameParsed(t *testing.T) {
 	src := `
 p = provider("openrouter", api_key = env("OPENROUTER_API_KEY"))
