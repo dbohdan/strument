@@ -239,6 +239,16 @@ func charAtIs(s string, i int, c rune) bool {
 }
 
 func (p *Parser) writeChar(char rune) {
+	// Carriage returns: some models stream CRLF (or bare CR) line endings.
+	// smd.js assumes LF, so a stray "\r" breaks line detection — a "\r\n" fence
+	// close reads as body text, leaking the ``` — and prints a raw CR to the
+	// terminal. CommonMark treats CR, LF, and CRLF as one line ending; dropping
+	// CR collapses CRLF to LF (a bare CR is never an LLM line ending) and lets
+	// the LF path do the work. A divergence from the port, for real input.
+	if char == '\r' {
+		return
+	}
+
 	// Newline after a code fence header or inside a fence: count the
 	// indent, unwind tokens it no longer reaches, replay the excess.
 	if p.token == tokNewline {
