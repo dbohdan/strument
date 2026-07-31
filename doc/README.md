@@ -255,7 +255,8 @@ A single user `config.star` (`$XDG_CONFIG_HOME/strument/config.star`)
 declares providers and models; a project-local `.strument.star` can extend
 it but is **inert until trusted** (`strument trust`, content-hash gated,
 direnv-style). The `README.md` has a worked example covering providers,
-model factories, `with_extra_params`, and aliases.
+model factories, `with_extra_params`, and aliases;
+[`config.md`](config.md) is the reference for every built-in and parameter.
 
 Outbound HTTPS can be routed through a **SOCKS5 proxy** (`socks5://` or
 `socks5h://`) for restricted networks, and it covers *every* outbound HTTPS

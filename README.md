@@ -62,7 +62,8 @@ it is a read-only grep target, never committed.
 
 Strument is configured using [Starlark](https://starlark-lang.org/), a sandboxed dialect of Python.
 It reads model and provider definitions from a `config.star` file (typically `~/.config/strument/config.star`).
-Here is an example configuration demonstrating providers, reusable model factories, and aliases:
+[`doc/config.md`](doc/config.md) is the reference for every built-in and parameter; here is an example
+configuration demonstrating providers, reusable model factories, and aliases:
 
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))

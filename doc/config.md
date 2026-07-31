@@ -1,0 +1,138 @@
+# Configuring Strument
+
+Strument reads its configuration from a [Starlark] file, `config.star` (by
+default `$XDG_CONFIG_HOME/strument/config.star`, i.e.
+`~/.config/strument/config.star`). Starlark is a small, sandboxed dialect of
+Python — no imports, no I/O, deterministic — so a config file is a short program
+that builds provider and model objects and assigns them to a few top-level
+names. If you read Python you can read it already; for the specifics see the
+[language spec][Starlark] and Laurent Le Brun's [overview of Starlark][overview].
+
+[Starlark]: https://starlark-lang.org/
+[overview]: https://laurent.le-brun.eu/blog/an-overview-of-starlark
+
+A complete, worked example — providers, model factories, aliases,
+`with_extra_params` — lives in the [README](../README.md#configuration). This
+document is the reference for the built-ins that example uses.
+
+## Top-level names
+
+The loader reads these module-level variables after running your file:
+
+| name | type | meaning |
+| --- | --- | --- |
+| `models` | dict | Maps an **alias** (string) to a `model()`. Required, non-empty. |
+| `default` | string | The alias used when none is given on the command line. Required; must be a key of `models`. |
+| `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). |
+| `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
+
+Anything else at the top level (helper `def`s, intermediate variables) is
+ignored by the loader, so factor freely.
+
+## Built-in functions
+
+Three functions are predeclared. Keyword-only parameters follow the `*`, as in
+Python.
+
+### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
+
+Describes one API endpoint and dialect. Returns a provider value to pass to
+`model()`.
+
+- **`adapter`** — `"openai"` or `"openrouter"`. Selects the request dialect
+  (e.g. how reasoning effort is serialized) and the default base URL.
+  `"anthropic"` is reserved and not yet supported.
+- **`base_url`** — endpoint override. Unset uses the adapter default
+  (`https://api.openai.com/v1` or `https://openrouter.ai/api/v1`).
+- **`api_key`** — the bearer token. Keep it out of the file with `env()`
+  (below): `api_key=env("OPENROUTER_API_KEY")`.
+- **`name`** — a label for the provider. It appears in the provider-qualified
+  slug Strument prints (`local/qwen/...`) and defaults to the adapter when unset,
+  so name a provider when you run two of the same adapter.
+- **`proxy`** — a SOCKS5 proxy URL (`socks5://host:1080` or `socks5h://…`) for
+  this provider's requests. `"direct"` forces a direct connection even when a
+  global `proxy` is set; unset inherits the global one. Credentials may be inline
+  (`socks5://user:pass@host:1080`) or from `env()`.
+- **`extra_params`** — a dict of extra request fields, merged into the JSON body
+  beneath the keys Strument owns (`model`, `messages`, `stream`, … — those are
+  rejected). Values must be JSON-serializable.
+
+### `model(provider, slug, *, display_name=None, edit_format="tool", weak_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
+
+Describes one usable model. Returns a model value to place in the `models` dict.
+
+- **`provider`** — a value from `provider()`.
+- **`slug`** — the model id sent to the API, e.g. `"anthropic/claude-haiku-4.5"`.
+- **`display_name`** — a human label (used in git commit trailers). Defaults to
+  the slug reduced to its core (provider prefix and `:variant` suffix stripped).
+- **`edit_format`** — how the model returns edits: `"tool"` (default, native
+  tool calls), `"diff"`, `"diff-fenced"`, or `"whole"`. The fallbacks suit models
+  with weaker tool-calling.
+- **`weak_model`** — a cheaper model for summaries and commit messages: an alias
+  string or an inline `model()`. Unset means the model is its own weak model.
+- **`reasoning`** — reasoning effort: `"low"`, `"medium"`, or `"high"` (other
+  values pass through). `"off"` disables reasoning where the provider allows it;
+  `""` or `"default"` leaves it to the model.
+- **`reasoning_tag`** — the name of an inline tag (e.g. `"think"`) the model
+  wraps its reasoning in; its contents are stripped from the answer body.
+- **`temperature`** — a float, or `None` to omit the field.
+- **`repo_map`** — include the tree-sitter repository map (default `True`).
+- **`cache`** — enable prompt caching: cache-control breakpoints with a one-hour
+  TTL, and the repo map frozen so the cached prefix stays byte-stable (default
+  `False`).
+- **`context`** — the input window in tokens. `0`/unset means unknown, which
+  disables the context-limit warning.
+- **`max_output`** — the maximum output tokens.
+- **`input_cost`, `output_cost`** — price in **US dollars per million tokens**
+  (e.g. `input_cost=3`). Used for the per-turn cost estimate; unset means
+  unknown, and no cost is shown. `strument model-config` fills these in for you.
+- **`extra_params`** — as on `provider()`, but per model; on a key clash the
+  model's value wins over the provider's.
+
+### `env(name, default=None, required=True)`
+
+Reads an environment variable at load time — the one impure built-in.
+
+- **`name`** — the variable to read.
+- **`required`** — when `True` (the default) and the variable is unset, loading
+  fails with an error. Set `required=False` to allow a fallback.
+- **`default`** — returned when the variable is unset **and** `required=False`
+  (otherwise the result is `None`).
+
+The gotcha worth stating outright: `default` only takes effect when
+`required=False`. `env("X", default="y")` on its own still errors if `X` is
+unset, because `required` is `True` by default — you need both:
+
+```python
+api_key = env("OPENROUTER_API_KEY")                        # required; errors if unset
+base = env("STRUMENT_BASE_URL", required=False)            # None if unset
+proxy = env("STRUMENT_PROXY", default="", required=False)  # "" if unset
+```
+
+## Model methods
+
+### `model.with_extra_params(**overrides)`
+
+Returns a copy of the model with `overrides` merged into its `extra_params`
+(overrides win); the original is unchanged. Handy for a one-off tweak on top of a
+factory:
+
+```python
+def flex(m):
+    return m.with_extra_params(service_tier="flex")
+```
+
+## Aliases
+
+An alias is just a `models` key, so the same model can appear under several:
+
+```python
+models["ds"] = models["deepseek-pro"]  # one model, two aliases
+```
+
+## Project-local config
+
+A `.strument.star` in the project root can add or override `models`, `default`,
+`history_file`, and `proxy`, with the project file winning. It is **inert until
+trusted**: run `strument trust` in the directory (a direnv-style content-hash
+gate), and re-run it after every edit.
