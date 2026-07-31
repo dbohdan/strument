@@ -244,8 +244,8 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	if m.Temperature, err = optFloat("temperature", temperature); err != nil {
 		return nil, err
 	}
-	// Costs are declared per million tokens (readable: "5", not "0.000005") and
-	// stored as the per-token USD the usage math expects.
+	// Costs are declared in US dollars per million tokens (readable: "5", not
+	// "0.000005") and stored as the per-token USD the usage math expects.
 	var f *float64
 	if f, err = optFloat("input_cost", inputCost); err != nil {
 		return nil, err

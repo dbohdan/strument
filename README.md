@@ -184,7 +184,7 @@ model(
 ```
 
 It fills the objective fields from OpenRouter's catalog (context size, max
-output, per-million-token costs, and `cache=True` when the model supports caching) and
+output, costs in US dollars per million tokens, and `cache=True` when the model supports caching) and
 leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
 commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output
