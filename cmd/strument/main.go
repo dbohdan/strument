@@ -351,11 +351,8 @@ func (c *modelConfigCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	for i, info := range found {
-		if i > 0 {
-			fmt.Println()
-		}
-		fmt.Print(modelconfig.EmitStarlark(info, c.ProviderName))
+	if len(found) > 0 {
+		fmt.Print(modelconfig.EmitStarlark(found, c.ProviderName))
 	}
 	for _, m := range missing {
 		fmt.Fprintf(os.Stderr, "strument: model %q not found on %s\n", m, c.Source)

@@ -161,33 +161,39 @@ for external traffic. Credentials go in the URL
 `socks5h://` are supported.
 
 Writing out `context`, costs, and `cache` by hand for every model is tedious, so
-`strument model-config` fetches them for you and prints copy-pastable `model()`
-blocks:
+`strument model-config` fetches them for you and prints a copy-pastable
+`models` dict:
 
 ```sh
 strument model-config anthropic/claude-haiku-4.5
 ```
 
 ```python
-model(
-    openrouter,
-    "anthropic/claude-haiku-4.5",
-    display_name="Claude Haiku 4.5",
-    context=200000,
-    max_output=64000,
-    input_cost=1,
-    output_cost=5,
-    cache=True,  # OpenRouter reports prompt caching for this model.
-    # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
-    # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-    # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
-),
+models = {
+    "claude-haiku-4.5": model(
+        openrouter,
+        "anthropic/claude-haiku-4.5",
+        display_name="Claude Haiku 4.5",
+        context=200000,
+        max_output=64000,
+        input_cost=1,
+        output_cost=5,
+        cache=True,  # OpenRouter reports prompt caching for this model.
+        # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
+        # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
+        # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+    ),
+}
 ```
 
-It fills the objective fields from OpenRouter's catalog (context size, max
-output, costs in US dollars per million tokens, and `cache=True` when the model supports caching) and
-leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
-commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
+Each key is the slug's core — rename it to the short alias you'll actually type.
+The output is a whole `models` dict, so it drops in as a new config; to add to
+one that already defines `models`, merge the two dicts (don't paste a second
+`models =`). It fills the objective fields from OpenRouter's catalog (context
+size, max output, costs in US dollars per million tokens, and `cache=True` when
+the model supports caching) and leaves the judgment calls — `reasoning`,
+`reasoning_tag`, `weak_model` — as commented placeholders for you to fill in.
+Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output
 goes to stdout, so redirect or pipe it wherever you like. It authenticates with
 your OpenRouter key — taken from your config, or the `OPENROUTER_API_KEY`

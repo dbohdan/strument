@@ -24,11 +24,12 @@ func TestEmitLoadsBackAndPinsSchema(t *testing.T) {
 		CacheCapable: true,
 		Reasoning:    true,
 	}
-	block := EmitStarlark(info, "openrouter")
+	// EmitStarlark already produces a full `models = {...}`, keyed by the slug
+	// core; it just needs a provider binding and a default.
+	block := EmitStarlark([]ModelInfo{info}, "openrouter")
 
 	src := `openrouter = provider("openrouter", api_key="x")
-models = {"m": ` + block + `}
-default = "m"
+` + block + `default = "claude-haiku-4.5"
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.star")
@@ -40,9 +41,9 @@ default = "m"
 	if err != nil {
 		t.Fatalf("emitted block did not load (schema drift?): %v\n%s", err, src)
 	}
-	m := cfg.Models["m"]
+	m := cfg.Models["claude-haiku-4.5"]
 	if m == nil {
-		t.Fatal("model alias \"m\" missing after load")
+		t.Fatal("model alias \"claude-haiku-4.5\" missing after load")
 	}
 	if m.Context != 200000 {
 		t.Errorf("context = %d, want 200000", m.Context)

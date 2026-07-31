@@ -76,16 +76,13 @@ type Model struct {
 	weakRef any
 }
 
-// ReadableName is the human-facing model name used in commit trailers: the
-// configured display_name, or the slug reduced to its core — everything
-// after the last "/" (dropping the provider prefix) and before the first ":"
-// (dropping a ":variant" suffix, which can name a private endpoint). Falls
-// back to the full slug when that reduction is empty.
-func (m *Model) ReadableName() string {
-	if m.DisplayName != "" {
-		return m.DisplayName
-	}
-	s := m.Slug
+// SlugCore reduces a model slug to its core name: everything after the last
+// "/" (dropping the provider prefix) and before the first ":" (dropping a
+// ":variant" suffix, which can name a private endpoint). Falls back to the full
+// slug when that reduction is empty. It is the default display name, and
+// `strument model-config` reuses it as the dict-key alias.
+func SlugCore(slug string) string {
+	s := slug
 	if i := strings.LastIndex(s, "/"); i >= 0 {
 		s = s[i+1:]
 	}
@@ -93,9 +90,18 @@ func (m *Model) ReadableName() string {
 		s = s[:i]
 	}
 	if s == "" {
-		return m.Slug
+		return slug
 	}
 	return s
+}
+
+// ReadableName is the human-facing model name used in commit trailers: the
+// configured display_name, or the slug reduced to its core (see SlugCore).
+func (m *Model) ReadableName() string {
+	if m.DisplayName != "" {
+		return m.DisplayName
+	}
+	return SlugCore(m.Slug)
 }
 
 // QualifiedSlug is the provider-qualified model slug: the provider's name (its
