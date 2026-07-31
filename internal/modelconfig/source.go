@@ -12,6 +12,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,14 +26,14 @@ import (
 // (x1,000,000) for readability, as an exact decimal shift so no float round-trip
 // mangles the value (empty => unknown). config divides them back by 1e6 at load.
 type ModelInfo struct {
-	Slug         string
-	DisplayName  string
-	Context      int
-	MaxOutput    int // 0 => unknown
-	InputCost    string
-	OutputCost   string
-	CacheCapable bool
-	Reasoning    bool
+	Slug         string `json:"slug"`
+	DisplayName  string `json:"display_name"`
+	Context      int    `json:"context"`
+	MaxOutput    int    `json:"max_output"` // 0 => unknown
+	InputCost    string `json:"input_cost"`
+	OutputCost   string `json:"output_cost"`
+	CacheCapable bool   `json:"cache_capable"`
+	Reasoning    bool   `json:"reasoning"`
 }
 
 // Source resolves exact model slugs to ModelInfo. Missing slugs are returned
@@ -41,29 +44,78 @@ type Source interface {
 
 const openRouterModelsURL = "https://openrouter.ai/api/v1/models"
 
-// OpenRouterSource reads OpenRouter's public /models catalog. Transport is an
-// injection seam (nil => the default), mirroring client.Client so the test
-// suite never opens a socket.
+// OpenRouter app-attribution headers, mirroring internal/client: an
+// authenticated, identified request reads as a known app rather than an
+// anonymous scraper that Cloudflare's bot protection may IP-block.
+const (
+	appReferer = "https://dbohdan.com/strument"
+	appTitle   = "Strument"
+)
+
+// cacheTTL bounds how long a cached model entry is served before a refetch. The
+// catalog moves slowly and the runtime cost line prefers the provider's in-band
+// cost anyway, so a day keeps a working session's repeated runs to one request
+// without meaningfully staling the output.
+const cacheTTL = 24 * time.Hour
+
+// OpenRouterSource reads OpenRouter's /models catalog. APIKey authenticates the
+// request — anonymous catalog requests are rate-limited and can get the IP
+// blocked, so it is required in practice. Transport, CacheDir, and Now are
+// injection seams so the test suite never opens a socket or touches the real
+// cache.
 type OpenRouterSource struct {
+	APIKey    string
+	UserAgent string // e.g. "Strument/1.2.3"; "" => the transport default
 	Transport http.RoundTripper
+	CacheDir  string           // "" => os.UserCacheDir()/strument/model-config
+	Now       func() time.Time // nil => time.Now
 }
 
+func (s *OpenRouterSource) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+// Lookup resolves each slug from the per-model cache, fetching the catalog once
+// (and only) when some requested slug is uncached or stale.
 func (s *OpenRouterSource) Lookup(slugs []string) (found []ModelInfo, missing []string, err error) {
-	models, err := s.fetch()
-	if err != nil {
-		return nil, nil, err
-	}
-	byID := make(map[string]orModel, len(models))
-	for _, m := range models {
-		byID[m.ID] = m
-	}
+	now := s.now()
+	result := make(map[string]ModelInfo, len(slugs))
+	var toFetch []string
 	for _, slug := range slugs {
-		m, ok := byID[slug]
-		if !ok {
-			missing = append(missing, slug)
-			continue
+		if info, ok := s.readCache(slug, now); ok {
+			result[slug] = info
+		} else {
+			toFetch = append(toFetch, slug)
 		}
-		found = append(found, toInfo(m))
+	}
+
+	if len(toFetch) > 0 {
+		models, err := s.fetch()
+		if err != nil {
+			return nil, nil, err
+		}
+		byID := make(map[string]orModel, len(models))
+		for _, m := range models {
+			byID[m.ID] = m
+		}
+		for _, slug := range toFetch {
+			if m, ok := byID[slug]; ok {
+				info := toInfo(m)
+				result[slug] = info
+				s.writeCache(slug, info, now)
+			}
+		}
+	}
+
+	for _, slug := range slugs {
+		if info, ok := result[slug]; ok {
+			found = append(found, info)
+		} else {
+			missing = append(missing, slug)
+		}
 	}
 	return found, missing, nil
 }
@@ -73,6 +125,19 @@ func (s *OpenRouterSource) fetch() ([]orModel, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Authenticate and identify: an anonymous request with Go's default
+	// user-agent reads as a scraper to OpenRouter's Cloudflare layer.
+	if s.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+s.APIKey)
+	}
+	// OpenRouter's docs write "HTTP-Referer"; Go canonicalizes to "Http-Referer"
+	// and header names are case-insensitive, so it matches (as in internal/client).
+	req.Header.Set("Http-Referer", appReferer)
+	req.Header.Set("X-Title", appTitle)
+	if s.UserAgent != "" {
+		req.Header.Set("User-Agent", s.UserAgent)
+	}
+
 	httpClient := &http.Client{Transport: s.Transport, Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -93,6 +158,62 @@ func (s *OpenRouterSource) fetch() ([]orModel, error) {
 		return nil, fmt.Errorf("parsing OpenRouter models: %w", err)
 	}
 	return parsed.Data, nil
+}
+
+// cacheEntry is one cached model, with its fetch time for the TTL check.
+type cacheEntry struct {
+	Info      ModelInfo `json:"info"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
+func (s *OpenRouterSource) cachePath(slug string) string {
+	dir := s.CacheDir
+	if dir == "" {
+		base, err := os.UserCacheDir()
+		if err != nil {
+			return "" // no resolvable cache dir => caching disabled
+		}
+		dir = filepath.Join(base, "strument", "model-config")
+	}
+	return filepath.Join(dir, url.QueryEscape(slug)+".json")
+}
+
+// readCache returns a fresh cached entry, if any. Any problem (missing, corrupt,
+// stale) is a miss: the cache never fails a lookup, it only saves a request.
+func (s *OpenRouterSource) readCache(slug string, now time.Time) (ModelInfo, bool) {
+	path := s.cachePath(slug)
+	if path == "" {
+		return ModelInfo{}, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ModelInfo{}, false
+	}
+	var e cacheEntry
+	if err := json.Unmarshal(data, &e); err != nil {
+		return ModelInfo{}, false
+	}
+	if now.Sub(e.FetchedAt) > cacheTTL {
+		return ModelInfo{}, false
+	}
+	return e.Info, true
+}
+
+// writeCache stores one model entry, best-effort — a cache write never fails a
+// lookup.
+func (s *OpenRouterSource) writeCache(slug string, info ModelInfo, now time.Time) {
+	path := s.cachePath(slug)
+	if path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return
+	}
+	data, err := json.Marshal(cacheEntry{Info: info, FetchedAt: now})
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0o600)
 }
 
 // orModel is the subset of OpenRouter's /models entry we read.

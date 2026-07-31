@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -29,17 +30,28 @@ const cannedModels = `{"data":[
    "supported_parameters":["tools"]}
 ]}`
 
-func cannedSource() *OpenRouterSource {
-	return &OpenRouterSource{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.URL.String() != openRouterModelsURL {
-			return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("no"))}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(cannedModels)),
-			Header:     make(http.Header),
-		}, nil
-	})}
+// cannedSource serves the fixture catalog and caches into a temp dir so tests
+// never touch the real XDG cache.
+func cannedSource(t *testing.T) *OpenRouterSource {
+	t.Helper()
+	return &OpenRouterSource{
+		APIKey:   "test-key",
+		CacheDir: t.TempDir(),
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.String() != openRouterModelsURL {
+				return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("no"))}, nil
+			}
+			return okResp(), nil
+		}),
+	}
+}
+
+func okResp() *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(cannedModels)),
+		Header:     make(http.Header),
+	}
 }
 
 // TestPerMillion pins the exact decimal-shift scaling — the reason it isn't a
@@ -65,8 +77,92 @@ func TestPerMillion(t *testing.T) {
 	}
 }
 
+// TestFetchSendsAuthAndIdentity: the request must authenticate and identify
+// itself, so OpenRouter's Cloudflare layer doesn't read it as an anonymous
+// scraper and IP-block it.
+func TestFetchSendsAuthAndIdentity(t *testing.T) {
+	var got *http.Request
+	src := &OpenRouterSource{
+		APIKey:    "sk-test",
+		UserAgent: "Strument/9.9.9",
+		CacheDir:  t.TempDir(),
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			got = r
+			return okResp(), nil
+		}),
+	}
+	if _, _, err := src.Lookup([]string{"vendor/cacher"}); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("no request captured")
+	}
+	for header, want := range map[string]string{
+		"Authorization": "Bearer sk-test",
+		"Http-Referer":  appReferer,
+		"X-Title":       appTitle,
+		"User-Agent":    "Strument/9.9.9",
+	} {
+		if h := got.Header.Get(header); h != want {
+			t.Errorf("%s = %q, want %q", header, h, want)
+		}
+	}
+}
+
+// TestCacheAvoidsSecondFetch: a second lookup of a cached model makes no request.
+func TestCacheAvoidsSecondFetch(t *testing.T) {
+	dir := t.TempDir()
+	calls := 0
+	mk := func() *OpenRouterSource {
+		return &OpenRouterSource{
+			APIKey:   "k",
+			CacheDir: dir,
+			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+				calls++
+				return okResp(), nil
+			}),
+		}
+	}
+	if _, _, err := mk().Lookup([]string{"vendor/cacher"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := mk().Lookup([]string{"vendor/cacher"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Errorf("fetched %d times, want 1 (second lookup should hit the cache)", calls)
+	}
+}
+
+// TestCacheExpiresAfterTTL: past the TTL, the entry is refetched.
+func TestCacheExpiresAfterTTL(t *testing.T) {
+	dir := t.TempDir()
+	calls := 0
+	now := time.Now()
+	mk := func(at time.Time) *OpenRouterSource {
+		return &OpenRouterSource{
+			APIKey:   "k",
+			CacheDir: dir,
+			Now:      func() time.Time { return at },
+			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+				calls++
+				return okResp(), nil
+			}),
+		}
+	}
+	if _, _, err := mk(now).Lookup([]string{"vendor/cacher"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := mk(now.Add(cacheTTL + time.Minute)).Lookup([]string{"vendor/cacher"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Errorf("fetched %d times, want 2 (entry should expire after the TTL)", calls)
+	}
+}
+
 func TestOpenRouterSourceLookup(t *testing.T) {
-	found, missing, err := cannedSource().Lookup([]string{"vendor/cacher", "vendor/implicit", "vendor/plain", "vendor/nope"})
+	found, missing, err := cannedSource(t).Lookup([]string{"vendor/cacher", "vendor/implicit", "vendor/plain", "vendor/nope"})
 	if err != nil {
 		t.Fatal(err)
 	}

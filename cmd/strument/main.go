@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -295,24 +296,57 @@ type modelConfigCmd struct {
 	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
 }
 
+// openRouterKeyFromConfig returns the API key of an OpenRouter provider in the
+// config, or "" when none is configured.
+func openRouterKeyFromConfig(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	for _, m := range cfg.Models {
+		if m.Provider.Adapter == config.AdapterOpenRouter && m.Provider.APIKey != "" {
+			return m.Provider.APIKey
+		}
+	}
+	return ""
+}
+
 func (c *modelConfigCmd) Run() error {
 	if c.Source != "openrouter" {
 		return fmt.Errorf("unknown source %q (only \"openrouter\" is supported)", c.Source)
 	}
-	// --proxy wins; otherwise fall back to the config's global proxy,
-	// best-effort — the config may not exist yet on a restricted network's
-	// first run, in which case only --proxy (or a direct connection) applies.
+	// Best-effort load the config once: it supplies the OpenRouter API key and
+	// the global proxy. It may not exist yet on a first run.
+	var cfg *config.Config
+	if loaded, err := config.Load(config.Options{}); err == nil {
+		cfg = loaded
+	}
+
+	// --proxy wins, then the config's global proxy.
 	proxy := c.Proxy
-	if proxy == "" {
-		if cfg, err := config.Load(config.Options{}); err == nil {
-			proxy = cfg.Proxy
-		}
+	if proxy == "" && cfg != nil {
+		proxy = cfg.Proxy
 	}
 	transport, err := httpx.ProxyTransport(proxy)
 	if err != nil {
 		return err
 	}
-	src := &modelconfig.OpenRouterSource{Transport: transport}
+
+	// Authentication is mandatory: unauthenticated catalog requests are
+	// rate-limited and can get the IP blocked. Prefer the config's OpenRouter
+	// key, fall back to OPENROUTER_API_KEY.
+	apiKey := openRouterKeyFromConfig(cfg)
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENROUTER_API_KEY")
+	}
+	if apiKey == "" {
+		return errors.New("model-config needs an OpenRouter API key (set OPENROUTER_API_KEY); anonymous catalog requests are rate-limited and can get your IP blocked")
+	}
+
+	src := &modelconfig.OpenRouterSource{
+		APIKey:    apiKey,
+		UserAgent: "Strument/" + version,
+		Transport: transport,
+	}
 	found, missing, err := src.Lookup(c.Models)
 	if err != nil {
 		return err

@@ -189,8 +189,12 @@ output, costs in US dollars per million tokens, and `cache=True` when the model 
 leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
 commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output
-goes to stdout, so redirect or pipe it wherever you like. When the catalog fetch
-itself must go through a proxy, pass `--proxy socks5://…`; otherwise it uses your
+goes to stdout, so redirect or pipe it wherever you like. It authenticates with
+your OpenRouter key — taken from your config, or the `OPENROUTER_API_KEY`
+environment variable — because anonymous catalog requests are rate-limited and
+can get your IP blocked; and it caches each fetched model for a day under your
+cache directory, so repeated runs don't refetch. When the catalog fetch itself
+must go through a proxy, pass `--proxy socks5://…`; otherwise it uses your
 config's global `proxy`. It maintains no model database — the catalog is fetched
 on demand and frozen into your own config.
 Because `config.star` is almost Python, you can tidy the pasted blocks with a
