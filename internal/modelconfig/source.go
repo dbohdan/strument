@@ -19,8 +19,9 @@ import (
 )
 
 // ModelInfo is the provider-neutral metadata the emitter renders. Cost fields
-// are the provider's per-token USD strings, kept verbatim (empty => unknown);
-// preserving the string avoids any float round-trip surprise in the output.
+// are per-million-token USD strings — the provider's per-token price scaled up
+// (x1,000,000) for readability, as an exact decimal shift so no float round-trip
+// mangles the value (empty => unknown). config divides them back by 1e6 at load.
 type ModelInfo struct {
 	Slug         string
 	DisplayName  string
@@ -115,8 +116,8 @@ func toInfo(m orModel) ModelInfo {
 		Slug:        m.ID,
 		DisplayName: cleanName(m.Name),
 		Context:     m.ContextLength,
-		InputCost:   validCost(m.Pricing.Prompt),
-		OutputCost:  validCost(m.Pricing.Completion),
+		InputCost:   perMillion(m.Pricing.Prompt),
+		OutputCost:  perMillion(m.Pricing.Completion),
 	}
 	if m.TopProvider.MaxCompletionTokens != nil {
 		info.MaxOutput = *m.TopProvider.MaxCompletionTokens
@@ -139,17 +140,56 @@ func cleanName(name string) string {
 	return name
 }
 
-// validCost returns the price string when it parses as a number, else ""
-// (unknown => omit). "0" is a real, known price and is kept.
-func validCost(s string) string {
+// perMillion multiplies a plain decimal price string by 1,000,000 exactly, by
+// shifting the decimal point six places right: OpenRouter quotes per-token
+// prices ("0.000005"), and per-million-token ("5") is what people read. The
+// shift is string-only so no float round-trip mangles the value (0.000005*1e6
+// formats as 5.000000000000001 in float64). Returns "" for an empty or
+// non-plain-decimal string (unknown => omit); "0" stays "0", a real known price.
+func perMillion(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
 	}
-	if _, err := strconv.ParseFloat(s, 64); err != nil {
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	intPart, fracPart, _ := strings.Cut(s, ".")
+	if (intPart == "" && fracPart == "") || !allDigits(intPart) || !allDigits(fracPart) {
 		return ""
 	}
-	return s
+
+	const shift = 6
+	var out string
+	if len(fracPart) <= shift {
+		digits := strings.TrimLeft(intPart+fracPart+strings.Repeat("0", shift-len(fracPart)), "0")
+		if digits == "" {
+			digits = "0"
+		}
+		out = digits
+	} else {
+		whole := strings.TrimLeft(intPart+fracPart[:shift], "0")
+		if whole == "" {
+			whole = "0"
+		}
+		if frac := strings.TrimRight(fracPart[shift:], "0"); frac != "" {
+			out = whole + "." + frac
+		} else {
+			out = whole
+		}
+	}
+	if neg && out != "0" {
+		out = "-" + out
+	}
+	return out
+}
+
+func allDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func isPositivePrice(s string) bool {

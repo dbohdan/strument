@@ -8,8 +8,8 @@ func TestEmitStarlarkFull(t *testing.T) {
 		DisplayName:  "Claude Haiku 4.5",
 		Context:      200000,
 		MaxOutput:    64000,
-		InputCost:    "0.000001",
-		OutputCost:   "0.000005",
+		InputCost:    "1",
+		OutputCost:   "5",
 		CacheCapable: true,
 		Reasoning:    true,
 	}
@@ -19,8 +19,8 @@ func TestEmitStarlarkFull(t *testing.T) {
     display_name="Claude Haiku 4.5",
     context=200000,
     max_output=64000,
-    input_cost=0.000001,
-    output_cost=0.000005,
+    input_cost=1,
+    output_cost=5,
     cache=True,  # OpenRouter reports prompt caching for this model.
     # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
     # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.

@@ -67,7 +67,7 @@ type Model struct {
 	Cache        bool // enable prompt-cache breakpoints (1h TTL) + freeze the repo map
 	Context      int  // input window tokens; 0 => unknown
 	MaxOutput    int
-	InputCost    *llm.Money // per-token; nil => unknown (never fabricate cost)
+	InputCost    *llm.Money // per-token USD (config declares per-million); nil => unknown (never fabricate cost)
 	OutputCost   *llm.Money
 	ExtraParams  map[string]any
 

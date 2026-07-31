@@ -19,8 +19,8 @@ func TestEmitLoadsBackAndPinsSchema(t *testing.T) {
 		DisplayName:  "Claude Haiku 4.5",
 		Context:      200000,
 		MaxOutput:    64000,
-		InputCost:    "0.000001",
-		OutputCost:   "0.000005",
+		InputCost:    "1", // per million tokens; loads back as 0.000001 per token
+		OutputCost:   "5",
 		CacheCapable: true,
 		Reasoning:    true,
 	}

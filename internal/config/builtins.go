@@ -170,6 +170,8 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 //	weak_model=None, reasoning=None, reasoning_tag=None, temperature=None,
 //	repo_map=True, cache=False, context=None, max_output=None,
 //	input_cost=None, output_cost=None, extra_params={}).
+//
+// input_cost and output_cost are USD per million tokens.
 func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 2 {
 		return nil, errors.New("model: only 'provider' and 'slug' may be positional")
@@ -242,16 +244,18 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	if m.Temperature, err = optFloat("temperature", temperature); err != nil {
 		return nil, err
 	}
+	// Costs are declared per million tokens (readable: "5", not "0.000005") and
+	// stored as the per-token USD the usage math expects.
 	var f *float64
 	if f, err = optFloat("input_cost", inputCost); err != nil {
 		return nil, err
 	} else if f != nil {
-		m.InputCost = &llm.Money{Known: true, USD: *f}
+		m.InputCost = &llm.Money{Known: true, USD: *f / 1e6}
 	}
 	if f, err = optFloat("output_cost", outputCost); err != nil {
 		return nil, err
 	} else if f != nil {
-		m.OutputCost = &llm.Money{Known: true, USD: *f}
+		m.OutputCost = &llm.Money{Known: true, USD: *f / 1e6}
 	}
 
 	if m.ExtraParams, err = dictToParams("model", extraParams); err != nil {

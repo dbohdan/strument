@@ -174,8 +174,8 @@ model(
     display_name="Claude Haiku 4.5",
     context=200000,
     max_output=64000,
-    input_cost=0.000001,
-    output_cost=0.000005,
+    input_cost=1,
+    output_cost=5,
     cache=True,  # OpenRouter reports prompt caching for this model.
     # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
     # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
@@ -184,7 +184,7 @@ model(
 ```
 
 It fills the objective fields from OpenRouter's catalog (context size, max
-output, per-token costs, and `cache=True` when the model supports caching) and
+output, per-million-token costs, and `cache=True` when the model supports caching) and
 leaves the judgment calls — `reasoning`, `reasoning_tag`, `weak_model` — as
 commented placeholders for you to fill in. Pass exact slugs; `--provider-name`
 sets the provider variable emitted in the call (default `openrouter`); output

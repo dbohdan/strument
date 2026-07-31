@@ -42,6 +42,29 @@ func cannedSource() *OpenRouterSource {
 	})}
 }
 
+// TestPerMillion pins the exact decimal-shift scaling — the reason it isn't a
+// float multiply is that 0.000005*1e6 formats as 5.000000000000001 in float64.
+func TestPerMillion(t *testing.T) {
+	cases := map[string]string{
+		"0.000005":   "5",
+		"0.000001":   "1",
+		"0.0000006":  "0.6",
+		"0.00000015": "0.15",
+		"0.00000105": "1.05",
+		"0":          "0",
+		"0.0":        "0",
+		"1.5":        "1500000",
+		"":           "",
+		"abc":        "",
+		"1e-6":       "", // scientific notation is not a plain decimal we shift
+	}
+	for in, want := range cases {
+		if got := perMillion(in); got != want {
+			t.Errorf("perMillion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestOpenRouterSourceLookup(t *testing.T) {
 	found, missing, err := cannedSource().Lookup([]string{"vendor/cacher", "vendor/implicit", "vendor/plain", "vendor/nope"})
 	if err != nil {
@@ -61,8 +84,9 @@ func TestOpenRouterSourceLookup(t *testing.T) {
 	if cacher.Context != 200000 || cacher.MaxOutput != 64000 {
 		t.Errorf("cacher context/max = %d/%d, want 200000/64000", cacher.Context, cacher.MaxOutput)
 	}
-	if cacher.InputCost != "0.000001" || cacher.OutputCost != "0.000005" {
-		t.Errorf("cacher costs = %q/%q", cacher.InputCost, cacher.OutputCost)
+	// Per-token 0.000001/0.000005 scaled to per-million 1/5.
+	if cacher.InputCost != "1" || cacher.OutputCost != "5" {
+		t.Errorf("cacher costs = %q/%q, want 1/5", cacher.InputCost, cacher.OutputCost)
 	}
 	if !cacher.CacheCapable || !cacher.Reasoning {
 		t.Errorf("cacher cache/reasoning = %v/%v, want true/true", cacher.CacheCapable, cacher.Reasoning)
