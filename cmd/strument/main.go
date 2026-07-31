@@ -131,7 +131,7 @@ func (c *chatCmd) Run() error {
 		sentAfter, recvAfter := cdr.SessionTokens()
 		costAfter, known := cdr.SessionCost()
 		if err := hist.Append(history.Turn{
-			Model:          model.Slug,
+			Model:          model.QualifiedSlug(),
 			TokensSent:     sentAfter - sentBefore,
 			TokensReceived: recvAfter - recvBefore,
 			Cost:           costAfter - costBefore,

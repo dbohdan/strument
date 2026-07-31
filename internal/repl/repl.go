@@ -420,7 +420,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 		sentAfter, recvAfter := r.coder.SessionTokens()
 		costAfter, known := r.coder.SessionCost()
 		if err := r.opts.History.Append(history.Turn{
-			Model:          r.coder.Model.Slug,
+			Model:          r.coder.Model.QualifiedSlug(),
 			TokensSent:     sentAfter - sentBefore,
 			TokensReceived: recvAfter - recvBefore,
 			Cost:           costAfter - costBefore,
