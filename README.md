@@ -24,11 +24,12 @@ Strument began as a close reverse-engineering of aider at commit [`5dc9490`](htt
   for questions that should not touch files. Architect mode, voice, GUI,
   analytics, summarization, and the other long-tail features are out of scope
   for v1.
-- **Plain-HTTP URL scraping.** URLs you mention are fetched with a plain
-  HTTP GET and reduced to text — no headless browser (a static binary can't
-  embed one), so JavaScript-rendered pages, which is most modern docs
-  sites, come back empty. aider ships a Playwright-based scraper; Strument
-  trades that reach for the single-binary distribution.
+- **Plain-HTTP URL scraping.** URLs you mention, or `/web <url>`, are fetched
+  with a plain HTTP GET — a real `User-Agent`, no headless browser — and
+  converted to markdown. A static binary can't embed a browser, so
+  JavaScript-rendered pages (most modern docs sites) come back thin; aider ships
+  a Playwright scraper, and a go-rod browser mode is a possible opt-in future.
+  Strument trades that reach for the single-binary distribution.
 
 The terminal interface, on the other hand, deliberately stays close to
 aider's: the same green/blue palette (with `--dark-mode` and `--light-mode`),

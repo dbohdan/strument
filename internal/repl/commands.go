@@ -52,6 +52,7 @@ func init() {
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last Strument auto-commit", cmdUndo},
+		{"web", "<url>", "Scrape a web page and stage it for your next message", cmdWeb},
 	}
 }
 
@@ -482,5 +483,29 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		r.coder.AppendExchange(result, "Ok")
 		r.printf("Added the command output to the chat.")
 	}
+	return ""
+}
+
+// cmdWeb scrapes a URL and adds its content to the chat as a completed exchange
+// (the same path /run uses for command output), so it's context for your next
+// message without re-scanning the page's own links or firing a turn.
+func cmdWeb(ctx context.Context, r *REPL, args string) string {
+	url := strings.TrimSpace(args)
+	if url == "" {
+		r.out.Errorf("Usage: /web <url>")
+		return ""
+	}
+	if r.coder.Scrape == nil {
+		r.out.Errorf("Scraping is not available.")
+		return ""
+	}
+	r.printf("Scraping %s...", url)
+	content, err := r.coder.Scrape(ctx, url)
+	if err != nil {
+		r.out.Errorf("Unable to fetch %s: %v", url, err)
+		return ""
+	}
+	r.coder.AppendExchange(content, "Ok")
+	r.printf("Added %s to the chat.", url)
 	return ""
 }

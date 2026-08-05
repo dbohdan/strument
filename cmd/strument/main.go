@@ -85,7 +85,7 @@ func (c *chatCmd) Run() error {
 	// URL scraping is a non-provider egress action, so it uses the global proxy
 	// (validated at load, so the error is dead; nil transport => direct).
 	scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
-	cdr.Scrape = coder.NewSimpleScraper(scrapeTransport)
+	cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
 	if model.RepoMap {
 		rm := repomap.New(root)
 		rm.MaxContextWindow = model.Context

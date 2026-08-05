@@ -459,3 +459,40 @@ func TestTurnCtrlCChord(t *testing.T) {
 		t.Errorf("missing chord hint:\n%s", out.String())
 	}
 }
+
+// TestWebCommandScrapesAndStages: /web scrapes the URL once and the page reaches
+// the model as context on the next real message.
+func TestWebCommandScrapesAndStages(t *testing.T) {
+	stub := answerStub("Summary.")
+	var reqText string
+	stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		var b strings.Builder
+		for _, m := range req.Messages {
+			b.WriteString(m.Text() + "\n")
+		}
+		reqText = b.String()
+		return nil
+	}
+
+	input := strings.NewReader("/web https://example.com/page\nsummarize\n/exit\n")
+	r, cdr, out := newTestREPL(t, stub, input)
+	defer r.Close()
+	var scraped []string
+	cdr.Scrape = func(_ context.Context, url string) (string, error) {
+		scraped = append(scraped, url)
+		return "SCRAPED PAGE BODY", nil
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(scraped) != 1 || scraped[0] != "https://example.com/page" {
+		t.Errorf("scraped = %v, want one call to the /web URL", scraped)
+	}
+	if !strings.Contains(reqText, "SCRAPED PAGE BODY") {
+		t.Errorf("staged page did not reach the model request:\n%s", reqText)
+	}
+	if !strings.Contains(out.String(), "Added https://example.com/page to the chat.") {
+		t.Errorf("missing /web confirmation:\n%s", out.String())
+	}
+}
