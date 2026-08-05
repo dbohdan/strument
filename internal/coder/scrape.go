@@ -19,7 +19,12 @@ const (
 	scrapeMaxBytes         = 2 * 1024 * 1024
 )
 
-var blankRunRe = regexp.MustCompile(`\n{3,}`)
+var (
+	blankRunRe = regexp.MustCompile(`\n{3,}`)
+	// Anchors that wrapped only an icon/logo image become empty [](url) links
+	// once the image is dropped; strip those artifacts, keeping real links.
+	emptyLinkRe = regexp.MustCompile(`\[\s*\]\([^)]*\)`)
+)
 
 // SimpleScraper fetches a URL and reduces HTML to markdown, with no proxy and a
 // default user-agent — the standalone stand-in for aider's scraper.
@@ -67,12 +72,19 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 	}
 }
 
-// htmlToMarkdown slims media — dropping images and svg, which bloat with data:
-// URIs (aider's slimdown_html does the same) — and converts to markdown. On a
-// parse or conversion error it falls back to the (possibly slimmed) HTML.
+// htmlToMarkdown slims the page and converts it to markdown. It drops media
+// (img/svg, which bloat with data: URIs — aider's slimdown_html does the same)
+// and the two unambiguous chrome landmarks, nav and footer, which held the
+// noise (Wikipedia's sidebar, page footers) in live tests. header stays: a
+// blog/news article's <h1> title lives in an article <header>, and the chrome a
+// page <header> carries is mostly <nav>, already removed. aside stays too:
+// documentation generators render admonitions as <div class="admonition">, not
+// <aside>, but Sphinx puts footnotes in <aside class="footnote">, so dropping it
+// would lose real content. On a parse or conversion error it falls back to the
+// (possibly slimmed) HTML.
 func htmlToMarkdown(htmlStr string) string {
 	if doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr)); err == nil {
-		doc.Find("img, svg, script, style, noscript").Remove()
+		doc.Find("img, svg, script, style, noscript, nav, footer").Remove()
 		if slimmed, err := doc.Html(); err == nil {
 			htmlStr = slimmed
 		}
@@ -81,5 +93,6 @@ func htmlToMarkdown(htmlStr string) string {
 	if err != nil {
 		return htmlStr
 	}
+	md = emptyLinkRe.ReplaceAllString(md, "")
 	return strings.TrimSpace(blankRunRe.ReplaceAllString(md, "\n\n"))
 }
