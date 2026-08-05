@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"golang.org/x/term"
@@ -83,9 +84,15 @@ func (c *chatCmd) Run() error {
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	// URL scraping is a non-provider egress action, so it uses the global proxy
-	// (validated at load, so the error is dead; nil transport => direct).
-	scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
-	cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
+	// (validated at load, so the error is dead; nil transport => direct). An
+	// explicit `scraper` command overrides the built-in fetcher — the opt-in path
+	// for JavaScript-rendered pages — and does its own networking (no proxy).
+	if len(cfg.Scraper) > 0 {
+		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second)
+	} else {
+		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
+		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
+	}
 	if model.RepoMap {
 		rm := repomap.New(root)
 		rm.MaxContextWindow = model.Context

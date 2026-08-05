@@ -44,6 +44,8 @@ type fileGlobals struct {
 	historyFile    string
 	hasProxy       bool
 	proxyVal       string
+	hasScraper     bool
+	scraperVal     []string
 }
 
 // Load runs the config pipeline: user config, gated project
@@ -126,6 +128,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasProxy {
 		cfg.Proxy = user.proxyVal
 	}
+	if user.hasScraper {
+		cfg.Scraper = user.scraperVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -136,6 +141,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasProxy {
 			cfg.Proxy = project.proxyVal
+		}
+		if project.hasScraper {
+			cfg.Scraper = project.scraperVal
 		}
 	}
 
@@ -283,6 +291,26 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		}
 		out.hasProxy = true
 		out.proxyVal = s
+	}
+
+	if sv, ok := globals["scraper"]; ok {
+		list, ok := sv.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf("%s: `scraper` must be a list of strings (argv, with %%s for the URL), got %s", path, sv.Type())
+		}
+		argv := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			s, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `scraper`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+			}
+			argv = append(argv, s)
+		}
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("%s: `scraper` must not be empty", path)
+		}
+		out.hasScraper = true
+		out.scraperVal = argv
 	}
 
 	return out, nil

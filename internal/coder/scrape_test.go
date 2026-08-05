@@ -2,10 +2,14 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type scrapeRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -84,4 +88,85 @@ func TestScraperNonHTMLVerbatim(t *testing.T) {
 	if !strings.Contains(out, "plain <b>not-html</b> text") {
 		t.Errorf("non-HTML should be verbatim: %q", out)
 	}
+}
+
+// TestBuildScrapeArgs: the URL is substituted for every %s, and appended when no
+// element carries the placeholder.
+func TestBuildScrapeArgs(t *testing.T) {
+	cases := []struct {
+		argv []string
+		url  string
+		want []string
+	}{
+		{[]string{"chromium", "--dump-dom", "%s"}, "https://x/y", []string{"chromium", "--dump-dom", "https://x/y"}},
+		{[]string{"fetch", "--url=%s", "--referer=%s"}, "u", []string{"fetch", "--url=u", "--referer=u"}},
+		{[]string{"monolith"}, "https://z", []string{"monolith", "https://z"}},
+	}
+	for _, c := range cases {
+		if got := buildScrapeArgs(c.argv, c.url); !slices.Equal(got, c.want) {
+			t.Errorf("buildScrapeArgs(%v, %q) = %v, want %v", c.argv, c.url, got, c.want)
+		}
+	}
+}
+
+// TestCommandScraper drives the command path against this test binary re-run as
+// the scrape command (the os/exec helper-process idiom): no sockets, no browser.
+func TestCommandScraper(t *testing.T) {
+	t.Setenv("GO_WANT_HELPER_PROCESS", "1")
+	helper := func(mode string) []string {
+		return []string{os.Args[0], "-test.run=TestScrapeHelperProcess", "--", mode, "%s"}
+	}
+
+	out, err := NewCommandScraper(helper("ok"), 10*time.Second)(context.Background(), "https://example.com/page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The URL reached the command, and its stdout HTML became markdown.
+	if !strings.Contains(out, "example.com/page") {
+		t.Errorf("URL not passed to command:\n%s", out)
+	}
+	if !strings.Contains(out, "# Rendered") {
+		t.Errorf("output not markdown-converted:\n%s", out)
+	}
+	if strings.Contains(out, "<h1>") {
+		t.Errorf("raw HTML leaked:\n%s", out)
+	}
+
+	// A non-zero exit surfaces as an error carrying the stderr tail.
+	_, err = NewCommandScraper(helper("fail"), 10*time.Second)(context.Background(), "https://x")
+	if err == nil {
+		t.Fatal("expected error from failing command")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("error missing stderr tail: %v", err)
+	}
+}
+
+// TestScrapeHelperProcess is not a real test: it is the child the command
+// scraper runs in TestCommandScraper. Guarded by GO_WANT_HELPER_PROCESS, it
+// echoes the URL it received inside a scrap of HTML, or exits non-zero on "fail".
+func TestScrapeHelperProcess(_ *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+	args := os.Args
+	for i, a := range args {
+		if a == "--" {
+			args = args[i+1:]
+			break
+		}
+	}
+	mode, url := "", ""
+	if len(args) > 0 {
+		mode = args[0]
+	}
+	if len(args) > 1 {
+		url = args[1]
+	}
+	if mode == "fail" {
+		fmt.Fprintln(os.Stderr, "boom: could not launch browser")
+		os.Exit(3)
+	}
+	fmt.Printf("<html><body><h1>Rendered</h1><p>URL was %s</p></body></html>\n", url)
+	os.Exit(0)
 }

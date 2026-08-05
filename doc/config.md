@@ -25,9 +25,26 @@ The loader reads these module-level variables after running your file:
 | `default` | string | The alias used when none is given on the command line. Required; must be a key of `models`. |
 | `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
+| `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
+
+### `scraper`
+
+When set, `scraper` is an argv list whose command replaces the built-in HTTP
+fetcher; `%s` in any element is substituted with the URL (if no element has
+`%s`, the URL is appended). Strument runs the command without a shell — so a
+hostile URL can't inject arguments — treats its stdout as HTML, and converts
+that to markdown exactly as it does a fetched page. It is the way to read
+JavaScript-rendered pages without bundling a browser: point it at a headless one.
+
+```python
+scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
+```
+
+Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
+**not** apply to a `scraper` command; the command handles its own networking.
 
 ## Built-in functions
 

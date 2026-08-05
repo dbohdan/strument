@@ -140,6 +140,10 @@ type Config struct {
 	// model-config, URL scraping, and any provider that sets no proxy of its
 	// own ("" => no global proxy).
 	Proxy string
+	// Scraper, when non-empty, is an external command (argv, with %s marking the
+	// URL) run to fetch pages instead of the built-in HTTP scraper — the opt-in
+	// path for JavaScript-rendered pages. The global proxy does not apply to it.
+	Scraper []string
 }
 
 // DefaultModel returns the model for the default alias.

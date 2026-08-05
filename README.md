@@ -24,12 +24,14 @@ Strument began as a close reverse-engineering of aider at commit [`5dc9490`](htt
   for questions that should not touch files. Architect mode, voice, GUI,
   analytics, summarization, and the other long-tail features are out of scope
   for v1.
-- **Plain-HTTP URL scraping.** URLs you mention, or `/web <url>`, are fetched
-  with a plain HTTP GET — a real `User-Agent`, no headless browser — and
-  converted to markdown. A static binary can't embed a browser, so
-  JavaScript-rendered pages (most modern docs sites) come back thin; aider ships
-  a Playwright scraper, and a go-rod browser mode is a possible opt-in future.
-  Strument trades that reach for the single-binary distribution.
+- **Plain-HTTP URL scraping, with an escape hatch.** URLs you mention, or
+  `/web <url>`, are fetched with a plain HTTP GET — a real `User-Agent`, no
+  headless browser — and converted to markdown. A static binary can't embed a
+  browser, so JavaScript-rendered pages (most modern docs sites) come back thin;
+  aider ships a Playwright scraper. For those pages, point the `scraper` setting
+  at an external command (e.g. a headless Chromium): Strument shells out to it
+  rather than vendoring a browser, so the single binary stays a single binary and
+  you bring your own renderer. See [Configuration](#configuration).
 
 The terminal interface, on the other hand, deliberately stays close to
 aider's: the same green/blue palette (with `--dark-mode` and `--light-mode`),
@@ -160,6 +162,21 @@ for external traffic. Credentials go in the URL
 (`socks5://user:pass@host:1080`); keep them out of the file with
 `proxy=env("STRUMENT_PROXY")`, exactly as with `api_key`. Only `socks5://` and
 `socks5h://` are supported.
+
+The built-in scraper is a plain HTTP GET, so JavaScript-rendered pages come back
+thin. For those, set a `scraper` command — an argv list with `%s` marking the
+URL — and Strument runs it instead of the built-in fetcher, treating its stdout
+as HTML and converting that to markdown the same way. A headless browser dumping
+the rendered DOM is the usual choice:
+
+```python
+scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
+```
+
+The command runs without a shell, so a hostile URL can't inject arguments; if no
+element contains `%s`, the URL is appended as the last argument. Leaving
+`scraper` unset keeps the built-in fetcher (the default). The global `proxy` does
+not apply to a `scraper` command — it does its own networking.
 
 Writing out `context`, costs, and `cache` by hand for every model is tedious, so
 `strument model-config` fetches them for you and prints a copy-pastable

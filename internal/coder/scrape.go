@@ -1,10 +1,13 @@
 package coder
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -68,7 +71,98 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 		if strings.Contains(resp.Header.Get("Content-Type"), "html") {
 			text = htmlToMarkdown(text)
 		}
-		return fmt.Sprintf("Here is the content of %s:\n\n%s", url, text), nil
+		return wrapContent(url, text), nil
+	}
+}
+
+// wrapContent frames a scraped page the way every scraper presents it to the
+// model, so the phrasing stays identical across the HTTP and command paths.
+func wrapContent(url, text string) string {
+	return fmt.Sprintf("Here is the content of %s:\n\n%s", url, text)
+}
+
+// buildScrapeArgs fills the URL into an argv template: every %s in an element is
+// replaced, and if no element mentions %s the URL is appended as a final
+// argument. Substituting into an argv slice (never a shell string) keeps a
+// hostile URL from injecting extra arguments.
+func buildScrapeArgs(argv []string, url string) []string {
+	out := make([]string, 0, len(argv)+1)
+	found := false
+	for _, a := range argv {
+		if strings.Contains(a, "%s") {
+			found = true
+			out = append(out, strings.ReplaceAll(a, "%s", url))
+		} else {
+			out = append(out, a)
+		}
+	}
+	if !found {
+		out = append(out, url)
+	}
+	return out
+}
+
+// boundedBuffer keeps at most max bytes and drops the rest, so a chatty
+// subprocess can't exhaust memory through stdout or stderr. It always reports a
+// full write so the child never blocks or sees a short-write error.
+type boundedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	if room := b.max - b.buf.Len(); room > 0 {
+		if len(p) > room {
+			b.buf.Write(p[:room])
+		} else {
+			b.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+// NewCommandScraper returns a Scraper that fetches a URL by running an external
+// command — typically a headless browser dumping the rendered DOM — and reduces
+// its stdout, treated as HTML, to markdown through the same pipeline as the HTTP
+// scraper. This is the opt-in path for JavaScript-rendered pages: it keeps
+// Strument a single static binary and lets the user bring their own browser. The
+// command runs without a shell, so a hostile URL cannot inject arguments; the
+// global proxy does not apply here — the command manages its own networking.
+func NewCommandScraper(argv []string, timeout time.Duration) Scraper {
+	return func(ctx context.Context, url string) (string, error) {
+		if len(argv) == 0 {
+			return "", errors.New("scraper command is empty")
+		}
+		runCtx := ctx
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			runCtx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+		args := buildScrapeArgs(argv, url)
+		// The command comes from the operator's config, and the URL is a single
+		// argv element (never shell-interpreted), so this is not attacker-run.
+		cmd := exec.CommandContext(runCtx, args[0], args[1:]...) //nolint:gosec
+
+		stdout := &boundedBuffer{max: scrapeMaxBytes}
+		stderr := &boundedBuffer{max: 4096}
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+
+		err := cmd.Run()
+		if runCtx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("scraper command timed out after %s", timeout)
+		}
+		if err != nil {
+			if tail := strings.TrimSpace(stderr.buf.String()); tail != "" {
+				return "", fmt.Errorf("scraper command failed: %w: %s", err, tail)
+			}
+			return "", fmt.Errorf("scraper command failed: %w", err)
+		}
+		if strings.TrimSpace(stdout.buf.String()) == "" {
+			return "", errors.New("scraper command produced no output")
+		}
+		return wrapContent(url, htmlToMarkdown(stdout.buf.String())), nil
 	}
 }
 
