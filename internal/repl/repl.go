@@ -393,6 +393,7 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 	// slow-to-wake model doesn't look hung (aider's WaitingSpinner). Only
 	// interactively; the first stream event erases it.
 	if r.interactive() {
+		r.out.hideCursor()
 		r.out.startWaiting(r.coder.Model.QualifiedSlug())
 	}
 	return fn(tctx)

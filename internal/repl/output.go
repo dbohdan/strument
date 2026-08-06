@@ -38,7 +38,7 @@ type termOutput struct {
 	waiting      bool
 }
 
-// startWaiting shows a "Waiting for <model>" line (no newline) while the
+// startWaiting shows a "Waiting for <model> " line (no newline) while the
 // request is in flight — aider's cue so a slow-to-wake model doesn't look
 // hung. clearWaiting erases it before the first output.
 func (o *termOutput) startWaiting(name string) {
