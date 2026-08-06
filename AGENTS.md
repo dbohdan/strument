@@ -58,6 +58,27 @@ suggests dashes everywhere; rendering aider's own `NoInsetMarkdown` (or just
 `rich.markdown`) shows the split. Strument mirrors it: `renderPromptHeader`
 uses `─`, the ANSI renderer's `Rule` and the THINKING/ANSWER headers use `-`.
 
+## What to live-test, and what to isolate
+
+The discipline above generalizes past the UI. Every part of Strument that meets
+the outside world — a model's wire behavior, a real page's HTML, a terminal's
+redraw, a proxy's egress — tends to differ from what the source predicts, and
+the difference stays invisible until observed. A live pass against a real model
+(`OPENROUTER_API_KEY` in the environment, never a file) has caught bugs no unit
+test would: a reversed tool-call field order, surfaced only because a second
+model ordered it differently; a code-fence marker leaking into the stream;
+reasoning that wouldn't turn off; a cache TTL that wasn't honored. Test with
+more than one model — providers disagree.
+
+So push the external→deterministic seam as far upstream as you can: grow the
+pure, *seizable* core (its output fully determined by its inputs), unit-test
+that cheaply and exhaustively, and spend the slow live pass only on the real I/O
+boundary. This is functional-core / imperative-shell read as a map of where
+in-head reasoning can be trusted and where you have to go and look. One trap
+worth knowing: when you drive readline through a pty, give it a real terminal
+size (an Options `GetSize` and the pty winsize), or the completion grid and the
+rules silently no-op at zero width.
+
 ## Conventions
 
 - **Commits**: conventional-commit style (`feat:`, `fix:`, `refactor:`,
