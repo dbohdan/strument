@@ -76,54 +76,77 @@ local_llm = provider(
     base_url="http://localhost:8000/v1",
 )
 
-def deepseek(variant):
-    return model(
-        openrouter,
-        "deepseek/deepseek-v4-%s:nitro" % variant.lower(),
-        context=128 * 1024,
-        display_name="DeepSeek V4 %s" % variant.title(),
-        edit_format="tool",  # The default; "diff"/"diff-fenced"/"whole" fall back for weaker tool calling.
-        max_output=8192,
-        reasoning="low",  # Effort "low"/"medium"/"high" (effect varies by model); "off" disables; "" or "default" defers to the model.
-        reasoning_tag="think",  # Strip reasoning from the response body before it is processed.
-        temperature=None,
-        weak_model="deepseek-flash",
-    )
 
 def flex(m):
     return m.with_extra_params(service_tier="flex")
 
+
 models = {
-    "deepseek-flash": deepseek("flash"),
-    "deepseek-pro": deepseek("pro"),
+    "deepseek-flash": model(
+        openrouter,
+        "deepseek/deepseek-v4-flash-0731",
+        display_name="DeepSeek V4 Flash 0731",
+        context=1048576,
+        max_output=384000,
+        cache=True,  # OpenRouter reports prompt caching for this model.
+        reasoning="high",
+    ),
     "ds": None,  # A placeholder for the alias below.
     "gemini-flash": flex(
-        model(openrouter, "google/gemini-3.5-flash", display_name="Gemini 3.5 Flash")
+        model(
+            openrouter,
+            "google/gemini-3.6-flash",
+            display_name="Gemini 3.6 Flash",
+            context=1048576,
+            max_output=65536,
+            cache=True,
+        ),
     ),
-    "gpt": flex(model(openrouter, "openai/gpt-5.4", display_name="GPT-5.4")),
-    "haiku": model(
-        openrouter, "anthropic/claude-haiku-4.5", display_name="Claude Haiku 4.5"
+    "gpt": flex(
+        model(
+            openrouter,
+            "openai/gpt-5.6-luna",
+            display_name="GPT-5.6 Luna",
+            context=1050000,
+            max_output=128000,
+            cache=True,
+            reasoning="high",
+        ),
     ),
-    "k3": flex(model(openrouter, "moonshotai/kimi-k3", display_name="Kimi K3")),
+    "mimo": model(
+        openrouter,
+        "xiaomi/mimo-v2.5",
+        display_name="MiMo-V2.5",
+        context=1050000,
+        max_output=131072,
+        cache=True,
+    ),
     "sonnet": model(
         openrouter,
         "anthropic/claude-sonnet-5",
         display_name="Claude Sonnet 5",
+        context=1000000,
+        max_output=128000,
+        input_cost=2,
+        output_cost=10,
         cache=True,  # Cache the prompt prefix (Anthropic honors this); freezes the repo map.
+        reasoning="medium",
+        weak_model="mimo",
     ),
     "qwen": model(
         local_llm,
         "qwen/qwen3.6-27b",
-        display_name="Qwen3.6 27B",  # Handles tool calls, so it uses the default "tool" format.
+        display_name="Qwen3.6 27B",
+        # Handles tool calls, so it uses the default "tool" format.
         reasoning="max",
         reasoning_tag="think",
-        weak_model="qwen",  # Self-as-weak; only strings express this.
+        weak_model="qwen",  # Self-as-weak, the default; only strings express this.
     ),
 }
 
-models["ds"] = models["deepseek-pro"]  # One struct under both keys.
+models["ds"] = models["deepseek-flash"]  # One struct under both keys.
 
-default = "deepseek-pro"
+default = "ds"
 ```
 
 The `cache` option (default off) turns on prompt caching for a model: Strument
