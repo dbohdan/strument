@@ -84,7 +84,8 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 }
 
 // completer offers command names and, under the file commands, chat or
-// addable file paths.
+// addable file paths; a bare (non-command) line completes file paths in the
+// message itself, aider-style. See promptCompleter in completion.go.
 func (r *REPL) completer() readline.AutoCompleter {
 	chatFiles := func(string) []string { return r.coder.ChatFiles() }
 	items := make([]*readline.PrefixCompleter, 0, len(commands))
@@ -100,7 +101,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 		}
 		items = append(items, readline.PcItem("/"+c.name, sub...))
 	}
-	return readline.NewPrefixCompleter(items...)
+	return promptCompleter{cmd: readline.NewPrefixCompleter(items...), files: r.completePromptFiles}
 }
 
 // recursiveDynamic builds a dynamic completer that re-offers itself for each
