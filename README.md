@@ -263,6 +263,12 @@ The streaming markdown renderer (`internal/render/`) is a port of
 [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by
 Damian Tarnawski, MIT licensed.
 
+The gitignore pattern matcher (`internal/gitignore/`) is vendored from
+[go-git](https://github.com/go-git/go-git) (Apache 2.0, the same license as
+Strument), taken at `v6.0.0-alpha.5`. See
+[`internal/gitignore/NOTICE`](internal/gitignore/NOTICE) for what was taken and
+what Strument replaced.
+
 The terminal line editor (`internal/readline/`) is a vendored fork of
 [ergochat/readline](https://github.com/ergochat/readline) (MIT), taken at
 v0.1.3. Its redraw was reworked to be flicker-free using the in-place,

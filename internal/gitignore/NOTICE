@@ -1,0 +1,46 @@
+internal/gitignore vendors the gitignore pattern matcher from go-git
+(https://github.com/go-git/go-git), taken from module
+github.com/go-git/go-git/v6 at v6.0.0-alpha.5, package
+plumbing/format/gitignore. go-git is distributed under the Apache License 2.0,
+the same license as Strument; the LICENSE file at the repository root applies.
+
+The package code carries its own upstream attribution, reproduced from doc.go:
+
+    Copyright (c) Oleg Sklyar, Silvertern and source{d}
+
+    The package code was donated to source{d} to include, modify and develop
+    further as a part of the `go-git` project, release it on the license of
+    the whole project or delete it from the project.
+
+Files taken verbatim, unmodified:
+
+  * doc.go       — package documentation and the gitignore pattern spec
+  * pattern.go   — ParsePattern and the wildmatch implementation ported from
+                   Git 2.54.0 (handles **, character classes, POSIX classes)
+  * matcher.go   — NewMatcher and priority resolution
+
+Strument's additions and omissions:
+
+  * dir.go is NOT vendored. Upstream reads ignore files through the go-billy
+    filesystem abstraction (github.com/go-git/go-billy), which Strument does not
+    depend on and does not want to add, and it eagerly recurses the entire
+    worktree. read.go replaces it: the same line filtering (skip comments and
+    blank lines, hand the rest to ParsePattern) over os, exposed per directory
+    so a caller walking the tree collects patterns as it descends rather than
+    traversing twice.
+
+  * Global and system patterns (core.excludesFile from ~/.gitconfig and
+    /etc/gitconfig) are not read. Upstream reaches them through go-git's
+    gitconfig decoder, a larger dependency than the matcher itself, and a
+    per-user ignore file should not silently change which files Strument will
+    show a model on someone else's machine.
+
+  * The upstream tests are not vendored: they require
+    github.com/stretchr/testify, and the conformance suite shells out to a real
+    git binary. read_test.go covers the reader and pins the matcher behavior
+    Strument relies on, including the ** cases that motivated taking the v6
+    matcher over the older, simpler one in v5.
+
+The vendored files are kept in upstream style and excluded from Strument's
+linters and formatters, like internal/readline; go vet and go test still cover
+them. read.go and read_test.go are Strument's own and are linted normally.
