@@ -144,6 +144,30 @@ type Config struct {
 	// URL) run to fetch pages instead of the built-in HTTP scraper — the opt-in
 	// path for JavaScript-rendered pages. The global proxy does not apply to it.
 	Scraper []string
+	// Verify is the project's named verification commands, in declared order.
+	// The `verify` tool runs them by name; a run with no name runs all of them
+	// in order and stops at the first failure, so fast checks belong first.
+	Verify []VerifyCheck
+}
+
+// VerifyCheck is one named verification command: an argv, never a shell string.
+//
+// The name is what the model passes to the verify tool, which is the point of
+// naming them. The model never supplies a command, so there is nothing to
+// classify and nothing to smuggle through — which is what lets verification run
+// without the confirmation `bash` requires.
+type VerifyCheck struct {
+	Name string
+	Argv []string
+}
+
+// VerifyNames lists the configured check names in declared order.
+func (c *Config) VerifyNames() []string {
+	out := make([]string, 0, len(c.Verify))
+	for _, v := range c.Verify {
+		out = append(out, v.Name)
+	}
+	return out
 }
 
 // DefaultModel returns the model for the default alias.

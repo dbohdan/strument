@@ -26,6 +26,7 @@ The loader reads these module-level variables after running your file:
 | `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
+| `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -45,6 +46,47 @@ scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
 
 Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 **not** apply to a `scraper` command; the command handles its own networking.
+
+### `verify`
+
+`verify` names the commands that check your project — tests, a linter, a build.
+Each value is an argv list, run without a shell.
+
+```python
+verify = {
+    "lint": ["golangci-lint", "run"],
+    "test": ["go", "test", "./..."],
+}
+```
+
+The model reaches these through the `verify` tool, and — unlike `bash`, which
+always asks — they run **without confirmation**. That is safe because the model
+supplies only a *name*: it calls `verify("lint")` and never a command, so there
+is nothing for it to alter or append. Everything runnable is written by you, in
+this file. This is the observation half of the harness running freely while
+mutation stays gated.
+
+Declared order matters. `verify()` with no name runs every check in order and
+stops at the first failure, so put the fast ones first. `verify("test")` runs
+just that one.
+
+A project's `.strument.star` merges into your `verify` **per key**: it can
+replace one check or add its own without restating the rest.
+
+```python
+# .strument.star — override just the test command, keep the user's lint.
+verify = {"test": ["go", "test", "-race", "./..."]}
+```
+
+Because the key replaces rather than appends, extend a check by building the
+dict explicitly:
+
+```python
+verify = dict(verify, lint=["golangci-lint", "run", "--fast"])
+```
+
+Unset, no `verify` tool is offered and every command goes through `bash` and its
+confirmation prompt.
 
 ## Built-in functions
 

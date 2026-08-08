@@ -6,6 +6,8 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
@@ -46,6 +48,8 @@ type fileGlobals struct {
 	proxyVal       string
 	hasScraper     bool
 	scraperVal     []string
+	hasVerify      bool
+	verifyVal      []VerifyCheck
 }
 
 // Load runs the config pipeline: user config, gated project
@@ -131,6 +135,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasScraper {
 		cfg.Scraper = user.scraperVal
 	}
+	if user.hasVerify {
+		cfg.Verify = user.verifyVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -144,6 +151,11 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasScraper {
 			cfg.Scraper = project.scraperVal
+		}
+		if project.hasVerify {
+			// Per-key rather than wholesale, so a project can override one check
+			// or add its own without restating the user's whole set.
+			cfg.Verify = mergeVerify(cfg.Verify, project.verifyVal)
 		}
 	}
 
@@ -313,7 +325,71 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		out.scraperVal = argv
 	}
 
+	if vv, ok := globals["verify"]; ok {
+		checks, err := parseVerify(path, vv)
+		if err != nil {
+			return nil, err
+		}
+		out.hasVerify = true
+		out.verifyVal = checks
+	}
+
 	return out, nil
+}
+
+// parseVerify decodes the top-level `verify` dict: check name -> argv. Starlark
+// dicts iterate in insertion order, so the declared order is preserved and
+// meaningful — a bare verify run stops at the first failure, so fast checks go
+// first.
+func parseVerify(path string, v starlark.Value) ([]VerifyCheck, error) {
+	dict, ok := v.(*starlark.Dict)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `verify` must be a dict of name -> argv list, e.g. {\"test\": [\"go\", \"test\", \"./...\"]}, got %s",
+			path, v.Type())
+	}
+	checks := make([]VerifyCheck, 0, dict.Len())
+	for _, item := range dict.Items() {
+		name, ok := starlark.AsString(item[0])
+		if !ok {
+			return nil, fmt.Errorf("%s: `verify` keys must be strings, got %s", path, item[0].Type())
+		}
+		if strings.TrimSpace(name) == "" {
+			return nil, fmt.Errorf("%s: `verify` has an empty check name", path)
+		}
+		list, ok := item[1].(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf("%s: `verify[%q]` must be a list of strings (argv), got %s", path, name, item[1].Type())
+		}
+		argv := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			s, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `verify[%q]`[%d] must be a string, got %s", path, name, i, list.Index(i).Type())
+			}
+			argv = append(argv, s)
+		}
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("%s: `verify[%q]` must not be empty", path, name)
+		}
+		checks = append(checks, VerifyCheck{Name: name, Argv: argv})
+	}
+	return checks, nil
+}
+
+// mergeVerify applies the project's checks over the user's: a shared name is
+// replaced in place, keeping the user's ordering, and a project-only name is
+// appended. This is the ordered form of the whole-key merge `models` uses.
+func mergeVerify(user, project []VerifyCheck) []VerifyCheck {
+	out := slices.Clone(user)
+	for _, p := range project {
+		if i := slices.IndexFunc(out, func(c VerifyCheck) bool { return c.Name == p.Name }); i >= 0 {
+			out[i] = p
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // TrustProject computes the project config's multihash and records it in

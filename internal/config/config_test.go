@@ -474,3 +474,80 @@ default = "m"
 		t.Errorf("positional args should fail: %v", err)
 	}
 }
+
+// TestVerifyParsesInDeclaredOrder pins the two properties the verify tool
+// depends on: a dict of name -> argv, kept in the order it was written, because
+// a bare verify run stops at the first failure and fast checks belong first.
+func TestVerifyParsesInDeclaredOrder(t *testing.T) {
+	src := userConfig + `
+verify = {
+    "lint": ["golangci-lint", "run"],
+    "test": ["go", "test", "./..."],
+    "build": ["go", "build", "./..."],
+}
+`
+	cfg, err := Load(harness(t, src, "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"lint", "test", "build"}
+	if got := cfg.VerifyNames(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("VerifyNames() = %v, want %v (declaration order is meaningful)", got, want)
+	}
+	if got := cfg.Verify[1].Argv; strings.Join(got, " ") != "go test ./..." {
+		t.Errorf("verify[test] argv = %v", got)
+	}
+}
+
+// TestVerifyProjectMergesPerKey covers the override the top-level placement is
+// for: a project replaces one check and adds another without restating the
+// user's set, and the user's ordering survives.
+func TestVerifyProjectMergesPerKey(t *testing.T) {
+	user := userConfig + `
+verify = {
+    "lint": ["user-lint"],
+    "test": ["user-test"],
+}
+`
+	project := `
+verify = {
+    "test": ["project-test", "-race"],
+    "typecheck": ["project-tsc"],
+}
+`
+	opts := harness(t, user, project, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"lint", "test", "typecheck"}
+	if got := cfg.VerifyNames(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("VerifyNames() = %v, want %v", got, want)
+	}
+	if got := strings.Join(cfg.Verify[0].Argv, " "); got != "user-lint" {
+		t.Errorf("lint = %q, want the user's (untouched by the project)", got)
+	}
+	if got := strings.Join(cfg.Verify[1].Argv, " "); got != "project-test -race" {
+		t.Errorf("test = %q, want the project's override in the user's slot", got)
+	}
+}
+
+func TestVerifyRejectsBadShapes(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"not a dict", `verify = ["go", "test"]`},
+		{"argv not a list", `verify = {"test": "go test"}`},
+		{"argv element not a string", `verify = {"test": ["go", 1]}`},
+		{"empty argv", `verify = {"test": []}`},
+		{"empty name", `verify = {"  ": ["go"]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Load(harness(t, userConfig+"\n"+tc.src+"\n", "", testEnv)); err == nil {
+				t.Error("expected an error")
+			}
+		})
+	}
+}
