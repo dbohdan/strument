@@ -17,7 +17,14 @@ type SendOutcome int
 
 const (
 	OutcomeSuccess SendOutcome = iota
+	// OutcomeReflect: the model made a recoverable mistake (an unmatched
+	// search, a malformed argument) and the turn re-sends so it can fix it.
 	OutcomeReflect
+	// OutcomeContinue: the model's tool calls succeeded and their results are
+	// waiting to be seen. A turn ending in tool calls is mid-sentence — the
+	// model asked something and the results are the answer — so the turn
+	// re-sends rather than handing control back to the human.
+	OutcomeContinue
 	OutcomeInterrupted
 	OutcomeContextExhausted
 	OutcomeOutputExhausted
@@ -30,6 +37,8 @@ func (o SendOutcome) String() string {
 		return "Success"
 	case OutcomeReflect:
 		return "Reflect"
+	case OutcomeContinue:
+		return "Continue"
 	case OutcomeInterrupted:
 		return "Interrupted"
 	case OutcomeContextExhausted:
@@ -191,10 +200,12 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	backoff := retryBackoff{delay: initialRetryDelay}
 	continuations := 0
-	interrupted := false
-	exhaustedContext := false
-	exhaustedOutput := false
-	failed := false
+
+	// term is how the whole stream phase ended, as opposed to how one
+	// streamOnce ended: retries and continuations loop without setting it.
+	// streamOnce already classifies precisely, so the phase carries that
+	// classification forward rather than re-encoding it into flags.
+	term := resDone
 
 	for {
 		c.partialResponseContent = ""
@@ -211,26 +222,18 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			if backoff.retry(c, streamErr) {
 				continue
 			}
-			failed = true
+			term = resFailed
 			break
 		}
 
-		if res == resInterrupted {
-			interrupted = true
-			break
-		}
-		if res == resContextExhausted {
-			exhaustedContext = true
-			break
-		}
 		if res == resContinuation {
 			if !c.PrefillSupported {
-				exhaustedOutput = true
+				term = resOutputExhausted
 				break
 			}
 			continuations++
 			if continuations > continuationCap {
-				exhaustedOutput = true // cap hit
+				term = resOutputExhausted // cap hit
 				break
 			}
 			// Stitch: accumulated + current partial becomes the prefill.
@@ -242,8 +245,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			}
 			continue
 		}
-		break // resDone
+
+		term = res // resDone, resInterrupted, resContextExhausted
+		break
 	}
+	interrupted := term == resInterrupted
 
 	// --- Finally (always runs) ---
 	c.Out.FlushStream()
@@ -263,29 +269,38 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.curMessages = append(c.curMessages, msg)
 	}
 
-	if exhaustedContext {
+	// dropUserTurn un-appends the user message this send added, so a send that
+	// produced nothing doesn't poison the history. It is a no-op on a tool
+	// continuation, which appended no user turn — truncating there would drop a
+	// tool result and leave a tool_call unanswered, making the next request
+	// malformed.
+	dropUserTurn := func() {
+		if appendedUser {
+			c.curMessages = c.curMessages[:len(c.curMessages)-1]
+		}
+	}
+
+	switch term {
+	case resContextExhausted:
 		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
 			c.curMessages = append(c.curMessages,
 				llm.TextMessage("assistant", "FinishReasonLength exception: you sent too many tokens"))
 		}
 		c.showExhaustedError()
 		return OutcomeContextExhausted, ""
-	}
-	if exhaustedOutput {
+	case resOutputExhausted:
 		// The large partial was kept above; no diagnostic (trailing message
 		// is the assistant partial).
 		return OutcomeOutputExhausted, ""
-	}
-	if failed {
+	case resFailed:
 		if answer == "" {
-			// Failed before output: don't poison history.
-			c.curMessages = c.curMessages[:len(c.curMessages)-1]
-			return OutcomeFailed, ""
+			dropUserTurn()
 		}
 		return OutcomeFailed, ""
 	}
+
 	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
-		c.curMessages = c.curMessages[:len(c.curMessages)-1]
+		dropUserTurn()
 		c.Out.Warningf("Empty response received from LLM. Check your provider account?")
 		return OutcomeFailed, ""
 	}

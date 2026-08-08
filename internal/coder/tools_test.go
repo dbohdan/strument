@@ -3,6 +3,8 @@ package coder
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -13,6 +15,28 @@ import (
 
 // toolMode sets the coder to the "tool" edit format for a replay.
 func toolMode(c *Coder) { c.editFormat = "tool" }
+
+// lastToolResult returns the final tool-result message in the coder's history.
+// With the loop closed, a turn's tool results are followed by the model's
+// closing answer, so counting back from the end of the history is not stable;
+// every tool scenario asserts through this instead.
+func lastToolResult(t *testing.T, c *Coder) llm.Message {
+	t.Helper()
+	history := append(append([]llm.Message(nil), c.doneMessages...), c.curMessages...)
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role == llm.RoleTool {
+			return history[i]
+		}
+	}
+	t.Fatalf("no tool result in history: %v", history)
+	return llm.Message{}
+}
+
+// closingTurn is the stream that ends a turn: the model reports what it did and
+// calls no tool. Every tool scenario needs one, because a turn whose last
+// message is a tool call is mid-sentence and the harness re-sends on the
+// results.
+const closingTurn = `{"kind":"stream","events":[{"kind":"Answer","text":"Done."},{"kind":"Finish","finish_reason":"stop"}]}`
 
 // TestToolRequestCarriesTools asserts the outgoing request advertises the
 // tool set with tool_choice "auto", and that suggest_command is gated on
@@ -74,8 +98,8 @@ func TestToolEditApplies(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-{"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"I applied your changes to the files."}]}
-`)
+{"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"I applied your changes to the files."},{"role":"assistant","text":"Done."}]}
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
@@ -102,7 +126,7 @@ func TestToolCreateFile(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"create_file","tool_args":"{\"path\":\"hi.txt\",\"content\":\"hi there\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"hi.txt","content":"hi there\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 }
@@ -119,14 +143,11 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"create_file","tool_args":"{\"path\":\"cfg.txt\",\"content\":\"brand new\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"cfg.txt","content":"brand new\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
-	result := env.coder.doneMessages[len(env.coder.doneMessages)-1]
-	if result.Role != llm.RoleTool {
-		t.Fatalf("last message role = %s, want tool", result.Role)
-	}
+	result := lastToolResult(t, env.coder)
 	if !strings.Contains(result.Text(), "Overwrote") {
 		t.Errorf("result = %q, want it to note the overwrite", result.Text())
 	}
@@ -143,7 +164,7 @@ func TestToolEditCommits(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, func(c *Coder) {
 		c.editFormat = "tool"
 		c.AutoCommits = true
@@ -151,7 +172,7 @@ func TestToolEditCommits(t *testing.T) {
 	})
 	env.run(t)
 
-	result := env.coder.doneMessages[2].Text()
+	result := lastToolResult(t, env.coder).Text()
 	if !strings.Contains(result, "abc1234") {
 		t.Errorf("tool result = %q, want it to name commit abc1234", result)
 	}
@@ -168,13 +189,13 @@ func TestToolSuggestCommand(t *testing.T) {
 {"kind":"command","block":"go test ./...","exit":0,"output":"ok\n"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"run the tests\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
-	result := env.coder.curMessages[len(env.coder.curMessages)-1]
-	if result.Role != llm.RoleTool || result.ToolCallID != "call_1" {
-		t.Fatalf("last message = %s/%s, want tool/call_1", result.Role, result.ToolCallID)
+	result := lastToolResult(t, env.coder)
+	if result.ToolCallID != "call_1" {
+		t.Fatalf("tool result answers %q, want call_1", result.ToolCallID)
 	}
 	if !strings.Contains(result.Text(), "Exit status: 0") || !strings.Contains(result.Text(), "ok") {
 		t.Errorf("command result = %q, want it to carry exit status and output", result.Text())
@@ -191,11 +212,11 @@ func TestToolSuggestCommandDeclined(t *testing.T) {
 {"kind":"confirm","prompt":"Run shell command?","answer":"no"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"rm -rf /\",\"purpose\":\"oops\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
-	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	result := lastToolResult(t, env.coder)
 	if !strings.Contains(result.Text(), "chose not to run") {
 		t.Errorf("declined result = %q, want a not-run message", result.Text())
 	}
@@ -212,14 +233,14 @@ func TestToolRequestFiles(t *testing.T) {
 {"kind":"confirm","prompt":"Add file to the chat?","answer":"yes"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"lib.go\"],\"reason\":\"need to edit it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
 	if !slices.Contains(env.coder.inchatRelativeFiles(), "lib.go") {
 		t.Errorf("lib.go not added to chat; chat = %v", env.coder.inchatRelativeFiles())
 	}
-	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	result := lastToolResult(t, env.coder)
 	if !strings.Contains(result.Text(), "Added to the chat: lib.go") {
 		t.Errorf("request result = %q, want an added-files summary", result.Text())
 	}
@@ -234,11 +255,11 @@ func TestToolRequestMissingFile(t *testing.T) {
 {"kind":"user","text":"edit ghost.go"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"ghost.go\"],\"reason\":\"need it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
-	result := env.coder.curMessages[len(env.coder.curMessages)-1]
+	result := lastToolResult(t, env.coder)
 	if !strings.Contains(result.Text(), "not found") {
 		t.Errorf("missing-file result = %q, want a not-found note", result.Text())
 	}
@@ -258,13 +279,14 @@ func TestToolEditReflects(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
-`)
+`+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 
 	// The reflection must NOT inject a synthetic user turn: the only user
 	// message is the original request. The sequence is
-	// user, assistant(call_1), tool(error), assistant(call_2), tool(ok).
+	// user, assistant(call_1), tool(error), assistant(call_2), tool(ok),
+	// assistant(closing).
 	history := env.coder.doneMessages
 	roles := make([]string, len(history))
 	users := 0
@@ -277,7 +299,7 @@ func TestToolEditReflects(t *testing.T) {
 	if users != 1 {
 		t.Errorf("user messages = %d, want 1 (no synthetic reflection turn); roles=%v", users, roles)
 	}
-	want := []string{"user", "assistant", "tool", "assistant", "tool"}
+	want := []string{"user", "assistant", "tool", "assistant", "tool", "assistant"}
 	if strings.Join(roles, ",") != strings.Join(want, ",") {
 		t.Fatalf("history roles = %v, want %v", roles, want)
 	}
@@ -285,6 +307,100 @@ func TestToolEditReflects(t *testing.T) {
 	// message.
 	if !strings.Contains(history[2].Text(), "was not found") {
 		t.Errorf("first tool result = %q, want a search-failure message", history[2].Text())
+	}
+}
+
+// TestToolLoopSpansFiles is the regression case the closed loop exists for: a
+// change that touches code and its separately-stored test. Before the loop
+// closed, the turn ended the moment the model emitted its first batch of calls,
+// so the model never saw the test output and never got to the second file —
+// which is why the failure only showed when a change spanned two files.
+func TestToolLoopSpansFiles(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"tool-loop-two-files","source":"authored"}
+{"kind":"fs","path":"app.go","content":"package app\n\nfunc Greet() string { return \"hello\" }\n"}
+{"kind":"fs","path":"app_test.go","content":"package app\n\nfunc TestGreet(t *testing.T) { _ = \"hello\" }\n"}
+{"kind":"chat","editable":["app.go","app_test.go"]}
+{"kind":"user","text":"change the greeting to hey"}
+{"kind":"confirm","prompt":"Run shell command?","answer":"yes"}
+{"kind":"command","block":"go test ./...","exit":1,"output":"FAIL: want hello, got hey\n"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"app.go\",\"search\":\"func Greet() string { return \\\"hello\\\" }\\n\",\"replace\":\"func Greet() string { return \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"suggest_command","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"check the change\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_3","tool_name":"replace_in_file","tool_args":"{\"path\":\"app_test.go\",\"search\":\"func TestGreet(t *testing.T) { _ = \\\"hello\\\" }\\n\",\"replace\":\"func TestGreet(t *testing.T) { _ = \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_fs","path":"app.go","content":"package app\n\nfunc Greet() string { return \"hey\" }\n"}
+{"kind":"expect_fs","path":"app_test.go","content":"package app\n\nfunc TestGreet(t *testing.T) { _ = \"hey\" }\n"}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`+closingTurn)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	// Three tool rounds, then the closing answer. The rounds are work steps,
+	// not error reflections — nothing went wrong.
+	if env.coder.numSteps != 3 {
+		t.Errorf("steps = %d, want 3", env.coder.numSteps)
+	}
+	if env.coder.numReflections != 0 {
+		t.Errorf("reflections = %d, want 0 (no mistakes were made)", env.coder.numReflections)
+	}
+	if env.stub.Remaining() != 0 {
+		t.Errorf("%d scripted turns unconsumed: the loop stopped early", env.stub.Remaining())
+	}
+
+	// The failing test output must have reached the model as a tool result —
+	// that is the observation the whole loop exists to deliver.
+	var sawOutput bool
+	for _, m := range append(append([]llm.Message(nil), env.coder.doneMessages...), env.coder.curMessages...) {
+		if m.Role == llm.RoleTool && strings.Contains(m.Text(), "want hello, got hey") {
+			sawOutput = true
+		}
+	}
+	if !sawOutput {
+		t.Error("the command output never reached the model as a tool result")
+	}
+}
+
+// TestToolLoopBudgetStops confirms the step budget is a checkpoint the user
+// clears: at maxSteps the turn reports what it has done and stops when the
+// user declines, leaving the work so far applied.
+func TestToolLoopBudgetStops(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"kind":"meta","v":1,"scenario":"tool-loop-budget","source":"authored"}
+{"kind":"fs","path":"a.txt","content":"start\n"}
+{"kind":"chat","editable":["a.txt"]}
+{"kind":"user","text":"keep rewriting a.txt"}
+{"kind":"confirm","prompt":"Keep going?","answer":"no"}
+`)
+	// One more stream than the budget would let run, so an off-by-one that
+	// overshot the checkpoint would consume it and fail the Remaining check.
+	for i := range maxSteps + 1 {
+		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"create_file","tool_args":"{\"path\":\"a.txt\",\"content\":\"pass %d\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, i)
+	}
+	sc := inlineScenario(t, b.String())
+
+	out := &captureOut{}
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.Out = out
+	})
+	env.coder.Run(t.Context(), sc.User)
+
+	if env.coder.numSteps != maxSteps {
+		t.Errorf("steps = %d, want %d", env.coder.numSteps, maxSteps)
+	}
+	if env.stub.Remaining() != 1 {
+		t.Errorf("remaining turns = %d, want 1 (the loop must stop at the budget)", env.stub.Remaining())
+	}
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "has run 25 steps and edited 1 file") {
+		t.Errorf("missing the budget summary:\n%s", joined)
+	}
+	// Declining stops the turn but keeps the work: the last applied edit stands.
+	data, err := os.ReadFile(filepath.Join(env.dir, "a.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != fmt.Sprintf("pass %d\n", maxSteps-1) {
+		t.Errorf("a.txt = %q, want the last applied edit to stand", got)
 	}
 }
 

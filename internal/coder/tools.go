@@ -101,8 +101,8 @@ func requestFilesTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolRequestFiles,
 		Description: "Ask the user to add existing files to the chat so you can edit them. Use this when " +
-			"a change needs a file that isn't in the chat yet, then stop and wait — don't propose edits " +
-			"to files that haven't been added.",
+			"a change needs a file that isn't in the chat yet. The result tells you which files were " +
+			"added; their contents reach you on the next step. Don't edit a file before it has been added.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -275,17 +275,18 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		results[req.callID] = c.addRequestedFiles(req)
 	}
 
-	// Append one tool result per call, in call order, then rotate or reflect.
+	// Append one tool result per call, in call order, then re-send on them.
 	c.appendToolResults(results)
 
+	// Either way the next send re-enters on the tool results already appended
+	// to curMessages, adding no user turn. The two outcomes differ only in
+	// which budget they spend: a failure the model must fix is a reflection, a
+	// result it merely needs to see is a work step.
+	c.toolContinuation = true
 	if needsReflection {
-		c.toolContinuation = true
 		return OutcomeReflect
 	}
-	if len(edited) > 0 {
-		c.moveBackCurMessages("")
-	}
-	return OutcomeSuccess
+	return OutcomeContinue
 }
 
 // parseCommandArgs decodes a suggest_command call. The second return is a

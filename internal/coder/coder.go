@@ -16,7 +16,17 @@ import (
 	"dbohdan.com/strument/internal/repomap"
 )
 
-const maxReflections = 3
+// A turn has two separate budgets, because the two kinds of re-send mean
+// different things. An error reflection is the model recovering from its own
+// mistake and should stay rare; a work step is the model reading a tool result
+// and carrying on, which is ordinary progress.
+const (
+	maxErrorReflections = 3
+	// maxSteps bounds the work rounds in one turn. It is a checkpoint, not a
+	// wall: on exhaustion the user is shown what the turn has done so far and
+	// asked whether to keep going.
+	maxSteps = 25
+)
 
 // Coder is the chat loop state.
 type Coder struct {
@@ -64,7 +74,8 @@ type Coder struct {
 	shellCommands     []string // response order, dedup by first occurrence; reset in initBeforeMessage
 	turnEditedFiles   map[string]bool
 
-	numReflections  int
+	numReflections  int         // error reflections this turn (maxErrorReflections)
+	numSteps        int         // work steps this turn (maxSteps)
 	lastSendOutcome SendOutcome // observability for tests/REPL status
 
 	// Send-scoped buffers.
@@ -281,6 +292,7 @@ func (c *Coder) addableRelativeFiles() []string {
 func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.numReflections = 0
+	c.numSteps = 0
 	c.shellCommands = nil
 	c.messageCost = 0
 	c.costKnown = false
@@ -296,8 +308,11 @@ func (c *Coder) Run(ctx context.Context, withMessage string) string {
 	return c.multiResponseContent + c.partialResponseContent
 }
 
-// runOne is the reflection loop: up to 4 sends (initial + 3
-// follow-ups).
+// runOne is the turn loop. It keeps sending while the model has something to
+// react to — a tool result it hasn't seen (OutcomeContinue) or a mistake to fix
+// (OutcomeReflect) — and stops when the model has nothing left to say, the
+// human interrupts, or a budget is spent. The turn boundary is still the
+// human's: nothing here starts new work of its own.
 func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	c.initBeforeMessage()
 
@@ -309,21 +324,68 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 		return
 	}
 
-	// Outcome-driven so a tool-error reflection (which carries no reflection
-	// text — it re-sends on the appended tool results) keeps the loop going.
+	// Rotating settled history is a turn-end concern for the tool format:
+	// mid-loop the tool results must stay in cur, and summarizing them away
+	// between steps would compact the very results the next send reacts to.
+	// A defer covers every exit — budget declined, reflection cap, or done.
+	defer func() {
+		if c.editFormat == "tool" && len(c.turnEditedFiles) > 0 {
+			c.moveBackCurMessages("")
+		}
+	}()
+
+	// Outcome-driven so a re-send that carries no message text — both a tool
+	// reflection and a tool continuation re-enter on the appended tool results
+	// — keeps the loop going.
 	for {
 		outcome, reflection := c.sendMessage(ctx, message)
 		c.lastSendOutcome = outcome
-		if outcome != OutcomeReflect {
-			break
-		}
-		if c.numReflections >= maxReflections {
-			c.Out.Warningf("Only %d reflections allowed, stopping.", maxReflections)
+
+		switch outcome {
+		case OutcomeReflect:
+			if c.numReflections >= maxErrorReflections {
+				c.Out.Warningf("Only %d reflections allowed, stopping.", maxErrorReflections)
+				return
+			}
+			c.numReflections++
+			message = reflection
+
+		case OutcomeContinue:
+			c.numSteps++
+			if c.numSteps >= maxSteps && !c.confirmMoreSteps() {
+				return
+			}
+			message = "" // the tool results are the message
+
+		default:
 			return
 		}
-		c.numReflections++
-		message = reflection
 	}
+}
+
+// confirmMoreSteps is the budget checkpoint. A long turn is legitimate, but it
+// should not run away unnoticed, so the user is shown what it has done so far
+// and asked whether to keep going. Declining ends the turn normally, with the
+// work up to that point already applied and committed. Answering yes buys
+// another maxSteps.
+func (c *Coder) confirmMoreSteps() bool {
+	files := len(c.turnEditedFiles)
+	noun := "files"
+	if files == 1 {
+		noun = "file"
+	}
+	c.Out.Printf("This turn has run %d steps and edited %d %s.", c.numSteps, files, noun)
+	if c.costKnown {
+		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
+	}
+
+	yes, _ := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?"})
+	if !yes {
+		c.Out.Printf("Stopping here. The work so far is applied; say what to do next.")
+		return false
+	}
+	c.numSteps = 0
+	return true
 }
 
 // preprocUserInput handles empty input, file mentions, and URLs.
