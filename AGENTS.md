@@ -33,6 +33,32 @@ task format           # gofmt/golangci-lint fmt; run before committing
 `task setup:reference` clones aider at the pinned commit into a gitignored
 `reference/` for comparison; the build never needs it.
 
+### Installing the tools
+
+`task` and `golangci-lint` are not vendored. Install them with the *project's*
+Go toolchain, pinning golangci-lint to the line CI uses
+(`.github/workflows/ci.yml`):
+
+```sh
+GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+GOTOOLCHAIN=go1.26.0 go install github.com/go-task/task/v3/cmd/task@v3.52.0
+```
+
+Both land in `$(go env GOPATH)/bin`, which must come before any older copy on
+`PATH` (`GOBIN=/usr/local/bin` if you'd rather replace one in place).
+
+The explicit `GOTOOLCHAIN` is the part that is easy to get wrong, and a prebuilt
+release binary hits the same wall. golangci-lint refuses to load a module whose
+Go version is newer than the Go it was itself built with — here, "the Go
+language version (go1.25) used to build golangci-lint is lower than the targeted
+Go version (1.26)". Building from source does not fix that on its own: its
+`go.mod` pins Go to *latest-1* as a matter of policy, so under the default
+`GOTOOLCHAIN=auto` the install quietly selects a 1.25 toolchain and produces a
+binary that still refuses this repo. Naming the toolchain forces a 1.26 build.
+Note that `go version` can report 1.26 while `/usr/local/go` is older — `auto`
+switches per module, so that reading tells you about Strument, not about what
+will build your tools.
+
 ## Comparing the terminal UI to aider
 
 Both Strument and aider need a real TTY (readline / prompt_toolkit), so piping

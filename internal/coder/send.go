@@ -204,8 +204,9 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// term is how the whole stream phase ended, as opposed to how one
 	// streamOnce ended: retries and continuations loop without setting it.
 	// streamOnce already classifies precisely, so the phase carries that
-	// classification forward rather than re-encoding it into flags.
-	term := resDone
+	// classification forward rather than re-encoding it into flags. Every path
+	// out of the loop below assigns it before breaking.
+	var term streamResult
 
 	for {
 		c.partialResponseContent = ""

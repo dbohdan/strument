@@ -23,9 +23,9 @@ func toolMode(c *Coder) { c.editFormat = "tool" }
 func lastToolResult(t *testing.T, c *Coder) llm.Message {
 	t.Helper()
 	history := append(append([]llm.Message(nil), c.doneMessages...), c.curMessages...)
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Role == llm.RoleTool {
-			return history[i]
+	for _, m := range slices.Backward(history) {
+		if m.Role == llm.RoleTool {
+			return m
 		}
 	}
 	t.Fatalf("no tool result in history: %v", history)
