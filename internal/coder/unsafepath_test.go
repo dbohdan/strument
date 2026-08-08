@@ -123,7 +123,7 @@ func TestApplyEditsAddedOutOfRootFile(t *testing.T) {
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", rel, "new content\n"),
-	}, map[string]string{}, map[string]string{}, &matchFailure)
+	}, map[string]string{}, &matchFailure)
 	if matchFailure {
 		t.Error("unexpected reflection editing a file the user deliberately added")
 	}

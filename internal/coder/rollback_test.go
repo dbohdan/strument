@@ -65,12 +65,11 @@ func TestApplyRollbackReturnsEmptyEdited(t *testing.T) {
 	c.AddFile("blocker/b.txt")
 
 	results := map[string]string{}
-	overwrote := map[string]string{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", "a.txt", "rewritten a\n"),
 		wholeFileWrite("call_2", "blocker/b.txt", "new b\n"),
-	}, results, overwrote, &matchFailure)
+	}, results, &matchFailure)
 
 	if edited != nil {
 		t.Errorf("edited = %v on a rolled-back batch, want nil", edited)
@@ -139,7 +138,7 @@ func TestCleanWriteEditedIsWrittenSet(t *testing.T) {
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", "a.txt", "new content\n"),
-	}, results, map[string]string{}, &matchFailure)
+	}, results, &matchFailure)
 
 	if matchFailure {
 		t.Error("unexpected reflection on a clean write")

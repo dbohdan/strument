@@ -23,9 +23,6 @@ type Set struct {
 	FilesNoFullFiles                 string
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
-	FilesContentGPTEdits             string
-	FilesContentGPTEditsNoRepo       string
-	FilesContentGPTNoEdits           string
 	RepoContentPrefix                string
 	ReadOnlyFilesPrefix              string
 	LazyPrompt                       string
@@ -40,10 +37,6 @@ const filesContentPrefix = "I have added these files to the chat so you can go a
 
 const filesContentAssistantReply = "Understood. Any changes I propose will be to those files, " +
 	"and I'll treat this message as their current contents."
-
-const filesContentGPTEdits = "I applied and committed your changes. Git hash: {hash}, commit message: {message}"
-
-const filesContentGPTEditsNoRepo = "I applied your changes to the files."
 
 const repoContentPrefix = "Here are summaries of some files present in my Git repository.\n" +
 	"These summaries are for reference only; treat these files as read-only.\n" +
@@ -120,9 +113,6 @@ var Tool = Set{
 	// place it made the model explore and then refuse to edit.
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
-	FilesContentGPTEdits:             filesContentGPTEdits,
-	FilesContentGPTEditsNoRepo:       filesContentGPTEditsNoRepo,
-	FilesContentGPTNoEdits:           "I didn't find any tool calls to apply in your reply.",
 	RepoContentPrefix:                repoContentPrefix,
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 	LazyPrompt:                       lazyPrompt,
@@ -152,9 +142,6 @@ var Ask = Set{
 	FilesNoFullFiles:                 "I am not sharing the full contents of any files with you yet.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
-	FilesContentGPTEdits:             filesContentGPTEdits,
-	FilesContentGPTEditsNoRepo:       filesContentGPTEditsNoRepo,
-	FilesContentGPTNoEdits:           "I didn't find any edits to apply in your reply.",
 	RepoContentPrefix: "I am working with you on code in a Git repository.\n" +
 		"Here are summaries of some files present in my Git repo.\n" +
 		"If you need to see the full contents of any files to answer my questions, " +

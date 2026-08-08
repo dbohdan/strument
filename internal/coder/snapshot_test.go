@@ -12,9 +12,8 @@ import (
 func applyBatch(t *testing.T, c *Coder, edits ...plannedEdit) {
 	t.Helper()
 	results := map[string]string{}
-	overwrote := map[string]string{}
 	fail := false
-	c.applyToolEdits(edits, results, overwrote, &fail)
+	c.applyToolEdits(edits, results, &fail)
 }
 
 func read(t *testing.T, dir, rel string) string {

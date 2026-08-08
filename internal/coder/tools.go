@@ -330,30 +330,15 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		}
 	}
 
-	// Edits apply directly, then commit — so /undo has a clean base and the
-	// tool result can name the commit.
-	overwrote := map[string]string{} // call id -> path, for create_file over an existing file
-	edited := c.applyToolEdits(edits, results, overwrote, &needsReflection)
-	saved := ""
-	if len(edited) > 0 {
-		for _, f := range edited {
-			c.turnEditedFiles[f] = true
+	// Edits apply directly. The commit comes at turn end, once, so a result
+	// here names what the call did rather than a commit that has not happened.
+	edited := c.applyToolEdits(edits, results, &needsReflection)
+	for _, f := range edited {
+		c.turnEditedFiles[f] = true
+		if !c.DryRun {
+			// Nothing landed under --dry-run, so there is nothing for the
+			// automatic checks to check.
 			c.editedSinceVerify = true
-		}
-		saved = c.autoCommit(edited)
-		if saved == "" {
-			saved = c.Prompts.FilesContentGPTEditsNoRepo
-		}
-	}
-	for id, text := range results {
-		if text == appliedPlaceholder {
-			if p, ok := overwrote[id]; ok {
-				// Tell the model it replaced an existing file, not created a new
-				// one, so it doesn't assume the old contents survived.
-				results[id] = fmt.Sprintf("Overwrote the existing file %s. %s", p, saved)
-			} else {
-				results[id] = saved
-			}
 		}
 	}
 
@@ -416,17 +401,13 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
 }
 
-// appliedPlaceholder marks a success result until the commit message is
-// known.
-const appliedPlaceholder = "\x00applied\x00"
-
 // appendToolResults appends a RoleTool message per captured call, in the
 // order the model produced them, so every tool_call_id is answered.
 func (c *Coder) appendToolResults(results map[string]string) {
 	for _, tc := range c.partialToolCalls {
 		text, ok := results[tc.ID]
-		if !ok || text == appliedPlaceholder {
-			text = c.Prompts.FilesContentGPTEditsNoRepo // defensive default
+		if !ok {
+			text = "The call produced no result." // defensive; every branch above sets one
 		}
 		c.curMessages = append(c.curMessages, llm.ToolResult(tc.ID, text))
 	}
@@ -437,7 +418,7 @@ func (c *Coder) appendToolResults(results map[string]string) {
 // results, and returns the edited relative paths. A search that doesn't match
 // sets *matchFailure and records a focused error (with a did-you-mean) for
 // that call.
-func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[string]string, matchFailure *bool) []string {
+func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, matchFailure *bool) []string {
 	if len(edits) == 0 {
 		return nil
 	}
@@ -447,6 +428,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 	pending := map[string]string{}
 	needDirtyCommit := map[string]bool{}
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
+	callVerb := map[string]string{}  // call id -> the same, for that one call
+	applied := map[string]bool{}     // call ids whose edit made it into the batch
 	var writeOrder []string
 	editedSet := map[string]bool{}
 	var edited []string
@@ -472,14 +455,19 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 		content, exists := read(e.path)
 		var newContent string
 		if e.create {
-			// create_file writes the whole file: create it fresh, or overwrite
-			// an existing one — never the old append-on-empty-search behavior.
+			// write puts down the whole file: create it fresh, or overwrite an
+			// existing one — never the old append-on-empty-search behavior.
 			newContent = e.replace
 			if exists {
-				overwrote[e.callID] = e.path
+				// Say "overwrote" rather than "created", so the model does not
+				// assume the old contents survived somewhere.
+				callVerb[e.callID] = "Overwrote"
 				writeVerb[e.path] = "Overwrote"
-			} else if writeVerb[e.path] == "" {
-				writeVerb[e.path] = "Created"
+			} else {
+				callVerb[e.callID] = "Created"
+				if writeVerb[e.path] == "" {
+					writeVerb[e.path] = "Created"
+				}
 			}
 		} else {
 			var ok bool
@@ -489,6 +477,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 				*matchFailure = true
 				continue
 			}
+			callVerb[e.callID] = "Applied the edit to"
 			if writeVerb[e.path] == "" {
 				writeVerb[e.path] = "Applied edit to"
 			}
@@ -502,7 +491,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 			editedSet[e.path] = true
 			edited = append(edited, e.path)
 		}
-		results[e.callID] = appliedPlaceholder
+		applied[e.callID] = true
+		results[e.callID] = fmt.Sprintf("%s %s.", callVerb[e.callID], e.path)
 	}
 
 	c.dirtyCommit(needDirtyCommit)
@@ -522,13 +512,21 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 			// error-reflection budget on a retry that will fail identically
 			// helps nobody. The loop continues and the model decides.
 			for _, e := range edits {
-				if results[e.callID] == appliedPlaceholder {
+				if applied[e.callID] {
 					results[e.callID] = fmt.Sprintf(
 						"The write failed and the whole batch was rolled back, so %s is unchanged: %v",
 						e.path, err)
 				}
 			}
 			return nil
+		}
+	}
+	if c.DryRun {
+		// Nothing reached the disk, and the model must not be told otherwise.
+		for _, e := range edits {
+			if applied[e.callID] {
+				results[e.callID] = fmt.Sprintf("Did not write %s: this session is --dry-run.", e.path)
+			}
 		}
 	}
 	for _, p := range edited {

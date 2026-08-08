@@ -365,14 +365,17 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 }
 
 // moveBackCurMessages rotates cur into done on edited turns.
-func (c *Coder) moveBackCurMessages(saved string) {
+//
+// aider appended a synthetic "I applied and committed your changes" user turn
+// here, plus an "Ok." from the assistant, because with SEARCH/REPLACE there was
+// no other channel: a text edit format has nothing to answer the model with.
+// The tool loop has one. Every edit call already gets a tool result saying what
+// it did to which file, so the pair would only repeat it — two fabricated
+// messages per turn, in a loop whose whole correction was to stop inventing
+// turns the model never took. The commit is reported to the user instead, where
+// the hash is worth something.
+func (c *Coder) moveBackCurMessages() {
 	c.doneMessages = append(c.doneMessages, c.curMessages...)
-	if saved != "" {
-		c.doneMessages = append(c.doneMessages,
-			llm.TextMessage("user", saved),
-			llm.TextMessage("assistant", "Ok."),
-		)
-	}
 	c.curMessages = nil
 	c.maybeSummarize()
 }

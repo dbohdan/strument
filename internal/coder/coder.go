@@ -350,14 +350,18 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 		return
 	}
 
-	// Rotating settled history is a turn-end concern for the tool format:
-	// mid-loop the tool results must stay in cur, and summarizing them away
-	// between steps would compact the very results the next send reacts to.
-	// A defer covers every exit — budget declined, reflection cap, or done.
+	// Committing and rotating settled history are both turn-end concerns.
+	// Mid-loop the tool results must stay in cur, and summarizing them away
+	// between steps would compact the very results the next send reacts to;
+	// committing mid-loop would spend one commit per send on fragments of one
+	// change. A defer covers every exit — budget declined, reflection cap,
+	// interrupted, or done. An interrupted turn's edits are real, so they are
+	// committed too.
 	defer func() {
+		c.commitTurn()
 		c.pushTurnSnapshot()
 		if c.editFormat == "tool" && len(c.turnEditedFiles) > 0 {
-			c.moveBackCurMessages("")
+			c.moveBackCurMessages()
 		}
 	}()
 

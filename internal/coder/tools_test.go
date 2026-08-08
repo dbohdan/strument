@@ -165,7 +165,7 @@ func TestToolEditApplies(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
-{"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"I applied your changes to the files."},{"role":"assistant","text":"Done."}]}
+{"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"Applied the edit to a.txt."},{"role":"assistant","text":"Done."}]}
 `+closingTurn)
 	env := setupScenario(t, sc, toolMode)
 	env.run(t)
@@ -219,8 +219,57 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 	}
 }
 
-// TestToolEditCommits asserts that with git auto-commit on, the applied
-// edit's tool result names the commit hash — the direct-apply safety net.
+// countingRepo records what it was asked to commit, so a test can pin how many
+// commits one turn produces and over which files.
+type countingRepo struct {
+	committingRepo
+
+	calls [][]string
+}
+
+func (r *countingRepo) Commit(fnames []string, context string, attributed bool) (string, string, bool, error) {
+	r.calls = append(r.calls, fnames)
+	return r.committingRepo.Commit(fnames, context, attributed)
+}
+
+// TestOneCommitPerTurn is the point of moving the commit to turn end. A turn
+// that edits two files across two sends is one change, and the history should
+// say so once — not twice, with each half described by a model that saw only
+// its own fragment.
+func TestOneCommitPerTurn(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"one-commit-per-turn","source":"authored"}
+{"kind":"fs","path":"a.txt","content":"hello\nworld\n"}
+{"kind":"fs","path":"b.txt","content":"keep\nthis\n"}
+{"kind":"chat","editable":["a.txt","b.txt"]}
+{"kind":"user","text":"change world to mars, then this to that"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"edit","tool_args":"{\"path\":\"b.txt\",\"old_string\":\"this\\n\",\"new_string\":\"that\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
+{"kind":"expect_fs","path":"b.txt","content":"keep\nthat\n"}
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`+closingTurn)
+	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt", "b.txt"}}}
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.AutoCommits = true
+		c.Repo = repo
+	})
+	env.run(t)
+
+	if len(repo.calls) != 1 {
+		t.Fatalf("Commit called %d times, want 1: %v", len(repo.calls), repo.calls)
+	}
+	if got := strings.Join(repo.calls[0], ","); got != "a.txt,b.txt" {
+		t.Errorf("committed %q, want both files the turn touched", got)
+	}
+}
+
+// TestToolEditCommits asserts the turn's single commit happens and is reported
+// to the user. The commit is deliberately *not* in the tool result: it lands at
+// turn end, after the call has already been answered, and its hash is a fact
+// about the user's history rather than about whether the edit applied. What the
+// model gets is what it needs — the edit landed, in this file.
 func TestToolEditCommits(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"tool-commit","source":"authored"}
@@ -231,16 +280,24 @@ func TestToolEditCommits(t *testing.T) {
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
+	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
 		c.editFormat = "tool"
 		c.AutoCommits = true
 		c.Repo = &committingRepo{tracked: []string{"a.txt"}}
+		c.Out = out
 	})
 	env.run(t)
 
+	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "Commit abc1234") {
+		t.Errorf("the commit was not reported to the user:\n%s", joined)
+	}
 	result := lastToolResult(t, env.coder).Text()
-	if !strings.Contains(result, "abc1234") {
-		t.Errorf("tool result = %q, want it to name commit abc1234", result)
+	if !strings.Contains(result, "a.txt") {
+		t.Errorf("tool result = %q, want it to name the file it edited", result)
+	}
+	if strings.Contains(result, "abc1234") {
+		t.Errorf("tool result = %q: the commit does not belong in it", result)
 	}
 }
 

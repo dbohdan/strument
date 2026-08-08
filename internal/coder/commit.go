@@ -2,6 +2,8 @@ package coder
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,32 +12,47 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 )
 
-// autoCommit commits edited files in git mode; a no-op without a
-// repo, with auto-commits off, or in dry-run. Returns the rotation message
-// for moveBackCurMessages ("" => the no-git default path applies).
-func (c *Coder) autoCommit(edited []string) string {
-	if c.Repo == nil || !c.AutoCommits || c.DryRun {
-		return ""
+// commitTurn commits everything the turn changed, as one commit.
+//
+// One commit per turn, not one per send. The two things a commit can be — an
+// undo substrate and a message to whoever reads the history later — used to be
+// the same object, which worked while a turn was one send. It stopped working
+// when the loop closed: a turn that edits across six steps wrote six commits,
+// each described by a weak model that had seen only its own fragment. The
+// substrate is the snapshot now (snapshot.go), so the commit can be just the
+// communication.
+//
+// Waiting also improves the message for free: commitContext formats curMessages,
+// which at turn end holds the user's request and the whole turn's work.
+//
+// A no-op without a repo, with auto-commits off, or in dry-run — the edits are
+// still applied, and /undo still reaches them through the snapshot.
+func (c *Coder) commitTurn() {
+	if len(c.turnEditedFiles) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
+		return
 	}
+	edited := slices.Sorted(maps.Keys(c.turnEditedFiles))
+
 	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), true)
 	if err != nil {
-		// Commit failure after write leaves the edits in place.
+		// A commit failure after the writes leaves the edits in the tree, where
+		// /undo still reaches them through the turn's snapshot.
 		c.Out.Errorf("Unable to commit: %v", err)
-		return ""
+		return
 	}
 	if !ok {
-		return c.Prompts.FilesContentGPTNoEdits
+		// The turn's edits netted out against HEAD — a change and its reversal,
+		// or a rewrite of what was already there.
+		c.Out.Toolf("The turn left the files as they were; nothing to commit.")
+		return
 	}
+
 	c.lastCommitHash = hash
 	if c.sessionCommits == nil {
 		c.sessionCommits = map[string]bool{}
 	}
 	c.sessionCommits[hash] = true
 	c.Out.Toolf("Commit %s %s", hash, message)
-	return pyFormat(c.Prompts.FilesContentGPTEdits, map[string]string{
-		"hash":    hash,
-		"message": message,
-	})
 }
 
 // commitContext formats curMessages for the commit-message model (aider's
