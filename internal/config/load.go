@@ -50,6 +50,8 @@ type fileGlobals struct {
 	scraperVal     []string
 	hasVerify      bool
 	verifyVal      []VerifyCheck
+	hasVerifyAuto  bool
+	verifyAutoVal  []string
 }
 
 // Load runs the config pipeline: user config, gated project
@@ -138,6 +140,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasVerify {
 		cfg.Verify = user.verifyVal
 	}
+	if user.hasVerifyAuto {
+		cfg.VerifyAuto = user.verifyAutoVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -156,6 +161,12 @@ func Load(opts Options) (*Config, error) {
 			// Per-key rather than wholesale, so a project can override one check
 			// or add its own without restating the user's whole set.
 			cfg.Verify = mergeVerify(cfg.Verify, project.verifyVal)
+		}
+		if project.hasVerifyAuto {
+			// Whole-value, unlike verify: this is one ordered decision about what
+			// runs unattended, and merging two such lists element-wise would give
+			// an order nobody wrote.
+			cfg.VerifyAuto = project.verifyAutoVal
 		}
 	}
 
@@ -224,6 +235,19 @@ func Load(opts Options) (*Config, error) {
 	}
 	if _, ok := cfg.Models[cfg.Default]; !ok {
 		return nil, fmt.Errorf("default model alias %q is not a key of `models`", cfg.Default)
+	}
+	// Validated after the merge, since a project may supply the check a user's
+	// verify_auto names, or vice versa. A typo here would otherwise mean the
+	// harness silently verifies nothing — the one failure mode this feature
+	// exists to prevent.
+	for _, name := range cfg.VerifyAuto {
+		if indexVerify(cfg.Verify, name) < 0 {
+			known := "none are configured"
+			if len(cfg.Verify) > 0 {
+				known = "configured checks: " + strings.Join(cfg.VerifyNames(), ", ")
+			}
+			return nil, fmt.Errorf("`verify_auto` names %q, which is not a `verify` check (%s)", name, known)
+		}
 	}
 	// Adapter, edit_format, and extra_params were validated at
 	// construction time by the builtins.
@@ -332,6 +356,24 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		}
 		out.hasVerify = true
 		out.verifyVal = checks
+	}
+
+	if av, ok := globals["verify_auto"]; ok {
+		list, ok := av.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `verify_auto` must be a list of check names from `verify`, got %s", path, av.Type())
+		}
+		names := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			s, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `verify_auto`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+			}
+			names = append(names, s)
+		}
+		out.hasVerifyAuto = true
+		out.verifyAutoVal = names
 	}
 
 	return out, nil

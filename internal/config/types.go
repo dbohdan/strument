@@ -158,6 +158,10 @@ type Config struct {
 	// The `verify` tool runs them by name; a run with no name runs all of them
 	// in order and stops at the first failure, so fast checks belong first.
 	Verify []VerifyCheck
+	// VerifyAuto names the checks the harness runs on its own at the end of a
+	// turn that edited files, in the order given. Empty means the model is the
+	// only thing that ever runs a check.
+	VerifyAuto []string
 }
 
 // VerifyCheck is one named verification command: an argv, never a shell string.
@@ -169,6 +173,16 @@ type Config struct {
 type VerifyCheck struct {
 	Name string
 	Argv []string
+}
+
+// indexVerify returns the position of the named check, or -1.
+func indexVerify(checks []VerifyCheck, name string) int {
+	for i, c := range checks {
+		if c.Name == name {
+			return i
+		}
+	}
+	return -1
 }
 
 // VerifyNames lists the configured check names in declared order.

@@ -205,3 +205,111 @@ func TestObservationToolsAnnounceThemselves(t *testing.T) {
 		}
 	}
 }
+
+// TestAutoVerifyFiresOnlyAfterEdits pins the trigger. A turn that changed
+// nothing has nothing to check, and running the suite anyway would be noise the
+// user pays for.
+func TestAutoVerifyFiresOnlyAfterEdits(t *testing.T) {
+	c, out := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
+	c.VerifyAuto = []string{"fails"}
+
+	if msg, keep := c.runAutoVerify(t.Context()); keep || msg != "" {
+		t.Errorf("a turn that edited nothing must not verify; got keep=%v msg=%q", keep, msg)
+	}
+	if strings.Contains(strings.Join(out.lines, "\n"), "automatic checks") {
+		t.Error("nothing should have been announced")
+	}
+
+	c.editedSinceVerify = true
+	msg, keep := c.runAutoVerify(t.Context())
+	if !keep || !strings.Contains(msg, "did not pass") {
+		t.Errorf("a failing check after an edit must continue the loop; got keep=%v msg=%q", keep, msg)
+	}
+}
+
+// TestAutoVerifyDoesNotReAskAnUnchangedTree is the fix for something only live
+// testing showed. Faced with a pre-existing failure the model answered, quite
+// correctly, that the break was not its doing and it would leave it alone — and
+// the harness ran the same check again, and again, until the budget ran out. An
+// unchanged tree can only produce the same output, so a considered answer must
+// end the turn rather than be re-asked.
+func TestAutoVerifyDoesNotReAskAnUnchangedTree(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
+	c.VerifyAuto = []string{"fails"}
+	c.editedSinceVerify = true
+
+	if _, keep := c.runAutoVerify(t.Context()); !keep {
+		t.Fatal("the first failing round should continue the loop")
+	}
+	// The model replies in prose and edits nothing.
+	if _, keep := c.runAutoVerify(t.Context()); keep {
+		t.Error("a reply that edited nothing must end the turn, not re-run the same check")
+	}
+	if c.autoVerifies != 1 {
+		t.Errorf("auto-verify rounds = %d, want 1 — the budget should be untouched", c.autoVerifies)
+	}
+}
+
+// TestAutoVerifyPassingEndsTheTurn is the other half: when the checks pass the
+// model is not sent anything, so the turn ends where it would have.
+func TestAutoVerifyPassingEndsTheTurn(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{{Name: "ok", Argv: []string{"true"}}}
+	c.VerifyAuto = []string{"ok"}
+	c.editedSinceVerify = true
+
+	if msg, keep := c.runAutoVerify(t.Context()); keep || msg != "" {
+		t.Errorf("passing checks must end the turn; got keep=%v msg=%q", keep, msg)
+	}
+}
+
+// TestAutoVerifyIsBounded pins the budget for the case it is actually for: a
+// model that keeps editing and keeps failing. Each round edits, so the
+// unchanged-tree gate never fires and only the counter stops it.
+func TestAutoVerifyIsBounded(t *testing.T) {
+	c, out := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
+	c.VerifyAuto = []string{"fails"}
+
+	rounds := 0
+	for {
+		c.editedSinceVerify = true // the model edited something each round
+		_, keep := c.runAutoVerify(t.Context())
+		if !keep {
+			break
+		}
+		rounds++
+		if rounds > maxAutoVerify+2 {
+			t.Fatal("runAutoVerify never gave up")
+		}
+	}
+	if rounds != maxAutoVerify {
+		t.Errorf("auto-verify rounds = %d, want %d", rounds, maxAutoVerify)
+	}
+	if !strings.Contains(strings.Join(out.lines, "\n"), "without passing") {
+		t.Error("the user should be told why it stopped")
+	}
+}
+
+// TestAutoVerifyRunsInTheListedOrder confirms the one ordering rule: checks run
+// in the order they are listed, which for verify_auto is that list's order, not
+// the verify dict's.
+func TestAutoVerifyRunsInTheListedOrder(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{
+		{Name: "slow", Argv: []string{"echo", "slow ran"}},
+		{Name: "fast", Argv: []string{"false"}},
+	}
+	c.VerifyAuto = []string{"fast", "slow"} // deliberately not the dict order
+	c.editedSinceVerify = true
+
+	msg, keep := c.runAutoVerify(t.Context())
+	if !keep {
+		t.Fatal("a failing check must continue the loop")
+	}
+	if strings.Contains(msg, "slow ran") {
+		t.Errorf("the list's order was not honored; slow ran before fast:\n%s", msg)
+	}
+}

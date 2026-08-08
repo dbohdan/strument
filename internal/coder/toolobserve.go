@@ -248,18 +248,39 @@ func (c *Coder) runVerify(ctx context.Context, tc llm.ToolCall) string {
 		return "No checks are configured for this project."
 	}
 
-	checks := c.Verify
+	names := checkNames(c.Verify)
 	if name := strings.TrimSpace(a.Name); name != "" {
+		if indexCheck(c.Verify, name) < 0 {
+			return fmt.Sprintf("There is no check named %q. Configured checks: %s.",
+				name, strings.Join(names, ", "))
+		}
+		names = []string{name}
+	}
+	// The model asked, so it gets the whole transcript either way — a passing
+	// run is information too.
+	transcript, _ := c.runChecks(ctx, names)
+	return transcript
+}
+
+// runChecks runs the named checks in the order given, stopping at the first
+// failure. It returns the transcript and whether everything passed.
+//
+// Order is the caller's, wherever the list came from: verify() uses the order
+// the checks were declared in, verify_auto uses the order that list was written
+// in. One rule, stated once — checks run in the order they are listed.
+func (c *Coder) runChecks(ctx context.Context, names []string) (transcript string, passed bool) {
+	var b strings.Builder
+	for _, name := range names {
 		i := indexCheck(c.Verify, name)
 		if i < 0 {
-			return fmt.Sprintf("There is no check named %q. Configured checks: %s.",
-				name, strings.Join(checkNames(c.Verify), ", "))
+			// Unreachable through either caller: the tool validates the name and
+			// config validates verify_auto at load. Report rather than skip, so a
+			// future third caller cannot silently check nothing.
+			fmt.Fprintf(&b, "%s: no such check is configured.\n", name)
+			return truncateResult(b.String()), false
 		}
-		checks = c.Verify[i : i+1]
-	}
+		ch := c.Verify[i]
 
-	var b strings.Builder
-	for _, ch := range checks {
 		c.Out.Printf("%s $ %s", ch.Name, strings.Join(ch.Argv, " "))
 		exit, output := c.runCheck(ctx, ch)
 		c.Out.Printf("%s", strings.TrimRight(output, "\n"))
@@ -272,14 +293,14 @@ func (c *Coder) runVerify(ctx context.Context, tc llm.ToolCall) string {
 			// Stop at the first failure: the later checks would mostly report
 			// the same breakage, and the user ordered them so the fast ones
 			// come first.
-			if len(checks) > 1 {
+			if len(names) > 1 {
 				b.WriteString("\nStopped here; later checks were not run.\n")
 			}
-			return truncateResult(b.String())
+			return truncateResult(b.String()), false
 		}
 		b.WriteString("\n")
 	}
-	return truncateResult(b.String())
+	return truncateResult(b.String()), true
 }
 
 // runCheck executes one check's argv, merging stdout and stderr.

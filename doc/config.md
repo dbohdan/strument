@@ -27,6 +27,7 @@ The loader reads these module-level variables after running your file:
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
+| `verify_auto` | list of strings | Optional. Names of `verify` checks Strument runs itself at the end of a turn that changed files. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -87,6 +88,34 @@ verify = dict(verify, lint=["golangci-lint", "run", "--fast"])
 
 Unset, no `verify` tool is offered and every command goes through `bash` and its
 confirmation prompt.
+
+### `verify_auto`
+
+`verify_auto` lists the checks Strument runs *itself*, without being asked, at
+the end of a turn that changed files.
+
+```python
+verify_auto = ["lint", "test"]
+```
+
+The names must be keys of `verify`; a name that isn't fails at load, so a typo
+can't leave you believing the project is checked when nothing runs.
+
+This exists because the model deciding *whether* and *which* to check is the
+part that goes wrong. A model can finish a change, run the tests, see them pass,
+and report success while a linter would have caught what it just wrote. Listing
+the checks here takes that judgement away from it.
+
+When a check fails, the output goes back to the model and it keeps working in
+the same turn. That repeats at most three times before Strument stops and hands
+back to you — a model that can't get the checks green should not spend your
+budget trying.
+
+Order is the order you write here, stopping at the first failure, which is the
+same rule `verify` follows: checks run in the order they are listed, wherever
+they are listed. Nothing runs after a turn that only read files, or under
+`--dry-run`, since no edit lands. The `verify` tool stays available either way,
+so the model can still check something mid-turn.
 
 ## Built-in functions
 

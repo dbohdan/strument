@@ -174,7 +174,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 
 		for _, want := range []string{
 			"Strument v9.9.9",
-			"Model: openrouter/test-model with tool edit format",
+			"Model: openrouter/test-model",
 			"Git repo: none",
 			"Repo-map: disabled",
 			"Added hello.txt to the chat.", // banner

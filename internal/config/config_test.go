@@ -551,3 +551,47 @@ func TestVerifyRejectsBadShapes(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyAutoValidatesAgainstMergedChecks pins the property that makes the
+// feature trustworthy: a name that isn't a real check fails at load. A typo
+// here would otherwise mean the harness silently verifies nothing, which is the
+// one failure mode automatic verification exists to prevent.
+func TestVerifyAutoValidatesAgainstMergedChecks(t *testing.T) {
+	good := userConfig + `
+verify = {"lint": ["golangci-lint", "run"], "test": ["go", "test", "./..."]}
+verify_auto = ["lint", "test"]
+`
+	cfg, err := Load(harness(t, good, "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(cfg.VerifyAuto, ",") != "lint,test" {
+		t.Errorf("VerifyAuto = %v", cfg.VerifyAuto)
+	}
+
+	bad := userConfig + `
+verify = {"test": ["go", "test", "./..."]}
+verify_auto = ["lnit"]
+`
+	_, err = Load(harness(t, bad, "", testEnv))
+	if err == nil {
+		t.Fatal("a verify_auto name with no matching check must fail at load")
+	}
+	if !strings.Contains(err.Error(), "lnit") || !strings.Contains(err.Error(), "test") {
+		t.Errorf("error should name the typo and the real checks, got: %v", err)
+	}
+}
+
+// TestVerifyAutoValidatesAfterTheProjectMerge covers why validation is
+// post-merge: the project can supply the check the user's verify_auto names.
+func TestVerifyAutoValidatesAfterTheProjectMerge(t *testing.T) {
+	user := userConfig + "\nverify_auto = [\"typecheck\"]\n"
+	project := `verify = {"typecheck": ["tsc", "--noEmit"]}`
+	opts := harness(t, user, project, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(opts); err != nil {
+		t.Errorf("a project-supplied check should satisfy the user's verify_auto: %v", err)
+	}
+}

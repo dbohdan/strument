@@ -338,6 +338,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	if len(edited) > 0 {
 		for _, f := range edited {
 			c.turnEditedFiles[f] = true
+			c.editedSinceVerify = true
 		}
 		saved = c.autoCommit(edited)
 		if saved == "" {

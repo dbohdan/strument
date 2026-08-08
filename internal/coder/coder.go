@@ -27,6 +27,11 @@ const (
 	// wall: on exhaustion the user is shown what the turn has done so far and
 	// asked whether to keep going.
 	maxSteps = 25
+	// maxAutoVerify bounds the rounds the harness itself starts by running the
+	// project's checks. It is small and separate on purpose: a model caught in a
+	// fix-break cycle should hand back to the human rather than spend the work
+	// budget on rounds nobody asked for.
+	maxAutoVerify = 3
 )
 
 // Coder is the chat loop state.
@@ -64,13 +69,15 @@ type Coder struct {
 	// Verify is the project's named verification commands. Empty means no
 	// verify tool is offered.
 	Verify []config.VerifyCheck
+	// VerifyAuto names the checks the harness runs itself at the end of a turn
+	// that edited files. Empty means the model is the only thing that runs one.
+	VerifyAuto []string
 
 	Prompts prompts.Set
 
-	// editFormat is the active format ("diff"/"diff-fenced"/"whole"/"ask").
-	// It starts as the model's EditFormat but /ask and /code switch it at
-	// runtime without changing the model, so the apply dispatch and prompt
-	// set read this, not Model.EditFormat.
+	// editFormat is the active mode, "tool" or "ask". It starts as the model's
+	// EditFormat but /ask and /code switch it at runtime without changing the
+	// model, so the tool set and prompt set read this, not Model.EditFormat.
 	editFormat string
 
 	// Chat state.
@@ -80,16 +87,23 @@ type Coder struct {
 	curMessages       []llm.Message
 	turnEditedFiles   map[string]bool
 
-	numReflections  int         // error reflections this turn (maxErrorReflections)
-	numSteps        int         // work steps this turn (maxSteps)
-	lastSendOutcome SendOutcome // observability for tests/REPL status
+	numReflections int // error reflections this turn (maxErrorReflections)
+	numSteps       int // work steps this turn (maxSteps)
+	autoVerifies   int // automatic check rounds this turn (maxAutoVerify)
+	// editedSinceVerify gates the automatic checks: they run only when a file
+	// has changed since the last time they ran. Without it, a model that
+	// answers a failure in prose — "that break was already there and isn't
+	// mine" — gets asked the identical question again, because re-running an
+	// unchanged tree can only produce the identical output.
+	editedSinceVerify bool
+	lastSendOutcome   SendOutcome // observability for tests/REPL status
 
 	// Send-scoped buffers.
 	partialResponseContent  string
 	partialReasoningContent string
 	multiResponseContent    string
 
-	// Send-scoped tool-call accumulation ("tool" edit format), in first-seen
+	// Send-scoped tool-call accumulation, in first-seen
 	// index order. toolContinuation makes the next send re-enter on the tool
 	// results already appended to curMessages, without adding a user turn.
 	partialToolCalls []llm.ToolCall
@@ -298,6 +312,8 @@ func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.numReflections = 0
 	c.numSteps = 0
+	c.autoVerifies = 0
+	c.editedSinceVerify = false
 	c.messageCost = 0
 	c.costKnown = false
 	if c.Repo != nil {
@@ -361,10 +377,66 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 			}
 			message = "" // the tool results are the message
 
+		case OutcomeSuccess:
+			// The model has nothing more to call, so it believes it is done.
+			// That is the moment to check, if the project asked us to.
+			report, ok := c.runAutoVerify(ctx)
+			if !ok {
+				return
+			}
+			message = report
+
 		default:
 			return
 		}
 	}
+}
+
+// runAutoVerify runs the project's verify_auto checks at the end of a turn that
+// edited files, and reports whether the turn should continue.
+//
+// It fires here rather than after each edit because a mid-turn state is
+// legitimately broken: edit one file, then its caller, and in between nothing
+// compiles. Verifying there would spend budget on failures the model was already
+// about to fix. At turn end the model has declared itself finished, which is
+// exactly when an independent check is worth something — and the reason to make
+// it independent is that the model's judgement about *which* check mattered is
+// the part that fails. A run that passed the tests and never linted still
+// reports "the checks pass".
+//
+// The returned message is a user turn, not a tool result, which is a deliberate
+// exception to the rule that reflection is a tool error. There is no call to
+// answer here: the model did not ask for this, the harness is speaking
+// unprompted, and a user message is the honest shape for that.
+func (c *Coder) runAutoVerify(ctx context.Context) (message string, keepGoing bool) {
+	// Nothing changed since the last run — either the turn edited nothing at
+	// all, or the model replied to a failure without touching a file, which is
+	// a considered answer ("that isn't mine") and not something to re-ask.
+	if len(c.VerifyAuto) == 0 || !c.editedSinceVerify {
+		return "", false
+	}
+	c.editedSinceVerify = false
+	if c.autoVerifies >= maxAutoVerify {
+		c.Out.Warningf("The automatic checks have run %d times without passing; stopping here.", maxAutoVerify)
+		return "", false
+	}
+	c.autoVerifies++
+
+	c.Out.Printf("Running the automatic checks.")
+	transcript, passed := c.runChecks(ctx, c.VerifyAuto)
+	if passed {
+		return "", false
+	}
+	// The wording matters, and live testing is what showed why. "did not pass
+	// after your changes" reads as "you caused this", which puts the model
+	// between this message and the standing instruction to leave unrelated code
+	// alone. Observed: it declined to fix a pre-existing failure, was asked
+	// again by the next round, and gave in — two rounds spent on an argument the
+	// harness started. Saying plainly that reporting is an acceptable answer
+	// settles it in one.
+	return "The automatic checks ran after your changes and did not pass:\n\n" + transcript +
+		"\nIf this is something you broke, fix it. If it was already failing and is unrelated to " +
+		"what you changed, say so and stop — don't fix it unless the user asks.", true
 }
 
 // confirmMoreSteps is the budget checkpoint. A long turn is legitimate, but it
@@ -389,6 +461,8 @@ func (c *Coder) confirmMoreSteps() bool {
 		return false
 	}
 	c.numSteps = 0
+	c.autoVerifies = 0
+	c.editedSinceVerify = false
 	return true
 }
 

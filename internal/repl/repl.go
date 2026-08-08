@@ -227,14 +227,14 @@ func (r *REPL) interactive() bool {
 }
 
 // announce prints the opening banner once at session start, mirroring
-// aider's get_announcements: version, model + edit format, git repo, repo
+// aider's get_announcements: version, model, git repo, repo
 // map, and the initially-added files.
 func (r *REPL) announce() {
 	if !r.interactive() {
 		return
 	}
 	r.printf("Strument v%s", r.opts.Version)
-	r.printf("Model: %s with %s edit format", r.coder.Model.QualifiedSlug(), r.coder.EditFormat())
+	r.printf("Model: %s", r.coder.Model.QualifiedSlug())
 	if r.opts.Git != nil {
 		r.printf("Git repo: .git with %d files", len(r.opts.Git.TrackedFiles()))
 	} else {
