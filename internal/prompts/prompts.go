@@ -372,18 +372,19 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"{final_reminders}\n" +
 	"The user will request changes to the supplied code.\n" +
 	"If a request is ambiguous, ask clarifying questions before making changes.\n\n" +
-	"Make changes by calling the provided tools:\n\n" +
-	"- replace_in_file and create_file edit files directly: the change is applied and committed to git " +
-	"the moment you call them, with no separate confirmation step — exactly like an ordinary edit. " +
-	"Call them only when you are ready to make the change.\n" +
-	"- suggest_command proposes a shell command, such as one to run the tests or build. " +
-	"Unlike an edit, it does not run until the user approves it, and its output is returned to you.\n" +
-	"- request_files asks the user to add existing files to the chat. Only files in the chat can be " +
-	"edited, so if a change needs a file that isn't present, call request_files first rather than " +
-	"guessing at the file's contents.\n\n" +
-	"Every call's result comes back to you, so you can keep working within the same turn: make an " +
-	"edit, run the tests, read what failed, and fix it. Finish by saying what you did, without " +
-	"calling a tool — that is what ends the turn and returns to the user.\n\n" +
+	"Work through the provided tools. They fall into three groups, which differ in what they cost " +
+	"the user:\n\n" +
+	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
+	"so use them freely rather than guessing at a file's contents. Files the project ignores are " +
+	"not listed or searched.\n" +
+	"- edit and write change files directly: the change lands the moment you call them, with no " +
+	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
+	"make the change.\n" +
+	"- bash runs a shell command, and the user is asked before it runs. Reach for it only for work " +
+	"the other tools don't cover; reading and searching have their own tools.\n\n" +
+	"Every call's result comes back to you, so you can keep working within the same turn: read a " +
+	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did, " +
+	"without calling a tool — that is what ends the turn and hands back to the user.\n\n" +
 	"Explain your changes briefly in prose alongside the tool calls.\n\n" +
 	"Keep in mind these details about the user's platform and environment:\n" +
 	"{platform}\n"
@@ -391,13 +392,14 @@ const toolMainSystem = "You are an expert software developer working with a user
 // toolSystemReminder is the trailing reminder for the tool format: the
 // exact-match rule for search and the one-change-per-call discipline.
 const toolSystemReminder = "# Editing rules\n\n" +
-	"- replace_in_file's search must match the file's current contents exactly, character for " +
-	"character, including all whitespace, comments, and docstrings. An inexact match is the most " +
-	"common reason an edit is rejected, so double-check it.\n" +
-	"- Include enough surrounding lines in search to identify the location uniquely, and keep each " +
-	"call to one small, self-contained change. Use several calls for several changes.\n" +
+	"- edit's old_string must match the file's current contents exactly, character for character, " +
+	"including all whitespace, comments, and docstrings. An inexact match is the most common reason " +
+	"an edit is rejected, so double-check it.\n" +
+	"- Include enough surrounding lines in old_string to identify the location uniquely, and keep " +
+	"each call to one small, self-contained change. Use several calls for several changes.\n" +
 	"- To move code, use two calls: one to remove it, one to add it in the new place.\n" +
-	"- Only edit files that are in the chat. To edit any other file, call request_files first.\n\n" +
+	"- Read a file before editing it unless its contents are already in the conversation. Editing " +
+	"from memory is where inexact matches come from.\n\n" +
 	"{final_reminders}"
 
 // Tool is the tool-calling edit format: the model edits, suggests commands,

@@ -81,6 +81,9 @@ func (c *chatCmd) Run() error {
 	cdr := coder.New(root, model)
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.New(model.Provider)
+	// The project's named checks, which the verify tool runs without asking:
+	// the model supplies only a name, so nothing it says can change what runs.
+	cdr.Verify = cfg.Verify
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	// URL scraping is a non-provider egress action, so it uses the global proxy

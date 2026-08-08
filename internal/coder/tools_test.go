@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -39,7 +40,7 @@ func lastToolResult(t *testing.T, c *Coder) llm.Message {
 const closingTurn = `{"kind":"stream","events":[{"kind":"Answer","text":"Done."},{"kind":"Finish","finish_reason":"stop"}]}`
 
 // TestToolRequestCarriesTools asserts the outgoing request advertises the
-// tool set with tool_choice "auto", and that suggest_command is gated on
+// tool set with tool_choice "auto", and that bash is gated on
 // whether shell commands are enabled.
 func TestToolRequestCarriesTools(t *testing.T) {
 	sc := inlineScenario(t, `
@@ -66,9 +67,75 @@ func TestToolRequestCarriesTools(t *testing.T) {
 	if choice != "auto" {
 		t.Errorf("tool_choice = %q, want auto", choice)
 	}
-	want := []string{"replace_in_file", "create_file", "request_files"}
+	// The read-only tools always come first; bash is gated off here, and no
+	// verify is configured.
+	want := []string{"read", "grep", "glob", "ls", "edit", "write"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
-		t.Errorf("tools = %v, want %v (suggest_command gated off)", names, want)
+		t.Errorf("tools = %v, want %v (bash gated off)", names, want)
+	}
+}
+
+// TestToolSetGating covers the two conditional parts of the tool set: bash
+// appears only when shell commands are enabled, verify only when the project
+// configured checks, and ask mode offers nothing that changes anything.
+func TestToolSetGating(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Coder)
+		want   []string
+	}{
+		{
+			"shell enabled, no verify configured",
+			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
+			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash"},
+		},
+		{
+			"verify configured",
+			func(c *Coder) {
+				c.editFormat = "tool"
+				c.SuggestShellCommands = true
+				c.Verify = []config.VerifyCheck{{Name: "test", Argv: []string{"go", "test", "./..."}}}
+			},
+			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash", "verify"},
+		},
+		{
+			"ask mode is read-only",
+			func(c *Coder) { c.editFormat = "ask"; c.SuggestShellCommands = true },
+			[]string{"read", "grep", "glob", "ls"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Coder{}
+			tc.mutate(c)
+			var names []string
+			for _, td := range c.toolDefs() {
+				names = append(names, td.Name)
+			}
+			if strings.Join(names, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("tools = %v, want %v", names, tc.want)
+			}
+		})
+	}
+}
+
+// TestVerifyToolListsChecksInDescription confirms the schema tells the model
+// which names exist and what each one runs — the tool takes a name and never a
+// command, so the description is the only place that information can live.
+func TestVerifyToolListsChecksInDescription(t *testing.T) {
+	def := verifyTool([]config.VerifyCheck{
+		{Name: "lint", Argv: []string{"golangci-lint", "run"}},
+		{Name: "test", Argv: []string{"go", "test", "./..."}},
+	})
+	for _, want := range []string{"lint: golangci-lint run", "test: go test ./..."} {
+		if !strings.Contains(def.Description, want) {
+			t.Errorf("description missing %q:\n%s", want, def.Description)
+		}
+	}
+	props, _ := def.Parameters["properties"].(map[string]any)
+	nameProp, _ := props["name"].(map[string]any)
+	enum, _ := nameProp["enum"].([]any)
+	if len(enum) != 2 || enum[0] != "lint" || enum[1] != "test" {
+		t.Errorf("name enum = %v, want the configured names in order", enum)
 	}
 }
 
@@ -86,7 +153,7 @@ func (r *committingRepo) Commit([]string, string, bool) (string, string, bool, e
 	return "abc1234", "feat: change world to mars", true, nil
 }
 
-// TestToolEditApplies replays a single replace_in_file tool call and asserts
+// TestToolEditApplies replays a single edit tool call and asserts
 // the edit lands on disk, the outcome is a clean success, and the history is
 // well-formed: user, assistant-with-tool-call, tool-result.
 func TestToolEditApplies(t *testing.T) {
@@ -95,7 +162,7 @@ func TestToolEditApplies(t *testing.T) {
 {"kind":"fs","path":"a.txt","content":"hello\nworld\n"}
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change world to mars"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 {"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"I applied your changes to the files."},{"role":"assistant","text":"Done."}]}
@@ -115,7 +182,7 @@ func TestToolEditApplies(t *testing.T) {
 	}
 }
 
-// TestToolCreateFile replays a create_file call and asserts the new file is
+// TestToolCreateFile replays a write call and asserts the new file is
 // written with its contents.
 func TestToolCreateFile(t *testing.T) {
 	sc := inlineScenario(t, `
@@ -123,7 +190,7 @@ func TestToolCreateFile(t *testing.T) {
 {"kind":"chat","editable":[]}
 {"kind":"user","text":"add a greeting file"}
 {"kind":"confirm","prompt":"Create new file?","answer":"yes"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"create_file","tool_args":"{\"path\":\"hi.txt\",\"content\":\"hi there\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"write","tool_args":"{\"path\":\"hi.txt\",\"content\":\"hi there\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"hi.txt","content":"hi there\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
@@ -131,7 +198,7 @@ func TestToolCreateFile(t *testing.T) {
 	env.run(t)
 }
 
-// TestToolCreateFileOverwrites confirms create_file on an existing path
+// TestToolCreateFileOverwrites confirms write on an existing path
 // replaces the whole file (not the old silent append) and tells the model it
 // overwrote, so it doesn't assume the prior contents survived.
 func TestToolCreateFileOverwrites(t *testing.T) {
@@ -140,7 +207,7 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 {"kind":"fs","path":"cfg.txt","content":"old line 1\nold line 2\n"}
 {"kind":"chat","editable":["cfg.txt"]}
 {"kind":"user","text":"rewrite cfg.txt from scratch"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"create_file","tool_args":"{\"path\":\"cfg.txt\",\"content\":\"brand new\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"write","tool_args":"{\"path\":\"cfg.txt\",\"content\":\"brand new\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"cfg.txt","content":"brand new\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
@@ -161,7 +228,7 @@ func TestToolEditCommits(t *testing.T) {
 {"kind":"fs","path":"a.txt","content":"hello\nworld\n"}
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change world to mars"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
@@ -178,7 +245,7 @@ func TestToolEditCommits(t *testing.T) {
 	}
 }
 
-// TestToolSuggestCommand replays a suggest_command call: the user confirms,
+// TestToolSuggestCommand replays a bash call: the user confirms,
 // the command runs, and its output comes back as the tool result.
 func TestToolSuggestCommand(t *testing.T) {
 	sc := inlineScenario(t, `
@@ -187,7 +254,7 @@ func TestToolSuggestCommand(t *testing.T) {
 {"kind":"user","text":"run the tests"}
 {"kind":"confirm","prompt":"Run shell command?","answer":"yes"}
 {"kind":"command","block":"go test ./...","exit":0,"output":"ok\n"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"run the tests\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"bash","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"run the tests\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
 	env := setupScenario(t, sc, toolMode)
@@ -210,7 +277,7 @@ func TestToolSuggestCommandDeclined(t *testing.T) {
 {"kind":"chat","editable":[]}
 {"kind":"user","text":"run the tests"}
 {"kind":"confirm","prompt":"Run shell command?","answer":"no"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"suggest_command","tool_args":"{\"command\":\"rm -rf /\",\"purpose\":\"oops\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"bash","tool_args":"{\"command\":\"rm -rf /\",\"purpose\":\"oops\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
 	env := setupScenario(t, sc, toolMode)
@@ -219,49 +286,6 @@ func TestToolSuggestCommandDeclined(t *testing.T) {
 	result := lastToolResult(t, env.coder)
 	if !strings.Contains(result.Text(), "chose not to run") {
 		t.Errorf("declined result = %q, want a not-run message", result.Text())
-	}
-}
-
-// TestToolRequestFiles replays a request_files call: the user confirms and the
-// file joins the chat.
-func TestToolRequestFiles(t *testing.T) {
-	sc := inlineScenario(t, `
-{"kind":"meta","v":1,"scenario":"tool-request","source":"authored"}
-{"kind":"fs","path":"lib.go","content":"package lib\n"}
-{"kind":"chat","editable":[]}
-{"kind":"user","text":"edit the library"}
-{"kind":"confirm","prompt":"Add file to the chat?","answer":"yes"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"lib.go\"],\"reason\":\"need to edit it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
-{"kind":"expect_outcome","outcome":"Success","reflections":0}
-`+closingTurn)
-	env := setupScenario(t, sc, toolMode)
-	env.run(t)
-
-	if !slices.Contains(env.coder.inchatRelativeFiles(), "lib.go") {
-		t.Errorf("lib.go not added to chat; chat = %v", env.coder.inchatRelativeFiles())
-	}
-	result := lastToolResult(t, env.coder)
-	if !strings.Contains(result.Text(), "Added to the chat: lib.go") {
-		t.Errorf("request result = %q, want an added-files summary", result.Text())
-	}
-}
-
-// TestToolRequestMissingFile confirms a request for a file that doesn't exist
-// reports it without prompting.
-func TestToolRequestMissingFile(t *testing.T) {
-	sc := inlineScenario(t, `
-{"kind":"meta","v":1,"scenario":"tool-request-missing","source":"authored"}
-{"kind":"chat","editable":[]}
-{"kind":"user","text":"edit ghost.go"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"request_files","tool_args":"{\"paths\":[\"ghost.go\"],\"reason\":\"need it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
-{"kind":"expect_outcome","outcome":"Success","reflections":0}
-`+closingTurn)
-	env := setupScenario(t, sc, toolMode)
-	env.run(t)
-
-	result := lastToolResult(t, env.coder)
-	if !strings.Contains(result.Text(), "not found") {
-		t.Errorf("missing-file result = %q, want a not-found note", result.Text())
 	}
 }
 
@@ -275,8 +299,8 @@ func TestToolEditReflects(t *testing.T) {
 {"kind":"fs","path":"a.txt","content":"hello\nworld\n"}
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change world to mars"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"planet\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"replace_in_file","tool_args":"{\"path\":\"a.txt\",\"search\":\"world\\n\",\"replace\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"planet\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
 `+closingTurn)
@@ -324,9 +348,9 @@ func TestToolLoopSpansFiles(t *testing.T) {
 {"kind":"user","text":"change the greeting to hey"}
 {"kind":"confirm","prompt":"Run shell command?","answer":"yes"}
 {"kind":"command","block":"go test ./...","exit":1,"output":"FAIL: want hello, got hey\n"}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"replace_in_file","tool_args":"{\"path\":\"app.go\",\"search\":\"func Greet() string { return \\\"hello\\\" }\\n\",\"replace\":\"func Greet() string { return \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"suggest_command","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"check the change\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
-{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_3","tool_name":"replace_in_file","tool_args":"{\"path\":\"app_test.go\",\"search\":\"func TestGreet(t *testing.T) { _ = \\\"hello\\\" }\\n\",\"replace\":\"func TestGreet(t *testing.T) { _ = \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"app.go\",\"old_string\":\"func Greet() string { return \\\"hello\\\" }\\n\",\"new_string\":\"func Greet() string { return \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"bash","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"check the change\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_3","tool_name":"edit","tool_args":"{\"path\":\"app_test.go\",\"old_string\":\"func TestGreet(t *testing.T) { _ = \\\"hello\\\" }\\n\",\"new_string\":\"func TestGreet(t *testing.T) { _ = \\\"hey\\\" }\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"app.go","content":"package app\n\nfunc Greet() string { return \"hey\" }\n"}
 {"kind":"expect_fs","path":"app_test.go","content":"package app\n\nfunc TestGreet(t *testing.T) { _ = \"hey\" }\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
@@ -373,7 +397,7 @@ func TestToolLoopBudgetStops(t *testing.T) {
 	// One more stream than the budget would let run, so an off-by-one that
 	// overshot the checkpoint would consume it and fail the Remaining check.
 	for i := range maxSteps + 1 {
-		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"create_file","tool_args":"{\"path\":\"a.txt\",\"content\":\"pass %d\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, i)
+		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"write","tool_args":"{\"path\":\"a.txt\",\"content\":\"pass %d\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, i)
 	}
 	sc := inlineScenario(t, b.String())
 

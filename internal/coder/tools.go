@@ -4,19 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
 )
 
-// Tool names for the "tool" edit format.
+// Tool names. These are the conventional names across coding harnesses, on
+// purpose: a model's expectations about what "edit" or "grep" does are worth
+// more than a bespoke vocabulary, and matching them is the whole reason this
+// harness moved to a standard tool set.
 const (
-	toolReplaceInFile  = "replace_in_file"
-	toolCreateFile     = "create_file"
-	toolSuggestCommand = "suggest_command"
-	toolRequestFiles   = "request_files"
+	toolRead   = "read"
+	toolWrite  = "write"
+	toolEdit   = "edit"
+	toolBash   = "bash"
+	toolGrep   = "grep"
+	toolGlob   = "glob"
+	toolLS     = "ls"
+	toolVerify = "verify"
 )
 
 // strProp is a JSON-Schema string property with a description.
@@ -24,50 +31,126 @@ func strProp(desc string) map[string]any {
 	return map[string]any{"type": "string", "description": desc}
 }
 
-// toolDefs is the function-tool set offered to the model this turn: the two
-// direct-apply edit tools, plus suggest_command (when shell commands are
-// enabled) and request_files.
+// intProp is a JSON-Schema integer property with a description.
+func intProp(desc string) map[string]any {
+	return map[string]any{"type": "integer", "description": desc}
+}
+
+// toolDefs is the tool set offered to the model this turn.
+//
+// Observation is always available; mutation is conditional. In ask mode only
+// the read-only tools are offered at all, which is what "discussion mode" now
+// means — a restricted tool set rather than a separate prompt set with an
+// engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
-	defs := editTools()
-	if c.SuggestShellCommands {
-		defs = append(defs, commandTool())
+	defs := readOnlyTools()
+	if c.editFormat == "ask" {
+		return defs
 	}
-	defs = append(defs, requestFilesTool())
+	defs = append(defs, editTools()...)
+	if c.SuggestShellCommands {
+		defs = append(defs, bashTool())
+	}
+	if len(c.Verify) > 0 {
+		defs = append(defs, verifyTool(c.Verify))
+	}
 	return defs
 }
 
-// editTools are the direct-apply edit tools — like a SEARCH/REPLACE block,
-// not a proposal — with git auto-commit and /undo as the safety net.
-func editTools() []llm.ToolDef {
+// readOnlyTools are the four ways to look at the project. They never mutate
+// anything, so they never ask for confirmation.
+func readOnlyTools() []llm.ToolDef {
 	return []llm.ToolDef{
 		{
-			Name: toolReplaceInFile,
-			Description: "Replace an exact span of text in a file that is in the chat. " +
-				"The edit applies immediately and is committed to git. Make one call per " +
-				"change; call it several times to make several changes.",
+			Name: toolRead,
+			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
+				"use offset and limit to page through a long one.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The file's path, exactly as shown in the chat."),
-					"search": strProp("The exact existing text to replace, character for character, " +
-						"including all whitespace, comments, and docstrings. Include enough surrounding " +
-						"lines to match the intended location uniquely."),
-					"replace": strProp("The text to put in its place."),
+					"path":   strProp("The file's path, relative to the project root."),
+					"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
+					"limit":  intProp("How many lines to return. Omit for a default window."),
 				},
-				"required": []any{"path", "search", "replace"},
+				"required": []any{"path"},
 			},
 		},
 		{
-			Name: toolCreateFile,
-			Description: "Write a file with the given full contents, creating it — or " +
-				"completely overwriting it if it already exists. Applies immediately and " +
-				"commits to git. To change part of an existing file, use replace_in_file " +
-				"instead; use this only when you are providing the whole file.",
+			Name: toolGrep,
+			Description: "Search file contents with a regular expression. Files the project ignores " +
+				"are not searched.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path":    strProp("The new file's path, including any directories."),
-					"content": strProp("The complete contents of the new file."),
+					"pattern": strProp("A regular expression (Go syntax, which is close to PCRE without backreferences)."),
+					"glob":    strProp("Optional. Only search paths matching this glob, e.g. \"**/*.go\"."),
+					"path":    strProp("Optional. Only search under this directory."),
+					"mode": map[string]any{
+						"type": "string",
+						"enum": []any{"files", "content", "count"},
+						"description": "\"files\" (the default) lists the files that match, \"content\" returns the " +
+							"matching lines with line numbers, \"count\" returns a per-file count.",
+					},
+					"ignore_case": map[string]any{"type": "boolean", "description": "Match case-insensitively."},
+				},
+				"required": []any{"pattern"},
+			},
+		},
+		{
+			Name:        toolGlob,
+			Description: "Find files by path pattern. Supports ** for any number of directories.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"pattern": strProp("A glob such as \"**/*.go\" or \"internal/*/testdata/*\"."),
+				},
+				"required": []any{"pattern"},
+			},
+		},
+		{
+			Name:        toolLS,
+			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": strProp("The directory, relative to the project root. Omit for the root itself."),
+				},
+			},
+		},
+	}
+}
+
+// editTools change files directly — the change lands the moment the call
+// arrives, exactly like an ordinary edit, with git auto-commit and /undo as the
+// safety net.
+func editTools() []llm.ToolDef {
+	return []llm.ToolDef{
+		{
+			Name: toolEdit,
+			Description: "Replace an exact span of text in a file. The edit applies immediately. " +
+				"Make one call per change; call it several times to make several changes.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": strProp("The file's path, relative to the project root."),
+					"old_string": strProp("The exact existing text to replace, character for character, " +
+						"including all whitespace, comments, and docstrings. Include enough surrounding " +
+						"lines to match the intended location uniquely."),
+					"new_string": strProp("The text to put in its place."),
+				},
+				"required": []any{"path", "old_string", "new_string"},
+			},
+		},
+		{
+			Name: toolWrite,
+			Description: "Write a file with the given full contents, creating it — or completely " +
+				"overwriting it if it already exists. Applies immediately. To change part of an " +
+				"existing file use edit instead; use this only when you are providing the whole file.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":    strProp("The file's path, including any directories."),
+					"content": strProp("The complete contents of the file."),
 				},
 				"required": []any{"path", "content"},
 			},
@@ -75,15 +158,16 @@ func editTools() []llm.ToolDef {
 	}
 }
 
-// commandTool proposes a shell command for the user to run — a suggestion,
-// not a direct action: the user confirms before it runs and its output comes
-// back as the tool result.
-func commandTool() llm.ToolDef {
+// bashTool runs a shell command, and is the one tool that always asks first.
+// Everything the model might want to *observe* has its own tool, so what
+// reaches bash is the open-ended and possibly destructive remainder — which is
+// exactly what deserves a confirmation prompt.
+func bashTool() llm.ToolDef {
 	return llm.ToolDef{
-		Name: toolSuggestCommand,
-		Description: "Suggest a single shell command for the user to run — for example to run tests, " +
-			"a build, or the program. The user is asked to confirm before it runs, and its output is " +
-			"returned to you. Commands run from the project's root directory.",
+		Name: toolBash,
+		Description: "Run a shell command. The user is asked to confirm before it runs, and its output " +
+			"is returned to you. Commands run from the project's root directory. To read, search, or " +
+			"list files, use the read, grep, glob, and ls tools instead — they need no confirmation.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -95,25 +179,33 @@ func commandTool() llm.ToolDef {
 	}
 }
 
-// requestFilesTool asks the user to add existing files to the chat — a
-// request, not a direct action: the user confirms each one before it joins.
-func requestFilesTool() llm.ToolDef {
+// verifyTool runs the project's configured checks. It takes a name, never a
+// command: everything it can run was written by the user in their config, so
+// there is nothing for the model to alter or append. That is what lets it run
+// without the confirmation bash requires.
+func verifyTool(checks []config.VerifyCheck) llm.ToolDef {
+	names := make([]any, 0, len(checks))
+	var desc strings.Builder
+	desc.WriteString("Run the project's configured checks and return their output. " +
+		"Runs without asking the user, because it can only run commands they configured. " +
+		"Omit name to run every check in order, stopping at the first failure.\n\nAvailable checks:\n")
+	for _, ch := range checks {
+		names = append(names, ch.Name)
+		fmt.Fprintf(&desc, "- %s: %s\n", ch.Name, strings.Join(ch.Argv, " "))
+	}
+
 	return llm.ToolDef{
-		Name: toolRequestFiles,
-		Description: "Ask the user to add existing files to the chat so you can edit them. Use this when " +
-			"a change needs a file that isn't in the chat yet. The result tells you which files were " +
-			"added; their contents reach you on the next step. Don't edit a file before it has been added.",
+		Name:        toolVerify,
+		Description: desc.String(),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"paths": map[string]any{
-					"type":        "array",
-					"items":       map[string]any{"type": "string"},
-					"description": "Project-relative paths of the files to add.",
+				"name": map[string]any{
+					"type":        "string",
+					"enum":        names,
+					"description": "Which check to run. Omit to run all of them.",
 				},
-				"reason": strProp("A short note on why these files are needed."),
 			},
-			"required": []any{"paths"},
 		},
 	}
 }
@@ -141,10 +233,10 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	tc.Arguments += d.Args
 }
 
-// toolEdit is one edit-tool call resolved to an editblock edit plus the call
-// id it answers. create marks a create_file call, whose content is the file's
+// plannedEdit is one edit-tool call resolved to an editblock edit plus the
+// call id it answers. create marks a create_file call, whose content is the file's
 // whole text (written fresh, or overwriting an existing file).
-type toolEdit struct {
+type plannedEdit struct {
 	callID  string
 	path    string
 	search  string
@@ -158,36 +250,30 @@ type toolCommand struct {
 	command string
 }
 
-// toolFileReq is one request_files call.
-type toolFileReq struct {
-	callID string
-	paths  []string
-}
-
 // editArgs is the decoded argument object shared by the edit tools.
 type editArgs struct {
-	Path    string `json:"path"`
-	Search  string `json:"search"`
-	Replace string `json:"replace"`
-	Content string `json:"content"`
+	Path      string `json:"path"`
+	OldString string `json:"old_string"`
+	NewString string `json:"new_string"`
+	Content   string `json:"content"`
 }
 
 // parseEditArgs decodes an edit tool call's arguments into a toolEdit.
-// create_file becomes an edit with an empty search (a new-file write). The
+// write becomes an edit with an empty search (a whole-file write). The
 // second return is a model-facing failure message, "" on success.
-func parseEditArgs(tc llm.ToolCall) (toolEdit, string) {
+func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 	var a editArgs
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
-		return toolEdit{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
+		return plannedEdit{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
 	}
 	if a.Path == "" {
-		return toolEdit{}, "The required \"path\" argument was missing."
+		return plannedEdit{}, "The required \"path\" argument was missing."
 	}
 	switch tc.Name {
-	case toolCreateFile:
-		return toolEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
-	default: // toolReplaceInFile
-		return toolEdit{callID: tc.ID, path: a.Path, search: a.Search, replace: a.Replace}, ""
+	case toolWrite:
+		return plannedEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
+	default: // toolEdit
+		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString, replace: a.NewString}, ""
 	}
 }
 
@@ -203,15 +289,17 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		return OutcomeSuccess
 	}
 
-	var edits []toolEdit
+	var edits []plannedEdit
 	var commands []toolCommand
-	var fileReqs []toolFileReq
 	results := map[string]string{} // call id -> result text
 	needsReflection := false
 
+	// Read-only calls answer immediately, in the order the model made them.
+	// Edits are collected first and applied as one batch below, so sequential
+	// edits to one file compose and the whole batch commits together.
 	for _, tc := range c.partialToolCalls {
 		switch tc.Name {
-		case toolReplaceInFile, toolCreateFile:
+		case toolEdit, toolWrite:
 			e, msg := parseEditArgs(tc)
 			if msg != "" {
 				results[tc.ID] = msg
@@ -219,7 +307,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			edits = append(edits, e)
-		case toolSuggestCommand:
+		case toolBash:
 			cmd, msg := parseCommandArgs(tc)
 			if msg != "" {
 				results[tc.ID] = msg
@@ -227,14 +315,16 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			commands = append(commands, cmd)
-		case toolRequestFiles:
-			req, msg := parseFileReqArgs(tc)
-			if msg != "" {
-				results[tc.ID] = msg
-				needsReflection = true
-				continue
-			}
-			fileReqs = append(fileReqs, req)
+		case toolRead:
+			results[tc.ID] = c.runRead(tc)
+		case toolGrep:
+			results[tc.ID] = c.runGrep(tc)
+		case toolGlob:
+			results[tc.ID] = c.runGlob(tc)
+		case toolLS:
+			results[tc.ID] = c.runLS(tc)
+		case toolVerify:
+			results[tc.ID] = c.runVerify(ctx, tc)
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
 		}
@@ -266,13 +356,10 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		}
 	}
 
-	// Proposals: run confirmed commands (edits first, matching the text
-	// flow), then add requested files.
+	// Shell commands run after the edits, so a test run in the same turn sees
+	// the edited files.
 	for _, cmd := range commands {
-		results[cmd.callID] = c.runSuggestedCommand(ctx, cmd)
-	}
-	for _, req := range fileReqs {
-		results[req.callID] = c.addRequestedFiles(req)
+		results[cmd.callID] = c.runShellTool(ctx, cmd)
 	}
 
 	// Append one tool result per call, in call order, then re-send on them.
@@ -305,26 +392,10 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	return toolCommand{callID: tc.ID, command: a.Command}, ""
 }
 
-// parseFileReqArgs decodes a request_files call. The second return is a
-// model-facing failure message, "" on success.
-func parseFileReqArgs(tc llm.ToolCall) (toolFileReq, string) {
-	var a struct {
-		Paths  []string `json:"paths"`
-		Reason string   `json:"reason"`
-	}
-	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
-		return toolFileReq{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
-	}
-	if len(a.Paths) == 0 {
-		return toolFileReq{}, "No file paths were provided."
-	}
-	return toolFileReq{callID: tc.ID, paths: a.Paths}, ""
-}
-
-// runSuggestedCommand confirms and runs a proposed shell command, returning
-// its output as the tool result. The command output always returns to the
-// model (it answers the tool call); there is no separate add-to-chat step.
-func (c *Coder) runSuggestedCommand(ctx context.Context, cmd toolCommand) string {
+// runShellTool confirms and runs a shell command, returning its output as the
+// tool result. The output always returns to the model (it answers the tool
+// call); there is no separate add-to-chat step.
+func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	if !c.SuggestShellCommands {
 		return "Shell commands are disabled in this session; the command was not run."
 	}
@@ -342,60 +413,6 @@ func (c *Coder) runSuggestedCommand(ctx context.Context, cmd toolCommand) string
 
 	exitCode, output := c.runAndShow(ctx, command)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
-}
-
-// addRequestedFiles confirms and adds requested files to the chat, returning
-// a summary as the tool result. Files already in the chat or missing on disk
-// are reported without a prompt.
-func (c *Coder) addRequestedFiles(req toolFileReq) string {
-	inChat := map[string]bool{}
-	for _, f := range c.inchatRelativeFiles() {
-		inChat[f] = true
-	}
-
-	var added, skipped []string
-	for _, p := range req.paths {
-		rel := strings.TrimSpace(p)
-		if rel == "" {
-			continue
-		}
-		switch {
-		case inChat[rel]:
-			skipped = append(skipped, rel+" (already in the chat)")
-		case !c.fileExists(rel):
-			skipped = append(skipped, rel+" (not found)")
-		default:
-			yes, _ := c.Confirm.Confirm(ConfirmRequest{
-				Prompt:     "Add file to the chat?",
-				Subject:    rel,
-				AllowNever: true,
-				Group:      "add-file",
-			})
-			if yes {
-				c.AddFile(rel)
-				added = append(added, rel)
-			} else {
-				skipped = append(skipped, rel+" (the user declined)")
-			}
-		}
-	}
-
-	var b strings.Builder
-	if len(added) > 0 {
-		fmt.Fprintf(&b, "Added to the chat: %s.", strings.Join(added, ", "))
-	} else {
-		b.WriteString("No files were added to the chat.")
-	}
-	if len(skipped) > 0 {
-		fmt.Fprintf(&b, " Not added: %s.", strings.Join(skipped, ", "))
-	}
-	return b.String()
-}
-
-// fileExists reports whether rel resolves to a readable file under the root.
-func (c *Coder) fileExists(rel string) bool {
-	info, err := os.Stat(c.absRootPath(rel))
-	return err == nil && !info.IsDir()
 }
 
 // appliedPlaceholder marks a success result until the commit message is
@@ -419,7 +436,7 @@ func (c *Coder) appendToolResults(results map[string]string) {
 // results, and returns the edited relative paths. A search that doesn't match
 // sets *matchFailure and records a focused error (with a did-you-mean) for
 // that call.
-func (c *Coder) applyToolEdits(edits []toolEdit, results, overwrote map[string]string, matchFailure *bool) []string {
+func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[string]string, matchFailure *bool) []string {
 	if len(edits) == 0 {
 		return nil
 	}
@@ -523,7 +540,7 @@ func (c *Coder) applyToolEdits(edits []toolEdit, results, overwrote map[string]s
 
 // toolMatchFailure builds the tool result for an edit whose search didn't
 // match, including a did-you-mean when a near match exists.
-func toolMatchFailure(e toolEdit, content string, fen editblock.Fence) string {
+func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The search text was not found in %s, so no change was made.\n", e.path)
 	b.WriteString("It must match the current file contents exactly, character for character, " +

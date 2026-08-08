@@ -47,13 +47,25 @@ func TestToolPromptShape(t *testing.T) {
 		t.Errorf("tool system_reminder missing {final_reminders}")
 	}
 
-	// The prompt must convey the tools' differing natures: edits are direct,
-	// commands are suggestions the user approves.
-	if !strings.Contains(Tool.MainSystem, "directly") {
-		t.Error("tool main_system should state that edits apply directly")
+	// The prompt must convey what separates the three groups of tools, since
+	// that is the part the schema cannot carry: observation is free, edits land
+	// directly, and the shell asks first.
+	for _, want := range []string{
+		"change nothing and need no permission", // read/grep/glob/ls
+		"change files directly",                 // edit/write
+		"the user is asked before it runs",      // bash
+	} {
+		if !strings.Contains(Tool.MainSystem, want) {
+			t.Errorf("tool main_system should convey %q", want)
+		}
 	}
-	if !strings.Contains(Tool.MainSystem, "does not run until the user approves") {
-		t.Error("tool main_system should state that suggested commands need approval")
+	// The loop's shape is the other thing only the prompt can say: results come
+	// back, and a reply without a tool call is what ends the turn.
+	if !strings.Contains(Tool.MainSystem, "result comes back to you") {
+		t.Error("tool main_system should tell the model its tool results return")
+	}
+	if !strings.Contains(Tool.MainSystem, "ends the turn") {
+		t.Error("tool main_system should say what ends the turn")
 	}
 	// The schema carries the format, so no few-shot examples are needed.
 	if len(Tool.ExampleMessages) != 0 {

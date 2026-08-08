@@ -162,7 +162,7 @@ type ToolDiff struct {
 	curField    string
 	wroteHeader bool
 	pending     []string // diff lines held until the header (path) is known
-	sawSearch   bool     // the search field has begun streaming
+	sawSearch   bool     // the old_string field has begun streaming
 	addedBuf    []string // "+" lines held back until after the "-" lines
 }
 
@@ -189,16 +189,32 @@ func (d *ToolDiff) Flush() {
 	d.addedBuf = nil
 }
 
+// RendersDiff reports whether a tool's streamed arguments are worth drawing as
+// they arrive. Only the two edit tools and bash carry content the user wants to
+// watch scroll past — a diff, or the command about to run.
+//
+// The observation tools must be excluded rather than merely rendering nothing:
+// read and ls also take a "path" argument, and without this they would each
+// print a bare path line as if it were a diff header, with no diff under it.
+func RendersDiff(tool string) bool {
+	switch tool {
+	case "edit", "write", "bash":
+		return true
+	default:
+		return false
+	}
+}
+
 // expectsPath reports whether the tool has a path/header, so its diff lines
-// must wait for it. suggest_command has none — its command line streams live.
+// must wait for it. bash has none — its command line streams live.
 func (d *ToolDiff) expectsPath() bool {
-	return d.tool == "replace_in_file" || d.tool == "create_file"
+	return d.tool == "edit" || d.tool == "write"
 }
 
 // isLineField reports whether a field's value renders as diff/command lines.
 func isLineField(field string) bool {
 	switch field {
-	case "search", "replace", "content", "command":
+	case "old_string", "new_string", "content", "command":
 		return true
 	default:
 		return false
@@ -220,7 +236,7 @@ func (d *ToolDiff) onArg(field, chunk string) {
 		d.path.WriteString(chunk)
 		return
 	}
-	if field == "search" {
+	if field == "old_string" {
 		d.sawSearch = true
 	}
 	if !isLineField(field) {
@@ -246,7 +262,7 @@ func (d *ToolDiff) flushLine() {
 func (d *ToolDiff) header() {
 	d.wroteHeader = true
 	label := d.path.String()
-	if d.tool == "create_file" {
+	if d.tool == "write" {
 		// "whole file" is honest whether the file is new or overwritten; the
 		// stream can't tell (no filesystem access). The coder's outcome line
 		// and tool result carry the created-vs-overwrote truth.
@@ -261,7 +277,7 @@ func (d *ToolDiff) header() {
 
 func (d *ToolDiff) emitLine(field, text string) {
 	line := d.formatLine(field, text)
-	// A replace field that streams before search must wait so the removed (-)
+	// A new_string field that streams before old_string must wait so removed (-)
 	// lines still print first, whatever order the provider sent the fields in.
 	// This is held separately from the header's pending buffer and appended
 	// after every "-" line on Flush.
@@ -282,17 +298,17 @@ func (d *ToolDiff) emitLine(field, text string) {
 }
 
 // holdsAdded reports whether an added ("+") line must be buffered because it
-// arrived before the search field it should follow. Only replace_in_file
-// reverses this way; create_file's content is the whole diff and streams live.
+// arrived before the old_string field it should follow. Only edit reverses this
+// way; write's content is the whole diff and streams live.
 func (d *ToolDiff) holdsAdded(field string) bool {
-	return field == "replace" && d.tool == "replace_in_file" && !d.sawSearch
+	return field == "new_string" && d.tool == "edit" && !d.sawSearch
 }
 
 // formatLine renders one diff/command line with its prefix and themed color.
 func (d *ToolDiff) formatLine(field, text string) string {
-	prefix, color := "-", d.theme.DiffRemoved // search: removed
+	prefix, color := "-", d.theme.DiffRemoved // old_string: removed
 	switch field {
-	case "replace", "content":
+	case "new_string", "content":
 		prefix, color = "+", d.theme.DiffAdded // added
 	case "command":
 		prefix, color = "$", d.theme.Command // suggested command
@@ -319,20 +335,35 @@ type ToolDiffSet struct {
 	order []int
 	diffs map[int]*ToolDiff
 	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
+	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/verify)
 	live  int                   // the index streaming to w; -1 until the first is seen
 }
 
 // NewToolDiffSet builds a diff fan-out writing to w.
 func NewToolDiffSet(w io.Writer, color bool, theme Theme) *ToolDiffSet {
-	return &ToolDiffSet{w: w, color: color, theme: theme, diffs: map[int]*ToolDiff{}, bufs: map[int]*bytes.Buffer{}, live: -1}
+	return &ToolDiffSet{
+		w: w, color: color, theme: theme,
+		diffs: map[int]*ToolDiff{}, bufs: map[int]*bytes.Buffer{}, skip: map[int]bool{}, live: -1,
+	}
 }
 
 // Write forwards an argument fragment for the tool call at index, opening a
 // fresh diff the first time an index is seen. name is read from the first
 // fragment (later fragments carry only args).
 func (s *ToolDiffSet) Write(index int, name, frag string) {
+	if s.skip[index] {
+		return
+	}
 	d, ok := s.diffs[index]
 	if !ok {
+		// A tool with nothing to draw is dropped here rather than opening a
+		// diff that renders nothing: an observation tool's own one-line outcome
+		// is printed when it runs, and a half-rendered header would collide
+		// with it.
+		if name != "" && !RendersDiff(name) {
+			s.skip[index] = true
+			return
+		}
 		var out io.Writer
 		if s.live == -1 {
 			s.live = index
@@ -363,5 +394,6 @@ func (s *ToolDiffSet) Flush() {
 	s.order = nil
 	clear(s.diffs)
 	clear(s.bufs)
+	clear(s.skip)
 	s.live = -1
 }

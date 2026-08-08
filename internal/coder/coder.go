@@ -14,6 +14,7 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // A turn has two separate budgets, because the two kinds of re-send mean
@@ -57,6 +58,12 @@ type Coder struct {
 	RepoMap    *repomap.RepoMap
 	Scrape     Scraper
 	Platform   PlatformInfo
+	// Files is the workspace behind read/ls/glob/grep. It never consults git,
+	// so the tools behave the same in a plain directory.
+	Files *workspace.Workspace
+	// Verify is the project's named verification commands. Empty means no
+	// verify tool is offered.
+	Verify []config.VerifyCheck
 
 	Prompts prompts.Set
 
@@ -157,6 +164,7 @@ func New(root string, model *config.Model) *Coder {
 		Out:                  &StdOutput{},
 		Prompts:              promptsForFormat(model.EditFormat),
 		editFormat:           model.EditFormat,
+		Files:                workspace.New(root),
 		ignoreMentions:       map[string]bool{},
 		rejectedUrls:         map[string]bool{},
 		turnEditedFiles:      map[string]bool{},
