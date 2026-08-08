@@ -120,6 +120,11 @@ type Coder struct {
 	totalTokensReceived   int
 	lastUsageReport       string
 
+	// turnSnap accumulates what this turn has written; pushed onto undoStack at
+	// turn end. The stack is the undo substrate that works without git.
+	turnSnap  *turnSnapshot
+	undoStack []*turnSnapshot
+
 	fence               fence
 	commitBeforeMessage []string
 	lastCommitHash      string
@@ -314,6 +319,7 @@ func (c *Coder) initBeforeMessage() {
 	c.numSteps = 0
 	c.autoVerifies = 0
 	c.editedSinceVerify = false
+	c.turnSnap = nil
 	c.messageCost = 0
 	c.costKnown = false
 	if c.Repo != nil {
@@ -349,6 +355,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	// between steps would compact the very results the next send reacts to.
 	// A defer covers every exit — budget declined, reflection cap, or done.
 	defer func() {
+		c.pushTurnSnapshot()
 		if c.editFormat == "tool" && len(c.turnEditedFiles) > 0 {
 			c.moveBackCurMessages("")
 		}

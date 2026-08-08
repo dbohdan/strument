@@ -136,20 +136,21 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 
 // writeAtomically writes the plan's files via temp+rename, rolling the
 // batch back on any failure.
+//
+// The pre-write contents it reads for that rollback are also the turn's
+// snapshot, so on success they are handed to recordWrites rather than dropped.
+// On failure they are not: a batch that rolled back changed nothing, and
+// recording it would give /undo a turn to unwind that never happened.
 func (c *Coder) writeAtomically(plan writePlan) error {
-	type backup struct {
-		path    string
-		content []byte
-		existed bool
-	}
-	var backups []backup
-	var written []string
+	backups := map[string]snapEntry{}
+	var order []string
 
 	restore := func() {
-		for _, b := range backups {
-			full := filepath.Join(c.Root, filepath.FromSlash(b.path))
+		for _, rel := range order {
+			b := backups[rel]
+			full := filepath.Join(c.Root, filepath.FromSlash(rel))
 			if b.existed {
-				_ = os.WriteFile(full, b.content, 0o644) //nolint:gosec // Restoring a project file; sources are world-readable.
+				_ = os.WriteFile(full, b.before, 0o644) //nolint:gosec // Restoring a project file; sources are world-readable.
 			} else {
 				_ = os.Remove(full)
 			}
@@ -160,7 +161,8 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 		full := filepath.Join(c.Root, filepath.FromSlash(rel))
 		old, err := os.ReadFile(full)
 		existed := err == nil
-		backups = append(backups, backup{rel, old, existed})
+		backups[rel] = snapEntry{before: old, existed: existed}
+		order = append(order, rel)
 
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			restore()
@@ -192,8 +194,7 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 			restore()
 			return fmt.Errorf("rename %s: %w", rel, err)
 		}
-		written = append(written, rel)
 	}
-	_ = written
+	c.recordWrites(plan, backups)
 	return nil
 }
