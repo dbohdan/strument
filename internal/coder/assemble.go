@@ -210,22 +210,15 @@ func (c *Coder) platformText() string {
 }
 
 // fmtSystemPrompt substitutes the template slots.
+//
+// Three slots remain. The fence and shell-command slots went with the text edit
+// formats: fences framed SEARCH/REPLACE blocks, and the shell-command guidance
+// described a format where commands were prose the harness parsed back out.
+// Both are the schema's job now.
 func (c *Coder) fmtSystemPrompt(prompt string) string {
 	var finalReminders []string
 	if c.Platform.Language != "" {
 		finalReminders = append(finalReminders, "Reply in "+c.Platform.Language+".\n")
-	}
-
-	platformText := c.platformText()
-
-	var shellCmdPrompt, shellCmdReminder, renameWithShell string
-	if c.SuggestShellCommands {
-		shellCmdPrompt = pyFormat(c.Prompts.ShellCmdPrompt, map[string]string{"platform": platformText})
-		shellCmdReminder = pyFormat(c.Prompts.ShellCmdReminder, map[string]string{"platform": platformText})
-		renameWithShell = c.Prompts.RenameWithShell
-	} else {
-		shellCmdPrompt = pyFormat(c.Prompts.NoShellCmdPrompt, map[string]string{"platform": platformText})
-		shellCmdReminder = pyFormat(c.Prompts.NoShellCmdReminder, map[string]string{"platform": platformText})
 	}
 
 	language := c.Platform.Language
@@ -233,22 +226,10 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 		language = "the same language they are using"
 	}
 
-	quadBacktickReminder := ""
-	if c.fence.open == "````" {
-		quadBacktickReminder = "\nIMPORTANT: Use *quadruple* backticks ```` as fences, not triple backticks!\n"
-	}
-
 	return pyFormat(prompt, map[string]string{
-		"fence[0]":               c.fence.open,
-		"fence[1]":               c.fence.close,
-		"quad_backtick_reminder": quadBacktickReminder,
-		"final_reminders":        strings.Join(finalReminders, "\n\n"),
-		"platform":               platformText,
-		"shell_cmd_prompt":       shellCmdPrompt,
-		"rename_with_shell":      renameWithShell,
-		"shell_cmd_reminder":     shellCmdReminder,
-		"go_ahead_tip":           c.Prompts.GoAheadTip,
-		"language":               language,
+		"final_reminders": strings.Join(finalReminders, "\n\n"),
+		"platform":        c.platformText(),
+		"language":        language,
 	})
 }
 

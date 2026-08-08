@@ -92,7 +92,7 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	model := &config.Model{
 		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:       slug,
-		EditFormat: "diff",
+		EditFormat: "tool",
 		RepoMap:    false,
 	}
 	model.WeakModel = model
@@ -206,15 +206,6 @@ func dumpHistory(msgs []llm.Message) string {
 	return b.String()
 }
 
-func loadScenario(t *testing.T, name string) *fixture.Scenario {
-	t.Helper()
-	sc, err := fixture.Load(filepath.Join("..", "..", "testdata", "fixtures", "basecoder", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sc
-}
-
 func inlineScenario(t *testing.T, jsonl string) *fixture.Scenario {
 	t.Helper()
 	sc, err := fixture.Read(strings.NewReader(strings.TrimSpace(jsonl)))
@@ -222,31 +213,4 @@ func inlineScenario(t *testing.T, jsonl string) *fixture.Scenario {
 		t.Fatal(err)
 	}
 	return sc
-}
-
-// capturePlatform pins PlatformInfo to the environment of the live capture
-// so assembled prompts byte-match the recorded request.
-func capturePlatform() PlatformInfo {
-	return PlatformInfo{
-		Platform: "Linux-6.18.5-x86_64-with-glibc2.39",
-		ShellVar: "SHELL",
-		ShellVal: "/bin/bash",
-		Language: "English",
-		Date:     "2026-07-16",
-		InGit:    false,
-	}
-}
-
-// TestReplayEditSuccess replays the captured smoke scenario end-to-end and
-// asserts the assembled request against aider's real request (parsed-JSON
-// subset, message content not normalized).
-func TestReplayEditSuccess(t *testing.T) {
-	sc := loadScenario(t, "edit-success.jsonl")
-	temp := 0.0
-	env := setupScenario(t, sc, func(c *Coder) {
-		c.Platform = capturePlatform()
-		c.Model.Temperature = &temp
-	})
-
-	env.run(t)
 }

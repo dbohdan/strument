@@ -3,87 +3,9 @@ package coder
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
-	"slices"
 	"strings"
 )
-
-// addShellCommand collects a model-proposed shell block, deduped by first
-// occurrence in response order.
-func (c *Coder) addShellCommand(block string) {
-	if !slices.Contains(c.shellCommands, block) {
-		c.shellCommands = append(c.shellCommands, block)
-	}
-}
-
-// runShellCommands offers and runs the collected blocks.
-// suggest_shell_commands=false gates execution, not just the prompt
-// variant. shellCommands resets only in initBeforeMessage, so blocks from a
-// failed attempt run after a later reflected attempt succeeds.
-func (c *Coder) runShellCommands(ctx context.Context) string {
-	if !c.SuggestShellCommands {
-		return ""
-	}
-
-	var accumulated strings.Builder
-	for _, block := range c.shellCommands {
-		output := c.handleShellBlock(ctx, block)
-		if output != "" {
-			accumulated.WriteString(output)
-			accumulated.WriteString("\n\n")
-		}
-	}
-	return accumulated.String()
-}
-
-// handleShellBlock confirms and runs one block through a single shell
-// (whole block, one shell, merged output with exit
-// status visible to the model even when empty).
-func (c *Coder) handleShellBlock(ctx context.Context, block string) string {
-	lines := strings.Split(strings.TrimSpace(block), "\n")
-	commandCount := 0
-	for _, l := range lines {
-		t := strings.TrimSpace(l)
-		if t != "" && !strings.HasPrefix(t, "#") {
-			commandCount++
-		}
-	}
-	prompt := "Run shell command?"
-	if commandCount != 1 {
-		prompt = "Run shell commands?"
-	}
-	yes, _ := c.Confirm.Confirm(ConfirmRequest{
-		Prompt:              prompt,
-		Subject:             strings.Join(lines, "\n"),
-		ExplicitYesRequired: true,
-		AllowNever:          true,
-		Group:               "run-shell",
-	})
-	if !yes {
-		return ""
-	}
-
-	command := strings.TrimSpace(block)
-	exitCode, output := c.runAndShow(ctx, command)
-	result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
-
-	addYes, _ := c.Confirm.Confirm(ConfirmRequest{
-		Prompt:     "Add command output to the chat?",
-		AllowNever: true,
-		Group:      "add-output",
-	})
-	if !addYes {
-		return ""
-	}
-	numLines := len(strings.Split(strings.TrimSpace(result), "\n"))
-	plural := "lines"
-	if numLines == 1 {
-		plural = "line"
-	}
-	c.Out.Printf("Added %d %s of output to the chat.", numLines, plural)
-	return result
-}
 
 // runAndShow runs a confirmed command through the configured runner, echoing
 // "Running <cmd>" and then the captured output to the user — the output

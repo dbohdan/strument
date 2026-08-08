@@ -221,13 +221,21 @@ func TestCommitNewFile(t *testing.T) {
 	}
 }
 
-// editStub replays one SEARCH/REPLACE response editing main.txt.
+// editStub replays an edit tool call against main.txt, then the closing answer
+// that ends the turn. Two turns, because a reply ending in a tool call is
+// mid-sentence: the harness re-sends on the result.
 func editStub() *fixture.StreamStub {
-	response := "Sure.\n\nmain.txt\n```\n<<<<<<< SEARCH\nhello world\n=======\nhello strument\n>>>>>>> REPLACE\n```\n"
-	return &fixture.StreamStub{Turns: []fixture.Turn{{Events: []fixture.Event{
-		{Kind: "Answer", Text: response},
-		{Kind: "Finish", FinishReason: "stop"},
-	}}}}
+	args := `{"path":"main.txt","old_string":"hello world\n","new_string":"hello strument\n"}`
+	return &fixture.StreamStub{Turns: []fixture.Turn{
+		{Events: []fixture.Event{
+			{Kind: "ToolCall", ToolIndex: 0, ToolID: "call_1", ToolName: "edit", ToolArgs: args},
+			{Kind: "Finish", FinishReason: "tool_calls"},
+		}},
+		{Events: []fixture.Event{
+			{Kind: "Answer", Text: "Changed the greeting."},
+			{Kind: "Finish", FinishReason: "stop"},
+		}},
+	}}
 }
 
 type yesConfirmer struct{}
@@ -249,7 +257,7 @@ func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Code
 	model := &config.Model{
 		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:       "test-model",
-		EditFormat: "diff",
+		EditFormat: "tool",
 	}
 	model.WeakModel = model
 

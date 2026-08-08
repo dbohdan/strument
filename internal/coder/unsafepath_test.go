@@ -31,7 +31,7 @@ func TestAddFileThroughSymlinkedRootStaysRelative(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	c := wholeModelCoder(t, realDir)
+	c := toolCoder(t, realDir)
 	c.AddFile(filepath.Join(link, "internal", "foo.go"))
 
 	if got, want := c.inchatRelativeFiles(), []string{"internal/foo.go"}; !slices.Equal(got, want) {
@@ -52,7 +52,7 @@ func TestUnsafePathExemptsAddedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := wholeModelCoder(t, root)
+	c := toolCoder(t, root)
 	const relUp = "../active/dduckdns/README.md"
 
 	// Out of root and not added: rejected. A model-invented escape: rejected.
@@ -88,7 +88,7 @@ func TestUnsafePathExemptsAddedFileThroughSymlink(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	c := wholeModelCoder(t, root)
+	c := toolCoder(t, root)
 	const rel = "active/dduckdns/README.md"
 
 	if c.unsafePath(rel) == "" {
@@ -116,13 +116,16 @@ func TestApplyEditsAddedOutOfRootFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := wholeModelCoder(t, root)
+	c := toolCoder(t, root)
 	const rel = "../active/dduckdns/README.md"
 	c.AddFile(rel)
 
-	edited, reflection := c.applyUpdates(rel + "\n```\nnew content\n```\n")
-	if reflection != "" {
-		t.Errorf("unexpected reflection: %q", reflection)
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{
+		wholeFileWrite("call_1", rel, "new content\n"),
+	}, map[string]string{}, map[string]string{}, &matchFailure)
+	if matchFailure {
+		t.Error("unexpected reflection editing a file the user deliberately added")
 	}
 	if len(edited) != 1 || edited[0] != rel {
 		t.Errorf("edited = %v, want [%s]", edited, rel)

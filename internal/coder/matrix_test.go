@@ -6,6 +6,7 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -243,160 +244,46 @@ func TestCheckTokensDeclined(t *testing.T) {
 }
 
 // Regression: a reflection after a continuation-bearing send must not
-// carry a stale accumulator prefix into the next send's answer.
+// carry a stale accumulator prefix into the next send's answer. The reflection
+// is now driven by an edit whose old_string doesn't match, which is the
+// tool-format equivalent of the unmatched SEARCH block this originally used.
 func TestStaleAccumulatorRegression(t *testing.T) {
-	badEdit := "a.txt\\n<<<<<<< SEARCH\\nno such line\\n=======\\nnew\\n>>>>>>> REPLACE\\n"
+	badCall := `{\"path\":\"a.txt\",\"old_string\":\"no such line\\n\",\"new_string\":\"new\\n\"}`
 	sc := inlineScenario(t, metaRow+`
 {"kind":"fs","path":"a.txt","content":"hello\n"}
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"go"}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+badEdit[:20]+`"},{"kind":"Finish","finish_reason":"length"}]}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+badEdit[20:]+`"},{"kind":"Finish","finish_reason":"stop"}]}
+{"kind":"stream","events":[{"kind":"Answer","text":"thinking"},{"kind":"Finish","finish_reason":"length"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"`+badCall+`"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"stream","events":[{"kind":"Answer","text":"understood, no edit"},{"kind":"Finish","finish_reason":"stop"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
 `)
-	env := setupScenario(t, sc, nil)
+	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 	if env.coder.partialResponseContent != "understood, no edit" {
-		t.Errorf("send 2 answer = %q (stale accumulator?)", env.coder.partialResponseContent)
+		t.Errorf("final answer = %q (stale accumulator?)", env.coder.partialResponseContent)
 	}
 	if env.coder.multiResponseContent != "" {
 		t.Errorf("multiResponseContent = %q, want empty", env.coder.multiResponseContent)
 	}
 }
 
-// cancelingOutput cancels the context after the first streamed delta,
-// simulating Ctrl-C mid-stream.
-type cancelingOutput struct {
-	testOutput
-
-	cancel context.CancelFunc
-	fired  bool
-}
-
-func (o *cancelingOutput) StreamText(_ string) {
-	if !o.fired {
-		o.fired = true
-		o.cancel()
-	}
-}
-
-func TestInterruptMidStream(t *testing.T) {
-	sc := inlineScenario(t, metaRow+`
-{"kind":"user","text":"go"}
-{"kind":"stream","events":[{"kind":"Answer","text":"partial answer"},{"kind":"Answer","text":" more"}]}
-`)
-	ctx, cancel := context.WithCancel(context.Background())
-	env := setupScenario(t, sc, nil)
-	env.coder.Out = &cancelingOutput{testOutput{t}, cancel, false}
-	env.coder.Run(ctx, sc.User)
-
-	if env.coder.lastSendOutcome != OutcomeInterrupted {
-		t.Errorf("outcome = %s", env.coder.lastSendOutcome)
-	}
-	hist := env.coder.curMessages
-	// Shape: user, assistant partial, user ^C, assistant notice.
-	if len(hist) != 4 ||
-		hist[1].Role != "assistant" || hist[1].Text() != "partial answer" ||
-		hist[2].Role != "user" || hist[2].Text() != "^C KeyboardInterrupt" ||
-		hist[3].Text() != "I see that you interrupted my previous reply." {
-		t.Errorf("history = %s", dumpHistory(hist))
-	}
-}
-
-func TestInterruptThenMentionDoesNotReflect(t *testing.T) {
-	sc := inlineScenario(t, metaRow+`
-{"kind":"fs","path":"main.go","content":"package main\n"}
-{"kind":"fs","path":"other.go","content":"package main\n"}
-{"kind":"chat","editable":["main.go"]}
-{"kind":"user","text":"go"}
-{"kind":"stream","events":[{"kind":"Answer","text":"you should add other.go to the chat"},{"kind":"Answer","text":" ..."}]}
-`)
-	ctx, cancel := context.WithCancel(context.Background())
-	env := setupScenario(t, sc, func(c *Coder) {
-		c.Repo = &fakeRepo{tracked: []string{"main.go", "other.go"}}
-	})
-	env.coder.Out = &cancelingOutput{testOutput{t}, cancel, false}
-	env.coder.Run(ctx, sc.User)
-	if env.coder.lastSendOutcome != OutcomeInterrupted {
-		t.Errorf("outcome = %s (mention must not reflect after interrupt)", env.coder.lastSendOutcome)
-	}
-	if env.coder.numReflections != 0 {
-		t.Errorf("reflections = %d", env.coder.numReflections)
-	}
-}
-
-func TestDuplicateShellBlocksRunOnce(t *testing.T) {
-	answer := "```bash\\necho hi\\n```\\n\\nagain:\\n\\n```bash\\necho hi\\n```\\n"
-	sc := inlineScenario(t, metaRow+`
-{"kind":"user","text":"go"}
-{"kind":"confirm","prompt":"Run shell command?","answer":"y"}
-{"kind":"confirm","prompt":"Add command output to the chat?","answer":"y"}
-{"kind":"command","block":"echo hi","exit":0,"output":"hi\n"}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+answer+`"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
-	env := setupScenario(t, sc, nil)
-	env.run(t)
-	if len(env.coder.shellCommands) != 1 {
-		t.Errorf("shellCommands = %q (dup should collapse)", env.coder.shellCommands)
-	}
-	// Output appended as {user, output} + {assistant, "Ok"}.
-	hist := env.coder.curMessages
-	n := len(hist)
-	if n < 2 || hist[n-1].Text() != "Ok" || !strings.Contains(hist[n-2].Text(), "Exit status: 0") {
-		t.Errorf("history = %s", dumpHistory(hist))
-	}
-}
-
-func TestSuggestShellOffGatesExecution(t *testing.T) {
-	answer := "```bash\\nrm -rf /\\n```\\n"
-	sc := inlineScenario(t, metaRow+`
-{"kind":"user","text":"go"}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+answer+`"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"expect_outcome","outcome":"Success","reflections":0}
-`)
-	env := setupScenario(t, sc, func(c *Coder) { c.SuggestShellCommands = false })
-	env.run(t)
-	// No confirm rows scripted: any confirm attempt would have failed the
-	// test. The block is still collected (models emit them anyway).
-	if len(env.coder.shellCommands) != 1 {
-		t.Errorf("shellCommands = %q", env.coder.shellCommands)
-	}
-}
-
-func TestShellFromFailedAttemptRunsAfterReflectedSuccess(t *testing.T) {
-	attempt1 := "```bash\\necho from-attempt-1\\n```\\n\\na.txt\\n<<<<<<< SEARCH\\nno such\\n=======\\nx\\n>>>>>>> REPLACE\\n"
-	attempt2 := "a.txt\\n<<<<<<< SEARCH\\nhello\\n=======\\ngoodbye\\n>>>>>>> REPLACE\\n"
-	sc := inlineScenario(t, metaRow+`
-{"kind":"fs","path":"a.txt","content":"hello\n"}
-{"kind":"chat","editable":["a.txt"]}
-{"kind":"user","text":"go"}
-{"kind":"confirm","prompt":"Run shell command?","answer":"y"}
-{"kind":"confirm","prompt":"Add command output to the chat?","answer":"n"}
-{"kind":"command","block":"echo from-attempt-1","exit":0,"output":"from-attempt-1\n"}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+attempt1+`"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"stream","events":[{"kind":"Answer","text":"`+attempt2+`"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"expect_fs","path":"a.txt","content":"goodbye\n"}
-{"kind":"expect_outcome","outcome":"Success","reflections":1}
-`)
-	env := setupScenario(t, sc, nil)
-	env.run(t)
-}
-
+// TestReflectionCapFourSends pins the error-reflection budget: an edit that
+// never matches must not loop forever. Work steps have their own, larger budget
+// (TestToolLoopBudgetStops); this one is only about the model's own mistakes.
 func TestReflectionCapFourSends(t *testing.T) {
-	bad := "a.txt\\n<<<<<<< SEARCH\\nno such\\n=======\\nx\\n>>>>>>> REPLACE\\n"
+	badCall := `{\"path\":\"a.txt\",\"old_string\":\"no such\\n\",\"new_string\":\"x\\n\"}`
 	rows := metaRow + "\n" +
 		`{"kind":"fs","path":"a.txt","content":"hello\n"}` + "\n" +
 		`{"kind":"chat","editable":["a.txt"]}` + "\n" +
 		`{"kind":"user","text":"go"}` + "\n"
-	var rowsSb389 strings.Builder
-	for range 5 {
-		rowsSb389.WriteString(`{"kind":"stream","events":[{"kind":"Answer","text":"` + bad + `"},{"kind":"Finish","finish_reason":"stop"}]}` + "\n")
+	var b strings.Builder
+	for i := range 5 {
+		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"edit","tool_args":"%s"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, badCall)
 	}
-	rows += rowsSb389.String()
+	rows += b.String()
 	sc := inlineScenario(t, rows)
-	env := setupScenario(t, sc, nil)
+	env := setupScenario(t, sc, toolMode)
 	env.run(t)
 	// Budget: initial + 3 follow-ups = 4 sends; the 5th fixture turn stays.
 	if got := 5 - env.stub.Remaining(); got != 4 {
@@ -478,36 +365,5 @@ func TestDeclinedMentionNotReprompted(t *testing.T) {
 	env.coder.Run(context.Background(), "go again")
 	if env.coder.numReflections != 0 {
 		t.Errorf("reflections = %d", env.coder.numReflections)
-	}
-}
-
-func TestMentionReflects(t *testing.T) {
-	sc := inlineScenario(t, metaRow+`
-{"kind":"fs","path":"main.go","content":"package main\n"}
-{"kind":"fs","path":"helper.go","content":"package main\n"}
-{"kind":"chat","editable":["main.go"]}
-{"kind":"user","text":"go"}
-{"kind":"confirm","prompt":"Add file to the chat?","answer":"y"}
-{"kind":"stream","events":[{"kind":"Answer","text":"I need helper.go added"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"stream","events":[{"kind":"Answer","text":"thanks, all set"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"expect_outcome","outcome":"Success","reflections":1}
-`)
-	env := setupScenario(t, sc, func(c *Coder) {
-		c.Repo = &fakeRepo{tracked: []string{"main.go", "helper.go"}}
-	})
-	var secondUser string
-	env.stub.OnRequest = func(turn int, req llm.Request, _ *fixture.Request) error {
-		if turn == 1 {
-			for _, m := range req.Messages {
-				if m.Role == "user" && strings.Contains(m.Text(), "added these files") {
-					secondUser = m.Text()
-				}
-			}
-		}
-		return nil
-	}
-	env.run(t)
-	if !strings.Contains(secondUser, "I added these files to the chat: helper.go") {
-		t.Errorf("reflection message = %q", secondUser)
 	}
 }

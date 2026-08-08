@@ -18,12 +18,14 @@ Strument began as a close reverse-engineering of aider at commit [`5dc9490`](htt
   explicitly trusted (direnv-style content-hash gate).
 - **One model dialect.** OpenAI-compatible chat completions with OpenRouter
   extensions and native tool calls; no litellm, no MCP.
-- **Essentials only.** Tool-call edits by default (with SEARCH/REPLACE,
-  fenced, and whole-file as fallbacks), repo map, reflection on failed edits,
-  shell-command suggestions, git auto-commit with `/undo`, and `/ask` mode
-  for questions that should not touch files. Architect mode, voice, GUI,
-  analytics, summarization, and the other long-tail features are out of scope
-  for v1.
+- **Essentials only.** A standard tool set — `read`, `write`, `edit`, `bash`,
+  `grep`, `glob`, `ls`, plus a `verify` tool for the project's configured
+  checks — driven in a loop where the model sees each result and continues
+  within the turn. Repo map, reflection on failed edits, git auto-commit with
+  `/undo`, and `/ask` mode for questions that should not touch files. The text
+  edit formats (SEARCH/REPLACE, fenced, whole-file) have been removed.
+  Architect mode, voice, GUI, analytics, and the other long-tail features are
+  out of scope for v1.
 - **Plain-HTTP URL scraping, with an escape hatch.** URLs you mention, or
   `/web <url>`, are fetched with a plain HTTP GET — a real `User-Agent`, no
   headless browser — and converted to markdown. A static binary can't embed a

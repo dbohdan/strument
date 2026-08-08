@@ -1,6 +1,7 @@
 package editblock
 
 import (
+	"path"
 	"regexp"
 	"strings"
 	"unicode"
@@ -350,4 +351,42 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 		return "", false
 	}
 	return newContent, true
+}
+
+// splitLines splits keeping line endings, on the same boundary set as
+// Python's str.splitlines (LF, CR, CRLF, VT, FF, FS, GS, RS, NEL, LS, PS).
+// Only \n and \r\n occur in practice; the rest is insurance for parity
+// with the transliterated oracle.
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		isSep := false
+		switch r {
+		case '\n', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
+			isSep = true
+		case '\r':
+			isSep = true
+			if i+1 < len(s) && s[i+1] == '\n' {
+				size = 2
+			}
+		}
+		i += size
+		if isSep {
+			lines = append(lines, s[start:i])
+			start = i
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+// pathBase is Python's Path(p).name: the final component, treating both
+// separators (pathlib on POSIX only splits on "/", but valid_fnames are
+// repo-relative forward-slashed paths, so path.Base fits).
+func pathBase(p string) string {
+	return path.Base(strings.ReplaceAll(p, "\\", "/"))
 }

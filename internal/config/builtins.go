@@ -213,7 +213,13 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		return nil, fmt.Errorf("model: provider must be a provider value, got %s", providerV.Type())
 	}
 	if !knownEditFormats[editFormat] {
-		return nil, fmt.Errorf("model: unknown edit_format %q (want \"tool\", \"diff\", \"diff-fenced\", or \"whole\")", editFormat)
+		if retiredEditFormats[editFormat] {
+			return nil, fmt.Errorf(
+				"model: edit_format %q has been removed; Strument now edits through tool calls only. "+
+					"Drop the setting (or use \"tool\") — a model that cannot call functions can no longer "+
+					"drive Strument, since reading and searching are tool calls too", editFormat)
+		}
+		return nil, fmt.Errorf("model: unknown edit_format %q (the only value is \"tool\")", editFormat)
 	}
 
 	m := &Model{

@@ -7,9 +7,18 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"dbohdan.com/strument/internal/editblock"
 )
+
+// writePlan is a batch of file writes to apply as one unit: the final content
+// of each touched path, plus first-touch order so application is deterministic.
+//
+// This used to be editblock.PlanResult. Planning moved out of editblock with the
+// text formats: with a typed path argument there is nothing to parse and nothing
+// to re-attribute, so what remains is just the batch itself.
+type writePlan struct {
+	Writes     map[string]string
+	WriteOrder []string
+}
 
 // diskReader reads current file contents for the edit planner.
 type diskReader struct{ root string }
@@ -20,185 +29,6 @@ func (d diskReader) ReadFile(rel string) (string, bool) {
 		return "", false
 	}
 	return string(data), true
-}
-
-// applyUpdates dispatches on the active edit format.
-func (c *Coder) applyUpdates(answer string) ([]string, string) {
-	switch c.editFormat {
-	case "ask":
-		// Ask mode's engine parses nothing (aider's base get_edits returns
-		// []): no edits, no shell collection, so everything downstream —
-		// auto-commit, history rotation, edit-failure reflection — no-ops
-		// by construction. A well-formed SEARCH/REPLACE block in an ask
-		// answer is left as prose.
-		return nil, ""
-	case "whole":
-		return c.applyWholeFileUpdates(answer)
-	default:
-		return c.applyEditBlockUpdates(answer)
-	}
-}
-
-// applyWholeFileUpdates handles the trivial "whole" format: fenced full-file
-// listings that overwrite their targets.
-func (c *Coder) applyWholeFileUpdates(answer string) ([]string, string) {
-	fen := editblock.Fence{Open: c.fence.open, Close: c.fence.close}
-	edits, err := editblock.ParseWholeFile(answer, fen, c.inchatRelativeFiles())
-	if err != nil {
-		c.Out.Errorf("The LLM did not conform to the edit format.")
-		c.Out.Printf("%s", err.Error())
-		return nil, err.Error()
-	}
-	if len(edits) == 0 {
-		return nil, ""
-	}
-
-	var plan editblock.PlanResult
-	plan.Writes = map[string]string{}
-	needDirtyCommit := map[string]bool{}
-	var edited []string
-	for _, e := range edits {
-		if reason := c.unsafePath(e.Path); reason != "" {
-			c.Out.Errorf("Skipping edit to %s: %s", e.Path, reason)
-			continue
-		}
-		if !c.allowedToEdit(e.Path, needDirtyCommit) {
-			continue
-		}
-		plan.Writes[e.Path] = e.Content
-		plan.WriteOrder = append(plan.WriteOrder, e.Path)
-		edited = append(edited, e.Path)
-	}
-	c.dirtyCommit(needDirtyCommit)
-	if len(edited) == 0 {
-		return nil, ""
-	}
-	if !c.DryRun {
-		if err := c.writeAtomically(plan); err != nil {
-			c.Out.Errorf("Exception while updating files:")
-			c.Out.Errorf("%s", err.Error())
-			return nil, ""
-		}
-	}
-	for _, p := range edited {
-		if c.DryRun {
-			c.Out.Printf("Did not apply edit to %s (--dry-run)", p)
-		} else {
-			c.Out.Printf("Applied edit to %s", p)
-		}
-	}
-	return edited, ""
-}
-
-// applyEditBlockUpdates is the SEARCH/REPLACE pipeline: parse -> reject
-// unsafe paths -> plan (dry) -> prepareToEdit confirms -> re-plan allowed ->
-// write atomically -> report/reflect. It returns the edited rel paths and a
-// reflection message ("" if none).
-func (c *Coder) applyEditBlockUpdates(answer string) ([]string, string) {
-	blocks, err := editblock.FindBlocks(answer, editblock.Fence{Open: c.fence.open, Close: c.fence.close}, c.inchatRelativeFiles())
-	if err != nil {
-		c.Out.Errorf("The LLM did not conform to the edit format.")
-		c.Out.Printf("%s", err.Error())
-		return nil, err.Error()
-	}
-
-	var edits []editblock.Edit
-	for _, b := range blocks {
-		if b.IsShell {
-			c.addShellCommand(b.Shell)
-			continue
-		}
-		edits = append(edits, b.Edit)
-	}
-	if len(edits) == 0 {
-		return nil, ""
-	}
-
-	// Path containment is the first security boundary: reject before any
-	// FS read. Unsafe paths are reported, not reflected.
-	var safe []editblock.Edit
-	for _, e := range edits {
-		if reason := c.unsafePath(e.Path); reason != "" {
-			c.Out.Errorf("Skipping edit to %s: %s", e.Path, reason)
-			continue
-		}
-		safe = append(safe, e)
-	}
-	if len(safe) == 0 {
-		return nil, ""
-	}
-
-	reader := diskReader{root: c.Root}
-	chatFiles := c.inchatRelativeFiles()
-	fen := editblock.Fence{Open: c.fence.open, Close: c.fence.close}
-
-	// Dry plan to learn target paths (including cross-file reattribution).
-	plan := editblock.ApplyEdits(safe, chatFiles, reader, fen)
-
-	// prepareToEdit: per-path permission (create-new / not-in-chat) and the
-	// dirty-commit contract.
-	allowedPath := map[string]bool{}
-	decided := map[string]bool{}
-	needDirtyCommit := map[string]bool{}
-	decide := func(path string) bool {
-		if v, ok := decided[path]; ok {
-			return v
-		}
-		v := c.allowedToEdit(path, needDirtyCommit)
-		decided[path] = v
-		if v {
-			allowedPath[path] = true
-		}
-		return v
-	}
-	var allowed []editblock.Edit
-	for _, e := range append(append([]editblock.Edit(nil), plan.Applied...), plan.Failed...) {
-		if decide(e.Path) {
-			allowed = append(allowed, e)
-		}
-	}
-	if len(allowed) == 0 {
-		return nil, ""
-	}
-	c.dirtyCommit(needDirtyCommit)
-
-	// Re-plan over the allowed set (overlay composition can change when
-	// edits were filtered) and write.
-	plan = editblock.ApplyEdits(allowed, chatFiles, reader, fen)
-
-	if !c.DryRun {
-		if err := c.writeAtomically(plan); err != nil {
-			c.Out.Errorf("Exception while updating files:")
-			c.Out.Errorf("%s", err.Error())
-			return nil, ""
-		}
-	}
-
-	// edited = allowed target paths (aider counts allowed-but-failed paths
-	// too; they auto-commit as no-ops).
-	editedSet := map[string]bool{}
-	var edited []string
-	for _, e := range allowed {
-		if !editedSet[e.Path] {
-			editedSet[e.Path] = true
-			edited = append(edited, e.Path)
-		}
-	}
-
-	for _, p := range edited {
-		if c.DryRun {
-			c.Out.Printf("Did not apply edit to %s (--dry-run)", p)
-		} else {
-			c.Out.Printf("Applied edit to %s", p)
-		}
-	}
-
-	if plan.Report != "" {
-		c.Out.Errorf("The LLM did not conform to the edit format.")
-		c.Out.Printf("%s", plan.Report)
-		return edited, plan.Report
-	}
-	return edited, ""
 }
 
 // unsafePath rejects absolute paths, traversal outside the root, and
@@ -306,7 +136,7 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 
 // writeAtomically writes the plan's files via temp+rename, rolling the
 // batch back on any failure.
-func (c *Coder) writeAtomically(plan editblock.PlanResult) error {
+func (c *Coder) writeAtomically(plan writePlan) error {
 	type backup struct {
 		path    string
 		content []byte

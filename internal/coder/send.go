@@ -306,18 +306,6 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		return OutcomeFailed, ""
 	}
 
-	if !interrupted {
-		if c.editFormat == "tool" {
-			return c.applyToolCalls(ctx), ""
-		}
-		if msg := c.checkForFileMentions(answer); msg != "" {
-			return OutcomeReflect, msg
-		}
-		if c.replyCompleted() {
-			return OutcomeSuccess, ""
-		}
-	}
-
 	if interrupted {
 		// Interrupt shape.
 		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
@@ -330,40 +318,13 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		return OutcomeInterrupted, ""
 	}
 
-	// --- Success path ---
-	edited, reflection := c.applyUpdates(answer)
-
-	if len(edited) > 0 {
-		for _, f := range edited {
-			c.turnEditedFiles[f] = true
-		}
-		saved := c.autoCommit(edited)
-		if saved == "" {
-			saved = c.Prompts.FilesContentGPTEditsNoRepo
-		}
-		c.moveBackCurMessages(saved)
-	}
-
-	if reflection != "" {
-		return OutcomeReflect, reflection
-	}
-
-	// [lint reflection re-enters here in v2]
-
-	if output := c.runShellCommands(ctx); output != "" {
-		c.curMessages = append(c.curMessages,
-			llm.TextMessage("user", output),
-			llm.TextMessage("assistant", "Ok"),
-		)
-	}
-
-	// [test reflection re-enters here in v2]
-
-	return OutcomeSuccess, ""
+	// Everything a turn does now arrives as tool calls, in every mode: ask mode
+	// is the same dispatch with the mutating tools withheld. There is no longer
+	// a second path that reads the answer text for edits, shell blocks, or file
+	// mentions — those were the text formats' way of saying what a tool call
+	// says directly.
+	return c.applyToolCalls(ctx), ""
 }
-
-// replyCompleted is the no-op v1 hook; a truthy return ends the turn.
-func (c *Coder) replyCompleted() bool { return false }
 
 // buildRequest translates state into an llm.Request.
 func (c *Coder) buildRequest(messages []llm.Message) llm.Request {

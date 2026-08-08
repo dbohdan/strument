@@ -61,7 +61,7 @@ func TestAskOneShotRevertsAndCarriesContext(t *testing.T) {
 		t.Errorf("send 2 did not carry the ask Q&A:\n%s", captured[1])
 	}
 	// The active format is back to the model default after the one-shot.
-	if cdr.EditFormat() != "diff" {
+	if cdr.EditFormat() != "tool" {
 		t.Errorf("format did not revert after one-shot /ask: %q", cdr.EditFormat())
 	}
 }
@@ -83,7 +83,7 @@ func TestAskPersistentSwitchAndPrompt(t *testing.T) {
 		t.Errorf("no code-mode announcement:\n%s", got)
 	}
 	// After /code, the format is back to the default.
-	if cdr.EditFormat() != "diff" {
-		t.Errorf("format after /code = %q, want diff", cdr.EditFormat())
+	if cdr.EditFormat() != "tool" {
+		t.Errorf("format after /code = %q, want tool", cdr.EditFormat())
 	}
 }

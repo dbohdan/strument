@@ -34,8 +34,9 @@ inherited from aider.
 
 - **Tool calls are the default edit path.** Every model in scope has solid
   function calling, so edits, shell suggestions, and file requests go through
-  native tool calls; text SEARCH/REPLACE and whole-file are the fallback for
-  weaker models. Beyond reliability, tool calls remove the SEARCH/REPLACE
+  native tool calls, and that is now the only path — the text formats were
+  removed, because a model that cannot call functions cannot find or read a
+  file either. Beyond reliability, tool calls remove the SEARCH/REPLACE
   delimiter-collision problem — a file that itself contains `<<<<<<< SEARCH`
   is just data — which is what makes the harness usable on its own source,
   including its prompt strings. The user still sees code scroll by, rendered
@@ -57,8 +58,8 @@ inherited from aider.
 
 ## Relationship to aider
 
-- **Scope.** Essentials only: tool-call edits by default (SEARCH/REPLACE,
-  fenced, and whole-file as fallbacks), repo map, reflection, shell
+- **Scope.** Essentials only: a standard tool set driven in a closed loop
+  (read/write/edit/bash/grep/glob/ls plus verify), repo map, reflection, shell
   suggestions, git auto-commit with `/undo`, `/ask`, chat-history
   summarization. Architect mode, voice, GUI, and analytics are out of scope
   for v1.
@@ -95,9 +96,14 @@ inherited from aider.
   - `coder/` — the orchestration spine: assemble → stream → reflect →
     apply → shell → commit → cost. Its seams with the outside world are
     interfaces in `ports.go` (see below).
-  - `editblock/` — the pure edit-format engine: SEARCH/REPLACE parsing,
-    Python-`difflib` sequence matching, whole-file parsing, and a pure
-    apply planner (`ApplyEdits`) shared by dry runs and real runs.
+  - `editblock/` — the edit engine: Python-`difflib` sequence matching that
+    lands a replacement whose whitespace the model reproduced imperfectly, and
+    the did-you-mean an unmatched edit returns. The SEARCH/REPLACE parser, the
+    whole-file parser, and the batch planner went with the text formats.
+  - `workspace/` — the file-access layer behind read/ls/glob/grep, walking the
+    tree and applying ignore rules in process so it behaves the same with and
+    without git.
+  - `gitignore/` — go-git's gitignore matcher, vendored; see its `NOTICE`.
   - `llm/` — wire-neutral chat types (messages, stream events, usage,
     money) shared by the client, the coder, and the fixture harness.
   - `client/` — the one HTTP client: OpenAI-compatible chat completions,
@@ -164,9 +170,8 @@ and asks for files through native function calls instead of text blocks. The
 API schema enforces the format, so the whole class of format-parse failures
 disappears, the prompts shrink (the schema carries the rules), and a file
 that contains `<<<<<<< SEARCH` is just data — which is what lets the harness
-edit its own prompt strings. `diff`, `diff-fenced`, and `whole` remain
-selectable per model as the fallback for a model with weaker function
-calling.
+edit its own prompt strings. `diff`, `diff-fenced`, and `whole` have been
+removed.
 
 Four tools, in two shapes that match the harness's nature:
 

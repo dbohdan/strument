@@ -124,9 +124,12 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`slug`** — the model id sent to the API, e.g. `"anthropic/claude-haiku-4.5"`.
 - **`display_name`** — a human label (used in git commit trailers). Defaults to
   the slug reduced to its core (provider prefix and `:variant` suffix stripped).
-- **`edit_format`** — how the model returns edits: `"tool"` (default, native
-  tool calls), `"diff"`, `"diff-fenced"`, or `"whole"`. The fallbacks suit models
-  with weaker tool-calling.
+- **`edit_format`** — `"tool"`, which is the default and the only value. The
+  text fallbacks (`"diff"`, `"diff-fenced"`, `"whole"`) have been removed: they
+  existed for models that could not call functions reliably, and such a model
+  can no longer drive Strument at all, because finding, reading, and searching
+  files are tool calls too. A config still naming one gets an error saying so;
+  the fix is to drop the setting.
 - **`weak_model`** — a cheaper model for summaries and commit messages: an alias
   string or an inline `model()`. Unset means the model is its own weak model.
 - **`reasoning`** — reasoning effort: `"low"`, `"medium"`, or `"high"` (other

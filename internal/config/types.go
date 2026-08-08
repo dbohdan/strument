@@ -17,11 +17,21 @@ const (
 	AdapterOpenRouter = "openrouter"
 )
 
-// Edit formats recognized by model(). "ask" is deliberately absent: it is
-// a runtime-only format (the /ask command), not a configurable one — a
-// model whose default format was "ask" could never edit anything.
+// Edit formats recognized by model(). Only one remains, and the parameter is
+// kept for the configs that name it: "diff", "diff-fenced", and "whole" were
+// for models that could not call functions reliably, and such a model cannot
+// drive this harness at all now — finding and reading files are tool calls too.
+//
+// "ask" is deliberately absent: it is a runtime-only mode (the /ask command),
+// not a configurable one — a model whose default mode was "ask" could never
+// edit anything.
 var knownEditFormats = map[string]bool{
-	"tool":        true,
+	"tool": true,
+}
+
+// retiredEditFormats get a message that says what happened, rather than a bare
+// "unknown": a config carrying one of these worked until this change.
+var retiredEditFormats = map[string]bool{
 	"diff":        true,
 	"diff-fenced": true,
 	"whole":       true,

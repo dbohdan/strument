@@ -78,7 +78,6 @@ type Coder struct {
 	absReadOnlyFnames []string
 	doneMessages      []llm.Message
 	curMessages       []llm.Message
-	shellCommands     []string // response order, dedup by first occurrence; reset in initBeforeMessage
 	turnEditedFiles   map[string]bool
 
 	numReflections  int         // error reflections this turn (maxErrorReflections)
@@ -122,20 +121,18 @@ type Coder struct {
 
 type fence struct{ open, close string }
 
-// promptsForFormat picks the prompt set for an edit format.
+// promptsForFormat picks the prompt set for a mode.
+//
+// Two remain. "tool" is how Strument works; "ask" is the same tools with the
+// mutating ones withheld. The three text formats — diff, diff-fenced, and
+// whole — are gone: they existed for models that could not call functions
+// reliably, and a model that cannot do that today cannot drive this harness at
+// all, since finding and reading files are tool calls too.
 func promptsForFormat(format string) prompts.Set {
-	switch format {
-	case "tool":
-		return prompts.Tool
-	case "whole":
-		return prompts.WholeFile
-	case "diff-fenced":
-		return prompts.EditBlockFenced
-	case "ask":
+	if format == "ask" {
 		return prompts.Ask
-	default:
-		return prompts.EditBlock
 	}
+	return prompts.Tool
 }
 
 // PlatformInfo feeds the {platform} prompt slot deterministically
@@ -301,7 +298,6 @@ func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.numReflections = 0
 	c.numSteps = 0
-	c.shellCommands = nil
 	c.messageCost = 0
 	c.costKnown = false
 	if c.Repo != nil {

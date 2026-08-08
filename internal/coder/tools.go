@@ -510,15 +510,21 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 		return nil
 	}
 	if !c.DryRun {
-		if err := c.writeAtomically(editblock.PlanResult{Writes: pending, WriteOrder: writeOrder}); err != nil {
+		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
 			c.Out.Errorf("Exception while updating files:")
 			c.Out.Errorf("%s", err.Error())
-			// The batch rolled back; report each intended write as failed so
-			// the model doesn't assume success.
+			// The batch rolled back, so every intended write must be reported as
+			// failed or the model will assume success. It is told what happened
+			// but this is deliberately not a reflection: a filesystem failure —
+			// a full disk, a path whose parent is a regular file — is not
+			// something the model can fix by rewriting its edit, so spending the
+			// error-reflection budget on a retry that will fail identically
+			// helps nobody. The loop continues and the model decides.
 			for _, e := range edits {
 				if results[e.callID] == appliedPlaceholder {
-					results[e.callID] = "The file write failed; the edit was not applied."
-					*matchFailure = true
+					results[e.callID] = fmt.Sprintf(
+						"The write failed and the whole batch was rolled back, so %s is unchanged: %v",
+						e.path, err)
 				}
 			}
 			return nil

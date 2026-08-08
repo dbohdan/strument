@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -19,7 +20,7 @@ func testCoder(t *testing.T) *Coder {
 	model := &config.Model{
 		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:       "test-model",
-		EditFormat: "diff",
+		EditFormat: "tool",
 	}
 	model.WeakModel = model
 	c := New(t.TempDir(), model)
@@ -37,7 +38,7 @@ func TestReminderUserPath(t *testing.T) {
 		t.Error("user path must leave the reminder slot empty")
 	}
 	final := chunks.cur[len(chunks.cur)-1]
-	if !strings.Contains(final.Text(), "SEARCH/REPLACE block rules") || !strings.HasPrefix(final.Text(), "do the thing\n\n") {
+	if !strings.Contains(final.Text(), "# Editing rules") || !strings.HasPrefix(final.Text(), "do the thing\n\n") {
 		t.Errorf("final user message = %q...", final.Text()[:80])
 	}
 	// The reminder is stitched into the outgoing clone only, never history.
@@ -103,10 +104,16 @@ func TestFenceEscalationWhenChatFileHasBackticks(t *testing.T) {
 	if c.fence.open != "````" {
 		t.Errorf("fence = %q, want quad backticks", c.fence.open)
 	}
-	// The system prompt gains the quad-backtick reminder.
-	sys := c.fmtSystemPrompt(c.Prompts.SystemReminder)
-	if !strings.Contains(sys, "IMPORTANT: Use *quadruple* backticks") {
-		t.Error("quad backtick reminder missing")
+	// The escalation no longer reaches the prompt — fences framed SEARCH/REPLACE
+	// blocks, and those are gone. It still matters for the fenced did-you-mean
+	// an unmatched edit returns, which must not be cut short by a fence the
+	// file's own content already uses.
+	quoted := editblock.FindSimilarLines("```go\ncode\n```\n", "intro\n```go\ncode\n```\n", 0.6)
+	if quoted == "" {
+		t.Fatal("did-you-mean found nothing to quote")
+	}
+	if strings.HasPrefix(quoted, c.fence.open) {
+		t.Error("the chosen fence must not collide with the content it wraps")
 	}
 }
 
@@ -169,14 +176,16 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 		}
 		return n
 	}
-	// examples slot exists (editblock examples) => breakpoint there, none
-	// on system; readonly empty and repo empty => that breakpoint is a
-	// no-op; chat_files gets one.
-	if got := countBreakpoints(chunks.examples); got != 1 {
-		t.Errorf("examples breakpoints = %d", got)
+	// No prompt set ships few-shot examples any more — the schema carries the
+	// format — so the examples slot is empty and its breakpoint falls back to
+	// system, which is the documented fallback in addCacheControlHeaders.
+	// readonly and repo are empty here, so that breakpoint is a no-op;
+	// chat_files gets one.
+	if got := countBreakpoints(chunks.examples); got != 0 {
+		t.Errorf("examples breakpoints = %d, want 0 (no examples ship now)", got)
 	}
-	if got := countBreakpoints(chunks.system); got != 0 {
-		t.Errorf("system breakpoints = %d", got)
+	if got := countBreakpoints(chunks.system); got != 1 {
+		t.Errorf("system breakpoints = %d, want 1 (the examples fallback)", got)
 	}
 	if got := countBreakpoints(chunks.chatFiles); got != 1 {
 		t.Errorf("chat_files breakpoints = %d", got)

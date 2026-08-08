@@ -5,28 +5,6 @@ import (
 	"testing"
 )
 
-func TestPromptSlotsPresent(t *testing.T) {
-	for _, slot := range []string{"{final_reminders}", "{shell_cmd_prompt}"} {
-		if !strings.Contains(EditBlock.MainSystem, slot) {
-			t.Errorf("main_system missing slot %s", slot)
-		}
-	}
-	for _, slot := range []string{"{fence[0]}", "{quad_backtick_reminder}", "{rename_with_shell}", "{go_ahead_tip}", "{shell_cmd_reminder}"} {
-		if !strings.Contains(EditBlock.SystemReminder, slot) {
-			t.Errorf("system_reminder missing slot %s", slot)
-		}
-	}
-	// The leaked merge-conflict marker upstream left at the
-	// end of the diff-fenced example (editblock_fenced_prompts.py @ 5dc9490)
-	// is dropped. It must not reappear.
-	if strings.Contains(EditBlockFenced.ExampleMessages[1].Content, "<<<<<<< HEAD") {
-		t.Error("fenced example[1] still carries the leaked '<<<<<<< HEAD' marker")
-	}
-	if WholeFile.RedactedEditMessage != "No changes are needed." {
-		t.Errorf("redacted_edit_message = %q", WholeFile.RedactedEditMessage)
-	}
-}
-
 func TestToolPromptShape(t *testing.T) {
 	// The tool format's system prompt uses only the {final_reminders} and
 	// {platform} slots (the schema does the rest); no other braces may linger

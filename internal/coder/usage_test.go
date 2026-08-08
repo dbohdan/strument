@@ -13,7 +13,7 @@ import (
 )
 
 func TestFinalizeUsageEstimatesWhenAborted(t *testing.T) {
-	c := wholeModelCoder(t, t.TempDir())
+	c := toolCoder(t, t.TempDir())
 	c.Model.InputCost = &llm.Money{Known: true, USD: 0.000001}
 	c.Model.OutputCost = &llm.Money{Known: true, USD: 0.000002}
 	c.partialResponseContent = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
@@ -36,7 +36,7 @@ func TestFinalizeUsageEstimatesWhenAborted(t *testing.T) {
 }
 
 func TestFinalizeUsageRealUsageNotMarked(t *testing.T) {
-	c := wholeModelCoder(t, t.TempDir())
+	c := toolCoder(t, t.TempDir())
 
 	c.finalizeUsage(&sendUsage{prompt: 100, completion: 50, estSent: 9999})
 

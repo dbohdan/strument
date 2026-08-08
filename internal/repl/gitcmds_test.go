@@ -56,12 +56,21 @@ func initScratchRepo(t *testing.T) string {
 	return root
 }
 
+// editResponseStub replays an edit tool call against main.txt, then the closing
+// answer that ends the turn — a reply ending in a tool call is mid-sentence, so
+// the harness re-sends on the result.
 func editResponseStub() *fixture.StreamStub {
-	response := "Sure.\n\nmain.txt\n```\n<<<<<<< SEARCH\nhello world\n=======\nhello strument\n>>>>>>> REPLACE\n```\n"
-	return &fixture.StreamStub{Turns: []fixture.Turn{{Events: []fixture.Event{
-		{Kind: "Answer", Text: response},
-		{Kind: "Finish", FinishReason: "stop"},
-	}}}}
+	args := `{"path":"main.txt","old_string":"hello world\n","new_string":"hello strument\n"}`
+	return &fixture.StreamStub{Turns: []fixture.Turn{
+		{Events: []fixture.Event{
+			{Kind: "ToolCall", ToolIndex: 0, ToolID: "call_1", ToolName: "edit", ToolArgs: args},
+			{Kind: "Finish", FinishReason: "tool_calls"},
+		}},
+		{Events: []fixture.Event{
+			{Kind: "Answer", Text: "Changed the greeting."},
+			{Kind: "Finish", FinishReason: "stop"},
+		}},
+	}}
 }
 
 func TestModelSwitchUpdatesTrailer(t *testing.T) {
