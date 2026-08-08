@@ -224,11 +224,16 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 type countingRepo struct {
 	committingRepo
 
+	dirty bool // report every file as dirty, as a tree with the user's own work is
 	calls [][]string
+	attrs []bool
 }
+
+func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
 func (r *countingRepo) Commit(fnames []string, context string, attributed bool) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
+	r.attrs = append(r.attrs, attributed)
 	return r.committingRepo.Commit(fnames, context, attributed)
 }
 
@@ -262,6 +267,40 @@ func TestOneCommitPerTurn(t *testing.T) {
 	}
 	if got := strings.Join(repo.calls[0], ","); got != "a.txt,b.txt" {
 		t.Errorf("committed %q, want both files the turn touched", got)
+	}
+}
+
+// TestDirtyCommitIgnoresTheTurnsOwnEdits is a regression found live. Once the
+// commit moved to turn end, a turn's first edit leaves the file dirty, so its
+// second edit to the same file looked like the user's uncommitted work. The
+// pre-edit dirty commit then swept the turn's changes into an unattributed
+// commit — one /undo and /squash both refuse, because Strument has no record of
+// having made it.
+func TestDirtyCommitIgnoresTheTurnsOwnEdits(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"dirty-commit-once","source":"authored"}
+{"kind":"fs","path":"a.txt","content":"one\ntwo\n"}
+{"kind":"chat","editable":["a.txt"]}
+{"kind":"user","text":"change both lines, one at a time"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"one\\n\",\"new_string\":\"ONE\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"two\\n\",\"new_string\":\"TWO\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"expect_fs","path":"a.txt","content":"ONE\nTWO\n"}
+`+closingTurn)
+	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.AutoCommits = true
+		c.Repo = repo
+	})
+	env.run(t)
+
+	// Exactly two: the user's pre-existing work before the first edit, then the
+	// turn's own at the end. A third would be the turn committing itself away.
+	if len(repo.calls) != 2 {
+		t.Fatalf("Commit called %d times, want 2 (dirty, then the turn): %v", len(repo.calls), repo.calls)
+	}
+	if repo.attrs[0] || !repo.attrs[1] {
+		t.Errorf("attribution = %v, want the dirty commit unattributed and the turn's attributed", repo.attrs)
 	}
 }
 

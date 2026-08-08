@@ -54,6 +54,15 @@ func (s *turnSnapshot) record(path string, before []byte, existed bool, after st
 
 func (s *turnSnapshot) empty() bool { return s == nil || len(s.order) == 0 }
 
+// wrote reports whether this turn has already written path.
+func (s *turnSnapshot) wrote(path string) bool {
+	if s == nil {
+		return false
+	}
+	_, ok := s.entries[path]
+	return ok
+}
+
 // recordWrites folds a completed batch into the current turn's snapshot. It is
 // called only after the whole batch landed: a batch that rolled back changed
 // nothing and must leave no trace here.

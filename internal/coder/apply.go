@@ -113,9 +113,21 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool 
 	return true
 }
 
+// checkForDirtyCommit separates the user's uncommitted work from the turn's, by
+// committing theirs before the first edit lands on a file.
+//
+// It must not fire on a file this turn has already written. Once the commit
+// moved to turn end, the turn's own first edit leaves the file dirty, so a
+// second edit to it looked exactly like the user's uncommitted work — and
+// committing there swept the turn's changes into an unattributed commit with no
+// trailer, which /undo and /squash then rightly refused to touch. The turn's
+// snapshot is the record of what it has written, so it is also the test.
 func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool) {
 	if c.Repo == nil || !c.Repo.IsDirty(rel) {
 		return
+	}
+	if c.turnSnap.wrote(rel) {
+		return // dirty because of this turn; there is nothing of the user's here
 	}
 	c.Out.Toolf("Committing %s before applying edits.", rel)
 	needDirtyCommit[rel] = true
