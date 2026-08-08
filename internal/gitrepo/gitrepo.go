@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -199,6 +200,47 @@ func (r *Repo) ChangedInHead() ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// ChangedInRange lists the files changed between rev and HEAD — what /squash
+// needs to re-stage after folding several commits back into the index.
+func (r *Repo) ChangedInRange(rev string) ([]string, error) {
+	out, err := r.git("diff", "--name-only", "-z", rev, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for f := range strings.SplitSeq(out, "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files, nil
+}
+
+// Commit describes one commit for the /squash gates.
+type Commit struct {
+	SHA     string
+	Short   string
+	Subject string
+}
+
+// LastCommits returns the n most recent commits, newest first. It returns
+// fewer than n only when the branch is shorter than that.
+func (r *Repo) LastCommits(n int) ([]Commit, error) {
+	out, err := r.git("log", "-n", strconv.Itoa(n), "--format=%H%x00%h%x00%s")
+	if err != nil {
+		return nil, err
+	}
+	var commits []Commit
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		parts := strings.SplitN(line, "\x00", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		commits = append(commits, Commit{SHA: parts[0], Short: parts[1], Subject: parts[2]})
+	}
+	return commits, nil
 }
 
 // InCommit reports whether rel exists in the given commit's tree.

@@ -50,8 +50,9 @@ func init() {
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
+		{"squash", "[n]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
-		{"undo", "", "Undo the last Strument auto-commit", cmdUndo},
+		{"undo", "", "Undo the last turn's edits", cmdUndo},
 		{"web", "<url>", "Scrape a web page and stage it for your next message", cmdWeb},
 	}
 }

@@ -73,6 +73,143 @@ func editResponseStub() *fixture.StreamStub {
 	}}
 }
 
+// editTurn is one turn of the stub: an edit call, then the answer that ends it.
+func editTurn(callID, path, from, to string) []fixture.Turn {
+	args := `{"path":"` + path + `","old_string":"` + from + `","new_string":"` + to + `"}`
+	return []fixture.Turn{
+		{Events: []fixture.Event{
+			{Kind: "ToolCall", ToolIndex: 0, ToolID: callID, ToolName: "edit", ToolArgs: args},
+			{Kind: "Finish", FinishReason: "tool_calls"},
+		}},
+		{Events: []fixture.Event{
+			{Kind: "Answer", Text: "Done."},
+			{Kind: "Finish", FinishReason: "stop"},
+		}},
+	}
+}
+
+// TestUndoWithoutGitSession is the no-repository half of /undo. There is no
+// commit to move away from, so the turn's snapshot is the whole record — and
+// this is the case that makes Strument usable on a live configuration directory
+// or under another SCM.
+func TestUndoWithoutGitSession(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello world\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	model := testModel()
+	cdr := coder.New(root, model)
+	cdr.Client = &fixture.StreamStub{Turns: editTurn("call_1", "main.txt", `hello world\n`, `hello strument\n`)}
+	cdr.AddFile("main.txt")
+
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:      cdr,
+		Config:     testConfig(model),
+		Git:        nil, // --no-git, or simply not a repository
+		ModelAlias: "test",
+		Stdin:      strings.NewReader("change the greeting\n/undo\n/exit\n"),
+		Stdout:     out,
+		Stderr:     out,
+		IsTerminal: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	cdr.Confirm = coder.AutoConfirmer{Yes: true, Fallback: r.Confirmer()}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(data) != "hello world\n" {
+		t.Errorf("main.txt after undo = %q, want the pre-turn contents", data)
+	}
+	got := out.String()
+	if !strings.Contains(got, "Undid the last turn's edits:") || !strings.Contains(got, "main.txt") {
+		t.Errorf("output does not report the undo:\n%s", got)
+	}
+
+	// A second /undo has nothing left, and must say so rather than pretend.
+	if _, err := cdr.UndoLastTurn(); err == nil {
+		t.Error("want an error undoing twice")
+	}
+}
+
+// TestSquashSession folds two turns into one commit. Two turns are two
+// commits by construction; /squash is how a human says they were one change
+// after all.
+func TestSquashSession(t *testing.T) {
+	root := initScratchRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.CommitTrailer = gitrepo.Trailer("test-model")
+	g.Message = func(_, chatContext string) string {
+		if strings.Contains(chatContext, "combined into one") {
+			return "feat: greet strument, politely"
+		}
+		return "feat: a turn"
+	}
+
+	model := testModel()
+	cdr := coder.New(root, model)
+	turns := append(
+		editTurn("call_1", "main.txt", `hello world\n`, `hello strument\n`),
+		editTurn("call_2", "main.txt", `hello strument\n`, `hello strument, please\n`)...,
+	)
+	cdr.Client = &fixture.StreamStub{Turns: turns}
+	cdr.Repo = g
+	cdr.AutoCommits = true
+	cdr.AddFile("main.txt")
+
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:      cdr,
+		Config:     testConfig(model),
+		Git:        g,
+		ModelAlias: "test",
+		Stdin:      strings.NewReader("change the greeting\nnow add please\n/squash\n/exit\n"),
+		Stdout:     out,
+		Stderr:     out,
+		IsTerminal: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	cdr.Confirm = coder.AutoConfirmer{Yes: true, Fallback: r.Confirmer()}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Squashed 2 commits into ") {
+		t.Errorf("output does not report the squash:\n%s", got)
+	}
+	// One commit where there were two, sitting straight on top of the base,
+	// with the message written for the whole range.
+	commits, err := g.LastCommits(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 3 ||
+		commits[0].Subject != "feat: greet strument, politely" ||
+		commits[1].Subject != "base commit" {
+		t.Errorf("history after squash = %+v, want the squash sitting on base commit", commits)
+	}
+	// The edits themselves survive the squash untouched.
+	if data, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(data) != "hello strument, please\n" {
+		t.Errorf("main.txt = %q", data)
+	}
+	if g.IsDirty("main.txt") {
+		t.Error("main.txt dirty after squash")
+	}
+}
+
 func TestModelSwitchUpdatesTrailer(t *testing.T) {
 	root := initScratchRepo(t)
 	g, err := gitrepo.Discover(root)

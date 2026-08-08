@@ -91,6 +91,33 @@ func (c *Coder) DropTurnSnapshot() {
 	}
 }
 
+// SquashTurns collapses the last n turns into one on the undo stack and records
+// hash as a session commit, so /undo after a /squash unwinds the same range the
+// squash commit covers. Earliest before-state per path wins; latest after-state
+// wins — exactly what one long turn would have recorded.
+func (c *Coder) SquashTurns(hash string, n int) {
+	if hash != "" {
+		if c.sessionCommits == nil {
+			c.sessionCommits = map[string]bool{}
+		}
+		c.sessionCommits[hash] = true
+		c.lastCommitHash = hash
+	}
+
+	if n < 2 || len(c.undoStack) < n {
+		return
+	}
+	head := len(c.undoStack) - n
+	merged := newTurnSnapshot()
+	for _, snap := range c.undoStack[head:] {
+		for _, rel := range snap.order {
+			e := snap.entries[rel]
+			merged.record(rel, e.before, e.existed, string(e.after))
+		}
+	}
+	c.undoStack = append(c.undoStack[:head], merged)
+}
+
 // UndoLastTurn puts back what the last turn wrote and returns the paths it
 // restored. It is the no-git undo; with a repository the commit is the record
 // and /undo moves HEAD instead.
