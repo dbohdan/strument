@@ -3,6 +3,7 @@ package coder
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -326,6 +327,74 @@ func TestUndoRollsBackWhenARestoreFails(t *testing.T) {
 	}
 	if !c.HasTurnSnapshot() {
 		t.Error("a failed undo must leave the turn on the stack")
+	}
+}
+
+// TestParseWarningOnRegression: the edit still applies — this is a warning, not
+// a gate — but the model is told in the same step, and so is the user.
+func TestParseWarningOnRegression(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"),
+		[]byte("package a\n\nfunc F() int { return 1 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &captureOut{}
+	c := toolCoder(t, dir)
+	c.Out = out
+
+	results := map[string]string{}
+	fail := false
+	c.applyToolEdits([]plannedEdit{
+		{callID: "1", path: "a.go", search: "func F() int { return 1 }\n", replace: "func F() int { return 1\n"},
+	}, results, &fail)
+
+	if got := read(t, dir, "a.go"); !strings.Contains(got, "return 1\n") {
+		t.Errorf("the edit did not apply: %q", got)
+	}
+	if !strings.Contains(results["1"], "no longer does") {
+		t.Errorf("the model was not told:\n%s", results["1"])
+	}
+	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "no longer does") {
+		t.Errorf("the user was not told:\n%s", joined)
+	}
+}
+
+// TestNoParseWarningWhenAlreadyBroken: the model may be mid-repair, and a note
+// about breakage it did not cause is noise it cannot act on.
+func TestNoParseWarningWhenAlreadyBroken(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"),
+		[]byte("package a\n\nfunc F() int { return 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	results := map[string]string{}
+	fail := false
+	c.applyToolEdits([]plannedEdit{
+		{callID: "1", path: "a.go", search: "func F() int { return 1\n", replace: "func F() int { return 2\n"},
+	}, results, &fail)
+
+	if strings.Contains(results["1"], "no longer does") {
+		t.Errorf("warned about a file that was already broken:\n%s", results["1"])
+	}
+}
+
+// TestNoParseWarningWithoutAGrammar: silence here means "nothing is known",
+// which is not the same as "the file is fine".
+func TestNoParseWarningWithoutAGrammar(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	results := map[string]string{}
+	fail := false
+	c.applyToolEdits([]plannedEdit{
+		{callID: "1", path: "notes.txt", search: "one\n", replace: "}}} not code {{{\n"},
+	}, results, &fail)
+
+	if strings.Contains(results["1"], "no longer does") {
+		t.Errorf("warned about a file no grammar covers:\n%s", results["1"])
 	}
 }
 

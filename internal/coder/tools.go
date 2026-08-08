@@ -430,6 +430,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
 	callVerb := map[string]string{}  // call id -> the same, for that one call
 	applied := map[string]bool{}     // call ids whose edit made it into the batch
+	orig := map[string]string{}      // path -> contents before the batch's first write
+	lastCall := map[string]string{}  // path -> the call that produced its final contents
 	var writeOrder []string
 	editedSet := map[string]bool{}
 	var edited []string
@@ -485,8 +487,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 
 		if _, seen := pending[e.path]; !seen {
 			writeOrder = append(writeOrder, e.path)
+			orig[e.path] = content // before *this batch*, not before this edit
 		}
 		pending[e.path] = newContent
+		lastCall[e.path] = e.callID
 		if !editedSet[e.path] {
 			editedSet[e.path] = true
 			edited = append(edited, e.path)
@@ -538,6 +542,19 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			c.Out.Toolf("Did not write %s (--dry-run)", p)
 		} else {
 			c.Out.Toolf("%s %s", verb, p)
+		}
+	}
+
+	// A file that has stopped parsing is worth saying out loud, to the user in
+	// the scroll and to the model in the result of the call that finished it.
+	for _, p := range edited {
+		note := parseNote(p, orig[p], pending[p])
+		if note == "" {
+			continue
+		}
+		c.Out.Warningf("%s", note)
+		if id := lastCall[p]; id != "" {
+			results[id] += "\n\n" + note
 		}
 	}
 	return edited
