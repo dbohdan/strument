@@ -28,6 +28,9 @@ type FileText struct {
 	Total int
 	// Truncated reports that the window stops short of the end of the file.
 	Truncated bool
+	// Link is the target when Path is a symlink, so a reader given both the
+	// link and the target can tell it is holding one file rather than two.
+	Link string
 }
 
 // Read returns a window of a text file. offset is 1-based; 0 means the start.
@@ -73,6 +76,9 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 	}
 
 	out := FileText{Path: rel, Start: offset, Total: len(lines)}
+	if li, err := os.Lstat(full); err == nil && li.Mode()&os.ModeSymlink != 0 {
+		out.Link, _ = os.Readlink(full)
+	}
 	if offset > len(lines) {
 		return out, nil
 	}

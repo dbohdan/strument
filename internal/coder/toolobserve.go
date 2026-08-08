@@ -60,7 +60,11 @@ func (c *Coder) runRead(tc llm.ToolCall) string {
 	c.Out.Toolf("Read %s", readSummary(ft))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s (%d lines)\n", ft.Path, ft.Total)
+	if ft.Link != "" {
+		fmt.Fprintf(&b, "%s -> %s (%d lines)\n", ft.Path, ft.Link, ft.Total)
+	} else {
+		fmt.Fprintf(&b, "%s (%d lines)\n", ft.Path, ft.Total)
+	}
 	if len(ft.Lines) == 0 {
 		fmt.Fprintf(&b, "\nLine %d is past the end of the file.\n", ft.Start)
 		return b.String()
@@ -216,11 +220,18 @@ func (c *Coder) runLS(tc llm.ToolCall) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s:\n\n", displayDir(a.Path))
 	for _, e := range entries {
-		if e.IsDir {
+		switch {
+		case e.IsDir:
 			fmt.Fprintf(&b, "%s/\n", e.Path)
-			continue
+		case e.Link != "":
+			// Named the way ls -l names it. Without this a symlink and its
+			// target read as two identical files, and a model shown both spends
+			// the turn deciding which one is meant — observed live, on a
+			// dotfiles directory where aliases.sh links to real/aliases.sh.
+			fmt.Fprintf(&b, "%s -> %s\n", e.Path, e.Link)
+		default:
+			b.WriteString(e.Path + "\n")
 		}
-		b.WriteString(e.Path + "\n")
 	}
 	return truncateResult(b.String())
 }

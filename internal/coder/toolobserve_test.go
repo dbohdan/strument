@@ -187,6 +187,31 @@ func TestVerifyWithoutConfigSaysSo(t *testing.T) {
 	}
 }
 
+// TestSymlinksAreNamedAsSuch is a token-cost bug, watched live: a dotfiles
+// directory where aliases.sh links to real/aliases.sh gave the model two paths
+// with identical contents and no way to tell them apart, and it spent the whole
+// turn deciding which one was meant instead of editing either. ls -l has named
+// links this way for decades; so do these tools now.
+func TestSymlinksAreNamedAsSuch(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"real/aliases.sh": "alias ll='ls -l'\n"})
+	if err := os.Symlink(filepath.Join(c.Root, "real/aliases.sh"), filepath.Join(c.Root, "aliases.sh")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	listing := c.runLS(call("ls", `{}`))
+	if !strings.Contains(listing, "aliases.sh -> ") {
+		t.Errorf("ls does not name the link:\n%s", listing)
+	}
+	got := c.runRead(call("read", `{"path":"aliases.sh"}`))
+	if !strings.Contains(got, "aliases.sh -> ") {
+		t.Errorf("read does not name the link:\n%s", got)
+	}
+	// The target itself is an ordinary file and must not grow an arrow.
+	if plain := c.runRead(call("read", `{"path":"real/aliases.sh"}`)); strings.Contains(plain, " -> ") {
+		t.Errorf("a plain file was reported as a link:\n%s", plain)
+	}
+}
+
 // TestVerifyIsQuietWhenItPasses pins the asymmetry between the two audiences.
 // With verify_auto on, a green suite lands on every editing turn, and dumping
 // its transcript buries the diffs the user is there to read; the model gets the

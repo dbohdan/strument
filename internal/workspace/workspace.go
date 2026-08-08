@@ -86,6 +86,10 @@ type Entry struct {
 	Path  string
 	IsDir bool
 	Size  int64
+	// Link is a symlink's target as written, empty for everything else. A
+	// listing that doesn't say so shows one file under two names and gives the
+	// reader no way to tell it from a duplicate.
+	Link string
 }
 
 // Truncated reports that a result was cut short by a limit. Callers surface
@@ -257,6 +261,9 @@ func (w *Workspace) List(dir string) ([]Entry, error) {
 		ent := Entry{Path: strings.Join(components, "/"), IsDir: e.IsDir()}
 		if info, err := e.Info(); err == nil && !e.IsDir() {
 			ent.Size = info.Size()
+			if info.Mode()&os.ModeSymlink != 0 {
+				ent.Link, _ = os.Readlink(filepath.Join(full, name))
+			}
 		}
 		out = append(out, ent)
 		if len(out) >= w.Limits.results() {
