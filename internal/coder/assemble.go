@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"runtime"
-	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/editblock"
@@ -12,13 +11,17 @@ import (
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
-// system + examples + readonly_files + repo + done + chat_files + cur +
-// reminder.
+// system + examples + readonly_files + done + chat_files + cur + reminder.
+//
+// aider has a repo slot between readonly_files and done, carrying the ranked
+// repository map. Strument no longer fills it. The map answered "how does the
+// model find code when it cannot look", and the model can look now — it greps —
+// so the map was a per-turn tax on every send for a digest it did not read.
+// /map keeps it for the human.
 type chatChunks struct {
 	system        []llm.Message
 	examples      []llm.Message
 	done          []llm.Message
-	repo          []llm.Message
 	readonlyFiles []llm.Message
 	chatFiles     []llm.Message
 	cur           []llm.Message
@@ -27,12 +30,11 @@ type chatChunks struct {
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
-		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+len(ch.repo)+
+		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+
 			len(ch.done)+len(ch.chatFiles)+len(ch.cur)+len(ch.reminder))
 	out = append(out, ch.system...)
 	out = append(out, ch.examples...)
 	out = append(out, ch.readonlyFiles...)
-	out = append(out, ch.repo...)
 	out = append(out, ch.done...)
 	out = append(out, ch.chatFiles...)
 	out = append(out, ch.cur...)
@@ -62,18 +64,18 @@ func addCacheControl(messages []llm.Message) {
 }
 
 // addCacheControlHeaders places at most 3 breakpoints: examples-else-system,
-// repo-else-readonly, chat_files. Never on done/cur.
+// read-only files, chat_files. Never on done/cur.
+//
+// The repo map used to hold the second one, and was the reason the map had to
+// be frozen: a prefix that changes every turn caches nothing. With the map out
+// of the prompt the prefix is stable by construction.
 func (ch *chatChunks) addCacheControlHeaders() {
 	if len(ch.examples) > 0 {
 		addCacheControl(ch.examples)
 	} else {
 		addCacheControl(ch.system)
 	}
-	if len(ch.repo) > 0 {
-		addCacheControl(ch.repo)
-	} else {
-		addCacheControl(ch.readonlyFiles)
-	}
+	addCacheControl(ch.readonlyFiles)
 	addCacheControl(ch.chatFiles)
 }
 
@@ -286,38 +288,6 @@ func (c *Coder) repoMapContent() string {
 	return content
 }
 
-// repoMapForPrompt returns the repo map for the assembled prompt. With caching
-// off it is the live per-turn map (repoMapContent). With caching on it is
-// frozen: computed once and reused until the chat file set changes, so the
-// cached prefix stays byte-stable across turns. A file add/drop refreshes it
-// (invalidating the cache once, as expected); between refreshes the map
-// reflects the mentions present at the last file-set change rather than the
-// current turn's — the tradeoff caching accepts, matching aider's
-// map_refresh="files". RepoMapNow still calls repoMapContent, so the on-demand
-// map display stays live.
-func (c *Coder) repoMapForPrompt() string {
-	if !c.cacheHeadersEnabled() {
-		return c.repoMapContent()
-	}
-	key := repoMapCacheKey(c.absFnames, c.absReadOnlyFnames)
-	if key != c.cachedRepoMapKey {
-		c.cachedRepoMap = c.repoMapContent()
-		c.cachedRepoMapKey = key
-	}
-	return c.cachedRepoMap
-}
-
-// repoMapCacheKey is the chat-file-set signature the frozen map is keyed on:
-// the sorted editable and read-only paths. Sorting makes it order-independent,
-// so re-adding a dropped file does not force a needless recompute.
-func repoMapCacheKey(absFnames, absReadOnlyFnames []string) string {
-	edit := slices.Clone(absFnames)
-	slices.Sort(edit)
-	ro := slices.Clone(absReadOnlyFnames)
-	slices.Sort(ro)
-	return strings.Join(edit, "\n") + "\x00" + strings.Join(ro, "\n")
-}
-
 func (c *Coder) curMessageText() string {
 	var b strings.Builder
 	for _, m := range c.curMessages {
@@ -377,18 +347,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
-	if repoContent := c.repoMapForPrompt(); repoContent != "" {
-		other := ""
-		if len(c.absFnames) > 0 {
-			other = "other "
-		}
-		_ = other // the {other} slot is substituted by repomap's prefix handling
-		chunks.repo = []llm.Message{
-			llm.TextMessage("user", repoContent),
-			llm.TextMessage("assistant", "Ok, I won't try and edit those files without asking first."),
-		}
-	}
-
 	if roContent := c.readOnlyFilesContent(); roContent != "" {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
@@ -401,9 +359,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	case len(c.absFnames) > 0:
 		filesContent = c.Prompts.FilesContentPrefix + c.filesContent()
 		filesReply = c.Prompts.FilesContentAssistantReply
-	case len(chunks.repo) > 0 && c.Prompts.FilesNoFullFilesWithRepoMap != "":
-		filesContent = c.Prompts.FilesNoFullFilesWithRepoMap
-		filesReply = c.Prompts.FilesNoFullFilesWithRepoMapReply
 	default:
 		filesContent = c.Prompts.FilesNoFullFiles
 		filesReply = "Ok."
@@ -459,11 +414,13 @@ func (c *Coder) formatMessages() *chatChunks {
 
 // cacheHeadersEnabled reports whether the active model opts into prompt
 // caching (the per-model `cache` config setting). It reads the model live so
-// the gate follows a /model switch. When on, formatMessages decorates the
-// slots with cache-control breakpoints and repoMapForPrompt freezes the map to
-// keep the cached prefix byte-stable. Explicit breakpoints matter on
-// Anthropic-family models; on implicit-caching providers they are inert but the
-// frozen prefix still helps, so the flag is worth setting for any caching model.
+// the gate follows a /model switch. When on, formatMessages decorates the slots
+// with cache-control breakpoints. Explicit breakpoints matter on
+// Anthropic-family models; on implicit-caching providers they are inert but a
+// stable prefix still helps, so the flag is worth setting for any caching
+// model. Nothing has to be frozen to keep that prefix stable any more — the
+// repo map was the one part that changed every turn, and it is no longer in
+// the prompt.
 func (c *Coder) cacheHeadersEnabled() bool { return c.Model != nil && c.Model.Cache }
 
 func (c *Coder) countMessages(msgs []llm.Message) int {

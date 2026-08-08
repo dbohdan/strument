@@ -230,61 +230,6 @@ func TestCacheBreakpointTTL(t *testing.T) {
 	}
 }
 
-// TestRepoMapFreezeReusesUntilFileSetChanges proves the freeze mechanics
-// without a live repo map: it poisons the cache with a sentinel and confirms a
-// second call returns the stored value (no recompute), while a file-set change
-// invalidates it. repoMapContent returns "" with no RepoMap port, which is all
-// the freeze logic needs — it caches whatever repoMapContent produces.
-func TestRepoMapFreezeReusesUntilFileSetChanges(t *testing.T) {
-	c := testCoder(t)
-	c.Model.Cache = true
-	c.Model.RepoMap = true
-
-	_ = c.repoMapForPrompt() // first call computes and caches (empty; no port)
-	keyBefore := c.cachedRepoMapKey
-
-	// A second call must return the stored value, not recompute.
-	c.cachedRepoMap = "SENTINEL"
-	if got := c.repoMapForPrompt(); got != "SENTINEL" {
-		t.Errorf("frozen map recomputed instead of reusing the cache: got %q", got)
-	}
-	if c.cachedRepoMapKey != keyBefore {
-		t.Errorf("key changed without a file-set change: %q -> %q", keyBefore, c.cachedRepoMapKey)
-	}
-
-	// Changing the chat file set invalidates the freeze and recomputes.
-	p := filepath.Join(c.Root, "a.txt")
-	if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile("a.txt")
-	if got := c.repoMapForPrompt(); got == "SENTINEL" {
-		t.Error("map not refreshed after a file-set change")
-	}
-	if c.cachedRepoMapKey == keyBefore {
-		t.Error("cache key did not change after AddFile")
-	}
-}
-
-// TestRepoMapNotFrozenWhenCacheOff guards the coupling: the default (cache off)
-// keeps the live per-turn map and never populates the freeze cache.
-func TestRepoMapNotFrozenWhenCacheOff(t *testing.T) {
-	c := testCoder(t)
-	c.Model.Cache = false
-	c.Model.RepoMap = true
-
-	_ = c.repoMapForPrompt()
-	if c.cachedRepoMapKey != "" || c.cachedRepoMap != "" {
-		t.Errorf("cache-off path populated the freeze cache: key=%q map=%q", c.cachedRepoMapKey, c.cachedRepoMap)
-	}
-
-	// A poisoned cache is ignored: the cache-off path recomputes live.
-	c.cachedRepoMap = "SENTINEL"
-	if got := c.repoMapForPrompt(); got == "SENTINEL" {
-		t.Error("cache-off path returned a frozen value")
-	}
-}
-
 func TestStripReasoningInlineAndNative(t *testing.T) {
 	// Complete tag pair.
 	if got := stripReasoning("<think>secret plan</think>\n\nanswer", "think"); got != "answer" {

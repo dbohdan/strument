@@ -245,8 +245,9 @@ func toInfo(m orModel) ModelInfo {
 	}
 	// A non-zero cache-READ price is the universal "this provider caches" tell.
 	// Implicit cachers (e.g. OpenAI) leave input_cache_write null but still list
-	// a read price, and cache=True still earns its keep there — the frozen repo
-	// map stabilizes the prefix their automatic caching keys on.
+	// a read price, and cache=True still earns its keep there, because the
+	// prompt prefix is stable across turns for their automatic caching to key
+	// on.
 	info.CacheCapable = isPositivePrice(m.Pricing.InputCacheRead)
 	info.Reasoning = slices.Contains(m.SupportedParameters, "reasoning")
 	return info

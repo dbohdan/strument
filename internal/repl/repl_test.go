@@ -176,7 +176,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Strument v9.9.9",
 			"Model: openrouter/test-model",
 			"Git repo: none",
-			"Repo-map: disabled",
+			"Repo map: disabled",
 			"Added hello.txt to the chat.", // banner
 			strings.Repeat("─", 24),        // solid rule (aider's console.rule), honors GetSize width
 			"hello.txt",                    // file listing

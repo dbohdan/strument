@@ -152,15 +152,11 @@ default = "ds"
 ```
 
 The `cache` option (default off) turns on prompt caching for a model: Strument
-attaches cache-control breakpoints with a one-hour TTL and freezes the repo map
-so the cached prefix stays byte-stable across turns. Explicit breakpoints are
+attaches cache-control breakpoints with a one-hour TTL. Explicit breakpoints are
 honored by Anthropic models (reached through OpenRouter); other providers cache
-automatically and ignore them, but the frozen prefix still helps their implicit
+automatically and ignore them, but a stable prefix still helps their implicit
 caching, so it is worth setting on any cache-capable model. There is no
-automatic default — set it per model where you know it pays off. Freezing the
-map is the tradeoff caching accepts: the map refreshes when you add or drop
-files, not on every message, so mid-conversation file mentions no longer re-rank
-it while caching is on.
+automatic default — set it per model where you know it pays off.
 
 On a network that can't reach a provider directly, set a SOCKS5 `proxy` on the
 `provider()` call (`socks5://`, or `socks5h://` to resolve DNS at the proxy):

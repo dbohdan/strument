@@ -91,12 +91,15 @@ func TestAskCacheBreakpointFallsBackToSystem(t *testing.T) {
 	}
 }
 
-func TestAskFalsySentinelUsesPlainNoFullFiles(t *testing.T) {
+// TestRepoMapStaysOutOfThePrompt is the assertion behind taking it out. A
+// repository with a rankable file that is not in the chat is exactly the shape
+// that used to produce a repo chunk; now nothing about lib.go reaches the
+// assembled messages, and the chat-files slot says plainly that no files are
+// shared. /map still renders the map on request.
+func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 	dir := t.TempDir()
-	// A repo file that is NOT in the chat, so the repo map has content but
-	// there are no editable files — the branch the sentinel governs.
 	if err := os.WriteFile(filepath.Join(dir, "lib.go"),
-		[]byte("package lib\n\nfunc Exported() int { return 1 }\n"), 0o644); err != nil {
+		[]byte("package lib\n\nfunc VerySpecificName() int { return 1 }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	c := askCoder(t, dir)
@@ -104,26 +107,28 @@ func TestAskFalsySentinelUsesPlainNoFullFiles(t *testing.T) {
 	rm.MaxContextWindow = 4096
 	rm.RepoContentPrefix = c.Prompts.RepoContentPrefix
 	c.RepoMap = rm
-	// A repo that lists lib.go as tracked, so the map can rank it even
-	// though it is not in the chat (no git needed for the assembly path).
 	c.Repo = &fakeRepo{tracked: []string{"lib.go"}}
 	c.curMessages = []llm.Message{llm.TextMessage("user", "what functions are here?")}
 
-	chunks := c.formatChatChunks()
-	if len(chunks.repo) == 0 {
-		t.Skip("repo map produced no content in this environment; sentinel branch unreachable")
+	var all strings.Builder
+	for _, m := range c.formatChatChunks().allMessages() {
+		all.WriteString(m.Text())
+	}
+	if strings.Contains(all.String(), "VerySpecificName") {
+		t.Errorf("the repo map reached the prompt:\n%s", all.String())
 	}
 
 	var chat strings.Builder
-	for _, m := range chunks.chatFiles {
+	for _, m := range c.formatChatChunks().chatFiles {
 		chat.WriteString(m.Text())
 	}
-	got := chat.String()
-	// Ask's files_no_full_files_with_repo_map is "" (falsy sentinel), so
-	// the branch is disabled and the plain files_no_full_files is used —
-	// not an empty pair, not a skipped chunk.
-	if !strings.Contains(got, "I am not sharing the full contents of any files with you yet") {
-		t.Errorf("falsy sentinel not honored; chat_files chunk:\n%q", got)
+	if !strings.Contains(chat.String(), "I am not sharing the full contents of any files with you yet") {
+		t.Errorf("chat_files chunk:\n%q", chat.String())
+	}
+
+	// The map itself still works — it just is not sent unasked.
+	if got := c.RepoMapNow(); !strings.Contains(got, "VerySpecificName") {
+		t.Errorf("/map no longer renders the map:\n%s", got)
 	}
 }
 
