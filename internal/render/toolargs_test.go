@@ -183,6 +183,79 @@ func TestToolDiffReplaceBeforeSearchPathLast(t *testing.T) {
 	}
 }
 
+// TestToolDiffContext is the case the diff exists for: the edit tool asks for
+// surrounding lines so the search matches uniquely, and those lines must read
+// as context rather than as a wholesale removal and re-addition.
+func TestToolDiffContext(t *testing.T) {
+	args := `{"path":"a.go","old_string":"func foo() {\n  x := 1\n  return x\n}",` +
+		`"new_string":"func foo() {\n  x := 2\n  return x\n}"}`
+	want := "a.go\n" +
+		"  func foo() {\n" +
+		"-   x := 1\n" +
+		"+   x := 2\n" +
+		"    return x\n" +
+		"  }\n"
+	if got := renderDiff(t, "edit", false, []string{args}); got != want {
+		t.Errorf("one blob:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+	// Buffering must be indifferent to where the provider splits the stream.
+	if got := renderDiff(t, "edit", false, splitBytes(args)); got != want {
+		t.Errorf("byte by byte:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffContextColor confirms unchanged lines carry no color, so the
+// changed ones are what the eye lands on.
+func TestToolDiffContextColor(t *testing.T) {
+	args := `{"path":"a.go","old_string":"keep\nold","new_string":"keep\nnew"}`
+	want := "a.go\n  keep\n\x1b[31m- old\x1b[0m\n\x1b[32m+ new\x1b[0m\n"
+	if got := renderDiff(t, "edit", true, []string{args}); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffElidesLongContext keeps a generous old_string from burying the
+// line that changed: only diffContext lines survive on each side of it, and
+// what was left out is counted rather than dropped silently.
+func TestToolDiffElidesLongContext(t *testing.T) {
+	args := `{"path":"a.go",` +
+		`"old_string":"a\nb\nc\nd\ne\nf\ng\nh\nX\ni\nj\nk\nl\nm\nn\no",` +
+		`"new_string":"a\nb\nc\nd\ne\nf\ng\nh\nY\ni\nj\nk\nl\nm\nn\no"}`
+	want := "a.go\n" +
+		"  … 5 unchanged lines …\n" +
+		"  f\n  g\n  h\n" +
+		"- X\n+ Y\n" +
+		"  i\n  j\n  k\n" +
+		"  … 4 unchanged lines …\n"
+	if got := renderDiff(t, "edit", false, []string{args}); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffPureInsertAndDelete covers the degenerate shapes: an empty side
+// falls out of the opcodes rather than needing a case of its own.
+func TestToolDiffPureInsertAndDelete(t *testing.T) {
+	insert := `{"path":"a.go","old_string":"","new_string":"one\ntwo"}`
+	if got, want := renderDiff(t, "edit", false, []string{insert}), "a.go\n+ one\n+ two\n"; got != want {
+		t.Errorf("insert got:\n%q\nwant:\n%q", got, want)
+	}
+	del := `{"path":"a.go","old_string":"one\ntwo","new_string":""}`
+	if got, want := renderDiff(t, "edit", false, []string{del}), "a.go\n- one\n- two\n"; got != want {
+		t.Errorf("delete got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestToolDiffNoChange: an edit whose sides are identical elides nothing —
+// there is no change for the context to sit beside, so showing it all is the
+// honest rendering of a no-op.
+func TestToolDiffNoChange(t *testing.T) {
+	args := `{"path":"a.go","old_string":"a\nb\nc\nd\ne\nf\ng\nh","new_string":"a\nb\nc\nd\ne\nf\ng\nh"}`
+	want := "a.go\n  a\n  b\n  c\n  d\n  e\n  f\n  g\n  h\n"
+	if got := renderDiff(t, "edit", false, []string{args}); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestToolDiffCommand renders a bash call: no header (no path),
 // the command on a "$" line, and the purpose ignored.
 func TestToolDiffCommand(t *testing.T) {

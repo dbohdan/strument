@@ -8,6 +8,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"dbohdan.com/strument/internal/editblock"
 )
 
 // ArgScanner incrementally decodes a tool call's JSON arguments object and
@@ -15,7 +17,7 @@ import (
 // chunk) as fragments arrive. It tolerates arguments split at any byte
 // boundary — mid-escape or mid-UTF-8. Nested and non-string values are
 // skipped; the edit tools' arguments are flat string fields
-// (path/search/replace/content/command), which is what the diff renderer
+// (path/old_string/new_string/content/command), which is what the diff renderer
 // needs. Best-effort: malformed JSON just stops producing sensible output,
 // and the authoritative parse happens elsewhere (json.Unmarshal on the whole
 // arguments) before anything is applied.
@@ -145,11 +147,18 @@ func (s *ArgScanner) put(r rune) {
 	}
 }
 
-// ToolDiff renders a streaming edit tool call as a red-green Git-style diff:
-// the path on a header line, then search lines as red "-" and replace/content
-// lines as green "+". Feed it raw JSON argument fragments; it decodes and
-// line-buffers internally. Colors use plain 31/32 (diff convention), gated on
-// color.
+// ToolDiff renders a tool call's streaming arguments as a Git-style diff: the
+// path on a header line, then removed lines in red and added lines in green.
+// Feed it raw JSON argument fragments; it decodes and line-buffers internally.
+// Colors use plain 31/32 (diff convention), gated on color.
+//
+// write and bash stream line by line as their arguments arrive — the file's
+// contents and the command are each one side of the story, so there is nothing
+// to wait for. An edit is different: it carries a before and an after, and only
+// with both in hand can the unchanged lines between them be shown as context
+// rather than removed and added back. So an edit's two text fields accumulate
+// whole and the diff is drawn in Flush. The header still prints the moment the
+// path is complete, so the file being edited appears while the rest streams.
 type ToolDiff struct {
 	w     io.Writer
 	color bool
@@ -162,11 +171,16 @@ type ToolDiff struct {
 	curField    string
 	wroteHeader bool
 	pending     []string // diff lines held until the header (path) is known
-	sawSearch   bool     // the old_string field has begun streaming
-	addedBuf    []string // "+" lines held back until after the "-" lines
+	oldText     strings.Builder
+	newText     strings.Builder
 }
 
-// NewToolDiff builds a diff renderer for one edit tool call writing to w.
+// diffContext is how many unchanged lines are shown on each side of a change,
+// as in a unified diff. A longer run is elided down to this with a count, so a
+// generous old_string doesn't bury the line that actually changed.
+const diffContext = 3
+
+// NewToolDiff builds a diff renderer for one tool call writing to w.
 func NewToolDiff(w io.Writer, color bool, theme Theme, tool string) *ToolDiff {
 	d := &ToolDiff{w: w, color: color, theme: theme, tool: tool}
 	d.scan = NewArgScanner(d.onArg)
@@ -176,17 +190,16 @@ func NewToolDiff(w io.Writer, color bool, theme Theme, tool string) *ToolDiff {
 // Write feeds the next raw arguments fragment.
 func (d *ToolDiff) Write(frag string) { d.scan.Write(frag) }
 
-// Flush emits any buffered partial line, then the held "+" lines; call once
-// the tool call is complete.
+// Flush emits any buffered partial line, then an edit's diff; call once the
+// tool call is complete.
 func (d *ToolDiff) Flush() {
 	d.flushLine()
-	if !d.wroteHeader && (d.path.Len() > 0 || len(d.pending) > 0 || len(d.addedBuf) > 0) {
+	if !d.wroteHeader && (d.path.Len() > 0 || len(d.pending) > 0) {
 		d.header() // resolve the header (path may have streamed after the diff)
 	}
-	for _, line := range d.addedBuf {
-		fmt.Fprint(d.w, line)
+	if d.isEdit() {
+		d.renderEdit()
 	}
-	d.addedBuf = nil
 }
 
 // RendersDiff reports whether a tool's streamed arguments are worth drawing as
@@ -210,6 +223,9 @@ func RendersDiff(tool string) bool {
 func (d *ToolDiff) expectsPath() bool {
 	return d.tool == "edit" || d.tool == "write"
 }
+
+// isEdit reports whether this call has two sides to diff against each other.
+func (d *ToolDiff) isEdit() bool { return d.tool == "edit" }
 
 // isLineField reports whether a field's value renders as diff/command lines.
 func isLineField(field string) bool {
@@ -236,8 +252,18 @@ func (d *ToolDiff) onArg(field, chunk string) {
 		d.path.WriteString(chunk)
 		return
 	}
-	if field == "old_string" {
-		d.sawSearch = true
+	// An edit's two sides accumulate whole; Flush diffs them. This is also why
+	// the provider's field order stops mattering here — old_string arriving
+	// after new_string changes nothing.
+	if d.isEdit() {
+		switch field {
+		case "old_string":
+			d.oldText.WriteString(chunk)
+			return
+		case "new_string":
+			d.newText.WriteString(chunk)
+			return
+		}
 	}
 	if !isLineField(field) {
 		return // purpose/reason/etc. don't render
@@ -277,14 +303,6 @@ func (d *ToolDiff) header() {
 
 func (d *ToolDiff) emitLine(field, text string) {
 	line := d.formatLine(field, text)
-	// A new_string field that streams before old_string must wait so removed (-)
-	// lines still print first, whatever order the provider sent the fields in.
-	// This is held separately from the header's pending buffer and appended
-	// after every "-" line on Flush.
-	if d.holdsAdded(field) {
-		d.addedBuf = append(d.addedBuf, line)
-		return
-	}
 	if !d.wroteHeader && d.path.Len() > 0 {
 		d.header()
 	}
@@ -297,11 +315,71 @@ func (d *ToolDiff) emitLine(field, text string) {
 	fmt.Fprint(d.w, line)
 }
 
-// holdsAdded reports whether an added ("+") line must be buffered because it
-// arrived before the old_string field it should follow. Only edit reverses this
-// way; write's content is the whole diff and streams live.
-func (d *ToolDiff) holdsAdded(field string) bool {
-	return field == "new_string" && d.tool == "edit" && !d.sawSearch
+// renderEdit draws the completed edit as a diff of its two sides: only the
+// lines that actually differ get a "-" or a "+", and the surrounding lines the
+// model was asked to include for a unique match print as context.
+func (d *ToolDiff) renderEdit() {
+	before := splitDiffLines(d.oldText.String())
+	after := splitDiffLines(d.newText.String())
+	if len(before) == 0 && len(after) == 0 {
+		return
+	}
+
+	ops := editblock.LineOps(before, after)
+	for i, op := range ops {
+		switch op.Kind {
+		case editblock.OpEqual:
+			d.emitContext(before[op.A1:op.A2], i == 0, i == len(ops)-1)
+		case editblock.OpDelete:
+			d.emitSide("old_string", before[op.A1:op.A2])
+		case editblock.OpInsert:
+			d.emitSide("new_string", after[op.B1:op.B2])
+		case editblock.OpReplace:
+			// Removed before added, as a diff reads.
+			d.emitSide("old_string", before[op.A1:op.A2])
+			d.emitSide("new_string", after[op.B1:op.B2])
+		}
+	}
+}
+
+func (d *ToolDiff) emitSide(field string, lines []string) {
+	for _, text := range lines {
+		fmt.Fprint(d.w, d.formatLine(field, text))
+	}
+}
+
+// emitContext prints an unchanged run, showing only the lines next to a
+// change. A leading run has nothing above it to give context to, so only its
+// tail prints; a trailing run, only its head. What is left out is named rather
+// than dropped, so the rendering never reads as the whole edit.
+func (d *ToolDiff) emitContext(lines []string, first, last bool) {
+	head, tail := diffContext, diffContext
+	if first {
+		head = 0
+	}
+	if last {
+		tail = 0
+	}
+	if head+tail == 0 || head+tail >= len(lines) {
+		d.emitSide("context", lines)
+		return
+	}
+	d.emitSide("context", lines[:head])
+	fmt.Fprintf(d.w, "  … %d unchanged lines …\n", len(lines)-head-tail)
+	d.emitSide("context", lines[len(lines)-tail:])
+}
+
+// splitDiffLines splits a field's text into lines, dropping the empty element a
+// trailing newline leaves behind so it doesn't render as a blank added line.
+func splitDiffLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	lines := strings.Split(s, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 // formatLine renders one diff/command line with its prefix and themed color.
@@ -312,6 +390,10 @@ func (d *ToolDiff) formatLine(field, text string) string {
 		prefix, color = "+", d.theme.DiffAdded // added
 	case "command":
 		prefix, color = "$", d.theme.Command // suggested command
+	case "context":
+		// Unchanged lines carry no color, as in git: they are the backdrop the
+		// changed lines stand out against.
+		prefix, color = " ", ""
 	}
 	if d.color && color != "" {
 		return fmt.Sprintf("\x1b[%sm%s %s\x1b[0m\n", color, prefix, text)
@@ -321,11 +403,10 @@ func (d *ToolDiff) formatLine(field, text string) string {
 
 // ToolDiffSet fans a send's streamed tool-call fragments out to a ToolDiff
 // per call index, so an Output can forward fragments without tracking indexes
-// itself. A non-edit tool (no path/search/replace/content fields) simply
-// renders nothing.
+// itself. A tool RendersDiff rejects is dropped and draws nothing.
 //
 // Providers may stream several tool calls' arguments interleaved, so only the
-// first call renders live; later calls buffer and are appended, each
+// first call writes straight through; later calls buffer and are appended, each
 // contiguous, in first-seen order on Flush. This keeps each diff whole
 // instead of interleaving their lines.
 type ToolDiffSet struct {
