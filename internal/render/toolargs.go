@@ -360,7 +360,10 @@ func (d *ToolDiff) emitContext(lines []string, first, last bool) {
 	if last {
 		tail = 0
 	}
-	if head+tail == 0 || head+tail >= len(lines) {
+	// Eliding one line is a bad trade: the marker costs the line it saves and
+	// says less than the line would have. This is also why the marker never has
+	// to read "1 unchanged lines".
+	if hidden := len(lines) - head - tail; head+tail == 0 || hidden <= 1 {
 		d.emitSide("context", lines)
 		return
 	}

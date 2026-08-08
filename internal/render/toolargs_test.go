@@ -232,6 +232,17 @@ func TestToolDiffElidesLongContext(t *testing.T) {
 	}
 }
 
+// TestToolDiffKeepsOneHiddenLine: a marker that hides a single line costs the
+// line it saves, so the line wins. Caught by watching a real edit render
+// "… 1 unchanged lines …" — which is also the grammar this rules out.
+func TestToolDiffKeepsOneHiddenLine(t *testing.T) {
+	args := `{"path":"a.go","old_string":"X\na\nb\nc\nd","new_string":"Y\na\nb\nc\nd"}`
+	want := "a.go\n- X\n+ Y\n  a\n  b\n  c\n  d\n"
+	if got := renderDiff(t, "edit", false, []string{args}); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestToolDiffPureInsertAndDelete covers the degenerate shapes: an empty side
 // falls out of the opcodes rather than needing a case of its own.
 func TestToolDiffPureInsertAndDelete(t *testing.T) {
