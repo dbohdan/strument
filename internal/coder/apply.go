@@ -146,6 +146,25 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 	}
 }
 
+// newFileMode is what a file Strument creates gets. It matches what git
+// checkout writes; the temp-then-rename below cannot consult the umask
+// portably, so this is a constant rather than 0o666 &^ umask.
+const newFileMode = 0o644
+
+// fullPath is where a relative path actually lives on disk, with symlinks
+// resolved.
+//
+// Resolving matters because writeAtomically renames a temp file into place, and
+// a rename replaces the *link* rather than following it: without this, editing
+// a symlinked file silently turns the link into a regular file and leaves the
+// real file with its old contents — the edit lands nowhere the user was looking.
+// unsafePath has already resolved this same path and required it to stay inside
+// the project root (or to be a file the user added deliberately), so following
+// the link here agrees with the check that already ran.
+func (c *Coder) fullPath(rel string) string {
+	return resolvePath(filepath.Join(c.Root, filepath.FromSlash(rel)))
+}
+
 // writeAtomically writes the plan's files via temp+rename, rolling the
 // batch back on any failure.
 //
@@ -153,6 +172,12 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 // snapshot, so on success they are handed to recordWrites rather than dropped.
 // On failure they are not: a batch that rolled back changed nothing, and
 // recording it would give /undo a turn to unwind that never happened.
+//
+// The temp file takes the mode of the file it replaces. A rename swaps inodes,
+// so without that every edit would leave the file at newFileMode whatever it
+// was before: scripts would stop being executable and a 0o600 file — an .env, a
+// key, an SSH config — would come back world-readable. Changing a file's
+// contents is what was asked for; changing who can read or run it was not.
 func (c *Coder) writeAtomically(plan writePlan) error {
 	backups := map[string]snapEntry{}
 	var order []string
@@ -160,9 +185,9 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 	restore := func() {
 		for _, rel := range order {
 			b := backups[rel]
-			full := filepath.Join(c.Root, filepath.FromSlash(rel))
+			full := c.fullPath(rel)
 			if b.existed {
-				_ = os.WriteFile(full, b.before, 0o644) //nolint:gosec // Restoring a project file; sources are world-readable.
+				_ = os.WriteFile(full, b.before, b.mode)
 			} else {
 				_ = os.Remove(full)
 			}
@@ -170,10 +195,19 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 	}
 
 	for _, rel := range plan.WriteOrder {
-		full := filepath.Join(c.Root, filepath.FromSlash(rel))
+		full := c.fullPath(rel)
 		old, err := os.ReadFile(full)
 		existed := err == nil
-		backups[rel] = snapEntry{before: old, existed: existed}
+		mode := os.FileMode(newFileMode)
+		if existed {
+			if fi, err := os.Stat(full); err == nil {
+				// Perm plus the setuid/setgid/sticky bits: everything os.Chmod
+				// can put back. Strument did not make the file special and has
+				// no business making it ordinary.
+				mode = fi.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+			}
+		}
+		backups[rel] = snapEntry{before: old, existed: existed, mode: mode}
 		order = append(order, rel)
 
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -196,7 +230,7 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 			restore()
 			return fmt.Errorf("close %s: %w", rel, err)
 		}
-		if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		if err := os.Chmod(tmp.Name(), mode); err != nil {
 			os.Remove(tmp.Name())
 			restore()
 			return fmt.Errorf("chmod %s: %w", rel, err)

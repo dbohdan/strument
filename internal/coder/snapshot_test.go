@@ -170,6 +170,165 @@ func TestSnapshotIgnoresARolledBackBatch(t *testing.T) {
 	}
 }
 
+// TestEditPreservesFileMode: a rename swaps inodes, so without care every edit
+// left the file at 0o644 — scripts stopped being executable and a 0o600 file
+// came back world-readable. Changing contents is what was asked for; changing
+// who can read or run the file was not.
+func TestEditPreservesFileMode(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		name string
+		mode os.FileMode
+	}{
+		{"script.sh", 0o755},
+		{"secret.env", 0o600},
+		{"plain.txt", 0o644},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, c.name), []byte("before\n"), c.mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(filepath.Join(dir, c.name), c.mode); err != nil { // defeat umask
+			t.Fatal(err)
+		}
+	}
+
+	cdr := toolCoder(t, dir)
+	applyBatch(t, cdr,
+		plannedEdit{callID: "1", path: "script.sh", search: "before", replace: "after"},
+		plannedEdit{callID: "2", path: "secret.env", search: "before", replace: "after"},
+		plannedEdit{callID: "3", path: "plain.txt", search: "before", replace: "after"},
+	)
+
+	for name, want := range map[string]os.FileMode{
+		"script.sh": 0o755, "secret.env": 0o600, "plain.txt": 0o644,
+	} {
+		fi, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fi.Mode().Perm(); got != want {
+			t.Errorf("%s mode = %v, want %v", name, got, want)
+		}
+		if got := read(t, dir, name); got != "after\n" {
+			t.Errorf("%s = %q, want the edit applied", name, got)
+		}
+	}
+}
+
+// TestNewFileGetsTheDefaultMode pins the other half: a file the turn creates
+// has no previous mode to keep.
+func TestNewFileGetsTheDefaultMode(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+	applyBatch(t, c, wholeFileWrite("1", "fresh.txt", "hello\n"))
+
+	fi, err := os.Stat(filepath.Join(dir, "fresh.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fi.Mode().Perm(); got != newFileMode {
+		t.Errorf("new file mode = %v, want %v", got, os.FileMode(newFileMode))
+	}
+}
+
+// TestEditWritesThroughASymlink: a rename replaces the link rather than
+// following it, so before this the edit turned the symlink into a regular file
+// and left the real file untouched — the change landed nowhere the user was
+// looking.
+func TestEditWritesThroughASymlink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "real.txt"), []byte("before\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "real.txt"), filepath.Join(dir, "link.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	c := toolCoder(t, dir)
+	applyBatch(t, c, plannedEdit{callID: "1", path: "link.txt", search: "before", replace: "after"})
+
+	if got := read(t, dir, "real.txt"); got != "after\n" {
+		t.Errorf("real.txt = %q, want the edit to have reached it through the link", got)
+	}
+	fi, err := os.Lstat(filepath.Join(dir, "link.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("link.txt is no longer a symlink")
+	}
+}
+
+// TestUndoLeavesAModeTheUserChanged: the turn never changed the mode, so the
+// undo has no business changing it either. A chmod between the turn and the
+// undo belongs to whoever ran it.
+func TestUndoLeavesAModeTheUserChanged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	applyBatch(t, c, plannedEdit{callID: "1", path: "a.txt", search: "one", replace: "two"})
+	c.pushTurnSnapshot()
+
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UndoLastTurn(); err != nil {
+		t.Fatalf("undo: %v", err)
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fi.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode after undo = %v, want the user's 0600 kept", got)
+	}
+	if got := read(t, dir, "a.txt"); got != "one\n" {
+		t.Errorf("contents = %q, want them reverted", got)
+	}
+}
+
+// TestUndoRollsBackWhenARestoreFails is the all-or-nothing promise under a
+// failure the pre-flight cannot see. A directory standing where a file was
+// makes the write fail as any user, root included — which is what this
+// container runs as, so an EACCES test would silently pass without proving
+// anything.
+func TestUndoRollsBackWhenARestoreFails(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("one\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := toolCoder(t, dir)
+	applyBatch(t, c,
+		plannedEdit{callID: "1", path: "a.txt", search: "one", replace: "two"},
+		plannedEdit{callID: "2", path: "b.txt", search: "one", replace: "two"},
+	)
+	c.pushTurnSnapshot()
+
+	// b.txt becomes a directory: reading it fails, and so does writing it.
+	if err := os.Remove(filepath.Join(dir, "b.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "b.txt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.UndoLastTurn(); err == nil {
+		t.Fatal("want an error when a restore cannot be completed")
+	}
+	if got := read(t, dir, "a.txt"); got != "two\n" {
+		t.Errorf("a.txt = %q, want the turn's own result put back", got)
+	}
+	if !c.HasTurnSnapshot() {
+		t.Error("a failed undo must leave the turn on the stack")
+	}
+}
+
 func TestUndoWithNothingToUndo(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	if _, err := c.UndoLastTurn(); err == nil {

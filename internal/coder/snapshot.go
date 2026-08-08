@@ -27,6 +27,7 @@ var errNothingToUndo = errors.New("no Strument edits to undo in this session")
 type snapEntry struct {
 	before  []byte
 	existed bool
+	mode    os.FileMode
 	after   []byte
 }
 
@@ -42,10 +43,10 @@ func newTurnSnapshot() *turnSnapshot {
 
 // record notes one write. The first call for a path fixes its before-state;
 // every call updates the after-state.
-func (s *turnSnapshot) record(path string, before []byte, existed bool, after string) {
+func (s *turnSnapshot) record(path string, before snapEntry, after string) {
 	e, ok := s.entries[path]
 	if !ok {
-		e = &snapEntry{before: before, existed: existed}
+		e = &snapEntry{before: before.before, existed: before.existed, mode: before.mode}
 		s.entries[path] = e
 		s.order = append(s.order, path)
 	}
@@ -71,8 +72,7 @@ func (c *Coder) recordWrites(plan writePlan, before map[string]snapEntry) {
 		c.turnSnap = newTurnSnapshot()
 	}
 	for _, rel := range plan.WriteOrder {
-		b := before[rel]
-		c.turnSnap.record(rel, b.before, b.existed, plan.Writes[rel])
+		c.turnSnap.record(rel, before[rel], plan.Writes[rel])
 	}
 }
 
@@ -121,7 +121,7 @@ func (c *Coder) SquashTurns(hash string, n int) {
 	for _, snap := range c.undoStack[head:] {
 		for _, rel := range snap.order {
 			e := snap.entries[rel]
-			merged.record(rel, e.before, e.existed, string(e.after))
+			merged.record(rel, *e, string(e.after))
 		}
 	}
 	c.undoStack = append(c.undoStack[:head], merged)
@@ -131,10 +131,18 @@ func (c *Coder) SquashTurns(hash string, n int) {
 // restored. It is the no-git undo; with a repository the commit is the record
 // and /undo moves HEAD instead.
 //
-// Nothing is restored unless everything can be: a file whose contents no longer
+// Nothing is restored unless everything is: a file whose contents no longer
 // match what Strument wrote has been changed by someone else, and quietly
 // overwriting that is the one outcome an undo must never produce. This is the
 // same judgement as the git path's refusal to undo over uncommitted changes.
+// A file the undo cannot write — read-only, or a directory now standing where
+// the file was — is the same problem arriving later, so a failure part of the
+// way through puts the turn's own result back rather than leaving the tree in a
+// state neither the user nor Strument asked for.
+//
+// It restores contents and not modes, deliberately. writeAtomically preserves a
+// file's mode through an edit, so the turn never changed one; a chmod between
+// the turn and the undo belongs to whoever ran it.
 func (c *Coder) UndoLastTurn() ([]string, error) {
 	n := len(c.undoStack)
 	if n == 0 {
@@ -144,7 +152,8 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 
 	for _, rel := range snap.order {
 		e := snap.entries[rel]
-		current, err := os.ReadFile(filepath.Join(c.Root, filepath.FromSlash(rel)))
+		full := c.fullPath(rel)
+		current, err := os.ReadFile(full)
 		if err != nil {
 			// Gone from disk. Whatever happened to it, putting the previous
 			// contents back cannot destroy work that is no longer there.
@@ -153,25 +162,55 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 		if string(current) != string(e.after) {
 			return nil, fmt.Errorf("%s has changed since Strument wrote it; undo would discard that", rel)
 		}
+		if e.existed {
+			// Fail before touching anything rather than halfway through. The
+			// rollback below is the backstop, not the plan.
+			f, err := os.OpenFile(full, os.O_WRONLY, 0)
+			if err != nil {
+				return nil, fmt.Errorf("cannot write %s to undo it: %w", rel, err)
+			}
+			f.Close()
+		}
 	}
 
 	var restored []string
 	for _, rel := range snap.order {
-		e := snap.entries[rel]
-		full := filepath.Join(c.Root, filepath.FromSlash(rel))
-		if !e.existed {
-			if err := os.Remove(full); err != nil && !os.IsNotExist(err) {
-				return restored, fmt.Errorf("could not remove %s: %w", rel, err)
-			}
-			restored = append(restored, rel)
-			continue
-		}
-		if err := os.WriteFile(full, e.before, 0o644); err != nil { //nolint:gosec // Restoring a project file; sources are world-readable.
-			return restored, fmt.Errorf("could not restore %s: %w", rel, err)
+		if err := c.restoreFile(rel, snap.entries[rel]); err != nil {
+			c.redoFiles(snap, restored)
+			return nil, fmt.Errorf("could not restore %s, so nothing was undone: %w", rel, err)
 		}
 		restored = append(restored, rel)
 	}
 
 	c.undoStack = c.undoStack[:n-1]
 	return restored, nil
+}
+
+// restoreFile puts one file back the way the turn found it.
+func (c *Coder) restoreFile(rel string, e *snapEntry) error {
+	full := c.fullPath(rel)
+	if !e.existed {
+		if err := os.Remove(full); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	// The mode argument applies only if the file has to be created — if it is
+	// still there, its current mode is kept, which is the point.
+	return os.WriteFile(full, e.before, e.mode)
+}
+
+// redoFiles puts the turn's own result back on the files an aborted undo had
+// already reverted, so a failure leaves the tree where the undo found it.
+func (c *Coder) redoFiles(snap *turnSnapshot, paths []string) {
+	for _, rel := range paths {
+		e := snap.entries[rel]
+		full := c.fullPath(rel)
+		mode := e.mode
+		if !e.existed {
+			mode = newFileMode // the turn created it; recreate it as the turn did
+			_ = os.MkdirAll(filepath.Dir(full), 0o755)
+		}
+		_ = os.WriteFile(full, e.after, mode)
+	}
 }
