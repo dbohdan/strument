@@ -422,7 +422,7 @@ func (c *Coder) runAutoVerify(ctx context.Context) (message string, keepGoing bo
 	}
 	c.autoVerifies++
 
-	c.Out.Printf("Running the automatic checks.")
+	c.Out.Toolf("Running the automatic checks.")
 	transcript, passed := c.runChecks(ctx, c.VerifyAuto)
 	if passed {
 		return "", false
@@ -485,6 +485,9 @@ type StdOutput struct {
 
 func (o *StdOutput) Printf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
+}
+func (o *StdOutput) Toolf(format string, args ...any) {
+	fmt.Printf(format+"\n", args...) // no color outside the REPL
 }
 func (o *StdOutput) Warningf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)

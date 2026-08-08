@@ -427,13 +427,14 @@ func TestToolLoopBudgetStops(t *testing.T) {
 	}
 }
 
-// captureOut records Printf lines so a test can assert on user-facing output;
-// the other Output methods are no-ops.
+// captureOut records the user-facing lines so a test can assert on them; the
+// streaming Output methods are no-ops.
 type captureOut struct{ lines []string }
 
 func (o *captureOut) Printf(format string, args ...any) {
 	o.lines = append(o.lines, fmt.Sprintf(format, args...))
 }
+func (o *captureOut) Toolf(format string, args ...any)    { o.Printf(format, args...) }
 func (o *captureOut) Warningf(format string, args ...any) { o.Printf(format, args...) }
 func (o *captureOut) Errorf(format string, args ...any)   { o.Printf(format, args...) }
 func (o *captureOut) StreamText(string)                   {}

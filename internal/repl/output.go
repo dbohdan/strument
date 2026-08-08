@@ -86,6 +86,11 @@ func (o *termOutput) Printf(format string, args ...any) {
 	fmt.Fprintf(o.w, format+"\n", args...)
 }
 
+func (o *termOutput) Toolf(format string, args ...any) {
+	o.clearWaiting()
+	fmt.Fprintf(o.w, o.sgr(o.theme.Tool)+format+o.sgr("0")+"\n", args...)
+}
+
 func (o *termOutput) Warningf(format string, args ...any) {
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)

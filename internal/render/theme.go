@@ -15,6 +15,7 @@ type Theme struct {
 	DiffRemoved string // removed ("-") lines in a tool-call diff
 	DiffAdded   string // added ("+") lines in a tool-call diff
 	Command     string // suggested-command ("$") lines
+	Tool        string // the harness reporting what a tool did
 }
 
 // DefaultTheme is aider's default palette: green input, blue assistant,
@@ -30,6 +31,7 @@ func DefaultTheme() Theme {
 		DiffRemoved: "31",             // red
 		DiffAdded:   "32",             // green
 		Command:     "36",             // cyan
+		Tool:        "90",             // gray
 	}
 }
 
@@ -45,6 +47,7 @@ func DarkTheme() Theme {
 		DiffRemoved: "31",
 		DiffAdded:   "32",
 		Command:     "36",
+		Tool:        "90",
 	}
 }
 
@@ -62,5 +65,6 @@ func LightTheme() Theme {
 		DiffRemoved: "31",
 		DiffAdded:   "32",
 		Command:     "36",
+		Tool:        "90",
 	}
 }

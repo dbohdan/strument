@@ -31,7 +31,7 @@ func (c *Coder) autoCommit(edited []string) string {
 		c.sessionCommits = map[string]bool{}
 	}
 	c.sessionCommits[hash] = true
-	c.Out.Printf("Commit %s %s", hash, message)
+	c.Out.Toolf("Commit %s %s", hash, message)
 	return pyFormat(c.Prompts.FilesContentGPTEdits, map[string]string{
 		"hash":    hash,
 		"message": message,

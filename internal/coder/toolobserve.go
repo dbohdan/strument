@@ -57,7 +57,7 @@ func (c *Coder) runRead(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not read %s: %v", a.Path, err)
 	}
-	c.Out.Printf("Read %s", readSummary(ft))
+	c.Out.Toolf("Read %s", readSummary(ft))
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s (%d lines)\n", ft.Path, ft.Total)
@@ -123,7 +123,7 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("The search pattern was not valid: %v", err)
 	}
-	c.Out.Printf("Searched for %s — %s", a.Pattern, matchSummary(res))
+	c.Out.Toolf("Searched for %s — %s", a.Pattern, matchSummary(res))
 
 	if len(res.Files) == 0 {
 		return fmt.Sprintf("No matches for %s.", a.Pattern)
@@ -180,7 +180,7 @@ func (c *Coder) runGlob(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not match %s: %v", a.Pattern, err)
 	}
-	c.Out.Printf("Matched %s against %s", plural(len(paths), "file", "files"), a.Pattern)
+	c.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), a.Pattern)
 
 	if len(paths) == 0 {
 		return fmt.Sprintf("No files match %s.", a.Pattern)
@@ -208,7 +208,7 @@ func (c *Coder) runLS(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
-	c.Out.Printf("Listed %s (%s)", displayDir(a.Path), plural(len(entries), "entry", "entries"))
+	c.Out.Toolf("Listed %s (%s)", displayDir(a.Path), plural(len(entries), "entry", "entries"))
 
 	if len(entries) == 0 {
 		return displayDir(a.Path) + " is empty."
@@ -281,9 +281,24 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 		}
 		ch := c.Verify[i]
 
-		c.Out.Printf("%s $ %s", ch.Name, strings.Join(ch.Argv, " "))
+		// The command prints before it runs, because a suite can take a minute
+		// and silence in the middle of a turn reads as a hang.
+		c.Out.Toolf("%s $ %s", ch.Name, strings.Join(ch.Argv, " "))
 		exit, output := c.runCheck(ctx, ch)
-		c.Out.Printf("%s", strings.TrimRight(output, "\n"))
+		if exit == 0 {
+			// A passing check's output is noise to the user — with verify_auto on
+			// it lands on every editing turn and buries the diffs they are here to
+			// read. The model still gets the whole transcript below: to it, what a
+			// passing run printed is information.
+			c.Out.Toolf("%s passed", ch.Name)
+		} else {
+			// A failure is the one thing here that has to be read, so it keeps the
+			// plain color and all of its output.
+			c.Out.Printf("%s failed (exit status %d)", ch.Name, exit)
+			if trimmed := strings.TrimRight(output, "\n"); trimmed != "" {
+				c.Out.Printf("%s", trimmed)
+			}
+		}
 
 		fmt.Fprintf(&b, "%s: %s\nExit status: %d\n", ch.Name, strings.Join(ch.Argv, " "), exit)
 		if strings.TrimSpace(output) != "" {

@@ -114,6 +114,11 @@ type Output interface {
 	Printf(format string, args ...any)
 	Warningf(format string, args ...any)
 	Errorf(format string, args ...any)
+	// Toolf reports what a tool just did — the file that was read, the search
+	// that matched, the check that passed. Most of a turn's scroll is now this,
+	// so it gets a recessive color of its own: the harness narrating its own
+	// work should sit behind the diffs and the answer, not compete with them.
+	Toolf(format string, args ...any)
 	StreamText(delta string)
 	StreamReasoning(delta string)
 	// StreamToolCall receives a streamed tool-call argument fragment for the

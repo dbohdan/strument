@@ -537,9 +537,9 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results, overwrote map[strin
 			verb = "Applied edit to"
 		}
 		if c.DryRun {
-			c.Out.Printf("Did not write %s (--dry-run)", p)
+			c.Out.Toolf("Did not write %s (--dry-run)", p)
 		} else {
-			c.Out.Printf("%s %s", verb, p)
+			c.Out.Toolf("%s %s", verb, p)
 		}
 	}
 	return edited

@@ -117,7 +117,7 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	if c.Repo == nil || !c.Repo.IsDirty(rel) {
 		return
 	}
-	c.Out.Printf("Committing %s before applying edits.", rel)
+	c.Out.Toolf("Committing %s before applying edits.", rel)
 	needDirtyCommit[rel] = true
 }
 

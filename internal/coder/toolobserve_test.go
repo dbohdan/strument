@@ -187,6 +187,42 @@ func TestVerifyWithoutConfigSaysSo(t *testing.T) {
 	}
 }
 
+// TestVerifyIsQuietWhenItPasses pins the asymmetry between the two audiences.
+// With verify_auto on, a green suite lands on every editing turn, and dumping
+// its transcript buries the diffs the user is there to read; the model gets the
+// whole thing either way, because to it a passing run's output is information.
+func TestVerifyIsQuietWhenItPasses(t *testing.T) {
+	c, out := observeEnv(t, nil)
+	// The command computes its output rather than echoing a literal, so the
+	// assertion below can tell the printed argv from the printed output.
+	c.Verify = []config.VerifyCheck{{Name: "suite", Argv: []string{"sh", "-c", "echo $((6 * 7)) tests passed"}}}
+
+	got := c.runVerify(t.Context(), call("verify", `{}`))
+	if !strings.Contains(got, "42 tests passed") {
+		t.Errorf("the model must still get the output:\n%s", got)
+	}
+	joined := strings.Join(out.lines, "\n")
+	if strings.Contains(joined, "42 tests passed") {
+		t.Errorf("a passing check must not print its output:\n%s", joined)
+	}
+	if !strings.Contains(joined, "suite passed") {
+		t.Errorf("a passing check must still say so:\n%s", joined)
+	}
+}
+
+// TestVerifyShowsAFailure is the other half: a failure is the one thing here
+// the user has to read, so all of it reaches them.
+func TestVerifyShowsAFailure(t *testing.T) {
+	c, out := observeEnv(t, nil)
+	c.Verify = []config.VerifyCheck{{Name: "suite", Argv: []string{"sh", "-c", "echo boom; exit 2"}}}
+
+	c.runVerify(t.Context(), call("verify", `{}`))
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "boom") || !strings.Contains(joined, "suite failed (exit status 2)") {
+		t.Errorf("a failing check must print its verdict and output:\n%s", joined)
+	}
+}
+
 // TestObservationToolsAnnounceThemselves confirms each read-only call prints a
 // one-line outcome, so the user watching the scroll sees what the model looked
 // at rather than a silent gap between diffs.
