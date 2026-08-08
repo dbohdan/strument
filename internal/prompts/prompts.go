@@ -407,14 +407,23 @@ const toolSystemReminder = "# Editing rules\n\n" +
 // It is the default format. The schema does the format-parsing work, so the
 // prompt only conveys the tools' natures and the exact-match discipline.
 var Tool = Set{
-	MainSystem:                       toolMainSystem,
-	SystemReminder:                   toolSystemReminder,
-	ExampleMessages:                  nil,
-	FilesContentPrefix:               filesContentPrefix,
-	FilesContentAssistantReply:       filesContentAssistantReply,
-	FilesNoFullFiles:                 filesNoFullFiles,
-	FilesNoFullFilesWithRepoMap:      filesNoFullFilesWithRepoMap,
-	FilesNoFullFilesWithRepoMapReply: filesNoFullFilesWithRepoMapReply,
+	MainSystem:                 toolMainSystem,
+	SystemReminder:             toolSystemReminder,
+	ExampleMessages:            nil,
+	FilesContentPrefix:         filesContentPrefix,
+	FilesContentAssistantReply: filesContentAssistantReply,
+	// An empty chat is the normal starting state now, not a problem to report.
+	// The model finds what it needs with read, grep, glob, and ls, so saying so
+	// is the whole message.
+	FilesNoFullFiles: "No files are pinned to the chat yet. Use read, grep, glob, and ls to find " +
+		"what you need — you can edit any file in the project.",
+	// The empty-string sentinel disables the repo-map branch in assembly, like
+	// Ask. Its text was written for a harness where the model could not look:
+	// it told the model to name the files it needed and stop so the user could
+	// add them, which is precisely the behavior the tool set replaces. Left in
+	// place it made the model explore and then refuse to edit.
+	FilesNoFullFilesWithRepoMap:      "",
+	FilesNoFullFilesWithRepoMapReply: "",
 	FilesContentGPTEdits:             filesContentGPTEdits,
 	FilesContentGPTEditsNoRepo:       filesContentGPTEditsNoRepo,
 	FilesContentGPTNoEdits:           "I didn't find any tool calls to apply in your reply.",

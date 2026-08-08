@@ -62,10 +62,12 @@ func (o testOutput) FlushStream()                        {}
 
 // replayEnv is one scenario wired up and ready to run.
 type replayEnv struct {
-	sc    *fixture.Scenario
-	coder *Coder
-	stub  *fixture.StreamStub
-	dir   string
+	sc       *fixture.Scenario
+	coder    *Coder
+	stub     *fixture.StreamStub
+	confirms *fixture.ConfirmScript
+	commands *fixture.CommandScript
+	dir      string
 }
 
 // setupScenario materializes the fixture fs in a temp root and builds the
@@ -98,8 +100,10 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	c := New(dir, model)
 	stub := fixture.NewStreamStub(sc)
 	c.Client = stub
-	c.Confirm = scriptConfirmer{t, fixture.NewConfirmScript(sc)}
-	c.Runner = scriptRunner{t, fixture.NewCommandScript(sc)}
+	confirms := fixture.NewConfirmScript(sc)
+	commands := fixture.NewCommandScript(sc)
+	c.Confirm = scriptConfirmer{t, confirms}
+	c.Runner = scriptRunner{t, commands}
 	c.Out = testOutput{t}
 	c.Clock = RealClock{} // replay streams never sleep long; retries use Clock below
 	if sc.Chat != nil {
@@ -113,7 +117,7 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	if mutate != nil {
 		mutate(c)
 	}
-	return &replayEnv{sc: sc, coder: c, stub: stub, dir: dir}
+	return &replayEnv{sc: sc, coder: c, stub: stub, confirms: confirms, commands: commands, dir: dir}
 }
 
 // run executes the scenario's user message and asserts the expect rows.
@@ -157,6 +161,17 @@ func (env *replayEnv) assertExpectations(t *testing.T) {
 				t.Errorf("history[%d]:\nwant %s %q\n got %s %q", i, want.Role, want.Text, history[i].Role, history[i].Text())
 			}
 		}
+	}
+
+	// An unconsumed scripted row means the scenario expected a prompt or a
+	// command that never happened — exactly the drift that should fail loudly
+	// rather than pass in silence. (It did pass in silence: a "Create new file?"
+	// row outlived the confirmation it scripted.)
+	if n := env.confirms.Remaining(); n != 0 {
+		t.Errorf("%d scripted confirm row(s) went unused; the run asked fewer questions than the scenario expected", n)
+	}
+	if n := env.commands.Remaining(); n != 0 {
+		t.Errorf("%d scripted command row(s) went unused", n)
 	}
 
 	if e := sc.ExpectUsage; e != nil {

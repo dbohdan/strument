@@ -237,29 +237,37 @@ func (c *Coder) unsafePath(rel string) string {
 	return ""
 }
 
-// allowedToEdit ports allowed_to_edit (base_coder.py:2191): chat files are
-// allowed (with a dirty-commit check); new files and out-of-chat files need
-// confirmation and join the chat.
+// allowedToEdit decides whether an edit may touch rel, and brings the file into
+// the chat when it does.
+//
+// aider asked before creating a file or editing one the user had not added
+// (allowed_to_edit, base_coder.py:2191). Strument no longer does, because the
+// model now finds files itself: those prompts moved from the exceptional path to
+// the common one, and a confirmation that always appears is not a safety
+// feature — it teaches the user to answer yes without reading it. Scoping it to
+// once per file or once per turn only slows that training down.
+//
+// What guards an edit is everything here that is not a question: path
+// containment (unsafePath, checked before this), the gitignore refusal below,
+// a dirty-commit before the edit so /undo has a clean base, git auto-commit,
+// and the diff scrolling past as it happens. Review lives in the diff and in
+// being able to undo, not in a y/n the user has learned to dismiss.
 func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool {
 	full := c.absRootPath(rel)
 
-	inChat := slices.Contains(c.absFnames, full)
-	if inChat {
+	if slices.Contains(c.absFnames, full) {
 		c.checkForDirtyCommit(rel, needDirtyCommit)
 		return true
 	}
 
+	// Still refused, and not as a prompt: an ignored file is one the project
+	// declared out of scope, and the observation tools do not show it either.
 	if c.Repo != nil && c.Repo.GitIgnored(rel) {
 		c.Out.Warningf("Skipping edits to %s that matches gitignore spec.", rel)
 		return false
 	}
 
 	if _, err := os.Stat(full); err != nil {
-		yes, _ := c.Confirm.Confirm(ConfirmRequest{Prompt: "Create new file?", Subject: rel})
-		if !yes {
-			c.Out.Printf("Skipping edits to %s", rel)
-			return false
-		}
 		if !c.DryRun {
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 				c.Out.Errorf("Unable to create %s, skipping edits.", rel)
@@ -270,14 +278,6 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool 
 		return true
 	}
 
-	yes, _ := c.Confirm.Confirm(ConfirmRequest{
-		Prompt:  "Allow edits to file that has not been added to the chat?",
-		Subject: rel,
-	})
-	if !yes {
-		c.Out.Printf("Skipping edits to %s", rel)
-		return false
-	}
 	c.absFnames = append(c.absFnames, full)
 	c.checkForDirtyCommit(rel, needDirtyCommit)
 	return true

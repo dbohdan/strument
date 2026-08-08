@@ -189,7 +189,6 @@ func TestToolCreateFile(t *testing.T) {
 {"kind":"meta","v":1,"scenario":"tool-create","source":"authored"}
 {"kind":"chat","editable":[]}
 {"kind":"user","text":"add a greeting file"}
-{"kind":"confirm","prompt":"Create new file?","answer":"yes"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"write","tool_args":"{\"path\":\"hi.txt\",\"content\":\"hi there\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"hi.txt","content":"hi there\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
