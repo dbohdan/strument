@@ -3,9 +3,10 @@
 Strument is an AI pair-programming tool for the terminal: a ground-up Go port
 of [aider](https://github.com/Aider-AI/aider), trimmed to the improved
 essentials. It talks to LLMs through a single OpenAI-compatible client
-(OpenRouter dialect), applies the model's edits to your files through native
-tool calls, builds a ranked repository map with tree-sitter, and — in a git
-repository — auto-commits each change so every edit is one `git undo` away.
+(OpenRouter dialect), lets the model read and search your project and edit it
+through native tool calls, shows you every change as it lands, and records each
+turn so the whole of it is one `/undo` away — in a git repository or outside
+one.
 
 Strument began as a close reverse-engineering of aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev), reimplemented in Go. It now follows its own direction — closer to aider in some places, further in others. [`doc/README.md`](doc/README.md) is the developer overview.
 
@@ -18,14 +19,25 @@ Strument began as a close reverse-engineering of aider at commit [`5dc9490`](htt
   explicitly trusted (direnv-style content-hash gate).
 - **One model dialect.** OpenAI-compatible chat completions with OpenRouter
   extensions and native tool calls; no litellm, no MCP.
-- **Essentials only.** A standard tool set — `read`, `write`, `edit`, `bash`,
-  `grep`, `glob`, `ls`, plus a `verify` tool for the project's configured
-  checks — driven in a loop where the model sees each result and continues
-  within the turn. Repo map, reflection on failed edits, git auto-commit with
-  `/undo`, and `/ask` mode for questions that should not touch files. The text
+- **Essentials only.** A standard tool set — `read`, `grep`, `glob`, `ls`,
+  `symbol` to look; `edit` and `write` to change; `bash` and `verify` to run —
+  driven in a loop where the model sees each result and continues within the
+  turn. Reflection on failed edits, `/ask` mode for questions that should not
+  touch files, and a repo map on `/map` rather than in every prompt. The text
   edit formats (SEARCH/REPLACE, fenced, whole-file) have been removed.
   Architect mode, voice, GUI, analytics, and the other long-tail features are
   out of scope for v1.
+- **Every turn is undoable, with or without git.** Strument snapshots each
+  file before it writes to it, so `/undo` puts a whole turn back even in a
+  directory that is not a repository — a live configuration directory, a
+  checkout under another SCM. Where there *is* a repository, a turn is also one
+  commit, described as one piece of work, and `/squash [n]` folds several into
+  the unit you actually recognize afterwards.
+- **Checks the model can't talk its way past.** `verify` names your project's
+  commands — tests, a linter, a build — and the model runs them by *name*, so
+  it never composes a shell command to check its own work. `verify_auto` runs
+  the ones you list at the end of any turn that changed a file, whether or not
+  the model thought to. See [Configuration](#configuration).
 - **Plain-HTTP URL scraping, with an escape hatch.** URLs you mention, or
   `/web <url>`, are fetched with a plain HTTP GET — a real `User-Agent`, no
   headless browser — and converted to markdown. A static binary can't embed a
@@ -131,7 +143,7 @@ models = {
         max_output=128000,
         input_cost=2,
         output_cost=10,
-        cache=True,  # Cache the prompt prefix (Anthropic honors this); freezes the repo map.
+        cache=True,  # Cache the prompt prefix (Anthropic honors this).
         reasoning="medium",
         weak_model="mimo",
     ),

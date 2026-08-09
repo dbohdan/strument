@@ -12,11 +12,14 @@ own direction. If you are an agent or a new contributor, start here.
 - **[`README.md`](README.md)** — user-facing: install, configuration, and what
   differs from aider.
 
-The short version of the philosophy: Strument is a **propose/direct-apply
-tool, not an autonomous agent** — the model responds, the harness acts, the
-human drives the next turn. The **code is the source of truth** (the old port
-specs are retired; don't reintroduce a spec the code must conform to). Prompts
-are **calm and specific**, written as you'd write for a competent colleague.
+The short version of the philosophy: Strument is a **reviewable loop, not an
+autonomous one** — the model calls tools and keeps working within a turn,
+because that is the protocol tool calls carry; what does not move is the review
+surface, and the turn boundary stays the human's. The **code is the source of
+truth** (the old port specs are retired; don't reintroduce a spec the code must
+conform to). Prompts are **calm and specific**, written as you'd write for a
+competent colleague. Read the Philosophy section of `doc/README.md` for the
+reasoning, including why this reverses the position the project started from.
 
 ## Build, test, lint
 

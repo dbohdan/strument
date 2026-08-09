@@ -18,25 +18,50 @@ The positions below are the ones worth knowing before you change anything
 substantive. They are the project's own, arrived at deliberately — not
 inherited from aider.
 
-- **A propose/direct-apply tool, not an agent.** Strument is in the aider
-  lineage: the model responds, the harness acts, the human drives the next
-  turn. There is no self-continuing loop where the model calls tools, reads
-  results, and keeps going on its own. Concretely: **file edits apply
-  directly** (with git auto-commit and `/undo` as the safety net); **shell
-  commands are suggested** and only run after the user confirms; **files are
-  added on request**, not reached for. Keep that shape. Adding an autonomous
-  loop would make it a different program.
+- **A reviewable loop, not an autonomous one.** The model calls tools, reads
+  the results, and keeps working inside one turn. That is a deliberate
+  reversal, and it is worth knowing why, because the position it replaced was
+  held just as deliberately.
+
+  Strument began as aider's shape: the model responds, the harness acts, the
+  human drives the next turn. That shape is *coherent with SEARCH/REPLACE*,
+  where a reply carrying an edit is a finished thought. It is not coherent with
+  tool calls. A reply that ends in a tool call carries
+  `finish_reason: "tool_calls"` — the model is mid-sentence by construction,
+  and every post-trained model expects results, then continuation. Strument
+  used the tool-call *transport* with aider's *turn semantics*, appended the
+  results, and hung up before the model could read them. In practice mid-size
+  models terminated early and got confused, worst when a change spanned code
+  and its separately-stored tests. That was not the models being weak. It was
+  the harness breaking a protocol.
+
+  So the loop closed, and with it the rest: the model finds files with `grep`
+  and `read` instead of asking for them, and the repo map left the prompt
+  because a model that can look does not need a digest.
+
+  **What did not change is the review surface**, and that is the part worth
+  defending. Every edit is snapshotted before it lands and is one `/undo`
+  away, with or without git. Mutation through the shell is gated while
+  observation runs free. The step budget is a checkpoint a human clears. The
+  turn boundary is still the human's — nothing here starts work nobody asked
+  for. aider's spirit was never *one send per turn*; it was that nothing is
+  unrecoverable and you see everything happen. A twenty-five-step loop that
+  snapshots every edit and shows every diff honors that better than a
+  single-send turn that does neither.
+
+  The line that remains is autonomy *across* turns, not within one. Keep it
+  there.
 
 - **The code is the source of truth.** The written port specs and their
   journal are retired. Don't re-introduce a parallel spec that the code must
   "conform to"; document decisions in the code, the commit, and these docs.
   Where we differ from aider, that is on purpose — say why in the comment.
 
-- **Tool calls are the default edit path.** Every model in scope has solid
-  function calling, so edits, shell suggestions, and file requests go through
-  native tool calls, and that is now the only path — the text formats were
-  removed, because a model that cannot call functions cannot find or read a
-  file either. Beyond reliability, tool calls remove the SEARCH/REPLACE
+- **Tool calls are the only path.** Every model in scope has solid function
+  calling, so looking, editing, and running go through native tool calls —
+  the text formats were removed, because a model that cannot call functions
+  cannot find or read a file either, and the harness now assumes it can do
+  both. Beyond reliability, tool calls remove the SEARCH/REPLACE
   delimiter-collision problem — a file that itself contains `<<<<<<< SEARCH`
   is just data — which is what makes the harness usable on its own source,
   including its prompt strings. The user still sees code scroll by, rendered
@@ -52,38 +77,51 @@ inherited from aider.
 - **Small, honest, self-contained.** One static binary, no cgo. One
   OpenAI-compatible dialect (OpenRouter). Starlark configuration behind a
   direnv-style trust gate. Never fabricate cost or token counts; mark
-  estimates as estimates. Git is the safety model: auto-commit each edit,
-  `/undo`, atomic batch writes that roll back on failure, path containment.
-  Never commit secrets.
+  estimates as estimates. Never commit secrets.
+
+  The safety model is a snapshot, not git. Every file a turn writes is
+  recorded before the first write to it, so `/undo` restores a turn whether or
+  not there is a repository — which is what makes the harness usable on a live
+  configuration directory or under another SCM. Git is layered on top where it
+  exists: one commit per turn, `/squash` to merge turns, and the pre-existing
+  dirty state committed separately so a turn never absorbs the user's own work.
+  Alongside that: atomic batch writes that roll back whole, path containment,
+  and an edit that preserves the file's mode and follows a symlink instead of
+  replacing it.
 
 ## Relationship to aider
 
 - **Scope.** Essentials only: a standard tool set driven in a closed loop
-  (read/write/edit/bash/grep/glob/ls plus verify), repo map, reflection, shell
-  suggestions, git auto-commit with `/undo`, `/ask`, chat-history
-  summarization. Architect mode, voice, GUI, and analytics are out of scope
-  for v1.
+  (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
+  `bash` and `verify` to run things), turn-scoped snapshots with `/undo` and
+  `/squash`, git auto-commit where there is a repository, `/ask`, an
+  on-demand repo map (`/map`), reflection, chat-history summarization.
+  Architect mode, voice, GUI, and analytics are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
   YAML/`.env`/model-database configuration. Prompt caching follows from this:
   with no model database to declare capability, it is a per-model `cache`
-  setting that decorates the prompt with cache-control breakpoints (1h TTL) and
-  freezes the repo map to hold the prefix stable — aider's `--cache-prompts`
-  plus `map_refresh="files"`, minus the cache-warming pings, which we omit.
-- **Where we differ.** Some behavior is deliberately not aider's — atomic
-  batch writes with rollback, a single pure apply planner shared by dry and
-  real runs, usage accounting that survives an aborted turn, an in-chat-file
-  exemption on path containment. Chat-history summarization is aider's
-  algorithm ported closely, but it runs **synchronously** (aider uses a
-  background thread) and only when the model's context window is declared
-  (`context=`), where aider always summarizes; the summarize prompt is
-  modernized from aider's shouty original for effectiveness and model welfare,
-  like the other built-in prompts. When you diverge, say why in the code
-  comment and the commit message.
+  setting that decorates the prompt with cache-control breakpoints (1h TTL) —
+  aider's `--cache-prompts` minus the cache-warming pings, which we omit.
+  aider also needs `map_refresh="files"` to keep the prefix byte-stable;
+  Strument does not, because the repo map is the one thing that changed every
+  turn and it is no longer in the prompt.
+- **Where we differ.** Some behavior is deliberately not aider's — the closed
+  loop above all, and then atomic batch writes that roll back whole and
+  preserve the file's mode, an undo substrate that does not need git, usage
+  accounting that survives an aborted turn, an in-chat-file exemption on path
+  containment. Chat-history summarization is aider's algorithm ported closely,
+  but it runs **synchronously** (aider uses a background thread) and only when
+  the model's context window is declared (`context=`), where aider always
+  summarizes; the summarize prompt is modernized from aider's shouty original
+  for effectiveness and model welfare, like the other built-in prompts. When
+  you diverge, say why in the code comment and the commit message.
 - **Borrowed material.** The tree-sitter tag queries under
   `internal/repomap/queries*/` are copied from aider. The built-in prompts in
-  `internal/prompts/` began as aider's and are now ours to change; a test
-  pins their hashes so a change is always deliberate, not accidental.
+  `internal/prompts/` began as aider's and are now ours to change;
+  `prompts_test.go` asserts the *shape* of the two sets — that each slot says
+  the things the loop depends on — rather than pinning a hash, so wording
+  stays free to improve and a rule cannot be deleted by accident.
 
 ## Codebase structure
 
@@ -97,9 +135,11 @@ inherited from aider.
     apply → shell → commit → cost. Its seams with the outside world are
     interfaces in `ports.go` (see below).
   - `editblock/` — the edit engine: Python-`difflib` sequence matching that
-    lands a replacement whose whitespace the model reproduced imperfectly, and
-    the did-you-mean an unmatched edit returns. The SEARCH/REPLACE parser, the
-    whole-file parser, and the batch planner went with the text formats.
+    lands a replacement whose whitespace the model reproduced imperfectly, the
+    did-you-mean an unmatched edit returns, and `LineOps` (difflib's
+    `get_opcodes`, pinned against CPython) which the renderer diffs an edit's
+    two sides with. The SEARCH/REPLACE parser, the whole-file parser, and the
+    batch planner went with the text formats.
   - `workspace/` — the file-access layer behind read/ls/glob/grep, walking the
     tree and applying ignore rules in process so it behaves the same with and
     without git.
@@ -112,10 +152,13 @@ inherited from aider.
   - `config/` — the Starlark configuration surface (`provider()`,
     `model()`, `env()`) and the direnv-style trust gate for project
     configs.
-  - `repomap/` — ranked repo map: tree-sitter tag extraction (pure-Go
-    grammars via gotreesitter), personalized PageRank, token-budgeted
-    rendering. `queries/` and `queries-legacy/` hold the aider `.scm`
-    files.
+  - `repomap/` — the parse layer. Tree-sitter tag extraction (pure-Go
+    grammars via gotreesitter) feeds three things now: the ranked map itself
+    (personalized PageRank, token-budgeted rendering, on `/map` rather than in
+    every prompt), `Tags` for the `symbol` tool, and `ParseStatus` for the
+    after-an-edit check — which routes `.go` to `go/parser` instead, because
+    for Go that is exact and about a thousand times faster on the pathological
+    cases. `queries/` and `queries-legacy/` hold the aider `.scm` files.
   - `prompts/` — the built-in prompt sets.
   - `render/` — streaming markdown renderer (a Go port of
     thetarnav/streaming-markdown) plus the ANSI terminal renderer and the
@@ -153,7 +196,7 @@ reaching around it.
 | `llm.ModelClient` | one streaming send | `client.Client` / `fixture.StreamStub` |
 | `Output` | user-facing printing + live stream | `repl.termOutput`, `StdOutput` / test buffers |
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
-| `CommandRunner` | `/run` and suggested shell commands | `PipeRunner` / replay stub |
+| `CommandRunner` | `/run`, the `bash` tool, `verify` checks | `PipeRunner` / replay stub |
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
 | `Clock` | retry backoff sleeps | `RealClock` / instant fake |
@@ -163,68 +206,118 @@ The REPL has the same philosophy: `repl.Options` exposes seams
 `GetSize`) so the whole interactive loop runs under tests over pipes and a
 real pty.
 
-## Tool calls (the default edit format)
+## The tool loop
 
-The default `edit_format` is `"tool"`: the model edits, suggests commands,
-and asks for files through native function calls instead of text blocks. The
-API schema enforces the format, so the whole class of format-parse failures
-disappears, the prompts shrink (the schema carries the rules), and a file
-that contains `<<<<<<< SEARCH` is just data — which is what lets the harness
-edit its own prompt strings. `diff`, `diff-fenced`, and `whole` have been
-removed.
+`edit_format` accepts one value, `"tool"`: everything the model does, it does
+through a native function call. The API schema enforces the format, so the
+whole class of format-parse failures disappears, the prompts shrink (the
+schema carries the rules), and a file that contains `<<<<<<< SEARCH` is just
+data — which is what lets the harness edit its own prompt strings. `diff`,
+`diff-fenced`, and `whole` have been removed, and `edit_format` now exists
+only to give the old values a migration error.
 
-Four tools, in two shapes that match the harness's nature:
+Nine tools, in three natures:
 
-- **`replace_in_file(path, search, replace)`** and **`create_file(path,
-  content)`** — *direct*. Exactly like a SEARCH/REPLACE block: the edit
-  applies and auto-commits the moment the call arrives, with `/undo` as the
-  safety net. Not a proposal. `create_file` writes the whole file — creating
-  it, or fully overwriting an existing one (the outcome line and tool result
-  say which) — so a total rewrite doesn't need a hunk diff.
-- **`suggest_command(command, purpose)`** — a *proposal*. Runs only after the
-  user confirms (the existing run-shell gate); its output returns as the tool
-  result.
-- **`request_files(paths, reason)`** — a *request*. The user confirms each
-  file before it joins the chat.
+- **Observation is free**, because the cost of looking is what makes a model
+  guess. `read(path, offset, limit)` returns a `cat -n`-style window with a
+  paging hint when it truncates; `grep(pattern, …)` searches contents, listing
+  files, matching lines, or per-file counts; `glob(pattern)` finds files by
+  path; `ls(path)` lists a directory and names a symlink's target;
+  `symbol(name, kind)` answers "where is this defined" from the tree-sitter
+  tags rather than from text, and is offered only where grammars are. None of
+  them ask the user anything, and none of them see a file the project ignores.
+- **Edits are direct**, exactly as a SEARCH/REPLACE block was.
+  `edit(path, old_string, new_string)` replaces an exact span, through the
+  same fuzzy matcher aider's format used, and returns a did-you-mean when it
+  misses. `write(path, content)` puts down a whole file — creating it or
+  completely overwriting it, and the outcome line says which, so neither the
+  user nor the model assumes the old contents survived. Both land the moment
+  the call arrives. The safety net is the snapshot and the diff, not a
+  question.
+- **Mutation through the shell is gated.** `bash(command, purpose)` runs only
+  after the user confirms; its output returns as the tool result.
+  `verify(check)` runs a *configured* argv from the `verify` dict by name, so
+  it needs no gate — the model supplies a key, never a command, and there is
+  nothing to classify or smuggle. It is offered only when `verify` is
+  configured.
 
-The tools live in `internal/coder/tools.go`; `applyToolCalls` dispatches a
+The tools live in `internal/coder/tools.go` (`toolobserve.go` for the
+observation half, `toolsymbol.go` for `symbol`); `applyToolCalls` dispatches a
 captured turn. Every tool call gets a `tool` result message, always, so the
-next request stays well-formed. Edits reuse the same replace primitive,
-atomic-write, and auto-commit machinery as the SEARCH/REPLACE path — the tool
-format changes how edits *arrive*, not how they apply.
+next request stays well-formed.
 
-**Reflection is a tool error, not a synthetic user turn.** When a `search`
-doesn't match, its call's tool result carries the failure (with a
-did-you-mean) and the turn re-sends on those results — no injected "please
-fix" user message. `runOne` is outcome-driven so a text-free tool reflection
-still loops, bounded by `maxReflections`.
+**The loop closes.** When a turn produces tool calls, the results are appended
+and the turn *sends again* — `applyToolCalls` returns `OutcomeContinue` and
+`runOne` goes round. That is the whole pivot: a reply ending in a tool call
+carries `finish_reason: "tool_calls"`, so hanging up on it breaks the
+protocol every post-trained model was fitted to. The loop is bounded by
+`maxSteps` (25), which is a checkpoint rather than a wall: the turn reports
+what it has done and asks whether to continue. `maxErrorReflections` (3)
+bounds the rounds an *error* starts, and `maxAutoVerify` (3) the rounds the
+harness itself starts, so a model in a fix-break cycle hands back to the human
+instead of eating the work budget.
+
+**Reflection is a tool error, not a synthetic user turn.** When an
+`old_string` doesn't match, its call's tool result carries the failure (with
+the did-you-mean) and the turn re-sends on those results — no injected "please
+fix" user message. `runOne` is outcome-driven, so a text-free tool reflection
+still loops. There is one deliberate exception: a failing `verify_auto` speaks
+as a *user* message, because the harness is talking unprompted and no tool
+call is waiting for an answer.
+
+**Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
+in order against a shared overlay, so two edits to one file build on each
+other, then writes the batch atomically — all of it or none of it, each file
+keeping its mode and following a symlink rather than replacing it. Each call
+gets its own result and its own verb (`Created` / `Overwrote` /
+`Applied the edit to`). A file that parsed cleanly before the batch and no
+longer does earns a warning to the user and a note on the result of the call
+that finished it (`parsecheck.go`); the edit still applies, because the model
+may be mid-repair and a check that refuses is a check that has to be right.
 
 **"Code scrolls by" with tool calls.** Providers stream a call's arguments as
 JSON-escaped string fragments, so raw rendering would show escaped JSON.
 `internal/render/toolargs.go` decodes them live: `ArgScanner` is a streaming
 JSON string-field extractor (escape- and UTF-8-boundary-safe) and `ToolDiff`
-turns the decoded `search`/`replace`/`content`/`command` fields into a
-red-green Git-style diff as they arrive. `ToolDiffSet` fans a turn's calls
-out by index. There are two decoders by design: `ArgScanner` for streaming
-*display* (best-effort) and `json.Unmarshal` on the complete arguments for
-the authoritative *apply*.
+turns the decoded fields into a red-green Git-style diff. `write` and `bash`
+stream line by line, since neither has a second side to compare against. An
+`edit` is *buffered* and rendered in `Flush`: its two sides are diffed against
+each other with `editblock.LineOps`, so a one-line change inside twenty lines
+of matching context reads as a one-line change, with three lines of context
+each side and a `… N unchanged lines …` marker between. The `path` header
+still prints the moment that field completes, so the file being edited appears
+while the rest streams. `ToolDiffSet` fans a turn's calls out by index. There
+are two decoders by design: `ArgScanner` for streaming *display*
+(best-effort) and `json.Unmarshal` on the complete arguments for the
+authoritative *apply*.
+
+**The harness's own voice is a channel.** `Output.Toolf` and `Theme.Tool` (a
+recessive gray) carry everything Strument says about its own mechanics — what
+a tool did, what was committed, which check is running — so it sits behind the
+diffs and the answer rather than competing with them. A passing check prints
+one line; only a failing one prints its output.
 
 ### Cross-provider streaming quirks
 
 Tool-call *edits* work across the current model field — but the way providers
 *stream* a call's arguments diverges, so the clean, uniform UX is the
 renderer's doing, not the wire's. A 16-model live sweep (via OpenRouter, one
-`replace_in_file` edit + one `suggest_command` + one `create_file` per model)
-made this concrete. Fourteen models drove all three tools cleanly and rendered
-byte-identical canonical diffs. The two that stumbled did so only on the *edit*
-— they still handled `suggest_command` and `create_file` — and both were the
-smallest, most reasoning-heavy models (gpt-oss-120b, qwen3-14b), which spent a
-modest output budget thinking and never emitted the call. The ~27B floor holds.
+edit + one shell command + one whole-file write per model) made this concrete.
+Fourteen models drove all three tools cleanly and rendered byte-identical
+canonical diffs. The two that stumbled did so only on the *edit* — they still
+ran the command and wrote the file — and both were the smallest, most
+reasoning-heavy models (gpt-oss-120b, qwen3-14b), which spent a modest output
+budget thinking and never emitted the call. The ~27B floor holds.
+
+The sweep predates the current tool names (the edit tool was
+`replace_in_file(path, search, replace)` then, and is `edit(path, old_string,
+new_string)` now), but what it measured is a property of the providers, not of
+the schema, and it has not changed.
 
 Underneath that uniform surface, the wire order of an edit's JSON fields is
 all over the map:
 
-| Wire order of `replace_in_file` fields | Models |
+| Wire order of the edit tool's fields | Models |
 | --- | --- |
 | `path, search, replace` (schema order) | Claude Haiku 4.5 / Opus 4.8 / Sonnet 5, Cohere North-mini-code, Kimi K3, Laguna-S-2.1, Step-3.7-flash, MiMo v2.5 |
 | `path, replace, search` (replace first) | Gemma-4-31b, MiniMax-M3, Kimi K2.6, GPT-5.6-sol, Inkling |
@@ -233,14 +326,19 @@ all over the map:
 Only eight of the fourteen keep schema order. Gemini streams `path` **last**,
 so nothing in the arguments even names the file until the end. The renderer
 absorbs all of it — every row above renders header-first, removed lines above
-added — because it never assumes field order. Three display-only
-normalizations, each with a regression test in `toolargs_test.go`:
+added — because it never assumes field order. The normalizations, each with a
+regression test in `toolargs_test.go`:
 
-- **`replace` before `search`.** Held added (`+`) lines wait until the removed
-  (`-`) lines are known, so a diff always reads in canonical git order. (Seen
-  first with GLM 5.2; confirmed on six models in the sweep, Gemini included.)
+- **The two sides in either order.** An edit is buffered whole and diffed in
+  `Flush`, so which side arrives first cannot be observed. This *replaces* an
+  earlier fix that held added (`+`) lines until the removed (`-`) lines were
+  known — buffering for the context diff subsumed it, and the reordering
+  machinery went with it. (The problem was seen first with GLM 5.2, then on
+  six models in the sweep, Gemini included; the test stayed when the code
+  changed.)
 - **`path` not first (Gemini, Qwen3.6).** An edit's diff lines are buffered
-  until the `path`/header resolves, then the header leads.
+  until the `path`/header resolves, then the header leads. This still matters
+  for `write`, which streams.
 - **Interleaved calls (DeepSeek).** With two calls in one turn, fragments
   arrive interleaved; `ToolDiffSet` streams the first call live and buffers
   later ones, appending each whole in first-seen order. (Single-call sweep
@@ -249,10 +347,9 @@ normalizations, each with a regression test in `toolargs_test.go`:
 The authoritative `json.Unmarshal` parse is order-independent, so none of this
 touches correctness — only display. The lesson worth keeping: **field order
 and fragment contiguity are provider-specific and not guaranteed; a streaming
-renderer must assume neither.** The per-hunk `replace_in_file` shape itself
-needed no change — every capable model produced well-formed single-hunk calls
-(some with more surrounding context than others), so batching stays
-unnecessary.
+renderer must assume neither.** The per-hunk edit shape itself needed no change
+— every capable model produced well-formed single-hunk calls (some with more
+surrounding context than others), so batching stays unnecessary.
 
 ## Configuration
 
@@ -285,8 +382,10 @@ no external dependency is needed.
 - **REPL tests**: scripted sessions over pipes in readline's
   non-interactive mode, plus a real-pty round trip that answers the
   cursor-position query itself.
-- **Pinning tests**: prompt hashes, embedded-query compilation, the
-  grammar-tag list, and the safety-critical behaviors (`rollback_test.go`,
+- **Pinning tests**: embedded-query compilation, the grammar-tag list,
+  `LineOps` against CPython's `difflib`, the prompt sets' shape
+  (`prompts_test.go` — the rules the loop depends on, not a hash), and the
+  safety-critical behaviors (`rollback_test.go`, `snapshot_test.go`,
   `unsafepath_test.go`, `usage_test.go`) have tests that fail if the
   invariant drifts.
 
