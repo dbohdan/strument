@@ -1,8 +1,10 @@
 package repomap
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"os"
 )
@@ -29,18 +31,46 @@ func goTags(relFname, absFname string) []Tag {
 		return nil
 	}
 	fset := token.NewFileSet()
-	// AllErrors, and the error deliberately ignored: a file caught mid-edit
-	// still yields every declaration before the break. That is the difference
-	// between a symbol lookup that degrades while the user types and one that
-	// goes blank. SkipObjectResolution because nothing here needs an identifier
-	// resolved to its declaration.
-	f, _ := parser.ParseFile(fset, absFname, src, parser.SkipObjectResolution|parser.AllErrors)
+	// AllErrors, and the error kept rather than discarded: a file caught
+	// mid-edit still yields every declaration before the break, which is the
+	// difference between a symbol lookup that degrades while the user types and
+	// one that goes blank. SkipObjectResolution because nothing here needs an
+	// identifier resolved to its declaration.
+	f, err := parser.ParseFile(fset, absFname, src, parser.SkipObjectResolution|parser.AllErrors)
 	if f == nil {
 		return nil
 	}
-	g := &goTagger{relFname: relFname, absFname: absFname, fset: fset, src: src}
+	g := &goTagger{
+		relFname: relFname,
+		absFname: absFname,
+		fset:     fset,
+		src:      src,
+		brokenAt: firstGoErrorLine(err),
+	}
 	g.file(f)
 	return g.tags
+}
+
+// firstGoErrorLine is the 1-based line of the earliest parse error, or 0 when
+// the file parsed cleanly. Named apart from firstErrorLine in parse.go, which
+// answers the same question about a tree-sitter tree.
+func firstGoErrorLine(err error) int {
+	if err == nil {
+		return 0
+	}
+	var list scanner.ErrorList
+	if errors.As(err, &list) && len(list) > 0 {
+		line := 0
+		for _, e := range list {
+			if line == 0 || e.Pos.Line < line {
+				line = e.Pos.Line
+			}
+		}
+		return line
+	}
+	// An error carrying no position. Treat the whole file as suspect rather than
+	// none of it: the point of this number is to stop claiming things.
+	return 1
 }
 
 type goTagger struct {
@@ -52,19 +82,40 @@ type goTagger struct {
 
 	// enclosing is the function whose body is being walked, "" at file scope.
 	enclosing string
+
+	// brokenAt is the 1-based line of the first parse error, 0 when the file
+	// parsed cleanly. Past it, this file's enclosing names are not trustworthy;
+	// see emit.
+	brokenAt int
 }
 
 func (g *goTagger) emit(kind Kind, name string, pos token.Pos) {
 	if name == "" {
 		return
 	}
+	line := g.fset.Position(pos).Line
+
+	// Below a parse error, drop the enclosing name. Recovery does not resume at
+	// the right nesting: a half-typed `if x := f(` swallows the remainder of the
+	// file into whichever function was open at the break, so every later
+	// reference gets confidently attributed to that one. A live pass caught this
+	// reporting four of runLS's and runChecks's call sites as runGlob's.
+	//
+	// Silence is the whole contract here — an annotation is offered as fact, and
+	// a wrong function name sends a reader somewhere real and wrong. Above the
+	// break the parse was ordinary, so those names stand.
+	enclosing := g.enclosing
+	if g.brokenAt > 0 && line >= g.brokenAt {
+		enclosing = ""
+	}
+
 	g.tags = append(g.tags, Tag{
 		RelFname:  g.relFname,
 		Fname:     g.absFname,
-		Line:      g.fset.Position(pos).Line - 1, // Tag.Line is 0-based
+		Line:      line - 1, // Tag.Line is 0-based
 		Name:      name,
 		Kind:      kind,
-		Enclosing: g.enclosing,
+		Enclosing: enclosing,
 	})
 }
 

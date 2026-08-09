@@ -331,6 +331,71 @@ func TestGoTagsSurviveAMidEditFile(t *testing.T) {
 	}
 }
 
+// TestGoTagsDropEnclosingBelowABreak pins a bug a live pass found and the unit
+// tests did not, because they asked the wrong question.
+//
+// They checked that the definitions *above* a break survive. They never checked
+// what is claimed *below* one. With internal/coder/toolobserve.go broken at its
+// midpoint, a symbol lookup found all seven call sites — and attributed four of
+// runLS's and runChecks's to runGlob, because recovery swallows the rest of the
+// file into whichever function was open at the break.
+//
+// That is exactly the failure the annotation was designed to rule out: not a
+// gap, but a confident wrong name pointing at real code. Below the first parse
+// error there is no enclosing name at all.
+func TestGoTagsDropEnclosingBelowABreak(t *testing.T) {
+	const src = `package fixture
+
+func alpha() { helper() }
+
+func beta() { helper() }
+
+func gamma() { helper() }
+
+func helper() {}
+`
+	dir := t.TempDir()
+	abs := filepath.Join(dir, "fixture.go")
+	if err := os.WriteFile(abs, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	enclosingOf := func(want string) map[int]string {
+		out := map[int]string{}
+		for _, tag := range goTags("fixture.go", abs) {
+			if tag.Name == want && tag.Kind == Ref {
+				out[tag.Line+1] = tag.Enclosing
+			}
+		}
+		return out
+	}
+
+	intact := enclosingOf("helper")
+	for line, want := range map[int]string{3: "alpha", 5: "beta", 7: "gamma"} {
+		if intact[line] != want {
+			t.Fatalf("intact: line %d attributed to %q, want %q", line, intact[line], want)
+		}
+	}
+
+	// Break inside alpha, above beta and gamma.
+	lines := strings.Split(src, "\n")
+	lines[2] = "func alpha() { helper(); if x := ( }"
+	if err := os.WriteFile(abs, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	broken := enclosingOf("helper")
+	if len(broken) == 0 {
+		t.Fatal("a broken file reported no references at all")
+	}
+	for line, got := range broken {
+		if line >= 3 && got != "" {
+			t.Errorf("line %d below the break claims to be in %q; below a parse "+
+				"error there is nothing trustworthy to say", line, got)
+		}
+	}
+}
+
 // TestGoTagsIsolateABrokenFile: one file mid-edit must not take the rest of the
 // project's answers with it.
 func TestGoTagsIsolateABrokenFile(t *testing.T) {
