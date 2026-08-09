@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -262,6 +263,96 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 	const minRefAgreement = 99.9
 	if agreement < minRefAgreement {
 		t.Errorf("reference agreement %.2f%% is below the pinned floor of %.1f%%", agreement, minRefAgreement)
+	}
+}
+
+// TestGoTagsSurviveAMidEditFile is the reservation this extractor was weighed
+// against: a call-graph feature that goes blank while the user is typing is
+// worse than none. A type-resolved graph does exactly that — it needs the
+// package to type-check, which mid-edit it does not — and this is the reason
+// the syntactic answer was chosen instead.
+//
+// The promise is precise and partial: **every definition ahead of the break is
+// still found**. What comes after it is not promised at all, and the count can
+// even come out higher than the intact file's — error recovery closes a
+// function early and reparses the rest of its body as top-level declarations.
+// Those are transient and self-correcting, since the file is retagged the
+// moment it changes again; losing the declarations above the cursor would not
+// be.
+func TestGoTagsSurviveAMidEditFile(t *testing.T) {
+	dir := t.TempDir()
+	abs := filepath.Join(dir, "fixture.go")
+	if err := os.WriteFile(abs, []byte(goParityFixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(goParityFixture, "\n")
+	mid := len(lines) / 2
+
+	// The definitions above the break, which is what must survive. Breaks are
+	// inserted at mid, so these keep their line numbers in every variant.
+	var above []string
+	for _, s := range sites(goTags("fixture.go", abs), Def) {
+		num, _, _ := strings.Cut(s, ":")
+		if n, err := strconv.Atoi(num); err == nil && n <= mid {
+			above = append(above, s)
+		}
+	}
+	if len(above) < 5 {
+		t.Fatalf("only %d definitions above the break; this measures nothing", len(above))
+	}
+
+	for _, tc := range []struct {
+		what   string
+		broken string
+	}{
+		{"truncated mid-file", strings.Join(lines[:mid], "\n")},
+		{"half-typed statement", strings.Join(slices.Concat(
+			lines[:mid], []string{"\tif x := foo("}, lines[mid:]), "\n")},
+		{"stray closing braces", strings.Join(slices.Concat(
+			lines[:mid], []string{"}}}"}, lines[mid:]), "\n")},
+		{"unterminated string", strings.Join(slices.Concat(
+			lines[:mid], []string{`	s := "oops`}, lines[mid:]), "\n")},
+	} {
+		t.Run(tc.what, func(t *testing.T) {
+			if err := os.WriteFile(abs, []byte(tc.broken), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			got := sites(goTags("fixture.go", abs), Def)
+			if len(got) == 0 {
+				t.Fatal("a broken file yielded nothing; the whole file was lost, not its tail")
+			}
+			lost, _ := diffCounts(above, got)
+			if len(lost) > 0 {
+				t.Errorf("definitions above the break were lost: %v", lost)
+			}
+			t.Logf("%d definitions total, all %d above the break intact", len(got), len(above))
+		})
+	}
+}
+
+// TestGoTagsIsolateABrokenFile: one file mid-edit must not take the rest of the
+// project's answers with it.
+func TestGoTagsIsolateABrokenFile(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "good.go")
+	bad := filepath.Join(dir, "bad.go")
+	if err := os.WriteFile(good, []byte(goParityFixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bad, []byte("package fixture\n\nfunc broken() { if x := ("), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rm := testMap(t, dir)
+	var fromGood int
+	for _, tag := range rm.Tags([]string{good, bad}) {
+		if tag.RelFname == "good.go" {
+			fromGood++
+		}
+	}
+	if fromGood == 0 {
+		t.Error("a broken file in the workspace silenced an intact one")
 	}
 }
 
