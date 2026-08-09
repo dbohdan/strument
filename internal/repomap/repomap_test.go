@@ -1,6 +1,8 @@
 // Transliterated from aider tests/basic/test_repomap.py @ 5dc9490. The
-// refresh-mode tests (refresh="files"/"auto") are N/A: Strument drops all
-// cross-call caches by design.
+// refresh-mode tests (refresh="files"/"auto") are N/A: those knobs decide when
+// aider may reuse a stale *rendered map*, and Strument re-ranks and re-renders
+// on every call. It caches only tag extraction, keyed on the file's stamp
+// (tagcache_test.go), so there is no staleness for a mode to trade against.
 
 package repomap
 
