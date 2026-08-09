@@ -374,3 +374,22 @@ func (rm *RepoMap) buildTreeContext(absFname string) *TreeContext {
 	}
 	return NewTreeContext(code, tree.RootNode())
 }
+
+// Tags extracts the definition and reference tags for the given absolute paths.
+// It is the entry point behind the symbol tool: the same tree-sitter pass the
+// map is built from, exposed without the ranking and rendering on top.
+//
+// Files with no grammar, no tags query, or unreadable contents contribute
+// nothing and are skipped silently — a missing grammar is a gap in coverage,
+// not an error in the caller's request.
+func (rm *RepoMap) Tags(absFnames []string) []Tag {
+	if rm.warnedFiles == nil {
+		rm.warnedFiles = map[string]bool{}
+	}
+	inv := newInvocation()
+	out := make([]Tag, 0, len(absFnames))
+	for _, fname := range absFnames {
+		out = append(out, inv.tags(rm, fname, rm.relFname(fname))...)
+	}
+	return out
+}

@@ -23,6 +23,7 @@ const (
 	toolGrep   = "grep"
 	toolGlob   = "glob"
 	toolLS     = "ls"
+	toolSymbol = "symbol"
 	toolVerify = "verify"
 )
 
@@ -44,6 +45,11 @@ func intProp(desc string) map[string]any {
 // engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
 	defs := readOnlyTools()
+	if c.RepoMap != nil {
+		// symbol reads the same tree-sitter layer the repo map is built from,
+		// so it is offered exactly when that layer is available.
+		defs = append(defs, symbolTool())
+	}
 	if c.editFormat == "ask" {
 		return defs
 	}
@@ -323,6 +329,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runGlob(tc)
 		case toolLS:
 			results[tc.ID] = c.runLS(tc)
+		case toolSymbol:
+			results[tc.ID] = c.runSymbol(tc)
 		case toolVerify:
 			results[tc.ID] = c.runVerify(ctx, tc)
 		default:
