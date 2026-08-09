@@ -60,6 +60,93 @@ func TestSymbolFindsReferences(t *testing.T) {
 	}
 }
 
+const symbolCallers = `package lib
+
+import "fmt"
+
+type Store struct{ n int }
+
+func Target() int { return 1 }
+
+func fromFunc() int {
+	return Target()
+}
+
+func (s *Store) fromMethod() int {
+	return Target()
+}
+
+var atFileScope = Target()
+
+func printer() {
+	fmt.Println(Target())
+}
+`
+
+// TestSymbolNamesTheEnclosingFunction: a list of coordinates says where to
+// look, a function name says what is doing the looking. The method carries its
+// receiver, because "fromMethod" alone does not locate anything in a project
+// with several of them.
+func TestSymbolNamesTheEnclosingFunction(t *testing.T) {
+	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
+
+	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
+	for _, want := range []string{
+		"in fromFunc",
+		"in Store.fromMethod",
+		"in printer",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestSymbolSaysNothingAboutAReferenceOutsideAFunction pins the half that
+// matters more. A reference at file scope has no enclosing function, and the
+// answer must leave it unannotated rather than reach for the nearest name
+// above it — a wrong function name sends a reader somewhere real and wrong.
+func TestSymbolSaysNothingAboutAReferenceOutsideAFunction(t *testing.T) {
+	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
+
+	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
+	for line := range strings.SplitSeq(got, "\n") {
+		if !strings.HasPrefix(line, "lib.go:17") {
+			continue
+		}
+		if strings.Contains(line, " in ") {
+			t.Errorf("a file-scope reference was given an enclosing function: %q", line)
+		}
+		return
+	}
+	t.Errorf("the file-scope reference on line 17 was not reported at all:\n%s", got)
+}
+
+// A name can be extracted twice by overlapping query patterns, so the dedup has
+// to key on the annotation as well as the site — otherwise one reference shows
+// up once with a function name and once without.
+func TestSymbolReportsEachSiteOnce(t *testing.T) {
+	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
+
+	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
+	seen := map[string]int{}
+	for line := range strings.SplitSeq(got, "\n") {
+		if site, _, ok := strings.Cut(strings.TrimSpace(line), " "); ok && strings.HasPrefix(site, "lib.go:") {
+			seen[site]++
+		} else if strings.HasPrefix(line, "lib.go:") {
+			seen[strings.TrimSpace(line)]++
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatalf("no sites were reported:\n%s", got)
+	}
+	for site, n := range seen {
+		if n != 1 {
+			t.Errorf("%s reported %d times:\n%s", site, n, got)
+		}
+	}
+}
+
 // TestSymbolSaysWhenItFindsNothing: silence would read as "this name does not
 // exist", when the truth may be that no grammar covers the file it lives in.
 // The answer points at grep rather than leaving the model stuck.

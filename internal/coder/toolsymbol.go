@@ -41,7 +41,8 @@ func symbolTool() llm.ToolDef {
 					"type": "string",
 					"enum": []any{"definition", "reference"},
 					"description": "\"definition\" (the default) reports where the name is declared; " +
-						"\"reference\" reports where it is used.",
+						"\"reference\" reports where it is used, naming the function each use sits in " +
+						"where the parser can tell.",
 				},
 			},
 			"required": []any{"name"},
@@ -97,10 +98,22 @@ func (c *Coder) runSymbol(tc llm.ToolCall) string {
 			sites = append(sites, t.RelFname)
 			continue
 		}
-		sites = append(sites, fmt.Sprintf("%s:%d", t.RelFname, t.Line+1))
+		site := fmt.Sprintf("%s:%d", t.RelFname, t.Line+1)
+		// Naming the function a reference sits in is what turns a list of
+		// coordinates into an answer about the code. Only an extractor that
+		// knows exactly fills Enclosing in, so a site with no name attached is
+		// one nothing could be said about — never a guess. Silence is the
+		// honest form here: a wrong function name sends a reader somewhere real
+		// and wrong, and this tool earns its place beside grep by being exact.
+		if t.Enclosing != "" {
+			site += "  in " + t.Enclosing
+		}
+		sites = append(sites, site)
 	}
 	// One tag can be extracted twice when a query matches overlapping patterns,
-	// and the same site listed twice reads as two separate places.
+	// and the same site listed twice reads as two separate places. The
+	// enclosing name is part of the key, or an annotated and an unannotated
+	// copy of one site would both survive.
 	slices.Sort(sites)
 	sites = slices.Compact(sites)
 
