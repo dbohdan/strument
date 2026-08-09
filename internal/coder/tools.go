@@ -485,6 +485,16 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			if !ok || newContent == "" {
 				results[e.callID] = toolMatchFailure(e, content, fen)
 				*matchFailure = true
+				// The model is told through the tool result, and will usually
+				// re-read and try again. The user has to be told separately, or
+				// the diff that just scrolled past is the last word on an edit
+				// that never happened — every other outcome here prints a line,
+				// and only this one was silent.
+				if n := editblock.CountOccurrences(content, e.search); n > 1 {
+					c.Out.Warningf("Could not edit %s: the text to replace appears %d times.", e.path, n)
+				} else {
+					c.Out.Warningf("Could not edit %s: the text to replace was not found.", e.path)
+				}
 				continue
 			}
 			callVerb[e.callID] = "Applied the edit to"
@@ -572,6 +582,18 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 // match, including a did-you-mean when a near match exists.
 func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence) string {
 	var b strings.Builder
+
+	// Ambiguity and absence are different problems with different fixes, and
+	// telling a model its text was "not found" when the file holds three copies
+	// sends it hunting for a typo it did not make.
+	if n := editblock.CountOccurrences(content, e.search); n > 1 {
+		fmt.Fprintf(&b, "The text to replace appears %d times in %s, so it is ambiguous "+
+			"and nothing was changed.\n", n, e.path)
+		b.WriteString("Include enough surrounding lines to pick out the one you mean, " +
+			"and make one call per place if you mean several.\n")
+		return b.String()
+	}
+
 	fmt.Fprintf(&b, "The search text was not found in %s, so no change was made.\n", e.path)
 	b.WriteString("It must match the current file contents exactly, character for character, " +
 		"including all whitespace, comments, and docstrings.\n")

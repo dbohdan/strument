@@ -10,6 +10,7 @@
 package editblock
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -112,5 +113,62 @@ func TestDotDotDots(t *testing.T) {
 	// Unpaired dots are a no-match, not a panic.
 	if _, ok := ReplaceMostSimilarChunk(whole, "top\n...\nbot\n", "TOP\nBOT\n"); ok {
 		t.Error("unpaired dots must not match")
+	}
+}
+
+// TestDoReplaceMatchesASubstring pins the contract the edit tool's schema
+// states: "an exact span of text, character for character", with nothing said
+// about lines.
+//
+// aider's matcher is line-oriented because a SEARCH/REPLACE block is, and for
+// a while the tool inherited that silently — a model fixing a typo mid-line was
+// told the text was not in a file that plainly contained it. Found live with
+// MiMo-V2.5, which lost three edits of four that way.
+func TestDoReplaceMatchesASubstring(t *testing.T) {
+	fence := Fence{Open: "```", Close: "```"}
+	const content = "Version 3B kept the script but asked the agent to add two seconds\n" +
+		"to every shot with dialogue as a crude fix for dialog clipping.\n"
+
+	got, ok := DoReplace("notes.md", content, true, "dialog clipping", "dialogue clipping", fence)
+	if !ok {
+		t.Fatal("a substring inside a line must match")
+	}
+	if !strings.Contains(got, "for dialogue clipping.") || strings.Contains(got, "for dialog clipping.") {
+		t.Errorf("substring not replaced:\n%q", got)
+	}
+	// The rest of the line, and the rest of the file, are untouched.
+	if !strings.Contains(got, "to every shot with dialogue as a crude fix") {
+		t.Errorf("the surrounding line was disturbed:\n%q", got)
+	}
+}
+
+// TestDoReplaceDeclinesAnAmbiguousSubstring: replacing the first of several
+// matches is a coin flip on the model's behalf. Declining is the stricter
+// choice, and CountOccurrences lets the caller say why.
+func TestDoReplaceDeclinesAnAmbiguousSubstring(t *testing.T) {
+	fence := Fence{Open: "```", Close: "```"}
+	const content = "alpha here\nbeta there\nalpha again\n"
+
+	if n := CountOccurrences(content, "alpha"); n != 2 {
+		t.Errorf("CountOccurrences = %d, want 2", n)
+	}
+	if got, ok := DoReplace("f.txt", content, true, "alpha", "ALPHA", fence); ok {
+		t.Errorf("an ambiguous substring must not be replaced, got %q", got)
+	}
+}
+
+// A whole-line search still works, and still goes through the fuzzy matcher
+// when whitespace drifted — the substring path is an addition, not a
+// replacement.
+func TestDoReplaceStillMatchesWholeLines(t *testing.T) {
+	fence := Fence{Open: "```", Close: "```"}
+	const content = "func main() {\n    println(\"hi\")\n}\n"
+
+	got, ok := DoReplace("m.go", content, true, "    println(\"hi\")\n", "    println(\"bye\")\n", fence)
+	if !ok {
+		t.Fatal("a whole-line search must still match")
+	}
+	if !strings.Contains(got, "println(\"bye\")") {
+		t.Errorf("line not replaced:\n%q", got)
 	}
 }

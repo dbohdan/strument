@@ -332,6 +332,14 @@ func splitLinesNoEnds(s string) []string {
 // exists says whether the target file already exists;
 // content is its current text ("" for a new file).
 func DoReplace(fname string, content string, exists bool, beforeText, afterText string, fence Fence) (string, bool) {
+	// The arguments as the model wrote them. StripQuotedWrapping below is
+	// aider's normalization for prose-parsed blocks: it drops a filename line
+	// and a fence, and — the part that matters here — appends a trailing
+	// newline to anything without one, because every line of a SEARCH block has
+	// one. That coercion is what a substring match cannot survive, so the exact
+	// path below uses the text untouched.
+	rawBefore, rawAfter := beforeText, afterText
+
 	beforeText = StripQuotedWrapping(beforeText, fname, fence)
 	afterText = StripQuotedWrapping(afterText, fname, fence)
 
@@ -346,11 +354,44 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 		// Append to existing file, or start a new file.
 		return content + afterText, true
 	}
+
+	// An exact substring, occurring once, is replaced as written.
+	//
+	// Everything below this line is aider's matcher, and aider's matcher is
+	// line-oriented because a SEARCH/REPLACE block is: it splits both sides into
+	// lines and looks for a run of them. That was the right shape for a text
+	// format where the model transcribes whole lines between markers. It is the
+	// wrong shape for a tool whose schema asks for "an exact span of text,
+	// character for character" and says nothing about lines — and a model that
+	// takes that at its word, sending `dialog clipping` to fix a typo mid-line,
+	// got "the text to replace was not found" about text plainly in the file.
+	// Found with MiMo-V2.5, which lost three of four edits that way and spent
+	// the turn re-reading the file.
+	//
+	// Uniqueness is required, and that is stricter than what follows rather
+	// than looser: the line matcher takes the first run that matches, while an
+	// ambiguous substring here declines and asks for more context. A caller can
+	// tell the two failures apart with CountOccurrences.
+	if rawBefore != "" && strings.Count(content, rawBefore) == 1 {
+		return strings.Replace(content, rawBefore, rawAfter, 1), true
+	}
+
 	newContent, ok := ReplaceMostSimilarChunk(content, beforeText, afterText)
 	if !ok {
 		return "", false
 	}
 	return newContent, true
+}
+
+// CountOccurrences reports how many times the search text appears verbatim in
+// content, so a failed edit can say "three places, narrow it down" instead of
+// "not found" — which is false and sends the model looking for a typo it did
+// not make.
+func CountOccurrences(content, search string) int {
+	if search == "" {
+		return 0
+	}
+	return strings.Count(content, search)
 }
 
 // splitLines splits keeping line endings, on the same boundary set as
