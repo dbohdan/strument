@@ -479,6 +479,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	if estimated {
 		report += " (estimated)"
 	}
+	report += c.turnProgress()
 
 	c.lastUsageReport = report
 	c.Out.Printf("") // blank line before the token/cost report, like aider
@@ -528,4 +529,25 @@ func stripReasoning(answer, tag string) string {
 		answer = strings.TrimSpace(answer[idx+len(closing):])
 	}
 	return answer
+}
+
+// turnProgress is what a long turn adds to its usage line: how many steps in it
+// is, and how many files it has changed so far.
+//
+// Folded into a line that already prints rather than given one of its own. A
+// turn can run twenty-five steps, and a per-step status line would be
+// twenty-five lines competing with the diffs, which is the scroll problem the
+// renderer work spent three commits on. It says nothing on a one-step turn,
+// which is most of them, so the ordinary case looks exactly as it did.
+func (c *Coder) turnProgress() string {
+	if c.numSteps == 0 {
+		return ""
+	}
+	// numSteps counts completed continuations, so the send being reported is the
+	// next one.
+	out := fmt.Sprintf(" Step %d of %d.", c.numSteps+1, maxSteps)
+	if n := len(c.turnEditedFiles); n > 0 {
+		out += " " + plural(n, "file", "files") + " changed so far."
+	}
+	return out
 }
