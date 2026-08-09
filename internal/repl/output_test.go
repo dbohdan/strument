@@ -151,3 +151,20 @@ func TestEachFileNamedOnceInARun(t *testing.T) {
 		got = got[i:]
 	}
 }
+
+// TestObservationOnlySendLeavesNoBlankLine: read, grep, glob, ls, and verify
+// draw nothing in the stream — they print their own one-line outcome when they
+// run — so a send made only of those must not leave a separator behind it. It
+// did, and the blank landed above the outcome line, where it read as a gap in
+// the transcript rather than as spacing.
+func TestObservationOnlySendLeavesNoBlankLine(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+	o.StreamToolCall(0, "read", `{"path":"notes.md"}`)
+	o.StreamToolCall(1, "grep", `{"pattern":"Sonnerie"}`)
+	o.FlushStream()
+
+	if got := buf.String(); got != "" {
+		t.Errorf("a send that drew nothing wrote %q", got)
+	}
+}

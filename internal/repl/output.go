@@ -201,7 +201,9 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 		o.diffs = render.NewToolDiffSet(o.w, o.color, o.theme)
 	}
 	o.toolStarted = true
-	o.streamed = true
+	// streamed is set at the flush, from whether the set actually drew: a send
+	// of nothing but read and grep calls writes nothing here, and marking it as
+	// streamed left a blank line above their outcome lines.
 	o.diffs.Write(index, name, args)
 }
 
@@ -209,6 +211,9 @@ func (o *termOutput) FlushStream() {
 	o.clearWaiting()
 	o.closeParser()
 	if o.diffs != nil {
+		if o.diffs.Drew() {
+			o.streamed = true
+		}
 		o.diffs.Flush()
 		o.diffs = nil
 	}

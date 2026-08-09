@@ -440,6 +440,10 @@ type ToolDiffSet struct {
 	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/verify)
 	live  int                   // the index streaming to w; -1 until the first is seen
 
+	// drew records that at least one call had something to draw, so a send of
+	// nothing but observation calls does not leave a blank line behind it.
+	drew bool
+
 	// lastLabel is the header most recently written, so a run of edits to one
 	// file names it once. Reset per set, and a set lives for one send.
 	lastLabel string
@@ -479,6 +483,7 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 			s.bufs[index] = buf
 			out = buf
 		}
+		s.drew = true
 		d = NewToolDiff(out, s.color, s.theme, name)
 		if s.live != index {
 			d.SuppressHeader() // Flush writes it, once its position is settled
@@ -488,6 +493,12 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 	}
 	d.Write(frag)
 }
+
+// Drew reports whether any call in this set had something to render. read,
+// grep, glob, ls, and verify draw nothing — they print their own one-line
+// outcome when they run — so a send made only of those has written nothing here
+// and needs no separator after it.
+func (s *ToolDiffSet) Drew() bool { return s.drew }
 
 // Flush closes every open diff and appends the buffered ones after the live
 // one, each whole, in first-seen order; then resets the set.
@@ -527,6 +538,7 @@ func (s *ToolDiffSet) Flush() {
 	}
 	s.order = nil
 	s.lastLabel = ""
+	s.drew = false
 	clear(s.diffs)
 	clear(s.bufs)
 	clear(s.skip)
