@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -42,6 +43,13 @@ type termOutput struct {
 	// when a whitespace-only content delta is worth rendering; see StreamText.
 	answerVisible bool
 	toolStarted   bool
+
+	// held renders prose that arrives after a tool call has begun. It cannot go
+	// straight to the terminal: an edit's body is not written until the flush,
+	// so text rendered immediately would appear above the diff it was written
+	// after. Buffered here, it rejoins the tool calls in the model's own order.
+	held    *render.Parser
+	heldBuf bytes.Buffer
 }
 
 // startWaiting shows a "Waiting for <model> " line (no newline) while the
@@ -128,10 +136,15 @@ func (o *termOutput) closeParser() {
 	o.parser = nil
 }
 
-// header renders a THINKING/ANSWER separator directly (not through the markdown
+// header renders a labelled separator directly (not through the markdown
 // renderer, so the spacing is exact): a blank line, a full-width dashed rule, a
-// blank line, a bold "► LABEL", and a blank line — matching aider. The caller
-// guarantees the cursor is at column 0.
+// blank line, a bold "► LABEL", and a blank line — aider's shape.
+//
+// Only THINKING uses it now. aider's matching "► ANSWER" said something true of
+// a turn that was one reply: everything after it was the answer. In a loop it
+// labels the wrong thing — most of what follows is tool calls, and the label
+// lands again on every step. Thinking is what needs marking off; the answer is
+// just everything else, and rule() closes the block instead.
 func (o *termOutput) header(label string) {
 	width := o.width
 	if width <= 0 {
@@ -142,6 +155,30 @@ func (o *termOutput) header(label string) {
 		o.sgr(o.theme.Assistant)+o.sgr("1"), label, o.sgr("0"))
 }
 
+// rule closes the thinking block: the same separator without a label. It is
+// what tells a reader the dimmed text has ended, and it is not decoration —
+// without color there would be nothing else to say so.
+func (o *termOutput) rule() {
+	width := o.width
+	if width <= 0 {
+		width = 80
+	}
+	fmt.Fprintf(o.w, "\n%s%s%s\n\n",
+		o.sgr(o.theme.Assistant), strings.Repeat("-", width), o.sgr("0"))
+}
+
+// reasoningTheme is the palette the thinking block renders in: the ordinary one
+// with its body color made recessive, so the whole block reads as an aside
+// rather than competing with the answer.
+func (o *termOutput) reasoningTheme() render.Theme {
+	t := o.theme
+	if t.Reasoning != "" {
+		t.Assistant = t.Reasoning
+		t.Code = t.Reasoning // a code span inside thinking is still thinking
+	}
+	return t
+}
+
 func (o *termOutput) StreamReasoning(delta string) {
 	o.clearWaiting()
 	o.hideCursor()
@@ -149,7 +186,9 @@ func (o *termOutput) StreamReasoning(delta string) {
 		o.header("THINKING") // cursor is at column 0 after clearWaiting
 		o.phase = phaseReasoning
 	}
-	o.ensureParser()
+	if o.parser == nil {
+		o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width))
+	}
 	o.streamed = true
 	o.parser.Write(delta)
 }
@@ -171,11 +210,21 @@ func (o *termOutput) StreamText(delta string) {
 	}
 	o.answerVisible = true
 
+	// Once a call has begun, prose belongs in the sequence with the diffs, not
+	// ahead of them.
+	if o.toolStarted {
+		if o.held == nil {
+			o.held = render.NewParser(render.NewANSI(&o.heldBuf, o.color, o.theme, o.width))
+		}
+		o.held.Write(delta)
+		return
+	}
+
 	o.clearWaiting()
 	o.hideCursor()
 	if o.phase == phaseReasoning {
 		o.closeParser() // end THINKING, land on a fresh line
-		o.header("ANSWER")
+		o.rule()
 	}
 	o.phase = phaseAnswer
 	o.ensureParser()
@@ -190,7 +239,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	// so close the parser before the diff begins; they never interleave.
 	if o.phase == phaseReasoning {
 		o.closeParser()
-		o.header("ANSWER") // reasoning gave way to edits: mark the boundary
+		o.rule() // reasoning gave way to edits: close the block
 		o.phase = phaseAnswer
 	}
 	if o.parser != nil {
@@ -200,6 +249,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	if o.diffs == nil {
 		o.diffs = render.NewToolDiffSet(o.w, o.color, o.theme)
 	}
+	o.flushHeld() // whatever was said since the last call goes in before this one
 	o.toolStarted = true
 	// streamed is set at the flush, from whether the set actually drew: a send
 	// of nothing but read and grep calls writes nothing here, and marking it as
@@ -207,9 +257,28 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	o.diffs.Write(index, name, args)
 }
 
+// flushHeld closes the held renderer and hands its bytes to the diff set, so
+// they take their place in the sequence rather than racing the diffs to the
+// terminal.
+func (o *termOutput) flushHeld() {
+	if o.held == nil {
+		return
+	}
+	o.held.End()
+	if o.color {
+		fmt.Fprint(&o.heldBuf, "\x1b[0m") // the renderer leaves its base color open
+	}
+	o.held = nil
+	if o.diffs != nil {
+		o.diffs.Text(o.heldBuf.Bytes())
+	}
+	o.heldBuf.Reset()
+}
+
 func (o *termOutput) FlushStream() {
 	o.clearWaiting()
 	o.closeParser()
+	o.flushHeld()
 	if o.diffs != nil {
 		if o.diffs.Drew() {
 			o.streamed = true

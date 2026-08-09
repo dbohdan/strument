@@ -434,7 +434,7 @@ type ToolDiffSet struct {
 	w     io.Writer
 	color bool
 	theme Theme
-	order []int
+	seq   []seqItem
 	diffs map[int]*ToolDiff
 	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
 	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/verify)
@@ -447,6 +447,17 @@ type ToolDiffSet struct {
 	// lastLabel is the header most recently written, so a run of edits to one
 	// file names it once. Reset per set, and a set lives for one send.
 	lastLabel string
+}
+
+// seqItem is one thing to emit, in the order the model produced it: a tool
+// call (index >= 0) or a block of already-rendered text between two calls
+// (index < 0). Text has to travel through here rather than straight to the
+// terminal, because an edit's body is not written until Flush — so prose sent
+// after a call but rendered immediately would land above the diff it was
+// written after.
+type seqItem struct {
+	index int
+	text  []byte
 }
 
 // NewToolDiffSet builds a diff fan-out writing to w.
@@ -489,9 +500,19 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 			d.SuppressHeader() // Flush writes it, once its position is settled
 		}
 		s.diffs[index] = d
-		s.order = append(s.order, index)
+		s.seq = append(s.seq, seqItem{index: index})
 	}
 	d.Write(frag)
+}
+
+// Text appends a rendered block of the model's prose to the sequence, so text
+// written between two tool calls appears between their diffs.
+func (s *ToolDiffSet) Text(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	s.drew = true
+	s.seq = append(s.seq, seqItem{index: -1, text: bytes.Clone(b)})
 }
 
 // Drew reports whether any call in this set had something to render. read,
@@ -510,22 +531,33 @@ func (s *ToolDiffSet) Drew() bool { return s.drew }
 // name once and are separated by a blank line, which is what the repetition was
 // standing in for.
 func (s *ToolDiffSet) Flush() {
-	for _, i := range s.order {
-		s.diffs[i].Flush()
+	for _, it := range s.seq {
+		if it.index >= 0 {
+			s.diffs[it.index].Flush()
+		}
 	}
-	// The live call wrote its own header as it streamed, so the file it named is
-	// the one a following call has to match against.
+	// The live call wrote its own header and body straight to w above, and it is
+	// always first, so the file it named is what a following call matches
+	// against.
 	if s.live >= 0 {
 		if d := s.diffs[s.live]; d != nil {
 			s.lastLabel = d.Label()
 		}
 	}
-	for _, i := range s.order {
-		buf := s.bufs[i]
-		if buf == nil {
+	for _, it := range s.seq {
+		if it.index < 0 {
+			// Prose between two calls ends the run: the file is named again
+			// after it, because a blank line no longer reads as "the same file
+			// as above" once something has been said in between.
+			_, _ = s.w.Write(it.text)
+			s.lastLabel = ""
 			continue
 		}
-		switch label := s.diffs[i].Label(); label {
+		buf := s.bufs[it.index]
+		if buf == nil {
+			continue // the live call, already written
+		}
+		switch label := s.diffs[it.index].Label(); label {
 		case "":
 			// A tool with no path (bash): nothing to name, nothing to repeat.
 		case s.lastLabel:
@@ -536,7 +568,7 @@ func (s *ToolDiffSet) Flush() {
 		}
 		_, _ = s.w.Write(buf.Bytes())
 	}
-	s.order = nil
+	s.seq = nil
 	s.lastLabel = ""
 	s.drew = false
 	clear(s.diffs)

@@ -9,10 +9,13 @@ import (
 	"dbohdan.com/strument/internal/render"
 )
 
-// TestReasoningHeaders confirms reasoning and answer stream through one
-// markdown renderer, separated by the THINKING and ANSWER headers (a
-// full-width rule + a bold ► label), mirroring aider.
-func TestReasoningHeaders(t *testing.T) {
+// TestThinkingIsBracketed confirms the thinking block is opened by a labelled
+// header and closed by a bare rule, with the answer plain after it.
+//
+// aider labels the answer too. That was true of a turn that was one reply;
+// in a loop the label lands on every step and mostly precedes tool calls
+// rather than an answer, so only the block that needs marking off gets a name.
+func TestThinkingIsBracketed(t *testing.T) {
 	var buf bytes.Buffer
 	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
 	o.StreamReasoning("weighing options")
@@ -21,16 +24,47 @@ func TestReasoningHeaders(t *testing.T) {
 	got := buf.String()
 
 	rule := strings.Repeat("-", 40)
-	for _, want := range []string{"► THINKING", "► ANSWER", "weighing options", "here is the answer", rule} {
+	for _, want := range []string{"► THINKING", "weighing options", "here is the answer", rule} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%q", want, got)
 		}
 	}
-	if i, j := strings.Index(got, "► THINKING"), strings.Index(got, "► ANSWER"); i < 0 || j < 0 || i >= j {
-		t.Errorf("THINKING must precede ANSWER (%d vs %d):\n%q", i, j, got)
+	if strings.Contains(got, "ANSWER") {
+		t.Errorf("the answer is no longer labelled:\n%q", got)
 	}
-	if strings.Index(got, "weighing options") >= strings.Index(got, "► ANSWER") {
-		t.Errorf("reasoning must appear before the ANSWER header:\n%q", got)
+	// header, thinking, closing rule, answer — in that order.
+	for _, want := range []string{"► THINKING", "weighing options", rule, "here is the answer"} {
+		i := strings.Index(got, want)
+		if i < 0 {
+			t.Fatalf("out of order at %q:\n%q", want, got)
+		}
+		got = got[i+len(want):]
+	}
+	if n := strings.Count(buf.String(), rule); n != 2 {
+		t.Errorf("the block should be bracketed by two rules, found %d:\n%q", n, buf.String())
+	}
+}
+
+// TestThinkingIsDimmed: the whole block renders in the recessive color, so it
+// reads as an aside rather than competing with the answer.
+func TestThinkingIsDimmed(t *testing.T) {
+	var buf bytes.Buffer
+	theme := render.DefaultTheme()
+	o := &termOutput{w: &buf, color: true, theme: theme, width: 40}
+	o.StreamReasoning("weighing options")
+	o.StreamText("here is the answer")
+	o.FlushStream()
+	got := buf.String()
+
+	think, answer, ok := strings.Cut(got, "weighing options")
+	if !ok {
+		t.Fatalf("reasoning missing:\n%q", got)
+	}
+	if !strings.Contains(think, "\x1b["+theme.Reasoning+"m") {
+		t.Errorf("thinking is not in the recessive color:\n%q", think)
+	}
+	if !strings.Contains(answer, "\x1b["+theme.Assistant+"m") {
+		t.Errorf("the answer should return to the assistant color:\n%q", answer)
 	}
 }
 
@@ -166,5 +200,38 @@ func TestObservationOnlySendLeavesNoBlankLine(t *testing.T) {
 
 	if got := buf.String(); got != "" {
 		t.Errorf("a send that drew nothing wrote %q", got)
+	}
+}
+
+// TestProseBetweenCallsStaysBetweenThem: an edit's body is not written until
+// the flush, so prose rendered the moment it arrived appeared *above* the diff
+// it was written after — a caption attached to the wrong picture. It now
+// travels with the tool calls and keeps the model's order.
+func TestProseBetweenCallsStaysBetweenThem(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+	o.StreamText("First the heading.")
+	o.StreamToolCall(0, "edit", editArgs("a.md", "alpha", "ALPHA"))
+	o.StreamText("Now the body.")
+	o.StreamToolCall(1, "edit", editArgs("a.md", "beta", "BETA"))
+	o.FlushStream()
+
+	got := buf.String()
+	for _, want := range []string{
+		"First the heading.",
+		"- alpha", "+ ALPHA",
+		"Now the body.",
+		"- beta", "+ BETA",
+	} {
+		i := strings.Index(got, want)
+		if i < 0 {
+			t.Fatalf("missing or out of order: %q\n%s", want, buf.String())
+		}
+		got = got[i+len(want):]
+	}
+	// Prose ends the run, so the file is named again after it rather than
+	// separated by a blank line that would now read as "same file as above".
+	if n := strings.Count(buf.String(), "a.md"); n != 2 {
+		t.Errorf("a.md named %d times, want 2 (once per run):\n%s", n, buf.String())
 	}
 }
