@@ -16,6 +16,7 @@ type Theme struct {
 	DiffAdded   string // added ("+") lines in a tool-call diff
 	Command     string // suggested-command ("$") lines
 	Tool        string // the harness reporting what a tool did
+	Reasoning   string // the model's thinking, recessive against the answer
 }
 
 // DefaultTheme is aider's default palette: green input, blue assistant,
@@ -32,6 +33,7 @@ func DefaultTheme() Theme {
 		DiffAdded:   "32",             // green
 		Command:     "36",             // cyan
 		Tool:        "90",             // gray
+		Reasoning:   "90",             // thinking recedes; the one knob to tune
 	}
 }
 
@@ -48,6 +50,7 @@ func DarkTheme() Theme {
 		DiffAdded:   "32",
 		Command:     "36",
 		Tool:        "90",
+		Reasoning:   "90",
 	}
 }
 
@@ -66,5 +69,6 @@ func LightTheme() Theme {
 		DiffAdded:   "32",
 		Command:     "36",
 		Tool:        "90",
+		Reasoning:   "90",
 	}
 }
