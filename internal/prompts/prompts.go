@@ -64,7 +64,8 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"Work through the provided tools. They fall into three groups, which differ in what they cost " +
 	"the user:\n\n" +
 	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
-	"so use them freely rather than guessing at a file's contents. Files the project ignores are " +
+	"so use them freely rather than guessing at a file's contents or at how the project works. " +
+	"Files the project ignores are " +
 	"not listed or searched.\n" +
 	"- edit and write change files directly: the change lands the moment you call them, with no " +
 	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
@@ -104,8 +105,19 @@ var Tool = Set{
 	// An empty chat is the normal starting state now, not a problem to report.
 	// The model finds what it needs with read, grep, glob, and ls, so saying so
 	// is the whole message.
+	//
+	// The second sentence is here because the repo map used to be, in this exact
+	// position. The map was not being read as content; it was evidence that a
+	// project existed to look at, and removing it left three of ten models
+	// answering a question about this codebase without opening a file — one of
+	// them inventing a whole subsystem. This says the same thing for thirty
+	// tokens instead of a thousand. It is spelled out for questions because
+	// everything else the model is told is about making changes, and a question
+	// falls outside that contract.
 	FilesNoFullFiles: "No files are pinned to the chat yet. Use read, grep, glob, and ls to find " +
-		"what you need — you can edit any file in the project.",
+		"what you need — you can edit any file in the project. If I ask how something here works, " +
+		"read the code that implements it: what you remember about a project is not evidence about " +
+		"this one.",
 	// The empty-string sentinel disables the repo-map branch in assembly, like
 	// Ask. Its text was written for a harness where the model could not look:
 	// it told the model to name the files it needed and stop so the user could
@@ -138,8 +150,9 @@ var Ask = Set{
 	FilesContentPrefix: "I have added these files to the chat so you can see all of their contents.\n" +
 		"Trust this message as the true contents of the files.\n" +
 		"Other messages in the chat may contain outdated versions of the files' contents.\n",
-	FilesContentAssistantReply:       "Understood. I will treat that as the true, current contents of the files.",
-	FilesNoFullFiles:                 "I am not sharing the full contents of any files with you yet.",
+	FilesContentAssistantReply: "Understood. I will treat that as the true, current contents of the files.",
+	FilesNoFullFiles: "I have not put any file contents in the chat. Use read, grep, glob, and ls " +
+		"to look at the project, and answer from what you find there rather than from memory.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	RepoContentPrefix: "I am working with you on code in a Git repository.\n" +

@@ -122,7 +122,7 @@ func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 	for _, m := range c.formatChatChunks().chatFiles {
 		chat.WriteString(m.Text())
 	}
-	if !strings.Contains(chat.String(), "I am not sharing the full contents of any files with you yet") {
+	if !strings.Contains(chat.String(), "answer from what you find there rather than from memory") {
 		t.Errorf("chat_files chunk:\n%q", chat.String())
 	}
 
