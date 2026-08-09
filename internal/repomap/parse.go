@@ -1,9 +1,29 @@
 package repomap
 
 import (
+	"time"
+
 	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
 )
+
+// parseBudget bounds one call. Two things made this necessary, and a sweep over
+// the Go and Python standard libraries found both.
+//
+// Cost: the check runs twice per edited file, before and after, so its latency
+// lands on the user's turn. A clean file parses at roughly half a megabyte a
+// second, which is nothing for ordinary source; a large generated one is
+// seconds.
+//
+// Correctness: a file the grammar cannot handle is *also* slow, because error
+// recovery explores alternatives. cmd/compile/internal/ssa/regalloc.go is 89 KiB
+// of valid Go and takes 3.7 seconds — twenty times the rate of a file the
+// grammar likes — and comes back wrongly reported as broken. So the same budget
+// that bounds the wait also filters much of what the check gets wrong.
+//
+// Exceeding it yields known=false: nothing is claimed about the file, which is
+// the direction this check already fails in when no grammar covers a file.
+const parseBudget = 500 * time.Millisecond
 
 // ParseStatus reports whether src parses cleanly under the grammar implied by
 // fname's extension. line is the 1-based line of the first parse error, 0 when
@@ -31,11 +51,18 @@ func ParseStatus(fname string, src []byte) (clean bool, line int, known bool) {
 		return false, 0, false
 	}
 
-	tree, err := ts.NewParser(reg.Language()).Parse(src)
+	parser := ts.NewParser(reg.Language())
+	parser.SetTimeoutMicros(uint64(parseBudget / time.Microsecond))
+	tree, err := parser.Parse(src)
 	if err != nil || tree == nil {
 		// The parser gave up entirely. That is a fact about the parser, not
 		// about the file, so report it as unknown rather than as an error in
 		// the user's code.
+		return false, 0, false
+	}
+	if tree.ParseStoppedEarly() {
+		// Out of budget. The tree is a partial one and its error nodes describe
+		// where the parser ran out of time, not where the code is wrong.
 		return false, 0, false
 	}
 	root := tree.RootNode()

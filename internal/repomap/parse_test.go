@@ -1,6 +1,11 @@
 package repomap
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestParseStatus(t *testing.T) {
 	cases := []struct {
@@ -97,5 +102,40 @@ func TestParseStatusPointsAtTheErrorRegion(t *testing.T) {
 	}
 	if line != 1 {
 		t.Errorf("line = %d, want 1 (where the error region starts)", line)
+	}
+}
+
+// TestParseBudgetYieldsUnknown: a file too big to parse inside the budget must
+// report known=false, not a verdict from a partial tree. Synthetic rather than
+// a path into the Go install, so it holds wherever the suite runs.
+//
+// The budget exists because a sweep of the Go and Python standard libraries
+// found valid files the grammar chokes on — and choking is slow, so the same
+// bound that caps the wait also silences most of what the check gets wrong.
+func TestParseBudgetYieldsUnknown(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package a\n")
+	for i := range 40000 {
+		fmt.Fprintf(&b, "func f%d(x int) int { return x + %d }\n", i, i)
+	}
+	src := []byte(b.String())
+	if len(src) < 1<<20 {
+		t.Fatalf("test input is only %d bytes; too small to exceed the budget", len(src))
+	}
+
+	start := time.Now()
+	clean, line, known := ParseStatus("big.go", src)
+	elapsed := time.Since(start)
+
+	if known {
+		t.Errorf("known = true on a parse that should have run out of budget (%v)", elapsed)
+	}
+	if clean || line != 0 {
+		t.Errorf("clean = %v, line = %d; an unknown result must claim nothing", clean, line)
+	}
+	// The whole point is a bounded wait. Allow generous slack for a loaded
+	// machine, but fail if the budget is not being enforced at all.
+	if elapsed > 4*parseBudget {
+		t.Errorf("parse took %v with a %v budget", elapsed, parseBudget)
 	}
 }
