@@ -217,7 +217,7 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 	}
 
 	rm := testMap(t, root)
-	var defsTotal, refsTotal, refsAgreed int
+	var defsTotal, refsTotal, accountedFor int
 	for _, abs := range files {
 		rel := rm.relFname(abs)
 		ts := treeSitterTags(t, rm, abs, rel)
@@ -234,36 +234,50 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 		wantRefs, gotRefs := sites(ts, Ref), sites(gp, Ref)
 		missing, extra := diffCounts(wantRefs, gotRefs)
 		refsTotal += len(wantRefs)
-		refsAgreed += len(wantRefs) - len(missing)
-		if len(missing) > 0 || len(extra) > 0 {
-			t.Logf("%s: %d refs, %d missing, %d extra\n  missing: %v\n  extra:   %v",
-				rel, len(wantRefs), len(missing), len(extra), first(missing, 8), first(extra, 8))
+
+		// go/parser must never invent a reference the grammar does not have.
+		// Divergence is allowed in exactly one direction, and only for the one
+		// cause characterized below.
+		if len(extra) > 0 {
+			t.Errorf("%s: go/parser reported references tree-sitter does not: %v", rel, extra)
+		}
+
+		src, err := os.ReadFile(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srcLines := strings.Split(string(src), "\n")
+		for _, m := range missing {
+			num, name, _ := strings.Cut(m, ":")
+			n, convErr := strconv.Atoi(num)
+			if convErr != nil || n < 1 || n > len(srcLines) {
+				t.Errorf("%s: unaccountable missing reference %q", rel, m)
+				continue
+			}
+			// The single known cause: tree-sitter resolves `X[Y]` as a generic
+			// type in some parse states and as an index in others, from state
+			// rather than from meaning — so definitions[d.fname][d.ident] comes
+			// back as three type identifiers while list.buffer[pos] comes back
+			// as none. Every divergence must therefore sit on a line carrying a
+			// bracket. This is a characterization of the cause, not a
+			// line-number pin, so ordinary edits to these files cannot break it
+			// while a divergence of any *other* kind fails immediately.
+			if !strings.Contains(srcLines[n-1], "[") {
+				t.Errorf("%s:%d: reference %q is missing on a line with no index expression, "+
+					"so it is not the known bracket ambiguity:\n\t%s",
+					rel, n, name, strings.TrimSpace(srcLines[n-1]))
+				continue
+			}
+			accountedFor++
+			t.Logf("%s:%d %s — tree-sitter read the brackets as a generic type: %s",
+				rel, n, name, strings.TrimSpace(srcLines[n-1]))
 		}
 	}
 
-	t.Logf("%d files, %d definition tags, %d reference tags", len(files), defsTotal, refsTotal)
-	agreement := 100 * float64(refsAgreed) / float64(refsTotal)
-	t.Logf("reference agreement: %.2f%%", agreement)
-
-	// Measured at 99.97% when this was written — 5 tags out of 15,360, with no
-	// extras in either direction beyond them, and definition parity exact.
-	//
-	// The residue is one thing and it is not fixable here: tree-sitter resolves
-	// `X[Y]` in expression position sometimes as an index and sometimes as a
-	// generic type, from parse state rather than from meaning, so
-	// `definitions[d.fname][d.ident]` comes back as three type identifiers while
-	// `list.buffer[pos]` comes back as none. go/parser has an unambiguous AST
-	// and cannot reproduce that, which is most of the reason to prefer it.
-	// Reproducing a parser's conflict resolution is not a contract worth
-	// keeping, and five edges do not move a PageRank over fifteen thousand.
-	//
-	// A floor rather than an equality, so that a Go release adding syntax shows
-	// up as a number to look at instead of a red build. A drop is still a
-	// regression to investigate, not to bless by lowering this.
-	const minRefAgreement = 99.9
-	if agreement < minRefAgreement {
-		t.Errorf("reference agreement %.2f%% is below the pinned floor of %.1f%%", agreement, minRefAgreement)
-	}
+	t.Logf("%d files, %d definition tags (exact parity), %d reference tags",
+		len(files), defsTotal, refsTotal)
+	t.Logf("%d references diverge, %d of them accounted for — %.2f%% identical, 100%% explained",
+		accountedFor, accountedFor, 100*float64(refsTotal-accountedFor)/float64(refsTotal))
 }
 
 // TestGoTagsSurviveAMidEditFile is the reservation this extractor was weighed
@@ -419,13 +433,6 @@ func TestGoTagsIsolateABrokenFile(t *testing.T) {
 	if fromGood == 0 {
 		t.Error("a broken file in the workspace silenced an intact one")
 	}
-}
-
-func first(s []string, n int) []string {
-	if len(s) <= n {
-		return s
-	}
-	return append(slices.Clone(s[:n]), "…")
 }
 
 // TestGoRepoMapUnchanged is the same question asked in the user's units: the
