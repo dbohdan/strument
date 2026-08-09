@@ -119,6 +119,7 @@ type Coder struct {
 	totalTokensSent       int
 	totalTokensReceived   int
 	lastUsageReport       string
+	usageReportPending    bool // composed but not yet printed; see flushUsageReport
 
 	// turnSnap accumulates what this turn has written; pushed onto undoStack at
 	// turn end. The stack is the undo substrate that works without git.

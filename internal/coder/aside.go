@@ -60,6 +60,7 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 	answer := stripReasoning(c.partialResponseContent, c.Model.ReasoningTag)
 	c.partialResponseContent = answer // for finalizeUsage's estimate fallback
 	c.finalizeUsage(usage)
+	c.flushUsageReport() // an aside has no tool calls to wait for
 
 	c.multiResponseContent = ""
 	c.partialResponseContent = ""

@@ -195,6 +195,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// --- Stream ---
 	c.multiResponseContent = "" // per-send reset (H1)
 
+	// Deferred first so it runs last: the accounting settles, the tool calls
+	// apply and report, and only then does the usage line close the send. Every
+	// return path below is covered, including the early ones.
+	defer c.flushUsageReport()
+
 	usage := &sendUsage{estSent: c.countMessages(messages)}
 	defer c.finalizeUsage(usage)
 
@@ -482,8 +487,24 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	report += c.turnProgress()
 
 	c.lastUsageReport = report
+	c.usageReportPending = true
+}
+
+// flushUsageReport prints the report finalizeUsage composed, once.
+//
+// It is separate from composing it so the two can happen at different moments.
+// The accounting has to be settled while the send's state is still in hand, and
+// deferred so an abort cannot lose it; but the line reads as the turn's
+// bottom rule, and the tools have not finished speaking when the stream ends.
+// Printing it here puts the edits' outcomes above it, where a reader expects
+// the last line to be the last word.
+func (c *Coder) flushUsageReport() {
+	if !c.usageReportPending {
+		return
+	}
+	c.usageReportPending = false
 	c.Out.Printf("") // blank line before the token/cost report, like aider
-	c.Out.Printf("%s", report)
+	c.Out.Printf("%s", c.lastUsageReport)
 }
 
 // streamedText is everything received this send — stitched continuations plus
