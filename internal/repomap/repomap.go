@@ -204,7 +204,16 @@ func (inv *invocation) tags(rm *RepoMap, fname, relFname string) []Tag {
 		}
 	}
 
-	t := extractTags(relFname, fname, inv.parse(rm, fname, relFname))
+	// Go goes to go/parser, which is exact and about seventy times faster; the
+	// dispatch is here rather than inside extractTags so the tree-sitter parse
+	// never happens at all. Every other language keeps the grammar. See
+	// gotags.go, and parse.go for the same split in ParseStatus.
+	var t []Tag
+	if strings.HasSuffix(fname, ".go") {
+		t = goTags(relFname, fname)
+	} else {
+		t = extractTags(relFname, fname, inv.parse(rm, fname, relFname))
+	}
 
 	// Stat again and store only if the file did not move under us. Otherwise a
 	// write landing during the parse would be recorded under the pre-write

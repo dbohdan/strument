@@ -18,6 +18,13 @@ type Tag struct {
 	Line     int    // 0-based start row; -1 only for chroma-backfilled refs
 	Name     string // display identifier text
 	Kind     Kind
+
+	// Enclosing names the function this occurrence sits in, "" at file scope or
+	// where the extractor cannot say. Only an extractor that knows exactly fills
+	// it in — the symbol tool reports it as fact, and a wrong function name
+	// sends a reader somewhere real and wrong, which is worse than silence.
+	// Empty from tree-sitter; filled by gotags.go.
+	Enclosing string
 }
 
 // MapItem is a ranked entry: either a full tag or a bare file marker
