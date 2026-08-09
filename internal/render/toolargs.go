@@ -170,6 +170,7 @@ type ToolDiff struct {
 	line        strings.Builder
 	curField    string
 	wroteHeader bool
+	noHeader    bool     // the set writes this call's header; see SuppressHeader
 	pending     []string // diff lines held until the header (path) is known
 	oldText     strings.Builder
 	newText     strings.Builder
@@ -285,8 +286,12 @@ func (d *ToolDiff) flushLine() {
 	}
 }
 
-func (d *ToolDiff) header() {
-	d.wroteHeader = true
+// Label is the header line this diff belongs under, once the path field has
+// completed; "" for a tool that has none.
+func (d *ToolDiff) Label() string {
+	if d.path.Len() == 0 {
+		return ""
+	}
 	label := d.path.String()
 	if d.tool == "write" {
 		// "whole file" is honest whether the file is new or overwritten; the
@@ -294,7 +299,20 @@ func (d *ToolDiff) header() {
 		// and tool result carry the created-vs-overwrote truth.
 		label += " (whole file)"
 	}
-	fmt.Fprintf(d.w, "%s\n", label)
+	return label
+}
+
+// SuppressHeader stops this diff from writing its own header line, leaving the
+// caller to write it. A buffered call uses this: where it lands in the output
+// is only settled when the set appends it, and only there can it be known
+// whether the file has already been named.
+func (d *ToolDiff) SuppressHeader() { d.noHeader = true }
+
+func (d *ToolDiff) header() {
+	d.wroteHeader = true
+	if !d.noHeader {
+		fmt.Fprintf(d.w, "%s\n", d.Label())
+	}
 	for _, line := range d.pending {
 		fmt.Fprint(d.w, line)
 	}
@@ -421,6 +439,10 @@ type ToolDiffSet struct {
 	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
 	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/verify)
 	live  int                   // the index streaming to w; -1 until the first is seen
+
+	// lastLabel is the header most recently written, so a run of edits to one
+	// file names it once. Reset per set, and a set lives for one send.
+	lastLabel string
 }
 
 // NewToolDiffSet builds a diff fan-out writing to w.
@@ -458,6 +480,9 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 			out = buf
 		}
 		d = NewToolDiff(out, s.color, s.theme, name)
+		if s.live != index {
+			d.SuppressHeader() // Flush writes it, once its position is settled
+		}
 		s.diffs[index] = d
 		s.order = append(s.order, index)
 	}
@@ -466,16 +491,42 @@ func (s *ToolDiffSet) Write(index int, name, frag string) {
 
 // Flush closes every open diff and appends the buffered ones after the live
 // one, each whole, in first-seen order; then resets the set.
+//
+// The buffered calls' headers are written here rather than by the diffs
+// themselves, because this is the first point at which a call's position in the
+// output is settled — and therefore the first point at which "is this the same
+// file as the diff above?" has an answer. Several edits to one file print its
+// name once and are separated by a blank line, which is what the repetition was
+// standing in for.
 func (s *ToolDiffSet) Flush() {
 	for _, i := range s.order {
 		s.diffs[i].Flush()
 	}
-	for _, i := range s.order {
-		if buf := s.bufs[i]; buf != nil {
-			_, _ = s.w.Write(buf.Bytes())
+	// The live call wrote its own header as it streamed, so the file it named is
+	// the one a following call has to match against.
+	if s.live >= 0 {
+		if d := s.diffs[s.live]; d != nil {
+			s.lastLabel = d.Label()
 		}
 	}
+	for _, i := range s.order {
+		buf := s.bufs[i]
+		if buf == nil {
+			continue
+		}
+		switch label := s.diffs[i].Label(); label {
+		case "":
+			// A tool with no path (bash): nothing to name, nothing to repeat.
+		case s.lastLabel:
+			fmt.Fprintln(s.w)
+		default:
+			fmt.Fprintf(s.w, "%s\n", label)
+			s.lastLabel = label
+		}
+		_, _ = s.w.Write(buf.Bytes())
+	}
 	s.order = nil
+	s.lastLabel = ""
 	clear(s.diffs)
 	clear(s.bufs)
 	clear(s.skip)

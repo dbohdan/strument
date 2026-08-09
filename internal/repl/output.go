@@ -36,6 +36,12 @@ type termOutput struct {
 	streamed     bool
 	cursorHidden bool
 	waiting      bool
+
+	// answerVisible records that this send's answer has said something, and
+	// toolStarted that a tool call has begun streaming. Between them they decide
+	// when a whitespace-only content delta is worth rendering; see StreamText.
+	answerVisible bool
+	toolStarted   bool
 }
 
 // startWaiting shows a "Waiting for <model> " line (no newline) while the
@@ -149,6 +155,22 @@ func (o *termOutput) StreamReasoning(delta string) {
 }
 
 func (o *termOutput) StreamText(delta string) {
+	// Providers interleave content deltas with tool calls, and some of those
+	// deltas say nothing — an empty string, or a lone newline between two edit
+	// calls. Rendering them is not free: creating the parser is what makes the
+	// *next* tool call emit its separator, so a model in the habit of putting a
+	// newline between calls bought one blank line per edit.
+	//
+	// Whitespace is dropped in two situations, for the same reason in both:
+	// there is nothing for it to space apart. Before the answer has said
+	// anything, it would only push the ANSWER header down. After a tool call has
+	// begun, the diffs space themselves, and the model's own line breaks are a
+	// habit of composing prose rather than a request for a blank line here.
+	if strings.TrimSpace(delta) == "" && (!o.answerVisible || o.toolStarted) {
+		return
+	}
+	o.answerVisible = true
+
 	o.clearWaiting()
 	o.hideCursor()
 	if o.phase == phaseReasoning {
@@ -178,6 +200,7 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	if o.diffs == nil {
 		o.diffs = render.NewToolDiffSet(o.w, o.color, o.theme)
 	}
+	o.toolStarted = true
 	o.streamed = true
 	o.diffs.Write(index, name, args)
 }
@@ -194,5 +217,7 @@ func (o *termOutput) FlushStream() {
 		o.streamed = false
 	}
 	o.phase = phaseNone
+	o.answerVisible = false
+	o.toolStarted = false
 	o.showCursor()
 }
