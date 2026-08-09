@@ -152,7 +152,7 @@ func (o *termOutput) header(label string) {
 	}
 	fmt.Fprintf(o.w, "\n%s%s%s\n\n%s► %s%s\n\n",
 		o.sgr(o.theme.Assistant), strings.Repeat("-", width), o.sgr("0"),
-		o.sgr(o.theme.Assistant)+o.sgr("1"), label, o.sgr("0"))
+		o.sgr(o.reasoningTheme().Assistant)+o.sgr("1"), label, o.sgr("0"))
 }
 
 // rule closes the thinking block: the same separator without a label. It is
