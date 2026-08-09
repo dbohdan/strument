@@ -2,6 +2,7 @@ package repomap
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -57,10 +58,14 @@ func TestParseStatus(t *testing.T) {
 			wantKnown: false,
 		},
 		{
+			// An empty .go file has no package clause, so it is not valid Go —
+			// go/parser says so and the grammar did not. This costs nothing in
+			// practice: parseNote reports only regressions, and a file created
+			// empty was never clean to regress from.
 			name:      "empty file",
 			fname:     "a.go",
 			src:       "",
-			wantClean: true,
+			wantClean: false,
 			wantKnown: true,
 		},
 	}
@@ -106,25 +111,20 @@ func TestParseStatusPointsAtTheErrorRegion(t *testing.T) {
 }
 
 // TestParseBudgetYieldsUnknown: a file too big to parse inside the budget must
-// report known=false, not a verdict from a partial tree. Synthetic rather than
-// a path into the Go install, so it holds wherever the suite runs.
+// report known=false, not a verdict from a partial tree.
 //
-// The budget exists because a sweep of the Go and Python standard libraries
-// found valid files the grammar chokes on — and choking is slow, so the same
-// bound that caps the wait also silences most of what the check gets wrong.
+// In Python, because Go no longer goes through the grammar at all — go/parser
+// handles a megabyte in under a tenth of a second, which is the whole reason
+// that path exists. The budget still guards every other language.
 func TestParseBudgetYieldsUnknown(t *testing.T) {
 	var b strings.Builder
-	b.WriteString("package a\n")
-	for i := range 40000 {
-		fmt.Fprintf(&b, "func f%d(x int) int { return x + %d }\n", i, i)
+	for i := range 60000 {
+		fmt.Fprintf(&b, "def f%d(x):\n    return x + %d\n", i, i)
 	}
 	src := []byte(b.String())
-	if len(src) < 1<<20 {
-		t.Fatalf("test input is only %d bytes; too small to exceed the budget", len(src))
-	}
 
 	start := time.Now()
-	clean, line, known := ParseStatus("big.go", src)
+	clean, line, known := ParseStatus("big.py", src)
 	elapsed := time.Since(start)
 
 	if known {
@@ -133,9 +133,48 @@ func TestParseBudgetYieldsUnknown(t *testing.T) {
 	if clean || line != 0 {
 		t.Errorf("clean = %v, line = %d; an unknown result must claim nothing", clean, line)
 	}
-	// The whole point is a bounded wait. Allow generous slack for a loaded
-	// machine, but fail if the budget is not being enforced at all.
 	if elapsed > 4*parseBudget {
 		t.Errorf("parse took %v with a %v budget", elapsed, parseBudget)
+	}
+}
+
+// TestGoParseIsExactAndFast pins what go/parser bought. A sweep of the Go
+// standard library found valid files the grammar reported as broken, and the
+// same files were pathologically slow because error recovery is expensive.
+// go/parser cannot produce that error: for Go, "parses" and "is valid Go" are
+// the same question.
+func TestGoParseIsExactAndFast(t *testing.T) {
+	for _, p := range []string{
+		"/usr/local/go/src/archive/tar/reader_test.go",
+		"/usr/local/go/src/cmd/compile/internal/ssa/regalloc.go",
+		"/usr/local/go/src/crypto/tls/ticket.go",
+	} {
+		src, err := os.ReadFile(p)
+		if err != nil {
+			t.Skipf("Go source tree not available: %v", err)
+		}
+		start := time.Now()
+		clean, _, known := ParseStatus(p, src)
+		elapsed := time.Since(start)
+		if !known || !clean {
+			t.Errorf("%s: clean=%v known=%v — this file is in the standard library and compiles",
+				p, clean, known)
+		}
+		if elapsed > 100*time.Millisecond {
+			t.Errorf("%s took %v; the grammar's seconds were the reason to switch", p, elapsed)
+		}
+	}
+}
+
+// TestGoParsePointsAtTheError: go/parser reports where the syntax error is, not
+// where a recovering parser gave up, so this one says "at" and means it.
+func TestGoParsePointsAtTheError(t *testing.T) {
+	src := "package a\n\nfunc F() int {\n\treturn 1\n\nfunc G() {}\n"
+	clean, line, known := ParseStatus("a.go", []byte(src))
+	if !known || clean {
+		t.Fatalf("clean=%v known=%v; want a known break", clean, known)
+	}
+	if line != 6 {
+		t.Errorf("line = %d, want 6 (where the parser actually objects)", line)
 	}
 }
