@@ -131,6 +131,27 @@ func (c *Coder) LastCommitHash() string { return c.lastCommitHash }
 // aider_commit_hashes gate).
 func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[short] }
 
+// NoteUndo records in the chat history that the user reverted a turn's edits.
+//
+// Without it the model reads its own "Applied the edit to x.go" in the history
+// and builds on a change that is no longer on disk. Nothing else tells it:
+// /undo moves HEAD, restores files, and pops the snapshot stack, all outside
+// any tool call it could be answered through.
+//
+// A user-role message is the honest shape here, and it is not the synthetic
+// turn this harness otherwise refuses to write: the user really did type /undo.
+// The assistant line after it only keeps the roles alternating.
+func (c *Coder) NoteUndo(files []string) {
+	if len(files) == 0 {
+		return
+	}
+	c.doneMessages = append(c.doneMessages,
+		llm.TextMessage("user", "I ran /undo. The edits from that turn are gone and "+
+			strings.Join(files, ", ")+" are back to what they were before it. "+
+			"Don't assume anything you changed there is still in place; read a file before building on it."),
+		llm.TextMessage("assistant", "Understood. I'll treat those files as unchanged by that turn."))
+}
+
 // CommitsBeforeMessage returns the HEAD hashes captured at the start of
 // each message; /diff uses the last one as its base.
 func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }

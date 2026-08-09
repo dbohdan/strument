@@ -94,6 +94,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 		return ""
 	}
 	r.coder.DropTurnSnapshot() // the commit was the record here; keep the stacks level
+	r.coder.NoteUndo(changed)  // or the model builds on edits that are no longer there
 	r.printf("Removed: %s %s", short, subject)
 	if _, nowShort, nowSubject, _, err := g.HeadInfo(); err == nil {
 		r.printf("Now at:  %s %s", nowShort, nowSubject)
@@ -111,6 +112,7 @@ func undoFromSnapshot(r *REPL) string {
 		r.out.Errorf("Unable to complete undo: %v", err)
 		return ""
 	}
+	r.coder.NoteUndo(restored)
 	r.printf("Undid the last turn's edits:")
 	for _, f := range restored {
 		r.printf("  %s", f)

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/llm"
 )
 
 // applyBatch runs one batch of edit-tool calls through the real apply path, the
@@ -402,5 +404,41 @@ func TestUndoWithNothingToUndo(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	if _, err := c.UndoLastTurn(); err == nil {
 		t.Error("want an error when the stack is empty")
+	}
+}
+
+// TestNoteUndoTellsTheModel closes the one channel /undo does not touch. It
+// moves HEAD, restores files, and pops the snapshot stack — all outside any
+// tool call — so without this the history still says "Applied the edit to
+// a.go" and the next turn builds on a change that is no longer on disk.
+func TestNoteUndoTellsTheModel(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.doneMessages = []llm.Message{
+		llm.TextMessage("user", "rename cur to line"),
+		llm.ToolResult("call_1", "Applied the edit to a.go."),
+	}
+	before := len(c.doneMessages)
+
+	c.NoteUndo([]string{"a.go", "b.go"})
+
+	added := c.doneMessages[before:]
+	if len(added) != 2 {
+		t.Fatalf("added %d messages, want a user note and an assistant ack", len(added))
+	}
+	if added[0].Role != "user" || added[1].Role != "assistant" {
+		t.Errorf("roles = %q, %q; want user then assistant so the turn alternates",
+			added[0].Role, added[1].Role)
+	}
+	text := added[0].Text()
+	for _, want := range []string{"/undo", "a.go", "b.go"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the note does not mention %q:\n%s", want, text)
+		}
+	}
+
+	// Nothing undone, nothing to say: an empty list must not add a turn.
+	c.NoteUndo(nil)
+	if len(c.doneMessages) != before+2 {
+		t.Errorf("an empty undo added %d messages", len(c.doneMessages)-before-2)
 	}
 }
