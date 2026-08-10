@@ -49,6 +49,42 @@ scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
 Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 **not** apply to a `scraper` command; the command handles its own networking.
 
+### `proxy`
+
+A SOCKS5 proxy URL for networks that can't reach a provider directly —
+`socks5://host:1080`, or `socks5h://` to resolve DNS at the proxy. Only those two
+schemes are supported.
+
+```python
+proxy = "socks5://127.0.0.1:1080"
+```
+
+At the top level it is the default for every provider that doesn't set its own,
+and it also covers the two egress paths that belong to no provider:
+`strument model-config`'s catalog fetch and URL scraping. In other words, a
+top-level `proxy` covers every outbound HTTPS action Strument takes.
+
+A `proxy` on a `provider()` call overrides it for that provider, and
+`proxy="direct"` opts a provider out entirely — the case for a LAN-local model
+server when the proxy exists only for external traffic:
+
+```python
+openrouter = provider(
+    "openrouter",
+    api_key=env("OPENROUTER_API_KEY"),
+    proxy="socks5://127.0.0.1:1080",
+)
+local_llm = provider("openai", base_url="http://localhost:8000/v1", proxy="direct")
+```
+
+Credentials go in the URL (`socks5://user:pass@host:1080`); keep them out of the
+file with `proxy=env("STRUMENT_PROXY")`, exactly as with `api_key`. The URL is
+resolved and validated at load, so a malformed one fails at startup rather than
+on the first request.
+
+A `scraper` command is the one exception: it does its own networking, and the
+global `proxy` does not reach it.
+
 ### `verify`
 
 `verify` names the commands that check your project — tests, a linter, a build.
@@ -261,6 +297,57 @@ An alias is just a `models` key, so the same model can appear under several:
 ```python
 models["ds"] = models["deepseek-pro"]  # one model, two aliases
 ```
+
+## `strument model-config`
+
+Writing `context`, `max_output`, and the costs by hand for every model is
+tedious, so `strument model-config` fetches them and prints a copy-pastable
+block:
+
+```sh
+strument model-config anthropic/claude-haiku-4.5
+```
+
+```python
+models = {
+    "claude-haiku-4.5": model(
+        openrouter,
+        "anthropic/claude-haiku-4.5",
+        display_name="Claude Haiku 4.5",
+        context=200000,
+        max_output=64000,
+        input_cost=1,
+        output_cost=5,
+        cache=True,  # OpenRouter reports prompt caching for this model.
+        # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
+        # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
+        # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+    ),
+}
+```
+
+It fills in the objective fields from OpenRouter's catalog — context size, max
+output, costs in US dollars per million tokens, and `cache=True` where the model
+supports caching — and leaves the judgment calls commented out for you. Each key
+is the slug's core; rename it to the short alias you will actually type. The
+output is a whole `models` dict, so it drops in as a new config; to add to one
+that already defines `models`, merge the two dicts rather than pasting a second
+`models =`.
+
+Pass exact slugs. `--provider-name` sets the provider variable emitted in the
+call (default `openrouter`), and output goes to stdout, so redirect or pipe it
+wherever you like. Because `config.star` is almost Python, a Python formatter
+such as `ruff format` or `black` will tidy the pasted blocks.
+
+It authenticates with your OpenRouter key — from your config, or from
+`OPENROUTER_API_KEY` — because anonymous catalog requests are rate-limited and
+can get your IP blocked, and it caches each fetched model for a day under your
+cache directory so repeated runs don't refetch. Pass `--proxy socks5://…` when
+the catalog fetch itself must go through a proxy; otherwise it uses the global
+[`proxy`](#proxy).
+
+Strument maintains no model database. The catalog is fetched on demand and
+frozen into your own config, which is why nothing goes stale behind your back.
 
 ## Project-local config
 

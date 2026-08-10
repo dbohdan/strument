@@ -124,7 +124,7 @@ func Load(opts Options) (*Config, error) {
 	userSrc, err := os.ReadFile(userPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("no user config at %s (create it; see config-schema)", userPath)
+			return nil, fmt.Errorf("no user config at %s (create it; see doc/config.md)", userPath)
 		}
 		return nil, err
 	}

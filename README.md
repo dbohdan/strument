@@ -1,86 +1,207 @@
 # Strument
 
-Strument is an AI pair-programming tool for the terminal: a ground-up Go port
-of [aider](https://github.com/Aider-AI/aider), trimmed to the improved
-essentials. It talks to LLMs through a single OpenAI-compatible client
-(OpenRouter dialect), lets the model read and search your project and edit it
-through native tool calls, shows you every change as it lands, and records each
-turn so the whole of it is one `/undo` away — in a git repository or outside
-one.
+Strument is an AI pair-programming tool for the terminal.
+You describe a change; the model searches your project with `grep`, `glob`, and `symbol`,
+reads what it finds, edits it, runs your test suite, reads the failure, and tries again —
+all inside the turn you started.
+Every edit scrolls past as a diff, and the whole turn is one `/undo` away,
+in a git repository or outside one.
 
-Strument began as a close reverse-engineering of aider at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev), reimplemented in Go. It now follows its own direction — closer to aider in some places, further in others. [`doc/README.md`](doc/README.md) is the developer overview.
+The loop closes inside a turn and stops at its edge.
+Strument will read forty files and rewrite six of them without asking permission for any of it;
+it will not begin a turn you didn't begin,
+and it will not run a shell command you didn't approve.
+Broad authority inside a turn, none between turns.
 
-## What's different from aider
+One static Go binary: no Python, no cgo, no model database,
+one configuration file in Starlark, one OpenAI-compatible dialect.
+Strument began as a ground-up reimplementation of [aider](https://github.com/Aider-AI/aider)
+at commit [`5dc9490`](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) (0.86.3.dev)
+and now follows its own direction — closer to aider in some places, further in others.
+[`doc/README.md`](doc/README.md) is the developer overview.
 
-- **One binary, no Python.** Pure Go, including tree-sitter (no cgo).
-- **Starlark configuration.**
-  A single `config.star` replaces layered YAML/`.env`/model-database
-  [configuration](#configuration); project-local `.strument.star` files are inert until
-  explicitly trusted (direnv-style content-hash gate).
-- **One model dialect.** OpenAI-compatible chat completions with OpenRouter
-  extensions and native tool calls; no litellm, no MCP.
-- **Essentials only.** A standard tool set — `read`, `grep`, `glob`, `ls`,
-  `symbol` to look; `edit` and `write` to change; `bash` and `verify` to run —
-  driven in a loop where the model sees each result and continues within the
-  turn. Reflection on failed edits, `/ask` mode for questions that should not
-  touch files, and a repo map on `/map` rather than in every prompt. The text
-  edit formats (SEARCH/REPLACE, fenced, whole-file) have been removed.
-  Architect mode, voice, GUI, analytics, and the other long-tail features are
-  out of scope for v1.
-- **Every turn is undoable, with or without git.** Strument snapshots each
-  file before it writes to it, so `/undo` puts a whole turn back even in a
-  directory that is not a repository — a live configuration directory, a
-  checkout under another SCM. Where there *is* a repository, a turn is also one
-  commit, described as one piece of work, and `/squash [n]` folds several into
-  the unit you actually recognize afterwards.
-- **Checks the model can't talk its way past.** `verify` names your project's
-  commands — tests, a linter, a build — and the model runs them by *name*, so
-  it never composes a shell command to check its own work. `verify_auto` runs
-  the ones you list at the end of any turn that changed a file, whether or not
-  the model thought to. See [Configuration](#configuration).
-- **Plain-HTTP URL scraping, with an escape hatch.** URLs you mention, or
-  `/web <url>`, are fetched with a plain HTTP GET — a real `User-Agent`, no
-  headless browser — and converted to markdown. A static binary can't embed a
-  browser, so JavaScript-rendered pages (most modern docs sites) come back thin;
-  aider ships a Playwright scraper. For those pages, point the `scraper` setting
-  at an external command (e.g. a headless Chromium): Strument shells out to it
-  rather than vendoring a browser, so the single binary stays a single binary and
-  you bring your own renderer. See [Configuration](#configuration).
+## A session
 
-The terminal interface, on the other hand, deliberately stays close to
-aider's: the same green/blue palette (with `--dark-mode` and `--light-mode`),
-a horizontal rule and the in-chat file list before each prompt, and an
-opening banner — so a returning aider user feels no seam. Syntax highlighting
-and the code-block background are the intentional omissions.
+```
+> Rename defaultTimeout to pollInterval and update the callers.
 
-## Building
+‹thinking› Let me find where that constant is defined.
+Searched for defaultTimeout — 3 matches in 2 files
+Read internal/poll/poll.go (118 lines)
 
-Go 1.26 or later; no cgo, no C toolchain.
+‹thinking›
+The declaration is in poll.go and there is one more use there and one in
+watch.go. I'll rename the declaration, then each use.
+‹/›
 
-```sh
-go install dbohdan.com/strument/cmd/strument@latest  # install the latest release
-go build ./cmd/strument            # full build: every bundled tree-sitter grammar
-task build:strument:subset         # release variant: only the grammars strument uses
+internal/poll/poll.go
+   const (
+  -	defaultTimeout = 30 * time.Second
+  +	pollInterval   = 30 * time.Second
+   	maxRetries     = 3
+   )
+
+internal/poll/poll.go
+  -	t := time.NewTicker(defaultTimeout)
+  +	t := time.NewTicker(pollInterval)
+
+internal/poll/watch.go
+  -	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+  +	ctx, cancel := context.WithTimeout(ctx, pollInterval)
+
+Applied the edit to internal/poll/poll.go
+Applied the edit to internal/poll/poll.go
+Applied the edit to internal/poll/watch.go
+Renamed the constant and updated its two uses.
+
+Running the automatic checks.
+test $ go test ./...
+test passed
+Commit 6c1e0a4 refactor(poll): rename defaultTimeout to pollInterval
+
+Tokens: 12.4k sent, 1.8k received. Cost: $0.03 turn, $0.03 session. 4 steps, 2 files changed.
 ```
 
-The subset build (about 32 MB instead of 43 MB, statically linked and
-stripped) compiles in just the 35 grammars the repo map supports, via
-gotreesitter's `grammar_subset` build tags; the tag list lives in
-[`script/grammar-tags.txt`](script/grammar-tags.txt) and a test keeps it in
-sync with the supported-language set. `task release` cross-compiles subset
-binaries for the release platforms.
+One prompt, four sends, one commit, one cost line.
+The recessive gray lines are Strument narrating its own mechanics;
+the diffs and the sentence at the end are the model's.
+The tests ran because `verify_auto` says they run after any turn that changed a file,
+not because the model remembered to.
+`/undo` at that prompt puts both files back and drops the commit.
 
-Strument builds and tests without any extra setup. To consult the original
-aider source, `task setup:reference` (or `sh script/setup-reference.sh`)
-clones aider at commit `5dc9490` into a gitignored `reference/` directory;
-it is a read-only grep target, never committed.
+## Getting started
+
+Go 1.26 or later, no cgo, no C toolchain:
+
+```sh
+go install dbohdan.com/strument/cmd/strument@latest
+```
+
+Strument needs a configuration file before it will start —
+there is no model database and nothing is assumed about which models you have.
+The smallest one that works is four lines.
+Put it in `~/.config/strument/config.star`:
+
+```python
+openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
+
+models = {"haiku": model(openrouter, "anthropic/claude-haiku-4.5")}
+default = "haiku"
+```
+
+Then export the key and start it in your project:
+
+```sh
+export OPENROUTER_API_KEY=sk-or-...
+cd ~/src/myproject
+strument
+```
+
+That is enough to work with.
+It is worth adding `context`, `max_output`, and the costs per model
+so that Strument can warn you before you overrun the window
+and report what a turn spent;
+`strument model-config <slug>` fetches those numbers and prints a config block to paste.
+See [Configuration](#configuration).
+
+Strument spends your money by the turn, and a turn can run twenty-five steps.
+Start on a small request against a cheap model and watch the cost line before you turn it loose on something large.
+
+## Using it
+
+Type what you want changed.
+The model works until it is finished or until it needs you,
+and each tool call reports one line as it goes.
+At twenty-five steps it stops, summarizes what it has done and what it has spent,
+and asks whether to keep going —
+a checkpoint, not a wall.
+Shell commands are the other place it stops: `bash` always asks first,
+while reading, searching, and editing do not.
+
+Slash commands do the things that are yours rather than the model's:
+
+| | |
+| --- | --- |
+| `/add <file>`, `/drop`, `/ls` | Pin a file's contents into the conversation when you already know what needs changing. Everything else the model finds itself. |
+| `/ask <question>` | Ask about the code with the editing tools taken away. `/code` switches back. |
+| `/undo` | Put the last turn back — the files, and the commit if there was one. |
+| `/squash [n]` | Fold the last n turns' commits into one. |
+| `/diff`, `/map`, `/tokens` | Show what changed, the repository map, and how full the context window is. |
+| `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. |
+| `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |
+
+`/help` lists all twenty-one.
+
+For scripts and one-offs, `-m` runs a single turn and exits:
+
+```sh
+strument -m 'Add a --version flag to cmd/pollctl.'
+strument --dry-run -m 'Fix the race in internal/poll.'   # report the edits, write nothing
+strument --yes -m 'Update the changelog for v0.3.0.'     # answer confirmations; still never runs a shell command
+```
+
+`--yes-shell` is the flag that lets the model run shell commands unattended.
+`--no-git` turns off the git integration inside a repository;
+outside one it is already off, and `/undo` works either way.
+
+## What it does differently
+
+Strument is a *reviewable* loop rather than an autonomous one.
+The model works within a turn because that is what tool calls mean —
+a reply ending in a tool call is a reply the model has not finished —
+and refusing it produced confusion, not safety.
+What Strument keeps is the review surface: the diff on your screen, the undo behind it, the turn boundary in your hands.
+Everything below follows from that.
+
+- **One binary, no Python.** Pure Go, tree-sitter included, no cgo.
+- **Starlark configuration.**
+  A single `config.star` replaces layered YAML, `.env` files, and a model database.
+  Project-local `.strument.star` files are inert until you run `strument trust` in the directory —
+  a direnv-style content-hash gate that you re-run after every edit.
+- **One model dialect.** OpenAI-compatible chat completions with OpenRouter extensions and native tool calls.
+  No litellm, no MCP.
+- **Nine tools, in three natures.**
+  `read`, `grep`, `glob`, `ls`, and `symbol` to look — free, unconfirmed, and never seeing a file the project ignores.
+  `edit` and `write` to change, landing the moment the call arrives.
+  `bash` to run something, behind a confirmation, and `verify` to run a check you configured.
+  `symbol` answers "where is this defined" from the language parser rather than from text,
+  which is what keeps it from being a second `grep`.
+- **Every turn is undoable, with or without git.**
+  Strument records each file before the first time it writes to it,
+  so `/undo` restores a whole turn in a directory that is not a repository —
+  a live configuration directory, a checkout under another SCM.
+  An edit preserves the file's mode and writes *through* a symlink instead of replacing it,
+  and a batch that fails partway rolls back whole.
+  Where there is a repository, a turn is also one commit,
+  described as one piece of work, and `/squash [n]` merges several.
+- **Checks the model can't talk its way past.**
+  `verify` names your project's commands — tests, a linter, a build — and the model runs them by *name*,
+  so it never composes a shell command to check its own work.
+  `verify_auto` runs the ones you list at the end of any turn that changed a file,
+  whether or not the model thought to.
+  A passing check prints one line; only a failing one prints its output.
+- **Plain-HTTP URL scraping, with an escape hatch.**
+  URLs you mention, or `/web <url>`, are fetched with an ordinary HTTP GET — a real `User-Agent`, no headless browser — and converted to markdown.
+  A static binary can't embed a browser, so JavaScript-rendered pages come back thin;
+  for those, point the `scraper` setting at an external command and Strument shells out to it.
+  You bring the renderer; the binary stays one file.
+
+The terminal interface stays deliberately close to aider's:
+the same green/blue palette (with `--dark-mode` and `--light-mode`),
+a horizontal rule and the in-chat file list before each prompt, an opening banner.
+Where it diverges it does so because the loop is different —
+a step's tool calls are narrated in a recessive gray,
+and reasoning arrives between `‹thinking›` and `‹/›` rather than under a banner,
+because most reasoning is one line and a banner cannot be one.
+Syntax highlighting and the code-block background are the intentional omissions.
 
 ## Configuration
 
-Strument is configured using [Starlark](https://starlark-lang.org/), a sandboxed dialect of Python.
-It reads model and provider definitions from a `config.star` file (typically `~/.config/strument/config.star`).
-[`doc/config.md`](doc/config.md) is the reference for every built-in and parameter; here is an example
-configuration demonstrating providers, reusable model factories, and aliases:
+Strument is configured in [Starlark](https://starlark-lang.org/), a small sandboxed dialect of Python:
+a config file is a short program that builds model objects and assigns them to a few names.
+[`doc/config.md`](doc/config.md) is the reference for every built-in and setting.
+Here is a fuller example than the starter above —
+two providers, a factory for a repeated option, and aliases:
 
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
@@ -96,26 +217,6 @@ def flex(m):
 
 
 models = {
-    "deepseek-flash": model(
-        openrouter,
-        "deepseek/deepseek-v4-flash-0731",
-        display_name="DeepSeek V4 Flash 0731",
-        context=1048576,
-        max_output=384000,
-        cache=True,  # OpenRouter reports prompt caching for this model.
-        reasoning="high",
-    ),
-    "ds": None,  # A placeholder for the alias below.
-    "gemini-flash": flex(
-        model(
-            openrouter,
-            "google/gemini-3.6-flash",
-            display_name="Gemini 3.6 Flash",
-            context=1048576,
-            max_output=65536,
-            cache=True,
-        ),
-    ),
     "gpt": flex(
         model(
             openrouter,
@@ -145,149 +246,123 @@ models = {
         output_cost=10,
         cache=True,  # Cache the prompt prefix (Anthropic honors this).
         reasoning="medium",
-        weak_model="mimo",
+        weak_model="mimo",  # A cheaper model for commit messages and summaries.
     ),
     "qwen": model(
         local_llm,
         "qwen/qwen3.6-27b",
         display_name="Qwen3.6 27B",
-        # Handles tool calls, so it uses the default "tool" format.
         reasoning="max",
-        reasoning_tag="think",
-        weak_model="qwen",  # Self-as-weak, the default; only strings express this.
+        reasoning_tag="think",  # This one emits reasoning in inline tags.
     ),
 }
 
-models["ds"] = models["deepseek-flash"]  # One struct under both keys.
+models["s"] = models["sonnet"]  # One model, two aliases.
 
-default = "ds"
+default = "sonnet"
 ```
 
-The `cache` option (default off) turns on prompt caching for a model: Strument
-attaches cache-control breakpoints with a one-hour TTL. Explicit breakpoints are
-honored by Anthropic models (reached through OpenRouter); other providers cache
-automatically and ignore them, but a stable prefix still helps their implicit
-caching, so it is worth setting on any cache-capable model. There is no
-automatic default — set it per model where you know it pays off.
+`cache` (off by default) attaches cache-control breakpoints with a one-hour TTL.
+Anthropic models reached through OpenRouter honor them explicitly;
+other providers cache automatically and ignore them,
+but a stable prefix helps their implicit caching too,
+so it is worth setting on any cache-capable model.
 
-On a network that can't reach a provider directly, set a SOCKS5 `proxy` on the
-`provider()` call (`socks5://`, or `socks5h://` to resolve DNS at the proxy):
+Writing `context`, `max_output`, and the costs by hand for every model is tedious,
+so `strument model-config anthropic/claude-haiku-4.5` fetches them from the provider's catalog
+and prints a `models` dict to paste,
+with the judgment calls (`reasoning`, `reasoning_tag`, `weak_model`) left as commented placeholders.
+It keeps no model database: the catalog is fetched on demand and frozen into your own config.
+
+Three settings live at the top level rather than on a model.
+`verify` names the commands that check your project,
+`verify_auto` says which of them Strument should run itself at the end of an editing turn,
+and `reasoning_display` says how much of the model's thinking to show:
 
 ```python
-openrouter = provider(
-    "openrouter",
-    api_key=env("OPENROUTER_API_KEY"),
-    proxy="socks5://127.0.0.1:1080",
-)
-```
-
-A top-level `proxy` is the default for every provider that doesn't set its own,
-and it also covers `strument model-config` and URL scraping — every outbound
-HTTPS action:
-
-```python
-proxy = "socks5://127.0.0.1:1080"
-```
-
-A provider bypasses that global proxy and connects directly with
-`proxy="direct"` — the case for a LAN-local model server when the proxy is only
-for external traffic. Credentials go in the URL
-(`socks5://user:pass@host:1080`); keep them out of the file with
-`proxy=env("STRUMENT_PROXY")`, exactly as with `api_key`. Only `socks5://` and
-`socks5h://` are supported.
-
-The built-in scraper is a plain HTTP GET, so JavaScript-rendered pages come back
-thin. For those, set a `scraper` command — an argv list with `%s` marking the
-URL — and Strument runs it instead of the built-in fetcher, treating its stdout
-as HTML and converting that to markdown the same way. A headless browser dumping
-the rendered DOM is the usual choice:
-
-```python
-scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
-```
-
-The command runs without a shell, so a hostile URL can't inject arguments; if no
-element contains `%s`, the URL is appended as the last argument. Leaving
-`scraper` unset keeps the built-in fetcher (the default). The global `proxy` does
-not apply to a `scraper` command — it does its own networking.
-
-Writing out `context`, costs, and `cache` by hand for every model is tedious, so
-`strument model-config` fetches them for you and prints a copy-pastable
-`models` dict:
-
-```sh
-strument model-config anthropic/claude-haiku-4.5
-```
-
-```python
-models = {
-    "claude-haiku-4.5": model(
-        openrouter,
-        "anthropic/claude-haiku-4.5",
-        display_name="Claude Haiku 4.5",
-        context=200000,
-        max_output=64000,
-        input_cost=1,
-        output_cost=5,
-        cache=True,  # OpenRouter reports prompt caching for this model.
-        # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
-        # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
-    ),
+verify = {
+    "lint": ["golangci-lint", "run"],
+    "test": ["go", "test", "./..."],
 }
+verify_auto = ["lint", "test"]
+
+reasoning_display = 10  # "full" (the default), a line count, or "off".
 ```
 
-Each key is the slug's core — rename it to the short alias you'll actually type.
-The output is a whole `models` dict, so it drops in as a new config; to add to
-one that already defines `models`, merge the two dicts (don't paste a second
-`models =`). It fills the objective fields from OpenRouter's catalog (context
-size, max output, costs in US dollars per million tokens, and `cache=True` when
-the model supports caching) and leaves the judgment calls — `reasoning`,
-`reasoning_tag`, `weak_model` — as commented placeholders for you to fill in.
-Pass exact slugs; `--provider-name`
-sets the provider variable emitted in the call (default `openrouter`); output
-goes to stdout, so redirect or pipe it wherever you like. It authenticates with
-your OpenRouter key — taken from your config, or the `OPENROUTER_API_KEY`
-environment variable — because anonymous catalog requests are rate-limited and
-can get your IP blocked; and it caches each fetched model for a day under your
-cache directory, so repeated runs don't refetch. When the catalog fetch itself
-must go through a proxy, pass `--proxy socks5://…`; otherwise it uses your
-config's global `proxy`. It maintains no model database — the catalog is fetched
-on demand and frozen into your own config.
-Because `config.star` is almost Python, you can tidy the pasted blocks with a
-Python formatter such as `ruff format` or `black`.
+Checks run in the order they are listed and stop at the first failure, so put the fast ones first.
+Hiding reasoning is not the same as not buying it —
+reasoning tokens are billed either way, and `reasoning="off"` on the model is what stops the spending.
 
-`reasoning_display` controls how much of the model's thinking appears, in both
-interactive and `--message` runs: `"full"` (the default), a line count, or
-`"off"`. Note that hiding it is not the same as not buying it — reasoning tokens
-are billed either way, and `reasoning="off"` on the model is what stops the
-spending. See [`doc/config.md`](doc/config.md).
+On a network that can't reach a provider directly,
+a `proxy` on the `provider()` call routes that provider's requests through SOCKS5,
+and a top-level `proxy` covers every outbound HTTPS action Strument takes.
+A project-local `.strument.star` can extend or override any of this, once you have run `strument trust` in the directory.
+[`doc/config.md`](doc/config.md) has the details of all of it.
 
-Project-local `.strument.star` files can override or extend this, but
-require explicit trust (`/trust`) before they take effect.
+## What it doesn't do
+
+Strument is pre-1.0 and moving; expect settings to change under you and read the commit log before upgrading.
+Beyond that, the limits worth knowing before you install it:
+
+- **It needs a model that calls functions well.**
+  Everything — reading a file, searching, editing — is a tool call, so a model that fumbles them cannot drive Strument at all.
+  The text edit formats that existed for such models (SEARCH/REPLACE, fenced, whole-file) have been removed.
+  In a sixteen-model live sweep, fourteen drove every tool cleanly;
+  the two that couldn't were the smallest and most reasoning-heavy of the set, and spent their output budget thinking instead of calling.
+  Treat about 27B as the working floor.
+- **It is tested on Linux.**
+  Releases cross-compile for twelve platforms, including macOS, Windows, and the BSDs,
+  but CI runs on Linux only, and that is where the live testing happens.
+- **No MCP, no subagents, no architect mode, no voice, no GUI, no analytics.**
+  One dialect, one model at a time, one terminal.
+- **No syntax highlighting** and no background behind code blocks — a deliberate omission, not a missing feature.
+- **The scraper is plain HTTP.** JavaScript-rendered pages need the `scraper` escape hatch above.
+
+## Relationship to aider
+
+Strument reimplements aider's ideas in Go rather than wrapping them, and the debt is specific.
+The tree-sitter tag queries under `internal/repomap/queries*/` are aider's, copied.
+The built-in prompts began as aider's and have since been rewritten.
+The repository map — a PageRank-ranked skeleton of the project — is aider's design, and so are
+`/undo`, `/ask`, the chat-history summarization, the fuzzy matcher that lands an edit whose whitespace the model reproduced imperfectly,
+and the look of the terminal.
+
+Two divergences are deliberate and worth stating outright.
+The loop closes: aider's turn is one send because a SEARCH/REPLACE block is a finished thought, while a tool call is not,
+and Strument follows the tool call's semantics instead.
+And the safety net is a snapshot rather than a commit:
+aider's undo is git's, Strument's is its own record of every file it wrote,
+which is what makes it usable where there is no repository at all.
 
 ## Credits and license
 
-Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul
-Gauthier and the aider contributors, licensed under the
-[Apache License 2.0](LICENSE). Strument carries the same license. The
-tree-sitter tag queries under `internal/repomap/queries/` and
-`internal/repomap/queries-legacy/` are copied from aider, and the built-in
-prompts began as aider's; the rest is an independent reimplementation.
+Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul Gauthier and the aider contributors,
+licensed under the [Apache License 2.0](LICENSE), and carries the same license.
 
-The streaming markdown renderer (`internal/render/`) is a port of
-[streaming-markdown](https://github.com/thetarnav/streaming-markdown) by
-Damian Tarnawski, MIT licensed.
+Three components are vendored, each with a `NOTICE` recording what was taken and what was changed:
 
-The gitignore pattern matcher (`internal/gitignore/`) is vendored from
-[go-git](https://github.com/go-git/go-git) (Apache 2.0, the same license as
-Strument), taken at `v6.0.0-alpha.5`. See
-[`internal/gitignore/NOTICE`](internal/gitignore/NOTICE) for what was taken and
-what Strument replaced.
+- the streaming markdown renderer (`internal/render/`), ported from
+  [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by Damian Tarnawski (MIT);
+- the gitignore pattern matcher (`internal/gitignore/`), from
+  [go-git](https://github.com/go-git/go-git) at `v6.0.0-alpha.5` (Apache 2.0);
+- the terminal line editor (`internal/readline/`), a fork of
+  [ergochat/readline](https://github.com/ergochat/readline) v0.1.3 (MIT),
+  whose redraw was reworked to be flicker-free using the single-write technique from
+  [bestline](https://github.com/jart/bestline) by Justine Tunney (2-clause BSD).
 
-The terminal line editor (`internal/readline/`) is a vendored fork of
-[ergochat/readline](https://github.com/ergochat/readline) (MIT), taken at
-v0.1.3. Its redraw was reworked to be flicker-free using the in-place,
-single-write technique from [bestline](https://github.com/jart/bestline) by
-Justine Tunney (2-clause BSD), and Ctrl+arrow now moves by word. See
-[`internal/readline/NOTICE`](internal/readline/NOTICE) for details.
+## Building
+
+```sh
+go build ./cmd/strument     # full build: every bundled tree-sitter grammar
+task build:strument:subset  # release variant: only the grammars Strument uses
+task release                # cross-compile the subset build for every platform
+```
+
+The subset build compiles in just the 35 grammars the repository map supports,
+via gotreesitter's `grammar_subset` build tags —
+about 32 MB instead of 43 MB, statically linked and stripped.
+The tag list lives in [`script/grammar-tags.txt`](script/grammar-tags.txt), and a test keeps it in sync with the supported languages.
+
+Strument builds and tests offline, with no API keys and no extra setup.
+To read aider's source alongside it, `task setup:reference` clones aider at commit `5dc9490`
+into a gitignored `reference/` directory; nothing in the build needs it.
