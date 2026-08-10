@@ -23,7 +23,6 @@ type Set struct {
 	FilesNoFullFiles                 string
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
-	RepoContentPrefix                string
 	ReadOnlyFilesPrefix              string
 	LazyPrompt                       string
 	OvereagerPrompt                  string
@@ -37,10 +36,6 @@ const filesContentPrefix = "I have added these files to the chat so you can go a
 
 const filesContentAssistantReply = "Understood. Any changes I propose will be to those files, " +
 	"and I'll treat this message as their current contents."
-
-const repoContentPrefix = "Here are summaries of some files present in my Git repository.\n" +
-	"These summaries are for reference only; treat these files as read-only.\n" +
-	"If you need to edit any of them, ask me to add them to the chat first.\n"
 
 const readOnlyFilesPrefix = "Here are some read-only files, provided for your reference.\n" +
 	"Do not propose edits to these files.\n"
@@ -125,16 +120,31 @@ var Tool = Set{
 	// place it made the model explore and then refuse to edit.
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
-	RepoContentPrefix:                repoContentPrefix,
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 	LazyPrompt:                       lazyPrompt,
 	OvereagerPrompt:                  overeagerPrompt,
 }
 
-// Ask is the discussion mode. It is enforced by the tool set rather than by
-// this prompt: toolDefs withholds edit, write, bash, and verify, so there is
-// nothing to parse back out and nothing to discard. The prompt only sets the
-// register.
+// Ask is the discussion mode. What it withholds is enforced by the tool set,
+// not by this prompt: toolDefs drops edit, write, bash, and verify, so there is
+// nothing to parse back out and nothing to discard.
+//
+// What it *keeps* has to be said here, though, and for a while was not. Ask
+// offers read, grep, glob, ls, and symbol, and this prompt named none of them
+// while opening with "you cannot apply edits from it" — a sentence a model can
+// read as "you cannot act". The only mention of the observation tools sat in
+// FilesNoFullFiles, which is used solely when nothing is pinned, so /ask after
+// /add described a mode with no way to look at anything. Nothing said results
+// come back either, so a model had no picture of the loop and could repeat a
+// call it had already made. Observed: MiMo looping.
+//
+// So the tool paragraph and the loop sentence are here in the register the tool
+// prompt uses, and the no-editing sentence explains the mechanism (this mode has
+// no editing tools) rather than issuing a prohibition that reads wider than it
+// is. symbol stays unnamed on purpose, exactly as in the tool prompt: it is
+// offered only where grammars are, and prose promising a conditional tool is the
+// bug this comment is about, in mirror image. Its schema description carries it,
+// and models reach for it from that alone.
 //
 // FilesNoFullFilesWithRepoMap is "" — a falsy sentinel that disables that
 // assembly branch, not an empty message.
@@ -142,9 +152,17 @@ var Ask = Set{
 	MainSystem: "You are an expert code analyst.\n" +
 		"Answer questions about the supplied code.\n" +
 		"Always reply to the user in {language}.\n\n" +
-		"This is a discussion mode and you cannot apply edits from it; " +
-		"if you need to describe code changes, do so briefly and " +
-		"the user can switch modes to have them made.\n",
+		"Work through the provided tools. read, grep, glob, and ls look at the project. " +
+		"They change nothing and need no permission, so use them freely rather than " +
+		"answering from memory or guessing at how the project works. Files the project " +
+		"ignores are not listed or searched.\n\n" +
+		"Every call's result comes back to you, so you can keep looking within the same " +
+		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
+		"answering the question, without calling a tool — that is what ends the turn and " +
+		"hands back to the user.\n\n" +
+		"This mode has no editing tools. Describe changes rather than making them: say " +
+		"briefly what you would change and where, and the user can switch to code mode to " +
+		"have it done.\n",
 	SystemReminder:  "{final_reminders}",
 	ExampleMessages: nil,
 	FilesContentPrefix: "I have added these files to the chat so you can see all of their contents.\n" +
@@ -155,11 +173,7 @@ var Ask = Set{
 		"to look at the project, and answer from what you find there rather than from memory.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
-	RepoContentPrefix: "I am working with you on code in a Git repository.\n" +
-		"Here are summaries of some files present in my Git repo.\n" +
-		"If you need to see the full contents of any files to answer my questions, " +
-		"ask me to add them to the chat.\n",
-	ReadOnlyFilesPrefix: readOnlyFilesPrefix,
+	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 	LazyPrompt: "Be thorough: if you describe changes or a plan, " +
 		"cover everything needed rather than trailing off.\n",
 	OvereagerPrompt: "Do not return fully detailed code or full diffs.\n" +

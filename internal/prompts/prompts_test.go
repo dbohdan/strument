@@ -67,9 +67,32 @@ func TestAskPromptShape(t *testing.T) {
 	if Ask.FilesNoFullFilesWithRepoMap != "" {
 		t.Errorf("ask files_no_full_files_with_repo_map must be the empty sentinel, got %q", Ask.FilesNoFullFilesWithRepoMap)
 	}
-	// Ask's repo_content_prefix invites the add-file flow rather than
-	// forbidding edits.
-	if !strings.Contains(Ask.RepoContentPrefix, "add them to the chat") {
-		t.Errorf("ask repo_content_prefix should invite adding files: %q", Ask.RepoContentPrefix)
+	// Ask must describe the tools it actually has. It offers read, grep, glob,
+	// ls, and symbol; it once named none of them and opened by saying what it
+	// could not do, which left a model with no picture of the mode and no reason
+	// to look at anything. These are the sentences whose absence caused that, so
+	// they are pinned rather than left to a future tidy-up.
+	for _, want := range []string{
+		"read, grep, glob, and ls look at the project",
+		"change nothing and need no permission",
+		"result comes back to you", // the loop closes here too
+		"ends the turn",
+	} {
+		if !strings.Contains(Ask.MainSystem, want) {
+			t.Errorf("ask main_system should convey %q:\n%s", want, Ask.MainSystem)
+		}
+	}
+	// The no-editing rule has to name the mechanism rather than sound like a ban
+	// on acting: this mode has no editing tools, so describe changes instead.
+	if !strings.Contains(Ask.MainSystem, "no editing tools") {
+		t.Errorf("ask main_system should say why it cannot edit:\n%s", Ask.MainSystem)
+	}
+	if strings.Contains(Ask.MainSystem, "cannot apply edits from it") {
+		t.Error("ask main_system reverted to the phrasing that read as 'you cannot act'")
+	}
+	// {language} is the only slot Ask substitutes; a stray brace would survive
+	// into the prompt as a literal.
+	if strings.ContainsAny(strings.ReplaceAll(Ask.MainSystem, "{language}", ""), "{}") {
+		t.Errorf("ask main_system has an unexpected brace:\n%s", Ask.MainSystem)
 	}
 }

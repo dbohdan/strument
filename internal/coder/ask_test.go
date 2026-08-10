@@ -8,8 +8,10 @@ package coder
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -199,5 +201,39 @@ func TestAskModeIgnoresSearchReplaceAndShell(t *testing.T) {
 	// History has the plain Q&A, no "committed" rotation.
 	if len(c.doneMessages) != 0 {
 		t.Errorf("ask mode rotated history: %s", dumpHistory(c.doneMessages))
+	}
+}
+
+// Ask mode's request must actually carry its tools. It did not: buildRequest
+// gated req.Tools on editFormat == "tool", so ask sent none, and toolDefs's own
+// "ask" branch was unreachable — the source read as though ask had a read-only
+// tool set while the wire carried nothing. A live pass is what caught it, so
+// this pins the wire rather than the tool list.
+func TestAskRequestCarriesReadOnlyTools(t *testing.T) {
+	c := askCoder(t, t.TempDir())
+	c.RepoMap = repomap.New(c.Root)
+	req := c.buildRequest([]llm.Message{llm.TextMessage("user", "what is here?")})
+
+	if len(req.Tools) == 0 {
+		t.Fatal("ask mode sent no tools at all")
+	}
+	if req.ToolChoice != "auto" {
+		t.Errorf("tool_choice = %q, want auto", req.ToolChoice)
+	}
+	got := map[string]bool{}
+	for _, d := range req.Tools {
+		got[d.Name] = true
+	}
+	for _, want := range []string{"read", "grep", "glob", "ls", "symbol"} {
+		if !got[want] {
+			t.Errorf("ask mode should offer %s, got %v", want, slices.Sorted(maps.Keys(got)))
+		}
+	}
+	// The withheld half is what makes it ask mode, and it is withheld by the
+	// tool set rather than by the prompt.
+	for _, gone := range []string{"edit", "write", "bash", "verify"} {
+		if got[gone] {
+			t.Errorf("ask mode must not offer %s", gone)
+		}
 	}
 }

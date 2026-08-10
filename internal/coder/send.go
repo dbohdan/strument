@@ -335,8 +335,15 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 		ReasoningEffort: c.Model.Reasoning,
 		ExtraParams:     c.Model.RequestExtraParams(),
 	}
-	if c.editFormat == "tool" {
-		req.Tools = c.toolDefs()
+	// Whatever tools this mode offers, offer them. The condition used to be
+	// editFormat == "tool", which meant ask mode sent none at all — and made
+	// toolDefs's own "ask" branch unreachable, so the code read as though ask
+	// had a read-only tool set while the wire carried nothing. A model told to
+	// look at the project with no way to do it invents the syntax: MiMo emitted
+	// <bash>ls -la</bash> as prose, and one run spent 759 lines guessing at
+	// markup. RunAside builds its own request and is deliberately not affected.
+	if defs := c.toolDefs(); len(defs) > 0 {
+		req.Tools = defs
 		req.ToolChoice = "auto"
 	}
 	return req
