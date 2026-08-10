@@ -588,12 +588,15 @@ func stripReasoning(answer, tag string) string {
 // step count now appears: it used to ride every send's line, where twenty-five
 // steps meant twenty-five status lines competing with the diffs.
 func (c *Coder) turnSummary() string {
-	var out string
+	var parts []string
 	if c.numSteps > 0 {
-		out += fmt.Sprintf(" %s.", plural(c.numSteps+1, "step", "steps"))
+		parts = append(parts, plural(c.numSteps+1, "step", "steps"))
 	}
 	if n := len(c.turnEditedFiles); n > 0 {
-		out += " " + plural(n, "file", "files") + " changed."
+		parts = append(parts, plural(n, "file", "files")+" changed")
 	}
-	return out
+	if len(parts) == 0 {
+		return ""
+	}
+	return " " + strings.Join(parts, ", ") + "."
 }

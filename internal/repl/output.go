@@ -188,7 +188,6 @@ func (o *termOutput) reasoningTheme() render.Theme {
 func (o *termOutput) StreamReasoning(delta string) {
 	o.clearWaiting()
 	o.hideCursor()
-	o.streamed = true
 
 	if o.phase != phaseReasoning {
 		o.phase = phaseReasoning
@@ -215,6 +214,10 @@ func (o *termOutput) StreamReasoning(delta string) {
 // marker takes a line of its own.
 func (o *termOutput) openThinking(block bool) {
 	o.thinkOpened, o.thinkBlock = true, block
+	// Set here rather than on the first delta: a provider that pads a turn with
+	// an empty reasoning delta has streamed nothing, and claiming otherwise buys
+	// a blank line from FlushStream with no content above it.
+	o.streamed = true
 	dim, off := o.sgr(o.theme.Reasoning), o.sgr("0")
 	if block {
 		fmt.Fprintf(o.w, "%s%s%s\n", dim, thinkingOpen, off)
@@ -240,15 +243,16 @@ func (o *termOutput) separateFromThinking() {
 	o.streamed = false
 }
 
-// endReasoning closes the thinking block. A one-liner needs no closing marker:
-// the line it sits on is the whole of it.
-func (o *termOutput) endReasoning() {
+// endReasoning closes the thinking block and reports whether there was one. A
+// one-liner needs no closing marker: the line it sits on is the whole of it.
+func (o *termOutput) endReasoning() bool {
 	if o.phase != phaseReasoning {
-		return
+		return false
 	}
 	if !o.thinkOpened && strings.TrimSpace(o.thinkHeld.String()) != "" {
 		o.openThinking(false) // the block ended on its first line
 	}
+	rendered := o.thinkOpened
 	o.closeParser()
 	if o.thinkBlock {
 		fmt.Fprintf(o.w, "%s%s%s\n", o.sgr(o.theme.Reasoning), thinkingClose, o.sgr("0"))
@@ -256,6 +260,7 @@ func (o *termOutput) endReasoning() {
 	o.thinkHeld.Reset()
 	o.thinkOpened, o.thinkBlock = false, false
 	o.phase = phaseNone
+	return rendered
 }
 
 func (o *termOutput) StreamText(delta string) {
@@ -287,8 +292,7 @@ func (o *termOutput) StreamText(delta string) {
 
 	o.clearWaiting()
 	o.hideCursor()
-	if o.phase == phaseReasoning {
-		o.endReasoning()
+	if o.phase == phaseReasoning && o.endReasoning() {
 		o.separateFromThinking()
 	}
 	o.phase = phaseAnswer
@@ -303,8 +307,9 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
 	// so close the parser before the diff begins; they never interleave.
 	if o.phase == phaseReasoning {
-		o.endReasoning() // reasoning gave way to edits: close the block
-		o.separateFromThinking()
+		if o.endReasoning() { // reasoning gave way to edits: close the block
+			o.separateFromThinking()
+		}
 		o.phase = phaseAnswer
 	}
 	if o.parser != nil {

@@ -304,3 +304,19 @@ func TestProseBetweenCallsStaysBetweenThem(t *testing.T) {
 		t.Errorf("a.md named %d times, want 2 (once per run):\n%s", n, buf.String())
 	}
 }
+
+// TestEmptyReasoningRendersNothing: a provider padding a turn with an empty
+// reasoning delta has streamed nothing, and must not buy a blank line with no
+// content above it — the same shape of wart that whitespace content deltas had.
+func TestEmptyReasoningRendersNothing(t *testing.T) {
+	for _, pad := range []string{"", "\n", "   \n  "} {
+		var buf bytes.Buffer
+		o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
+		o.StreamReasoning(pad)
+		o.StreamToolCall(0, "read", `{"path":"a.md"}`)
+		o.FlushStream()
+		if got := buf.String(); got != "" {
+			t.Errorf("reasoning of %q wrote %q", pad, got)
+		}
+	}
+}
