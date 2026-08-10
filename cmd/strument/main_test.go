@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/history"
 )
 
 // newRepo makes a repository with a subdirectory and returns both paths.
@@ -96,5 +98,63 @@ func TestHistoryOverrideResolvesAgainstTheProjectRoot(t *testing.T) {
 		if got != want {
 			t.Errorf("from %s: got %s, want %s", dir, got, want)
 		}
+	}
+}
+
+// The alias is recorded only when it differs from the config's default.
+// Recording the default would pin a project to whatever it happened to be the
+// first time the project was opened, so that later editing `default` in
+// config.star would mysteriously not take effect there.
+func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, _ := newRepo(t)
+	cfg := &config.Config{Default: "mimo"}
+	cdr := coder.New(root, &config.Model{Slug: "x"})
+
+	save := saveResumeFunc(cdr, cfg, root, true)
+	if save == nil {
+		t.Fatal("no save function when state is kept")
+	}
+
+	save("mimo") // the default: nothing to remember
+	if got := history.LoadResume(root).Model; got != "" {
+		t.Errorf("the default alias was pinned: %q", got)
+	}
+	save("sonnet") // a deliberate choice: remember it
+	if got := history.LoadResume(root).Model; got != "sonnet" {
+		t.Errorf("model = %q, want sonnet", got)
+	}
+	// Switching back to the default is the way out of the pin.
+	save("mimo")
+	if got := history.LoadResume(root).Model; got != "" {
+		t.Errorf("switching back to the default left %q pinned", got)
+	}
+}
+
+// --no-history means leave no trace, so there is nothing to call.
+func TestResumeIsNotSavedWithoutState(t *testing.T) {
+	if save := saveResumeFunc(nil, nil, "/tmp/whatever", false); save != nil {
+		t.Error("a no-trace session should have no save function")
+	}
+}
+
+// Paths are recorded relative to the project root rather than the coder's, so
+// they survive --no-git, where the coder works from the invocation directory
+// while the project is still the worktree.
+func TestResumePathsAreProjectRelative(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, sub := newRepo(t)
+	if err := os.WriteFile(filepath.Join(sub, "b.go"), []byte("package b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A --no-git session in sub/: the coder's root is sub, the project is root.
+	cdr := coder.New(sub, &config.Model{Slug: "x"})
+	cdr.AddFile(filepath.Join(sub, "b.go"))
+
+	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, true)("m")
+
+	got := history.LoadResume(root).Files
+	if len(got) != 1 || got[0] != "sub/b.go" {
+		t.Errorf("files = %v, want [sub/b.go]", got)
 	}
 }

@@ -410,6 +410,17 @@ go stale under rebase. Read the trailer instead.
 These are not hypothetical. Applied to ten candidates, they rejected four
 without further argument.
 
+`resume.json` is the one that passed cleanly, and it is deliberately the *cheap*
+half of a session: pinned files, read-only files, and the model alias — what you
+would otherwise retype. Not the conversation. Storing `doneMessages` would make
+Strument re-send a context the user pays for, assert something about what the
+model remembers, and blur the turn boundary; the transcript already exists for
+reading. Two rules keep it from surprising anyone: paths are relative to the
+project root rather than the coder's, so they survive `--no-git` from a
+subdirectory, and the model alias is recorded only when it differs from the
+config's `default`, so a project is never silently pinned to a stale default.
+Restoring is announced in the banner, and `--no-history` writes none of it.
+
 ## Testing
 
 - `go test ./...` runs everything without network, sockets, or API keys.

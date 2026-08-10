@@ -57,6 +57,15 @@ func init() {
 	}
 }
 
+// saveResume records the session state a restart would otherwise make the user
+// retype. Called from every command that changes it; a no-op when the session
+// leaves no trace.
+func (r *REPL) saveResume() {
+	if r.opts.SaveResume != nil {
+		r.opts.SaveResume(r.opts.ModelAlias)
+	}
+}
+
 func findCommand(name string) *command {
 	for i := range commands {
 		if commands[i].name == name {
@@ -282,6 +291,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 		r.coder.AddFile(rel)
 		r.printf("Added %s to the chat.", rel)
 	}
+	r.saveResume()
 	return ""
 }
 
@@ -294,6 +304,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 		r.coder.AddReadOnlyFile(rel)
 		r.printf("Added %s to the chat (read-only).", rel)
 	}
+	r.saveResume()
 	return ""
 }
 
@@ -322,6 +333,7 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 			r.out.Warningf("No chat files matched %q.", pat)
 		}
 	}
+	r.saveResume()
 	return ""
 }
 
@@ -357,6 +369,7 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	r.coder.DropAll()
 	r.coder.ClearHistory()
 	r.printf("Dropped all files and cleared the chat history.")
+	r.saveResume()
 	return ""
 }
 
@@ -409,6 +422,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens)
 	}
 	r.opts.ModelAlias = args
+	r.saveResume()
 	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
 	return ""
 }

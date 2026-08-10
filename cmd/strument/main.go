@@ -69,11 +69,32 @@ func (c *chatCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// The project's state directory, and whatever the last session left in it.
+	// Resolved before the model, because a remembered alias participates in
+	// choosing one.
+	projectRoot, rootErr := historyRoot()
+	var res history.Resume
+	if rootErr == nil {
+		res = history.LoadResume(projectRoot)
+	}
+
+	// -M beats a remembered alias beats the config's default.
 	alias := c.Model
+	fromResume := false
+	if alias == "" && res.Model != "" {
+		alias, fromResume = res.Model, true
+	}
 	if alias == "" {
 		alias = cfg.Default
 	}
 	model, ok := cfg.Models[alias]
+	if !ok && fromResume {
+		// An alias can be renamed out of the config between sessions. That is
+		// not the user's mistake here and must not stop them starting.
+		fmt.Fprintf(os.Stderr, "strument: remembered model %q is no longer in the config; using %q.\n", alias, cfg.Default)
+		alias, ok = cfg.Default, true
+		model = cfg.Models[alias]
+	}
 	if !ok {
 		return fmt.Errorf("unknown model alias %q (aliases: %s)", alias, strings.Join(slices.Sorted(maps.Keys(cfg.Models)), ", "))
 	}
@@ -125,26 +146,34 @@ func (c *chatCmd) Run() error {
 		cdr.AddFile(f)
 	}
 
-	// historyRoot, not root: under --no-git the coder's root is the working
-	// directory, but a project's state still belongs to the project. Created
-	// once here, 0700, with its root file, so the transcript and the input
-	// history both land in a directory that already exists and is already
-	// locked down — including under --no-history, which suppresses the
-	// transcript and not the input history.
-	projectRoot, rootErr := historyRoot()
-	if rootErr == nil {
-		_, _ = history.EnsureProjectDir(projectRoot)
+	// --no-history means leave no trace: no transcript, no input history, no
+	// resume file, and no directory created to hold them. Reading what a past
+	// session left is still fine — that writes nothing, and refusing it would
+	// make the flag a bigger behavior change than its name suggests.
+	keepState := !c.NoHistory && rootErr == nil
+	if keepState {
+		if _, err := history.EnsureProjectDir(projectRoot); err != nil {
+			keepState = false
+		}
 	}
 
 	var hist *history.Writer
-	if !c.NoHistory && rootErr == nil {
+	if keepState {
 		if p, err := resolveHistoryPath(cfg, projectRoot); err == nil {
 			hist = history.New(p)
 		}
 	}
 
 	if c.Message == "" {
-		return c.runREPL(cfg, cdr, repo, hist, alias)
+		// Restoring only in the REPL keeps a scripted run reproducible from its
+		// own arguments: `strument -m ...` should send what it was told to, not
+		// whatever an interactive session left pinned, which the user would pay
+		// for without seeing it.
+		note := ""
+		if len(c.Files) == 0 && rootErr == nil {
+			note = restoreSession(cdr, projectRoot, res)
+		}
+		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, keepState, note)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -198,6 +227,90 @@ func historyRootFrom(dir string) string {
 	return dir
 }
 
+// restoreSession re-pins what the last session had pinned, returning a line for
+// the banner or "" when nothing was restored.
+//
+// Paths are project-root-relative, so they survive the --no-git case where the
+// coder's root is the invocation directory and the project is the git worktree.
+// A file that has since moved is skipped rather than reported: the point is to
+// save retyping, not to litigate what happened to the tree.
+func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) string {
+	abs := func(rel string) (string, bool) {
+		p := filepath.Join(projectRoot, filepath.FromSlash(rel))
+		if _, err := os.Stat(p); err != nil {
+			return "", false
+		}
+		return p, true
+	}
+	var files, readOnly int
+	for _, rel := range res.Files {
+		if p, ok := abs(rel); ok {
+			cdr.AddFile(p)
+			files++
+		}
+	}
+	for _, rel := range res.ReadOnly {
+		if p, ok := abs(rel); ok {
+			cdr.AddReadOnlyFile(p)
+			readOnly++
+		}
+	}
+	switch {
+	case files == 0 && readOnly == 0:
+		return ""
+	case readOnly == 0:
+		return fmt.Sprintf("Restored %s from your last session.", plural(files, "file", "files"))
+	case files == 0:
+		return fmt.Sprintf("Restored %s from your last session.", plural(readOnly, "read-only file", "read-only files"))
+	}
+	return fmt.Sprintf("Restored %s and %s from your last session.",
+		plural(files, "file", "files"), plural(readOnly, "read-only file", "read-only files"))
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// saveResumeFunc returns the callback the REPL calls after a command changes
+// what a resume would restore, or nil when this session leaves no trace.
+//
+// The alias is recorded only when it differs from the config's default. That is
+// a simpler rule than "explicitly chosen" and a more robust one: recording the
+// default would pin a project to whatever it happened to be the first time the
+// project was opened, so that later editing `default` in config.star would
+// mysteriously not take effect there. It also gives an obvious way out —
+// switching back to the default stops the pinning.
+func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, keepState bool) func(alias string) {
+	if !keepState {
+		return nil
+	}
+	return func(alias string) {
+		toProject := func(rels []string) []string {
+			out := make([]string, 0, len(rels))
+			for _, rel := range rels {
+				p := filepath.Join(cdr.Root, filepath.FromSlash(rel))
+				r, err := filepath.Rel(projectRoot, p)
+				if err != nil || strings.HasPrefix(r, "..") {
+					continue // outside the project; nothing stable to record
+				}
+				out = append(out, filepath.ToSlash(r))
+			}
+			return out
+		}
+		res := history.Resume{
+			Files:    toProject(cdr.ChatFiles()),
+			ReadOnly: toProject(cdr.ReadOnlyFiles()),
+		}
+		if alias != cfg.Default {
+			res.Model = alias
+		}
+		_ = history.SaveResume(projectRoot, res)
+	}
+}
+
 // resolveHistoryPath is the config override (absolute, or relative to the
 // history root above) or the XDG default.
 func resolveHistoryPath(cfg *config.Config, projectRoot string) (string, error) {
@@ -234,12 +347,14 @@ func terminalSize() (int, int) {
 }
 
 // runREPL starts the interactive session.
-func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer,
+	alias, projectRoot string, keepState bool, resumeNote string,
+) error {
 	// Scoped to the project like the transcript, in the directory Run already
-	// created.
+	// created — and suppressed with it when the session leaves no trace.
 	var inputHistory string
-	if hr, err := historyRoot(); err == nil {
-		inputHistory, _ = history.InputHistoryPath(hr)
+	if keepState {
+		inputHistory, _ = history.InputHistoryPath(projectRoot)
 	}
 	r, err := repl.New(repl.Options{
 		Coder:      cdr,
@@ -247,6 +362,8 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Git:        repo,
 		History:    hist,
 		ModelAlias: alias,
+		ResumeNote: resumeNote,
+		SaveResume: saveResumeFunc(cdr, cfg, projectRoot, keepState),
 		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})

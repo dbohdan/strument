@@ -31,6 +31,16 @@ type Options struct {
 	Config     *config.Config
 	ModelAlias string // alias of the active model, for /model display
 
+	// ResumeNote is a banner line naming what a previous session left pinned,
+	// "" when nothing was restored. The banner lists the files either way; this
+	// says where they came from, so restored context is never invisible.
+	ResumeNote string
+
+	// SaveResume records what a resume would restore, called after any command
+	// that changes it. nil when the session leaves no trace (--no-history), so
+	// the REPL needs no flag of its own.
+	SaveResume func(alias string)
+
 	// Git enables /undo and /diff; nil outside a repository (--no-git).
 	Git *gitrepo.Repo
 
@@ -242,6 +252,9 @@ func (r *REPL) announce() {
 		r.printf("Git repo: .git with %d files", len(r.opts.Git.TrackedFiles()))
 	} else {
 		r.printf("Git repo: none")
+	}
+	if r.opts.ResumeNote != "" {
+		r.printf("%s", r.opts.ResumeNote)
 	}
 	// The parse layer is what symbol and the after-an-edit check are built on.
 	// The banner used to report the repo map's token budget here, which stopped
