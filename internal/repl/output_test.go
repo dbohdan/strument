@@ -9,59 +9,128 @@ import (
 	"dbohdan.com/strument/internal/render"
 )
 
-// TestThinkingIsBracketed confirms the thinking block is opened by a labelled
-// header and closed by a bare rule, with the answer plain after it.
-//
-// aider labels the answer too. That was true of a turn that was one reply;
-// in a loop the label lands on every step and mostly precedes tool calls
-// rather than an answer, so only the block that needs marking off gets a name.
-func TestThinkingIsBracketed(t *testing.T) {
+// TestThinkingIsInlineWhenItIsOneLine pins the common shape. In a seven-step
+// session, five of the seven thinking blocks were a single sentence restating
+// the tool call that followed — a banner cannot be a prefix, which is why the
+// banner had to go rather than merely shrink.
+func TestThinkingIsInlineWhenItIsOneLine(t *testing.T) {
 	var buf bytes.Buffer
 	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
-	o.StreamReasoning("weighing options")
-	o.StreamText("here is the answer")
+	o.StreamReasoning("Let me check the output.go file.")
+	o.StreamText("Here is the answer.")
 	o.FlushStream()
-	got := buf.String()
 
-	rule := strings.Repeat("-", 40)
-	for _, want := range []string{"► THINKING", "weighing options", "here is the answer", rule} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q:\n%q", want, got)
-		}
+	got := buf.String()
+	want := thinkingOpen + " Let me check the output.go file."
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("thinking should open inline with %q:\n%q", want, got)
 	}
-	if strings.Contains(got, "ANSWER") {
-		t.Errorf("the answer is no longer labelled:\n%q", got)
+	if strings.Contains(got, thinkingClose) {
+		t.Errorf("one line of thinking needs no closer:\n%q", got)
 	}
-	// header, thinking, closing rule, answer — in that order.
-	for _, want := range []string{"► THINKING", "weighing options", rule, "here is the answer"} {
-		i := strings.Index(got, want)
-		if i < 0 {
-			t.Fatalf("out of order at %q:\n%q", want, got)
-		}
-		got = got[i+len(want):]
-	}
-	if n := strings.Count(buf.String(), rule); n != 2 {
-		t.Errorf("the block should be bracketed by two rules, found %d:\n%q", n, buf.String())
+	if strings.Contains(got, "THINKING") || strings.Contains(got, strings.Repeat("-", 40)) {
+		t.Errorf("the banner and its rules should be gone:\n%q", got)
 	}
 }
 
-// TestThinkingIsDimmed: the whole block renders in the recessive color, so it
-// reads as an aside rather than competing with the answer.
-func TestThinkingIsDimmed(t *testing.T) {
+// TestThinkingIsBracketedWhenItRunsOn: past one line, the marker takes a line of
+// its own and the block is closed, so a long trace has a findable end.
+func TestThinkingIsBracketedWhenItRunsOn(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
+	o.StreamReasoning("I can see the header function.\n")
+	o.StreamReasoning("It uses the assistant color.")
+	o.StreamText("Here is the answer.")
+	o.FlushStream()
+
+	got := buf.String()
+	if !strings.HasPrefix(got, thinkingOpen+"\n") {
+		t.Errorf("a block should open on its own line:\n%q", got)
+	}
+	for _, want := range []string{
+		thinkingOpen, "I can see the header function.", "It uses the assistant color.",
+		thinkingClose, "Here is the answer.",
+	} {
+		i := strings.Index(got, want)
+		if i < 0 {
+			t.Fatalf("missing or out of order: %q\n%s", want, buf.String())
+		}
+		got = got[i+len(want):]
+	}
+	if n := strings.Count(buf.String(), "I can see the header function."); n != 1 {
+		t.Errorf("the held first line was emitted %d times, want 1:\n%s", n, buf.String())
+	}
+}
+
+// A newline before or after the thinking is the provider's spacing, not a
+// second line — only an interior one makes a block.
+func TestThinkingEdgeNewlinesDoNotMakeABlock(t *testing.T) {
+	for _, text := range []string{"\nJust a thought.", "Just a thought.\n", "\n Just a thought. \n"} {
+		var buf bytes.Buffer
+		o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
+		o.StreamReasoning(text)
+		o.FlushStream()
+		if got := buf.String(); strings.Contains(got, thinkingClose) {
+			t.Errorf("%q should stay inline:\n%q", text, got)
+		}
+	}
+}
+
+// TestThinkingLeavesOneBlankLine: thinking sets the streamed flag, so a tool
+// call that draws nothing of its own — a read, whose outcome prints later
+// through Toolf — used to collect a second blank line under the separator.
+func TestThinkingLeavesOneBlankLine(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		drive func(*termOutput)
+	}{
+		{"then an observation call", func(o *termOutput) {
+			o.StreamReasoning("A thought.")
+			o.StreamToolCall(0, "read", `{"path":"a.md"}`)
+		}},
+		{"then an edit", func(o *termOutput) {
+			o.StreamReasoning("A thought.")
+			o.StreamToolCall(0, "edit", editArgs("a.md", "alpha", "ALPHA"))
+		}},
+		{"then an answer", func(o *termOutput) {
+			o.StreamReasoning("A thought.")
+			o.StreamText("The answer.")
+		}},
+		{"alone", func(o *termOutput) { o.StreamReasoning("A thought.") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
+			tc.drive(o)
+			o.FlushStream()
+			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+			for i := 1; i < len(lines); i++ {
+				if lines[i] == "" && lines[i-1] == "" {
+					t.Errorf("consecutive blank lines at %d:\n%q", i, buf.String())
+				}
+			}
+		})
+	}
+}
+
+// TestThinkingIsFaint: the whole block, marker included, renders faint — which
+// is a modifier rather than a color, so it dims whatever palette the user has
+// instead of betting on one. Theme.Reasoning explains why at length.
+func TestThinkingIsFaint(t *testing.T) {
 	var buf bytes.Buffer
 	theme := render.DefaultTheme()
 	o := &termOutput{w: &buf, color: true, theme: theme, width: 40}
-	o.StreamReasoning("weighing options")
-	o.StreamText("here is the answer")
+	o.StreamReasoning("Weighing options.")
+	o.StreamText("Here is the answer.")
 	o.FlushStream()
-	got := buf.String()
 
-	think, answer, ok := strings.Cut(got, "weighing options")
+	got := buf.String()
+	think, answer, ok := strings.Cut(got, "Weighing options")
 	if !ok {
 		t.Fatalf("reasoning missing:\n%q", got)
 	}
 	if !strings.Contains(think, "\x1b["+theme.Reasoning+"m") {
-		t.Errorf("thinking is not in the recessive color:\n%q", think)
+		t.Errorf("thinking is not faint:\n%q", think)
 	}
 	if !strings.Contains(answer, "\x1b["+theme.Assistant+"m") {
 		t.Errorf("the answer should return to the assistant color:\n%q", answer)
