@@ -45,6 +45,25 @@ func TestToolPromptShape(t *testing.T) {
 	if !strings.Contains(Tool.MainSystem, "ends the turn") {
 		t.Error("tool main_system should say what ends the turn")
 	}
+	// The reach clause is measured, not stylistic: without it three models
+	// updated a stale test 76 times in 90, with it 87 (CMH p=0.011). It is
+	// pinned so a tidy-up cannot quietly revert an experiment.
+	// See doc/experiments/2026-08-prompt-scope.md.
+	for _, want := range []string{
+		"Carry the change through everywhere it reaches",
+		"the tests that cover it",
+		"That is the same request, not extra work",
+	} {
+		if !strings.Contains(Tool.MainSystem, want) {
+			t.Errorf("the scope block should say %q", want)
+		}
+	}
+	// The bans survive alongside it: the clause buys reach, and the block still
+	// has to forbid the drive-by work it was inherited to forbid.
+	if !strings.Contains(Tool.MainSystem, "no drive-by refactoring") {
+		t.Error("the scope block lost its ban list")
+	}
+
 	// The schema carries the format, so no few-shot examples are needed.
 	if len(Tool.ExampleMessages) != 0 {
 		t.Errorf("tool example_messages should be empty, got %d", len(Tool.ExampleMessages))

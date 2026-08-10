@@ -78,8 +78,16 @@ M2 predicted base 2–4/12 against e1 6–9/12.
 Actual: 0/12 and 1/12, and at full scale 4/90 and 6/90 — null.
 The clause literally says "the docs that describe it", the most
 teaching-to-the-test phrasing available, and it moved nothing.
-Whatever works in the clause is the test/call-site half or the framing; the doc
-half is inert and was dropped before landing.
+
+The first draft of this write-up concluded that the doc half was therefore
+inert and should be trimmed before landing.
+That was wrong, and the clause shipped whole.
+A null on one reach target does not establish that the phrase contributes
+nothing to the effect measured on the other — nothing here says which third of
+the clause carries the +13 points.
+The counter-metric was 0/90 in both arms, so the phrase costs nothing to keep,
+and trimming a measured string to ship an unmeasured one trades the only
+evidence there is for five tokens.
 
 **Provider failures were read as model behaviour.**
 Two Qwen strata returned `Empty response received from LLM` with 0 tokens
@@ -142,6 +150,7 @@ E2 is null: the cost framing does not detectably change how much the model
 looks, and the one cell that suggested otherwise was the artifact above.
 
 **Scope of the claim:** one task, one fixture, one reach target, three models.
+The clause landed verbatim as tested, in `internal/prompts/prompts.go`.
 
 ## What the transcripts show that the statistics do not
 
@@ -189,3 +198,15 @@ Counting told us how often. Reading told us why.
    starved of.
 9. **Verify provider health per model before committing to a stratum.** Two of
    five models were unusable, and that was only discoverable live.
+10. **A source reading is a hypothesis, not a finding.** Days after this
+    experiment, `/ask` was diagnosed from the code as a prompt problem — the
+    tool list looked right in `toolDefs`, so the plumbing was declared fine.
+    The plumbing was the bug: `buildRequest` gated `req.Tools` on
+    `editFormat == "tool"`, which made the `"ask"` branch of `toolDefs`
+    unreachable and the source read as though it worked. The prompt fix shipped
+    first, the live pass came back with *zero* tool calls in both arms, and one
+    treated run spent 759 lines inventing markup — worse than baseline, because
+    a model told more confidently to use tools it does not have tries harder.
+    That failure is what found the real gate. Same lesson as the artifact above,
+    from the other direction: the aggregate agreed with me and the transcript
+    did not.

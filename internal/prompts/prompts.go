@@ -44,9 +44,30 @@ const lazyPrompt = "Implement requested changes completely.\n" +
 	"Never leave placeholder comments (like \"... rest of code ...\" or \"implement this later\") " +
 	"in place of real code.\n"
 
+// overeagerPrompt is aider's scope block with one clause added, and the reason
+// it is worth a comment is that the clause was measured rather than reasoned.
+//
+// As inherited it was the only block in the tool prompt with no positive
+// counterpart: one attend-to, one "do no more", four named bans. That cannot
+// distinguish in-scope work the user did not enumerate — the call sites a rename
+// breaks, the test that covers the function — from out-of-scope drive-by work,
+// so it bans both by implication. Strument's founding regression case was a
+// model asked to change a function and its separately-stored test, and Claude
+// Haiku would compute the stale assertion, write "2.999 rounds to 300 (not 299)"
+// in its own summary, and leave the test file untouched.
+//
+// Randomised A/B over three models, 90 runs per arm: test-file updates rose from
+// 76/90 to 87/90 (CMH p=0.011) with zero drive-by edits in all 180 runs. The
+// wording here is the arm that was measured, kept verbatim. "the docs that
+// describe it" is part of it: doc edits alone did not move (4/90 vs 6/90), but
+// nothing says which third of the clause carries the effect, and trimming a
+// measured string to ship an unmeasured one is not an improvement.
+// doc/experiments/2026-08-prompt-scope.md has the design and the four
+// predictions it falsified.
 const overeagerPrompt = "Pay careful attention to the scope of the user's request.\n" +
-	"Do what they ask, but no more.\n" +
-	"Leave unrelated code untouched: no drive-by refactoring, reformatting, added comments, " +
+	"Carry the change through everywhere it reaches: the call sites it breaks, the tests that " +
+	"cover it, the docs that describe it. That is the same request, not extra work.\n" +
+	"Leave everything else untouched: no drive-by refactoring, reformatting, added comments, " +
 	"or fixes to things the user didn't ask about.\n"
 
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
