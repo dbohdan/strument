@@ -166,6 +166,26 @@ func (c *chatCmd) Run() error {
 		}
 	}
 
+	if keepState {
+		// A callback, so the coder stays ignorant of where state lives. A write
+		// failure is not worth interrupting a turn over: the ledger is a record
+		// to read later, and the usage line has already told the user the
+		// numbers.
+		cdr.RecordUsage = func(u coder.TurnUsage) {
+			_ = history.AppendCost(projectRoot, history.CostEntry{
+				Model:        u.Model,
+				TokensSent:   u.TokensSent,
+				TokensRecv:   u.TokensRecv,
+				CacheRead:    u.CacheRead,
+				CacheWrite:   u.CacheWrite,
+				Cost:         u.Cost,
+				Estimated:    u.Estimated,
+				Steps:        u.Steps,
+				FilesChanged: u.FilesChanged,
+			})
+		}
+	}
+
 	var hist *history.Writer
 	if keepState {
 		if p, err := resolveHistoryPath(cfg, projectRoot); err == nil {

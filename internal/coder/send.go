@@ -541,6 +541,38 @@ func (c *Coder) flushTurnUsage() {
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)
+
+	if c.RecordUsage != nil {
+		u := TurnUsage{
+			Model:        c.Model.QualifiedSlug(),
+			TokensSent:   c.messageTokensSent,
+			TokensRecv:   c.messageTokensReceived,
+			CacheRead:    c.messageCacheRead,
+			CacheWrite:   c.messageCacheWrite,
+			Estimated:    c.messageEstimated,
+			Steps:        c.numSteps + 1,
+			FilesChanged: len(c.turnEditedFiles),
+		}
+		if c.costKnown {
+			cost := c.messageCost
+			u.Cost = &cost
+		}
+		c.RecordUsage(u)
+	}
+}
+
+// TurnUsage is one turn's accounting, handed to RecordUsage at turn end — the
+// same numbers the closing usage line prints.
+type TurnUsage struct {
+	Model        string
+	TokensSent   int
+	TokensRecv   int
+	CacheRead    int
+	CacheWrite   int
+	Cost         *float64 // nil when the provider reported none
+	Estimated    bool
+	Steps        int
+	FilesChanged int
 }
 
 // streamedText is everything received this send — stitched continuations plus

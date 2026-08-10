@@ -75,6 +75,12 @@ type Coder struct {
 
 	Prompts prompts.Set
 
+	// RecordUsage, when set, receives each turn's accounting at turn end. A
+	// callback rather than a writer so the coder keeps knowing nothing about
+	// where state lives — the transcript is appended outside it for the same
+	// reason. nil in a session that leaves no trace.
+	RecordUsage func(TurnUsage)
+
 	// editFormat is the active mode, "tool" or "ask". It starts as the model's
 	// EditFormat but /ask and /code switch it at runtime without changing the
 	// model, so the tool set and prompt set read this, not Model.EditFormat.

@@ -60,6 +60,8 @@ projects/myproj-9428ba2d/
     root            the absolute path this directory belongs to
     transcript.md   the chat transcript
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
+    resume.json     pinned files and the model alias, so a restart costs no retyping
+    cost.jsonl      one line per turn: tokens, cost, steps, files changed
 ```
 
 `strument history` prints the transcript's path, which is the point of the

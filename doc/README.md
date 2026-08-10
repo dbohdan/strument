@@ -429,6 +429,17 @@ subdirectory, and the model alias is recorded only when it differs from the
 config's `default`, so a project is never silently pinned to a stale default.
 Restoring is announced in the banner, and `--no-history` writes none of it.
 
+`cost.jsonl` is one JSON line per turn — the same numbers the closing usage line
+prints, kept as data rather than as prose. It exists because the question "which
+model is actually worth it" keeps coming up and nothing on disk could answer it:
+a prompt A/B in August ended up with its sample size set by the most expensive
+model rather than by the question. Appended, never rewritten, so a partial write
+costs at most the last line, and `cat projects/*/cost.jsonl` aggregates across
+every project — the query the per-project layout would otherwise make harder. At
+about a hundred bytes a turn there is no pruning policy to get wrong. The coder
+reaches it through a `RecordUsage` callback rather than a writer, so it keeps
+knowing nothing about where state lives.
+
 ## Testing
 
 - `go test ./...` runs everything without network, sockets, or API keys.
