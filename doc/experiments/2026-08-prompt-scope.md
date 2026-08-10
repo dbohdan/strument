@@ -193,9 +193,9 @@ Counting told us how often. Reading told us why.
    useful artifact the exercise produced.
 8. **Model choice dominates cost.** Claude Haiku 4.5 was $3.93 of the $4.14
    total — roughly 95% of the spend for one of four strata. A cheaper
-   near-frontier model (MiMo-V2.5-Pro, GLM-5.2) buys several times the sample
-   for the same money, and sample size is what this kind of question is
-   starved of.
+   near-frontier model buys several times the sample for the same money, and
+   sample size is what this kind of question is starved of. This became the
+   project's default: see "Which model to reach for" in `AGENTS.md`.
 9. **Verify provider health per model before committing to a stratum.** Two of
    five models were unusable, and that was only discoverable live.
 10. **A source reading is a hypothesis, not a finding.** Days after this

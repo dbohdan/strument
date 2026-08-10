@@ -108,6 +108,29 @@ worth knowing: when you drive readline through a pty, give it a real terminal
 size (an Options `GetSize` and the pty winsize), or the completion grid and the
 rules silently no-op at zero width.
 
+### Which model to reach for
+
+**Default to MiMo-V2.5 (`xiaomi/mimo-v2.5`) wherever you would otherwise reach
+for a frontier model by instinct.** It benchmarks between Claude Haiku 4.5 and
+Sonnet 4.6, so it is an adequate stand-in for "a capable model", and on
+OpenRouter it costs $0.14/$0.28 per million against Haiku 4.5's $1.00/$5.00 —
+roughly seven times cheaper on input and eighteen on output. It is also *fast*,
+which matters more than it looks: in a sweep, wall-clock is what caps the sample
+you can afford to collect in one sitting.
+
+The reason this is a rule and not a preference: in
+[`doc/experiments/2026-08-prompt-scope.md`](doc/experiments/2026-08-prompt-scope.md)
+Haiku was $3.93 of a $4.14 total, 95% of the spend for one stratum of four, and
+the sample size ended up set by the most expensive model rather than by the
+question being asked. Price the strata *before* designing the arms.
+
+This narrows the default, not the coverage. "Test with more than one model —
+providers disagree" still holds, and where the point *is* cross-provider
+behavior — tool-call streaming, field order, fragment contiguity — one model of
+any price answers nothing. Reach past the default deliberately: to check
+something specific to a vendor, or when a result hinges on capability and you
+want a frontier model to confirm it.
+
 ### Comparing two prompts (or two anything) against live models
 
 A live A/B is a different discipline from a live pass, and the trap is not the
