@@ -108,6 +108,26 @@ worth knowing: when you drive readline through a pty, give it a real terminal
 size (an Options `GetSize` and the pty winsize), or the completion grid and the
 rules silently no-op at zero width.
 
+### Comparing two prompts (or two anything) against live models
+
+A live A/B is a different discipline from a live pass, and the trap is not the
+one you expect. **Randomize the order of the arms.** Running every baseline and
+then every treatment confounds the arm with the time it ran, and providers drift
+across that window: in
+[`doc/experiments/2026-08-prompt-scope.md`](doc/experiments/2026-08-prompt-scope.md)
+the unrandomized design produced p=0.0009 on a prompt change, and shuffling the
+order — nothing else — moved the baseline from 65% to 84% while the treatment
+arm stayed put, taking the same comparison to p=0.15. In another cell the sign
+flipped outright. Randomizing was worth more than tripling the sample.
+
+Three more that cost real time there. Read individual transcripts before
+believing an aggregate: a provider returning `Empty response received from LLM`
+and a model emitting a tool call as inline text are indistinguishable in a
+summary and mean opposite things. Choose metrics that are counts rather than
+judgments, so you are not both author and judge. And report the counter-metric
+— the thing your change might break — as prominently as the effect you want,
+because that is what makes a result safe to act on.
+
 ## Conventions
 
 - **Commits**: conventional-commit style (`feat:`, `fix:`, `refactor:`,
