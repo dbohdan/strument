@@ -53,12 +53,12 @@ type termOutput struct {
 	held    *render.Parser
 	heldBuf bytes.Buffer
 
-	// thinkHeld carries the first line of a thinking block until it is known
-	// whether there will be a second; thinkOpened says the marker is out, and
-	// thinkBlock that it went on a line of its own and wants a closer.
-	thinkHeld   strings.Builder
-	thinkOpened bool
-	thinkBlock  bool
+	// Thinking is how much of the model's reasoning to show, from the config.
+	// The zero value shows all of it.
+	Thinking render.ThinkingDisplay
+
+	// think renders the reasoning block in flight; nil between blocks.
+	think *render.Thinking
 }
 
 // blankGuard collapses a run of blank lines to one.
@@ -192,21 +192,6 @@ func (o *termOutput) closeParser() {
 	o.parser = nil
 }
 
-// The delimiters around the model's thinking. Tag-shaped and deliberately not
-// tag-valid: stripReasoning (coder/send.go) removes <tag>…</tag> from model
-// output, so printing that shape would make the harness's voice
-// indistinguishable from the model's, and a transcript would round-trip
-// lossily through Strument itself. The guillemets are General Punctuation, the
-// same block as the "…" already used by the diff renderer, so they need no font
-// beyond what the elision marker already assumes.
-//
-// Two constants so the glyphs can be swapped in one line while the shape stays
-// put; the shape lives in StreamReasoning and endReasoning.
-const (
-	thinkingOpen  = "‹thinking›"
-	thinkingClose = "‹/›"
-)
-
 // reasoningTheme is the palette the thinking block renders in: the ordinary one
 // with its body color made recessive, so the whole block reads as an aside
 // rather than competing with the answer.
@@ -219,21 +204,10 @@ func (o *termOutput) reasoningTheme() render.Theme {
 	return t
 }
 
-// StreamReasoning renders the model's thinking behind a delimiter rather than a
-// banner, and picks its shape from the thinking itself: one line of it reads as
-// a prefixed aside, several lines as a bracketed block.
-//
-// Most thinking is one line. In a seven-step session, five of the seven blocks
-// were a single sentence restating the tool call that immediately followed —
-// "Let me check the output.go file", then Read output.go. A banner cannot be a
-// prefix, which is why that shape had to go rather than merely shrink.
-//
-// The shape cannot be decided as it streams, because by the time a newline
-// arrives the marker is already on screen. So the first line is held and
-// nothing more: at most one line of latency, after which a long block streams
-// live as it is generated. Which line the text lands on is decided by the
-// text's own newlines, which is sound because the renderer does not wrap —
-// render.ANSI uses its width only for rule length.
+// StreamReasoning renders the model's thinking. The shape — inline for one
+// line, bracketed past that, capped where the user asked — belongs to
+// render.Thinking, which script mode uses too; what stays here is the terminal
+// half: the dimmed markdown renderer the body goes through.
 func (o *termOutput) StreamReasoning(delta string) {
 	o.guard()
 	o.clearWaiting()
@@ -241,42 +215,38 @@ func (o *termOutput) StreamReasoning(delta string) {
 
 	if o.phase != phaseReasoning {
 		o.phase = phaseReasoning
-		o.thinkHeld.Reset()
-		o.thinkOpened, o.thinkBlock = false, false
-	}
-
-	if !o.thinkOpened {
-		o.thinkHeld.WriteString(delta)
-		// Trimmed at both ends before looking: a newline the provider puts
-		// before or after the thinking is spacing, not a second line. Only an
-		// interior one means the block runs past one line.
-		if !strings.Contains(strings.TrimSpace(o.thinkHeld.String()), "\n") {
-			return // one line so far, and it may stay that way
+		o.think = &render.Thinking{
+			Marker: func(s string) {
+				fmt.Fprint(o.w, o.sgr(o.theme.Reasoning)+s+o.sgr("0"))
+			},
+			Body: func(s string) {
+				// Opened lazily and through the recessive palette, so the whole
+				// block reads as an aside. streamed goes up here rather than on
+				// the first delta: a provider that pads a turn with an empty
+				// reasoning delta has streamed nothing, and claiming otherwise
+				// buys a blank line with no content above it.
+				if o.parser == nil {
+					o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width))
+					o.streamed = true
+				}
+				o.parser.Write(s)
+			},
+			CloseBody: o.closeParser,
+			Display:   o.Thinking,
 		}
-		o.openThinking(true)
-		return // openThinking released the held text, delta included
 	}
-	o.parser.Write(delta)
+	o.think.Write(delta)
 }
 
-// openThinking emits the opening marker and releases the held first line. block
-// says whether the thinking runs past one line, which decides whether the
-// marker takes a line of its own.
-func (o *termOutput) openThinking(block bool) {
-	o.thinkOpened, o.thinkBlock = true, block
-	// Set here rather than on the first delta: a provider that pads a turn with
-	// an empty reasoning delta has streamed nothing, and claiming otherwise buys
-	// a blank line from FlushStream with no content above it.
-	o.streamed = true
-	dim, off := o.sgr(o.theme.Reasoning), o.sgr("0")
-	if block {
-		fmt.Fprintf(o.w, "%s%s%s\n", dim, thinkingOpen, off)
-	} else {
-		fmt.Fprintf(o.w, "%s%s%s ", dim, thinkingOpen, off)
+// endReasoning closes the thinking block and reports whether there was one.
+func (o *termOutput) endReasoning() bool {
+	if o.phase != phaseReasoning || o.think == nil {
+		return false
 	}
-	o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width))
-	o.parser.Write(strings.TrimLeft(o.thinkHeld.String(), " \t\r\n"))
-	o.thinkHeld.Reset()
+	rendered := o.think.End()
+	o.think = nil
+	o.phase = phaseNone
+	return rendered
 }
 
 // separateFromThinking puts one blank line between the thinking and whatever
@@ -291,26 +261,6 @@ func (o *termOutput) openThinking(block bool) {
 func (o *termOutput) separateFromThinking() {
 	fmt.Fprintln(o.w)
 	o.streamed = false
-}
-
-// endReasoning closes the thinking block and reports whether there was one. A
-// one-liner needs no closing marker: the line it sits on is the whole of it.
-func (o *termOutput) endReasoning() bool {
-	if o.phase != phaseReasoning {
-		return false
-	}
-	if !o.thinkOpened && strings.TrimSpace(o.thinkHeld.String()) != "" {
-		o.openThinking(false) // the block ended on its first line
-	}
-	rendered := o.thinkOpened
-	o.closeParser()
-	if o.thinkBlock {
-		fmt.Fprintf(o.w, "%s%s%s\n", o.sgr(o.theme.Reasoning), thinkingClose, o.sgr("0"))
-	}
-	o.thinkHeld.Reset()
-	o.thinkOpened, o.thinkBlock = false, false
-	o.phase = phaseNone
-	return rendered
 }
 
 func (o *termOutput) StreamText(delta string) {

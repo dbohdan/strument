@@ -122,6 +122,9 @@ func New(opts Options) (*REPL, error) {
 
 	r := &REPL{opts: opts, coder: opts.Coder}
 	r.out = &termOutput{w: opts.Stdout, color: opts.Color, theme: opts.Theme, width: r.termWidth()}
+	if opts.Config != nil {
+		r.out.Thinking = coder.ThinkingDisplay(opts.Config.ReasoningDisplay)
+	}
 	r.coder.Out = r.out
 
 	cfg := &readline.Config{

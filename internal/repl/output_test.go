@@ -21,11 +21,11 @@ func TestThinkingIsInlineWhenItIsOneLine(t *testing.T) {
 	o.FlushStream()
 
 	got := buf.String()
-	want := thinkingOpen + " Let me check the output.go file."
+	want := render.ThinkingOpen + " Let me check the output.go file."
 	if !strings.HasPrefix(got, want) {
 		t.Errorf("thinking should open inline with %q:\n%q", want, got)
 	}
-	if strings.Contains(got, thinkingClose) {
+	if strings.Contains(got, render.ThinkingClose) {
 		t.Errorf("one line of thinking needs no closer:\n%q", got)
 	}
 	if strings.Contains(got, "THINKING") || strings.Contains(got, strings.Repeat("-", 40)) {
@@ -44,12 +44,12 @@ func TestThinkingIsBracketedWhenItRunsOn(t *testing.T) {
 	o.FlushStream()
 
 	got := buf.String()
-	if !strings.HasPrefix(got, thinkingOpen+"\n") {
+	if !strings.HasPrefix(got, render.ThinkingOpen+"\n") {
 		t.Errorf("a block should open on its own line:\n%q", got)
 	}
 	for _, want := range []string{
-		thinkingOpen, "I can see the header function.", "It uses the assistant color.",
-		thinkingClose, "Here is the answer.",
+		render.ThinkingOpen, "I can see the header function.", "It uses the assistant color.",
+		render.ThinkingClose, "Here is the answer.",
 	} {
 		i := strings.Index(got, want)
 		if i < 0 {
@@ -70,7 +70,7 @@ func TestThinkingEdgeNewlinesDoNotMakeABlock(t *testing.T) {
 		o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
 		o.StreamReasoning(text)
 		o.FlushStream()
-		if got := buf.String(); strings.Contains(got, thinkingClose) {
+		if got := buf.String(); strings.Contains(got, render.ThinkingClose) {
 			t.Errorf("%q should stay inline:\n%q", text, got)
 		}
 	}
@@ -379,5 +379,46 @@ func TestBlankGuardKeepsContent(t *testing.T) {
 	}
 	if got, want := buf.String(), "a\n\n\n\nb\n\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestBothOutputsAgreeOnShape is the point of putting the thinking renderer in
+// render: the terminal and a redirected run must lay a block out the same way,
+// differing only in the color the terminal adds. They disagreed completely
+// before — script mode rendered nothing at all.
+func TestBothOutputsAgreeOnShape(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		display render.ThinkingDisplay
+		deltas  []string
+	}{
+		{"one line", render.ThinkingDisplay{}, []string{"Let me check output.go."}},
+		{"a block", render.ThinkingDisplay{}, []string{"First.\n", "Second.\nThird."}},
+		{"capped", render.ThinkingDisplay{Mode: render.ThinkingCapped, Lines: 2},
+			[]string{"one\ntwo\nthree\nfour"}},
+		{"off", render.ThinkingDisplay{Mode: render.ThinkingOff}, []string{"one\ntwo"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var term bytes.Buffer
+			o := &termOutput{w: &term, color: false, theme: render.DefaultTheme(), width: 200}
+			o.Thinking = tc.display
+			for _, d := range tc.deltas {
+				o.StreamReasoning(d)
+			}
+			o.endReasoning()
+
+			var plain bytes.Buffer
+			p := render.PlainThinking(&plain, tc.display)
+			for _, d := range tc.deltas {
+				p.Write(d)
+			}
+			p.End()
+
+			got := strings.TrimRight(term.String(), "\n")
+			want := strings.TrimRight(plain.String(), "\n")
+			if got != want {
+				t.Errorf("the two outputs disagree:\n terminal %q\n plain    %q", got, want)
+			}
+		})
 	}
 }

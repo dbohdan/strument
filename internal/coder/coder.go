@@ -503,8 +503,13 @@ func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 
 // StdOutput writes to stdout/stderr.
 type StdOutput struct {
+	// Thinking is how much of the model's reasoning to show. The zero value
+	// shows all of it.
+	Thinking render.ThinkingDisplay
+
 	diffs     *render.ToolDiffSet
 	wroteText bool
+	think     *render.Thinking
 }
 
 func (o *StdOutput) Printf(format string, args ...any) {
@@ -520,14 +525,44 @@ func (o *StdOutput) Errorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 func (o *StdOutput) StreamText(delta string) {
+	if o.endReasoning() {
+		fmt.Println()
+	}
 	if delta != "" {
 		o.wroteText = true
 	}
 	fmt.Print(delta)
 }
-func (o *StdOutput) StreamReasoning(_ string) {}
+
+// StreamReasoning renders the model's thinking, plain.
+//
+// It used to be an empty function, so `strument -m … > transcript.txt` dropped
+// the whole reasoning trace without saying so, while the same session run
+// interactively showed it. Which mode you happened to use decided whether the
+// thinking existed — a decision nobody made, and one that cost several live
+// runs chasing a marker that could not appear. How much to show is now
+// reasoning_display's to answer, in both modes alike.
+func (o *StdOutput) StreamReasoning(delta string) {
+	if o.think == nil {
+		o.think = render.PlainThinking(os.Stdout, o.Thinking)
+	}
+	o.think.Write(delta)
+}
+
+// endReasoning closes an open thinking block and reports whether there was one.
+func (o *StdOutput) endReasoning() bool {
+	if o.think == nil {
+		return false
+	}
+	rendered := o.think.End()
+	o.think = nil
+	return rendered
+}
 
 func (o *StdOutput) StreamToolCall(index int, name, args string) {
+	if o.endReasoning() {
+		fmt.Println()
+	}
 	if o.diffs == nil {
 		// Break to a fresh line so the first diff header isn't glued to the
 		// answer text (which need not end in a newline).
@@ -540,10 +575,25 @@ func (o *StdOutput) StreamToolCall(index int, name, args string) {
 }
 
 func (o *StdOutput) FlushStream() {
+	o.endReasoning() // a send that was nothing but thinking still closes it
 	if o.diffs != nil {
 		o.diffs.Flush()
 		o.diffs = nil
 	}
 	o.wroteText = false
 	fmt.Println()
+}
+
+// ThinkingDisplay translates the config's answer into the renderer's. The two
+// types are deliberately separate: render must not import config, and this is
+// the whole of what it needs to know.
+func ThinkingDisplay(d config.ReasoningDisplay) render.ThinkingDisplay {
+	switch d.Mode {
+	case config.ReasoningOff:
+		return render.ThinkingDisplay{Mode: render.ThinkingOff}
+	case config.ReasoningCapped:
+		return render.ThinkingDisplay{Mode: render.ThinkingCapped, Lines: d.Lines}
+	default:
+		return render.ThinkingDisplay{Mode: render.ThinkingFull}
+	}
 }

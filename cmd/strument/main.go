@@ -85,6 +85,11 @@ func (c *chatCmd) Run() error {
 	// the model supplies only a name, so nothing it says can change what runs.
 	cdr.Verify = cfg.Verify
 	cdr.VerifyAuto = cfg.VerifyAuto
+	if std, ok := cdr.Out.(*coder.StdOutput); ok {
+		// Script mode's output; the REPL swaps in its own and reads the setting
+		// from the config it already carries.
+		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
+	}
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	// URL scraping is a non-provider egress action, so it uses the global proxy
