@@ -162,6 +162,36 @@ type Config struct {
 	// turn that edited files, in the order given. Empty means the model is the
 	// only thing that ever runs a check.
 	VerifyAuto []string
+	// ReasoningDisplay is how much of the model's thinking to show. The zero
+	// value shows all of it.
+	ReasoningDisplay ReasoningDisplay
+}
+
+// ReasoningMode is what ReasoningDisplay does with a thinking block.
+type ReasoningMode int
+
+const (
+	// ReasoningFull shows the whole block. The default, because a plain text
+	// stream has no way to unfold what it hid, so anything less makes the
+	// transcript incomplete — which is a thing to choose, not to inherit.
+	ReasoningFull ReasoningMode = iota
+	// ReasoningCapped shows the first Lines lines and says how many it left.
+	ReasoningCapped
+	// ReasoningOff shows nothing, not even a marker.
+	ReasoningOff
+)
+
+// ReasoningDisplay is the `reasoning_display` setting: "full", a positive
+// integer, or "off".
+//
+// It is about a screen, not about a request. "off" hides the thinking; it does
+// not stop the model producing it, and reasoning tokens are billed either way.
+// The per-model reasoning="off" is what stops the spending. Keeping these apart
+// matters because a project's .strument.star could otherwise change what a turn
+// costs by way of a display preference.
+type ReasoningDisplay struct {
+	Mode  ReasoningMode
+	Lines int // meaningful only for ReasoningCapped
 }
 
 // VerifyCheck is one named verification command: an argv, never a shell string.

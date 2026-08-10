@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -52,6 +53,49 @@ type fileGlobals struct {
 	verifyVal      []VerifyCheck
 	hasVerifyAuto  bool
 	verifyAutoVal  []string
+
+	hasReasoningDisplay bool
+	reasoningDisplayVal ReasoningDisplay
+}
+
+// parseReasoningDisplay reads `reasoning_display`: "full", a line count, or
+// "off". Zero lines is "off" — the number says it plainly enough.
+//
+// A count and a word share one setting because they answer one question — how
+// much thinking to show — and splitting them into two keys would let a config
+// say "off" and "12" at once.
+func parseReasoningDisplay(path string, v starlark.Value) (ReasoningDisplay, error) {
+	switch val := v.(type) {
+	case starlark.String:
+		switch s := string(val); s {
+		case "full":
+			return ReasoningDisplay{Mode: ReasoningFull}, nil
+		case "off":
+			return ReasoningDisplay{Mode: ReasoningOff}, nil
+		default:
+			return ReasoningDisplay{}, fmt.Errorf(
+				"%s: `reasoning_display` must be \"full\", a number of lines, or \"off\", got %q", path, s)
+		}
+	case starlark.Int:
+		n, ok := val.Int64()
+		if !ok || n > math.MaxInt32 {
+			return ReasoningDisplay{}, fmt.Errorf("%s: `reasoning_display` line count is out of range", path)
+		}
+		if n == 0 {
+			// Zero lines is "off" by the plainest reading of the number, so it
+			// means that rather than failing to load. A second spelling is worth
+			// having when it is the one someone would reach for first.
+			return ReasoningDisplay{Mode: ReasoningOff}, nil
+		}
+		if n < 0 {
+			return ReasoningDisplay{}, fmt.Errorf(
+				"%s: `reasoning_display` cannot be negative; use 0 or \"off\" to hide the thinking", path)
+		}
+		return ReasoningDisplay{Mode: ReasoningCapped, Lines: int(n)}, nil
+	default:
+		return ReasoningDisplay{}, fmt.Errorf(
+			"%s: `reasoning_display` must be \"full\", a number of lines, or \"off\", got %s", path, v.Type())
+	}
 }
 
 // Load runs the config pipeline: user config, gated project
@@ -143,6 +187,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasVerifyAuto {
 		cfg.VerifyAuto = user.verifyAutoVal
 	}
+	if user.hasReasoningDisplay {
+		cfg.ReasoningDisplay = user.reasoningDisplayVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -167,6 +214,9 @@ func Load(opts Options) (*Config, error) {
 			// runs unattended, and merging two such lists element-wise would give
 			// an order nobody wrote.
 			cfg.VerifyAuto = project.verifyAutoVal
+		}
+		if project.hasReasoningDisplay {
+			cfg.ReasoningDisplay = project.reasoningDisplayVal
 		}
 	}
 
@@ -347,6 +397,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*f
 		}
 		out.hasScraper = true
 		out.scraperVal = argv
+	}
+
+	if rv, ok := globals["reasoning_display"]; ok {
+		d, err := parseReasoningDisplay(path, rv)
+		if err != nil {
+			return nil, err
+		}
+		out.hasReasoningDisplay = true
+		out.reasoningDisplayVal = d
 	}
 
 	if vv, ok := globals["verify"]; ok {
