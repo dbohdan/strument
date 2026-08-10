@@ -23,7 +23,7 @@ The loader reads these module-level variables after running your file:
 | --- | --- | --- |
 | `models` | dict | Maps an **alias** (string) to a `model()`. Required, non-empty. |
 | `default` | string | The alias used when none is given on the command line. Required; must be a key of `models`. |
-| `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). |
+| `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). See below. |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
@@ -48,6 +48,27 @@ scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
 
 Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 **not** apply to a `scraper` command; the command handles its own networking.
+
+### `history_file`
+
+Strument keeps one markdown transcript per project, by default at
+`$XDG_STATE_HOME/strument/history/<basename>-<hash>.md`, where the hash is the
+first 8 hex characters of the SHA-256 of the project root's absolute path.
+`strument history` prints the path, which is the point of the command — XDG
+makes it hard to guess.
+
+The project, for this purpose, is the **git worktree root** wherever there is
+one, and the working directory otherwise. That holds from any subdirectory, and
+it does not change under `--no-git`: that flag says how a turn is committed, not
+which project you are in, so one repository keeps one transcript however you
+launch Strument in it.
+
+`history_file` overrides the path. An absolute value is used as given; a
+relative one resolves against that same project root.
+
+```python
+history_file = "notes/strument.md"
+```
 
 ### `proxy`
 

@@ -127,8 +127,12 @@ func (c *chatCmd) Run() error {
 
 	var hist *history.Writer
 	if !c.NoHistory {
-		if p, err := resolveHistoryPath(cfg, root); err == nil {
-			hist = history.New(p)
+		// historyRoot, not root: under --no-git the coder's root is the working
+		// directory, but the transcript still belongs to the project.
+		if hr, err := historyRoot(); err == nil {
+			if p, err := resolveHistoryPath(cfg, hr); err == nil {
+				hist = history.New(p)
+			}
 		}
 	}
 
@@ -159,8 +163,36 @@ func (c *chatCmd) Run() error {
 	return nil
 }
 
+// historyRoot is the project a transcript belongs to.
+//
+// It is the git worktree root wherever there is one and the working directory
+// otherwise, and it is deliberately independent of --no-git. That flag says how
+// a turn is committed, not which project you are in: working on one repository
+// sometimes with git and sometimes without should leave one transcript, not two
+// scattered by a flag whose name does not hint at it.
+//
+// chat and history used to derive this separately — chat honoring --no-git,
+// history not — so `chat --no-git` in a subdirectory filed the transcript under
+// the subdirectory while `strument history` reported the repository root. Two
+// paths, two hashes, and no way to find your own history. One function now, so
+// they cannot drift again.
+func historyRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return historyRootFrom(cwd), nil
+}
+
+func historyRootFrom(dir string) string {
+	if g, err := gitrepo.Discover(dir); err == nil {
+		return g.Root()
+	}
+	return dir
+}
+
 // resolveHistoryPath is the config override (absolute, or relative to the
-// project root) or the XDG default.
+// history root above) or the XDG default.
 func resolveHistoryPath(cfg *config.Config, projectRoot string) (string, error) {
 	if cfg.HistoryFile != "" {
 		p := cfg.HistoryFile
@@ -275,12 +307,9 @@ func (c *trustCmd) Run() error {
 type historyCmd struct{}
 
 func (*historyCmd) Run() error {
-	root, err := os.Getwd()
+	root, err := historyRoot()
 	if err != nil {
 		return err
-	}
-	if g, err := gitrepo.Discover(root); err == nil {
-		root = g.Root()
 	}
 	// Honor a config override when the config loads; otherwise fall back to
 	// the default path so "where is my history" always answers.
