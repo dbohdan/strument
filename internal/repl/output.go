@@ -48,6 +48,8 @@ type termOutput struct {
 	// straight to the terminal: an edit's body is not written until the flush,
 	// so text rendered immediately would appear above the diff it was written
 	// after. Buffered here, it rejoins the tool calls in the model's own order.
+	guarded bool // w has been wrapped in a blankGuard
+
 	held    *render.Parser
 	heldBuf bytes.Buffer
 
@@ -59,10 +61,53 @@ type termOutput struct {
 	thinkBlock  bool
 }
 
+// blankGuard collapses a run of blank lines to one.
+//
+// Several places emit a separator without knowing what came before it: the
+// newline between an answer and the first diff, the one FlushStream puts after
+// anything the stream drew, and the blank the usage line opens with. Each is
+// right on its own, and each has at some point doubled up with another — the
+// same bug three times, in three different pairs.
+//
+// Rather than teach every separator what the others did, a lone newline is
+// dropped when the output already sits on a blank line. Only a bare "\n" is
+// ever suppressed, so nothing the markdown renderer or a diff writes can be
+// swallowed: those always carry text with them.
+type blankGuard struct {
+	w   io.Writer
+	run int // trailing newlines written
+}
+
+func (g *blankGuard) Write(p []byte) (int, error) {
+	if len(p) == 1 && p[0] == '\n' && g.run >= 2 {
+		return 1, nil // already on a blank line; claim the write and drop it
+	}
+	n, err := g.w.Write(p)
+	for _, c := range p[:n] {
+		if c == '\n' {
+			g.run++
+		} else {
+			g.run = 0
+		}
+	}
+	return n, err
+}
+
+// guard wraps the writer in place, once. It is done here rather than in a
+// constructor because termOutput is built as a struct literal, in repl.go and
+// in every test.
+func (o *termOutput) guard() {
+	if !o.guarded {
+		o.guarded = true
+		o.w = &blankGuard{w: o.w}
+	}
+}
+
 // startWaiting shows a "Waiting for <model> " line (no newline) while the
 // request is in flight — aider's cue so a slow-to-wake model doesn't look
 // hung. clearWaiting erases it before the first output.
 func (o *termOutput) startWaiting(name string) {
+	o.guard()
 	o.waiting = true
 	fmt.Fprintf(o.w, "Waiting for %s", name)
 }
@@ -103,21 +148,25 @@ func (o *termOutput) sgr(codes string) string {
 }
 
 func (o *termOutput) Printf(format string, args ...any) {
+	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, format+"\n", args...)
 }
 
 func (o *termOutput) Toolf(format string, args ...any) {
+	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Tool)+format+o.sgr("0")+"\n", args...)
 }
 
 func (o *termOutput) Warningf(format string, args ...any) {
+	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)
 }
 
 func (o *termOutput) Errorf(format string, args ...any) {
+	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Error)+format+o.sgr("0")+"\n", args...)
 }
@@ -186,6 +235,7 @@ func (o *termOutput) reasoningTheme() render.Theme {
 // text's own newlines, which is sound because the renderer does not wrap —
 // render.ANSI uses its width only for rule length.
 func (o *termOutput) StreamReasoning(delta string) {
+	o.guard()
 	o.clearWaiting()
 	o.hideCursor()
 
@@ -264,6 +314,7 @@ func (o *termOutput) endReasoning() bool {
 }
 
 func (o *termOutput) StreamText(delta string) {
+	o.guard()
 	// Providers interleave content deltas with tool calls, and some of those
 	// deltas say nothing — an empty string, or a lone newline between two edit
 	// calls. Rendering them is not free: creating the parser is what makes the
@@ -302,6 +353,7 @@ func (o *termOutput) StreamText(delta string) {
 }
 
 func (o *termOutput) StreamToolCall(index int, name, args string) {
+	o.guard()
 	o.clearWaiting()
 	o.hideCursor()
 	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
@@ -346,6 +398,7 @@ func (o *termOutput) flushHeld() {
 }
 
 func (o *termOutput) FlushStream() {
+	o.guard()
 	o.clearWaiting()
 	o.endReasoning() // a send that was nothing but thinking still closes it
 	o.closeParser()

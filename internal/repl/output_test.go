@@ -320,3 +320,64 @@ func TestEmptyReasoningRendersNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestNoDoubledBlankLines drives the sequences that produced them, each of
+// which pairs two separators that were individually correct: an answer and a
+// tool call that draws nothing, thinking and the same, and the trailing newline
+// meeting the usage line's leading one.
+func TestNoDoubledBlankLines(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		drive func(*termOutput)
+	}{
+		{"answer then an observation call", func(o *termOutput) {
+			o.StreamText("Let me search the codebase.")
+			o.StreamToolCall(0, "grep", `{"pattern":"maxSteps"}`)
+		}},
+		{"thinking, answer, observation call", func(o *termOutput) {
+			o.StreamReasoning("Considering.")
+			o.StreamText("Let me look.")
+			o.StreamToolCall(0, "read", `{"path":"a.md"}`)
+		}},
+		{"answer then the usage line", func(o *termOutput) {
+			o.StreamText("Here is the summary.")
+			o.FlushStream()
+			o.Printf("") // the usage line opens with a blank, as aider's did
+			o.Printf("Tokens: 1.0k sent, 20 received.")
+		}},
+		{"thinking block then the usage line", func(o *termOutput) {
+			o.StreamReasoning("One.\nTwo.")
+			o.FlushStream()
+			o.Printf("")
+			o.Printf("Tokens: 1.0k sent, 20 received.")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+			tc.drive(o)
+			o.FlushStream()
+			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+			for i := 1; i < len(lines); i++ {
+				if lines[i] == "" && lines[i-1] == "" {
+					t.Errorf("consecutive blank lines at %d:\n%q", i, buf.String())
+				}
+			}
+		})
+	}
+}
+
+// The guard only ever drops a bare newline, so content that happens to contain
+// blank lines is untouched.
+func TestBlankGuardKeepsContent(t *testing.T) {
+	var buf bytes.Buffer
+	g := &blankGuard{w: &buf}
+	for _, chunk := range []string{"a\n", "\n", "\n", "\n\nb\n", "\n", "\n"} {
+		if _, err := g.Write([]byte(chunk)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, want := buf.String(), "a\n\n\n\nb\n\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
