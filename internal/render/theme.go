@@ -16,7 +16,22 @@ type Theme struct {
 	DiffAdded   string // added ("+") lines in a tool-call diff
 	Command     string // suggested-command ("$") lines
 	Tool        string // the harness reporting what a tool did
-	Reasoning   string // the model's thinking, recessive against the answer
+
+	// Reasoning is how the model's thinking recedes against the answer. It is
+	// SGR 2 (faint) rather than a color, and that is deliberate: faint is
+	// relative to whatever foreground the user's theme sets, while a fixed color
+	// is a bet on their palette.
+	//
+	// The bet was lost once already. This was "90" — bright black, palette slot
+	// 8 — which Solarized repurposes as base03, the background color of
+	// Solarized dark. On a canonical Solarized terminal the thinking rendered as
+	// nothing at all. Faint has the opposite failure: a terminal that does not
+	// implement it (QTerminal) shows ordinary readable text. One fails safe, the
+	// other fails invisible, which is the whole argument.
+	//
+	// "2;"+Assistant is the variant to try if faint-but-in-palette-hue reads
+	// better than faint-on-default.
+	Reasoning string
 }
 
 // DefaultTheme is aider's default palette: green input, blue assistant,
@@ -33,7 +48,7 @@ func DefaultTheme() Theme {
 		DiffAdded:   "32",             // green
 		Command:     "36",             // cyan
 		Tool:        "90",             // gray
-		Reasoning:   "90",             // thinking recedes; the one knob to tune
+		Reasoning:   "2",              // faint; see the field comment before changing
 	}
 }
 
@@ -50,7 +65,7 @@ func DarkTheme() Theme {
 		DiffAdded:   "32",
 		Command:     "36",
 		Tool:        "90",
-		Reasoning:   "90",
+		Reasoning:   "2",
 	}
 }
 
@@ -69,6 +84,6 @@ func LightTheme() Theme {
 		DiffAdded:   "32",
 		Command:     "36",
 		Tool:        "90",
-		Reasoning:   "90",
+		Reasoning:   "2",
 	}
 }
