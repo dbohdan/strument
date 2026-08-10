@@ -103,10 +103,7 @@ func (c *chatCmd) Run() error {
 		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
 	}
 	if model.RepoMap {
-		rm := repomap.New(root)
-		rm.MaxContextWindow = model.Context
-		rm.RepoContentPrefix = cdr.Prompts.RepoContentPrefix
-		cdr.RepoMap = rm
+		cdr.RepoMap = repomap.New(root)
 	}
 	if repo != nil {
 		weak := model.WeakModel

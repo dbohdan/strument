@@ -338,8 +338,10 @@ Beyond that, the limits worth knowing before you install it:
 Strument reimplements aider's ideas in Go rather than wrapping them, and the debt is specific.
 The tree-sitter tag queries under `internal/repomap/queries*/` are aider's, copied.
 The built-in prompts began as aider's and have since been rewritten.
-The repository map — a PageRank-ranked skeleton of the project — is aider's design.
-So are `/undo`, `/ask`, the chat-history summarization,
+The tree-sitter parse layer behind `/symbol` began as aider's repository map,
+whose PageRank ranking Strument carried and has since removed —
+the model finds code by searching, so a ranked digest had no reader left.
+`/undo`, `/ask`, the chat-history summarization,
 the fuzzy matcher that lands an edit whose whitespace the model reproduced imperfectly,
 and the look of the terminal.
 
@@ -376,7 +378,7 @@ task build:strument:subset  # release variant: only the grammars Strument uses
 task release                # cross-compile the subset build for every platform
 ```
 
-The subset build compiles in just the 35 grammars the repository map supports,
+The subset build compiles in just the 35 grammars the parse layer supports,
 via gotreesitter's `grammar_subset` build tags.
 That comes to about 32 MB instead of 43 MB, statically linked and stripped.
 The tag list lives in [`script/grammar-tags.txt`](script/grammar-tags.txt),

@@ -103,10 +103,7 @@ func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := askCoder(t, dir)
-	rm := repomap.New(dir)
-	rm.MaxContextWindow = 4096
-	rm.RepoContentPrefix = c.Prompts.RepoContentPrefix
-	c.RepoMap = rm
+	c.RepoMap = repomap.New(dir)
 	c.Repo = &fakeRepo{tracked: []string{"lib.go"}}
 	c.curMessages = []llm.Message{llm.TextMessage("user", "what functions are here?")}
 

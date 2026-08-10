@@ -27,35 +27,6 @@ type Tag struct {
 	Enclosing string
 }
 
-// MapItem is a ranked entry: either a full tag or a bare file marker
-// (rendered as a filename line with no body).
-type MapItem struct {
-	RelFname string
-	Tag      *Tag // nil => bare file
-}
-
-// lessMapItem reproduces Python's tuple ordering over aider's mixed
-// (fname,) 1-tuples and 5-field Tag namedtuples: bare sorts before Tag at
-// equal RelFname.
-func lessMapItem(a, b MapItem) bool {
-	if a.RelFname != b.RelFname {
-		return a.RelFname < b.RelFname
-	}
-	if (a.Tag == nil) != (b.Tag == nil) {
-		return a.Tag == nil
-	}
-	if a.Tag == nil {
-		return false
-	}
-	if a.Tag.Line != b.Tag.Line {
-		return a.Tag.Line < b.Tag.Line
-	}
-	if a.Tag.Name != b.Tag.Name {
-		return a.Tag.Name < b.Tag.Name
-	}
-	return a.Tag.Kind < b.Tag.Kind
-}
-
 // lessTag orders definition tags deterministically before rendering.
 func lessTag(a, b Tag) bool {
 	if a.RelFname != b.RelFname {

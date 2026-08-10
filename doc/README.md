@@ -37,7 +37,9 @@ inherited from aider.
 
   So the loop closed, and with it the rest: the model finds files with `grep`
   and `read` instead of asking for them, and the repo map left the prompt
-  because a model that can look does not need a digest.
+  because a model that can look does not need a digest. The ranked map has
+  since gone entirely: what survives is its tag layer, which `/symbol` and the
+  `symbol` tool read.
 
   **What did not change is the review surface**, and that is the part worth
   defending. Every edit is snapshotted before it lands and is one `/undo`
@@ -104,8 +106,8 @@ inherited from aider.
   setting that decorates the prompt with cache-control breakpoints (1h TTL) —
   aider's `--cache-prompts` minus the cache-warming pings, which we omit.
   aider also needs `map_refresh="files"` to keep the prefix byte-stable;
-  Strument does not, because the repo map is the one thing that changed every
-  turn and it is no longer in the prompt.
+  Strument does not, because the repo map was the one thing that changed every
+  turn and it no longer exists.
 - **Where we differ.** Some behavior is deliberately not aider's — the closed
   loop above all, and then atomic batch writes that roll back whole and
   preserve the file's mode, an undo substrate that does not need git, usage

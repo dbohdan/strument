@@ -435,9 +435,15 @@ func TestGoTagsIsolateABrokenFile(t *testing.T) {
 	}
 }
 
-// TestGoRepoMapUnchanged is the same question asked in the user's units: the
-// rendered map for a Go tree must be identical under either extractor.
-func TestGoRepoMapUnchanged(t *testing.T) {
+// TestGoTagsUnchangedAcrossAFileSet asks the parity question over a whole
+// directory rather than one file: every tag either extractor reports for a Go
+// tree must match, in order.
+//
+// This was a rendered-map comparison when the map existed — the same question
+// in the user's units. The map is gone, so the user's units are Tags, which is
+// what both surviving consumers (the symbol tool and /symbol) read. Comparing
+// them directly is the same gate with the proxy removed.
+func TestGoTagsUnchangedAcrossAFileSet(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
 		"fixture.go": goParityFixture,
@@ -457,20 +463,30 @@ func useAll() {
 	}
 	paths := writeFiles(t, dir, files)
 
-	tsMap := renderWith(t, dir, paths, false)
-	goMap := renderWith(t, dir, paths, true)
-	if tsMap != goMap {
-		t.Errorf("the rendered map differs between extractors\n--- tree-sitter ---\n%s\n--- go/parser ---\n%s",
-			tsMap, goMap)
+	tsTags := tagsWith(t, dir, paths, false)
+	goTagSet := tagsWith(t, dir, paths, true)
+	if len(tsTags) == 0 {
+		t.Fatal("the fixture produced no tags, so this compares nothing")
 	}
-	if strings.TrimSpace(tsMap) == "" {
-		t.Error("the fixture produced an empty map, so this compares nothing")
+	if len(tsTags) != len(goTagSet) {
+		t.Fatalf("tag counts differ: tree-sitter %d, go/parser %d", len(tsTags), len(goTagSet))
+	}
+	// Enclosing is deliberately excluded. go/parser knows the enclosing
+	// function exactly and fills it in; tree-sitter cannot say and leaves it
+	// empty, which is the asymmetry Stage 7c chose on purpose — exact or absent,
+	// never a guess. The rendered map this test replaced never displayed the
+	// field, so comparing whole structs would fail on the feature.
+	key := func(t Tag) [4]any { return [4]any{t.RelFname, t.Line, t.Name, t.Kind} }
+	for i := range tsTags {
+		if key(tsTags[i]) != key(goTagSet[i]) {
+			t.Errorf("tag %d differs:\n tree-sitter %+v\n go/parser   %+v", i, tsTags[i], goTagSet[i])
+		}
 	}
 }
 
-// renderWith builds the map for paths, forcing one extractor or the other
-// through TagsOverride.
-func renderWith(t *testing.T, dir string, paths []string, useGo bool) string {
+// tagsWith collects the tags for paths, forcing one extractor or the other
+// through TagsOverride, in a stable order.
+func tagsWith(t *testing.T, dir string, paths []string, useGo bool) []Tag {
 	t.Helper()
 	rm := testMap(t, dir)
 	base := testMap(t, dir) // a separate RepoMap so the override cannot recurse
@@ -480,5 +496,15 @@ func renderWith(t *testing.T, dir string, paths []string, useGo bool) string {
 		}
 		return treeSitterTags(t, base, fname, relFname)
 	}
-	return strings.TrimSpace(rm.GetRepoMap(nil, paths, nil, nil))
+	tags := rm.Tags(paths)
+	slices.SortFunc(tags, func(a, b Tag) int {
+		switch {
+		case lessTag(a, b):
+			return -1
+		case lessTag(b, a):
+			return 1
+		}
+		return 0
+	})
+	return tags
 }
