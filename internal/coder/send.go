@@ -195,11 +195,6 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// --- Stream ---
 	c.multiResponseContent = "" // per-send reset (H1)
 
-	// Deferred first so it runs last: the accounting settles, the tool calls
-	// apply and report, and only then does the usage line close the send. Every
-	// return path below is covered, including the early ones.
-	defer c.flushUsageReport()
-
 	usage := &sendUsage{estSent: c.countMessages(messages)}
 	defer c.finalizeUsage(usage)
 
@@ -438,8 +433,14 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 		received = c.Tokens.Count(c.streamedText())
 	}
 
-	c.messageTokensSent = sent
-	c.messageTokensReceived = received
+	// Accumulate into the turn rather than assign: a turn is many sends, and the
+	// line that reports it is printed once, at the end.
+	c.messageSends++
+	c.messageTokensSent += sent
+	c.messageTokensReceived += received
+	c.messageCacheRead += u.cacheRead
+	c.messageCacheWrite += u.cacheWrite
+	c.messageEstimated = c.messageEstimated || estimated
 	c.totalTokensSent += sent
 	c.totalTokensReceived += received
 
@@ -475,36 +476,64 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	}
 
 	if known {
-		c.messageCost = cost
+		c.messageCost += cost
 		c.totalCost += cost
 		c.costKnown = true
 		c.sessionKnown = true
-		report += fmt.Sprintf(" Cost: $%s message, $%s session.", formatCost(c.messageCost), formatCost(c.totalCost))
+		report += fmt.Sprintf(" Cost: $%s message, $%s session.", formatCost(cost), formatCost(c.totalCost))
 	}
 	if estimated {
 		report += " (estimated)"
 	}
-	report += c.turnProgress()
 
 	c.lastUsageReport = report
-	c.usageReportPending = true
 }
 
-// flushUsageReport prints the report finalizeUsage composed, once.
+// flushSendUsage prints one send's own line.
 //
-// It is separate from composing it so the two can happen at different moments.
-// The accounting has to be settled while the send's state is still in hand, and
-// deferred so an abort cannot lose it; but the line reads as the turn's
-// bottom rule, and the tools have not finished speaking when the stream ends.
-// Printing it here puts the edits' outcomes above it, where a reader expects
-// the last line to be the last word.
-func (c *Coder) flushUsageReport() {
-	if !c.usageReportPending {
+// Only an aside calls it. A /btw is not a turn — no tool calls to wait for, no
+// later sends to sum with — so its accounting is complete the moment the stream
+// ends.
+func (c *Coder) flushSendUsage() {
+	if c.lastUsageReport == "" {
 		return
 	}
-	c.usageReportPending = false
-	c.Out.Printf("") // blank line before the token/cost report, like aider
+	c.Out.Printf("")
 	c.Out.Printf("%s", c.lastUsageReport)
+	c.lastUsageReport = ""
+}
+
+// flushTurnUsage prints the turn's accounting, once, at its end.
+//
+// It replaces a line per send. In a seven-step turn that was seven of the
+// noisiest lines on the screen, each reporting a fragment — "Cost: $0.000038
+// message" — where the number a reader wants is the total. What survives of
+// turnProgress is the step count, which is worth saying once it is not being
+// said on every step.
+func (c *Coder) flushTurnUsage() {
+	if c.messageSends == 0 {
+		return // an empty turn has no accounting
+	}
+	c.messageSends = 0 // idempotent: never report the same turn twice
+
+	report := fmt.Sprintf("Tokens: %s sent", formatTokens(c.messageTokensSent))
+	if c.messageCacheWrite > 0 {
+		report += fmt.Sprintf(", %s cache write", formatTokens(c.messageCacheWrite))
+	}
+	if c.messageCacheRead > 0 {
+		report += fmt.Sprintf(", %s cache hit", formatTokens(c.messageCacheRead))
+	}
+	report += fmt.Sprintf(", %s received.", formatTokens(c.messageTokensReceived))
+	if c.costKnown {
+		report += fmt.Sprintf(" Cost: $%s turn, $%s session.", formatCost(c.messageCost), formatCost(c.totalCost))
+	}
+	if c.messageEstimated {
+		report += " (estimated)"
+	}
+	report += c.turnSummary()
+
+	c.Out.Printf("")
+	c.Out.Printf("%s", report)
 }
 
 // streamedText is everything received this send — stitched continuations plus
@@ -552,23 +581,19 @@ func stripReasoning(answer, tag string) string {
 	return answer
 }
 
-// turnProgress is what a long turn adds to its usage line: how many steps in it
-// is, and how many files it has changed so far.
+// turnSummary is how far the turn ran, appended to its closing usage line.
 //
-// Folded into a line that already prints rather than given one of its own. A
-// turn can run twenty-five steps, and a per-step status line would be
-// twenty-five lines competing with the diffs, which is the scroll problem the
-// renderer work spent three commits on. It says nothing on a one-step turn,
-// which is most of them, so the ordinary case looks exactly as it did.
-func (c *Coder) turnProgress() string {
-	if c.numSteps == 0 {
-		return ""
+// It says nothing about a one-step turn, which is most of them, so the ordinary
+// case reads as a plain accounting line. Past that it is the only place the
+// step count now appears: it used to ride every send's line, where twenty-five
+// steps meant twenty-five status lines competing with the diffs.
+func (c *Coder) turnSummary() string {
+	var out string
+	if c.numSteps > 0 {
+		out += fmt.Sprintf(" %s.", plural(c.numSteps+1, "step", "steps"))
 	}
-	// numSteps counts completed continuations, so the send being reported is the
-	// next one.
-	out := fmt.Sprintf(" Step %d of %d.", c.numSteps+1, maxSteps)
 	if n := len(c.turnEditedFiles); n > 0 {
-		out += " " + plural(n, "file", "files") + " changed so far."
+		out += " " + plural(n, "file", "files") + " changed."
 	}
 	return out
 }

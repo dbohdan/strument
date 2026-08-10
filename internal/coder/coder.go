@@ -110,16 +110,23 @@ type Coder struct {
 	toolCallIndex    map[int]int
 	toolContinuation bool
 
+	// The message* fields are the *turn's* running totals, accumulated across
+	// every send in it and reset by initBeforeMessage. They used to be assigned
+	// per send, which made "Cost so far" at the step checkpoint report only the
+	// last one — a turn of twelve sends showed the cost of the twelfth.
 	messageCost           float64
 	totalCost             float64
-	costKnown             bool // in-band or priced cost seen this message
+	costKnown             bool // in-band or priced cost seen this turn
 	sessionKnown          bool
 	messageTokensSent     int
 	messageTokensReceived int
+	messageCacheRead      int
+	messageCacheWrite     int
+	messageEstimated      bool // any send in this turn fell back to an estimate
+	messageSends          int
 	totalTokensSent       int
 	totalTokensReceived   int
-	lastUsageReport       string
-	usageReportPending    bool // composed but not yet printed; see flushUsageReport
+	lastUsageReport       string // the last send's line; printed only by an aside
 
 	// turnSnap accumulates what this turn has written; pushed onto undoStack at
 	// turn end. The stack is the undo substrate that works without git.
@@ -318,6 +325,12 @@ func (c *Coder) initBeforeMessage() {
 	c.turnSnap = nil
 	c.messageCost = 0
 	c.costKnown = false
+	c.messageTokensSent = 0
+	c.messageTokensReceived = 0
+	c.messageCacheRead = 0
+	c.messageCacheWrite = 0
+	c.messageEstimated = false
+	c.messageSends = 0
 	if c.Repo != nil {
 		c.commitBeforeMessage = append(c.commitBeforeMessage, c.Repo.HeadSHA())
 	}
@@ -359,6 +372,10 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 		if c.editFormat == "tool" && len(c.turnEditedFiles) > 0 {
 			c.moveBackCurMessages()
 		}
+		// Last, so the accounting closes the turn: the commit line above it, and
+		// nothing under it. This is what the per-send reorder was reaching for,
+		// now at the scope where a reader actually wants the number.
+		c.flushTurnUsage()
 	}()
 
 	// Outcome-driven so a re-send that carries no message text — both a tool
