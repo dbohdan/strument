@@ -28,6 +28,7 @@ The loader reads these module-level variables after running your file:
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
 | `verify_auto` | list of strings | Optional. Names of `verify` checks Strument runs itself at the end of a turn that changed files. See below. |
+| `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -116,6 +117,40 @@ same rule `verify` follows: checks run in the order they are listed, wherever
 they are listed. Nothing runs after a turn that only read files, or under
 `--dry-run`, since no edit lands. The `verify` tool stays available either way,
 so the model can still check something mid-turn.
+
+### `reasoning_display`
+
+How much of the model's thinking to show, in both the interactive REPL and
+`--message` script mode:
+
+```python
+reasoning_display = "full"   # the default: all of it
+reasoning_display = 10       # the first 10 lines, then "… N more lines of thinking …"
+reasoning_display = "off"    # none of it
+reasoning_display = 0        # the same as "off"
+```
+
+`"full"` is the default because a terminal transcript has no way to unfold what
+it hid. Showing less makes the transcript incomplete, which is a thing to
+choose rather than to inherit.
+
+A number keeps the **first** lines. That is the useful half, not merely the one
+that streams: a thinking block usually ends by restating its conclusion, and the
+answer then says the same thing, while the opening — the approach weighed, the
+option rejected — appears nowhere else.
+
+The number is not sensitive, so do not agonize over it. Block lengths are
+bimodal in practice: most are a single sentence restating the tool call that
+follows, and the occasional one runs to dozens of lines. Anything from about 3
+to 15 behaves the same on both — one-liners untouched, the long one cut. Ten is
+a fine starting point.
+
+**`"off"` hides the thinking; it does not stop the model producing it.**
+Reasoning tokens are billed whether or not they are shown. To stop paying for
+them, set `reasoning="off"` on the model instead — that changes the request,
+where this changes only the screen. Keeping them apart matters: otherwise a
+project's `.strument.star` could change what a turn costs by way of a display
+preference.
 
 ## Built-in functions
 

@@ -257,6 +257,12 @@ on demand and frozen into your own config.
 Because `config.star` is almost Python, you can tidy the pasted blocks with a
 Python formatter such as `ruff format` or `black`.
 
+`reasoning_display` controls how much of the model's thinking appears, in both
+interactive and `--message` runs: `"full"` (the default), a line count, or
+`"off"`. Note that hiding it is not the same as not buying it — reasoning tokens
+are billed either way, and `reasoning="off"` on the model is what stops the
+spending. See [`doc/config.md`](doc/config.md).
+
 Project-local `.strument.star` files can override or extend this, but
 require explicit trust (`/trust`) before they take effect.
 
