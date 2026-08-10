@@ -61,7 +61,9 @@ func (o *opHistory) initHistory() {
 func (o *opHistory) historyUpdatePath(cfg *Config) {
 	o.fdLock.Lock()
 	defer o.fdLock.Unlock()
-	f, err := os.OpenFile(cfg.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
+	// 0600, not upstream's 0666: input history is a record of what the user
+	// typed, kept owner-only like ~/.bash_history. See NOTICE.
+	f, err := os.OpenFile(cfg.HistoryFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return
 	}
@@ -109,7 +111,9 @@ func (o *opHistory) rewriteLocked() {
 	}
 
 	tmpFile := cfg.HistoryFile + ".tmp"
-	fd, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0666)
+	// 0600 here too: the rename below replaces the inode, so a mode set on the
+	// original would not survive a rewrite. See NOTICE.
+	fd, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0600)
 	if err != nil {
 		return
 	}

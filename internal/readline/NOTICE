@@ -25,3 +25,8 @@ Strument's changes to the vendored copy:
 
   * Ctrl+Left / Ctrl+Right move by word (terminal.go), matching Alt+arrow and
     aider's prompt_toolkit bindings.
+
+  * The input-history file is created 0600 rather than upstream's 0666
+    (history.go), matching ~/.bash_history. It is set in both places that open
+    it: the rewrite path writes a temp file and renames over the original, which
+    replaces the inode, so a mode set once on the file would not survive.

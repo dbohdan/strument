@@ -125,14 +125,21 @@ func (c *chatCmd) Run() error {
 		cdr.AddFile(f)
 	}
 
+	// historyRoot, not root: under --no-git the coder's root is the working
+	// directory, but a project's state still belongs to the project. Created
+	// once here, 0700, with its root file, so the transcript and the input
+	// history both land in a directory that already exists and is already
+	// locked down — including under --no-history, which suppresses the
+	// transcript and not the input history.
+	projectRoot, rootErr := historyRoot()
+	if rootErr == nil {
+		_, _ = history.EnsureProjectDir(projectRoot)
+	}
+
 	var hist *history.Writer
-	if !c.NoHistory {
-		// historyRoot, not root: under --no-git the coder's root is the working
-		// directory, but the transcript still belongs to the project.
-		if hr, err := historyRoot(); err == nil {
-			if p, err := resolveHistoryPath(cfg, hr); err == nil {
-				hist = history.New(p)
-			}
+	if !c.NoHistory && rootErr == nil {
+		if p, err := resolveHistoryPath(cfg, projectRoot); err == nil {
+			hist = history.New(p)
 		}
 	}
 
@@ -228,17 +235,11 @@ func terminalSize() (int, int) {
 
 // runREPL starts the interactive session.
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
-	// Scoped to the project, like the transcript, and through the same root so
-	// the two cannot disagree about which project this is. The parent is ensured
-	// here because the transcript writer that usually creates it never runs
-	// under --no-history.
+	// Scoped to the project like the transcript, in the directory Run already
+	// created.
 	var inputHistory string
 	if hr, err := historyRoot(); err == nil {
-		if p, err := history.InputHistoryPath(hr); err == nil {
-			if os.MkdirAll(filepath.Dir(p), 0o755) == nil {
-				inputHistory = p
-			}
-		}
+		inputHistory, _ = history.InputHistoryPath(hr)
 	}
 	r, err := repl.New(repl.Options{
 		Coder:      cdr,

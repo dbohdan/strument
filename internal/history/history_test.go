@@ -24,47 +24,119 @@ func TestDefaultPathKeying(t *testing.T) {
 	if p1 == p2 {
 		t.Errorf("different roots gave the same path: %q", p1)
 	}
-	if base := filepath.Base(p1); !strings.HasPrefix(base, "myproj-") || !strings.HasSuffix(base, ".md") {
-		t.Errorf("filename = %q, want myproj-<hash>.md", base)
+	// The key is the directory now, and it keeps the readable prefix: a
+	// listing of projects/ should be legible without resolving hashes.
+	if dir := filepath.Base(filepath.Dir(p1)); !strings.HasPrefix(dir, "myproj-") {
+		t.Errorf("project dir = %q, want myproj-<hash>", dir)
 	}
-	if !strings.Contains(p1, filepath.Join("strument", "history")) {
-		t.Errorf("path not under strument/history: %q", p1)
+	if !strings.Contains(p1, filepath.Join("strument", "projects")) {
+		t.Errorf("path not under strument/projects: %q", p1)
 	}
 }
 
 // Input history is per project now, and shares the transcript's key so the two
 // files sit adjacent. It was global; real use said a shared file fills with
 // prompts that mean nothing in the project you are actually in.
-func TestInputHistoryPathIsPerProject(t *testing.T) {
+// A project's files live in one directory, and the directory is the unit:
+// "forget this project" is an rm -rf, and the mode has one place to be right.
+func TestProjectDirLayout(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 
-	a, err := InputHistoryPath("/tmp/alpha")
+	dir, err := ProjectDir("/tmp/alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := InputHistoryPath("/tmp/beta")
-	if err != nil {
-		t.Fatal(err)
+	if filepath.Base(filepath.Dir(dir)) != "projects" {
+		t.Errorf("project dir not under projects/: %q", dir)
 	}
-	if a == b {
-		t.Errorf("two projects share one input history: %q", a)
-	}
-	if filepath.Ext(a) != ".input" {
-		t.Errorf("input history extension = %q", filepath.Ext(a))
-	}
-	if filepath.Base(filepath.Dir(a)) != "history" {
-		t.Errorf("input history not under history/: %q", a)
-	}
-
-	// The pairing is the point: same stem, different extension, so a project's
-	// two files are adjacent in a listing and obviously belong together.
 	transcript, err := DefaultPath("/tmp/alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stem := func(p string) string { return strings.TrimSuffix(filepath.Base(p), filepath.Ext(p)) }
-	if stem(a) != stem(transcript) {
-		t.Errorf("input history and transcript disagree on the key:\n %s\n %s", a, transcript)
+	input, err := InputHistoryPath("/tmp/alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := filepath.Join(dir, "transcript.md"); transcript != got {
+		t.Errorf("transcript = %q, want %q", transcript, got)
+	}
+	if got := filepath.Join(dir, "input.txt"); input != got {
+		t.Errorf("input history = %q, want %q", input, got)
+	}
+
+	other, err := ProjectDir("/tmp/beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other == dir {
+		t.Errorf("two projects share one directory: %q", dir)
+	}
+}
+
+// The root file is why the directory is worth having a name that is only a
+// hash: it says which project this is without recomputing the hash over
+// candidate paths.
+func TestEnsureProjectDirWritesRoot(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	dir, err := EnsureProjectDir(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(project)
+	if strings.TrimSpace(string(got)) != abs {
+		t.Errorf("root file = %q, want %q", got, abs)
+	}
+	// Rewritten each session, so calling twice must not append or fail.
+	if _, err := EnsureProjectDir(project); err != nil {
+		t.Fatal(err)
+	}
+	got2, _ := os.ReadFile(filepath.Join(dir, "root"))
+	if string(got2) != string(got) {
+		t.Errorf("root file changed on the second call: %q then %q", got, got2)
+	}
+}
+
+// A project's state is owner-only. The transcript carries whatever the model
+// read out of the project, and Strument is meant to be usable on a live
+// configuration directory, where that is an .env as often as it is source.
+func TestProjectStateIsOwnerOnly(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	dir, err := EnsureProjectDir(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != dirMode {
+		t.Errorf("project dir mode = %04o, want %04o", perm, dirMode)
+	}
+
+	p, err := DefaultPath(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := New(p)
+	if err := w.Append(Turn{User: "q", Assistant: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"transcript.md", "root"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := info.Mode().Perm(); perm != fileMode {
+			t.Errorf("%s mode = %04o, want %04o", name, perm, fileMode)
+		}
 	}
 }
 

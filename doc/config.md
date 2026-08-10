@@ -51,23 +51,29 @@ Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 
 ### `history_file`
 
-Strument keeps one markdown transcript per project, by default at
-`$XDG_STATE_HOME/strument/history/<basename>-<hash>.md`, where the hash is the
-first 8 hex characters of the SHA-256 of the project root's absolute path.
-`strument history` prints the path, which is the point of the command — XDG
-makes it hard to guess.
+Strument keeps one directory per project under
+`$XDG_STATE_HOME/strument/projects/<basename>-<hash>/`, where the hash is the
+first 8 hex characters of the SHA-256 of the project root's absolute path:
+
+```
+projects/myproj-9428ba2d/
+    root            the absolute path this directory belongs to
+    transcript.md   the chat transcript
+    input.txt       the REPL's input history (owner-only, like ~/.bash_history)
+```
+
+`strument history` prints the transcript's path, which is the point of the
+command — XDG makes it hard to guess. The `root` file answers the other
+direction: which project a directory belongs to, without recomputing hashes.
+The directory is `0700` and its files `0600`, because a transcript records
+whatever the model read out of the project, and Strument is meant to be usable
+on a live configuration directory.
 
 The project, for this purpose, is the **git worktree root** wherever there is
 one, and the working directory otherwise. That holds from any subdirectory, and
 it does not change under `--no-git`: that flag says how a turn is committed, not
-which project you are in, so one repository keeps one transcript however you
+which project you are in, so one repository keeps one directory however you
 launch Strument in it.
-
-The REPL's input history — the lines you recall with the up arrow — is scoped
-the same way and sits beside the transcript as `<basename>-<hash>.input`. It
-used to be one global file, on the reasoning that bash, python, and psql all
-keep input history global; in practice a shared file fills with prompts that
-mean nothing in the project you are actually in.
 
 `history_file` overrides the transcript path. An absolute value is used as
 given; a relative one resolves against that same project root. It does not move
