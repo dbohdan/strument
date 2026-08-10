@@ -228,7 +228,18 @@ func terminalSize() (int, int) {
 
 // runREPL starts the interactive session.
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer, alias string) error {
-	inputHistory, _ := history.InputHistoryPath()
+	// Scoped to the project, like the transcript, and through the same root so
+	// the two cannot disagree about which project this is. The parent is ensured
+	// here because the transcript writer that usually creates it never runs
+	// under --no-history.
+	var inputHistory string
+	if hr, err := historyRoot(); err == nil {
+		if p, err := history.InputHistoryPath(hr); err == nil {
+			if os.MkdirAll(filepath.Dir(p), 0o755) == nil {
+				inputHistory = p
+			}
+		}
+	}
 	r, err := repl.New(repl.Options{
 		Coder:      cdr,
 		Config:     cfg,

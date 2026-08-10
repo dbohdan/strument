@@ -36,11 +36,12 @@ func stateDir() (string, error) {
 	return filepath.Join(dir, "strument"), nil
 }
 
-// DefaultPath is the chat-history file for a project root:
-// $XDG_STATE_HOME/strument/history/<basename>-<hash8>.md, keyed by the
-// absolute root path (readable prefix, hash suffix against collisions —
-// the trust store's keying style).
-func DefaultPath(projectRoot string) (string, error) {
+// projectPath is one of a project's state files:
+// $XDG_STATE_HOME/strument/history/<basename>-<hash8><ext>, keyed by the
+// absolute root path (readable prefix, hash suffix against collisions — the
+// trust store's keying style). One key for every kind of file, so a project's
+// transcript and its input history sit adjacent and obviously paired.
+func projectPath(projectRoot, ext string) (string, error) {
 	base, err := stateDir()
 	if err != nil {
 		return "", err
@@ -50,20 +51,31 @@ func DefaultPath(projectRoot string) (string, error) {
 		return "", err
 	}
 	sum := sha256.Sum256([]byte(abs))
-	name := filepath.Base(abs) + "-" + hex.EncodeToString(sum[:])[:8] + ".md"
+	name := filepath.Base(abs) + "-" + hex.EncodeToString(sum[:])[:8] + ext
 	return filepath.Join(base, "history", name), nil
 }
 
-// InputHistoryPath is the global readline input-history file:
-// $XDG_STATE_HOME/strument/input-history. Global, not per-project — every
-// other REPL (bash, python, psql) keeps input history global, and
-// recalling a prompt across projects is exactly when it's wanted.
-func InputHistoryPath() (string, error) {
-	base, err := stateDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "input-history"), nil
+// DefaultPath is the chat-history file for a project root.
+func DefaultPath(projectRoot string) (string, error) {
+	return projectPath(projectRoot, ".md")
+}
+
+// InputHistoryPath is the readline input-history file for a project root,
+// beside that project's transcript and keyed identically.
+//
+// This was global, on the reasoning that every other REPL — bash, python, psql —
+// keeps input history global, and that recalling a prompt across projects is
+// exactly when you want it. Real use reversed it: prompts are about the project
+// you are in, and one shared file fills with lines that mean nothing where you
+// are now. Scoping costs the cross-project recall, which turned out to be the
+// rarer want by a wide margin.
+//
+// It lives under history/ rather than in an input-history/ directory of its own
+// because $XDG_STATE_HOME/strument/input-history is already a regular file for
+// anyone who ran an earlier version, and MkdirAll over a file fails. That file
+// is left alone; nothing reads it now.
+func InputHistoryPath(projectRoot string) (string, error) {
+	return projectPath(projectRoot, ".input")
 }
 
 // Turn is one recorded exchange.

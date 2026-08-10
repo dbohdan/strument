@@ -32,18 +32,39 @@ func TestDefaultPathKeying(t *testing.T) {
 	}
 }
 
-func TestInputHistoryPathIsGlobal(t *testing.T) {
+// Input history is per project now, and shares the transcript's key so the two
+// files sit adjacent. It was global; real use said a shared file fills with
+// prompts that mean nothing in the project you are actually in.
+func TestInputHistoryPathIsPerProject(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	p, err := InputHistoryPath()
+
+	a, err := InputHistoryPath("/tmp/alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(p) != "input-history" {
-		t.Errorf("input history basename = %q", filepath.Base(p))
+	b, err := InputHistoryPath("/tmp/beta")
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Global: directly under strument/, not under history/.
-	if filepath.Base(filepath.Dir(p)) != "strument" {
-		t.Errorf("input history not global: %q", p)
+	if a == b {
+		t.Errorf("two projects share one input history: %q", a)
+	}
+	if filepath.Ext(a) != ".input" {
+		t.Errorf("input history extension = %q", filepath.Ext(a))
+	}
+	if filepath.Base(filepath.Dir(a)) != "history" {
+		t.Errorf("input history not under history/: %q", a)
+	}
+
+	// The pairing is the point: same stem, different extension, so a project's
+	// two files are adjacent in a listing and obviously belong together.
+	transcript, err := DefaultPath("/tmp/alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stem := func(p string) string { return strings.TrimSuffix(filepath.Base(p), filepath.Ext(p)) }
+	if stem(a) != stem(transcript) {
+		t.Errorf("input history and transcript disagree on the key:\n %s\n %s", a, transcript)
 	}
 }
 

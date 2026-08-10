@@ -63,8 +63,15 @@ it does not change under `--no-git`: that flag says how a turn is committed, not
 which project you are in, so one repository keeps one transcript however you
 launch Strument in it.
 
-`history_file` overrides the path. An absolute value is used as given; a
-relative one resolves against that same project root.
+The REPL's input history — the lines you recall with the up arrow — is scoped
+the same way and sits beside the transcript as `<basename>-<hash>.input`. It
+used to be one global file, on the reasoning that bash, python, and psql all
+keep input history global; in practice a shared file fills with prompts that
+mean nothing in the project you are actually in.
+
+`history_file` overrides the transcript path. An absolute value is used as
+given; a relative one resolves against that same project root. It does not move
+the input history, which has no override.
 
 ```python
 history_file = "notes/strument.md"
