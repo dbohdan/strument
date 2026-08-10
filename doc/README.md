@@ -227,6 +227,14 @@ Nine tools, in three natures:
   `symbol(name, kind)` answers "where is this defined" from the tree-sitter
   tags rather than from text, and is offered only where grammars are. None of
   them ask the user anything, and none of them see a file the project ignores.
+- **Reference material is pinned, and refused as an edit target.** `/read-only`
+  puts a file's contents in the prompt and `allowedToEdit` refuses any edit to
+  it, answering the call with why so the model adapts within the turn. It is
+  also the only way to show the model a file *outside* the project: `read`,
+  `grep`, `glob`, and `ls` are all scoped to the workspace root, so an
+  out-of-tree spec or a sibling repo's header has no other channel. Editable
+  files stay inside the root — `/add` and command-line arguments both refuse to
+  leave it, and point at `/read-only` instead.
 - **Edits are direct**, exactly as a SEARCH/REPLACE block was.
   `edit(path, old_string, new_string)` replaces an exact span, through the
   same fuzzy matcher aider's format used, and returns a did-you-mean when it

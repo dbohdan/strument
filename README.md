@@ -129,6 +129,7 @@ Slash commands do the things that are yours rather than the model's:
 | --- | --- |
 | `/add <file>`, `/drop`, `/ls` | Pin a file's contents into the conversation when you already know what needs changing. Everything else the model finds itself. |
 | `/ask <question>` | Ask about the code with the editing tools taken away. `/code` switches back. |
+| `/read-only <file>` | Pin reference material the model can read but never edit. The one way to show it a file outside the project — a spec, a sibling repo's header — since the search tools only see the project itself. |
 | `/undo` | Put the last turn back — the files, and the commit if there was one. |
 | `/squash [n]` | Fold the last n turns' commits into one. |
 | `/diff`, `/tokens` | Show what changed, and how full the context window is. |

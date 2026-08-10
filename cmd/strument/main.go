@@ -143,6 +143,15 @@ func (c *chatCmd) Run() error {
 		if !filepath.IsAbs(f) {
 			f = filepath.Join(cwd, f)
 		}
+		// Held to the same boundary as /add. This path used to skip the check
+		// entirely, so `strument ../other/file.go` produced an editable
+		// out-of-root file that /add would have refused — two layers disagreeing
+		// about the same rule. Reference material outside the project goes
+		// through /read-only, which is the one sanctioned way in.
+		if rel, err := filepath.Rel(root, f); err != nil || strings.HasPrefix(rel, "..") {
+			fmt.Fprintf(os.Stderr, "strument: skipping %s: outside the project root; use /read-only to reference it.\n", f)
+			continue
+		}
 		cdr.AddFile(f)
 	}
 
@@ -236,7 +245,10 @@ func historyRootFrom(dir string) string {
 // save retyping, not to litigate what happened to the tree.
 func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) string {
 	abs := func(rel string) (string, bool) {
-		p := filepath.Join(projectRoot, filepath.FromSlash(rel))
+		p := filepath.FromSlash(rel)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(projectRoot, p)
+		}
 		if _, err := os.Stat(p); err != nil {
 			return "", false
 		}
@@ -288,13 +300,22 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 		return nil
 	}
 	return func(alias string) {
+		// Project-relative where possible, absolute where not. A read-only
+		// reference reached outside the project has no project-relative form,
+		// and dropping it would silently forget the entry that took the most
+		// effort to find. Editable files are always inside, so this only ever
+		// produces an absolute path for a reference.
 		toProject := func(rels []string) []string {
 			out := make([]string, 0, len(rels))
 			for _, rel := range rels {
-				p := filepath.Join(cdr.Root, filepath.FromSlash(rel))
+				p := rel
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(cdr.Root, filepath.FromSlash(rel))
+				}
 				r, err := filepath.Rel(projectRoot, p)
 				if err != nil || strings.HasPrefix(r, "..") {
-					continue // outside the project; nothing stable to record
+					out = append(out, filepath.ToSlash(p))
+					continue
 				}
 				out = append(out, filepath.ToSlash(r))
 			}

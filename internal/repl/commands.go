@@ -45,7 +45,7 @@ func init() {
 		{"ls", "", "List files in the chat", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"quit", "", "Exit Strument", cmdExit},
-		{"read-only", "<file> [file ...]", "Add reference files the model must not edit", cmdReadOnly},
+		{"read-only", "<file> [file ...]", "Pin reference files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
@@ -196,9 +196,15 @@ func (r *REPL) switchFormat(target, args string) string {
 	return args
 }
 
-// expandPatterns resolves glob patterns relative to the coder root,
-// returning root-relative paths of existing regular files.
-func (r *REPL) expandPatterns(patterns []string) []string {
+// expandPatterns resolves glob patterns relative to the coder root, returning
+// root-relative paths of existing regular files.
+//
+// outside allows matches that fall outside the project, returned absolute. Only
+// /read-only passes it: reference material is the one thing the workspace tools
+// cannot reach, since read, grep, glob, and ls are all scoped to the root, so
+// pinning it is the only channel there is. Editable out-of-project files stay
+// refused — that is the direction where a mistake is worst.
+func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
 	var out []string
 	for _, pat := range patterns {
 		abs := pat
@@ -221,7 +227,15 @@ func (r *REPL) expandPatterns(patterns []string) []string {
 			}
 			rel, err := filepath.Rel(r.coder.Root, m)
 			if err != nil || strings.HasPrefix(rel, "..") {
-				r.out.Warningf("Skipping %s: outside the project root.", m)
+				if !outside {
+					r.out.Warningf("Skipping %s: outside the project root. Use /read-only to reference it.", m)
+					continue
+				}
+				abs, err := filepath.Abs(m)
+				if err != nil {
+					continue
+				}
+				out = append(out, abs)
 				continue
 			}
 			out = append(out, filepath.ToSlash(rel))
@@ -287,7 +301,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Usage: /add <file> [file ...]")
 		return ""
 	}
-	for _, rel := range r.expandPatterns(splitArgs(args)) {
+	for _, rel := range r.expandPatterns(splitArgs(args), false) {
 		r.coder.AddFile(rel)
 		r.printf("Added %s to the chat.", rel)
 	}
@@ -300,7 +314,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Usage: /read-only <file> [file ...]")
 		return ""
 	}
-	for _, rel := range r.expandPatterns(splitArgs(args)) {
+	for _, rel := range r.expandPatterns(splitArgs(args), true) {
 		r.coder.AddReadOnlyFile(rel)
 		r.printf("Added %s to the chat (read-only).", rel)
 	}

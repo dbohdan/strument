@@ -68,7 +68,9 @@ func (c *Coder) unsafePath(rel string) string {
 }
 
 // allowedToEdit decides whether an edit may touch rel, and brings the file into
-// the chat when it does.
+// the chat when it does. The second return is a model-facing reason on refusal,
+// "" otherwise: a call that is skipped answers with why, so the model can act on
+// it within the turn instead of re-trying the same thing.
 //
 // aider asked before creating a file or editing one the user had not added
 // (allowed_to_edit, base_coder.py:2191). Strument no longer does, because the
@@ -82,35 +84,48 @@ func (c *Coder) unsafePath(rel string) string {
 // a dirty-commit before the edit so /undo has a clean base, git auto-commit,
 // and the diff scrolling past as it happens. Review lives in the diff and in
 // being able to undo, not in a y/n the user has learned to dismiss.
-func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) bool {
+func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool, string) {
 	full := c.absRootPath(rel)
+
+	// Read-only first, so it wins over a file that is in both lists. This is
+	// checked here rather than left to the prompt because the prompt was all
+	// there was: /read-only asked the model not to edit and nothing enforced
+	// it, so the file fell through below and was quietly promoted into the
+	// editable set. A reference the user reached outside the project for is the
+	// worst thing to edit by accident — it is outside the repo, outside the
+	// diff they are watching, and outside git's undo.
+	if slices.Contains(c.absReadOnlyFnames, full) {
+		c.Out.Warningf("Skipping edits to %s, which is in the chat as read-only.", rel)
+		return false, "that file is in the chat as read-only, so it was not changed. " +
+			"Make the change elsewhere, or ask the user to add it with /add if it should be editable."
+	}
 
 	if slices.Contains(c.absFnames, full) {
 		c.checkForDirtyCommit(rel, needDirtyCommit)
-		return true
+		return true, ""
 	}
 
 	// Still refused, and not as a prompt: an ignored file is one the project
 	// declared out of scope, and the observation tools do not show it either.
 	if c.Repo != nil && c.Repo.GitIgnored(rel) {
 		c.Out.Warningf("Skipping edits to %s that matches gitignore spec.", rel)
-		return false
+		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
 
 	if _, err := os.Stat(full); err != nil {
 		if !c.DryRun {
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 				c.Out.Errorf("Unable to create %s, skipping edits.", rel)
-				return false
+				return false, "the parent directory could not be created."
 			}
 		}
 		c.absFnames = append(c.absFnames, full)
-		return true
+		return true, ""
 	}
 
 	c.absFnames = append(c.absFnames, full)
 	c.checkForDirtyCommit(rel, needDirtyCommit)
-	return true
+	return true, ""
 }
 
 // checkForDirtyCommit separates the user's uncommitted work from the turn's, by

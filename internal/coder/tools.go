@@ -457,8 +457,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			results[e.callID] = fmt.Sprintf("Skipped %s: %s", e.path, reason)
 			continue
 		}
-		if !c.allowedToEdit(e.path, needDirtyCommit) {
-			results[e.callID] = fmt.Sprintf("Skipped %s: not allowed or declined.", e.path)
+		if ok, why := c.allowedToEdit(e.path, needDirtyCommit); !ok {
+			results[e.callID] = fmt.Sprintf("Skipped %s: %s", e.path, why)
 			continue
 		}
 
