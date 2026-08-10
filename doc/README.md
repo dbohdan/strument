@@ -372,6 +372,44 @@ URL is resolved and validated at config load (once per `*Model`, in
 package; Go's `net/http` speaks SOCKS5 natively, including `user:pass@` auth, so
 no external dependency is needed.
 
+## Per-project state
+
+Strument keeps one directory per project under
+`$XDG_STATE_HOME/strument/projects/<basename>-<hash8>/`, keyed by the SHA-256 of
+the project root's absolute path. It holds `root` (the path that hash was taken
+over, so a stale directory can be identified without recomputing hashes), the
+markdown `transcript.md`, and readline's `input.txt`. The directory is `0700`
+and its files `0600`: a transcript records whatever the model read out of the
+project, and the case that justified `--no-git` in the first place is a live
+configuration directory.
+
+The project, for this purpose, is the git worktree root wherever there is one
+and the working directory otherwise — **independent of `--no-git`**, which says
+how a turn is committed rather than which project you are in.
+
+Before adding anything here, three tests. A file belongs only if it is:
+
+1. **Per-project.** Global things stay global. The `.strument.star` trust store
+   is the sharp case: one file to audit and one file to revoke is a security
+   property, and scattering trust records across project directories would turn
+   an audit into a `find`.
+2. **Not reconstructible.** Anything derivable from the source or refetchable
+   from a provider is a *cache* and belongs in `XDG_CACHE_HOME`, where the
+   `model-config` catalog already goes. A persisted tag cache and a scraped-page
+   cache both fail here.
+3. **Not config, and not adjudicated from outside.** Instructions that shape how
+   the model works belong *in* the project, versioned and reviewable, on the
+   same terms as `.strument.star` — not in a hidden directory that silently
+   changes behavior.
+
+A fourth question is worth asking even when all three pass: **does the data
+already exist somewhere authoritative?** Strument stamps its own commits with a
+trailer, so a file listing "commits this session made" would duplicate git and
+go stale under rebase. Read the trailer instead.
+
+These are not hypothetical. Applied to ten candidates, they rejected four
+without further argument.
+
 ## Testing
 
 - `go test ./...` runs everything without network, sockets, or API keys.
