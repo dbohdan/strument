@@ -156,17 +156,14 @@ func (c *Coder) NoteUndo(files []string) {
 // each message; /diff uses the last one as its base.
 func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
 
-// RepoMapNow renders the repo map as the next send would see it (/map).
-func (c *Coder) RepoMapNow() string { return c.repoMapContent() }
-
-// RepoMapTokens is the repo-map token budget, or 0 when the map is off; the
-// opening banner reports it.
-func (c *Coder) RepoMapTokens() int {
-	if c.RepoMap == nil {
-		return 0
-	}
-	return c.RepoMap.MapTokens
-}
+// HasParser reports whether the tree-sitter layer is available: it is what
+// symbol, /symbol, and the after-an-edit parse check are built on, and the
+// banner says so. One condition, the same one toolDefs and SymbolLookup use, so
+// the banner cannot claim something the tools disagree with.
+//
+// It replaced RepoMapTokens, which reported a token budget that stopped meaning
+// anything when the map left the prompt: nothing spends those tokens.
+func (c *Coder) HasParser() bool { return c.RepoMap != nil }
 
 // SessionCost returns the running session cost and whether any cost was
 // priced this session; the history writer diffs it across a turn.

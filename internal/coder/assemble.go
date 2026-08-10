@@ -17,7 +17,8 @@ import (
 // repository map. Strument no longer fills it. The map answered "how does the
 // model find code when it cannot look", and the model can look now — it greps —
 // so the map was a per-turn tax on every send for a digest it did not read.
-// /map keeps it for the human.
+// The ranked rendering has since gone entirely: /map became /symbol, because
+// "where is this defined" is the question a reader actually has.
 type chatChunks struct {
 	system        []llm.Message
 	examples      []llm.Message
@@ -233,68 +234,6 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 		"platform":        c.platformText(),
 		"language":        language,
 	})
-}
-
-// repoMapContent asks the repo map with the three-step fallback of
-// get_repo_map.
-func (c *Coder) repoMapContent() string {
-	if c.RepoMap == nil || !c.Model.RepoMap {
-		return ""
-	}
-	curText := c.curMessageText()
-	mentionedFnames := c.fileMentions(curText, false)
-	mentionedIdents := identMentions(curText)
-	for f := range c.identFilenameMatches(mentionedIdents) {
-		mentionedFnames[f] = true
-	}
-
-	allAbs := map[string]bool{}
-	for _, rel := range c.allRelativeFiles() {
-		allAbs[c.absRootPath(rel)] = true
-	}
-	chatSet := map[string]bool{}
-	for _, f := range c.absFnames {
-		chatSet[f] = true
-	}
-	for _, f := range c.absReadOnlyFnames {
-		if allAbs[f] {
-			chatSet[f] = true
-		}
-	}
-	var chatFiles, otherFiles []string
-	for f := range allAbs {
-		if chatSet[f] {
-			chatFiles = append(chatFiles, f)
-		} else {
-			otherFiles = append(otherFiles, f)
-		}
-	}
-
-	content := c.RepoMap.GetRepoMap(chatFiles, otherFiles, mentionedFnames, mentionedIdents)
-	if content == "" {
-		var all []string
-		for f := range allAbs {
-			all = append(all, f)
-		}
-		content = c.RepoMap.GetRepoMap(nil, all, mentionedFnames, mentionedIdents)
-	}
-	if content == "" {
-		var all []string
-		for f := range allAbs {
-			all = append(all, f)
-		}
-		content = c.RepoMap.GetRepoMap(nil, all, nil, nil)
-	}
-	return content
-}
-
-func (c *Coder) curMessageText() string {
-	var b strings.Builder
-	for _, m := range c.curMessages {
-		b.WriteString(m.Text())
-		b.WriteString("\n")
-	}
-	return b.String()
 }
 
 // formatChatChunks builds the canonical slots.

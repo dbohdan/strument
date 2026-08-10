@@ -95,7 +95,7 @@ func TestAskCacheBreakpointFallsBackToSystem(t *testing.T) {
 // repository with a rankable file that is not in the chat is exactly the shape
 // that used to produce a repo chunk; now nothing about lib.go reaches the
 // assembled messages, and the chat-files slot says plainly that no files are
-// shared. /map still renders the map on request.
+// shared. The parse layer still answers when asked, now through /symbol.
 func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lib.go"),
@@ -126,9 +126,15 @@ func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 		t.Errorf("chat_files chunk:\n%q", chat.String())
 	}
 
-	// The map itself still works — it just is not sent unasked.
-	if got := c.RepoMapNow(); !strings.Contains(got, "VerySpecificName") {
-		t.Errorf("/map no longer renders the map:\n%s", got)
+	// The parse layer itself still works — it just is not sent unasked. This
+	// is what /map used to assert and /symbol now does: the same tags, reached
+	// by the question a reader actually has.
+	got, n, problem := c.SymbolLookup("VerySpecificName", "")
+	if problem != "" {
+		t.Fatalf("SymbolLookup: %s", problem)
+	}
+	if n != 1 || !strings.Contains(got, "lib.go:3") {
+		t.Errorf("/symbol should find the definition, got %d site(s):\n%s", n, got)
 	}
 }
 

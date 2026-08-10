@@ -243,12 +243,14 @@ func (r *REPL) announce() {
 	} else {
 		r.printf("Git repo: none")
 	}
-	// The map is no longer sent with every request, so the banner reports what
-	// /map will render rather than a tax on each turn.
-	if n := r.coder.RepoMapTokens(); n > 0 {
-		r.printf("Repo map: %d tokens, on /map", n)
+	// The parse layer is what symbol and the after-an-edit check are built on.
+	// The banner used to report the repo map's token budget here, which stopped
+	// meaning anything when the map left the prompt: nothing spends those
+	// tokens. What a user can act on is whether the parser is available at all.
+	if r.coder.HasParser() {
+		r.printf("Language parser: on, for /symbol")
 	} else {
-		r.printf("Repo map: disabled")
+		r.printf("Language parser: off")
 	}
 	for _, f := range r.coder.ChatFiles() {
 		r.printf("Added %s to the chat.", f)

@@ -101,45 +101,6 @@ func (c *Coder) checkForFileMentions(content string) string {
 	return ""
 }
 
-// identMentions splits on non-word characters, like aider's \W+ split.
-var nonWordRe = regexp.MustCompile(`\W+`)
-
-func identMentions(text string) map[string]bool {
-	out := map[string]bool{}
-	for _, w := range nonWordRe.Split(text, -1) {
-		if w != "" {
-			out[w] = true
-		}
-	}
-	return out
-}
-
-// identFilenameMatches maps mentioned identifiers to files whose stem
-// matches (>= 5 chars), per get_ident_filename_matches.
-func (c *Coder) identFilenameMatches(idents map[string]bool) map[string]bool {
-	byStem := map[string][]string{}
-	for _, fname := range c.allRelativeFiles() {
-		if fname == "" || fname == "." {
-			continue
-		}
-		base := path.Base(fname)
-		stem := strings.ToLower(strings.TrimSuffix(base, path.Ext(base)))
-		if len(stem) >= 5 {
-			byStem[stem] = append(byStem[stem], fname)
-		}
-	}
-	matches := map[string]bool{}
-	for ident := range idents {
-		if len(ident) < 5 {
-			continue
-		}
-		for _, f := range byStem[strings.ToLower(ident)] {
-			matches[f] = true
-		}
-	}
-	return matches
-}
-
 // urlRe matches aider's check_for_urls pattern.
 var urlRe = regexp.MustCompile(`(https?://[^\s/$.?#].[^\s"]*[^\s,.])`)
 

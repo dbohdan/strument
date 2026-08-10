@@ -94,8 +94,8 @@ inherited from aider.
 - **Scope.** Essentials only: a standard tool set driven in a closed loop
   (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
   `bash` and `verify` to run things), turn-scoped snapshots with `/undo` and
-  `/squash`, git auto-commit where there is a repository, `/ask`, an
-  on-demand repo map (`/map`), reflection, chat-history summarization.
+  `/squash`, git auto-commit where there is a repository, `/ask`, `/symbol`,
+  reflection, chat-history summarization.
   Architect mode, voice, GUI, and analytics are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
@@ -153,9 +153,8 @@ inherited from aider.
     `model()`, `env()`) and the direnv-style trust gate for project
     configs.
   - `repomap/` — the parse layer. Tree-sitter tag extraction (pure-Go
-    grammars via gotreesitter) feeds three things now: the ranked map itself
-    (personalized PageRank, token-budgeted rendering, on `/map` rather than in
-    every prompt), `Tags` for the `symbol` tool, and `ParseStatus` for the
+    grammars via gotreesitter) feeds two things: `Tags`, behind both the
+    `symbol` tool and the `/symbol` command, and `ParseStatus` for the
     after-an-edit check — which routes `.go` to `go/parser` instead, because
     for Go that is exact and about a thousand times faster on the pathological
     cases. `queries/` and `queries-legacy/` hold the aider `.scm` files.

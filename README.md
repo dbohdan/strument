@@ -131,7 +131,8 @@ Slash commands do the things that are yours rather than the model's:
 | `/ask <question>` | Ask about the code with the editing tools taken away. `/code` switches back. |
 | `/undo` | Put the last turn back — the files, and the commit if there was one. |
 | `/squash [n]` | Fold the last n turns' commits into one. |
-| `/diff`, `/map`, `/tokens` | Show what changed, the repository map, and how full the context window is. |
+| `/diff`, `/tokens` | Show what changed, and how full the context window is. |
+| `/symbol <name> [reference]` | Find where a name is defined, or used, from the language parser rather than from text. |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |
 

@@ -59,28 +59,57 @@ func (c *Coder) runSymbol(tc llm.ToolCall) string {
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg
 	}
-	name := strings.TrimSpace(a.Name)
+	text, count, problem := c.SymbolLookup(a.Name, a.Kind)
+	if problem != "" {
+		return problem
+	}
+	c.Out.Toolf("Looked up %s — %s %s", strings.TrimSpace(a.Name),
+		plural(count, "site", "sites"), lookupNoun(a.Kind))
+	return truncateResult(text)
+}
+
+// lookupNoun is the word for what was looked for, shared by the outcome line
+// and the answer so the two agree.
+func lookupNoun(kind string) string {
+	if kind == "reference" {
+		return "referenced"
+	}
+	return "defined"
+}
+
+// SymbolLookup answers "where is this name defined, or used" for a model and a
+// human alike — /symbol shows the same text the tool returns, because the
+// answer to that question does not depend on who asked.
+//
+// count is how many sites it names, which the tool path reports on its own
+// outcome line; the REPL has the text and needs no count. problem is a
+// caller-facing failure message, "" on success — the same shape decodeArgs and
+// parseCommandArgs use, because these read as sentences to a model and a person
+// alike rather than as Go error strings.
+func (c *Coder) SymbolLookup(rawName, kind string) (text string, count int, problem string) {
+	name := strings.TrimSpace(rawName)
 	if name == "" {
-		return "The required \"name\" argument was missing."
+		return "", 0, "The required \"name\" argument was missing."
 	}
 	if c.RepoMap == nil {
 		// Unreachable through toolDefs, which offers the tool only with the
-		// parse layer behind it. Answered rather than panicked, because a tool
-		// call arrives from outside and outside is where surprises come from.
-		return "The language parser is not available in this session; use grep to find the text."
+		// parse layer behind it, and guarded in the REPL the same way. Answered
+		// rather than panicked, because a tool call arrives from outside and
+		// outside is where surprises come from.
+		return "", 0, "The language parser is not available in this session; use grep to find the text."
 	}
 	want := repomap.Def
-	switch a.Kind {
+	switch kind {
 	case "", "definition":
 	case "reference":
 		want = repomap.Ref
 	default:
-		return fmt.Sprintf("Unknown kind %q. Use \"definition\" or \"reference\".", a.Kind)
+		return "", 0, fmt.Sprintf("Unknown kind %q. Use \"definition\" or \"reference\".", kind)
 	}
 
-	rels, trunc, err := c.Files.Files()
-	if err != nil {
-		return fmt.Sprintf("Could not list the project's files: %v", err)
+	rels, trunc, ferr := c.Files.Files()
+	if ferr != nil {
+		return "", 0, fmt.Sprintf("Could not list the project's files: %v", ferr)
 	}
 	abs := make([]string, 0, len(rels))
 	for _, rel := range rels {
@@ -117,15 +146,10 @@ func (c *Coder) runSymbol(tc llm.ToolCall) string {
 	slices.Sort(sites)
 	sites = slices.Compact(sites)
 
-	noun := "defined"
-	if want == repomap.Ref {
-		noun = "referenced"
-	}
-	c.Out.Toolf("Looked up %s — %s %s", name, plural(len(sites), "site", "sites"), noun)
-
+	noun := lookupNoun(kind)
 	if len(sites) == 0 {
 		return fmt.Sprintf("No place where %s is %s was found. The parser only sees languages it has a "+
-			"grammar for; grep will find the text wherever it is.", name, noun)
+			"grammar for; grep will find the text wherever it is.", name, noun), 0, ""
 	}
 
 	var b strings.Builder
@@ -140,5 +164,5 @@ func (c *Coder) runSymbol(tc llm.ToolCall) string {
 	if trunc.Any() {
 		b.WriteString("\n(The file walk hit a limit, so some of the project was not searched.)\n")
 	}
-	return truncateResult(b.String())
+	return b.String(), len(sites), ""
 }

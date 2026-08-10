@@ -21,6 +21,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/repomap"
 )
 
 // syncBuffer collects REPL output; the in-turn signal goroutine may write
@@ -40,6 +41,12 @@ func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+func (s *syncBuffer) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.b.Reset()
 }
 
 func testModel() *config.Model {
@@ -176,7 +183,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Strument v9.9.9",
 			"Model: openrouter/test-model",
 			"Git repo: none",
-			"Repo map: disabled",
+			"Language parser: off",
 			"Added hello.txt to the chat.", // banner
 			strings.Repeat("─", 24),        // solid rule (aider's console.rule), honors GetSize width
 			"hello.txt",                    // file listing
@@ -494,5 +501,44 @@ func TestWebCommandScrapesAndStages(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Added https://example.com/page to the chat.") {
 		t.Errorf("missing /web confirmation:\n%s", out.String())
+	}
+}
+
+// /symbol is the human's door to the tag layer, and it replaced /map: the
+// ranked digest was a thing to read once, "where is this defined" is a thing to
+// ask constantly. These pin the four answers it can give.
+func TestSymbolCommand(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("ok\n"), strings.NewReader("/exit\n"))
+	defer r.Close()
+	if err := os.WriteFile(filepath.Join(cdr.Root, "lib.go"),
+		[]byte("package lib\n\nfunc VerySpecificName() int { return 1 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No parser: the command says so rather than pretending there are no hits.
+	cmdSymbol(context.Background(), r, "VerySpecificName")
+	if got := out.String(); !strings.Contains(got, "language parser is not available") {
+		t.Errorf("without a parser:\n%s", got)
+	}
+
+	cdr.RepoMap = repomap.New(cdr.Root)
+	out.Reset()
+
+	cmdSymbol(context.Background(), r, "VerySpecificName")
+	if got := out.String(); !strings.Contains(got, "lib.go:3") || !strings.Contains(got, "is defined in") {
+		t.Errorf("definition lookup:\n%s", got)
+	}
+
+	out.Reset()
+	cmdSymbol(context.Background(), r, "NoSuchName")
+	if got := out.String(); !strings.Contains(got, "No place where NoSuchName is defined") {
+		t.Errorf("miss should say so plainly:\n%s", got)
+	}
+
+	// A bare /symbol is a usage error, not an empty search over the project.
+	out.Reset()
+	cmdSymbol(context.Background(), r, "")
+	if got := out.String(); !strings.Contains(got, "Usage: /symbol") {
+		t.Errorf("bare /symbol:\n%s", got)
 	}
 }

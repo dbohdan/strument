@@ -43,7 +43,6 @@ func init() {
 		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List files in the chat", cmdLs},
-		{"map", "", "Print the current repository map", cmdMap},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Add reference files the model must not edit", cmdReadOnly},
@@ -51,6 +50,7 @@ func init() {
 		{"reset", "", "Drop all files and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"squash", "[n]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
+		{"symbol", "<name> [reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
 		{"web", "<url>", "Scrape a web page and stage it for your next message", cmdWeb},
@@ -365,13 +365,23 @@ func cmdTokens(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
-func cmdMap(_ context.Context, r *REPL, _ string) string {
-	content := r.coder.RepoMapNow()
-	if content == "" {
-		r.printf("No repository map (disabled for this model, or no mappable files).")
+// cmdSymbol is the human's door to the same lookup the model has. It replaced
+// /map: once the repo map left the prompt, the ranked digest was a thing to
+// read once on an unfamiliar repository, while "where is this defined" is a
+// thing to ask constantly — and the answer names the enclosing function, which
+// is what the reader wanted from the map and never got.
+func cmdSymbol(_ context.Context, r *REPL, args string) string {
+	name, kind, _ := strings.Cut(args, " ")
+	if strings.TrimSpace(name) == "" {
+		r.out.Errorf("Usage: /symbol <name> [reference]")
 		return ""
 	}
-	r.printf("%s", content)
+	text, _, problem := r.coder.SymbolLookup(name, strings.TrimSpace(kind))
+	if problem != "" {
+		r.out.Errorf("%s", problem)
+		return ""
+	}
+	r.printf("%s", strings.TrimRight(text, "\n"))
 	return ""
 }
 

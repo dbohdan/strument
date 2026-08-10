@@ -238,9 +238,10 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`reasoning_tag`** — the name of an inline tag (e.g. `"think"`) the model
   wraps its reasoning in; its contents are stripped from the answer body.
 - **`temperature`** — a float, or `None` to omit the field.
-- **`repo_map`** — build the tree-sitter repository map, which `/map` renders
-  (default `True`). The map is not sent with your requests; the model finds code
-  with `grep`, `glob`, and `read`.
+- **`repo_map`** — build the tree-sitter parse layer (default `True`). It is what
+  the `symbol` tool, the `/symbol` command, and the after-an-edit parse check are
+  read from. Nothing derived from it is sent with your requests; the model finds
+  code with `grep`, `glob`, and `read`.
 - **`cache`** — enable prompt caching: cache-control breakpoints with a one-hour
   TTL (default `False`).
 - **`context`** — the input window in tokens. `0`/unset means unknown, which
