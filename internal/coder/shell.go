@@ -50,7 +50,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	}
 	output := string(out)
 	if len(output) > maxBytes {
-		output = output[:maxBytes] + "\n... (output truncated)"
+		output = output[:maxBytes] + "\n… output truncated"
 	}
 
 	exitCode := 0
