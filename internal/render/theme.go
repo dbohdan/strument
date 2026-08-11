@@ -47,7 +47,7 @@ func DefaultTheme() Theme {
 		DiffRemoved: "31",             // red
 		DiffAdded:   "32",             // green
 		Command:     "36",             // cyan
-		Tool:        "90",             // gray
+		Tool:        "36",             // cyan
 		Reasoning:   "2",              // faint; see the field comment before changing
 	}
 }
@@ -64,7 +64,7 @@ func DarkTheme() Theme {
 		DiffRemoved: "31",
 		DiffAdded:   "32",
 		Command:     "36",
-		Tool:        "90",
+		Tool:        "36",
 		Reasoning:   "2",
 	}
 }
@@ -83,7 +83,7 @@ func LightTheme() Theme {
 		DiffRemoved: "31",
 		DiffAdded:   "32",
 		Command:     "36",
-		Tool:        "90",
+		Tool:        "36",
 		Reasoning:   "2",
 	}
 }
