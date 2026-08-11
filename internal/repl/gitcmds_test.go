@@ -318,7 +318,7 @@ func TestDiffAndUndoSession(t *testing.T) {
 	}
 
 	// The undo restored the file and moved HEAD back to base.
-	if data, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(data) != "hello world\n" {
+	if data, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(data) != "hello world\n" && string(data) != "hello world\r\n" {
 		t.Errorf("file after undo = %q", data)
 	}
 	sha, _, subject, _, err := g.HeadInfo()

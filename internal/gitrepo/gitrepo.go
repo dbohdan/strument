@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -33,7 +34,11 @@ func Discover(dir string) (*Repo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not a git repository: %w", err)
 	}
-	return &Repo{root: strings.TrimSpace(string(out))}, nil
+	root := filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(out))))
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
+	return &Repo{root: root}, nil
 }
 
 // Trailer renders the attribution trailer for a model name, stripping

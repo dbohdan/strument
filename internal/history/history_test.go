@@ -3,6 +3,7 @@ package history
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,9 @@ func TestProjectStateIsOwnerOnly(t *testing.T) {
 	dir, err := EnsureProjectDir(project)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
 	}
 	info, err := os.Stat(dir)
 	if err != nil {

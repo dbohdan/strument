@@ -251,9 +251,9 @@ func historyRoot() (string, error) {
 
 func historyRootFrom(dir string) string {
 	if g, err := gitrepo.Discover(dir); err == nil {
-		return g.Root()
+		return filepath.Clean(g.Root())
 	}
-	return dir
+	return filepath.Clean(dir)
 }
 
 // restoreSession re-pins what the last session had pinned, returning a line for
@@ -327,12 +327,19 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 		// produces an absolute path for a reference.
 		toProject := func(rels []string) []string {
 			out := make([]string, 0, len(rels))
+			base := projectRoot
+			if resolved, err := filepath.EvalSymlinks(base); err == nil {
+				base = resolved
+			}
 			for _, rel := range rels {
 				p := rel
 				if !filepath.IsAbs(p) {
 					p = filepath.Join(cdr.Root, filepath.FromSlash(rel))
 				}
-				r, err := filepath.Rel(projectRoot, p)
+				if resolved, err := filepath.EvalSymlinks(p); err == nil {
+					p = resolved
+				}
+				r, err := filepath.Rel(base, p)
 				if err != nil || strings.HasPrefix(r, "..") {
 					out = append(out, filepath.ToSlash(p))
 					continue

@@ -3,6 +3,7 @@ package coder
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -178,6 +179,9 @@ func TestSnapshotIgnoresARolledBackBatch(t *testing.T) {
 // came back world-readable. Changing contents is what was asked for; changing
 // who can read or run the file was not.
 func TestEditPreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	dir := t.TempDir()
 	for _, c := range []struct {
 		name string
@@ -221,6 +225,9 @@ func TestEditPreservesFileMode(t *testing.T) {
 // TestNewFileGetsTheDefaultMode pins the other half: a file the turn creates
 // has no previous mode to keep.
 func TestNewFileGetsTheDefaultMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	dir := t.TempDir()
 	c := toolCoder(t, dir)
 	applyBatch(t, c, wholeFileWrite("1", "fresh.txt", "hello\n"))
@@ -266,6 +273,9 @@ func TestEditWritesThroughASymlink(t *testing.T) {
 // undo has no business changing it either. A chmod between the turn and the
 // undo belongs to whoever ran it.
 func TestUndoLeavesAModeTheUserChanged(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
 	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {

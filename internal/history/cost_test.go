@@ -3,6 +3,7 @@ package history
 import (
 	"encoding/json"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,6 +45,9 @@ func TestAppendCostIsOneLinePerTurn(t *testing.T) {
 		t.Error("time not stamped")
 	}
 
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	info, err := os.Stat(p)
 	if err != nil {
 		t.Fatal(err)

@@ -3,6 +3,7 @@ package history
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -68,6 +69,9 @@ func TestLoadResumeToleratesJunk(t *testing.T) {
 // resume — and the temp file is created 0600, because the rename replaces the
 // destination's inode and a mode set afterwards would not survive.
 func TestSaveResumeIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 

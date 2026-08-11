@@ -12,6 +12,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -145,6 +146,9 @@ func TestScriptedSession(t *testing.T) {
 }
 
 func TestBannerAndPromptHeader(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows requires a real console for ANSI mode")
+	}
 	for _, color := range []bool{true, false} {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hi\n"), 0o644); err != nil {
