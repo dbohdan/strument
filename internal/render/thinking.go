@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 // The delimiters around the model's thinking. Tag-shaped and deliberately not
@@ -20,6 +21,10 @@ const (
 	ThinkingOpen      = "‹thinking›"
 	ThinkingClose     = "‹/›"
 	ThinkingMoreLines = "… %5d more %s of thinking"
+
+	// ProgressInterval is the minimum time between real-time progress updates.
+	// 8 FPS.
+	ProgressInterval = 125 * time.Millisecond
 )
 
 // ThinkingMode is what a Thinking does with a block. It mirrors
@@ -66,12 +71,13 @@ type Thinking struct {
 	// Display is how much to show.
 	Display ThinkingDisplay
 
-	held    strings.Builder
-	opened  bool
-	block   bool
-	lines   int  // lines of body emitted so far
-	elided  int  // lines withheld by the cap
-	stopped bool // the cap is reached; count the rest, render none of it
+	held       strings.Builder
+	opened     bool
+	block      bool
+	lines      int       // lines of body emitted so far
+	elided     int       // lines withheld by the cap
+	stopped    bool      // the cap is reached; count the rest, render none of it
+	progressAt time.Time // last time Progress was called
 }
 
 // ThinkingDisplay is the caller's answer to "how much of it".
@@ -162,7 +168,8 @@ func (t *Thinking) emit(s string) {
 		t.Body(line)
 		s = ""
 	}
-	if t.stopped && t.elided > 0 && t.Progress != nil {
+	if t.stopped && t.elided > 0 && t.Progress != nil && time.Since(t.progressAt) >= ProgressInterval {
+		t.progressAt = time.Now()
 		t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
 	}
 }

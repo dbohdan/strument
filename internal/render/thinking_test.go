@@ -141,8 +141,9 @@ func TestThinkingIndifferentToDeltaBoundaries(t *testing.T) {
 }
 
 // TestThinkingCapProgressShownInRealTime: when a Progress callback is set, the
-// elision count is emitted on each elided line via "\r" so the user can track
-// that the model is still thinking. End commits the final count with "\n".
+// elision count is emitted via "\r" so the user can track that the model is
+// still thinking. Updates are debounced to ProgressInterval; End always commits
+// the final count with "\n".
 func TestThinkingCapProgressShownInRealTime(t *testing.T) {
 	var buf bytes.Buffer
 	var updates []string
@@ -151,23 +152,20 @@ func TestThinkingCapProgressShownInRealTime(t *testing.T) {
 		updates = append(updates, s)
 		fmt.Fprint(&buf, s)
 	}
-	// Feed one line per delta to simulate streaming.
+	// Feed one line per delta to simulate streaming. All six arrive in well
+	// under a second, so only the first elided line triggers a real-time
+	// update; the rest are debounced.
 	for _, line := range []string{"one\n", "two\n", "three\n", "four\n", "five\n", "six\n"} {
 		th.Write(line)
 	}
 	th.End()
 
-	// Three lines elided → three progress updates, then the final commit.
-	if len(updates) != 3 {
-		t.Fatalf("progress called %d times, want 3: %v", len(updates), updates)
+	// One real-time update (the first elided line), plus the final commit in End.
+	if len(updates) != 1 {
+		t.Fatalf("progress called %d times, want 1: %v", len(updates), updates)
 	}
-	for i, u := range updates {
-		if !strings.HasPrefix(u, "\r") {
-			t.Errorf("update %d %q should start with \\r", i, u)
-		}
-	}
-	if !strings.Contains(updates[len(updates)-1], "3 more lines") {
-		t.Errorf("last progress should show the current count: %q", updates[len(updates)-1])
+	if !strings.HasPrefix(updates[0], "\r") {
+		t.Errorf("update %q should start with \\r", updates[0])
 	}
 	// The committed final message in End must carry a newline.
 	got := buf.String()
