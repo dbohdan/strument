@@ -69,7 +69,7 @@ func TestThinkingCap(t *testing.T) {
 			t.Errorf("%q is past the cap and should not appear:\n%q", gone, got)
 		}
 	}
-	if !strings.Contains(got, "… 3 more lines of thinking …") {
+	if !strings.Contains(got, "…    3 more lines of thinking\n") {
 		t.Errorf("missing the elision note:\n%q", got)
 	}
 	if !strings.HasSuffix(strings.TrimRight(got, "\n"), ThinkingClose) {
@@ -91,7 +91,7 @@ func TestThinkingCapLeavesOneLinerAlone(t *testing.T) {
 // Singular, because "1 more lines" is the kind of thing that gets noticed.
 func TestThinkingCapSingular(t *testing.T) {
 	got := drive(ThinkingDisplay{Mode: ThinkingCapped, Lines: 1}, "one\ntwo")
-	if !strings.Contains(got, "… 1 more line of thinking …") {
+	if !strings.Contains(got, "…    1 more line of thinking\n") {
 		t.Errorf("want a singular elision note:\n%q", got)
 	}
 }

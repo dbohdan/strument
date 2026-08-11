@@ -17,8 +17,9 @@ import (
 // Two constants so the glyphs can be swapped in one line while the shape stays
 // put; the shape lives in Thinking below.
 const (
-	ThinkingOpen  = "‹thinking›"
-	ThinkingClose = "‹/›"
+	ThinkingOpen      = "‹thinking›"
+	ThinkingClose     = "‹/›"
+	ThinkingMoreLines = "… %4d more %s of thinking\n"
 )
 
 // ThinkingMode is what a Thinking does with a block. It mirrors
@@ -179,7 +180,7 @@ func (t *Thinking) End() bool {
 	if rendered && t.elided > 0 {
 		// The diff renderer's idiom, so an elision reads as native rather than
 		// invented.
-		t.Marker(fmt.Sprintf("… %d more %s of thinking …\n", t.elided, plural(t.elided, "line", "lines")))
+		t.Marker(fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
 	}
 	if rendered && t.block {
 		t.Marker(ThinkingClose + "\n")
