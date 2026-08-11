@@ -44,8 +44,7 @@ type Coder struct {
 	AutoCommits          bool
 	SuggestShellCommands bool // false gates execution too
 	Stream               bool
-	ReminderPlacement    string // "sys" | "user" (aider model default: "user")
-	PrefillSupported     bool   // continuation on finish_reason=length
+	PrefillSupported     bool // continuation on finish_reason=length
 	ExamplesAsSysMsg     bool
 	UseSystemPrompt      bool
 	SystemPromptPrefix   string
@@ -181,7 +180,6 @@ func New(root string, model *config.Model) *Coder {
 		Model:                model,
 		SuggestShellCommands: true,
 		Stream:               true,
-		ReminderPlacement:    "user",
 		PrefillSupported:     true,
 		UseSystemPrompt:      true,
 		Tokens:               RuneCounter{},

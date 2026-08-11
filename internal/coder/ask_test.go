@@ -40,7 +40,6 @@ func askCoder(t *testing.T, dir string) *Coder {
 func TestAskAssemblyNoExamplesReminderPresent(t *testing.T) {
 	c := askCoder(t, t.TempDir())
 	c.Platform.Language = "English"
-	c.ReminderPlacement = "sys"
 	c.curMessages = []llm.Message{llm.TextMessage("user", "what does this do?")}
 
 	chunks := c.formatChatChunks()
@@ -48,8 +47,8 @@ func TestAskAssemblyNoExamplesReminderPresent(t *testing.T) {
 	if len(chunks.examples) != 0 {
 		t.Errorf("ask must have no few-shot examples chunk, got %d", len(chunks.examples))
 	}
-	if len(chunks.reminder) != 1 || !strings.Contains(chunks.reminder[0].Text(), "Reply in English") {
-		t.Errorf("ask reminder chunk = %+v", chunks.reminder)
+	if !strings.Contains(chunks.system[0].Text(), "Reply in English") {
+		t.Errorf("ask system prompt lost the language reminder:\n%s", chunks.system[0].Text())
 	}
 	var sys strings.Builder
 	for _, m := range chunks.system {

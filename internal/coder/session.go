@@ -186,7 +186,7 @@ func (c *Coder) TokensReport() string {
 		name string
 		n    int
 	}{
-		{"system messages", c.countMessages(chunks.system) + c.countMessages(chunks.reminder)},
+		{"system messages", c.countMessages(chunks.system)},
 		{"examples", c.countMessages(chunks.examples)},
 		{"read-only files", c.countMessages(chunks.readonlyFiles)},
 		{"chat files", c.countMessages(chunks.chatFiles)},

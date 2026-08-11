@@ -29,67 +29,60 @@ func testCoder(t *testing.T) *Coder {
 	return c
 }
 
-func TestReminderUserPath(t *testing.T) {
+// The editing rules go out exactly once, in the system prompt.
+//
+// They used to go out twice: aider appends the reminder again at the end, and
+// Strument carried that. Claude Haiku reported the duplication when asked what
+// looked odd about the harness, and a probe confirmed two copies per send. This
+// pins the count rather than the mechanism, so a future re-introduction of a
+// second copy fails here whatever shape it takes.
+func TestEditingRulesAppearOnce(t *testing.T) {
 	c := testCoder(t)
-	c.ReminderPlacement = "user"
 	c.curMessages = []llm.Message{llm.TextMessage("user", "do the thing")}
+
+	for turn := 1; turn <= 3; turn++ {
+		var all strings.Builder
+		for _, m := range c.formatChatChunks().allMessages() {
+			all.WriteString(m.Text())
+		}
+		if n := strings.Count(all.String(), "# Editing rules"); n != 1 {
+			t.Errorf("turn %d: the editing rules appear %d times, want 1", turn, n)
+		}
+		c.moveBackCurMessages()
+		c.curMessages = []llm.Message{llm.TextMessage("user", "again")}
+	}
+}
+
+// The user's own words are the user's. The retired "user" placement edited the
+// reminder into the last user message, which is one of the places the harness
+// pretended the user had said something.
+func TestTheUserMessageIsLeftAlone(t *testing.T) {
+	c := testCoder(t)
+	c.curMessages = []llm.Message{llm.TextMessage("user", "do the thing")}
+
 	chunks := c.formatChatChunks()
-	if len(chunks.reminder) != 0 {
-		t.Error("user path must leave the reminder slot empty")
-	}
 	final := chunks.cur[len(chunks.cur)-1]
-	if !strings.Contains(final.Text(), "# Editing rules") || !strings.HasPrefix(final.Text(), "do the thing\n\n") {
-		t.Errorf("final user message = %q...", final.Text()[:80])
+	if final.Text() != "do the thing" {
+		t.Errorf("the outgoing user message was edited: %q", final.Text())
 	}
-	// The reminder is stitched into the outgoing clone only, never history.
 	if c.curMessages[0].Text() != "do the thing" {
 		t.Errorf("history mutated: %q", c.curMessages[0].Text())
 	}
-}
-
-func TestReminderSysPath(t *testing.T) {
-	c := testCoder(t)
-	c.ReminderPlacement = "sys"
-	c.curMessages = []llm.Message{llm.TextMessage("user", "do the thing")}
-	chunks := c.formatChatChunks()
-	if len(chunks.reminder) != 1 || chunks.reminder[0].Role != "system" {
-		t.Fatalf("reminder slot = %+v", chunks.reminder)
-	}
-	final := chunks.cur[len(chunks.cur)-1]
-	if final.Text() != "do the thing" {
-		t.Errorf("user message must stay clean on the sys path: %q", final.Text())
+	if !strings.Contains(chunks.system[0].Text(), "# Editing rules") {
+		t.Error("the rules should be in the system prompt")
 	}
 }
 
-func TestReminderUserPathSkippedWhenFinalIsAssistant(t *testing.T) {
+// A tiny context window no longer drops the rules. The old gate weighed the
+// reminder against the budget because it was a second copy that could be
+// skipped; the only copy cannot be, and a window too small for the system
+// prompt is a window too small for the session.
+func TestRulesSurviveATinyWindow(t *testing.T) {
 	c := testCoder(t)
-	c.ReminderPlacement = "user"
-	c.curMessages = []llm.Message{
-		llm.TextMessage("user", "hello"),
-		llm.TextMessage("assistant", "partial reply"),
-	}
-	chunks := c.formatChatChunks()
-	final := chunks.cur[len(chunks.cur)-1]
-	if final.Text() != "partial reply" {
-		t.Errorf("assistant-final message must not get the reminder: %q", final.Text())
-	}
-	if len(chunks.reminder) != 0 {
-		t.Error("reminder slot must stay empty on the user path")
-	}
-}
-
-func TestReminderUnknownMaxAlwaysAdds(t *testing.T) {
-	c := testCoder(t)
-	c.Model.Context = 0 // unknown
-	c.ReminderPlacement = "sys"
+	c.Model.Context = 100
 	c.curMessages = []llm.Message{llm.TextMessage("user", "x")}
-	if chunks := c.formatChatChunks(); len(chunks.reminder) != 1 {
-		t.Error("unknown max_input_tokens must always add the reminder")
-	}
-
-	c.Model.Context = 100 // tiny known window: gate blocks
-	if chunks := c.formatChatChunks(); len(chunks.reminder) != 0 {
-		t.Error("gate must block the reminder when over budget")
+	if !strings.Contains(c.formatChatChunks().system[0].Text(), "# Editing rules") {
+		t.Error("the rules were dropped on a tiny window")
 	}
 }
 

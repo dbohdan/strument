@@ -11,7 +11,7 @@ import (
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
-// system + examples + readonly_files + done + chat_files + cur + reminder.
+// system + examples + readonly_files + done + chat_files + cur.
 //
 // aider has a repo slot between readonly_files and done, carrying the ranked
 // repository map. Strument no longer fills it. The map answered "how does the
@@ -26,20 +26,18 @@ type chatChunks struct {
 	readonlyFiles []llm.Message
 	chatFiles     []llm.Message
 	cur           []llm.Message
-	reminder      []llm.Message
 }
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
 		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+
-			len(ch.done)+len(ch.chatFiles)+len(ch.cur)+len(ch.reminder))
+			len(ch.done)+len(ch.chatFiles)+len(ch.cur))
 	out = append(out, ch.system...)
 	out = append(out, ch.examples...)
 	out = append(out, ch.readonlyFiles...)
 	out = append(out, ch.done...)
 	out = append(out, ch.chatFiles...)
 	out = append(out, ch.cur...)
-	out = append(out, ch.reminder...)
 	return out
 }
 
@@ -268,6 +266,22 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		}
 	}
 
+	// The reminder rides in the system prompt and nowhere else.
+	//
+	// aider also appends it again at the end of the conversation — rules at the
+	// top and at the bottom, the standard hedge against instructions getting
+	// lost in the middle. Strument carried that, so the editing rules went out
+	// twice in every request. Claude Haiku reported it when asked what looked
+	// odd about the harness, and a probe confirmed it: two copies per send,
+	// stable across turns.
+	//
+	// The end copy is the one that went. The system prompt is a stable prefix
+	// and therefore cacheable, where a copy appended to the last user turn is
+	// regenerated every send. The tool schema now carries most of the format
+	// rules and travels beside the messages, so recency buys less than it did
+	// when a SEARCH/REPLACE block had to be parsed out of prose. And the "user"
+	// placement worked by editing words into the user's own message, which is
+	// one fewer place the harness pretends the user said something.
 	if c.Prompts.SystemReminder != "" {
 		mainSys += "\n" + c.fmtSystemPrompt(c.Prompts.SystemReminder)
 	}
@@ -310,34 +324,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	}
 
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)
-	chunks.reminder = nil
-
-	// Reminder gate: unknown max => always add; else add
-	// iff base + candidate < max - margin, margin = min(1024, 5%).
-	if c.Prompts.SystemReminder != "" {
-		reminderText := c.fmtSystemPrompt(c.Prompts.SystemReminder)
-		baseTokens := c.countMessages(chunks.allMessages())
-		candTokens := c.Tokens.Count(reminderText)
-		maxInput := c.Model.Context
-
-		add := maxInput <= 0
-		if !add {
-			margin := min(1024, maxInput/20)
-			add = baseTokens+candTokens < maxInput-margin
-		}
-
-		if add {
-			switch c.ReminderPlacement {
-			case "sys":
-				chunks.reminder = []llm.Message{llm.TextMessage("system", reminderText)}
-			case "user":
-				if n := len(chunks.cur); n > 0 && chunks.cur[n-1].Role == "user" {
-					chunks.cur[n-1] = llm.TextMessage("user", chunks.cur[n-1].Text()+"\n\n"+reminderText)
-				}
-			}
-		}
-	}
-
 	return chunks
 }
 
