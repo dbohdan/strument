@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -18,7 +22,9 @@ jobs:
       - run: go test ./...
       # The release variant: only the grammars strument uses compile in.
       - run: go build -tags "$(cat script/grammar-tags.txt)" ./cmd/strument
+        shell: bash
       - run: go test -tags "$(cat script/grammar-tags.txt)" ./internal/repomap/
+        shell: bash
 
   lint:
     runs-on: ubuntu-latest
