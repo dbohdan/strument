@@ -13,7 +13,7 @@ import (
 // the terminal. Returns the exit code and captured output.
 func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	c.Out.Printf("")
-	c.Out.Toolf("Running %s", command)
+	c.Out.Toolf("Running %s", quoteToolArg(command))
 
 	runner := c.Runner
 	if runner == nil {

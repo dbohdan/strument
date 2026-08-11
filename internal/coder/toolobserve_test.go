@@ -260,7 +260,7 @@ func TestObservationToolsAnnounceThemselves(t *testing.T) {
 	c.runLS(call("ls", `{}`))
 
 	joined := strings.Join(out.lines, "\n")
-	for _, want := range []string{"Read a.go", "Searched for package", "Matched 1 file", "Listed the project root"} {
+	for _, want := range []string{"Read a.go", "Searched for package", "Matched 1 file", `Listed "the project root"`} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}

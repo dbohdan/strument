@@ -240,7 +240,7 @@ func editStub() *fixture.StreamStub {
 
 type yesConfirmer struct{}
 
-func (yesConfirmer) Confirm(coder.ConfirmRequest) (bool, bool) { return true, false }
+func (yesConfirmer) Confirm(coder.ConfirmRequest) coder.ConfirmResult { return coder.ConfirmResult{Yes: true} }
 
 type quietOutput struct{ testing.TB }
 

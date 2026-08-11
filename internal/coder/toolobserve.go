@@ -14,6 +14,23 @@ import (
 	"dbohdan.com/strument/internal/workspace"
 )
 
+// quoteToolArg puts s in quotes when it contains whitespace so the boundary
+// between a status message and the model-supplied argument it names is always
+// visible. Strings without whitespace are returned as-is. When s contains
+// double quotes but no single quotes, single-quoting is used instead of
+// escaping, because '"foo" bar' reads better than "\"foo\" bar".
+func quoteToolArg(s string) string {
+	if !strings.ContainsAny(s, " \t\n\r") {
+		return s
+	}
+
+	if strings.Contains(s, `"`) && !strings.Contains(s, `'`) {
+		return `'` + s + `'`
+	}
+
+	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+}
+
 // This file holds the observation tools — read, grep, glob, ls, and verify.
 // None of them changes anything, so none of them asks for confirmation, and
 // each answers immediately rather than being batched like the edits.
@@ -55,7 +72,7 @@ func (c *Coder) runRead(tc llm.ToolCall) string {
 
 	ft, err := c.Files.Read(a.Path, a.Offset, a.Limit)
 	if err != nil {
-		return fmt.Sprintf("Could not read %s: %v", a.Path, err)
+		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err)
 	}
 	c.Out.Toolf("Read %s", readSummary(ft))
 
@@ -85,13 +102,14 @@ func (c *Coder) runRead(tc llm.ToolCall) string {
 
 // readSummary is the one-line outcome shown to the user.
 func readSummary(ft workspace.FileText) string {
+	p := quoteToolArg(ft.Path)
 	if len(ft.Lines) == 0 {
-		return fmt.Sprintf("%s (%d lines, nothing at offset %d)", ft.Path, ft.Total, ft.Start)
+		return fmt.Sprintf("%s (%d lines, nothing at offset %d)", p, ft.Total, ft.Start)
 	}
 	if ft.Start == 1 && !ft.Truncated {
-		return fmt.Sprintf("%s (%d lines)", ft.Path, ft.Total)
+		return fmt.Sprintf("%s (%d lines)", p, ft.Total)
 	}
-	return fmt.Sprintf("%s (lines %d-%d of %d)", ft.Path, ft.Start, ft.Start+len(ft.Lines)-1, ft.Total)
+	return fmt.Sprintf("%s (lines %d-%d of %d)", p, ft.Start, ft.Start+len(ft.Lines)-1, ft.Total)
 }
 
 // runGrep answers a grep call.
@@ -127,10 +145,10 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("The search pattern was not valid: %v", err)
 	}
-	c.Out.Toolf("Searched for %s — %s", a.Pattern, matchSummary(res))
+	c.Out.Toolf("Searched for %s — %s", quoteToolArg(a.Pattern), matchSummary(res))
 
 	if len(res.Files) == 0 {
-		return fmt.Sprintf("No matches for %s.", a.Pattern)
+		return fmt.Sprintf("No matches for %s.", quoteToolArg(a.Pattern))
 	}
 
 	var b strings.Builder
@@ -182,15 +200,15 @@ func (c *Coder) runGlob(tc llm.ToolCall) string {
 
 	paths, trunc, err := c.Files.Glob(a.Pattern)
 	if err != nil {
-		return fmt.Sprintf("Could not match %s: %v", a.Pattern, err)
+		return fmt.Sprintf("Could not match %s: %v", quoteToolArg(a.Pattern), err)
 	}
-	c.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), a.Pattern)
+	c.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 
 	if len(paths) == 0 {
-		return fmt.Sprintf("No files match %s.", a.Pattern)
+		return fmt.Sprintf("No files match %s.", quoteToolArg(a.Pattern))
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s matching %s:\n\n", plural(len(paths), "file", "files"), a.Pattern)
+	fmt.Fprintf(&b, "%s matching %s:\n\n", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 	b.WriteString(strings.Join(paths, "\n"))
 	b.WriteString("\n")
 	if trunc.Any() {
@@ -212,7 +230,7 @@ func (c *Coder) runLS(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
-	c.Out.Toolf("Listed %s (%s)", displayDir(a.Path), plural(len(entries), "entry", "entries"))
+	c.Out.Toolf("Listed %s (%s)", quoteToolArg(displayDir(a.Path)), plural(len(entries), "entry", "entries"))
 
 	if len(entries) == 0 {
 		return displayDir(a.Path) + " is empty."

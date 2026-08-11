@@ -559,7 +559,7 @@ func TestRunAndShowDisplaysOutput(t *testing.T) {
 		t.Fatalf("runAndShow = (%d, %q), want (0, %q)", exit, output, "hello\nworld\n")
 	}
 	joined := strings.Join(out.lines, "\n")
-	if !strings.Contains(joined, "Running echo stuff") {
+	if !strings.Contains(joined, `Running "echo stuff"`) {
 		t.Errorf("missing the Running line:\n%s", joined)
 	}
 	if !strings.Contains(joined, "hello\nworld") {

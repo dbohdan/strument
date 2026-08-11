@@ -405,7 +405,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	}
 
 	exitCode, output := c.runAndShow(ctx, command)
-	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", command, exitCode, output)
+	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output)
 }
 
 // appendToolResults appends a RoleTool message per captured call, in the
@@ -452,12 +452,12 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 
 	for _, e := range edits {
 		if reason := c.unsafePath(e.path); reason != "" {
-			c.Out.Errorf("Skipping edit to %s: %s", e.path, reason)
-			results[e.callID] = fmt.Sprintf("Skipped %s: %s", e.path, reason)
+			c.Out.Errorf("Skipping edit to %s: %s", quoteToolArg(e.path), reason)
+			results[e.callID] = fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), reason)
 			continue
 		}
 		if ok, why := c.allowedToEdit(e.path, needDirtyCommit); !ok {
-			results[e.callID] = fmt.Sprintf("Skipped %s: %s", e.path, why)
+			results[e.callID] = fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why)
 			continue
 		}
 
@@ -513,7 +513,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			edited = append(edited, e.path)
 		}
 		applied[e.callID] = true
-		results[e.callID] = fmt.Sprintf("%s %s.", callVerb[e.callID], e.path)
+		results[e.callID] = fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
 	}
 
 	c.dirtyCommit(needDirtyCommit)
@@ -536,7 +536,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 				if applied[e.callID] {
 					results[e.callID] = fmt.Sprintf(
 						"The write failed and the whole batch was rolled back, so %s is unchanged: %v",
-						e.path, err)
+						quoteToolArg(e.path), err)
 				}
 			}
 			return nil
@@ -546,7 +546,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		// Nothing reached the disk, and the model must not be told otherwise.
 		for _, e := range edits {
 			if applied[e.callID] {
-				results[e.callID] = fmt.Sprintf("Did not write %s: this session is --dry-run.", e.path)
+				results[e.callID] = fmt.Sprintf("Did not write %s: this session is --dry-run.", quoteToolArg(e.path))
 			}
 		}
 	}
@@ -556,9 +556,9 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			verb = "Applied edit to"
 		}
 		if c.DryRun {
-			c.Out.Toolf("Did not write %s (--dry-run)", p)
+			c.Out.Toolf("Did not write %s (--dry-run)", quoteToolArg(p))
 		} else {
-			c.Out.Toolf("%s %s", verb, p)
+			c.Out.Toolf("%s %s", verb, quoteToolArg(p))
 		}
 	}
 
@@ -587,21 +587,21 @@ func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence) string
 	// sends it hunting for a typo it did not make.
 	if n := editblock.CountOccurrences(content, e.search); n > 1 {
 		fmt.Fprintf(&b, "The text to replace appears %d times in %s, so it is ambiguous "+
-			"and nothing was changed.\n", n, e.path)
+			"and nothing was changed.\n", n, quoteToolArg(e.path))
 		b.WriteString("Include enough surrounding lines to pick out the one you mean, " +
 			"and make one call per place if you mean several.\n")
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "The search text was not found in %s, so no change was made.\n", e.path)
+	fmt.Fprintf(&b, "The search text was not found in %s, so no change was made.\n", quoteToolArg(e.path))
 	b.WriteString("It must match the current file contents exactly, character for character, " +
 		"including all whitespace, comments, and docstrings.\n")
 	if didYouMean := editblock.FindSimilarLines(e.search, content, 0.6); didYouMean != "" {
 		fmt.Fprintf(&b, "\nDid you mean to match these lines from %s?\n\n%s\n%s\n%s\n",
-			e.path, fen.Open, didYouMean, fen.Close)
+			quoteToolArg(e.path), fen.Open, didYouMean, fen.Close)
 	}
 	if e.replace != "" && strings.Contains(content, e.replace) {
-		fmt.Fprintf(&b, "\nThe replacement text is already present in %s; this edit may not be needed.\n", e.path)
+		fmt.Fprintf(&b, "\nThe replacement text is already present in %s; this edit may not be needed.\n", quoteToolArg(e.path))
 	}
 	return b.String()
 }
