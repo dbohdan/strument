@@ -432,7 +432,7 @@ func stdoutIsTerminal() bool {
 // terminalConfirmer asks y/n questions on the terminal.
 type terminalConfirmer struct{}
 
-func (terminalConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
+func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	if req.Subject != "" {
 		fmt.Println(req.Subject)
 	}
@@ -440,15 +440,15 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		return false, false
+		return coder.ConfirmResult{}
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
-		return true, false
+		return coder.ConfirmResult{Yes: true}
 	case "d", "never":
-		return false, true
+		return coder.ConfirmResult{Never: true}
 	default:
-		return false, false
+		return coder.ConfirmResult{}
 	}
 }
 

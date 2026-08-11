@@ -144,6 +144,7 @@ type Coder struct {
 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
 	ignoreMentions      map[string]bool
 	rejectedUrls        map[string]bool
+	turnAutoApprove     map[string]bool // groups auto-approved for this turn
 }
 
 type fence struct{ open, close string }
@@ -191,6 +192,7 @@ func New(root string, model *config.Model) *Coder {
 		ignoreMentions:       map[string]bool{},
 		rejectedUrls:         map[string]bool{},
 		turnEditedFiles:      map[string]bool{},
+		turnAutoApprove:      map[string]bool{},
 	}
 	c.Platform = defaultPlatformInfo(c)
 	return c
@@ -322,6 +324,7 @@ func (c *Coder) addableRelativeFiles() []string {
 // initBeforeMessage resets per-top-level-message state.
 func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
+	c.turnAutoApprove = map[string]bool{}
 	c.numReflections = 0
 	c.numSteps = 0
 	c.autoVerifies = 0
@@ -338,6 +341,22 @@ func (c *Coder) initBeforeMessage() {
 	if c.Repo != nil {
 		c.commitBeforeMessage = append(c.commitBeforeMessage, c.Repo.HeadSHA())
 	}
+}
+
+// confirmTurn wraps c.Confirm with turn-scoped auto-approve. If the user
+// answered "a" (always this turn) to a previous Confirm with the same Group,
+// this one is approved without prompting. The first "a" answer records the
+// group and returns true. Callers that don't need turn-scoping —
+// confirmMoreSteps, checkTokens — call c.Confirm.Confirm directly.
+func (c *Coder) confirmTurn(req ConfirmRequest) bool {
+	if req.Group != "" && c.turnAutoApprove[req.Group] {
+		return true
+	}
+	res := c.Confirm.Confirm(req)
+	if res.AlwaysThisTurn && req.Group != "" {
+		c.turnAutoApprove[req.Group] = true
+	}
+	return res.Yes || res.AlwaysThisTurn
 }
 
 // Run executes one scripted message (script mode) and returns the
@@ -483,8 +502,8 @@ func (c *Coder) confirmMoreSteps() bool {
 		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
 	}
 
-	yes, _ := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?"})
-	if !yes {
+	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?"})
+	if !res.Yes {
 		c.Out.Printf("Stopping here. The work so far is applied; say what to do next.")
 		return false
 	}

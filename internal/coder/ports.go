@@ -30,10 +30,16 @@ func (RuneCounter) Count(text string) int {
 	return n / 4
 }
 
-// Confirmer asks the user yes/no questions. Never=true means "never ask
-// this again" — the caller tracks what that applies to.
+// Confirmer asks the user yes/no questions.
 type Confirmer interface {
-	Confirm(req ConfirmRequest) (yes bool, never bool)
+	Confirm(req ConfirmRequest) ConfirmResult
+}
+
+// ConfirmResult is the user's answer to a confirmation prompt.
+type ConfirmResult struct {
+	Yes            bool // the user approved this one action
+	Never          bool // "d" — session-scoped don't-ask for this Group
+	AlwaysThisTurn bool // "a" — turn-scoped auto-approve for this Group
 }
 
 // ConfirmRequest mirrors aider's confirm_ask surface.
@@ -54,23 +60,23 @@ type AutoConfirmer struct {
 	Fallback Confirmer
 }
 
-func (a AutoConfirmer) Confirm(req ConfirmRequest) (bool, bool) {
+func (a AutoConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 	if req.ExplicitYesRequired {
 		if a.YesShell {
-			return true, false
+			return ConfirmResult{Yes: true}
 		}
 		if a.Fallback != nil {
 			return a.Fallback.Confirm(req)
 		}
-		return false, false
+		return ConfirmResult{}
 	}
 	if a.Yes {
-		return true, false
+		return ConfirmResult{Yes: true}
 	}
 	if a.Fallback != nil {
 		return a.Fallback.Confirm(req)
 	}
-	return false, false
+	return ConfirmResult{}
 }
 
 // CommandRunner executes one accepted shell block through a single shell.

@@ -81,18 +81,18 @@ func (c *Coder) checkForFileMentions(content string) string {
 
 	var added []string
 	for _, relFname := range newMentions {
-		yes, never := c.Confirm.Confirm(ConfirmRequest{
+		res := c.Confirm.Confirm(ConfirmRequest{
 			Prompt:     "Add file to the chat?",
 			Subject:    relFname,
 			AllowNever: true,
 			Group:      "add-file",
 		})
-		if yes {
+		if res.Yes {
 			c.AddFile(relFname)
 			added = append(added, relFname)
 		} else {
 			c.ignoreMentions[relFname] = true
-			_ = never
+			_ = res.Never
 		}
 	}
 	if len(added) > 0 {
@@ -125,13 +125,13 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 			continue
 		}
 		trimmed := strings.TrimRight(url, ".',\"")
-		yes, _ := c.Confirm.Confirm(ConfirmRequest{
+		res := c.Confirm.Confirm(ConfirmRequest{
 			Prompt:     "Add URL to the chat?",
 			Subject:    trimmed,
 			AllowNever: true,
 			Group:      "add-url",
 		})
-		if yes {
+		if res.Yes {
 			content, err := c.Scrape(ctx, trimmed)
 			if err != nil {
 				c.Out.Errorf("Unable to fetch %s: %v", trimmed, err)

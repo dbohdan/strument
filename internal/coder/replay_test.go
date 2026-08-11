@@ -22,18 +22,18 @@ type scriptConfirmer struct {
 	script *fixture.ConfirmScript
 }
 
-func (s scriptConfirmer) Confirm(req ConfirmRequest) (bool, bool) {
+func (s scriptConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 	ans, err := s.script.Ask(req.Prompt)
 	if err != nil {
 		s.t.Fatalf("confirm: %v", err)
 	}
 	switch strings.ToLower(strings.TrimSpace(ans)) {
 	case "y", "yes", "a", "all":
-		return true, false
+		return ConfirmResult{Yes: true}
 	case "never", "d":
-		return false, true
+		return ConfirmResult{Never: true}
 	default:
-		return false, false
+		return ConfirmResult{}
 	}
 }
 

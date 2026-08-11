@@ -394,14 +394,13 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		return "Shell commands are disabled in this session; the command was not run."
 	}
 	command := strings.TrimSpace(cmd.command)
-	yes, _ := c.Confirm.Confirm(ConfirmRequest{
+	if !c.confirmTurn(ConfirmRequest{
 		Prompt:              "Run shell command?",
 		Subject:             command,
 		ExplicitYesRequired: true,
 		AllowNever:          true,
 		Group:               "run-shell",
-	})
-	if !yes {
+	}) {
 		return "The user chose not to run the command."
 	}
 

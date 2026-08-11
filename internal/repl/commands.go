@@ -511,12 +511,12 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		return ""
 	}
 
-	yes, _ := r.Confirmer().Confirm(coder.ConfirmRequest{
+	res := r.Confirmer().Confirm(coder.ConfirmRequest{
 		Prompt:     "Add command output to the chat?",
 		AllowNever: true,
 		Group:      "add-output",
 	})
-	if yes {
+	if res.Yes {
 		// The result shape, so /run context reads like
 		// model-proposed shell output.
 		result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", args, exitCode, output)

@@ -470,7 +470,7 @@ func (r *REPL) showUndoHint() {
 // input and confirm input share one reader.
 type rlConfirmer struct{ r *REPL }
 
-func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
+func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	r := cf.r
 	if req.Subject != "" {
 		r.printf("%s", req.Subject)
@@ -478,12 +478,12 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
 
 	// aider's confirm_ask defaults: yes, unless an explicit yes is
 	// required.
-	suffix, def := " (Y/n", true
+	suffix, def := " (Y/n", coder.ConfirmResult{Yes: true}
 	if req.ExplicitYesRequired {
-		suffix, def = " (y/N", false
+		suffix, def = " (y/N", coder.ConfirmResult{}
 	}
 	if req.AllowNever {
-		suffix += "/d=don't ask again"
+		suffix += "/a=all turn/d=don't ask again"
 	}
 	suffix += ") "
 
@@ -494,16 +494,18 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) (bool, bool) {
 
 	line, err := r.rl.ReadLineWithConfig(cfg)
 	if err != nil {
-		return false, false
+		return coder.ConfirmResult{}
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "":
-		return def, false
+		return def
 	case "y", "yes":
-		return true, false
+		return coder.ConfirmResult{Yes: true}
+	case "a", "always":
+		return coder.ConfirmResult{AlwaysThisTurn: true}
 	case "d", "never", "don't":
-		return false, true
+		return coder.ConfirmResult{Never: true}
 	default:
-		return false, false
+		return coder.ConfirmResult{}
 	}
 }

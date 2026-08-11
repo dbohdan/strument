@@ -39,12 +39,12 @@ func (r *fakeRepo) Commit([]string, string, bool) (string, string, bool, error) 
 // yesConfirmer answers yes to everything (including explicit-yes prompts).
 type yesConfirmer struct{}
 
-func (yesConfirmer) Confirm(ConfirmRequest) (bool, bool) { return true, false }
+func (yesConfirmer) Confirm(ConfirmRequest) ConfirmResult { return ConfirmResult{Yes: true} }
 
 // noConfirmer declines everything.
 type noConfirmer struct{}
 
-func (noConfirmer) Confirm(ConfirmRequest) (bool, bool) { return false, false }
+func (noConfirmer) Confirm(ConfirmRequest) ConfirmResult { return ConfirmResult{} }
 
 const metaRow = `{"v":1,"kind":"meta","scenario":"inline","source":"authored"}`
 
