@@ -287,10 +287,12 @@ func TestDirtyCommitIgnoresTheTurnsOwnEdits(t *testing.T) {
 {"kind":"expect_fs","path":"a.txt","content":"ONE\nTWO\n"}
 `+closingTurn)
 	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
+	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
 		c.editFormat = "tool"
 		c.AutoCommits = true
 		c.Repo = repo
+		c.Out = out
 	})
 	env.run(t)
 
@@ -301,6 +303,9 @@ func TestDirtyCommitIgnoresTheTurnsOwnEdits(t *testing.T) {
 	}
 	if repo.attrs[0] || !repo.attrs[1] {
 		t.Errorf("attribution = %v, want the dirty commit unattributed and the turn's attributed", repo.attrs)
+	}
+	if got := strings.Count(strings.Join(out.lines, "\n"), "Committing a.txt before applying edits."); got != 1 {
+		t.Errorf("dirty-commit notice count = %d, want 1; output:\n%s", got, strings.Join(out.lines, "\n"))
 	}
 }
 

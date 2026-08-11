@@ -144,6 +144,9 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	if c.turnSnap.wrote(rel) {
 		return // dirty because of this turn; there is nothing of the user's here
 	}
+	if needDirtyCommit[rel] {
+		return // already queued by an earlier edit in this batch
+	}
 	c.Out.Toolf("Committing %s before applying edits.", rel)
 	needDirtyCommit[rel] = true
 }
