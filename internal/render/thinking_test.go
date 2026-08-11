@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -69,7 +70,7 @@ func TestThinkingCap(t *testing.T) {
 			t.Errorf("%q is past the cap and should not appear:\n%q", gone, got)
 		}
 	}
-	if !strings.Contains(got, "…    3 more lines of thinking\n") {
+	if !strings.Contains(got, "…     3 more lines of thinking\n") {
 		t.Errorf("missing the elision note:\n%q", got)
 	}
 	if !strings.HasSuffix(strings.TrimRight(got, "\n"), ThinkingClose) {
@@ -91,7 +92,7 @@ func TestThinkingCapLeavesOneLinerAlone(t *testing.T) {
 // Singular, because "1 more lines" is the kind of thing that gets noticed.
 func TestThinkingCapSingular(t *testing.T) {
 	got := drive(ThinkingDisplay{Mode: ThinkingCapped, Lines: 1}, "one\ntwo")
-	if !strings.Contains(got, "…    1 more line of thinking\n") {
+	if !strings.Contains(got, "…     1 more line of thinking\n") {
 		t.Errorf("want a singular elision note:\n%q", got)
 	}
 }
@@ -136,5 +137,41 @@ func TestThinkingIndifferentToDeltaBoundaries(t *testing.T) {
 	split := drive(full, "First ", "line.", "\n", "Second ", "line.")
 	if whole != split {
 		t.Errorf("split deltas rendered differently:\n whole %q\n split %q", whole, split)
+	}
+}
+
+// TestThinkingCapProgressShownInRealTime: when a Progress callback is set, the
+// elision count is emitted on each elided line via "\r" so the user can track
+// that the model is still thinking. End commits the final count with "\n".
+func TestThinkingCapProgressShownInRealTime(t *testing.T) {
+	var buf bytes.Buffer
+	var updates []string
+	th := PlainThinking(&buf, ThinkingDisplay{Mode: ThinkingCapped, Lines: 3})
+	th.Progress = func(s string) {
+		updates = append(updates, s)
+		fmt.Fprint(&buf, s)
+	}
+	// Feed one line per delta to simulate streaming.
+	for _, line := range []string{"one\n", "two\n", "three\n", "four\n", "five\n", "six\n"} {
+		th.Write(line)
+	}
+	th.End()
+
+	// Three lines elided → three progress updates, then the final commit.
+	if len(updates) != 3 {
+		t.Fatalf("progress called %d times, want 3: %v", len(updates), updates)
+	}
+	for i, u := range updates {
+		if !strings.HasPrefix(u, "\r") {
+			t.Errorf("update %d %q should start with \\r", i, u)
+		}
+	}
+	if !strings.Contains(updates[len(updates)-1], "3 more lines") {
+		t.Errorf("last progress should show the current count: %q", updates[len(updates)-1])
+	}
+	// The committed final message in End must carry a newline.
+	got := buf.String()
+	if !strings.Contains(got, "…     3 more lines of thinking\n") {
+		t.Errorf("missing the committed elision note:\n%q", got)
 	}
 }

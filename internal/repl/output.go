@@ -232,7 +232,15 @@ func (o *termOutput) StreamReasoning(delta string) {
 				o.parser.Write(s)
 			},
 			CloseBody: o.closeParser,
-			Display:   o.Thinking,
+			Progress: func(s string) {
+				// The cap is reached — no more body text will follow — so
+				// flush the parser now; otherwise the trailing newline from
+				// the last body line arrives after the progress update rather
+				// than before it.
+				o.closeParser()
+				fmt.Fprint(o.w, o.sgr(o.theme.Reasoning)+s+o.sgr("0"))
+			},
+			Display: o.Thinking,
 		}
 	}
 	o.think.Write(delta)

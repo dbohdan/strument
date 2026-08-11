@@ -19,7 +19,7 @@ import (
 const (
 	ThinkingOpen      = "‹thinking›"
 	ThinkingClose     = "‹/›"
-	ThinkingMoreLines = "… %4d more %s of thinking\n"
+	ThinkingMoreLines = "… %5d more %s of thinking"
 )
 
 // ThinkingMode is what a Thinking does with a block. It mirrors
@@ -57,6 +57,12 @@ type Thinking struct {
 	// go through a buffering markdown renderer: anything the marker emits before
 	// the body is closed arrives in the wrong place.
 	CloseBody func()
+	// Progress, when set, receives real-time "\r"-prefixed progress updates
+	// while lines are being elided by a cap. Each call overwrites the previous
+	// one on the terminal so the user can track that the model is still
+	// thinking. End commits the final count through Marker with a "\n".
+	// Leave nil for non-interactive output where "\r" would be noise.
+	Progress func(string)
 	// Display is how much to show.
 	Display ThinkingDisplay
 
@@ -156,6 +162,9 @@ func (t *Thinking) emit(s string) {
 		t.Body(line)
 		s = ""
 	}
+	if t.stopped && t.elided > 0 && t.Progress != nil {
+		t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
+	}
 }
 
 // End closes the block and reports whether there was one. A one-liner needs no
@@ -180,7 +189,14 @@ func (t *Thinking) End() bool {
 	if rendered && t.elided > 0 {
 		// The diff renderer's idiom, so an elision reads as native rather than
 		// invented.
-		t.Marker(fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
+		msg := fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines"))
+		if t.Progress != nil {
+			// "\r" overwrites the last real-time progress update and the
+			// newline commits the line so the closing marker starts clean.
+			t.Marker("\r" + msg + "\n")
+		} else {
+			t.Marker(msg + "\n")
+		}
 	}
 	if rendered && t.block {
 		t.Marker(ThinkingClose + "\n")

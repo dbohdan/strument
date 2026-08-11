@@ -409,6 +409,7 @@ func TestBothOutputsAgreeOnShape(t *testing.T) {
 
 			var plain bytes.Buffer
 			p := render.PlainThinking(&plain, tc.display)
+			p.Progress = func(s string) { fmt.Fprint(&plain, s) }
 			for _, d := range tc.deltas {
 				p.Write(d)
 			}
