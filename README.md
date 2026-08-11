@@ -294,7 +294,8 @@ Known limits:
 - Strument needs a model that calls functions well.
   Everything is a tool call, so a model that fumbles tool calls cannot drive Strument.
   Aider's text-edit formats that existed for such models (`SEARCH`/`REPLACE`, fenced, whole-file) have been removed.
-- So far, Strument has been developed and tested on Linux only, though it supports other operating systems.
+- Strument is developed on Linux.
+  It is tested on macOS and Windows in CI.
 - No MCP, subagents, aider's architect mode, voice, or GUI.
 - No syntax highlighting.
 
