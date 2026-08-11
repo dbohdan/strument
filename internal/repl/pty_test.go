@@ -28,12 +28,12 @@ func TestInteractivePty(t *testing.T) {
 
 	// Raw slave: no echo, no canonical buffering, and ^C stays a byte for
 	// readline instead of becoming a line-discipline signal.
-	attrs, err := unix.IoctlGetTermios(int(tty.Fd()), unix.TCGETS)
+	attrs, err := unix.IoctlGetTermios(int(tty.Fd()), ioctlReadTermios)
 	if err != nil {
 		t.Fatal(err)
 	}
 	attrs.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG
-	if err := unix.IoctlSetTermios(int(tty.Fd()), unix.TCSETS, attrs); err != nil {
+	if err := unix.IoctlSetTermios(int(tty.Fd()), ioctlWriteTermios, attrs); err != nil {
 		t.Fatal(err)
 	}
 
