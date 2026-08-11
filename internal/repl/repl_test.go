@@ -103,6 +103,12 @@ func answerStub(text string) *fixture.StreamStub {
 	}}}}
 }
 
+type testCommandRunner func(context.Context, string, string) (int, string, error)
+
+func (r testCommandRunner) Run(ctx context.Context, command, cwd string) (int, string, error) {
+	return r(ctx, command, cwd)
+}
+
 func TestScriptedSession(t *testing.T) {
 	input := strings.NewReader(
 		"/help\n" +
@@ -233,12 +239,24 @@ func TestSlashCommandReturnsNoSend(t *testing.T) {
 }
 
 func TestRunCommandAddsExchange(t *testing.T) {
-	// /run output + "y" to the add-output confirm => an exchange lands in
-	// history; verified via /tokens growing is fragile, so peek via a turn.
-	input := strings.NewReader("/run echo hi from run\ny\n/exit\n")
-	stub := &fixture.StreamStub{}
+	// The command output is auto-confirmed, then the next turn verifies that
+	// the exchange was added to the conversation.
+	input := strings.NewReader("/run echo hi from run\ny\nshow me the command output\n/exit\n")
+	stub := answerStub("ok\n")
+	var reqText string
+	stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		var b strings.Builder
+		for _, m := range req.Messages {
+			b.WriteString(m.Text())
+		}
+		reqText = b.String()
+		return nil
+	}
 	r, cdr, out := newTestREPL(t, stub, input)
 	defer r.Close()
+	cdr.Runner = testCommandRunner(func(context.Context, string, string) (int, string, error) {
+		return 0, "hi from run\n", nil
+	})
 
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -250,7 +268,9 @@ func TestRunCommandAddsExchange(t *testing.T) {
 	if !strings.Contains(got, "Added the command output to the chat.") {
 		t.Errorf("confirm flow failed:\n%s", got)
 	}
-	_ = cdr
+	if !strings.Contains(reqText, "Command: echo hi from run") || !strings.Contains(reqText, "hi from run") {
+		t.Errorf("command output was not added to the next request:\n%s", reqText)
+	}
 }
 
 func TestReloadConfig(t *testing.T) {
