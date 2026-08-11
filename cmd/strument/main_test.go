@@ -18,15 +18,15 @@ func newRepo(t *testing.T) (root, sub string) {
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
 		t.Skipf("git unavailable: %v: %s", err, out)
 	}
-	sub = filepath.Join(root, "sub")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	// t.TempDir can hand back a symlinked path (/tmp -> /private/tmp on macOS)
 	// while git reports the resolved one. The hash is taken over the string, so
 	// compare against what the filesystem actually calls it.
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolved
+	}
+	sub = filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
 	}
 	return root, sub
 }
