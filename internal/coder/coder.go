@@ -171,6 +171,7 @@ type PlatformInfo struct {
 	ShellVal string
 	Language string // human-readable, e.g. "English"; "" => none
 	Date     string // YYYY-MM-DD
+	WorkDir  string // absolute path to the project root
 	InGit    bool
 }
 
@@ -209,6 +210,7 @@ func defaultPlatformInfo(c *Coder) PlatformInfo {
 		ShellVal: os.Getenv(shellVar),
 		Language: detectUserLanguage(c.ChatLanguage),
 		Date:     time.Now().Format("2006-01-02"),
+		WorkDir:  c.Root,
 	}
 }
 

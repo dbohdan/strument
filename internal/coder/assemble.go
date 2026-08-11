@@ -204,6 +204,9 @@ func (c *Coder) platformText() string {
 		b.WriteString("- Language: " + c.Platform.Language + "\n")
 	}
 	b.WriteString("- Current date: " + c.Platform.Date + "\n")
+	if c.Platform.WorkDir != "" {
+		b.WriteString("- Working directory: " + c.Platform.WorkDir + "\n")
+	}
 	if c.Platform.InGit {
 		b.WriteString("- The user is operating inside a git repository\n")
 	}
