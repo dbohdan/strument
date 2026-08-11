@@ -24,7 +24,8 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   `symbol` answers "where is this defined" using the language parser (tree-sitter and `go/parser`) rather than text.
   `edit` and `write` change text.
   Their edits are written immediately after the call.
-  `bash` runs a command behind a confirmation, and `verify` runs a check you pre-configured.
+  `bash` runs a command behind a confirmation using the embedded pure-Go
+  [mvdan/sh](https://github.com/mvdan/sh) shell, and `verify` runs a check you pre-configured.
 - Every turn is undoable, with or without Git.
   Strument records each file before the first time it writes to it.
   `/undo` can restore a whole turn even in a directory that is not a repository,

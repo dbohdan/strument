@@ -244,7 +244,9 @@ Nine tools, in three natures:
   the call arrives. The safety net is the snapshot and the diff, not a
   question.
 - **Mutation through the shell is gated.** `bash(command, purpose)` runs only
-  after the user confirms; its output returns as the tool result.
+  after the user confirms; its command is parsed and interpreted by the embedded
+  pure-Go `mvdan.cc/sh/v3` shell rather than a host `/bin/sh`. Its output
+  returns as the tool result.
   `verify(check)` runs a *configured* argv from the `verify` dict by name, so
   it needs no gate — the model supplies a key, never a command, and there is
   nothing to classify or smuggle. It is offered only when `verify` is

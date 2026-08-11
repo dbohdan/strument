@@ -1,10 +1,13 @@
 package coder
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"os/exec"
 	"strings"
+
+	"mvdan.cc/sh/v3/interp"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 // runAndShow runs a confirmed command through the configured runner, echoing
@@ -40,32 +43,40 @@ type PipeRunner struct {
 }
 
 func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, string, error) {
-	cmd := exec.CommandContext(ctx, shellPath(), "-c", block) //nolint:gosec // Running user-confirmed model shell commands is this feature.
-	cmd.Dir = cwd
-	out, err := cmd.CombinedOutput()
-
 	maxBytes := r.MaxBytes
 	if maxBytes <= 0 {
 		maxBytes = 64 * 1024
 	}
-	output := string(out)
-	if len(output) > maxBytes {
-		output = output[:maxBytes] + "\n… output truncated"
+
+	var output bytes.Buffer
+	file, err := syntax.NewParser().Parse(strings.NewReader(block), "")
+	if err != nil {
+		return -1, "", err
+	}
+
+	runner, err := interp.New(
+		interp.StdIO(&output, &output, &output),
+		interp.Dir(cwd),
+	)
+	if err != nil {
+		return -1, "", err
+	}
+	err = runner.Run(ctx, file)
+
+	captured := output.String()
+	if len(captured) > maxBytes {
+		captured = captured[:maxBytes] + "\n… output truncated"
 	}
 
 	exitCode := 0
 	if err != nil {
-		ee := &exec.ExitError{}
-		if errors.As(err, &ee) {
-			exitCode = ee.ExitCode()
+		var status interp.ExitStatus
+		if errors.As(err, &status) {
+			exitCode = int(status)
 			err = nil
 		} else {
 			exitCode = -1
 		}
 	}
-	return exitCode, output, err
-}
-
-func shellPath() string {
-	return "/bin/sh"
+	return exitCode, captured, err
 }
