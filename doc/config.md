@@ -278,8 +278,11 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   the `symbol` tool, the `/symbol` command, and the after-an-edit parse check are
   read from. Nothing derived from it is sent with your requests; the model finds
   code with `grep`, `glob`, and `read`.
-- **`cache`** — enable prompt caching: cache-control breakpoints with a one-hour
-  TTL (default `False`).
+- **`cache`** — add prompt-cache breakpoints with a one-hour TTL (default
+  `False`). Strument marks the last message in the examples-or-system,
+  read-only-files, and chat-files sections; it does not mark the completed or
+  current conversation. This adds provider-facing metadata only: whether a
+  cache is used depends on the provider and model.
 - **`context`** — the input window in tokens. `0`/unset means unknown, which
   disables the context-limit warning.
 - **`max_output`** — the maximum output tokens.

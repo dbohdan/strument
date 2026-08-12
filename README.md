@@ -248,9 +248,9 @@ models["ds"] = models["deepseek-flash"]  # One model, two aliases.
 default = "mimo"
 ```
 
-`cache` (off by default) attaches cache-control breakpoints with a one-hour TTL.
+`cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to stable prompt sections.
 Anthropic models reached through OpenRouter honor them explicitly.
-Expect other providers to cache automatically and ignore them.
+Other providers may ignore them or provide their own prompt-caching behavior.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
 Instead, `strument model-config anthropic/claude-haiku-4.5` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.
