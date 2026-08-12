@@ -2,104 +2,10 @@ package coder
 
 import (
 	"context"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
 )
-
-// addedFilesPrompt is aider's prompts.added_files.
-const addedFilesPrompt = "I added these files to the chat: %s\nLet me know if there are others we should add."
-
-// fileMentions ports get_file_mentions: filenames the text plausibly refers
-// to, by full relative path or unique basename (base_coder.py:1714).
-func (c *Coder) fileMentions(content string, ignoreCurrent bool) map[string]bool {
-	words := map[string]bool{}
-	for w := range strings.FieldsSeq(content) {
-		w = strings.TrimRight(w, ",.!;:?")
-		w = strings.Trim(w, "\"'`*_")
-		words[w] = true
-	}
-
-	var addable []string
-	existingBasenames := map[string]bool{}
-	if ignoreCurrent {
-		addable = c.allRelativeFiles()
-	} else {
-		addable = c.addableRelativeFiles()
-		for _, f := range c.inchatRelativeFiles() {
-			existingBasenames[path.Base(f)] = true
-		}
-		for _, f := range c.absReadOnlyFnames {
-			existingBasenames[path.Base(c.relFname(f))] = true
-		}
-	}
-
-	normalizedWords := map[string]bool{}
-	for w := range words {
-		normalizedWords[strings.ReplaceAll(w, "\\", "/")] = true
-	}
-
-	mentioned := map[string]bool{}
-	fnameToRel := map[string][]string{}
-	for _, relFname := range addable {
-		if normalizedWords[strings.ReplaceAll(relFname, "\\", "/")] {
-			mentioned[relFname] = true
-		}
-		base := path.Base(relFname)
-		// Skip basenames that could be plain words like "run" or "make".
-		if strings.ContainsAny(base, "/\\._-") {
-			fnameToRel[base] = append(fnameToRel[base], relFname)
-		}
-	}
-	for base, rels := range fnameToRel {
-		if existingBasenames[base] {
-			continue
-		}
-		if len(rels) == 1 && words[base] {
-			mentioned[rels[0]] = true
-		}
-	}
-	return mentioned
-}
-
-// checkForFileMentions offers to add mentioned files (minus ignoreMentions)
-// and returns the added_files reflection message, or "".
-func (c *Coder) checkForFileMentions(content string) string {
-	mentioned := c.fileMentions(content, false)
-
-	var newMentions []string
-	for f := range mentioned {
-		if !c.ignoreMentions[f] {
-			newMentions = append(newMentions, f)
-		}
-	}
-	if len(newMentions) == 0 {
-		return ""
-	}
-	sort.Strings(newMentions)
-
-	var added []string
-	for _, relFname := range newMentions {
-		res := c.Confirm.Confirm(ConfirmRequest{
-			Prompt:     "Add file to the chat?",
-			Subject:    relFname,
-			AllowNever: true,
-			Group:      "add-file",
-		})
-		if res.Yes {
-			c.AddFile(relFname)
-			added = append(added, relFname)
-		} else {
-			c.ignoreMentions[relFname] = true
-			_ = res.Never
-		}
-	}
-	if len(added) > 0 {
-		return strings.Replace(addedFilesPrompt, "%s", strings.Join(added, ", "), 1)
-	}
-	return ""
-}
 
 // urlRe matches aider's check_for_urls pattern.
 var urlRe = regexp.MustCompile(`(https?://[^\s/$.?#].[^\s"]*[^\s,.])`)

@@ -142,7 +142,6 @@ type Coder struct {
 	commitBeforeMessage []string
 	lastCommitHash      string
 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
-	ignoreMentions      map[string]bool
 	rejectedUrls        map[string]bool
 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
 }
@@ -190,7 +189,6 @@ func New(root string, model *config.Model) *Coder {
 		Prompts:              promptsForFormat(model.EditFormat),
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
-		ignoreMentions:       map[string]bool{},
 		rejectedUrls:         map[string]bool{},
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
@@ -515,15 +513,13 @@ func (c *Coder) confirmMoreSteps() bool {
 	return true
 }
 
-// preprocUserInput handles empty input, file mentions, and URLs.
+// preprocUserInput handles URLs.
 // Slash commands are dispatched by the REPL layer before this.
 func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
 	if inp == "" {
 		return ""
 	}
-	c.checkForFileMentions(inp)
-	inp = c.checkForUrls(ctx, inp)
-	return inp
+	return c.checkForUrls(ctx, inp)
 }
 
 // StdOutput writes to stdout/stderr.

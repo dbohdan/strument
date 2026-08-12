@@ -5,7 +5,6 @@
 package coder
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +22,7 @@ type fastClock struct{ slept []time.Duration }
 func (f *fastClock) Sleep(d time.Duration) { f.slept = append(f.slept, d) }
 func (f *fastClock) Now() time.Time        { return time.Unix(0, 0) }
 
-// fakeRepo provides tracked files so file mentions have addable targets.
+// fakeRepo provides tracked files for repo-map and repository-backed tests.
 type fakeRepo struct{ tracked []string }
 
 func (r *fakeRepo) Root() string             { return "" }
@@ -343,27 +342,5 @@ func TestPathTraversalRejected(t *testing.T) {
 	env2.run(t)
 	if _, err := os.Stat("/tmp/strument-evil-abs.txt"); err == nil {
 		t.Error("absolute path wrote outside the root")
-	}
-}
-
-func TestDeclinedMentionNotReprompted(t *testing.T) {
-	sc := inlineScenario(t, metaRow+`
-{"kind":"fs","path":"main.go","content":"package main\n"}
-{"kind":"fs","path":"other.go","content":"package main\n"}
-{"kind":"chat","editable":["main.go"]}
-{"kind":"user","text":"go"}
-{"kind":"confirm","prompt":"Add file to the chat?","answer":"n"}
-{"kind":"stream","events":[{"kind":"Answer","text":"look at other.go please"},{"kind":"Finish","finish_reason":"stop"}]}
-{"kind":"stream","events":[{"kind":"Answer","text":"other.go again I say"},{"kind":"Finish","finish_reason":"stop"}]}
-`)
-	env := setupScenario(t, sc, func(c *Coder) {
-		c.Repo = &fakeRepo{tracked: []string{"main.go", "other.go"}}
-	})
-	// First turn: mention declined (one confirm row consumed).
-	env.coder.Run(context.Background(), sc.User)
-	// Second turn: same mention; an unscripted confirm would fail the test.
-	env.coder.Run(context.Background(), "go again")
-	if env.coder.numReflections != 0 {
-		t.Errorf("reflections = %d", env.coder.numReflections)
 	}
 }
