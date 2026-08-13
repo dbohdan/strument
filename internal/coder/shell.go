@@ -55,7 +55,18 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	}
 
 	runner, err := interp.New(
-		interp.StdIO(&output, &output, &output),
+		// nil stdin rather than the output buffer, which was also passed as
+		// stdin. That wiring is self-referential: a command reading stdin reads
+		// what the block has printed so far, and reading a bytes.Buffer drains
+		// it. A standalone reproduction does exactly that — `echo one; echo two;
+		// cat -n` comes back as the numbered version of its own output — though
+		// it does not reproduce through this function, and I could not isolate
+		// what differs. So this is a correctness change rather than a fix for
+		// observed misbehavior: a tool-invoked command has no user at a keyboard,
+		// exec.Command gave it an empty stdin before the interpreter replaced it,
+		// and nil says that unambiguously instead of relying on whatever keeps
+		// the self-reference from biting.
+		interp.StdIO(nil, &output, &output),
 		interp.Dir(cwd),
 	)
 	if err != nil {
