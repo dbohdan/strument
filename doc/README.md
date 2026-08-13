@@ -237,12 +237,32 @@ Nine tools, in three natures:
   identifier was in twenty-one files at the time. Globs match whole paths, so
   `*.go` reaches only the root and a bare directory name matches nothing; that
   rule is now in the tool descriptions and in the message.
+- **Pinned files are named, not injected.** `/add` puts a file's *name* in the
+  system prompt with an instruction to read it; the contents arrive through a
+  `read` call like everything else. This replaced a fabricated user turn
+  carrying the contents and a fabricated assistant turn agreeing they were
+  current, and it was measured before it was adopted
+  ([`doc/experiments/2026-08-add-instruct.md`](experiments/2026-08-add-instruct.md)):
+  across 600 samples and three models, identical task success, one extra step,
+  and blind edits — a pinned file written without ever reading it — from 383
+  across 230 runs to **zero across none**. The earlier
+  [characterization pass](experiments/2026-08-add-authority-characterization.md)
+  is why it was tried at all: under the old design the model re-read a pinned
+  file in 31% of runs anyway, usually before editing. It did not believe the
+  block.
+
+  A pinned file that does not exist yet is named as one to create, not one to
+  read — there is nothing there to read, and sending the model after it would
+  waste a step.
 - **Reference material is pinned, and refused as an edit target.** `/read-only`
   puts a file's contents in the prompt and `allowedToEdit` refuses any edit to
   it, answering the call with why so the model adapts within the turn. It is
   also the only way to show the model a file *outside* the project: `read`,
   `grep`, `glob`, and `ls` are all scoped to the workspace root, so an
-  out-of-tree spec or a sibling repo's header has no other channel. Editable
+  out-of-tree spec or a sibling repo's header has no other channel. That is
+  also why `/read-only` still *injects* where `/add` no longer does: telling the
+  model to read a file outside the workspace would be telling it to do something
+  the tools cannot do. Editable
   files stay inside the root — `/add` and command-line arguments both refuse to
   leave it, and point at `/read-only` instead.
 - **Edits are direct**, exactly as a SEARCH/REPLACE block was.

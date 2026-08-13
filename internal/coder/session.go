@@ -189,7 +189,9 @@ func (c *Coder) TokensReport() string {
 		{"system messages", c.countMessages(chunks.system)},
 		{"examples", c.countMessages(chunks.examples)},
 		{"read-only files", c.countMessages(chunks.readonlyFiles)},
-		{"chat files", c.countMessages(chunks.chatFiles)},
+		// Pinned files no longer have a section of their own: their names ride
+		// in the system prompt and their contents arrive as tool results, which
+		// land in the history like any other tool result.
 		{"chat history", c.countMessages(chunks.done) + c.countMessages(chunks.cur)},
 	}
 

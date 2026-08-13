@@ -116,12 +116,14 @@ func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 		t.Errorf("the repo map reached the prompt:\n%s", all.String())
 	}
 
-	var chat strings.Builder
-	for _, m := range c.formatChatChunks().chatFiles {
-		chat.WriteString(m.Text())
+	// The "nothing is pinned, go and look" guidance now rides in the system
+	// prompt rather than a fabricated user turn.
+	var sys strings.Builder
+	for _, m := range c.formatChatChunks().system {
+		sys.WriteString(m.Text())
 	}
-	if !strings.Contains(chat.String(), "answer from what you find there rather than from memory") {
-		t.Errorf("chat_files chunk:\n%q", chat.String())
+	if !strings.Contains(sys.String(), "answer from what you find there rather than from memory") {
+		t.Errorf("system prompt:\n%q", sys.String())
 	}
 
 	// The parse layer itself still works — it just is not sent unasked. This

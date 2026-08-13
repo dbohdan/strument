@@ -2,8 +2,10 @@ package coder
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/editblock"
@@ -11,7 +13,11 @@ import (
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
-// system + examples + readonly_files + done + chat_files + cur.
+// system + examples + readonly_files + done + cur.
+//
+// aider's chat_files slot is gone. It carried the /add files' contents as a
+// fabricated user turn with a fabricated assistant reply; the names now ride in
+// the system prompt and the model reads the files itself.
 //
 // aider has a repo slot between readonly_files and done, carrying the ranked
 // repository map. Strument no longer fills it. The map answered "how does the
@@ -24,19 +30,17 @@ type chatChunks struct {
 	examples      []llm.Message
 	done          []llm.Message
 	readonlyFiles []llm.Message
-	chatFiles     []llm.Message
 	cur           []llm.Message
 }
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
 		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+
-			len(ch.done)+len(ch.chatFiles)+len(ch.cur))
+			len(ch.done)+len(ch.cur))
 	out = append(out, ch.system...)
 	out = append(out, ch.examples...)
 	out = append(out, ch.readonlyFiles...)
 	out = append(out, ch.done...)
-	out = append(out, ch.chatFiles...)
 	out = append(out, ch.cur...)
 	return out
 }
@@ -62,12 +66,14 @@ func addCacheControl(messages []llm.Message) {
 	}
 }
 
-// addCacheControlHeaders places at most 3 breakpoints: examples-else-system,
-// read-only files, chat_files. Never on done/cur.
+// addCacheControlHeaders places at most 2 breakpoints: examples-else-system
+// and read-only files. Never on done/cur.
 //
-// The repo map used to hold the second one, and was the reason the map had to
-// be frozen: a prefix that changes every turn caches nothing. With the map out
-// of the prompt the prefix is stable by construction.
+// There used to be a third, on the chat-files block. That block changed every
+// time the model edited a file, so it invalidated its own breakpoint on most
+// editing turns. Pinned files are named in the system prompt now and their
+// contents arrive as tool results, so the prefix moves only when the pin list
+// does — on /add and /drop, not on every edit.
 func (ch *chatChunks) addCacheControlHeaders() {
 	if len(ch.examples) > 0 {
 		addCacheControl(ch.examples)
@@ -75,15 +81,15 @@ func (ch *chatChunks) addCacheControlHeaders() {
 		addCacheControl(ch.system)
 	}
 	addCacheControl(ch.readonlyFiles)
-	addCacheControl(ch.chatFiles)
 }
 
 // allFences is the escalation list; shared with editblock.
 var allFences = editblock.AllFences
 
-// chooseFence scans chat + read-only content and picks the first fence
-// whose open/close begins no line; unreadable chat files are dropped with a
-// warning — an observable state mutation during assembly.
+// chooseFence picks the first fence whose open/close begins no line in the
+// read-only content, which is the only fenced content left. It still walks the
+// chat files, because absFnamesContent is what drops an unreadable one from the
+// chat with a warning — an observable state mutation during assembly.
 func (c *Coder) chooseFence() {
 	var allContent strings.Builder
 	for _, content := range c.absFnamesContent() {
@@ -139,34 +145,6 @@ func (c *Coder) absFnamesContent() []string {
 	}
 	c.absFnames = kept
 	return contents
-}
-
-// filesContent renders editable files: "\n{rel}\n{fence0}\n{content}{fence1}\n"
-// per file, sorted for determinism (a divergence from aider, which uses set order).
-func (c *Coder) filesContent() string {
-	type entry struct{ rel, content string }
-	contents := c.absFnamesContent()
-	entries := make([]entry, 0, len(c.absFnames))
-	for i, fname := range c.absFnames {
-		entries = append(entries, entry{c.relFname(fname), contents[i]})
-	}
-	sortEntries := func(es []entry) {
-		for i := 1; i < len(es); i++ {
-			for j := i; j > 0 && es[j].rel < es[j-1].rel; j-- {
-				es[j], es[j-1] = es[j-1], es[j]
-			}
-		}
-	}
-	sortEntries(entries)
-	var b strings.Builder
-	for _, e := range entries {
-		b.WriteString("\n")
-		b.WriteString(e.rel)
-		b.WriteString("\n" + c.fence.open + "\n")
-		b.WriteString(e.content)
-		b.WriteString(c.fence.close + "\n")
-	}
-	return b.String()
 }
 
 func (c *Coder) readOnlyFilesContent() string {
@@ -289,6 +267,13 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		mainSys += "\n" + c.fmtSystemPrompt(c.Prompts.SystemReminder)
 	}
 
+	// What /add pinned, in the harness's own voice. This used to be the files'
+	// contents in a fabricated user turn answered by a fabricated assistant one;
+	// it is now their names in the system prompt. See pinnedFilesNote.
+	if note := c.pinnedFilesNote(); note != "" {
+		mainSys += "\n\n" + note
+	}
+
 	chunks := &chatChunks{}
 
 	if c.UseSystemPrompt {
@@ -303,6 +288,12 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
+	// Read-only files keep their injection, and this is not an oversight. The
+	// observation tools are scoped to the workspace root, so /read-only is the
+	// only channel for a file *outside* the project — an out-of-tree spec, a
+	// sibling repo's header. Instructing the model to read one would instruct it
+	// to do something it cannot do. Its fabricated assistant reply is untested
+	// and stays for now; the A0/A2 run covered pinned files only.
 	if roContent := c.readOnlyFilesContent(); roContent != "" {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
@@ -310,24 +301,67 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		}
 	}
 
-	var filesContent, filesReply string
-	switch {
-	case len(c.absFnames) > 0:
-		filesContent = c.Prompts.FilesContentPrefix + c.filesContent()
-		filesReply = c.Prompts.FilesContentAssistantReply
-	default:
-		filesContent = c.Prompts.FilesNoFullFiles
-		filesReply = "Ok."
-	}
-	if filesContent != "" {
-		chunks.chatFiles = []llm.Message{
-			llm.TextMessage("user", filesContent),
-			llm.TextMessage("assistant", filesReply),
-		}
-	}
-
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)
 	return chunks
+}
+
+// pinnedFilesNote is what the system prompt says about the files /add pinned.
+//
+// It replaces the file *contents* that used to ride in a fabricated user turn
+// with the file *names* and an instruction to read them. Measured over 600
+// samples against three models (doc/experiments/2026-08-add-instruct.md): the
+// same task success, one extra step, and blind edits — a pinned file written
+// without ever reading it — from 383 across 230 runs down to zero across none.
+//
+// It also removes Strument's last always-on synthetic turn. Everything the
+// model learns about the project now arrives through a tool call, with no
+// exception carved out for /add, and the harness stops asserting in the user's
+// voice that a block of text is a file's current contents.
+//
+// A pinned file that does not exist yet is named separately. Telling the model
+// to read it would send it after something that is not there; it is a file to
+// create, and saying so is the whole of what it needs.
+func (c *Coder) pinnedFilesNote() string {
+	if len(c.absFnames) == 0 {
+		return c.Prompts.FilesNoFullFiles
+	}
+
+	var existing, missing []string
+	for _, fname := range c.absFnames {
+		rel := c.relFname(fname)
+		if _, err := os.Stat(fname); err == nil {
+			existing = append(existing, rel)
+		} else {
+			missing = append(missing, rel)
+		}
+	}
+	slices.Sort(existing)
+	slices.Sort(missing)
+
+	var b strings.Builder
+	if len(existing) > 0 {
+		subject, verb, object := "These are the files", "Read them", "their"
+		if len(existing) == 1 {
+			subject, verb, object = "This is the file", "Read it", "its"
+		}
+		fmt.Fprintf(&b, "The user has pinned %s to this session: %s.\n",
+			plural(len(existing), "file", "files"), strings.Join(existing, ", "))
+		fmt.Fprintf(&b, "%s they want changed. %s before editing, so you are working from "+
+			"%s current contents rather than from memory.\n", subject, verb, object)
+	}
+	if len(missing) > 0 {
+		does, them := "do", "them"
+		if len(missing) == 1 {
+			does, them = "does", "it"
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "The user has also pinned %s that %s not exist yet: %s.\n",
+			plural(len(missing), "file", "files"), does, strings.Join(missing, ", "))
+		fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // formatMessages = formatChatChunks + cache decoration; decoration

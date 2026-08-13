@@ -132,13 +132,18 @@ func TestChatFileRetentionDuringChooseFence(t *testing.T) {
 	}
 }
 
-func TestNonexistentChatFileRendersEmpty(t *testing.T) {
+// A pinned file that does not exist yet is named as one to create. Telling the
+// model to read it would send it after something that is not there — the case
+// the A0/A2 run never covered, because every fixture file existed.
+func TestNonexistentPinnedFileIsNamedAsOneToCreate(t *testing.T) {
 	c := testCoder(t)
 	c.AddFile("new.go") // never created
-	content := c.filesContent()
-	// The file is listed for the model with an empty body, so it can create it.
-	if !strings.Contains(content, "new.go") {
-		t.Errorf("nonexistent file not listed for creation:\n%q", content)
+	note := c.pinnedFilesNote()
+	if !strings.Contains(note, "new.go") || !strings.Contains(note, "does not exist yet") {
+		t.Errorf("nonexistent file not offered for creation:\n%q", note)
+	}
+	if strings.Contains(note, "Read them before editing") {
+		t.Errorf("the model was told to read a file that is not there:\n%q", note)
 	}
 	if !slices.Contains(c.absFnames, c.absRootPath("new.go")) {
 		t.Errorf("nonexistent file was dropped from the chat: %v", c.absFnames)
@@ -172,16 +177,14 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 	// No prompt set ships few-shot examples any more — the schema carries the
 	// format — so the examples slot is empty and its breakpoint falls back to
 	// system, which is the documented fallback in addCacheControlHeaders.
-	// readonly and repo are empty here, so that breakpoint is a no-op;
-	// chat_files gets one.
+	// readonly is empty here, so that breakpoint is a no-op. chat_files is
+	// gone: pinned files are named in the system prompt now, so there is no
+	// per-turn block left to cache separately.
 	if got := countBreakpoints(chunks.examples); got != 0 {
 		t.Errorf("examples breakpoints = %d, want 0 (no examples ship now)", got)
 	}
 	if got := countBreakpoints(chunks.system); got != 1 {
 		t.Errorf("system breakpoints = %d, want 1 (the examples fallback)", got)
-	}
-	if got := countBreakpoints(chunks.chatFiles); got != 1 {
-		t.Errorf("chat_files breakpoints = %d", got)
 	}
 	if got := countBreakpoints(chunks.done) + countBreakpoints(chunks.cur); got != 0 {
 		t.Errorf("done/cur breakpoints = %d (never cacheable)", got)
@@ -273,5 +276,38 @@ func TestPyFormat(t *testing.T) {
 	want := "a X b {literal} c ``` d {missing}"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// The note is read by a model, so it has to read like a sentence. A wire
+// capture caught "pinned 1 file … These are the files" and "Create them" for a
+// single file; both plural forms are pinned here.
+func TestPinnedFilesNoteAgreesInNumber(t *testing.T) {
+	one := testCoder(t)
+	if err := os.WriteFile(filepath.Join(one.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	one.AddFile("a.go")
+	one.AddFile("gone.go") // never created
+	got := one.pinnedFilesNote()
+	for _, want := range []string{"pinned 1 file", "This is the file", "Read it before editing",
+		"1 file that does not exist yet", "Create it with write"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("singular form missing %q:\n%s", want, got)
+		}
+	}
+
+	many := testCoder(t)
+	for _, f := range []string{"a.go", "b.go"} {
+		if err := os.WriteFile(filepath.Join(many.Root, f), []byte("package a\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		many.AddFile(f)
+	}
+	got = many.pinnedFilesNote()
+	for _, want := range []string{"pinned 2 files", "These are the files", "Read them before editing"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("plural form missing %q:\n%s", want, got)
+		}
 	}
 }

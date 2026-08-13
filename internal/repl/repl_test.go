@@ -134,7 +134,11 @@ func TestScriptedSession(t *testing.T) {
 		"Added hello.txt to the chat.",
 		"Files in the chat:",
 		"hello.txt",
-		"chat files",                      // /tokens section
+		"read-only files", // /tokens section (chat files no
+		//                                    longer have one: pinned files are
+		//                                    named in the system prompt and
+		//                                    their contents arrive as tool
+		//                                    results, landing in the history)
 		"Hello! Some bold and code here.", // rendered plain (no color)
 		"Invalid command: /nonsense.",
 		"Dropped all files from the chat.",

@@ -146,7 +146,7 @@ Slash commands perform actions initiated by you rather than the model:
 
 | | |
 | --- | --- |
-| `/add <file>`, `/drop`, `/ls` | Pin a file's contents into the conversation when you already know what needs changing. The model finds everything else on its own. |
+| `/add <file>`, `/drop`, `/ls` | Pin the files you already know need changing. Strument names them for the model, which reads them itself; it finds everything else on its own. |
 | `/ask <question>` | Ask about the project without giving the model editing tools. `/code` switches back. |
 | `/read-only <file>` | Pin reference material the model can read but never edit. This is a way to show the model a file outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |
