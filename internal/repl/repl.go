@@ -501,9 +501,9 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// was asked for one, and that it gave none is worth weighing before
 		// answering.
 		if req.Purpose != "" {
-			r.out.Toolf("%s", req.Purpose)
+			r.out.Toolf("‹shell› %s", req.Purpose)
 		} else {
-			r.out.Warningf("(no purpose given)")
+			r.out.Warningf("‹shell› (no purpose given)")
 		}
 		// "$ " is the shape runChecks prints an argv in, so the two shell
 		// surfaces read alike. The color deliberately is not: there the check is

@@ -450,9 +450,9 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	switch {
 	case req.Command != "":
 		if req.Purpose != "" {
-			fmt.Println(req.Purpose)
+			fmt.Println("‹shell›", req.Purpose)
 		} else {
-			fmt.Println("(no purpose given)")
+			fmt.Println("‹shell› (no purpose given)")
 		}
 		fmt.Printf("$ %s\n", req.Command)
 	case req.Subject != "":

@@ -371,8 +371,8 @@ func TestRunEmptySuccessSkipsConfirm(t *testing.T) {
 // asked for one, and its silence is part of the decision.
 func TestShellConfirmationShowsThePurpose(t *testing.T) {
 	for _, tc := range []struct{ name, purpose, want string }{
-		{"stated", "re-run the suite after the parser fix", "re-run the suite after the parser fix"},
-		{"absent", "", "(no purpose given)"},
+		{"stated", "re-run the suite after the parser fix", "‹shell› re-run the suite after the parser fix"},
+		{"absent", "", "‹shell› (no purpose given)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
