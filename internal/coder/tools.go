@@ -413,12 +413,35 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		return "Shell commands are disabled in this session; the command was not run."
 	}
 	command := strings.TrimSpace(cmd.command)
+
+	// A command that *is* one of the project's configured checks runs without
+	// asking. The user wrote it in their own config, so the prompt would be
+	// asking them to re-approve their own decision — and a prompt that fires on
+	// every `go test ./...` is what teaches them to answer without reading.
+	//
+	// It runs through runChecks rather than the shell: the parse proved the
+	// command equals the configured argv, so executing that argv directly is the
+	// only version where what ran is certainly what was compared. Sending the
+	// model's string back through a shell would reopen word splitting and
+	// globbing between the check and the execution.
+	if name, ok := matchConfiguredCheck(command, c.Verify); ok {
+		if cmd.purpose != "" {
+			c.Out.Toolf("%s", cmd.purpose)
+		}
+		transcript, _ := c.runChecks(ctx, []string{name})
+		// %q rather than quoteToolArg, which drops the quotes on a word that
+		// does not need them: this sentence is showing the model a call it can
+		// copy, and verify(test) is not one.
+		return fmt.Sprintf("That command is the configured check %q, so it ran without asking the "+
+			"user. Call verify(%q) to run it directly.\n\n%s", name, name, transcript)
+	}
+
 	// No Group, so no "a=all turn" here. A blanket turn-scoped yes is the last
 	// thing this gate should offer: what reaches it is the open-ended remainder
 	// left over once every observation tool has taken its share, and approving
 	// the next unseen one because the last was fine is exactly the reflex the
-	// prompt exists to interrupt. The repetition it was answering — re-running
-	// the project's own checks — belongs to the allowlist instead.
+	// prompt exists to interrupt. The repetition it was answering is the case
+	// just handled above.
 	if !c.confirmTurn(ConfirmRequest{
 		Prompt:           "Run shell command?",
 		Command:          command,
