@@ -82,7 +82,7 @@ func runesHasPrefix(s, prefix []rune) bool {
 // the tracked, chat, and read-only files, each contributing both its
 // repo-relative path and its basename (so "scra" completes "scrape.go" and
 // "internal/co" descends the path). Without git, TrackedFiles is nil, so
-// completion falls back to the chat and read-only files.
+// completion falls back to this session's editable and reference files.
 func (r *REPL) completePromptFiles() []string {
 	set := map[string]struct{}{}
 	add := func(rel string) {

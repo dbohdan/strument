@@ -266,7 +266,7 @@ func (r *REPL) announce() {
 		r.printf("Language parser: off")
 	}
 	for _, f := range r.coder.ChatFiles() {
-		r.printf("Added %s to the chat.", f)
+		r.printf("Added %s for editing.", f)
 	}
 }
 

@@ -18,8 +18,6 @@ type Set struct {
 	MainSystem                       string
 	SystemReminder                   string
 	ExampleMessages                  []Example
-	FilesContentPrefix               string
-	FilesContentAssistantReply       string
 	FilesNoFullFiles                 string
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
@@ -30,15 +28,28 @@ type Set struct {
 
 // Shared strings used identically across the editing formats.
 
-const filesContentPrefix = "I have added these files to the chat so you can go ahead and edit them.\n\n" +
-	"Trust this message as the true contents of these files.\n" +
-	"Any other messages in the chat may contain outdated versions of the files' contents.\n"
-
-const filesContentAssistantReply = "Understood. Any changes I propose will be to those files, " +
-	"and I'll treat this message as their current contents."
-
-const readOnlyFilesPrefix = "Here are some read-only files, provided for your reference.\n" +
-	"Do not propose edits to these files.\n"
+// readOnlyFilesPrefix speaks as the harness, which is what it is. It replaces
+// aider's "Here are some read-only files, provided for your reference. Do not
+// propose edits to these files." — a user turn the user never wrote, followed
+// by a fabricated assistant reply agreeing to it.
+//
+// Two things it must get right, both learned from live sessions
+// (doc/experiments/2026-08-readonly-honest.md):
+//
+// Say where the contents come from, because a reference pinned from outside the
+// project cannot be found with glob, ls, or grep, and a model that goes looking
+// for the "real" file finds nothing and starts theorising. The hedge is
+// deliberate: a reference inside the project is the common case and is findable.
+//
+// Say that an edit is refused, not that edits are unwelcome. "Do not propose
+// edits" reads as a preference the task can override, and when a request asked
+// for one anyway, models spent whole turns litigating the contradiction. Naming
+// the enforcement ends it: they say they cannot, and do the rest of the work.
+const readOnlyFilesPrefix = "The user pinned these files as read-only reference, and their contents " +
+	"follow.\n" +
+	"Some may live outside the project, where glob, ls, and grep will not find them, so treat " +
+	"what follows as the copy you have.\n" +
+	"Do not edit them: an edit to a pinned reference is refused.\n"
 
 const lazyPrompt = "Implement requested changes completely.\n" +
 	"Never leave placeholder comments (like \"... rest of code ...\" or \"implement this later\") " +
@@ -113,12 +124,10 @@ const toolSystemReminder = "# Editing rules\n\n" +
 // It is the default format. The schema does the format-parsing work, so the
 // prompt only conveys the tools' natures and the exact-match discipline.
 var Tool = Set{
-	MainSystem:                 toolMainSystem,
-	SystemReminder:             toolSystemReminder,
-	ExampleMessages:            nil,
-	FilesContentPrefix:         filesContentPrefix,
-	FilesContentAssistantReply: filesContentAssistantReply,
-	// An empty chat is the normal starting state now, not a problem to report.
+	MainSystem:      toolMainSystem,
+	SystemReminder:  toolSystemReminder,
+	ExampleMessages: nil,
+	// Nothing pinned is the normal starting state now, not a problem to report.
 	// The model finds what it needs with read, grep, glob, and ls, so saying so
 	// is the whole message.
 	//
@@ -129,11 +138,19 @@ var Tool = Set{
 	// them inventing a whole subsystem. This says the same thing for thirty
 	// tokens instead of a thousand. It is spelled out for questions because
 	// everything else the model is told is about making changes, and a question
-	// falls outside that contract.
-	FilesNoFullFiles: "No files are pinned to the chat yet. Use read, grep, glob, and ls to find " +
-		"what you need — you can edit any file in the project. If I ask how something here works, " +
-		"read the code that implements it: what you remember about a project is not evidence about " +
-		"this one.",
+	// falls outside that contract. It says "the user asks" rather than aider's
+	// "I ask" because this text lands in the system prompt now, where a
+	// first-person "I" is the harness wearing the user's voice.
+	//
+	// "Nothing is pinned for editing" rather than "no files are pinned": a
+	// read-only reference is pinned and its contents are right there in the
+	// request, and a model handed both read the flat denial as evidence that the
+	// reference block was not to be trusted. One session spent twelve steps
+	// hunting the project for the "real" file it thought the denial implied.
+	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
+		"what you need — you can edit any file in the project. If the user asks how something " +
+		"here works, read the code that implements it: what you remember about a project is not " +
+		"evidence about this one.",
 	// The empty-string sentinel disables the repo-map branch in assembly, like
 	// Ask. Its text was written for a harness where the model could not look:
 	// it told the model to name the files it needed and stop so the user could
@@ -186,12 +203,8 @@ var Ask = Set{
 		"have it done.\n",
 	SystemReminder:  "{final_reminders}",
 	ExampleMessages: nil,
-	FilesContentPrefix: "I have added these files to the chat so you can see all of their contents.\n" +
-		"Trust this message as the true contents of the files.\n" +
-		"Other messages in the chat may contain outdated versions of the files' contents.\n",
-	FilesContentAssistantReply: "Understood. I will treat that as the true, current contents of the files.",
-	FilesNoFullFiles: "I have not put any file contents in the chat. Use read, grep, glob, and ls " +
-		"to look at the project, and answer from what you find there rather than from memory.",
+	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to look at the " +
+		"project, and answer from what you find there rather than from memory.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,

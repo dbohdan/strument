@@ -288,16 +288,21 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
-	// Read-only files keep their injection, and this is not an oversight. The
-	// observation tools are scoped to the workspace root, so /read-only is the
-	// only channel for a file *outside* the project — an out-of-tree spec, a
-	// sibling repo's header. Instructing the model to read one would instruct it
-	// to do something it cannot do. Its fabricated assistant reply is untested
-	// and stays for now; the A0/A2 run covered pinned files only.
+	// Read-only files keep their injection, and this is not an oversight. glob,
+	// ls, and grep are scoped to the workspace root, so /read-only is the only
+	// channel for a file *outside* the project — an out-of-tree spec, a sibling
+	// repo's header. Instructing the model to go and find one, as /add now does,
+	// would send it after something three of the four observation tools cannot
+	// see.
+	//
+	// What did go is the fabricated assistant reply agreeing to it. Twelve live
+	// sessions across three models with the honest prefix and no reply are in
+	// doc/experiments/2026-08-readonly-honest.md: the contents were used as
+	// readily as before, and the one case that had been going wrong — a request
+	// to edit the reference — stopped producing stalled turns.
 	if roContent := c.readOnlyFilesContent(); roContent != "" {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
-			llm.TextMessage("assistant", "Ok, I will use these files as references."),
 		}
 	}
 

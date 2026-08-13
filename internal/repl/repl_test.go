@@ -131,8 +131,8 @@ func TestScriptedSession(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"/read-only <file> [file ...]", // /help output
-		"Added hello.txt to the chat.",
-		"Files in the chat:",
+		"Added hello.txt for editing.",
+		"For editing:",
 		"hello.txt",
 		"read-only files", // /tokens section (chat files no
 		//                                    longer have one: pinned files are
@@ -141,7 +141,7 @@ func TestScriptedSession(t *testing.T) {
 		//                                    results, landing in the history)
 		"Hello! Some bold and code here.", // rendered plain (no color)
 		"Invalid command: /nonsense.",
-		"Dropped all files from the chat.",
+		"Dropped all files.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)
@@ -198,7 +198,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Model: openrouter/test-model",
 			"Git repo: none",
 			"Language parser: off",
-			"Added hello.txt to the chat.", // banner
+			"Added hello.txt for editing.", // banner
 			strings.Repeat("─", 24),        // solid rule (aider's console.rule), honors GetSize width
 			"hello.txt",                    // file listing
 		} {
@@ -342,10 +342,10 @@ func TestAddDropDirectory(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"Added sub/a.txt to the chat.",
-		"Added sub/b.txt to the chat.",
-		"Dropped sub/a.txt from the chat.",
-		"Dropped sub/b.txt from the chat.",
+		"Added sub/a.txt for editing.",
+		"Added sub/b.txt for editing.",
+		"Dropped sub/a.txt.",
+		"Dropped sub/b.txt.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)

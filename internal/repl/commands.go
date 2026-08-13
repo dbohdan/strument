@@ -33,16 +33,16 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> [file ...]", "Add files to the chat (globs allowed)", cmdAdd},
+		{"add", "<file> [file ...]", "Add files for the model to edit (globs allowed)", cmdAdd},
 		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
 		{"clear", "", "Clear the conversation history", cmdClear},
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
-		{"drop", "[file ...]", "Remove files from the chat (all files if none given)", cmdDrop},
+		{"drop", "[file ...]", "Remove files from this session (all if none given)", cmdDrop},
 		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
-		{"ls", "", "List files in the chat", cmdLs},
+		{"ls", "", "List this session's files", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Pin reference files the model may read but never edit (may be outside the project)", cmdReadOnly},
@@ -303,7 +303,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), false) {
 		r.coder.AddFile(rel)
-		r.printf("Added %s to the chat.", rel)
+		r.printf("Added %s for editing.", rel)
 	}
 	r.saveResume()
 	return ""
@@ -316,7 +316,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), true) {
 		r.coder.AddReadOnlyFile(rel)
-		r.printf("Added %s to the chat (read-only).", rel)
+		r.printf("Added %s for reference.", rel)
 	}
 	r.saveResume()
 	return ""
@@ -325,7 +325,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 func cmdDrop(_ context.Context, r *REPL, args string) string {
 	if args == "" {
 		r.coder.DropAll()
-		r.printf("Dropped all files from the chat.")
+		r.printf("Dropped all files.")
 		return ""
 	}
 
@@ -341,10 +341,10 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 			}
 		}
 		for _, rel := range dropped {
-			r.printf("Dropped %s from the chat.", rel)
+			r.printf("Dropped %s.", rel)
 		}
 		if len(dropped) == 0 {
-			r.out.Warningf("No chat files matched %q.", pat)
+			r.out.Warningf("No files in this session matched %q.", pat)
 		}
 	}
 	r.saveResume()
@@ -355,17 +355,17 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 	chat := r.coder.ChatFiles()
 	ro := r.coder.ReadOnlyFiles()
 	if len(chat) == 0 && len(ro) == 0 {
-		r.printf("No files in the chat.")
+		r.printf("No files in this session.")
 		return ""
 	}
 	if len(chat) > 0 {
-		r.printf("Files in the chat:")
+		r.printf("For editing:")
 		for _, f := range chat {
 			r.printf("  %s", f)
 		}
 	}
 	if len(ro) > 0 {
-		r.printf("Read-only files:")
+		r.printf("For reference (the model reads these here; it cannot reach them with tools):")
 		for _, f := range ro {
 			r.printf("  %s", f)
 		}

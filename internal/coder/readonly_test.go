@@ -86,3 +86,34 @@ func TestOutsideReferenceIsPinnedButNotEditable(t *testing.T) {
 		t.Error("an outside reference was editable")
 	}
 }
+
+// The refusal has to give the real reason, and the tests above could not see
+// whether it did: they called allowedToEdit directly, where the read-only check
+// lives. On the path an actual edit takes, unsafePath runs first, and an
+// out-of-tree reference failed containment before ever reaching that check —
+// so the model was told "path escapes the project root", which is a fact about
+// geography rather than about the pin. Live sessions show the difference:
+// models read a containment error as an obstacle to route around (absolute
+// path, then the shell, then hunting for a writable copy in the project), and
+// a read-only error as an answer.
+func TestOutsideReferenceIsRefusedForBeingReadOnly(t *testing.T) {
+	c, _ := readOnlyCoder(t)
+	outside := filepath.Join(t.TempDir(), "api.md")
+	if err := os.WriteFile(outside, []byte("GET /widgets returns 200.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddReadOnlyFile(outside)
+
+	rel := c.relFname(outside)
+	if reason := c.unsafePath(rel); reason != "" {
+		t.Fatalf("containment refused the pinned reference first, so the model never "+
+			"learns it is read-only: %q", reason)
+	}
+	ok, why := c.allowedToEdit(rel, map[string]bool{})
+	if ok {
+		t.Fatal("an outside reference was editable")
+	}
+	if !strings.Contains(why, "read-only") {
+		t.Errorf("the refusal should name the pin, not the path: %q", why)
+	}
+}

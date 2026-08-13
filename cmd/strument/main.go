@@ -38,14 +38,14 @@ type chatCmd struct {
 	Model         string   `help:"Model alias from config; defaults to the config's default."    short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."              name:"dark-mode"                                           xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."             name:"light-mode"                                          xor:"palette"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."              name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."             name:"light-mode"                                             xor:"palette"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."            name:"no-auto-commits"`
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."            name:"no-history"`
 	DryRun        bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
 	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
 	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
-	Files         []string `arg:""                                                               help:"Files to add to the chat (they need not exist yet)." optional:""`
+	Files         []string `arg:""                                                               help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {

@@ -257,14 +257,31 @@ Nine tools, in three natures:
 - **Reference material is pinned, and refused as an edit target.** `/read-only`
   puts a file's contents in the prompt and `allowedToEdit` refuses any edit to
   it, answering the call with why so the model adapts within the turn. It is
-  also the only way to show the model a file *outside* the project: `read`,
-  `grep`, `glob`, and `ls` are all scoped to the workspace root, so an
-  out-of-tree spec or a sibling repo's header has no other channel. That is
-  also why `/read-only` still *injects* where `/add` no longer does: telling the
-  model to read a file outside the workspace would be telling it to do something
-  the tools cannot do. Editable
-  files stay inside the root — `/add` and command-line arguments both refuse to
-  leave it, and point at `/read-only` instead.
+  also the way to show the model a file *outside* the project: `grep`, `glob`,
+  and `ls` walk the workspace root, so an out-of-tree spec or a sibling repo's
+  header is invisible to the model's own searching. That is why `/read-only`
+  still *injects* where `/add` no longer does — telling the model to go and find
+  a file three of the four observation tools cannot see would be an instruction
+  it could not follow. Editable files stay inside the root: `/add` and
+  command-line arguments both refuse to leave it, and point at `/read-only`
+  instead.
+
+  What it no longer does is answer *itself*. The injected block used to be
+  followed by a fabricated assistant turn agreeing to use the files as
+  references; that is gone, and the prefix now says plainly who pinned them and
+  that an edit will be refused. Thirty-six live sessions
+  ([`doc/experiments/2026-08-readonly-honest.md`](experiments/2026-08-readonly-honest.md))
+  say the agreement was buying nothing — an unfetchable reference was used just
+  as readily without it — while "an edit is refused" in place of aider's "do not
+  propose edits" stopped models from spending whole turns litigating a request
+  that asked for one anyway.
+
+  One correction that pass forced, worth recording because the sentence above
+  used to contain it: `read` is *not* scoped to the root. It joins its argument
+  to the root with no containment check, so a relative path with `..` reads
+  fine, and transcripts show models doing exactly that. Only `grep`, `glob`, and
+  `ls` are confined. Edits are confined separately and properly, in
+  `unsafePath`.
 - **Edits are direct**, exactly as a SEARCH/REPLACE block was.
   `edit(path, old_string, new_string)` replaces an exact span, through the
   same fuzzy matcher aider's format used, and returns a did-you-mean when it

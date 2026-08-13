@@ -38,12 +38,22 @@ func (c *Coder) unsafePath(rel string) string {
 	if rel == "" {
 		return "empty path"
 	}
-	// A file already in the chat was chosen by the user, so it may live
-	// outside the project root (a sibling project reached through a symlinked
-	// directory, an out-of-tree file added by relative path). The containment
-	// boundary below guards against the model inventing new out-of-root
-	// paths, not against editing what the user deliberately added.
-	if slices.Contains(c.absFnames, c.absRootPath(rel)) {
+	// A file the user pinned was chosen by the user, so it may live outside the
+	// project root (a sibling project reached through a symlinked directory, an
+	// out-of-tree file added by relative path). The containment boundary below
+	// guards against the model inventing new out-of-root paths, not against
+	// editing what the user deliberately added.
+	//
+	// Read-only pins are exempt here too, and that grants nothing: allowedToEdit
+	// refuses every one of them unconditionally. What it buys is the *right
+	// refusal*. An out-of-tree reference used to be rejected here first, with
+	// "path escapes the project root" — true, but not the reason — and the model
+	// never saw the read-only message at all. Live sessions show what that cost:
+	// models retried with an absolute path, then through the shell, then went
+	// looking for a writable copy of the file inside the project, one of them for
+	// twelve steps. Told it is read-only, they say so and move on.
+	abs := c.absRootPath(rel)
+	if slices.Contains(c.absFnames, abs) || slices.Contains(c.absReadOnlyFnames, abs) {
 		return ""
 	}
 	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") {
@@ -95,8 +105,8 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 	// worst thing to edit by accident — it is outside the repo, outside the
 	// diff they are watching, and outside git's undo.
 	if slices.Contains(c.absReadOnlyFnames, full) {
-		c.Out.Warningf("Skipping edits to %s, which is in the chat as read-only.", rel)
-		return false, "that file is in the chat as read-only, so it was not changed. " +
+		c.Out.Warningf("Skipping edits to %s, which is pinned as read-only reference.", rel)
+		return false, "that file is pinned as read-only reference, so it was not changed. " +
 			"Make the change elsewhere, or ask the user to add it with /add if it should be editable."
 	}
 
