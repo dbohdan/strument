@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // drive feeds deltas to a plain Thinking and returns what it wrote.
@@ -140,36 +141,52 @@ func TestThinkingIndifferentToDeltaBoundaries(t *testing.T) {
 	}
 }
 
-// TestThinkingCapProgressShownInRealTime: when a Progress callback is set, the
-// elision count is emitted via "\r" so the user can track that the model is
-// still thinking. Updates are debounced to ProgressInterval; End always commits
-// the final count with "\n".
-func TestThinkingCapProgressShownInRealTime(t *testing.T) {
+// The counter repaints in place while lines are being elided, rate-limited to
+// ProgressInterval. The clock is injected, so this drives the interval instead
+// of sleeping through it — and can therefore test both sides of the limit.
+func TestThinkingCapProgressIsDebounced(t *testing.T) {
 	var buf bytes.Buffer
 	var updates []string
+	clock := time.Unix(0, 0)
+
 	th := PlainThinking(&buf, ThinkingDisplay{Mode: ThinkingCapped, Lines: 3})
+	th.Now = func() time.Time { return clock }
 	th.Progress = func(s string) {
 		updates = append(updates, s)
 		fmt.Fprint(&buf, s)
 	}
-	// Feed one line per delta to simulate streaming. All six arrive in well
-	// under a second, so only the first elided line triggers a real-time
-	// update; the rest are debounced.
+
+	// Three kept lines, then three elided with the clock frozen: the first
+	// elided line paints, the next two are inside the interval and are not.
 	for _, line := range []string{"one\n", "two\n", "three\n", "four\n", "five\n", "six\n"} {
 		th.Write(line)
 	}
-	th.End()
-
-	// One real-time update (the first elided line), plus the final commit in End.
 	if len(updates) != 1 {
-		t.Fatalf("progress called %d times, want 1: %v", len(updates), updates)
+		t.Fatalf("frozen clock: %d updates, want 1: %v", len(updates), updates)
 	}
-	if !strings.HasPrefix(updates[0], "\r") {
-		t.Errorf("update %q should start with \\r", updates[0])
+
+	// Past the interval, the next elided line paints again.
+	clock = clock.Add(ProgressInterval)
+	th.Write("seven\n")
+	if len(updates) != 2 {
+		t.Fatalf("after the interval: %d updates, want 2: %v", len(updates), updates)
 	}
-	// The committed final message in End must carry a newline.
-	got := buf.String()
-	if !strings.Contains(got, "…     3 more lines of thinking\n") {
-		t.Errorf("missing the committed elision note:\n%q", got)
+	// And immediately after that one, it does not.
+	th.Write("eight\n")
+	if len(updates) != 2 {
+		t.Errorf("inside the interval again: %d updates, want 2: %v", len(updates), updates)
+	}
+
+	for _, u := range updates {
+		if !strings.HasPrefix(u, "\r") {
+			t.Errorf("update %q should start with \\r", u)
+		}
+	}
+
+	th.End()
+	// The final count is committed with a newline so the closing marker starts
+	// on a clean line.
+	if !strings.Contains(buf.String(), "…     5 more lines of thinking\n") {
+		t.Errorf("missing the committed elision note:\n%q", buf.String())
 	}
 }

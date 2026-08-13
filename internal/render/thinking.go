@@ -62,6 +62,9 @@ type Thinking struct {
 	// go through a buffering markdown renderer: anything the marker emits before
 	// the body is closed arrives in the wrong place.
 	CloseBody func()
+	// Now is the clock the progress debounce reads; nil means time.Now. A seam,
+	// so a test can drive the interval instead of sleeping through it.
+	Now func() time.Time
 	// Progress, when set, receives real-time "\r"-prefixed progress updates
 	// while lines are being elided by a cap. Each call overwrites the previous
 	// one on the terminal so the user can track that the model is still
@@ -168,10 +171,33 @@ func (t *Thinking) emit(s string) {
 		t.Body(line)
 		s = ""
 	}
-	if t.stopped && t.elided > 0 && t.Progress != nil && time.Since(t.progressAt) >= ProgressInterval {
-		t.progressAt = time.Now()
-		t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
+	t.progress()
+}
+
+// now reads the injected clock, or the wall clock when there is none.
+func (t *Thinking) now() time.Time {
+	if t.Now != nil {
+		return t.Now()
 	}
+	return time.Now()
+}
+
+// progress redraws the elided-line counter in place, at most once per
+// ProgressInterval.
+//
+// The rate limit is the point: a fast model can elide hundreds of lines in a
+// second, and repainting per line is both a flicker and a lot of writes for a
+// number nobody reads that precisely.
+func (t *Thinking) progress() {
+	if !t.stopped || t.elided == 0 || t.Progress == nil {
+		return
+	}
+	if now := t.now(); t.progressAt.IsZero() || now.Sub(t.progressAt) >= ProgressInterval {
+		t.progressAt = now
+	} else {
+		return
+	}
+	t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
 }
 
 // End closes the block and reports whether there was one. A one-liner needs no
@@ -216,6 +242,7 @@ func (t *Thinking) reset() {
 	t.held.Reset()
 	t.opened, t.block, t.stopped = false, false, false
 	t.lines, t.elided = 0, 0
+	t.progressAt = time.Time{}
 }
 
 func plural(n int, one, many string) string {
