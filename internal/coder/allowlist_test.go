@@ -110,9 +110,9 @@ func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
 	checks := []config.VerifyCheck{{Name: "test", Argv: []string{"echo", "ran-the-configured-argv"}}}
 
 	t.Run("configured", func(t *testing.T) {
-		rc := &recordingConfirmer{}
+		rc, out := &recordingConfirmer{}, &captureOut{}
 		c := &Coder{
-			Out: &captureOut{}, Confirm: rc, SuggestShellCommands: true,
+			Out: out, Confirm: rc, SuggestShellCommands: true,
 			Verify: checks, Runner: refusingRunner{t},
 		}
 		result := c.runShellTool(context.Background(),
@@ -126,6 +126,21 @@ func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
 		}
 		if !strings.Contains(result, `verify("test")`) {
 			t.Errorf("the result should point at the direct call:\n%s", result)
+		}
+
+		// What the *user* sees. This path reads exactly like verify's, because
+		// it is verify's code printing it: the matched check named beside its
+		// argv, then how it went. The purpose is not among it — a purpose
+		// informs a decision, and nothing was decided here.
+		shown := strings.Join(out.lines, "\n")
+		if !strings.Contains(shown, "test $ echo ran-the-configured-argv") {
+			t.Errorf("the matched check should name itself and its argv:\n%s", shown)
+		}
+		if !strings.Contains(shown, "test passed") {
+			t.Errorf("the outcome should be reported:\n%s", shown)
+		}
+		if strings.Contains(shown, "check the change") {
+			t.Errorf("the purpose belongs above a prompt, and there is no prompt here:\n%s", shown)
 		}
 	})
 

@@ -425,9 +425,9 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	// model's string back through a shell would reopen word splitting and
 	// globbing between the check and the execution.
 	if name, ok := matchConfiguredCheck(command, c.Verify); ok {
-		if cmd.purpose != "" {
-			c.Out.Toolf("%s", cmd.purpose)
-		}
+		// The purpose is deliberately not printed. It exists to inform a
+		// decision, and here there is no decision; what the user needs is which
+		// check matched and how it went, which runChecks' own two lines say.
 		transcript, _ := c.runChecks(ctx, []string{name})
 		// %q rather than quoteToolArg, which drops the quotes on a word that
 		// does not need them: this sentence is showing the model a call it can

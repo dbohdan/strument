@@ -267,8 +267,10 @@ func TestToolDiffNoChange(t *testing.T) {
 	}
 }
 
-// TestToolDiffCommand renders a bash call: no header (no path),
-// the command on a "$" line, and the purpose ignored.
+// TestToolDiffCommand renders a command field: no header (no path), the command
+// on a "$" line, and the purpose ignored. ToolDiff keeps this ability even
+// though RendersDiff no longer routes bash to it — the "$ " line the
+// confirmation prompt draws is this same shape.
 func TestToolDiffCommand(t *testing.T) {
 	args := `{"command":"go test ./...","purpose":"run the tests"}`
 	want := "$ go test ./...\n"
@@ -299,19 +301,34 @@ func TestToolDiffSet(t *testing.T) {
 
 // TestToolDiffSetNoInterleave reproduces a provider streaming a second tool
 // call's argument in the middle of the first's (seen live against DeepSeek):
-// the write diff must stay contiguous, with the suggested command after
+// the write diff must stay contiguous, with the second call's rendering after
 // it rather than spliced between its lines.
 func TestToolDiffSetNoInterleave(t *testing.T) {
 	var sb strings.Builder
 	s := NewToolDiffSet(&sb, false, DefaultTheme())
 	s.Write(0, "write", `{"path":"hello.sh","content":"#!/bin/bash\n`)
-	s.Write(1, "bash", `{"command":"bash hello.sh"`)
+	s.Write(1, "edit", `{"path":"run.sh",`)
 	s.Write(0, "", `echo Hi"}`)
-	s.Write(1, "", `,"purpose":"run it"}`)
+	s.Write(1, "", `"old_string":"x","new_string":"y"}`)
 	s.Flush()
-	want := "hello.sh (whole file)\n+ #!/bin/bash\n+ echo Hi\n$ bash hello.sh\n"
+	want := "hello.sh (whole file)\n+ #!/bin/bash\n+ echo Hi\nrun.sh\n- x\n+ y\n"
 	if sb.String() != want {
 		t.Errorf("interleaved streams garbled:\ngot:\n%q\nwant:\n%q", sb.String(), want)
+	}
+}
+
+// TestToolDiffSetSkipsBash: a bash command is not streamed. A live run showed
+// it reaching the terminal three times for one call — here, again in the
+// confirmation prompt, and again as "Running …" at execution — and this is the
+// copy worth losing, since watching a one-line command arrive character by
+// character is worth little and the other two sit where a reader needs them.
+func TestToolDiffSetSkipsBash(t *testing.T) {
+	var sb strings.Builder
+	s := NewToolDiffSet(&sb, false, DefaultTheme())
+	s.Write(0, "bash", `{"command":"go test ./...","purpose":"run the tests"}`)
+	s.Flush()
+	if sb.String() != "" {
+		t.Errorf("bash streamed %q; the prompt and the run echo it already", sb.String())
 	}
 }
 

@@ -493,6 +493,9 @@ type StdOutput struct {
 	diffs     *render.ToolDiffSet
 	wroteText bool
 	think     *render.Thinking
+	// openedBlank records that the last thing written was a separator with
+	// nothing yet under it, so FlushStream does not add a second one.
+	openedBlank bool
 }
 
 func (o *StdOutput) Printf(format string, args ...any) {
@@ -545,12 +548,14 @@ func (o *StdOutput) endReasoning() bool {
 func (o *StdOutput) StreamToolCall(index int, name, args string) {
 	if o.endReasoning() {
 		fmt.Println()
+		o.openedBlank = true
 	}
 	if o.diffs == nil {
 		// Break to a fresh line so the first diff header isn't glued to the
 		// answer text (which need not end in a newline).
 		if o.wroteText {
 			fmt.Println()
+			o.openedBlank = true
 		}
 		o.diffs = render.NewToolDiffSet(os.Stdout, false, render.DefaultTheme())
 	}
@@ -561,10 +566,22 @@ func (o *StdOutput) FlushStream() {
 	o.endReasoning() // a send that was nothing but thinking still closes it
 	if o.diffs != nil {
 		o.diffs.Flush()
+		if o.diffs.Drew() {
+			o.openedBlank = false // something landed under the separator
+		}
 		o.diffs = nil
 	}
 	o.wroteText = false
-	fmt.Println()
+	// Only when this send did not already end on a blank line. A send whose
+	// tool calls all render nothing — a bash command, or any observation tool —
+	// otherwise puts the separator above the calls and this one below them with
+	// nothing in between. That doubled blank is what the REPL's blankGuard
+	// exists to prevent, and script mode has no guard; Drew() is the same
+	// signal repl/output.go reads for the same purpose.
+	if !o.openedBlank {
+		fmt.Println()
+	}
+	o.openedBlank = false
 }
 
 // ThinkingDisplay translates the config's answer into the renderer's. The two

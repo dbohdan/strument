@@ -204,15 +204,24 @@ func (d *ToolDiff) Flush() {
 }
 
 // RendersDiff reports whether a tool's streamed arguments are worth drawing as
-// they arrive. Only the two edit tools and bash carry content the user wants to
-// watch scroll past — a diff, or the command about to run.
+// they arrive. Only the two edit tools carry content the user wants to watch
+// scroll past, and what they carry is a diff.
 //
 // The observation tools must be excluded rather than merely rendering nothing:
 // read and ls also take a "path" argument, and without this they would each
 // print a bare path line as if it were a diff header, with no diff under it.
+//
+// bash used to be here, and a live run is what took it out. Its command was
+// reaching the terminal three times for one call: streamed from here, again in
+// the confirmation prompt, and again as "Running …" at execution. The stream is
+// the one worth losing. Watching a one-line command arrive character by
+// character is worth little, while the other two appear exactly where a reader
+// needs them — beside the decision, and beside the output. ToolDiff still
+// renders a "command" field for anything that asks it to; this is only the gate
+// that decides whether a streamed call is handed to one.
 func RendersDiff(tool string) bool {
 	switch tool {
-	case "edit", "write", "bash":
+	case "edit", "write":
 		return true
 	default:
 		return false
