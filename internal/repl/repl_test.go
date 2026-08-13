@@ -397,6 +397,40 @@ func TestShellConfirmationShowsThePurpose(t *testing.T) {
 	}
 }
 
+// TestShellPromptDefaultsToYes pins the answer line, which nothing did before:
+// Enter approves, and the shell gate offers no blanket "all this turn". A
+// grouped prompt still does — a message naming five URLs asks five identical
+// questions, which is the repetition "a" was for.
+func TestShellPromptDefaultsToYes(t *testing.T) {
+	shell := coder.ConfirmRequest{
+		Prompt:           "Run shell command?",
+		Command:          "go test ./...",
+		Purpose:          "re-run the suite",
+		RequiresYesShell: true,
+	}
+	grouped := coder.ConfirmRequest{
+		Prompt:  "Add URL to the chat?",
+		Subject: "https://example.com",
+		Group:   "add-url",
+	}
+	if got := confirmSuffix(shell); got != " (Y/n) " {
+		t.Errorf("shell suffix = %q, want the default-yes form with no blanket option", got)
+	}
+	if got := confirmSuffix(grouped); got != " (Y/n/a=all turn) " {
+		t.Errorf("grouped suffix = %q", got)
+	}
+
+	// And the answers those hints promise.
+	r, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("\n"))
+	if !r.Confirmer().Confirm(shell).Yes {
+		t.Error("a bare Enter did not approve")
+	}
+	r2, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("a\n"))
+	if !r2.Confirmer().Confirm(grouped).AlwaysThisTurn {
+		t.Error(`"a" did not mean all this turn`)
+	}
+}
+
 // TestNonShellConfirmationShowsOnlyItsSubject: a URL has no purpose slot, so
 // the absence marker must not leak onto prompts that never asked for one.
 func TestNonShellConfirmationShowsOnlyItsSubject(t *testing.T) {

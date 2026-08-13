@@ -436,21 +436,39 @@ func stdoutIsTerminal() bool {
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
-// terminalConfirmer asks y/n questions on the terminal.
+// terminalConfirmer asks y/n questions on the terminal in script mode, where
+// there is no REPL and so no readline and no theme.
+//
+// It shows the same three parts in the same order as the REPL's confirmer, and
+// defaults the same way. Script mode quietly dropping the model's reasoning was
+// the Stage 9 bug; a confirmation that showed less here than there, or meant
+// something different by Enter, would be the same bug at the one prompt where
+// being wrong costs the most.
 type terminalConfirmer struct{}
 
 func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
-	if req.Subject != "" {
+	switch {
+	case req.Command != "":
+		if req.Purpose != "" {
+			fmt.Println(req.Purpose)
+		} else {
+			fmt.Println("(no purpose given)")
+		}
+		fmt.Printf("$ %s\n", req.Command)
+	case req.Subject != "":
 		fmt.Println(req.Subject)
 	}
-	fmt.Printf("%s (y/N) ", req.Prompt)
+
+	fmt.Printf("%s (Y/n) ", req.Prompt)
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
+		// No answer available at all — a closed or redirected stdin. Declining
+		// is the safe reading: nobody is there to have meant yes.
 		return coder.ConfirmResult{}
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "y", "yes":
+	case "", "y", "yes":
 		return coder.ConfirmResult{Yes: true}
 	default:
 		return coder.ConfirmResult{}

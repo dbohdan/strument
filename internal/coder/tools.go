@@ -413,12 +413,17 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		return "Shell commands are disabled in this session; the command was not run."
 	}
 	command := strings.TrimSpace(cmd.command)
+	// No Group, so no "a=all turn" here. A blanket turn-scoped yes is the last
+	// thing this gate should offer: what reaches it is the open-ended remainder
+	// left over once every observation tool has taken its share, and approving
+	// the next unseen one because the last was fine is exactly the reflex the
+	// prompt exists to interrupt. The repetition it was answering — re-running
+	// the project's own checks — belongs to the allowlist instead.
 	if !c.confirmTurn(ConfirmRequest{
-		Prompt:              "Run shell command?",
-		Command:             command,
-		Purpose:             cmd.purpose,
-		ExplicitYesRequired: true,
-		Group:               "run-shell",
+		Prompt:           "Run shell command?",
+		Command:          command,
+		Purpose:          cmd.purpose,
+		RequiresYesShell: true,
 	}) {
 		return "The user chose not to run the command."
 	}

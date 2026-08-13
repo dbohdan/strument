@@ -61,12 +61,17 @@ type ConfirmResult struct {
 // worth showing as an absence rather than passing over in silence. The coder
 // stays ignorant of how any of the three is drawn.
 type ConfirmRequest struct {
-	Prompt              string
-	Subject             string
-	Command             string
-	Purpose             string
-	ExplicitYesRequired bool   // --yes must NOT auto-answer (model shell)
-	Group               string // ConfirmGroup key ("all"/"skip" scope)
+	Prompt  string
+	Subject string
+	Command string
+	Purpose string
+	// RequiresYesShell marks a prompt that plain --yes must not answer; only
+	// --yes-shell does. It used to also make the prompt default to no, which is
+	// why it was called ExplicitYesRequired. It no longer does: every prompt now
+	// defaults to yes, and this is a question about which flag covers a prompt,
+	// not about what Enter means at one.
+	RequiresYesShell bool
+	Group            string // ConfirmGroup key ("all"/"skip" scope)
 }
 
 // AutoConfirmer implements --yes / --yes-shell (--yes never auto-runs
@@ -79,7 +84,7 @@ type AutoConfirmer struct {
 }
 
 func (a AutoConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
-	if req.ExplicitYesRequired {
+	if req.RequiresYesShell {
 		if a.YesShell {
 			return ConfirmResult{Yes: true}
 		}

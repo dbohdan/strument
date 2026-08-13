@@ -466,6 +466,27 @@ func (r *REPL) showUndoHint() {
 	}
 }
 
+// confirmSuffix is the answer hint appended to a confirmation prompt.
+//
+// Every prompt defaults to yes, the shell gate included. aider defaulted that
+// one to no and Strument followed; the reason to diverge is that the cost falls
+// on a human reaching for a key, where Enter is easier than Y even for a touch
+// typist, and friction in the common case is precisely what erodes a prompt
+// into reflex. What buys the yes is the purpose line above it: a prompt worth
+// reading can afford a cheap answer, one that is not cannot. RequiresYesShell
+// still keeps plain --yes from covering the shell gate, which is a question
+// about flags rather than about what Enter means.
+//
+// Pulled out of Confirm because that is the one part of the prompt a test
+// cannot see: readline writes it straight to the terminal, so in the scripted
+// sessions it never reaches the captured output.
+func confirmSuffix(req coder.ConfirmRequest) string {
+	if req.Group != "" {
+		return " (Y/n/a=all turn) "
+	}
+	return " (Y/n) "
+}
+
 // rlConfirmer asks yes/no questions through the REPL's readline so prompt
 // input and confirm input share one reader.
 type rlConfirmer struct{ r *REPL }
@@ -492,19 +513,8 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		r.out.Printf("%s", req.Subject)
 	}
 
-	// aider's confirm_ask defaults: yes, unless an explicit yes is
-	// required.
-	suffix, def := " (Y/n", coder.ConfirmResult{Yes: true}
-	if req.ExplicitYesRequired {
-		suffix, def = " (y/N", coder.ConfirmResult{}
-	}
-	if req.Group != "" {
-		suffix += "/a=all turn"
-	}
-	suffix += ") "
-
 	cfg := r.rl.GetConfig()
-	cfg.Prompt = req.Prompt + suffix
+	cfg.Prompt = req.Prompt + confirmSuffix(req)
 	cfg.HistoryLimit = -1 // y/n answers stay out of the input history
 	cfg.AutoComplete = nil
 
@@ -514,7 +524,7 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "":
-		return def
+		return coder.ConfirmResult{Yes: true}
 	case "y", "yes":
 		return coder.ConfirmResult{Yes: true}
 	case "a", "always":
