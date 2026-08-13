@@ -202,9 +202,13 @@ func TestContextExhaustedEmptyAddsDiagnostic(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	env.run(t)
+	// The note goes in the harness's own voice. The model never replied — the
+	// request did not get that far — so an assistant message here would be a
+	// fabricated turn, and one in which the model appears to report a transport
+	// error about itself.
 	hist := env.coder.curMessages
-	if len(hist) != 2 || hist[1].Role != "assistant" ||
-		hist[1].Text() != "FinishReasonLength exception: you sent too many tokens" {
+	if len(hist) != 2 || hist[1].Role != llm.RoleSystem ||
+		!strings.Contains(hist[1].Text(), "cut off") {
 		t.Errorf("history = %s", dumpHistory(hist))
 	}
 }

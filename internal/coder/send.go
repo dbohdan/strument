@@ -283,9 +283,16 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	switch term {
 	case resContextExhausted:
+		// A system message, not an assistant one. The model did not say this —
+		// the request never reached a reply — so putting it in the assistant's
+		// voice fabricates a turn, and one in which the model appears to report
+		// its own transport error. The note exists so the next request does not
+		// end on a bare user turn with no answer, which is what the role check
+		// below is for; whose voice carries it is a separate question, and the
+		// harness's own is the honest one.
 		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
 			c.curMessages = append(c.curMessages,
-				llm.TextMessage("assistant", "FinishReasonLength exception: you sent too many tokens"))
+				llm.TextMessage(llm.RoleSystem, "The reply was cut off: the request exceeded the context limit."))
 		}
 		c.showExhaustedError()
 		return OutcomeContextExhausted, ""
