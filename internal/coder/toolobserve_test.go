@@ -108,6 +108,73 @@ func TestGrepModesAndScoping(t *testing.T) {
 	}
 }
 
+// TestGrepReportsItsScope: the scope and mode shape the answer completely, so a
+// report naming only the pattern points at the wrong argument. Watched live — a
+// search scoped by a directory-shaped glob came back "no matches", and the next
+// step widened the pattern, which was the only thing named.
+func TestGrepReportsItsScope(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{
+		"src/a.go": "package a\nfunc Target() {}\n",
+		"doc.txt":  "Target\n",
+	})
+
+	c.runGrep(call("grep", `{"pattern":"Target","path":"src","glob":"**/*.go","mode":"content"}`))
+	// Whitespace-free arguments print unquoted, per quoteToolArg.
+	line := strings.Join(out.lines, "\n")
+	for _, want := range []string{"Searched for Target", "under src", "matching **/*.go", "as content"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("outcome line is missing %s:\n%s", want, line)
+		}
+	}
+}
+
+// TestGrepDistinguishesItsNothings is the whole point of the change: three
+// different empty results that used to read identically, and only one of them
+// means "that text is not in this project".
+func TestGrepDistinguishesItsNothings(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"internal/coder/a.go": "package coder\nfunc Target() {}\n",
+	})
+
+	// A directory as a glob, and a non-recursive "*.go": both natural first
+	// guesses, both admit no files at all, and neither says anything about
+	// whether the pattern exists.
+	for _, args := range []string{
+		`{"pattern":"Target","glob":"internal/coder"}`,
+		`{"pattern":"Target","glob":"*.go"}`,
+	} {
+		got := c.runGrep(call("grep", args))
+		if !strings.Contains(got, "nothing is in that scope") {
+			t.Errorf("%s should say the scope was empty:\n%s", args, got)
+		}
+		if !strings.Contains(got, `"**/*.go"`) {
+			t.Errorf("%s should say how to write a working glob:\n%s", args, got)
+		}
+		// It must not claim the pattern is absent, which is the false statement
+		// the old message made.
+		if strings.Contains(got, "No matches for") {
+			t.Errorf("%s blamed the pattern for an empty scope:\n%s", args, got)
+		}
+	}
+
+	// A genuine scope with no hit says so, and says how much it looked at — which
+	// is what makes it trustworthy rather than just another empty answer.
+	genuine := c.runGrep(call("grep", `{"pattern":"Absent","glob":"**/*.go"}`))
+	if !strings.Contains(genuine, "No matches for") || !strings.Contains(genuine, "1 file searched") {
+		t.Errorf("a genuine miss should report what it searched:\n%s", genuine)
+	}
+}
+
+// TestGlobExplainsAnEmptyMatch: glob has the same rules, so it owes the same
+// explanation rather than letting a caller conclude the files do not exist.
+func TestGlobExplainsAnEmptyMatch(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"internal/coder/a.go": "package coder\n"})
+	got := c.runGlob(call("glob", `{"pattern":"*.go"}`))
+	if !strings.Contains(got, "No files match") || !strings.Contains(got, `"**/*.go"`) {
+		t.Errorf("glob should explain its own syntax on an empty match:\n%s", got)
+	}
+}
+
 func TestGlobAndLS(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
 		"main.go":       "",

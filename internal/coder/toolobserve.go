@@ -129,12 +129,13 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	}
 
 	mode := workspace.GrepFiles
+	modeName := "files"
 	switch a.Mode {
 	case "", "files":
 	case "content":
-		mode = workspace.GrepContent
+		mode, modeName = workspace.GrepContent, "content"
 	case "count":
-		mode = workspace.GrepCount
+		mode, modeName = workspace.GrepCount, "count"
 	default:
 		return fmt.Sprintf("Unknown mode %q. Use \"files\", \"content\", or \"count\".", a.Mode)
 	}
@@ -145,14 +146,19 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("The search pattern was not valid: %v", err)
 	}
-	c.Out.Toolf("Searched for %s — %s", quoteToolArg(a.Pattern), matchSummary(res))
+	// The scope and the mode go in the line, not just the pattern. They shape
+	// the answer completely — a glob that admits no files turns any pattern into
+	// "no matches" — so a report naming only the pattern blames the wrong
+	// argument, and leaves both the model and the user with nothing to correct.
+	query := fmt.Sprintf("%s%s as %s", quoteToolArg(a.Pattern), grepScope(a.Path, a.Glob), modeName)
+	c.Out.Toolf("Searched for %s — %s", query, matchSummary(res))
 
 	if len(res.Files) == 0 {
-		return fmt.Sprintf("No matches for %s.", quoteToolArg(a.Pattern))
+		return grepNothing(query, res)
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", matchSummary(res))
+	fmt.Fprintf(&b, "%s for %s.\n\n", matchSummary(res), query)
 	for _, f := range res.Files {
 		switch mode {
 		case workspace.GrepContent:
@@ -169,6 +175,49 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 		b.WriteString("\n(Results were cut short by a limit. Narrow the search with glob or path to see the rest.)\n")
 	}
 	return truncateResult(b.String())
+}
+
+// globSyntaxNote explains the two glob shapes that silently admit nothing. Both
+// are natural first guesses, and both used to fail to an empty result that named
+// only the pattern, so a reader concluded the code was not there.
+const globSyntaxNote = "A glob is matched against the whole path, segment by segment. " +
+	"\"*.go\" therefore matches only files in the project root, and a bare directory name " +
+	"matches nothing at all; use \"**/*.go\" to reach every directory. To search one subtree, " +
+	"grep's \"path\" argument is the direct way to say so."
+
+// grepScope renders the part of a search that is not the pattern, so a report
+// can name it. Empty when the search covered the whole project.
+func grepScope(dir, glob string) string {
+	var b strings.Builder
+	if d := strings.TrimSpace(dir); d != "" {
+		fmt.Fprintf(&b, " under %s", quoteToolArg(d))
+	}
+	if g := strings.TrimSpace(glob); g != "" {
+		fmt.Fprintf(&b, " matching %s", quoteToolArg(g))
+	}
+	return b.String()
+}
+
+// grepNothing explains an empty result, which is three different situations
+// that used to be reported as one.
+//
+// Saying "no matches" when the scope admitted no files states that the pattern
+// is absent from the project. Watched live, that is exactly how a model read it
+// — a search scoped with a directory-shaped glob returned nothing, and the next
+// step widened the *pattern*, because the pattern was the only thing the report
+// mentioned. The identifier was in 21 files at the time.
+func grepNothing(query string, res workspace.GrepResult) string {
+	switch {
+	case res.InScope == 0:
+		return "No files were searched for " + query + ": nothing is in that scope, " +
+			"so the pattern was never tested.\n\n" + globSyntaxNote
+	case res.Scanned == 0:
+		return fmt.Sprintf("No files were searched for %s: %s in that scope, but every one of "+
+			"them is binary or over the size limit.", query, plural(res.InScope, "file is", "files are"))
+	default:
+		return fmt.Sprintf("No matches for %s. %s searched.", query,
+			plural(res.Scanned, "file", "files"))
+	}
 }
 
 // matchSummary describes a search's outcome in one line.
@@ -205,7 +254,10 @@ func (c *Coder) runGlob(tc llm.ToolCall) string {
 	c.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 
 	if len(paths) == 0 {
-		return fmt.Sprintf("No files match %s.", quoteToolArg(a.Pattern))
+		// The same rules that make a grep glob silently admit nothing apply
+		// here, so the same explanation does. It is cheaper to say it than to
+		// let a caller conclude the files do not exist.
+		return fmt.Sprintf("No files match %s.\n\n%s", quoteToolArg(a.Pattern), globSyntaxNote)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s matching %s:\n\n", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))

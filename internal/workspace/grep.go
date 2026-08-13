@@ -55,6 +55,16 @@ type GrepResult struct {
 	Files     []GrepFileResult
 	Total     int // matching lines across all files
 	Truncated Truncated
+	// InScope counts the files Glob and Dir admitted, and Scanned the subset
+	// actually searched — the rest were binary or over the size cap.
+	//
+	// They exist so a caller can tell three different nothings apart: a scope
+	// that admitted no files (the pattern was never tested), files that could
+	// not be read, and a pattern that genuinely is not there. Reporting all
+	// three as "no matches" tells a reader the identifier does not exist in the
+	// project, which is a different claim and often a false one.
+	InScope int
+	Scanned int
 }
 
 // Grep searches file contents across the workspace.
@@ -89,6 +99,7 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 		if glob != "" && !matchGlob(glob, rel) {
 			return true
 		}
+		res.InScope++
 
 		if info, err := d.Info(); err == nil && info.Size() > w.Limits.fileBytes() {
 			return true
@@ -97,6 +108,7 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 		if err != nil || isBinary(data) {
 			return true
 		}
+		res.Scanned++
 
 		fileRes := GrepFileResult{Path: rel}
 		for i, line := range splitLines(string(data)) {

@@ -89,8 +89,11 @@ func readOnlyTools() []llm.ToolDef {
 				"type": "object",
 				"properties": map[string]any{
 					"pattern": strProp("A regular expression (Go syntax, which is close to PCRE without backreferences)."),
-					"glob":    strProp("Optional. Only search paths matching this glob, e.g. \"**/*.go\"."),
-					"path":    strProp("Optional. Only search under this directory."),
+					"glob": strProp("Optional. Only search paths matching this glob. It is matched " +
+						"against the whole path, so use \"**/*.go\" for every directory; \"*.go\" " +
+						"matches only the project root and a bare directory name matches nothing."),
+					"path": strProp("Optional. Only search under this directory. This, not glob, " +
+						"is how to restrict a search to a subtree."),
 					"mode": map[string]any{
 						"type": "string",
 						"enum": []any{"files", "content", "count"},
@@ -103,12 +106,14 @@ func readOnlyTools() []llm.ToolDef {
 			},
 		},
 		{
-			Name:        toolGlob,
-			Description: "Find files by path pattern. Supports ** for any number of directories.",
+			Name: toolGlob,
+			Description: "Find files by path pattern. The pattern is matched against the whole path, " +
+				"segment by segment, with ** standing for any number of directories.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"pattern": strProp("A glob such as \"**/*.go\" or \"internal/*/testdata/*\"."),
+					"pattern": strProp("A glob such as \"**/*.go\" or \"internal/*/testdata/*\". " +
+						"\"*.go\" matches only the project root, so use \"**/*.go\" to reach every directory."),
 				},
 				"required": []any{"pattern"},
 			},

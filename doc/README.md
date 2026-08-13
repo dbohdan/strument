@@ -227,6 +227,16 @@ Nine tools, in three natures:
   `symbol(name, kind)` answers "where is this defined" from the tree-sitter
   tags rather than from text, and is offered only where grammars are. None of
   them ask the user anything, and none of them see a file the project ignores.
+
+  **A search says what it searched.** The outcome line and the result both name
+  the scope and mode, not just the pattern, and an empty result distinguishes
+  three things: a scope that admitted no files, files that could not be read,
+  and a pattern that is genuinely absent. Only the last means "not in this
+  project", and reporting all three as "no matches" was observed sending a model
+  to widen its *pattern* when the fault was a directory-shaped glob — the
+  identifier was in twenty-one files at the time. Globs match whole paths, so
+  `*.go` reaches only the root and a bare directory name matches nothing; that
+  rule is now in the tool descriptions and in the message.
 - **Reference material is pinned, and refused as an edit target.** `/read-only`
   puts a file's contents in the prompt and `allowedToEdit` refuses any edit to
   it, answering the call with why so the model adapts within the turn. It is
