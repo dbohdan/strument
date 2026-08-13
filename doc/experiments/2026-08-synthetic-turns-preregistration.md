@@ -206,6 +206,47 @@ arm B is the only possible treatment.
 The n=1 observation is recorded here as the reason for the check, and is
 explicitly **not** evidence of an effect.
 
+### 2026-08-13 — task set changed after a pilot showed a ceiling
+
+**Pilot (n=24, all four original tasks).** 23/24 passed, and the one failure was
+a 300-second timeout — my own sentinel, not a model failure. So the behavioral
+pass rate was 24/24.
+
+That is a ceiling, and it matters for a reason worth stating precisely: it is
+**not** a precision problem. Binomial variance shrinks near the ceiling, so the
+confidence intervals would have been *tighter*. It is an external-validity
+problem. A null at 96% licenses only "no difference on tasks this easy", and the
+first fair question would be whether harder work differs.
+
+**Three harder tasks were added**, aimed at the hypothesis rather than at
+difficulty for its own sake. The removed message says *"I'll treat this message
+as their current contents"*, so the discriminating task is one where the block
+contradicts what a model would otherwise assume:
+
+- `contradicts_name` — the block shows a function whose body contradicts its
+  name (`Sum` computes a product). Describing it correctly requires reading the
+  block rather than the name. Pilot: **67%**.
+- `many_call_sites` — a rename across four files and six call sites. More steps,
+  more room to drift. Pilot: **67%**.
+- `unusual_signature` — a helper with reversed parameter order. Pilot: 12/12,
+  still at ceiling, so **dropped**.
+
+**Final task set**, chosen so the pooled baseline lands near the 85% the power
+arithmetic assumed rather than being tuned after the fact:
+`contradicts_name`, `many_call_sites`, `cross_file`, `search_required` —
+expected pooled baseline ≈ 83%, giving ~8.5pp detection and a ~5pp bound at
+300/arm, as originally registered.
+
+**Pilot data is discarded, not pooled.** It informed this design; reusing it
+would be selection on the outcome. The final run starts from an empty results
+file.
+
+**Two runner defects the pilot exposed**, both fixed before the real run:
+`ThreadPoolExecutor.map` yields in submission order, so a slow early job stalled
+all logging behind it (now `as_completed`); and the 300-second timeout was tight
+enough to manufacture a failure (now 600, with timeouts recorded by return code
+so they are never silently counted as behavioral failures).
+
 ### 2026-08-13 — DeepSeek model changed
 
 `deepseek/deepseek-v4-flash-0731` replaces `deepseek/deepseek-v4-flash` at the
