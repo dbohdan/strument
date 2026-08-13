@@ -176,6 +176,36 @@ as the model". The other direction — "the harness speaks as the user" — is
 untested and stays for a later decision, on the stronger footing that its
 remaining sites each have some real referent to point at.
 
+### 2026-08-13 — what arm B actually removes, checked against the prompt text
+
+Prompted by a smoke run: at n=1, arm B produced several hundred words of
+reasoning agonizing over whether the file block could be trusted
+(*"to avoid any mistake, I'll read the file again to ensure I have the exact
+string"*) where arm A read the file once and edited it. That raised the
+possibility that B removes *information*, not just a fabricated turn, which
+would make the whole comparison measure the wrong thing.
+
+Checked rather than assumed. The removed message is not `"Ok."` — it is
+*"Understood. Any changes I propose will be to those files, and I'll treat this
+message as their current contents."* But `filesContentPrefix`, in the user
+message that stays, already says *"Trust this message as the true contents of
+these files"* and *"I have added these files to the chat so you can go ahead and
+edit them."*
+
+So the assistant reply is a **restatement of the user message's instruction, in
+the model's own voice**. No unique instruction is lost, and the comparison is
+sound.
+
+This sharpens the hypothesis rather than changing the design. The question is
+not whether the instruction matters — both arms carry it — but whether the model
+*hearing it in its own voice* adds anything: whether a fabricated
+acknowledgement works as a commitment device. That is the interesting form of
+the question, and there is no way to test it without fabricating the turn, so
+arm B is the only possible treatment.
+
+The n=1 observation is recorded here as the reason for the check, and is
+explicitly **not** evidence of an effect.
+
 ### 2026-08-13 — DeepSeek model changed
 
 `deepseek/deepseek-v4-flash-0731` replaces `deepseek/deepseek-v4-flash` at the
