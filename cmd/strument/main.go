@@ -452,8 +452,6 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return coder.ConfirmResult{Yes: true}
-	case "d", "never":
-		return coder.ConfirmResult{Never: true}
 	default:
 		return coder.ConfirmResult{}
 	}

@@ -36,9 +36,18 @@ type Confirmer interface {
 }
 
 // ConfirmResult is the user's answer to a confirmation prompt.
+//
+// There used to be a Never ("d", don't ask again) alongside these, offered by
+// the prompt whenever AllowNever was set — and honored by nothing. Each caller
+// treated it as a plain decline: the URL check rejects the URL either way, the
+// command-output check reads only Yes, and the shell gate goes through
+// confirmTurn, which never looked at it. The one caller that might have meant
+// it left with the file-mention flow. A prompt advertising an option that does
+// nothing is worse than one without it, so the option is gone rather than
+// implemented — session-scoped silence on shell commands is the last thing this
+// gate should grow.
 type ConfirmResult struct {
 	Yes            bool // the user approved this one action
-	Never          bool // "d" — session-scoped don't-ask for this Group
 	AlwaysThisTurn bool // "a" — turn-scoped auto-approve for this Group
 }
 
@@ -46,8 +55,7 @@ type ConfirmResult struct {
 type ConfirmRequest struct {
 	Prompt              string
 	Subject             string
-	ExplicitYesRequired bool // --yes must NOT auto-answer (model shell)
-	AllowNever          bool
+	ExplicitYesRequired bool   // --yes must NOT auto-answer (model shell)
 	Group               string // ConfirmGroup key ("all"/"skip" scope)
 }
 

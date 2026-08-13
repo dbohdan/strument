@@ -28,10 +28,10 @@ func (s scriptConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 		s.t.Fatalf("confirm: %v", err)
 	}
 	switch strings.ToLower(strings.TrimSpace(ans)) {
-	case "y", "yes", "a", "all":
+	case "y", "yes":
 		return ConfirmResult{Yes: true}
-	case "never", "d":
-		return ConfirmResult{Never: true}
+	case "a", "all":
+		return ConfirmResult{AlwaysThisTurn: true}
 	default:
 		return ConfirmResult{}
 	}

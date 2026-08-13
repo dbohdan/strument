@@ -512,9 +512,8 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 	}
 
 	res := r.Confirmer().Confirm(coder.ConfirmRequest{
-		Prompt:     "Add command output to the chat?",
-		AllowNever: true,
-		Group:      "add-output",
+		Prompt: "Add command output to the chat?",
+		Group:  "add-output",
 	})
 	if res.Yes {
 		// The result shape, so /run context reads like

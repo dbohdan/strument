@@ -482,8 +482,8 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	if req.ExplicitYesRequired {
 		suffix, def = " (y/N", coder.ConfirmResult{}
 	}
-	if req.AllowNever {
-		suffix += "/a=all turn/d=don't ask again"
+	if req.Group != "" {
+		suffix += "/a=all turn"
 	}
 	suffix += ") "
 
@@ -503,8 +503,6 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		return coder.ConfirmResult{Yes: true}
 	case "a", "always":
 		return coder.ConfirmResult{AlwaysThisTurn: true}
-	case "d", "never", "don't":
-		return coder.ConfirmResult{Never: true}
 	default:
 		return coder.ConfirmResult{}
 	}

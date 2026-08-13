@@ -398,7 +398,6 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		Prompt:              "Run shell command?",
 		Subject:             command,
 		ExplicitYesRequired: true,
-		AllowNever:          true,
 		Group:               "run-shell",
 	}) {
 		return "The user chose not to run the command."

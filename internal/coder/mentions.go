@@ -32,10 +32,9 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 		}
 		trimmed := strings.TrimRight(url, ".',\"")
 		res := c.Confirm.Confirm(ConfirmRequest{
-			Prompt:     "Add URL to the chat?",
-			Subject:    trimmed,
-			AllowNever: true,
-			Group:      "add-url",
+			Prompt:  "Add URL to the chat?",
+			Subject: trimmed,
+			Group:   "add-url",
 		})
 		if res.Yes {
 			content, err := c.Scrape(ctx, trimmed)
