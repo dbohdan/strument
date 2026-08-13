@@ -128,7 +128,7 @@ func Load(opts Options) (*Config, error) {
 		}
 		return nil, err
 	}
-	user, err := execConfig(userPath, userSrc, lookup)
+	user, err := execConfig(userPath, userSrc, lookup, opts.ProjectRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func Load(opts Options) (*Config, error) {
 				return nil, err
 			}
 			if ts.IsTrusted(absPath, projSrc) {
-				if project, err = execConfig(projPath, projSrc, lookup); err != nil {
+				if project, err = execConfig(projPath, projSrc, lookup, opts.ProjectRoot); err != nil {
 					return nil, err
 				}
 			} else {
@@ -307,12 +307,16 @@ func Load(opts Options) (*Config, error) {
 
 // execConfig executes one Starlark file with the three builtins predeclared
 // and extracts the required globals.
-func execConfig(path string, src []byte, lookup func(string) (string, bool)) (*fileGlobals, error) {
+func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
 	thread := &starlark.Thread{Name: path}
 	predeclared := starlark.StringDict{
 		"provider": starlark.NewBuiltin("provider", builtinProvider),
 		"model":    starlark.NewBuiltin("model", builtinModel),
 		"env":      builtinEnv(lookup),
+		// The project's root, not the config file's directory, in both configs:
+		// a user-level `verify = project_checks()` should adapt to whatever
+		// project the session opened.
+		"project_checks": builtinProjectChecks(root),
 	}
 	fileOpts := &syntax.FileOptions{
 		Set:             true,
