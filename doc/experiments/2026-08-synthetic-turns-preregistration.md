@@ -131,4 +131,52 @@ infrastructure failure from model behavior.
 
 ## Amendments
 
-*(none yet)*
+### 2026-08-13 — arm B redefined, before any sample was collected
+
+**What changed.** Arm B was "file context merged into the real user turn". It is
+now "the fabricated *assistant* replies are removed; the file-context user
+messages are untouched".
+
+**Why.** The original B was caught by `TestTheUserMessageIsLeftAlone`
+(`assembly_test.go:58`), which exists because the system reminder used to be
+edited into the last user message and that was removed as *"one of the places
+the harness pretended the user had said something."* Merging file context into
+the user's turn is the same act in a different place. The project had already
+decided this question, and the treatment arm walked into it.
+
+**What this buys, beyond not contradicting ourselves.** The two halves of a
+synthetic pair are not equally indefensible, and separating them is a better
+experiment than bundling them:
+
+- The **user** half has a real referent. The user did pin those files, with
+  `/add`. Calling it fabricated is a stretch.
+- The **assistant** half has none. "Ok, I will use these files as references" is
+  the harness writing the model's lines and answering a question nobody asked.
+
+Three further consequences, all improvements:
+
+- The arms now differ by *exactly* the messages under test. Everything else is
+  byte-identical and in the same order.
+- The cache prefix does not move, so **tokens-sent is no longer confounded** and
+  can be read as a result rather than as description. The caveat in *Metrics* is
+  withdrawn.
+- The whole existing test suite passes under B, so the change is invisible to
+  every behavioral assertion the project already makes; it differs only on the
+  wire.
+
+**Wire risk, checked rather than assumed.** B produces consecutive user messages
+at two slot boundaries. All three models were probed directly and answer them
+correctly. A first probe appeared to show `mimo` and `v4-flash` returning null
+content; that was `max_tokens: 20` being consumed by reasoning before any
+content, not a provider limitation — an artifact of the probe, and worth
+recording because the aggregate looked exactly like a provider rejection.
+
+**Scope note.** Consequently this experiment now tests only "the harness speaks
+as the model". The other direction — "the harness speaks as the user" — is
+untested and stays for a later decision, on the stronger footing that its
+remaining sites each have some real referent to point at.
+
+### 2026-08-13 — DeepSeek model changed
+
+`deepseek/deepseek-v4-flash-0731` replaces `deepseek/deepseek-v4-flash` at the
+user's request (substantially stronger, and cheaper at $0.08/$0.18 per M).
