@@ -283,44 +283,6 @@ func (c *Coder) inchatRelativeFiles() []string {
 	return out
 }
 
-// allRelativeFiles is the repo's tracked files, or just the chat files
-// without git.
-func (c *Coder) allRelativeFiles() []string {
-	var files []string
-	if c.Repo != nil {
-		files = c.Repo.TrackedFiles()
-	} else {
-		files = c.inchatRelativeFiles()
-	}
-	set := map[string]bool{}
-	for _, f := range files {
-		set[f] = true
-	}
-	out := make([]string, 0, len(set))
-	for f := range set {
-		out = append(out, f)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func (c *Coder) addableRelativeFiles() []string {
-	exclude := map[string]bool{}
-	for _, f := range c.inchatRelativeFiles() {
-		exclude[f] = true
-	}
-	for _, f := range c.absReadOnlyFnames {
-		exclude[c.relFname(f)] = true
-	}
-	var out []string
-	for _, f := range c.allRelativeFiles() {
-		if !exclude[f] {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
 // initBeforeMessage resets per-top-level-message state.
 func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
