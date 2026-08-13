@@ -365,6 +365,55 @@ func TestRunEmptySuccessSkipsConfirm(t *testing.T) {
 	}
 }
 
+// TestShellConfirmationShowsThePurpose renders what the user actually reads
+// before answering: the model's claim about the command, above the command
+// itself. An absent purpose is shown rather than passed over — the model was
+// asked for one, and its silence is part of the decision.
+func TestShellConfirmationShowsThePurpose(t *testing.T) {
+	for _, tc := range []struct{ name, purpose, want string }{
+		{"stated", "re-run the suite after the parser fix", "re-run the suite after the parser fix"},
+		{"absent", "", "(no purpose given)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+			res := r.Confirmer().Confirm(coder.ConfirmRequest{
+				Prompt:  "Run shell command?",
+				Command: "go test ./...",
+				Purpose: tc.purpose,
+			})
+			if !res.Yes {
+				t.Fatal("y did not approve")
+			}
+			got := out.String()
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("prompt did not show %q:\n%s", tc.want, got)
+			}
+			// "$ " is the shape runChecks prints an argv in, so the two shell
+			// surfaces read alike.
+			if !strings.Contains(got, "$ go test ./...") {
+				t.Errorf("command not shown as a command:\n%s", got)
+			}
+		})
+	}
+}
+
+// TestNonShellConfirmationShowsOnlyItsSubject: a URL has no purpose slot, so
+// the absence marker must not leak onto prompts that never asked for one.
+func TestNonShellConfirmationShowsOnlyItsSubject(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+	r.Confirmer().Confirm(coder.ConfirmRequest{
+		Prompt:  "Add URL to the chat?",
+		Subject: "https://example.com/page",
+	})
+	got := out.String()
+	if !strings.Contains(got, "https://example.com/page") {
+		t.Errorf("subject not shown:\n%s", got)
+	}
+	if strings.Contains(got, "no purpose given") || strings.Contains(got, "$ ") {
+		t.Errorf("shell chrome leaked onto a non-shell prompt:\n%s", got)
+	}
+}
+
 func TestPromptCtrlCChordExits(t *testing.T) {
 	// Two ^C at the prompt within the window: first prints the hint,
 	// second exits. Readline maps \x03 to ErrInterrupt in non-interactive

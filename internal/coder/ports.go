@@ -52,9 +52,19 @@ type ConfirmResult struct {
 }
 
 // ConfirmRequest mirrors aider's confirm_ask surface.
+//
+// Command is a shell command awaiting approval, and Purpose is the model's own
+// claim about what running it is for. They are separate from Subject rather
+// than folded into it because a renderer should be free to draw a command
+// differently from a URL — and because a request carrying a Command is one
+// whose asker was *asked* for a purpose, which is what makes an empty Purpose
+// worth showing as an absence rather than passing over in silence. The coder
+// stays ignorant of how any of the three is drawn.
 type ConfirmRequest struct {
 	Prompt              string
 	Subject             string
+	Command             string
+	Purpose             string
 	ExplicitYesRequired bool   // --yes must NOT auto-answer (model shell)
 	Group               string // ConfirmGroup key ("all"/"skip" scope)
 }

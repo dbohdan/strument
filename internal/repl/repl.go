@@ -472,8 +472,24 @@ type rlConfirmer struct{ r *REPL }
 
 func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	r := cf.r
-	if req.Subject != "" {
-		r.printf("%s", req.Subject)
+	switch {
+	case req.Command != "":
+		// The purpose is the model's claim about the command, so it sits above
+		// it, recessive: it is narration, and the command is the thing that has
+		// to be read. An absent purpose is shown rather than skipped — the model
+		// was asked for one, and that it gave none is worth weighing before
+		// answering.
+		if req.Purpose != "" {
+			r.out.Toolf("%s", req.Purpose)
+		} else {
+			r.out.Warningf("(no purpose given)")
+		}
+		// "$ " is the shape runChecks prints an argv in, so the two shell
+		// surfaces read alike. The color deliberately is not: there the check is
+		// routine, here it is the decision.
+		r.out.Printf("$ %s", req.Command)
+	case req.Subject != "":
+		r.out.Printf("%s", req.Subject)
 	}
 
 	// aider's confirm_ask defaults: yes, unless an explicit yes is

@@ -164,23 +164,33 @@ func editTools() []llm.ToolDef {
 	}
 }
 
-// bashTool runs a shell command, and is the one tool that always asks first.
-// Everything the model might want to *observe* has its own tool, so what
-// reaches bash is the open-ended and possibly destructive remainder — which is
-// exactly what deserves a confirmation prompt.
+// bashTool runs a shell command, and is the tool that asks first. Everything
+// the model might want to *observe* has its own tool, so what reaches bash is
+// the open-ended and possibly destructive remainder — which is exactly what
+// deserves a confirmation prompt.
+//
+// purpose is required, and the description asks for a claim rather than a
+// label, because the prompt is worth only what the user reads off it: "run the
+// tests" tells them nothing they could not see in the command itself. The
+// requirement is a schema one, not a gate — a call without a purpose still runs
+// (see runShellTool), because the absence is something to show the user rather
+// than a reason to spend a round trip.
 func bashTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolBash,
-		Description: "Run a shell command. The user is asked to confirm before it runs, and its output " +
-			"is returned to you. Commands run from the project's root directory. To read, search, or " +
-			"list files, use the read, grep, glob, and ls tools instead — they need no confirmation.",
+		Description: "Run a shell command. Unless the command is one of the project's configured checks, " +
+			"the user is asked to confirm before it runs. Its output is returned to you. Commands run " +
+			"from the project's root directory. To read, search, or list files, use the read, grep, " +
+			"glob, and ls tools instead — they are never confirmed.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"command": strProp("The complete command, ready to execute, with no placeholders."),
-				"purpose": strProp("A short note on what running the command is for."),
+				"purpose": strProp("What this command does and why you are running it now — enough " +
+					"for the user to decide without reading the command itself. Say plainly if it " +
+					"writes, deletes, installs, or sends anything."),
 			},
-			"required": []any{"command"},
+			"required": []any{"command", "purpose"},
 		},
 	}
 }
@@ -250,10 +260,14 @@ type plannedEdit struct {
 	create  bool
 }
 
-// toolCommand is one suggest_command call.
+// toolCommand is one bash call.
 type toolCommand struct {
 	callID  string
 	command string
+	// purpose is the model's claim about what running the command is for. It
+	// is what the confirmation prompt is worth reading for, so it is carried
+	// rather than decoded and dropped.
+	purpose string
 }
 
 // editArgs is the decoded argument object shared by the edit tools.
@@ -370,8 +384,13 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	return OutcomeContinue
 }
 
-// parseCommandArgs decodes a suggest_command call. The second return is a
-// model-facing failure message, "" on success.
+// parseCommandArgs decodes a bash call. The second return is a model-facing
+// failure message, "" on success.
+//
+// A missing purpose is deliberately not a failure. It is required in the
+// schema, but refusing the call would spend a reflection on a formality, and
+// the user is better served by seeing that no purpose was given than by the
+// model being sent back to write one.
 func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	var a struct {
 		Command string `json:"command"`
@@ -383,7 +402,7 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	if strings.TrimSpace(a.Command) == "" {
 		return toolCommand{}, "The required \"command\" argument was missing."
 	}
-	return toolCommand{callID: tc.ID, command: a.Command}, ""
+	return toolCommand{callID: tc.ID, command: a.Command, purpose: strings.TrimSpace(a.Purpose)}, ""
 }
 
 // runShellTool confirms and runs a shell command, returning its output as the
@@ -396,7 +415,8 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	command := strings.TrimSpace(cmd.command)
 	if !c.confirmTurn(ConfirmRequest{
 		Prompt:              "Run shell command?",
-		Subject:             command,
+		Command:             command,
+		Purpose:             cmd.purpose,
 		ExplicitYesRequired: true,
 		Group:               "run-shell",
 	}) {

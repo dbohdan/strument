@@ -389,6 +389,71 @@ func TestToolSuggestCommandDeclined(t *testing.T) {
 	}
 }
 
+// recordingConfirmer captures the request it was asked, so a test can assert
+// on what the user would have been shown rather than only on the answer.
+type recordingConfirmer struct {
+	got    []ConfirmRequest
+	answer bool
+}
+
+func (rc *recordingConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
+	rc.got = append(rc.got, req)
+	return ConfirmResult{Yes: rc.answer}
+}
+
+// TestBashRequiresAPurpose pins the schema. The prompt is worth exactly what
+// the user reads off it, and a model that is not asked for a claim about the
+// command writes a label or nothing at all.
+func TestBashRequiresAPurpose(t *testing.T) {
+	required, ok := bashTool().Parameters["required"].([]any)
+	if !ok {
+		t.Fatalf("bash schema has no required list: %#v", bashTool().Parameters)
+	}
+	if !slices.Contains(required, any("command")) || !slices.Contains(required, any("purpose")) {
+		t.Errorf("required = %v, want both command and purpose", required)
+	}
+}
+
+// TestBashConfirmationCarriesThePurpose is the point of requiring one: the
+// model's claim reaches the confirmation, separately from the command, so a
+// renderer can draw them differently.
+func TestBashConfirmationCarriesThePurpose(t *testing.T) {
+	for _, tc := range []struct {
+		name, args, wantPurpose string
+	}{
+		{"stated", `{"command":"go test ./...","purpose":"re-run the suite after the parser fix"}`,
+			"re-run the suite after the parser fix"},
+		// Required in the schema, but a model that omits it is not sent back for
+		// one: the absence is shown to the user instead.
+		{"omitted", `{"command":"go test ./..."}`, ""},
+		{"blank", `{"command":"go test ./...","purpose":"   "}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rc := &recordingConfirmer{answer: false}
+			c := &Coder{Out: &captureOut{}, Confirm: rc, SuggestShellCommands: true}
+			cmd, msg := parseCommandArgs(call("bash", tc.args))
+			if msg != "" {
+				t.Fatalf("parse: %s", msg)
+			}
+			c.runShellTool(context.Background(), cmd)
+
+			if len(rc.got) != 1 {
+				t.Fatalf("confirmed %d times, want 1", len(rc.got))
+			}
+			req := rc.got[0]
+			if req.Command != "go test ./..." {
+				t.Errorf("Command = %q, want the command", req.Command)
+			}
+			if req.Subject != "" {
+				t.Errorf("Subject = %q, want the command in Command instead", req.Subject)
+			}
+			if req.Purpose != tc.wantPurpose {
+				t.Errorf("Purpose = %q, want %q", req.Purpose, tc.wantPurpose)
+			}
+		})
+	}
+}
+
 // TestToolEditReflects is the reflection-as-tool-error path: a first call
 // whose search doesn't match produces a tool-error result and the turn
 // re-sends on that result — no synthetic user turn — and the second, correct
