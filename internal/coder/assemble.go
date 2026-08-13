@@ -303,27 +303,37 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
+	// EXPERIMENT ARM B. The fabricated *assistant* replies are gone; the
+	// file-context user messages are untouched.
+	//
+	// The two halves of a synthetic pair are not equally indefensible, which is
+	// what this arm isolates. A user message carrying the pinned files has a
+	// real referent — the user did put them there with /add — while "Ok, I will
+	// use these files as references" is the harness writing the model's lines
+	// for it, and answers a question nobody asked.
+	//
+	// Removing only the assistant half also keeps the arms honest: the messages
+	// that remain are byte-identical and in the same order, so the two arms
+	// differ by exactly the thing under test, and the cache prefix does not move
+	// — which is what makes tokens-sent readable rather than confounded.
+	//
+	// Consecutive user messages are the result at two boundaries. All three
+	// models in this experiment were probed and answer them correctly.
 	if roContent := c.readOnlyFilesContent(); roContent != "" {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
-			llm.TextMessage("assistant", "Ok, I will use these files as references."),
 		}
 	}
 
-	var filesContent, filesReply string
+	var filesContent string
 	switch {
 	case len(c.absFnames) > 0:
 		filesContent = c.Prompts.FilesContentPrefix + c.filesContent()
-		filesReply = c.Prompts.FilesContentAssistantReply
 	default:
 		filesContent = c.Prompts.FilesNoFullFiles
-		filesReply = "Ok."
 	}
 	if filesContent != "" {
-		chunks.chatFiles = []llm.Message{
-			llm.TextMessage("user", filesContent),
-			llm.TextMessage("assistant", filesReply),
-		}
+		chunks.chatFiles = []llm.Message{llm.TextMessage("user", filesContent)}
 	}
 
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)
