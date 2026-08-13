@@ -26,6 +26,7 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   Their edits are written immediately after the call.
   `bash` runs a command behind a confirmation using the embedded pure-Go
   [mvdan/sh](https://github.com/mvdan/sh) shell, and `verify` runs a check you pre-configured.
+  The confirmation shows the model's stated purpose above the command, and it is skipped when the command is one of your configured checks verbatim.
 - Every turn is undoable, with or without Git.
   Strument records each file before the first time it writes to it.
   `/undo` can restore a whole turn even in a directory that is not a repository,
@@ -36,6 +37,7 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   The command `/squash [n]` merges several commits.
 - Configured checks.
   The `verify` dictionary names your project's verification commands, like tests, a linter, and a build, that the model can run by name.
+  `project_checks()` fills it in from your project's marker files across thirteen ecosystems.
   `verify_auto` runs a list of `verify` commands at the end of any turn that changed a file.
   Only failing checks print their output.
 - URL scraping.
@@ -274,6 +276,14 @@ reasoning_display = 10  # "full" (the default), a line count, or "off".
 ```
 
 Checks run in the order they are listed and stop at the first failure, so put the fast ones first.
+
+Naming a check also quiets the shell prompt for it.
+A `bash` command that is one of your checks *verbatim* runs without asking, because you already approved it by writing it here.
+Anything that is not an exact match — an added flag, a `&&`, a redirection — asks as usual.
+
+`verify = project_checks()` fills the dictionary in from your project's marker files, for Go, Rust, Python, Node, Deno, `make`/`task`/`just`, Java, .NET, PHP, Ruby, Elixir, Crystal, and Haskell.
+It is opt-in and never runs a target your project doesn't define.
+Note that these are your project's own commands, not commands that are inherently safe: `npm test` runs whatever your `package.json` says.
 Hiding reasoning is not the same as disabling it.
 The reasoning tokens are still generated, logged, and billed.
 Set `reasoning="off"` on the model to disable it.

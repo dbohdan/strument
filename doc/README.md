@@ -255,6 +255,28 @@ Nine tools, in three natures:
   it needs no gate — the model supplies a key, never a command, and there is
   nothing to classify or smuggle. It is offered only when `verify` is
   configured.
+- **The gate is an allowlist, and never a blacklist.** A `bash` command that is
+  a configured check *verbatim* skips the prompt (`allowlist.go`); everything
+  else asks. The asymmetry is the whole argument. A blacklist — escalate on
+  `rm`, `curl`, `sudo` — fails **open**: everything it did not think of sails
+  through, and the misses are silent. An allowlist fails **closed**: the worst
+  case is a prompt the user did not need, which they notice and can fix by
+  naming the check. Strument therefore classifies nothing as dangerous, because
+  nothing here could do it reliably. The match is strict — a single simple
+  command of bare literal words, no expansions, no quoting — and a match runs
+  the configured argv rather than the model's string, so what runs is certainly
+  what was compared. `project_checks()` fills the dict from a project's marker
+  files, opt-in, so the allowlist is worth configuring without hand-writing one
+  per repository.
+- **The surviving prompt is worth reading, so it can default to yes.** `purpose`
+  is required and shown above the command; an absent one is shown too. That pair
+  is deliberate: the earlier `y/N` made the common case cost a keystroke it did
+  not need to, and friction in the common case is exactly what erodes a prompt
+  into reflex. Cheapening the answer is only defensible alongside making the
+  question informative — which is also why the blanket "all this turn" option
+  left this gate. What reaches it is the open-ended remainder after every
+  observation tool has taken its share, and the repetition that option was
+  answering now belongs to the allowlist.
 
 The tools live in `internal/coder/tools.go` (`toolobserve.go` for the
 observation half, `toolsymbol.go` for `symbol`); `applyToolCalls` dispatches a
