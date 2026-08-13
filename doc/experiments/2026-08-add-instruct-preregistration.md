@@ -139,4 +139,54 @@ efficiency will find it.
 
 ## Amendments
 
-*(none yet)*
+### 2026-08-16 — difficulty pilot failed the band; primary and guardrail swap
+
+**The pilot.** 47 A0-only samples (one lost to a worker race, not a model
+failure), 3 models × 4 tasks. Baseline **46/47 = 98%**:
+
+| task | A0 | median steps |
+| --- | --- | --- |
+| `many_pinned` | 12/12 | 3 |
+| `double_edit` | 12/12 | 4 |
+| `contradicts_name` | 11/11 | 3 |
+| `cross_file` | 11/12 | 4 |
+
+That is outside the 65–85% band this document requires, so **the run as
+specified does not happen.**
+
+**Three attempts, three ceilings.** The synthetic-turn screen's original four
+tasks hit 24/24; its two "hard" replacements looked like 67% and turned out to
+be a scorer bug, running at 100% once fixed; and now a task built specifically
+for this question — six files pinned, two relevant — is 12/12. The conclusion is
+not that the fourth attempt will work. It is that **these three models solve
+small, well-specified Go editing tasks essentially always, so task success
+cannot be a discriminating primary metric at this task scale.** Making it one
+would require tasks large or ambiguous enough that deterministic scoring becomes
+the next problem, which is a different and much more expensive experiment.
+
+**What changes.** Primary and guardrail swap:
+
+- **Primary: total steps per turn.** Not at ceiling — medians of 3–4 with real
+  spread — and it is the live question. Mann-Whitney U, stratified reporting by
+  model and task.
+- **Guardrail: task success.** Still measured, still must not regress; at a 98%
+  baseline, 300/arm bounds any regression to roughly 2pp, which is a perfectly
+  good *safety* check even though it is useless as a discriminator.
+- **Safety counter unchanged: blind edits.** Note the pilot's A0 figures are high
+  by construction (15, 13, 18, 8) — under A0 editing without reading is correct,
+  because the content was supplied. The number is only interpretable for A2.
+
+**Why this is not post-hoc metric shopping, and the one fact that decides it:**
+the pilot was **A0 only**. No A2 sample has been collected or looked at, so the
+new primary was chosen blind to the treatment effect. The direction was also
+pre-committed: the characterization note this run comes from already said the
+real question a scaled run answers is *"does the extra round trip cost steps or
+wall time"*. The original pre-registration promoted success above that; the pilot
+says success cannot carry the weight, so the question returns to where it was
+first stated.
+
+**Decision rule, restated.** Adopt A2 if median steps rise by no more than one,
+**and** task success shows no regression beyond 5pp one-sided, **and** blind
+edits under A2 are not more common than under A0.
+
+Pilot data discarded, not pooled. Sample size unchanged at 600.
