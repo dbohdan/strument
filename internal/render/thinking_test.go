@@ -181,12 +181,15 @@ func TestThinkingCapProgressIsDebounced(t *testing.T) {
 		if !strings.HasPrefix(u, "\r") {
 			t.Errorf("update %q should start with \\r", u)
 		}
+		if !strings.HasSuffix(u, clearToEOL) {
+			t.Errorf("update %q should clear to end of line", u)
+		}
 	}
 
 	th.End()
 	// The final count is committed with a newline so the closing marker starts
 	// on a clean line.
-	if !strings.Contains(buf.String(), "…     5 more lines of thinking\n") {
+	if !strings.Contains(buf.String(), "…     5 more lines of thinking"+clearToEOL+"\n") {
 		t.Errorf("missing the committed elision note:\n%q", buf.String())
 	}
 }

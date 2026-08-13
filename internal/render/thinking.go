@@ -22,6 +22,21 @@ const (
 	ThinkingClose     = "‹/›"
 	ThinkingMoreLines = "… %5d more %s of thinking"
 
+	// clearToEOL erases whatever the previous, longer progress line left to the
+	// right of this one.
+	//
+	// Today nothing is left: the count only rises, %5d is fixed width, and the
+	// plural only grows ("line" to "lines"), so every repaint is at least as
+	// long as the one before. That is three coincidences holding a redraw
+	// together, none of them written down anywhere until now, and any of them
+	// could change — a width tweak, a reworded message, a count that resets.
+	// Two bytes buys independence from all three.
+	//
+	// Safe to emit unconditionally here because both users are reachable only
+	// when a caller has wired Progress, which only the terminal does; the plain
+	// renderer script mode uses leaves it nil and never reaches either.
+	clearToEOL = "\x1b[K"
+
 	// ProgressInterval is the minimum time between real-time progress updates.
 	// 8 FPS.
 	ProgressInterval = 125 * time.Millisecond
@@ -197,7 +212,7 @@ func (t *Thinking) progress() {
 	} else {
 		return
 	}
-	t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")))
+	t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")) + clearToEOL)
 }
 
 // End closes the block and reports whether there was one. A one-liner needs no
@@ -226,7 +241,7 @@ func (t *Thinking) End() bool {
 		if t.Progress != nil {
 			// "\r" overwrites the last real-time progress update and the
 			// newline commits the line so the closing marker starts clean.
-			t.Marker("\r" + msg + "\n")
+			t.Marker("\r" + msg + clearToEOL + "\n")
 		} else {
 			t.Marker(msg + "\n")
 		}
