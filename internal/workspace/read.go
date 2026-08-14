@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -41,11 +40,19 @@ type FileText struct {
 // that receives a silently truncated file will edit against text that is not
 // there. Truncated says so, and the tool layer turns it into a paging hint.
 func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
-	rel = path(rel)
+	full, rel, reason := w.contain(rel)
+	if reason != "" {
+		return FileText{}, errors.New(reason)
+	}
 	if rel == "" {
 		return FileText{}, errors.New("no path given")
 	}
-	full := filepath.Join(w.Root, filepath.FromSlash(rel))
+	// The ignore rules bind here too. They always bound ls, glob, and grep,
+	// which is what made this easy to miss: a gitignored .env was invisible to
+	// every way of finding it and one guessed filename away from being read.
+	if err := w.refuseIgnored(rel, full); err != nil {
+		return FileText{}, err
+	}
 
 	info, err := os.Stat(full)
 	if err != nil {

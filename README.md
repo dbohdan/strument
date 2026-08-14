@@ -20,7 +20,7 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
 - Nine [tool calls](https://towardsdatascience.com/tool-calling-explained-how-ai-agents-decide-what-to-do-next/) in three groups.
   Models get access to `read`, `grep`, `glob`, `ls`, and `symbol` for lookup.
   Those tools are freely available and require no use confirmation.
-  They never see a file the project ignores.
+  They never see a file the project ignores, and none of them reaches outside the project root.
   `symbol` answers "where is this defined" using the language parser (tree-sitter and `go/parser`) rather than text.
   `edit` and `write` change text.
   Their edits are written immediately after the call.
@@ -167,6 +167,8 @@ strument --yes -m 'Update the changelog for v0.3.0.'  # Answer confirmations; st
 ```
 
 `--yes-shell` is the flag that lets the model run shell commands unattended.
+Combined with `-m`, it gives a model up to 25 unattended steps of arbitrary shell in your project.
+That is the point of it, and it is meant for a terminal you are watching rather than for CI or cron, where a prompt-injected message becomes remote code execution.
 `--no-git` turns off the git integration inside a repository.
 Outside one it is already off, and `/undo` works either way.
 

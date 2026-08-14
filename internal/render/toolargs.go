@@ -320,7 +320,7 @@ func (d *ToolDiff) SuppressHeader() { d.noHeader = true }
 func (d *ToolDiff) header() {
 	d.wroteHeader = true
 	if !d.noHeader {
-		fmt.Fprintf(d.w, "%s\n", d.Label())
+		fmt.Fprintf(d.w, "%s\n", Sanitize(d.Label()))
 	}
 	for _, line := range d.pending {
 		fmt.Fprint(d.w, line)
@@ -414,6 +414,11 @@ func splitDiffLines(s string) []string {
 
 // formatLine renders one diff/command line with its prefix and themed color.
 func (d *ToolDiff) formatLine(field, text string) string {
+	// Every diff body is the model's own text, so it is sanitized here — one
+	// choke point that both outputs share, rather than once per Output
+	// implementation. The path header goes through Label, which is sanitized
+	// where it is emitted.
+	text = Sanitize(text)
 	prefix, color := "-", d.theme.DiffRemoved // old_string: removed
 	switch field {
 	case "new_string", "content":

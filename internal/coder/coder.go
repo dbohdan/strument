@@ -200,7 +200,20 @@ func New(root string, model *config.Model) *Coder {
 		turnAutoApprove:      map[string]bool{},
 	}
 	c.Platform = defaultPlatformInfo(c)
+	// The observation tools are contained to the project root, with the same
+	// exemption edits get: a file the user pinned is sanctioned wherever it
+	// lives. A predicate rather than a snapshot, so /add and /drop need no
+	// bookkeeping and the two lists cannot go stale.
+	c.Files.Pinned = c.isPinned
 	return c
+}
+
+// isPinned reports whether abs is a file the user added with /add or
+// /read-only. Out-of-tree references are the case it exists for: /read-only is
+// the only channel for a file outside the project, and a model that has its
+// contents in context will sometimes read it to check.
+func (c *Coder) isPinned(abs string) bool {
+	return slices.Contains(c.absFnames, abs) || slices.Contains(c.absReadOnlyFnames, abs)
 }
 
 func defaultPlatformInfo(c *Coder) PlatformInfo {
@@ -508,18 +521,18 @@ type StdOutput struct {
 }
 
 func (o *StdOutput) Printf(format string, args ...any) {
-	fmt.Printf(format+"\n", args...)
+	fmt.Print(render.Sanitize(fmt.Sprintf(format, args...)) + "\n")
 	o.sep.Clear() // the harness's own voice, outside any step
 }
 func (o *StdOutput) Toolf(format string, args ...any) {
-	fmt.Printf(format+"\n", args...) // no color outside the REPL
+	fmt.Print(render.Sanitize(fmt.Sprintf(format, args...)) + "\n") // no color outside the REPL
 	o.sep.Drew()
 }
 func (o *StdOutput) Warningf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	fmt.Fprint(os.Stderr, render.Sanitize(fmt.Sprintf(format, args...))+"\n")
 }
 func (o *StdOutput) Errorf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	fmt.Fprint(os.Stderr, render.Sanitize(fmt.Sprintf(format, args...))+"\n")
 }
 func (o *StdOutput) StreamText(delta string) {
 	// The one separator that still follows the thinking rather than preceding
@@ -533,7 +546,7 @@ func (o *StdOutput) StreamText(delta string) {
 		o.streamed = true
 		o.sep.Drew()
 	}
-	fmt.Print(delta)
+	fmt.Print(render.Sanitize(delta))
 }
 
 // StreamReasoning renders the model's thinking, plain.
@@ -558,7 +571,7 @@ func (o *StdOutput) StreamReasoning(delta string) {
 		}
 		o.think = t
 	}
-	o.think.Write(delta)
+	o.think.Write(render.Sanitize(delta))
 }
 
 // endReasoning closes an open thinking block and reports whether there was one.

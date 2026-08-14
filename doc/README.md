@@ -347,6 +347,14 @@ Nine tools, in three natures:
   it needs no gate — the model supplies a key, never a command, and there is
   nothing to classify or smuggle. It is offered only when `verify` is
   configured.
+
+  A check inherits Strument's environment — `PATH`, `HOME`, `GOCACHE`, the
+  proxy variables — deliberately, and a security review's suggestion to scrub
+  it was declined. `go test` does not work without those, so scrubbing would
+  break the feature outright, and it would not buy a boundary: the threat it
+  imagines is a poisoned `package.json`, which is arbitrary execution already.
+  What guards a check is that the model supplies a *name* and the user wrote
+  the argv.
 - **The gate is an allowlist, and never a blacklist.** A `bash` command that is
   a configured check *verbatim* skips the prompt (`allowlist.go`); everything
   else asks. The asymmetry is the whole argument. A blacklist — escalate on

@@ -196,28 +196,28 @@ func (o *termOutput) sgr(codes string) string {
 func (o *termOutput) Printf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
-	fmt.Fprintf(o.w, format+"\n", args...)
+	fmt.Fprint(o.w, render.Sanitize(fmt.Sprintf(format, args...))+"\n")
 	o.sep.Clear()
 }
 
 func (o *termOutput) Toolf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
-	fmt.Fprintf(o.w, o.sgr(o.theme.Tool)+format+o.sgr("0")+"\n", args...)
+	fmt.Fprint(o.w, o.sgr(o.theme.Tool)+render.Sanitize(fmt.Sprintf(format, args...))+o.sgr("0")+"\n")
 	o.sep.Drew()
 }
 
 func (o *termOutput) Warningf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
-	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)
+	fmt.Fprint(o.w, o.sgr(o.theme.Warning)+render.Sanitize(fmt.Sprintf(format, args...))+o.sgr("0")+"\n")
 	o.sep.Drew()
 }
 
 func (o *termOutput) Errorf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
-	fmt.Fprintf(o.w, o.sgr(o.theme.Error)+format+o.sgr("0")+"\n", args...)
+	fmt.Fprint(o.w, o.sgr(o.theme.Error)+render.Sanitize(fmt.Sprintf(format, args...))+o.sgr("0")+"\n")
 	o.sep.Drew()
 }
 
@@ -304,7 +304,7 @@ func (o *termOutput) StreamReasoning(delta string) {
 			Display: o.Thinking,
 		}
 	}
-	o.think.Write(delta)
+	o.think.Write(render.Sanitize(delta))
 }
 
 // endReasoning closes the thinking block and reports whether there was one.
@@ -356,7 +356,7 @@ func (o *termOutput) StreamText(delta string) {
 		if o.held == nil {
 			o.held = render.NewParser(render.NewANSI(&o.heldBuf, o.color, o.theme, o.width))
 		}
-		o.held.Write(delta)
+		o.held.Write(render.Sanitize(delta))
 		return
 	}
 
@@ -369,7 +369,7 @@ func (o *termOutput) StreamText(delta string) {
 	o.ensureParser()
 	o.streamed = true
 	o.sep.Drew()
-	o.parser.Write(delta)
+	o.parser.Write(render.Sanitize(delta))
 }
 
 func (o *termOutput) StreamToolCall(index int, name, args string) {

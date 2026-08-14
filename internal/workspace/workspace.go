@@ -13,6 +13,7 @@
 package workspace
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -100,6 +101,16 @@ func (l Limits) fileBytes() int64 {
 type Workspace struct {
 	Root   string
 	Limits Limits
+	// Pinned reports whether an absolute path is one the user explicitly
+	// pinned with /add or /read-only. Those are sanctioned wherever they live,
+	// the same exemption unsafePath makes for edits: containment guards against
+	// a model inventing a path out of the project, not against what the user
+	// deliberately reached for.
+	//
+	// A predicate rather than a list, because a list would go stale the first
+	// time /drop ran. nil means nothing is pinned, which is what `strument
+	// tool` passes: the command line is contained with no exception at all.
+	Pinned func(abs string) bool
 }
 
 // skipAlways is the only unconditional exclusion: the repository's own
@@ -254,30 +265,19 @@ func (w *Workspace) Files() ([]string, Truncated, error) {
 // unfamiliar tree, and answer "what is in here" badly when they have to guess
 // a pattern first.
 func (w *Workspace) List(dir string) ([]Entry, error) {
-	rel := path(dir)
-	full := w.Root
+	full, rel, reason := w.contain(dir)
+	if reason != "" {
+		return nil, errors.New(reason)
+	}
 	var domain []string
 	if rel != "" {
-		full = filepath.Join(w.Root, filepath.FromSlash(rel))
 		domain = strings.Split(rel, "/")
 	}
 
-	patterns, err := gitignore.ReadRoot(w.Root)
+	matcher, err := w.matcherFor(domain)
 	if err != nil {
 		return nil, err
 	}
-	// Collect the ignore rules along the path to dir so a nested .gitignore
-	// above it still applies.
-	cur := w.Root
-	for i, seg := range domain {
-		cur = filepath.Join(cur, seg)
-		own, err := gitignore.ReadDir(cur, domain[:i+1])
-		if err != nil {
-			return nil, err
-		}
-		patterns = slices.Concat(patterns, own)
-	}
-	matcher := gitignore.NewMatcher(patterns)
 
 	entries, err := os.ReadDir(full)
 	if err != nil {
