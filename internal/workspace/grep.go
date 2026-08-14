@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // GrepMode selects how much a search returns.
@@ -65,6 +66,23 @@ type GrepResult struct {
 	// project, which is a different claim and often a false one.
 	InScope int
 	Scanned int
+	// Shortened counts returned lines that were clipped to MaxMatchBytes, so
+	// the caller can say so rather than let a "…" pass for the file's content.
+	Shortened int
+}
+
+// clipRunes cuts s to at most n bytes without splitting a rune, marking the cut
+// so a clipped line cannot be mistaken for the whole one. The marker is the
+// same "…" the diff renderer elides with.
+func clipRunes(s string, n int) (string, bool) {
+	if len(s) <= n {
+		return s, false
+	}
+	cut := n
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + " …", true
 }
 
 // Grep searches file contents across the workspace.
@@ -118,7 +136,17 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 			fileRes.Count++
 			res.Total++
 			if q.Mode == GrepContent {
-				fileRes.Lines = append(fileRes.Lines, GrepLine{Number: i + 1, Text: line})
+				text, clipped := clipRunes(line, w.Limits.matchBytes())
+				if clipped {
+					res.Shortened++
+				}
+				fileRes.Lines = append(fileRes.Lines, GrepLine{Number: i + 1, Text: text})
+				// The cap is checked here and not only between files: one
+				// generated file can hold every match in the project, and a
+				// per-file check would let it through whole.
+				if res.Total >= w.Limits.matches() {
+					break
+				}
 			}
 		}
 		if fileRes.Count > 0 {
@@ -126,9 +154,9 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 		}
 
 		// In content mode the cap counts lines, since that is what reaches the
-		// context; otherwise it counts files.
+		// context; otherwise it counts paths.
 		if q.Mode == GrepContent {
-			return res.Total < w.Limits.results()
+			return res.Total < w.Limits.matches()
 		}
 		return len(res.Files) < w.Limits.results()
 	})
@@ -137,7 +165,7 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 	}
 
 	res.Truncated = trunc
-	if q.Mode == GrepContent && res.Total >= w.Limits.results() {
+	if q.Mode == GrepContent && res.Total >= w.Limits.matches() {
 		res.Truncated.Results = true
 	}
 	if q.Mode != GrepContent && len(res.Files) >= w.Limits.results() {

@@ -131,7 +131,13 @@ type Coder struct {
 	messageSends          int
 	totalTokensSent       int
 	totalTokensReceived   int
-	lastUsageReport       string // the last send's line; printed only by an aside
+	// peakTokensSent is the largest single request this session. The session
+	// and turn totals are sums over sends, which is what you are billed but not
+	// what fills the window: a five-step turn re-sends its whole conversation
+	// each time, so the total can be several times the largest prompt in it.
+	// Only the peak says how close the window came to full.
+	peakTokensSent  int
+	lastUsageReport string // the last send's line; printed only by an aside
 
 	// turnSnap accumulates what this turn has written; pushed onto undoStack at
 	// turn end. The stack is the undo substrate that works without git.

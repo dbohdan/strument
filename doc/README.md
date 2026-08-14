@@ -237,6 +237,22 @@ Nine tools, in three natures:
   identifier was in twenty-one files at the time. Globs match whole paths, so
   `*.go` reaches only the root and a bare directory name matches nothing; that
   rule is now in the tool descriptions and in the message.
+
+  **A path and a matching line are different currencies.** They have separate
+  caps because they cost differently by two orders of magnitude. A path in this
+  project averages 37 bytes, so a thousand of them is a predictable ~9k tokens;
+  a *matching line* is whatever happened to be on that line, and for one
+  unscoped search here the median match was 1383 bytes with a longest of 157 KB
+  — a single line of a recorded JSON fixture. Content searches therefore return
+  at most 100 lines, each clipped to 200 bytes and marked when clipped, while
+  path results keep the larger cap. Truncating a file listing is the worse
+  failure of the two: a reader concludes the files are not there, where a
+  truncated content search only means "narrow it".
+
+  The count cap alone would not have bounded anything. Before the per-line clip,
+  that search produced 1.33 MB of matches at a cap of 1000 and 88 KB at a cap of
+  100 — both over `maxToolOutputBytes` (60 KB), so both delivered *the same* 60 KB.
+  The obvious knob was the one that did nothing.
 - **Pinned files are named, not injected.** `/add` puts a file's *name* in the
   system prompt with an instruction to read it; the contents arrive through a
   `read` call like everything else. This replaced a fabricated user turn

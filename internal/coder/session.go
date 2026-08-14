@@ -206,6 +206,13 @@ func (c *Coder) TokensReport() string {
 	if c.Model.Context > 0 {
 		fmt.Fprintf(&b, " of %d context window", c.Model.Context)
 	}
+	// The rows above are what the *next* request will carry. The peak is the
+	// largest one already sent, which the usage line cannot show: that line
+	// sums over a turn's sends, and a turn that takes five steps re-sends its
+	// conversation five times. The sum is the bill; this is the high-water mark.
+	if c.peakTokensSent > 0 {
+		fmt.Fprintf(&b, "\nLargest request so far: %d tokens (reported by the provider)", c.peakTokensSent)
+	}
 	if c.sessionKnown {
 		fmt.Fprintf(&b, "\nSession cost: $%.4f", c.totalCost)
 	}

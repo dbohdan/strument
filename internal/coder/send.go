@@ -466,6 +466,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	c.messageEstimated = c.messageEstimated || estimated
 	c.totalTokensSent += sent
 	c.totalTokensReceived += received
+	c.peakTokensSent = max(c.peakTokensSent, sent)
 
 	report := formatTokenLine(sent, u.cacheWrite, u.cacheRead, received)
 

@@ -25,19 +25,40 @@ import (
 
 // Limits bound what a single call may traverse or return, so one tool call
 // cannot stall the turn or flood the context. Zero means the default.
+// A path and a matching line are different currencies, which is why they have
+// separate caps. Measured on this repo: a path averages 37 bytes, so even a
+// thousand of them is about 9k tokens and the ceiling is predictable. A
+// *matching line* is whatever happened to be on that line — the median for one
+// unscoped search here was 1383 bytes and the longest was 157 KB, a single
+// line in a recorded fixture. Capping the two with one number meant the cheap
+// case was throttled and the expensive one was not bounded at all.
 type Limits struct {
 	// MaxEntries caps how many filesystem entries a walk visits.
 	MaxEntries int
-	// MaxResults caps how many paths or matches a call returns.
+	// MaxResults caps how many paths a call returns: ls, glob, and grep in its
+	// files and count modes.
 	MaxResults int
+	// MaxMatches caps how many matching lines a content search returns.
+	MaxMatches int
+	// MaxMatchBytes caps the length of one returned matching line.
+	MaxMatchBytes int
 	// MaxFileBytes caps the size of a file that will be read or searched.
 	MaxFileBytes int64
 }
 
 const (
-	defaultMaxEntries   = 200_000
-	defaultMaxResults   = 1_000
-	defaultMaxFileBytes = 5 << 20 // 5 MiB
+	defaultMaxEntries = 200_000
+	defaultMaxResults = 1_000
+	// A content search is for finding a definition or a call site, and past a
+	// hundred lines the pattern is wrong rather than the limit. The cost of
+	// stopping early is one more call; the cost of not stopping is tens of
+	// thousands of tokens that every later step in the turn pays for again.
+	defaultMaxMatches = 100
+	// Enough for any line of source — the median match in this project's own Go
+	// files is 58 bytes and the 90th percentile is 81 — and short enough that a
+	// minified blob or a recorded JSON fixture cannot bring its whole line.
+	defaultMaxMatchBytes = 200
+	defaultMaxFileBytes  = 5 << 20 // 5 MiB
 )
 
 func (l Limits) entries() int {
@@ -52,6 +73,20 @@ func (l Limits) results() int {
 		return l.MaxResults
 	}
 	return defaultMaxResults
+}
+
+func (l Limits) matches() int {
+	if l.MaxMatches > 0 {
+		return l.MaxMatches
+	}
+	return defaultMaxMatches
+}
+
+func (l Limits) matchBytes() int {
+	if l.MaxMatchBytes > 0 {
+		return l.MaxMatchBytes
+	}
+	return defaultMaxMatchBytes
 }
 
 func (l Limits) fileBytes() int64 {

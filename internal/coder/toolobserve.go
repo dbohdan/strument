@@ -174,6 +174,12 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	if res.Truncated.Any() {
 		b.WriteString("\n(Results were cut short by a limit. Narrow the search with glob or path to see the rest.)\n")
 	}
+	// A clipped line ends in "…", but only saying so once makes it a fact about
+	// the search rather than a character that happened to be in the file.
+	if res.Shortened > 0 {
+		fmt.Fprintf(&b, "\n(%d long %s shortened, marked with \"…\". Read the file for the whole line.)\n",
+			res.Shortened, plural(res.Shortened, "line was", "lines were"))
+	}
 	return truncateResult(b.String())
 }
 

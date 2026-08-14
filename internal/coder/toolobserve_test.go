@@ -108,6 +108,28 @@ func TestGrepModesAndScoping(t *testing.T) {
 	}
 }
 
+// A clipped line ends in "…", which on its own is just a character that might
+// have been in the file. The result says once that lines were shortened, and
+// where to get the rest — the same rule the empty-result and truncation notes
+// follow: never let a cut pass for the whole answer.
+func TestGrepSaysWhenItShortenedLines(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"fixture.jsonl": `{"blob":"` + strings.Repeat("x", 4000) + `","tag":"Target"}` + "\n",
+		"short.go":      "// Target\n",
+	})
+
+	got := c.runGrep(call("grep", `{"pattern":"Target","mode":"content"}`))
+	if !strings.Contains(got, "shortened") {
+		t.Errorf("a shortened line must be reported:\n%s", got)
+	}
+	if !strings.Contains(got, "short.go:1: // Target") {
+		t.Errorf("an untouched line must survive intact:\n%s", got)
+	}
+	if len(got) > 2000 {
+		t.Errorf("a 4 KB line reached the result: %d bytes", len(got))
+	}
+}
+
 // TestGrepReportsItsScope: the scope and mode shape the answer completely, so a
 // report naming only the pattern points at the wrong argument. Watched live — a
 // search scoped by a directory-shaped glob came back "no matches", and the next

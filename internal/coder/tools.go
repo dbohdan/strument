@@ -98,7 +98,10 @@ func readOnlyTools() []llm.ToolDef {
 						"type": "string",
 						"enum": []any{"files", "content", "count"},
 						"description": "\"files\" (the default) lists the files that match, \"content\" returns the " +
-							"matching lines with line numbers, \"count\" returns a per-file count.",
+							"matching lines with line numbers, \"count\" returns a per-file count. " +
+							"\"content\" returns at most the first 100 matching lines, each shortened to " +
+							"200 characters; when that is not enough, narrow the pattern or the scope " +
+							"rather than expecting more.",
 					},
 					"ignore_case": map[string]any{"type": "boolean", "description": "Match case-insensitively."},
 				},

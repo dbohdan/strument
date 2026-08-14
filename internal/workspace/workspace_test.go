@@ -1,11 +1,13 @@
 package workspace
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // tree materializes a map of slash paths to contents under a temp root.
@@ -223,6 +225,109 @@ func TestReadRejectsBinaryAndDirs(t *testing.T) {
 	if _, err := w.Read("d", 0, 0); err == nil {
 		t.Error("reading a directory should fail")
 	}
+}
+
+// A matching line is whatever happened to be on that line. In this project's
+// own tree, an unscoped search for "thinking|reasoning|thought" returned 927
+// matches whose median line was 1383 bytes and whose longest was 157 KB — one
+// line of a recorded JSON fixture. A cap that counts lines does not bound that
+// at all, so lines are clipped as well as counted.
+func TestGrepClipsLongLines(t *testing.T) {
+	root := tree(t, map[string]string{
+		"fixture.jsonl": `{"blob":"` + strings.Repeat("x", 5000) + `","tag":"Target"}` + "\n",
+		"short.go":      "// Target\n",
+	})
+	w := New(root)
+
+	res, err := w.Grep(GrepQuery{Pattern: "Target", Mode: GrepContent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Shortened != 1 {
+		t.Errorf("Shortened = %d, want 1", res.Shortened)
+	}
+	for _, f := range res.Files {
+		for _, l := range f.Lines {
+			if len(l.Text) > defaultMaxMatchBytes+len(" …") {
+				t.Errorf("%s:%d is %d bytes, over the cap", f.Path, l.Number, len(l.Text))
+			}
+		}
+	}
+	long := res.Files[0].Lines[0]
+	if !strings.HasSuffix(long.Text, " …") {
+		t.Errorf("a clipped line must say so, got %q", last(long.Text, 20))
+	}
+	if got := res.Files[1].Lines[0].Text; got != "// Target" {
+		t.Errorf("a short line must be untouched, got %q", got)
+	}
+}
+
+// Clipping must not split a rune, or the result is invalid UTF-8 and the model
+// is handed a replacement character where the code had a word.
+func TestGrepClipDoesNotSplitRunes(t *testing.T) {
+	// Multi-byte characters straddling the cap, at every offset within a rune.
+	for pad := range 4 {
+		line := "Target " + strings.Repeat("x", pad) + strings.Repeat("é", 500)
+		root := tree(t, map[string]string{"a.txt": line + "\n"})
+		res, err := New(root).Grep(GrepQuery{Pattern: "Target", Mode: GrepContent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := res.Files[0].Lines[0].Text
+		if !utf8.ValidString(got) {
+			t.Errorf("pad=%d: clipped to invalid UTF-8: %q", pad, last(got, 12))
+		}
+	}
+}
+
+// The cap has to bind inside a file as well as between files: one generated
+// file can hold every match in a project, and a per-file check lets it through
+// whole.
+func TestGrepMatchCapBindsWithinOneFile(t *testing.T) {
+	root := tree(t, map[string]string{
+		"big.txt": strings.Repeat("Target\n", 5000),
+	})
+	w := New(root)
+	w.Limits.MaxMatches = 10
+
+	res, err := w.Grep(GrepQuery{Pattern: "Target", Mode: GrepContent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(res.Files[0].Lines); n != 10 {
+		t.Errorf("returned %d lines from one file, want the cap of 10", n)
+	}
+	if !res.Truncated.Results {
+		t.Error("hitting the cap must be reported, not passed off as the whole answer")
+	}
+}
+
+// Paths are the other currency and keep their own, larger cap: one averages 37
+// bytes, so the ceiling is predictable, and truncating a file listing is worse
+// than truncating matches — a reader concludes the files are not there.
+func TestGrepPathModesKeepTheLargerCap(t *testing.T) {
+	files := map[string]string{}
+	for i := range 150 {
+		files[fmt.Sprintf("f%03d.go", i)] = "Target\n"
+	}
+	w := New(tree(t, files))
+	w.Limits.MaxMatches = 10 // must not apply to paths
+
+	res, err := w.Grep(GrepQuery{Pattern: "Target"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Files) != 150 {
+		t.Errorf("files mode returned %d paths, want all 150", len(res.Files))
+	}
+}
+
+// last is the tail of s, for error messages about clipped text.
+func last(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 func TestGrepModes(t *testing.T) {
