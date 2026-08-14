@@ -128,7 +128,7 @@ func (r *Repo) HeadSHA() string {
 // trailer (auto-commits of model edits); dirty commits stay unattributed.
 // ok=false means there was nothing to commit. GIT_AUTHOR_* and
 // GIT_COMMITTER_* are never overridden; hooks run normally.
-func (r *Repo) Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error) {
+func (r *Repo) Commit(fnames []string, context, prepared string, attributed bool) (hash, message string, ok bool, err error) {
 	if len(fnames) == 0 {
 		return "", "", false, nil
 	}
@@ -147,7 +147,12 @@ func (r *Repo) Commit(fnames []string, context string, attributed bool) (hash, m
 		return "", "", false, nil
 	}
 
-	if r.Message != nil {
+	// A prepared message means the caller already has one — the model wrote it
+	// during the turn — so the generator is not consulted and no second request
+	// goes out. That is the whole point of the commit_message tool.
+	if prepared != "" {
+		message = strings.TrimSpace(prepared)
+	} else if r.Message != nil {
 		diffArgs := append([]string{"diff", "--cached", "--"}, fnames...)
 		diffs, _ := r.git(diffArgs...)
 		message = strings.TrimSpace(r.Message(diffs, context))

@@ -91,6 +91,9 @@ type Coder struct {
 	doneMessages      []llm.Message
 	curMessages       []llm.Message
 	turnEditedFiles   map[string]bool
+	// turnCommitMessage is what commit_message set this turn, "" when the model
+	// did not call it. Reset with the rest of the turn state.
+	turnCommitMessage string
 
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
@@ -293,6 +296,7 @@ func (c *Coder) inchatRelativeFiles() []string {
 func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
+	c.turnCommitMessage = ""
 	c.numReflections = 0
 	c.numSteps = 0
 	c.autoVerifies = 0

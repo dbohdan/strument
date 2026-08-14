@@ -150,7 +150,7 @@ func (r *recordingRepo) PathInRepo(string) bool { return true }
 func (r *recordingRepo) IsDirty(string) bool    { return false }
 func (r *recordingRepo) GitIgnored(string) bool { return false }
 func (r *recordingRepo) HeadSHA() string        { return "deadbeef" }
-func (r *recordingRepo) Commit([]string, string, bool) (string, string, bool, error) {
+func (r *recordingRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
 	r.commitCalls++
 	return "abc1234", "msg", true, nil
 }

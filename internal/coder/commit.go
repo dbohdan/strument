@@ -27,13 +27,23 @@ import (
 //
 // A no-op without a repo, with auto-commits off, or in dry-run — the edits are
 // still applied, and /undo still reaches them through the snapshot.
+// commitsThisTurn reports whether a commit will happen at the end of this turn,
+// which is exactly when commit_message is worth offering. Asking a model to
+// write one where nothing commits is asking for a wasted call.
+//
+// It does not check turnEditedFiles: the tool has to be in the schema before
+// the first edit, since the schema is fixed for the send.
+func (c *Coder) commitsThisTurn() bool {
+	return c.Repo != nil && c.AutoCommits && !c.DryRun
+}
+
 func (c *Coder) commitTurn() {
-	if len(c.turnEditedFiles) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
+	if len(c.turnEditedFiles) == 0 || !c.commitsThisTurn() {
 		return
 	}
 	edited := slices.Sorted(maps.Keys(c.turnEditedFiles))
 
-	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), true)
+	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), c.preparedCommitMessage(), true)
 	if err != nil {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.
@@ -69,11 +79,18 @@ func (c *Coder) commitContext() string {
 // timeout the commit proceeds with the fallback message.
 const commitMessageTimeout = 60 * time.Second
 
-// CommitMessenger returns a commit-message generator backed by a model —
-// the weak-model call, packaged as the git port's Message func. An
-// empty return means "no message" and the caller falls back.
-func CommitMessenger(cl llm.ModelClient, model *config.Model, language string) func(diffs, context string) string {
-	return func(diffs, chatContext string) string {
+// CommitMessenger returns a commit-message generator backed by a model,
+// packaged as the git port's Message func. An empty return means "no message"
+// and the caller falls back.
+//
+// record receives the request's usage, and exists because this call was
+// spending money nobody could see: it goes out through the client directly, so
+// it never reached finalizeUsage, and a measured turn reported $0.00084 having
+// paid $0.00093. Nil is accepted for a caller that does not account.
+func CommitMessenger(
+	cl llm.ModelClient, model *config.Model, language string, record func(llm.Usage),
+) func(diffs, context string) string {
+	return func(diffs, chatContext string) string { //nolint:contextcheck // its own timeout; the turn's context is already done here.
 		languageInstruction := ""
 		if language != "" {
 			languageInstruction = "\n- Is written in " + language + "."
@@ -98,15 +115,21 @@ func CommitMessenger(cl llm.ModelClient, model *config.Model, language string) f
 				llm.TextMessage("system", system),
 				llm.TextMessage("user", content),
 			},
-			ReasoningEffort: model.Reasoning,
-			Temperature:     model.Temperature,
-			ExtraParams:     model.RequestExtraParams(),
+			// No ReasoningEffort. It used to inherit the model's, so a reasoning
+			// model would think its way to a subject line — paid for, invisible,
+			// and slower at the one moment the user is waiting to get their
+			// prompt back.
+			Temperature: model.Temperature,
+			ExtraParams: model.RequestExtraParams(),
 		}) {
 			if err != nil {
 				return ""
 			}
 			if ev.Kind == llm.EventAnswer {
 				answer.WriteString(ev.Text)
+			}
+			if ev.Kind == llm.EventUsage && ev.Usage != nil && record != nil {
+				record(*ev.Usage)
 			}
 		}
 		return strings.TrimSpace(answer.String())

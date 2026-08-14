@@ -31,7 +31,7 @@ func (r *fakeRepo) PathInRepo(_ string) bool { return true }
 func (r *fakeRepo) IsDirty(_ string) bool    { return false }
 func (r *fakeRepo) GitIgnored(_ string) bool { return false }
 func (r *fakeRepo) HeadSHA() string          { return "deadbeef" }
-func (r *fakeRepo) Commit([]string, string, bool) (string, string, bool, error) {
+func (r *fakeRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
 	return "", "", false, nil
 }
 

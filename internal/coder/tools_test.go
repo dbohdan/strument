@@ -149,7 +149,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit([]string, string, bool) (string, string, bool, error) {
+func (r *committingRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
 	return "abc1234", "feat: change world to mars", true, nil
 }
 
@@ -231,10 +231,10 @@ type countingRepo struct {
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
-func (r *countingRepo) Commit(fnames []string, context string, attributed bool) (string, string, bool, error) {
+func (r *countingRepo) Commit(fnames []string, context, prepared string, attributed bool) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
 	r.attrs = append(r.attrs, attributed)
-	return r.committingRepo.Commit(fnames, context, attributed)
+	return r.committingRepo.Commit(fnames, context, prepared, attributed)
 }
 
 // TestOneCommitPerTurn is the point of moving the commit to turn end. A turn

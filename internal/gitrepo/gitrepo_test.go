@@ -147,7 +147,7 @@ func TestCommitContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", true)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", "", true)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -173,7 +173,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", true); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -192,7 +192,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, "", false)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, "", "", false)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -213,7 +213,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", "", true); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {
@@ -296,7 +296,11 @@ func TestCoderAutoCommitIntegration(t *testing.T) {
 		t.Fatal("no auto-commit created")
 	}
 	body := run(t, root, "git", "log", "-1", "--format=%B")
-	if !strings.Contains(body, "feat: greet strument") ||
+	// Arm C1: the model did not call commit_message, so the commit falls back to
+	// its own closing prose rather than a second generator request. The
+	// generator is now the fallback-of-the-fallback, reached only when a turn
+	// produced no prose at all.
+	if !strings.Contains(body, "Changed the greeting.") ||
 		!strings.Contains(body, "Assisted-by: test-model via Strument") {
 		t.Errorf("commit body: %q", body)
 	}

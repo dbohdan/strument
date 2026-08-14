@@ -121,7 +121,7 @@ type Repo interface {
 	// message, or ok=false when there was nothing to commit. attributed
 	// marks auto-commits of model edits, which get the trailer;
 	// dirty commits of user changes stay unattributed.
-	Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error)
+	Commit(fnames []string, context, prepared string, attributed bool) (hash, message string, ok bool, err error)
 }
 
 // Clock injects time so retry/continuation tests don't sleep.

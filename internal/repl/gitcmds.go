@@ -207,7 +207,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	for _, c := range slices.Backward(commits) {
 		fmt.Fprintf(&context, "- %s\n", c.Subject)
 	}
-	hash, message, ok, err := g.Commit(files, context.String(), true)
+	hash, message, ok, err := g.Commit(files, context.String(), "", true)
 	if err != nil || !ok {
 		r.out.Errorf("The commits were folded back into the index but not committed: %v", err)
 		r.printf("Your changes are staged; commit them yourself with `git commit`.")

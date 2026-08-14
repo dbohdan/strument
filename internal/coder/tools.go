@@ -25,6 +25,8 @@ const (
 	toolLS     = "ls"
 	toolSymbol = "symbol"
 	toolVerify = "verify"
+	// toolCommitMessage is offered only where a commit will actually happen.
+	toolCommitMessage = "commit_message"
 )
 
 // strProp is a JSON-Schema string property with a description.
@@ -59,6 +61,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	}
 	if len(c.Verify) > 0 {
 		defs = append(defs, verifyTool(c.Verify))
+	}
+	if c.commitsThisTurn() {
+		defs = append(defs, commitMessageTool())
 	}
 	return defs
 }
@@ -353,6 +358,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runLS(tc)
 		case toolSymbol:
 			results[tc.ID] = c.runSymbol(tc)
+		case toolCommitMessage:
+			results[tc.ID] = c.runCommitMessage(tc)
 		case toolVerify:
 			results[tc.ID] = c.runVerify(ctx, tc)
 		default:
@@ -389,7 +396,29 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	if needsReflection {
 		return OutcomeReflect
 	}
+	// A step whose only call was commit_message ends the turn. There is nothing
+	// to come back with — the model set a string — and re-sending the whole
+	// conversation so it can read "Noted." is the extra round trip this tool
+	// exists to delete. Alongside any other call the normal rules apply, because
+	// then there is a real result to see.
+	if onlyCommitMessage(c.partialToolCalls) {
+		return OutcomeSuccess
+	}
 	return OutcomeContinue
+}
+
+// onlyCommitMessage reports that a step asked for nothing but the commit
+// message.
+func onlyCommitMessage(calls []llm.ToolCall) bool {
+	if len(calls) == 0 {
+		return false
+	}
+	for _, tc := range calls {
+		if tc.Name != toolCommitMessage {
+			return false
+		}
+	}
+	return true
 }
 
 // parseCommandArgs decodes a bash call. The second return is a model-facing

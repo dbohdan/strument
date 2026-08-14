@@ -525,6 +525,31 @@ func (c *Coder) flushSendUsage() {
 	c.lastUsageReport = ""
 }
 
+// RecordSideUsage folds in a request the turn made outside the tool loop.
+//
+// Today that is only the commit message, which goes out through the client
+// directly and so never reached finalizeUsage. A measured five-request turn
+// reported the four it knew about — $0.00084 — having paid $0.00093. Nine
+// percent of a small turn, and the share grows with the diff, since that call
+// re-sends it uncached.
+//
+// It runs before flushTurnUsage (see Run), so the number the user reads is the
+// number they paid.
+func (c *Coder) RecordSideUsage(u llm.Usage) {
+	c.messageTokensSent += u.PromptTokens
+	c.messageTokensReceived += u.CompletionTokens
+	c.messageCacheRead += u.CacheReadTokens
+	c.messageCacheWrite += u.CacheWriteTokens
+	c.totalTokensSent += u.PromptTokens
+	c.totalTokensReceived += u.CompletionTokens
+	c.peakTokensSent = max(c.peakTokensSent, u.PromptTokens)
+	if u.Cost != nil {
+		c.messageCost += *u.Cost
+		c.totalCost += *u.Cost
+		c.costKnown, c.sessionKnown = true, true
+	}
+}
+
 // formatTokenLine renders the token half of the usage report, for one send and
 // for a whole turn alike.
 //
