@@ -369,25 +369,29 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`extra_params`** — as on `provider()`, but per model; on a key clash the
   model's value wins over the provider's.
 
-### `env(name, default=None, required=True)`
+### `env(name, default)`
 
 Reads an environment variable at load time — the one impure built-in.
 
 - **`name`** — the variable to read.
-- **`required`** — when `True` (the default) and the variable is unset, loading
-  fails with an error. Set `required=False` to allow a fallback.
-- **`default`** — returned when the variable is unset **and** `required=False`
-  (otherwise the result is `None`).
+- **`default`** — returned when the variable is unset. Giving one is what makes
+  the variable optional; omit it and an unset variable fails the load.
 
-The gotcha worth stating outright: `default` only takes effect when
-`required=False`. `env("X", default="y")` on its own still errors if `X` is
-unset, because `required` is `True` by default — you need both:
+It behaves like Starlark's own dictionary access, which is the shape you already
+know: `env("X")` is `d["x"]` and raises when the key is absent, while
+`env("X", default=v)` is `d.get("x", v)` and does not.
 
 ```python
-api_key = env("OPENROUTER_API_KEY")                        # required; errors if unset
-base = env("STRUMENT_BASE_URL", required=False)            # None if unset
-proxy = env("STRUMENT_PROXY", default="", required=False)  # "" if unset
+api_key = env("OPENROUTER_API_KEY")                # required; errors if unset
+api_key = env("SOME_OPTIONAL_KEY", default="")     # "" if unset
+base = env("STRUMENT_BASE_URL", default=None)      # None if unset
+proxy = env("STRUMENT_PROXY", "")                  # positional, like get()
 ```
+
+What counts is whether you passed `default`, not what you passed: `default=None`
+makes the variable optional and yields `None`, which omitting the keyword does
+not. Note that `provider()` wants a string for `api_key`, so an optional key
+wants `default=""` rather than `default=None`.
 
 ## Model methods
 

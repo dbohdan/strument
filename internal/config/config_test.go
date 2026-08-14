@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,18 +143,87 @@ func TestEnvRequiredUnsetFailsLoad(t *testing.T) {
 	}
 }
 
-func TestEnvDefaultOnlyWhenNotRequired(t *testing.T) {
+// TestEnvDefaultMakesItOptional is the whole of env's contract, which used to
+// take two parameters to express and got it wrong in the case anyone would
+// write: env("X", default = "y") errored on a missing X, because a separate
+// required defaulted to True and short-circuited before the default was
+// reached. Giving a default is now what makes a variable optional.
+//
+// The shape is Starlark's own dictionary access, so a config author already
+// knows it: env("X") is d["x"] and raises when the key is absent,
+// env("X", default = v) is d.get("x", v) and does not.
+func TestEnvDefaultMakesItOptional(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		expr    string
+		want    string // the resolved api_key
+		wantErr string // non-empty => loading must fail saying this
+	}{
+		{"set, no default", `env("PRESENT")`, "from-env", ""},
+		{"set, with default", `env("PRESENT", default = "unused")`, "from-env", ""},
+		{"unset, no default", `env("MISSING")`, "", "MISSING"},
+		{"unset, with default", `env("MISSING", default = "fallback")`, "fallback", ""},
+		{"unset, positional default", `env("MISSING", "positional")`, "positional", ""},
+		{"unset, empty default", `env("MISSING", default = "")`, "", ""},
+		// required is gone. UnpackArgs rejects it by name, which says enough.
+		{"required is no longer a thing", `env("MISSING", required = False)`, "", "required"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+p = provider("openai", api_key = %s)
+models = {"m": model(p, "gpt")}
+default = "m"
+`, tc.expr)
+			cfg, err := Load(harness(t, src, "", map[string]string{"PRESENT": "from-env"}))
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("want an error mentioning %q, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Models["m"].Provider.APIKey; got != tc.want {
+				t.Errorf("api key = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The keyword's presence is what counts, not its value: default = None means
+// optional-with-no-value, which omitting the keyword does not. Checked on its
+// own because provider() wants a string api_key and would reject the None
+// before env's behavior could be seen.
+func TestEnvExplicitNoneIsOptional(t *testing.T) {
 	src := `
-p = provider("openai", api_key = env("MISSING", default = "fallback", required = False))
+maybe = env("MISSING", default = None)
+p = provider("openai", api_key = "k", base_url = "https://example.invalid")
 models = {"m": model(p, "gpt")}
 default = "m"
 `
-	cfg, err := Load(harness(t, src, "", nil))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := Load(harness(t, src, "", nil)); err != nil {
+		t.Fatalf("default = None should make the variable optional: %v", err)
 	}
-	if cfg.Models["m"].Provider.APIKey != "fallback" {
-		t.Errorf("api key = %q", cfg.Models["m"].Provider.APIKey)
+}
+
+// The error for a missing variable has to say what to do about it: the reader
+// is looking at a name they may have spelled wrong, or at a variable they
+// meant to be optional, and those need different fixes.
+func TestEnvMissingErrorSuggestsTheDefault(t *testing.T) {
+	src := `
+p = provider("openai", api_key = env("NOPE"))
+models = {"m": model(p, "gpt")}
+default = "m"
+`
+	_, err := Load(harness(t, src, "", nil))
+	if err == nil {
+		t.Fatal("a missing variable with no default must fail the load")
+	}
+	for _, want := range []string{`"NOPE"`, "default"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should mention %s: %v", want, err)
+		}
 	}
 }
 

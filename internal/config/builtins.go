@@ -320,28 +320,41 @@ func optFloat(name string, v starlark.Value) (*float64, error) {
 	}
 }
 
-// builtinEnv implements env(name, default=None, required=True) — the sole
-// impurity. The lookup function is injected for tests.
+// builtinEnv implements env(name, default) — the sole impurity. The lookup
+// function is injected for tests.
+//
+// Giving a default is what makes a variable optional, so there is one knob
+// rather than two. It reads like Starlark's own dictionary access, which is the
+// shape a config author already has: env("X") is d["x"] and raises when the key
+// is absent; env("X", default=v) is d.get("x", v) and does not.
+//
+// There used to be a separate required=True, and default did nothing without
+// required=False — so env("X", default="y"), which is what anyone would write,
+// errored on a missing X and never reached the fallback. doc/config.md carried
+// a paragraph headed "The gotcha worth stating outright" explaining when the
+// parameter was ignored, which is the sort of documentation that should be
+// taken as a bug report about the interface.
+//
+// Absence is the presence of the keyword, not the value: default=None means
+// optional and None, distinct from omitting it. UnpackArgs leaves def nil in
+// the second case only, which is the whole mechanism.
 func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
 	return starlark.NewBuiltin("env", func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var name string
 		var def starlark.Value
-		required := true
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 			"name", &name,
 			"default?", &def,
-			"required?", &required,
 		); err != nil {
 			return nil, err
 		}
 		if val, ok := lookup(name); ok {
 			return starlark.String(val), nil
 		}
-		if required {
-			return nil, fmt.Errorf("env: required environment variable %q is not set", name)
-		}
 		if def == nil {
-			return starlark.None, nil
+			return nil, fmt.Errorf(
+				"env: environment variable %q is not set; pass a default to make it optional, "+
+					"e.g. env(%q, default = \"\")", name, name)
 		}
 		return def, nil
 	})
