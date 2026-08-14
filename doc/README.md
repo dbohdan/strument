@@ -253,6 +253,35 @@ Nine tools, in three natures:
   that search produced 1.33 MB of matches at a cap of 1000 and 88 KB at a cap of
   100 — both over `maxToolOutputBytes` (60 KB), so both delivered *the same* 60 KB.
   The obvious knob was the one that did nothing.
+
+  **`strument tool …` runs any of them from a shell**, printing the bytes a
+  model would receive — refusal sentences, truncation notes, and `…` clip
+  markers included. It is a developer instrument, not part of the user-facing
+  CLI, so the exact result text stays free to change.
+
+  ```sh
+  strument tool grep --mode content 'pattern' --glob '**/*' | wc -c
+  strument tool symbol SomeName --kind reference
+  strument tool --json ls internal
+  ```
+
+  The outcome line goes to stderr and the result to stdout, which is what makes
+  `| wc -c` measure the right thing. `--json` wraps that same string as
+  `{tool, arguments, result, bytes}` rather than re-rendering it, so the two
+  cannot disagree. A refusal exits 0, because that string is what a model gets
+  and this command's whole job is faithfulness.
+
+  Every number in the two paragraphs above was originally obtained by writing a
+  throwaway test inside `internal/workspace`, running it, and deleting it. The
+  command exists so that stops being the way. It earned itself on first use, by
+  printing `49 long 49 lines were shortened` — `plural` already carries the
+  count, and the test that should have caught it was checking
+  `Contains(got, "shortened")`.
+
+  The seam it needed is `coder.Inspector` (`internal/coder/inspect.go`): the
+  five observation tools hold nothing but a root, a `Workspace`, a `RepoMap`,
+  and somewhere to report, so they run without a model, a client, or a
+  conversation. `*Coder` keeps its methods as delegations to one.
 - **Pinned files are named, not injected.** `/add` puts a file's *name* in the
   system prompt with an instruction to read it; the contents arrive through a
   `read` call like everything else. This replaced a fabricated user turn

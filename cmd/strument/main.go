@@ -603,6 +603,7 @@ type cli struct {
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider." name:"model-config"`
+	Tool        toolCmd          `cmd:""                         help:"Run one observation tool and print what a model would see."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
 }
 

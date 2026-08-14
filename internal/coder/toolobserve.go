@@ -57,7 +57,7 @@ func decodeArgs(tc llm.ToolCall, dst any) string {
 }
 
 // runRead answers a read call with a numbered window of the file.
-func (c *Coder) runRead(tc llm.ToolCall) string {
+func (i *Inspector) runRead(tc llm.ToolCall) string {
 	var a struct {
 		Path   string `json:"path"`
 		Offset int    `json:"offset"`
@@ -70,11 +70,11 @@ func (c *Coder) runRead(tc llm.ToolCall) string {
 		return "The required \"path\" argument was missing."
 	}
 
-	ft, err := c.Files.Read(a.Path, a.Offset, a.Limit)
+	ft, err := i.Files.Read(a.Path, a.Offset, a.Limit)
 	if err != nil {
 		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err)
 	}
-	c.Out.Toolf("Read %s", readSummary(ft))
+	i.Out.Toolf("Read %s", readSummary(ft))
 
 	var b strings.Builder
 	if ft.Link != "" {
@@ -113,7 +113,7 @@ func readSummary(ft workspace.FileText) string {
 }
 
 // runGrep answers a grep call.
-func (c *Coder) runGrep(tc llm.ToolCall) string {
+func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	var a struct {
 		Pattern    string `json:"pattern"`
 		Glob       string `json:"glob"`
@@ -140,7 +140,7 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 		return fmt.Sprintf("Unknown mode %q. Use \"files\", \"content\", or \"count\".", a.Mode)
 	}
 
-	res, err := c.Files.Grep(workspace.GrepQuery{
+	res, err := i.Files.Grep(workspace.GrepQuery{
 		Pattern: a.Pattern, Glob: a.Glob, Dir: a.Path, Mode: mode, IgnoreCase: a.IgnoreCase,
 	})
 	if err != nil {
@@ -151,7 +151,7 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	// "no matches" — so a report naming only the pattern blames the wrong
 	// argument, and leaves both the model and the user with nothing to correct.
 	query := fmt.Sprintf("%s%s as %s", quoteToolArg(a.Pattern), grepScope(a.Path, a.Glob), modeName)
-	c.Out.Toolf("Searched for %s — %s", query, matchSummary(res))
+	i.Out.Toolf("Searched for %s — %s", query, matchSummary(res))
 
 	if len(res.Files) == 0 {
 		return grepNothing(query, res)
@@ -177,8 +177,11 @@ func (c *Coder) runGrep(tc llm.ToolCall) string {
 	// A clipped line ends in "…", but only saying so once makes it a fact about
 	// the search rather than a character that happened to be in the file.
 	if res.Shortened > 0 {
-		fmt.Fprintf(&b, "\n(%d long %s shortened, marked with \"…\". Read the file for the whole line.)\n",
-			res.Shortened, plural(res.Shortened, "line was", "lines were"))
+		// plural carries the count itself; passing it again alongside printed
+		// "49 long 49 lines were shortened". Found by the first real use of
+		// `strument tool grep`, which is the argument for the command.
+		fmt.Fprintf(&b, "\n(%s shortened, marked with \"…\". Read the file for the whole line.)\n",
+			plural(res.Shortened, "long line was", "long lines were"))
 	}
 	return truncateResult(b.String())
 }
@@ -242,7 +245,7 @@ func plural(n int, one, many string) string {
 }
 
 // runGlob answers a glob call.
-func (c *Coder) runGlob(tc llm.ToolCall) string {
+func (i *Inspector) runGlob(tc llm.ToolCall) string {
 	var a struct {
 		Pattern string `json:"pattern"`
 	}
@@ -253,11 +256,11 @@ func (c *Coder) runGlob(tc llm.ToolCall) string {
 		return "The required \"pattern\" argument was missing."
 	}
 
-	paths, trunc, err := c.Files.Glob(a.Pattern)
+	paths, trunc, err := i.Files.Glob(a.Pattern)
 	if err != nil {
 		return fmt.Sprintf("Could not match %s: %v", quoteToolArg(a.Pattern), err)
 	}
-	c.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
+	i.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 
 	if len(paths) == 0 {
 		// The same rules that make a grep glob silently admit nothing apply
@@ -276,7 +279,7 @@ func (c *Coder) runGlob(tc llm.ToolCall) string {
 }
 
 // runLS answers an ls call.
-func (c *Coder) runLS(tc llm.ToolCall) string {
+func (i *Inspector) runLS(tc llm.ToolCall) string {
 	var a struct {
 		Path string `json:"path"`
 	}
@@ -284,11 +287,11 @@ func (c *Coder) runLS(tc llm.ToolCall) string {
 		return msg
 	}
 
-	entries, err := c.Files.List(a.Path)
+	entries, err := i.Files.List(a.Path)
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
-	c.Out.Toolf("Listed %s (%s)", quoteToolArg(displayDir(a.Path)), plural(len(entries), "entry", "entries"))
+	i.Out.Toolf("Listed %s (%s)", quoteToolArg(displayDir(a.Path)), plural(len(entries), "entry", "entries"))
 
 	if len(entries) == 0 {
 		return displayDir(a.Path) + " is empty."

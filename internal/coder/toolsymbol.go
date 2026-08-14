@@ -51,7 +51,7 @@ func symbolTool() llm.ToolDef {
 }
 
 // runSymbol answers a symbol call.
-func (c *Coder) runSymbol(tc llm.ToolCall) string {
+func (i *Inspector) runSymbol(tc llm.ToolCall) string {
 	var a struct {
 		Name string `json:"name"`
 		Kind string `json:"kind"`
@@ -59,11 +59,11 @@ func (c *Coder) runSymbol(tc llm.ToolCall) string {
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg
 	}
-	text, count, problem := c.SymbolLookup(a.Name, a.Kind)
+	text, count, problem := i.SymbolLookup(a.Name, a.Kind)
 	if problem != "" {
 		return problem
 	}
-	c.Out.Toolf("Looked up %s — %s %s", quoteToolArg(strings.TrimSpace(a.Name)),
+	i.Out.Toolf("Looked up %s — %s %s", quoteToolArg(strings.TrimSpace(a.Name)),
 		plural(count, "site", "sites"), lookupNoun(a.Kind))
 	return truncateResult(text)
 }
@@ -86,12 +86,12 @@ func lookupNoun(kind string) string {
 // caller-facing failure message, "" on success — the same shape decodeArgs and
 // parseCommandArgs use, because these read as sentences to a model and a person
 // alike rather than as Go error strings.
-func (c *Coder) SymbolLookup(rawName, kind string) (text string, count int, problem string) {
+func (i *Inspector) SymbolLookup(rawName, kind string) (text string, count int, problem string) {
 	name := strings.TrimSpace(rawName)
 	if name == "" {
 		return "", 0, "The required \"name\" argument was missing."
 	}
-	if c.RepoMap == nil {
+	if i.RepoMap == nil {
 		// Unreachable through toolDefs, which offers the tool only with the
 		// parse layer behind it, and guarded in the REPL the same way. Answered
 		// rather than panicked, because a tool call arrives from outside and
@@ -107,17 +107,17 @@ func (c *Coder) SymbolLookup(rawName, kind string) (text string, count int, prob
 		return "", 0, fmt.Sprintf("Unknown kind %q. Use \"definition\" or \"reference\".", kind)
 	}
 
-	rels, trunc, ferr := c.Files.Files()
+	rels, trunc, ferr := i.Files.Files()
 	if ferr != nil {
 		return "", 0, fmt.Sprintf("Could not list the project's files: %v", ferr)
 	}
 	abs := make([]string, 0, len(rels))
 	for _, rel := range rels {
-		abs = append(abs, filepath.Join(c.Root, filepath.FromSlash(rel)))
+		abs = append(abs, filepath.Join(i.Root, filepath.FromSlash(rel)))
 	}
 
 	var sites []string
-	for _, t := range c.RepoMap.Tags(abs) {
+	for _, t := range i.RepoMap.Tags(abs) {
 		if t.Name != name || t.Kind != want {
 			continue
 		}

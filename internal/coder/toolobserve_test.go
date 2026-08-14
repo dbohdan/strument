@@ -119,8 +119,11 @@ func TestGrepSaysWhenItShortenedLines(t *testing.T) {
 	})
 
 	got := c.runGrep(call("grep", `{"pattern":"Target","mode":"content"}`))
-	if !strings.Contains(got, "shortened") {
-		t.Errorf("a shortened line must be reported:\n%s", got)
+	// The whole sentence, not just the word: plural() carries the count itself,
+	// and passing it a second time printed "1 long 1 line was shortened". A
+	// Contains check on "shortened" is exactly what missed that.
+	if want := `(1 long line was shortened, marked with "…".`; !strings.Contains(got, want) {
+		t.Errorf("want %q in:\n%s", want, got)
 	}
 	if !strings.Contains(got, "short.go:1: // Target") {
 		t.Errorf("an untouched line must survive intact:\n%s", got)
