@@ -253,6 +253,8 @@ default = "mimo"
 `cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to stable prompt sections.
 Anthropic models reached through OpenRouter honor them explicitly.
 Other providers may ignore them or provide their own prompt-caching behavior.
+When a turn used the cache, the usage line breaks the figure down in parentheses — `12.4k sent (4.2k cache write, 3.2k cache hit)`.
+Those are parts of what was sent, not extra tokens beside it.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
 Instead, `strument model-config anthropic/claude-haiku-4.5` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.

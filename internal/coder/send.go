@@ -432,7 +432,16 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	}
 	u.finalized = true
 
-	sent := u.prompt + u.cacheWrite
+	// prompt_tokens is the whole prompt. Both cache figures live under
+	// prompt_tokens_details and are a *breakdown* of it, not additions to it:
+	// on a cold request with a breakpoint, OpenRouter returns
+	// prompt_tokens=14021, cache_write_tokens=14018, and
+	// total_tokens=14026 = prompt + completion. Adding the write on top counted
+	// most of the prompt twice, and only on models that write a cache — which
+	// is why GPT-5.6 Luna looked like it was sending an order of magnitude more
+	// than Haiku for the same work. Cache reads were already treated as the
+	// subset they are; the two are the same kind of number.
+	sent := u.prompt
 	received := u.completion
 	estimated := false
 
@@ -458,14 +467,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	c.totalTokensSent += sent
 	c.totalTokensReceived += received
 
-	report := fmt.Sprintf("Tokens: %s sent", formatTokens(sent))
-	if u.cacheWrite > 0 {
-		report += fmt.Sprintf(", %s cache write", formatTokens(u.cacheWrite))
-	}
-	if u.cacheRead > 0 {
-		report += fmt.Sprintf(", %s cache hit", formatTokens(u.cacheRead))
-	}
-	report += fmt.Sprintf(", %s received.", formatTokens(received))
+	report := formatTokenLine(sent, u.cacheWrite, u.cacheRead, received)
 
 	cost := 0.0
 	known := false
@@ -480,10 +482,15 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 			cost = float64(sent)*pin + float64(received)*pout
 		} else {
 			// Anthropic-style cache pricing adjustments; no-ops at zero counts
-			// (DeepSeek's cache-read discount uses the same 0.10 factor).
+			// (DeepSeek's cache-read discount uses the same 0.10 factor). The
+			// cache figures are carved *out* of the prompt rather than added to
+			// it — see sent above — so each token is priced exactly once, at
+			// whichever rate applies to it. Charging them on top of a full-price
+			// prompt was the same double-count the token line had.
+			full := max(u.prompt-u.cacheWrite-u.cacheRead, 0)
 			cost = float64(u.cacheWrite)*pin*1.25 +
 				float64(u.cacheRead)*pin*0.10 +
-				float64(u.prompt)*pin +
+				float64(full)*pin +
 				float64(u.completion)*pout
 		}
 		known = true
@@ -517,6 +524,29 @@ func (c *Coder) flushSendUsage() {
 	c.lastUsageReport = ""
 }
 
+// formatTokenLine renders the token half of the usage report, for one send and
+// for a whole turn alike.
+//
+// The cache figures go in parentheses because they are a *breakdown* of what
+// was sent, not two more things that were sent. As a flat comma list —
+// "330.3k sent, 127.8k cache write, 74.7k cache hit" — they read as separate
+// quantities, which is exactly the misreading that had the sent figure adding
+// the cache write to a prompt that already contained it.
+func formatTokenLine(sent, cacheWrite, cacheRead, received int) string {
+	var parts []string
+	if cacheWrite > 0 {
+		parts = append(parts, formatTokens(cacheWrite)+" cache write")
+	}
+	if cacheRead > 0 {
+		parts = append(parts, formatTokens(cacheRead)+" cache hit")
+	}
+	line := "Tokens: " + formatTokens(sent) + " sent"
+	if len(parts) > 0 {
+		line += " (" + strings.Join(parts, ", ") + ")"
+	}
+	return line + ", " + formatTokens(received) + " received."
+}
+
 // flushTurnUsage prints the turn's accounting, once, at its end.
 //
 // It replaces a line per send. In a seven-step turn that was seven of the
@@ -530,14 +560,8 @@ func (c *Coder) flushTurnUsage() {
 	}
 	c.messageSends = 0 // idempotent: never report the same turn twice
 
-	report := fmt.Sprintf("Tokens: %s sent", formatTokens(c.messageTokensSent))
-	if c.messageCacheWrite > 0 {
-		report += fmt.Sprintf(", %s cache write", formatTokens(c.messageCacheWrite))
-	}
-	if c.messageCacheRead > 0 {
-		report += fmt.Sprintf(", %s cache hit", formatTokens(c.messageCacheRead))
-	}
-	report += fmt.Sprintf(", %s received.", formatTokens(c.messageTokensReceived))
+	report := formatTokenLine(c.messageTokensSent, c.messageCacheWrite,
+		c.messageCacheRead, c.messageTokensReceived)
 	if c.costKnown {
 		report += fmt.Sprintf(" Cost: $%s turn, $%s session.", formatCost(c.messageCost), formatCost(c.totalCost))
 	}
