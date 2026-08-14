@@ -493,16 +493,21 @@ type StdOutput struct {
 	diffs     *render.ToolDiffSet
 	wroteText bool
 	think     *render.Thinking
-	// openedBlank records that the last thing written was a separator with
-	// nothing yet under it, so FlushStream does not add a second one.
-	openedBlank bool
+	// streamed records that this send drew something, so the flush closes it
+	// with a blank line. sep is the gap before the next block of thinking. Both
+	// mirror repl/output.go exactly; the two outputs lay a turn out the same
+	// way and differ only in the color the terminal adds.
+	streamed bool
+	sep      render.GroupSep
 }
 
 func (o *StdOutput) Printf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
+	o.sep.Clear() // the harness's own voice, outside any step
 }
 func (o *StdOutput) Toolf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...) // no color outside the REPL
+	o.sep.Drew()
 }
 func (o *StdOutput) Warningf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
@@ -511,11 +516,16 @@ func (o *StdOutput) Errorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 func (o *StdOutput) StreamText(delta string) {
+	// The one separator that still follows the thinking rather than preceding
+	// it; repl/output.go's separateFromAnswer says why.
 	if o.endReasoning() {
 		fmt.Println()
+		o.sep.Clear()
 	}
 	if delta != "" {
 		o.wroteText = true
+		o.streamed = true
+		o.sep.Drew()
 	}
 	fmt.Print(delta)
 }
@@ -530,7 +540,17 @@ func (o *StdOutput) StreamText(delta string) {
 // reasoning_display's to answer, in both modes alike.
 func (o *StdOutput) StreamReasoning(delta string) {
 	if o.think == nil {
-		o.think = render.PlainThinking(os.Stdout, o.Thinking)
+		t := render.PlainThinking(os.Stdout, o.Thinking)
+		// Pay the group separator at the opening marker: thinking opens lazily,
+		// so a block that turns out to be empty never reaches Marker, and this
+		// is the last point still above the "‹thinking›" the gap must precede.
+		inner := t.Marker
+		t.Marker = func(s string) {
+			o.sep.Before(os.Stdout)
+			o.streamed = true
+			inner(s)
+		}
+		o.think = t
 	}
 	o.think.Write(delta)
 }
@@ -546,16 +566,18 @@ func (o *StdOutput) endReasoning() bool {
 }
 
 func (o *StdOutput) StreamToolCall(index int, name, args string) {
+	// Reasoning gave way to the calls it was about: no separator, since the
+	// thinking heads this group. Clearing streamed by hand keeps the flush from
+	// putting a blank directly above an outcome line printed by Toolf.
 	if o.endReasoning() {
-		fmt.Println()
-		o.openedBlank = true
+		o.streamed = false
 	}
 	if o.diffs == nil {
 		// Break to a fresh line so the first diff header isn't glued to the
 		// answer text (which need not end in a newline).
 		if o.wroteText {
 			fmt.Println()
-			o.openedBlank = true
+			o.streamed = false // that blank separates; the flush need not repeat it
 		}
 		o.diffs = render.NewToolDiffSet(os.Stdout, false, render.DefaultTheme())
 	}
@@ -567,21 +589,20 @@ func (o *StdOutput) FlushStream() {
 	if o.diffs != nil {
 		o.diffs.Flush()
 		if o.diffs.Drew() {
-			o.openedBlank = false // something landed under the separator
+			o.streamed = true
 		}
 		o.diffs = nil
 	}
 	o.wroteText = false
-	// Only when this send did not already end on a blank line. A send whose
-	// tool calls all render nothing — a bash command, or any observation tool —
-	// otherwise puts the separator above the calls and this one below them with
-	// nothing in between. That doubled blank is what the REPL's blankGuard
-	// exists to prevent, and script mode has no guard; Drew() is the same
-	// signal repl/output.go reads for the same purpose.
-	if !o.openedBlank {
+	// Only when this send drew. A send whose tool calls all render nothing — a
+	// bash command, or any observation tool — prints its outcome through Toolf
+	// after this runs, so a blank here would land above that outcome rather
+	// than after it. The gap before the next step is GroupSep's to write.
+	if o.streamed {
 		fmt.Println()
+		o.streamed = false
+		o.sep.Clear()
 	}
-	o.openedBlank = false
 }
 
 // ThinkingDisplay translates the config's answer into the renderer's. The two

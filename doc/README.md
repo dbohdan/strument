@@ -381,6 +381,30 @@ a tool did, what was committed, which check is running — so it sits behind the
 diffs and the answer rather than competing with them. A passing check prints
 one line; only a failing one prints its output.
 
+**Thinking heads its group; the blank line goes before it.** A block of
+reasoning explains the tool calls that come *after* it — "let me read the
+file", then the read — so `render.GroupSep` puts the separator ahead of the
+block rather than behind it. The separator is lazy: a step's outcomes print
+after the stream is flushed, and whether another step follows is unknowable
+until the next response arrives, so nothing is written when a group ends. A
+debt is recorded and paid by whatever starts the next group, which is also what
+keeps a separator off the top of a turn and off the bottom of one.
+
+The one exception is an answer, which keeps its blank line *after* the
+thinking: it is what the model decided to say rather than what it went and did,
+and running the two together blurs that. The policy is written twice, once per
+`Output` implementation, and `TestBothOutputsAgreeOnSpacing` holds them
+together.
+
+This is a readability fix that matters most where it is least visible in
+development: with the reasoning palette unavailable — a terminal without
+`faint` — the marker is the only cue there is, and the old spacing grouped each
+block with the calls above it, which it had nothing to do with. The same blind
+spot hid a doubled blank line in `blankGuard` for as long as it existed, since
+every test rendered without color and the bug needed a color reset to appear.
+The guard now steps over CSI sequences when counting newlines, and the spacing
+tests run both ways.
+
 ### Cross-provider streaming quirks
 
 Tool-call *edits* work across the current model field — but the way providers

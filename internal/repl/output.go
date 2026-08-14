@@ -59,6 +59,10 @@ type termOutput struct {
 
 	// think renders the reasoning block in flight; nil between blocks.
 	think *render.Thinking
+
+	// sep is the blank line between steps, owed by whatever drew last and paid
+	// by the next block of thinking. See render.GroupSep.
+	sep render.GroupSep
 }
 
 // blankGuard collapses a run of blank lines to one.
@@ -83,14 +87,52 @@ func (g *blankGuard) Write(p []byte) (int, error) {
 		return 1, nil // already on a blank line; claim the write and drop it
 	}
 	n, err := g.w.Write(p)
-	for _, c := range p[:n] {
-		if c == '\n' {
+	g.count(p[:n])
+	return n, err
+}
+
+// count advances the trailing-newline run, stepping over CSI sequences.
+//
+// A color change prints nothing, so it must neither extend a run nor break
+// one. Counting the escape bytes as content is what made the guard miss a
+// double blank whenever color was on, and only then — every test here rendered
+// plain, so the whole class was invisible. Two places produce it: the
+// renderer's reset, written between the last newline of a block and the
+// separator that follows, and the reset the thinking's closing marker trails
+// after its own newline.
+//
+// A sequence split across two writes is not handled; the stray ESC is treated
+// as content, which costs a suppression rather than making a wrong one. Nothing
+// here writes a partial sequence.
+func (g *blankGuard) count(p []byte) {
+	for i := 0; i < len(p); {
+		if n := csiLen(p[i:]); n > 0 {
+			i += n
+			continue
+		}
+		if p[i] == '\n' {
 			g.run++
 		} else {
 			g.run = 0
 		}
+		i++
 	}
-	return n, err
+}
+
+// csiLen is the length of the CSI sequence at the start of p, or 0 if there
+// isn't a complete one there.
+func csiLen(p []byte) int {
+	if len(p) < 2 || p[0] != 0x1b || p[1] != '[' {
+		return 0
+	}
+	i := 2
+	for i < len(p) && p[i] >= 0x20 && p[i] <= 0x3f { // parameters
+		i++
+	}
+	if i >= len(p) || p[i] < 0x40 || p[i] > 0x7e { // the final byte
+		return 0
+	}
+	return i + 1
 }
 
 // guard wraps the writer in place, once. It is done here rather than in a
@@ -147,28 +189,36 @@ func (o *termOutput) sgr(codes string) string {
 	return "\x1b[" + codes + "m"
 }
 
+// Printf is the REPL's own voice — the banner, the usage line, the /add
+// acknowledgements — and everything it says falls outside a step. So it settles
+// the group separator rather than owing one: the next turn's first thinking
+// must not start with a blank line pushed down from the turn before.
 func (o *termOutput) Printf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, format+"\n", args...)
+	o.sep.Clear()
 }
 
 func (o *termOutput) Toolf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Tool)+format+o.sgr("0")+"\n", args...)
+	o.sep.Drew()
 }
 
 func (o *termOutput) Warningf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Warning)+format+o.sgr("0")+"\n", args...)
+	o.sep.Drew()
 }
 
 func (o *termOutput) Errorf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
 	fmt.Fprintf(o.w, o.sgr(o.theme.Error)+format+o.sgr("0")+"\n", args...)
+	o.sep.Drew()
 }
 
 // ensureParser opens the markdown renderer on first use in a turn.
@@ -215,8 +265,18 @@ func (o *termOutput) StreamReasoning(delta string) {
 
 	if o.phase != phaseReasoning {
 		o.phase = phaseReasoning
+		// The separator is paid here, at the opening marker, rather than on the
+		// first delta. Thinking opens lazily — a block that turns out to be
+		// empty never reaches Marker at all — so this is the earliest point at
+		// which the block is known to be real, and the last one still above the
+		// "‹thinking›" it has to precede.
+		firstMarker := true
 		o.think = &render.Thinking{
 			Marker: func(s string) {
+				if firstMarker {
+					firstMarker = false
+					o.sep.Before(o.w)
+				}
 				fmt.Fprint(o.w, o.sgr(o.theme.Reasoning)+s+o.sgr("0"))
 			},
 			Body: func(s string) {
@@ -228,6 +288,7 @@ func (o *termOutput) StreamReasoning(delta string) {
 				if o.parser == nil {
 					o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width))
 					o.streamed = true
+					o.sep.Drew()
 				}
 				o.parser.Write(s)
 			},
@@ -257,18 +318,18 @@ func (o *termOutput) endReasoning() bool {
 	return rendered
 }
 
-// separateFromThinking puts one blank line between the thinking and whatever
-// follows, and takes the streamed flag with it.
+// separateFromAnswer puts one blank line between a thinking block and the
+// answer that follows it.
 //
-// That second part is the whole point. The flag exists so FlushStream can put a
-// blank line after anything the stream drew, and thinking sets it — so when the
-// next thing draws nothing of its own (a read or a grep, which print their
-// outcome later through Toolf), FlushStream would add a second blank under this
-// one. This separator has already done that job, so it clears the debt; whatever
-// writes next sets the flag again.
-func (o *termOutput) separateFromThinking() {
+// This is the one place a separator still goes *after* the thinking, and the
+// asymmetry is deliberate. Thinking heads the tool calls it explains, so a call
+// follows it directly; an answer is a different kind of thing, and running the
+// two together would blur the line between what the model worked out and what
+// it decided to tell the user. Everything else is spaced by render.GroupSep,
+// before the next block rather than after this one.
+func (o *termOutput) separateFromAnswer() {
 	fmt.Fprintln(o.w)
-	o.streamed = false
+	o.sep.Clear() // the blank just written is the group's, so nothing is owed
 }
 
 func (o *termOutput) StreamText(delta string) {
@@ -302,11 +363,12 @@ func (o *termOutput) StreamText(delta string) {
 	o.clearWaiting()
 	o.hideCursor()
 	if o.phase == phaseReasoning && o.endReasoning() {
-		o.separateFromThinking()
+		o.separateFromAnswer()
 	}
 	o.phase = phaseAnswer
 	o.ensureParser()
 	o.streamed = true
+	o.sep.Drew()
 	o.parser.Write(delta)
 }
 
@@ -317,8 +379,14 @@ func (o *termOutput) StreamToolCall(index int, name, args string) {
 	// A tool-call turn ends the markdown answer (finish_reason: tool_calls),
 	// so close the parser before the diff begins; they never interleave.
 	if o.phase == phaseReasoning {
-		if o.endReasoning() { // reasoning gave way to edits: close the block
-			o.separateFromThinking()
+		// Reasoning gave way to the calls it was about. No separator: the
+		// thinking heads this group, and GroupSep will space it from the last
+		// one. The streamed flag is cleared by hand because thinking sets it,
+		// and a send whose calls all draw nothing — a read or a grep, printing
+		// its outcome later through Toolf — would otherwise leave FlushStream a
+		// blank line to put directly above that outcome.
+		if o.endReasoning() {
+			o.streamed = false
 		}
 		o.phase = phaseAnswer
 	}
@@ -371,6 +439,7 @@ func (o *termOutput) FlushStream() {
 	if o.streamed {
 		fmt.Fprintln(o.w)
 		o.streamed = false
+		o.sep.Clear() // this blank is the gap; the next group need not repeat it
 	}
 	o.phase = phaseNone
 	o.answerVisible = false

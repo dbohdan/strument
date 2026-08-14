@@ -3,9 +3,14 @@ package repl
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/render"
 )
 
@@ -351,20 +356,195 @@ func TestNoDoubledBlankLines(t *testing.T) {
 			o.Printf("")
 			o.Printf("Tokens: 1.0k sent, 20 received.")
 		}},
+		// Found in a live capture, and only reproducible in color. The model
+		// ends its prose with its own paragraph break, so the renderer's reset
+		// lands between that newline and the separator the tool call adds —
+		// which used to look like content to the guard and let a second blank
+		// through. Every other case here renders plain, which is exactly why it
+		// survived: see escapesOnly.
+		{"prose with its own paragraph break, then an observation call", func(o *termOutput) {
+			o.StreamReasoning("Let me find all uses of Sum.")
+			o.StreamText("I'll search the project first.\n\n")
+			o.StreamToolCall(0, "grep", `{"pattern":"Sum"}`)
+			o.FlushStream()
+			o.Toolf("Searched for Sum as content — 4 matches in 3 files")
+		}},
+	} {
+		for _, color := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/color=%v", tc.name, color), func(t *testing.T) {
+				var buf bytes.Buffer
+				o := &termOutput{w: &buf, color: color, theme: render.DefaultTheme(), width: 60}
+				tc.drive(o)
+				o.FlushStream()
+				plain := ansiCodes.ReplaceAllString(buf.String(), "")
+				lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+				for i := 1; i < len(lines); i++ {
+					if lines[i] == "" && lines[i-1] == "" {
+						t.Errorf("consecutive blank lines at %d:\n%q", i, plain)
+					}
+				}
+			})
+		}
+	}
+}
+
+// ansiCodes strips styling so a layout assertion reads the same bytes the user
+// sees on a terminal that renders them.
+var ansiCodes = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+// The guard counts what a reader would see. Escapes are stepped over, so a
+// styled newline still ends a line and a color reset between two newlines does
+// not break the run they form.
+func TestBlankGuardCountsWhatIsVisible(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write string
+		run   int
+	}{
+		{"plain newlines", "a\n\n", 2},
+		{"a reset between them", "a\n\x1b[0m\n", 2},
+		{"a reset after them", "a\n\n\x1b[0m", 2},
+		{"styled text resets the run", "\n\x1b[2mtext\x1b[0m", 0},
+		{"a truncated escape counts as content", "\n\x1b[0", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
-			tc.drive(o)
-			o.FlushStream()
-			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
-			for i := 1; i < len(lines); i++ {
-				if lines[i] == "" && lines[i-1] == "" {
-					t.Errorf("consecutive blank lines at %d:\n%q", i, buf.String())
-				}
+			g := &blankGuard{w: io.Discard}
+			if _, err := g.Write([]byte(tc.write)); err != nil {
+				t.Fatal(err)
+			}
+			if g.run != tc.run {
+				t.Errorf("%q left run=%d, want %d", tc.write, g.run, tc.run)
 			}
 		})
 	}
+}
+
+// steps drives the shape this spacing exists for: two rounds of thinking,
+// each explaining observation calls whose outcomes print after the flush.
+// Written against coder.Output so both implementations can be fed it.
+func steps(o coder.Output) {
+	o.Printf("Tokens: 1.0k sent, 20 received.") // the turn before, and its rule
+	o.Printf("--------")
+
+	o.StreamReasoning("The user wants the structure. Let me explore first.")
+	o.StreamToolCall(0, "ls", `{"path":"."}`)
+	o.FlushStream()
+	o.Toolf("Listed . (24 entries)")
+	o.Toolf("Read doc/README.md (501 lines)")
+
+	o.StreamReasoning("Let me explore a few more key files.")
+	o.StreamToolCall(0, "read", `{"path":"go.mod"}`)
+	o.FlushStream()
+	o.Toolf("Read go.mod (31 lines)")
+}
+
+// TestThinkingHeadsItsToolCalls is the grouping this spacing is for. A block of
+// thinking explains the calls that come *after* it — "let me read the file",
+// then the read — so the blank line goes before the block, not after it.
+//
+// It used to go after, which glued each block to the calls above it, the ones
+// it had nothing to do with. The dimmed palette hid the damage; in a terminal
+// with no faint, where the marker is the only cue, the grouping was simply
+// wrong. Nothing here depends on color, which is the point.
+func TestThinkingHeadsItsToolCalls(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+	steps(o)
+
+	want := []string{
+		"Tokens: 1.0k sent, 20 received.",
+		"--------",
+		// No blank here: a turn opens flush against its rule.
+		render.ThinkingOpen + " The user wants the structure. Let me explore first.",
+		"Listed . (24 entries)",
+		"Read doc/README.md (501 lines)",
+		"",
+		render.ThinkingOpen + " Let me explore a few more key files.",
+		"Read go.mod (31 lines)",
+	}
+	got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if !slices.Equal(got, want) {
+		t.Errorf("layout:\n got %#v\nwant %#v", got, want)
+	}
+}
+
+// The one place a separator still follows the thinking. An answer is a
+// different kind of thing from a tool call — what the model decided to say,
+// rather than what it went and did — and running them together blurs it.
+func TestThinkingIsStillSeparatedFromTheAnswer(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+	o.StreamReasoning("Now I can summarize.")
+	o.StreamText("The repo is a Go reimplementation of aider.")
+	o.FlushStream()
+
+	want := render.ThinkingOpen + " Now I can summarize.\n\nThe repo is a Go reimplementation"
+	if got := buf.String(); !strings.HasPrefix(got, want) {
+		t.Errorf("want a blank between thinking and answer:\n got %q\nwant %q", got, want)
+	}
+}
+
+// A separator is owed by whatever drew last, so at the top of a turn — where
+// nothing has drawn since the REPL's own chrome — nothing is owed. Getting this
+// wrong pushes every turn down by a line, which is why the debt is paid lazily
+// rather than written when the previous step ends.
+func TestNoSeparatorAtTheTopOfATurn(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 60}
+	o.Toolf("Read a.go (10 lines)") // the previous turn's last outcome
+	o.Printf("")
+	o.Printf("Tokens: 1.0k sent, 20 received.")
+	o.StreamReasoning("A new turn begins.")
+	o.FlushStream()
+
+	if got := buf.String(); strings.Contains(got, "received.\n\n"+render.ThinkingOpen) {
+		t.Errorf("a stale separator opened the turn:\n%q", got)
+	}
+}
+
+// TestBothOutputsAgreeOnSpacing extends the shape parity below to the blank
+// lines around it. The spacing policy is written twice — once for the terminal,
+// once for a redirected run — because the two draw through different machinery,
+// and two copies of a rule drift the first time either is touched. render's
+// GroupSep holds the rule; this holds them to it.
+func TestBothOutputsAgreeOnSpacing(t *testing.T) {
+	var term bytes.Buffer
+	steps(&termOutput{w: &term, color: false, theme: render.DefaultTheme(), width: 200})
+
+	plain := captureStdout(t, func() { steps(&coder.StdOutput{}) })
+
+	if got, want := strings.TrimRight(plain, "\n"), strings.TrimRight(term.String(), "\n"); got != want {
+		t.Errorf("the two outputs space a turn differently:\n script   %q\n terminal %q", got, want)
+	}
+}
+
+// captureStdout runs fn with os.Stdout replaced by a pipe and returns what it
+// wrote. StdOutput prints through the package-level fmt functions, so there is
+// no writer to inject.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stdout
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		var b bytes.Buffer
+		_, _ = io.Copy(&b, r)
+		done <- b.String()
+	}()
+	fn()
+	os.Stdout = saved
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out := <-done
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // The guard only ever drops a bare newline, so content that happens to contain
