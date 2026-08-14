@@ -102,6 +102,30 @@ func TestFallbackCostPricesEachTokenOnce(t *testing.T) {
 	}
 }
 
+// The commit-message request went out through the client directly and never
+// reached finalizeUsage, so the turn line reported four requests where five
+// were paid for — $0.00084 against $0.00093 on a measured turn, and the share
+// grows with the diff because that call re-sends it uncached.
+func TestSideUsageReachesTheTurnTotals(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.finalizeUsage(&sendUsage{prompt: 2000, completion: 100})
+
+	cost := 0.0001
+	c.RecordSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &cost})
+
+	if sent, recv := c.SessionTokens(); sent != 2794 || recv != 113 {
+		t.Errorf("session tokens = (%d, %d), want (2794, 113)", sent, recv)
+	}
+	if got, known := c.SessionCost(); !known || got != cost {
+		t.Errorf("cost = %v (known=%v), want %v", got, known, cost)
+	}
+	// The peak is a high-water mark, not a sum: the 794-token side request
+	// never displaces the 2000-token one it rode behind.
+	if got := c.TokensReport(); !strings.Contains(got, "Largest request so far: 2000") {
+		t.Errorf("peak should stay at the largest single request:\n%s", got)
+	}
+}
+
 // The cache figures are parenthesized because they are a breakdown. A flat
 // comma list reads as separate quantities, which is how the arithmetic bug
 // above stayed plausible for as long as it did.

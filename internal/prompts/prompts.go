@@ -217,18 +217,44 @@ var Ask = Set{
 
 // CommitSystem is the commit-message system prompt, with the
 // {language_instruction} format slot intact.
-const CommitSystem = "You are an expert software engineer who writes concise, one-line Git commit messages " +
-	"based on the provided diffs.\n" +
-	"Review the provided context and diffs which are about to be committed to a Git repo.\n" +
-	"Review the diffs carefully.\n" +
-	"Generate a one-line commit message for those changes.\n" +
-	"The commit message should be structured as follows: <type>: <description>\n" +
-	"Use these for <type>: fix, feat, build, chore, ci, docs, style, refactor, perf, test\n\n" +
-	"Ensure the commit message:{language_instruction}\n" +
-	"- Starts with the appropriate prefix.\n" +
-	"- Is in the imperative mood (e.g., \"add feature\" not \"added feature\" or \"adding feature\").\n" +
-	"- Does not exceed 72 characters.\n\n" +
-	"Reply only with the one-line commit message, without any additional text, explanations, or line breaks.\n"
+//
+// It replaces aider's, which said "one-line" five times and closed with "without
+// any additional text, explanations, or line breaks" — so a body was not merely
+// discouraged, it was forbidden. The diff says what changed; nothing could say
+// why. That was the wrong half to make impossible.
+//
+// Three things are sharpened against the Conventional Commits v1.0.0 spec,
+// which the old prompt half-remembered:
+//
+//   - Scope. "fix(parser):" is in the spec (rule 4) and was missing here
+//     entirely. It is the single most scannable thing a subject can carry.
+//   - Breaking changes. The "!" marker and the BREAKING CHANGE footer (rules
+//     11-13) were both absent, which for a harness that commits every turn is
+//     the one omission that can actually cost someone.
+//   - 72 characters is git convention, not the spec, which imposes no limit at
+//     all. Kept, but no longer attributed to a rule that does not exist.
+//
+// The body is permitted and discouraged in the same breath. An unconditional
+// "you may add a body" grows a paragraph on every commit restating the diff;
+// "usually empty" plus a short list of what earns one does the real work.
+const CommitSystem = "Write the Git commit message for the changes below. " +
+	"You are given the request that prompted them, the work that followed, and the diff.\n\n" +
+	"The subject is one line, in the form \"type(scope): description\", " +
+	"e.g. \"fix(workspace): stop counting cache writes twice\".{language_instruction}\n" +
+	"- Use feat for a new capability and fix for a bug. build, chore, ci, docs, perf, " +
+	"refactor, style, and test are also conventional.\n" +
+	"- The scope names the part of the codebase the change is confined to. Leave it out " +
+	"when the change spans several.\n" +
+	"- Imperative mood (\"add feature\", not \"added\" or \"adding\"), no trailing period, " +
+	"under 72 characters.\n" +
+	"- If the change breaks existing behavior, put \"!\" before the colon.\n\n" +
+	"A body is optional and usually empty. Add one only for something the diff cannot " +
+	"say: why this approach, what was rejected, the constraint or measurement behind the " +
+	"choice. The diff already says what changed, so a body that restates it is noise. " +
+	"When there is a body, leave one blank line after the subject. If the change breaks " +
+	"existing behavior, include a paragraph starting \"BREAKING CHANGE: \" saying what " +
+	"breaks.\n\n" +
+	"Reply with the commit message and nothing else — no preamble, no quotes, no code fence.\n"
 
 // Summarize is the system prompt for chat-history compaction: the weak model
 // condenses older conversation so a long session stays within the context
