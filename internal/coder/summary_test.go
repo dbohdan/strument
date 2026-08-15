@@ -86,10 +86,10 @@ func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 	if len(out) >= len(msgs) {
 		t.Fatalf("no compaction: %d -> %d", len(msgs), len(out))
 	}
-	if out[0].Role != llm.RoleUser ||
-		!strings.Contains(out[0].Text(), prompts.SummaryPrefix) ||
+	if out[0].Role != llm.RoleSystem ||
+		!strings.Contains(out[0].Text(), prompts.SummaryLabel) ||
 		!strings.Contains(out[0].Text(), "CONDENSED") {
-		t.Errorf("first message is not the summary: %q", out[0].Text())
+		t.Errorf("first message is not the summary: %s %q", out[0].Role, out[0].Text())
 	}
 	// The recent tail survives verbatim.
 	if out[len(out)-2].Text() != tailU.Text() || out[len(out)-1].Text() != tailA.Text() {
@@ -173,4 +173,104 @@ func TestMaybeSummarizeGating(t *testing.T) {
 			t.Error("weak model was never called")
 		}
 	})
+}
+
+// captureStub records what the weak model was actually asked to summarize, so
+// the tests below assert on the wire rather than on the rendering function.
+type captureStub struct{ sent string }
+
+func (c *captureStub) Send(_ context.Context, req llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		for _, m := range req.Messages {
+			if m.Role == llm.RoleUser {
+				c.sent = m.Text()
+			}
+		}
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "CONDENSED"}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+// Compaction must not fabricate a turn. aider's prompt ended "Write as the user,
+// in the first person... Begin with \"I asked you...\"", the result went in as a
+// user message under "I spoke to you previously about a number of things.", and
+// the coder appended an assistant "Ok." agreeing to it — the exact pattern
+// readOnlyFilesPrefix's comment describes as what it replaced.
+//
+// Pinned as a property of the output rather than of the wording, so a future
+// rewrite of the prompt cannot quietly reintroduce the shape.
+func TestSummaryFabricatesNoTurn(t *testing.T) {
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "weak", Context: 100000}, RuneCounter{})
+	msgs := []llm.Message{
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 80), msgTok("assistant", 80),
+		msgTok("user", 10), msgTok("assistant", 10),
+	}
+
+	out, err := s.summarize(msgs, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, m := range out {
+		if strings.Contains(m.Text(), "CONDENSED") && m.Role != llm.RoleSystem {
+			t.Errorf("the summary is a %s message; it is the harness's artifact, not anyone's turn", m.Role)
+		}
+		if m.Role == llm.RoleAssistant && strings.TrimSpace(m.Text()) == "Ok." {
+			t.Errorf("message %d is a fabricated assistant agreement", i)
+		}
+	}
+	if last := out[len(out)-1]; strings.TrimSpace(last.Text()) == "Ok." {
+		t.Error("compaction still ends on a fabricated \"Ok.\"")
+	}
+}
+
+// The prompt itself must not ask for the impersonation either. Fixing the
+// injection alone would have left the weak model writing "I asked you..." into
+// the summary text, where it reads as the user's words wherever it lands.
+func TestSummarizePromptDoesNotAskForImpersonation(t *testing.T) {
+	for _, banned := range []string{"as the user", "first person", "I asked you", "refer to the assistant"} {
+		if strings.Contains(strings.ToLower(prompts.Summarize), strings.ToLower(banned)) {
+			t.Errorf("the summarize prompt still asks for %q", banned)
+		}
+	}
+}
+
+// A tool-driven harness whose summarizer only reads prose summarizes the wrong
+// thing: twelve tool calls and one closing sentence became that sentence.
+func TestSummarySeesToolWork(t *testing.T) {
+	stub := &captureStub{}
+	s := NewChatSummary(stub, &config.Model{Slug: "weak", Context: 100000}, RuneCounter{})
+
+	big := strings.Repeat("z", summaryToolBytes*2)
+	msgs := []llm.Message{
+		llm.TextMessage("user", strings.Repeat("q", 400)),
+		{Role: llm.RoleAssistant, Content: llm.TextContent("looking"), ToolCalls: []llm.ToolCall{
+			{ID: "c1", Name: "grep", Arguments: `{"pattern":"defaultTimeout"}`},
+		}},
+		llm.ToolResult("c1", "internal/poll/poll.go:3: "+big),
+		// A prior summary, which is a system message now. Skipping the role
+		// would erase compaction's own output on the next pass.
+		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"EARLIER-WORK-MARKER"),
+		msgTok("user", 10), msgTok("assistant", 10),
+	}
+	if _, err := s.summarizeAll(msgs); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"grep", "defaultTimeout", "EARLIER-WORK-MARKER"} {
+		if !strings.Contains(stub.sent, want) {
+			t.Errorf("the summarizer never saw %q:\n%s", want, stub.sent)
+		}
+	}
+	// The result is there but clipped: enough to see what came back, not enough
+	// to pay for the file contents twice.
+	if !strings.Contains(stub.sent, "(cut;") {
+		t.Error("an oversized tool result should be clipped and say so")
+	}
+	if len(stub.sent) > summaryToolBytes*3 {
+		t.Errorf("rendered input is %d bytes; the clip is not holding", len(stub.sent))
+	}
 }

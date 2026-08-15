@@ -18,6 +18,10 @@ const (
 	summaryMaxDepth      = 3    // recursion cap before summarizing the lot
 	summaryInputBuffer   = 512  // reserved from the weak model's window per call
 	summaryFallbackInput = 4096 // weak-model window when its Context is unknown
+	// summaryToolBytes caps one tool result fed to the summarizer. A read of a
+	// large file would otherwise fill the weak model's window with the very
+	// content the prompt asks it to leave out.
+	summaryToolBytes = 2000
 )
 
 // ChatSummary compacts settled chat history by asking the weak model to
@@ -59,17 +63,18 @@ func (s *ChatSummary) tooBig(msgs []llm.Message, maxTokens int) bool {
 	return s.total(msgs) > maxTokens
 }
 
-// summarize compacts msgs to fit maxTokens (the main model's history budget),
-// always ending with an assistant "Ok." so the slot stays a clean
-// user/assistant pair. On a weak-model failure it returns msgs unchanged and
-// the error, so the caller can warn and leave history intact.
+// summarize compacts msgs to fit maxTokens (the main model's history budget).
+// On a weak-model failure it returns msgs unchanged and the error, so the
+// caller can warn and leave history intact.
+//
+// It used to append an assistant "Ok." here, to keep the slot a clean
+// user/assistant pair — necessary only because the summary itself was a user
+// message. The summary is a system message now, which needs no partner, so the
+// fabricated agreement goes with it.
 func (s *ChatSummary) summarize(msgs []llm.Message, maxTokens int) ([]llm.Message, error) {
 	out, err := s.summarizeReal(msgs, maxTokens, 0)
 	if err != nil {
 		return msgs, err
-	}
-	if len(out) > 0 && out[len(out)-1].Role != llm.RoleAssistant {
-		out = append(out, llm.TextMessage(llm.RoleAssistant, "Ok."))
 	}
 	return out, nil
 }
@@ -130,22 +135,10 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 	return s.summarizeReal(combined, maxTokens, depth+1)
 }
 
-// summarizeAll collapses msgs into a single summary user message via the weak
+// summarizeAll collapses msgs into a single summary system message via the weak
 // model, mirroring CommitMessenger's send loop (commit.go).
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
-	var content strings.Builder
-	for _, m := range msgs {
-		role := strings.ToUpper(m.Role)
-		if role != "USER" && role != "ASSISTANT" {
-			continue
-		}
-		content.WriteString("# " + role + "\n")
-		text := m.Text()
-		content.WriteString(text)
-		if !strings.HasSuffix(text, "\n") {
-			content.WriteString("\n")
-		}
-	}
+	content := renderForSummary(msgs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), summaryTimeout)
 	defer cancel()
@@ -155,7 +148,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		Model: s.weak.Slug,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, prompts.Summarize),
-			llm.TextMessage(llm.RoleUser, content.String()),
+			llm.TextMessage(llm.RoleUser, content),
 		},
 		ReasoningEffort: s.weak.Reasoning,
 		Temperature:     s.weak.Temperature,
@@ -169,6 +162,60 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		}
 	}
 
-	summary := prompts.SummaryPrefix + strings.TrimSpace(answer.String())
-	return []llm.Message{llm.TextMessage(llm.RoleUser, summary)}, nil
+	summary := prompts.SummaryLabel + strings.TrimSpace(answer.String())
+	return []llm.Message{llm.TextMessage(llm.RoleSystem, summary)}, nil
+}
+
+// renderForSummary lays the messages out for the weak model.
+//
+// It used to skip every role that was not USER or ASSISTANT, which in a harness
+// where everything a turn does arrives as tool calls meant the summarizer saw
+// only the thin prose layer: a turn that made twelve tool calls and closed with
+// one sentence compacted to that sentence. The work was invisible to the thing
+// summarizing the work.
+//
+// Three consequences of including the rest:
+//
+// Tool *calls* carry the intent — which file, which pattern — so they are shown
+// in full. Tool *results* carry file contents and search output, which is
+// exactly what the prompt asks the model to drop, so they are cut to a budget:
+// enough to see what came back, not enough to pay for it twice.
+//
+// System messages have to be included, and this is the subtle one. Once the
+// summary itself became a system message, skipping the role would have silently
+// dropped every earlier summary on a second pass — compaction erasing its own
+// output, which is worse than the fold it replaced.
+func renderForSummary(msgs []llm.Message) string {
+	var b strings.Builder
+	for _, m := range msgs {
+		body := strings.TrimRight(m.Text(), "\n")
+		switch m.Role {
+		case llm.RoleTool:
+			body = clipForSummary(body)
+		case llm.RoleAssistant:
+			for _, tc := range m.ToolCalls {
+				if body != "" {
+					body += "\n"
+				}
+				body += "calls " + tc.Name + " " + clipForSummary(tc.Arguments)
+			}
+		}
+		if body == "" {
+			continue
+		}
+		b.WriteString("# " + strings.ToUpper(m.Role) + "\n")
+		b.WriteString(body)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// clipForSummary caps one tool result or argument blob. The cut is announced so
+// the model reads a truncated result as truncated rather than as a file that
+// ends there — the same reason maxToolOutputBytes says so (toolobserve.go).
+func clipForSummary(s string) string {
+	if len(s) <= summaryToolBytes {
+		return s
+	}
+	return s[:summaryToolBytes] + "\n… (cut; the full result is not part of the summary input)"
 }

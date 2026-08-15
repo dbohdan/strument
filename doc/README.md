@@ -112,12 +112,38 @@ inherited from aider.
   loop above all, and then atomic batch writes that roll back whole and
   preserve the file's mode, an undo substrate that does not need git, usage
   accounting that survives an aborted turn, an in-chat-file exemption on path
-  containment. Chat-history summarization is aider's algorithm ported closely,
-  but it runs **synchronously** (aider uses a background thread) and only when
-  the model's context window is declared (`context=`), where aider always
-  summarizes; the summarize prompt is modernized from aider's shouty original
-  for effectiveness and model welfare, like the other built-in prompts. When
-  you diverge, say why in the code comment and the commit message.
+  containment. Chat-history summarization keeps aider's recursive-split
+  algorithm, but runs **synchronously** (aider uses a background thread) and only
+  when the model's context window is declared (`context=`), where aider always
+  summarizes. Three further divergences are described below. When you diverge,
+  say why in the code comment and the commit message.
+
+- **Compaction fires at a turn boundary, and that is the whole trick.** Every
+  other harness — Claude Code, Codex CLI, OpenCode, Gemini CLI — compacts when
+  the context window fills. The window fills whenever it fills, so those
+  summaries are taken mid-thought: partial plans, half-tested hypotheses, error
+  threads still in flight. Strument compacts from `moveBackCurMessages`, at the
+  end of a turn, when the model has stopped, the edits have landed, the
+  automatic checks have run, and the commit exists. It gets that boundary
+  *because the turn boundary is the human's* — so a property adopted for review
+  and safety turns out to decide compaction quality too. If the loop ever grows
+  a reason to compact mid-turn, this is what it would be spending.
+
+  Two things follow from the same principle. The summary is a **system**
+  message: aider's prompt asked the weak model to write *as the user* ("Begin
+  with \"I asked you...\""), the result went in as a user turn, and the coder
+  appended an assistant `"Ok."` agreeing to it — a fabricated exchange, the same
+  shape `readOnlyFilesPrefix` was written to remove. And the summary is
+  **agentless** — no "I", no "you", no "the assistant" — because first person is
+  a lie whenever a different model wrote the text, and the summarizer is the
+  weak model, so it usually is. A changelog asserts no authorship and stays true
+  regardless of who wrote it or who reads it.
+
+  The summarizer also sees the **tool calls and results**, not only the prose.
+  It read USER and ASSISTANT messages alone, which in a harness where everything
+  a turn does arrives as a tool call meant a twelve-call turn that closed with
+  one sentence compacted to that sentence. Results are clipped to a budget:
+  enough to see what came back, not enough to pay for the file contents twice.
 - **Borrowed material.** The tree-sitter tag queries under
   `internal/repomap/queries*/` are copied from aider. The built-in prompts in
   `internal/prompts/` began as aider's and are now ours to change;

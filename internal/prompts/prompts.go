@@ -258,20 +258,50 @@ const CommitSystem = "Write the Git commit message for the changes below. " +
 
 // Summarize is the system prompt for chat-history compaction: the weak model
 // condenses older conversation so a long session stays within the context
-// window. Modernized from aider's GPT-4-Turbo-era version — all-caps and
-// "*MUST*"/"*DO NOT*" emphasis — into calm, colleague-style prose in the manner
-// of the built-in-prompt revision (commit 6448353), keeping every functional
-// requirement.
-const Summarize = "Briefly summarize this partial conversation about programming. " +
-	"Give more detail to the most recent messages and less to the older ones. " +
-	"Start a new paragraph whenever the topic changes.\n\n" +
-	"This is only part of a longer conversation, so don't end with a wrap-up phrase " +
-	"like \"Finally, ...\"; the conversation continues after your summary.\n\n" +
-	"Include the function, library, and package names under discussion, along with the " +
-	"filenames the assistant references inside fenced code blocks. Leave the fenced code " +
-	"blocks themselves out of the summary.\n\n" +
-	"Write as the user, in the first person, telling the assistant about the conversation, " +
-	"and refer to the assistant as \"you\". Begin with \"I asked you...\"."
+// window.
+//
+// aider's version ended "Write as the user, in the first person, telling the
+// assistant about the conversation, and refer to the assistant as \"you\". Begin
+// with \"I asked you...\"." — the prompt *commanded* the fabrication that
+// readOnlyFilesPrefix's comment describes as what it replaced: a user turn the
+// user never wrote, followed by a fabricated assistant reply agreeing to it.
+// Fixing the injection alone would not have fixed it.
+//
+// It is agentless now, and that is a decision rather than a style. First person
+// is a lie whenever a different model wrote the text, and the summarizer is the
+// weak model, so it usually is. Third person about the assistant ("another model
+// did this") is alienating the other way and invites the reader to discount it.
+// A changelog asserts no authorship and is true regardless of who wrote it or
+// who reads it.
+//
+// It also asks for the *why* first. The diff and the commits already carry what
+// changed; the decisions and the abandoned approaches are the only part a
+// summary can lose for good.
+const Summarize = "Summarize this part of a programming conversation so the summary can stand in " +
+	"for the messages themselves.\n\n" +
+	"The conversation continues after your summary, so do not write a conclusion or a " +
+	"wrap-up phrase like \"Finally, ...\".\n\n" +
+	"Keep:\n" +
+	"- What the user asked for, in their own terms.\n" +
+	"- Decisions made, and approaches tried and dropped, with the reason. This is the part " +
+	"that cannot be recovered from the code.\n" +
+	"- Files that changed, by path, and the function, package, and library names under " +
+	"discussion.\n" +
+	"- What was left unfinished.\n\n" +
+	"Drop the narration: lookups that succeeded and surprised no one, file contents, search " +
+	"results, and fenced code blocks. Say what was learned, not how it was found.\n\n" +
+	"Give more detail to recent messages than to older ones.\n\n" +
+	"Write notes, not prose. Do not attribute actions to anyone — no \"I\", no \"you\", no " +
+	"\"the assistant\". Say what happened. Say less rather than guess."
 
-// SummaryPrefix opens the compacted history the weak model returns.
-const SummaryPrefix = "I spoke to you previously about a number of things.\n"
+// SummaryLabel introduces the compacted history, in the harness's own voice.
+//
+// It replaces SummaryPrefix — "I spoke to you previously about a number of
+// things." — which was a user turn the user never wrote, and which the coder
+// followed with a fabricated assistant "Ok." agreeing to it. The summary is the
+// harness's artifact, so it goes in the harness's voice, as a system message.
+// The precedent is the context-exhausted note in coder/send.go, which is a
+// system message for the same reason: the model did not say this.
+const SummaryLabel = "Summary of the earlier part of this conversation, written by Strument to " +
+	"keep it inside the context window. It replaces those messages; it is not something " +
+	"anyone said.\n\n"
