@@ -150,7 +150,7 @@ func (c *chatCmd) Run() error {
 		// about the same rule. Reference material outside the project goes
 		// through /read-only, which is the one sanctioned way in.
 		if rel, err := filepath.Rel(root, f); err != nil || strings.HasPrefix(rel, "..") {
-			fmt.Fprintf(os.Stderr, "strument: skipping %s: outside the project root; use /read-only to reference it.\n", f)
+			fmt.Fprintf(os.Stderr, "strument: skipping %s: outside the project root; pin it with /read-only instead.\n", f)
 			continue
 		}
 		cdr.AddFile(f)
@@ -288,16 +288,20 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) st
 			readOnly++
 		}
 	}
+	// One count, then the split, so the number the user checks against /ls is the
+	// first thing on the line. "2 pins: 1 for editing, 1 read-only" also stays on
+	// one line where "1 file and 1 read-only file" was already the longer half of
+	// a sentence that grows with every category.
 	switch {
 	case files == 0 && readOnly == 0:
 		return ""
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session.", plural(files, "file", "files"))
+		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins"))
 	case files == 0:
-		return fmt.Sprintf("Restored %s from your last session.", plural(readOnly, "read-only file", "read-only files"))
+		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins"))
 	}
-	return fmt.Sprintf("Restored %s and %s from your last session.",
-		plural(files, "file", "files"), plural(readOnly, "read-only file", "read-only files"))
+	return fmt.Sprintf("Restored %s from your last session: %d for editing, %d read-only.",
+		plural(files+readOnly, "pin", "pins"), files, readOnly)
 }
 
 func plural(n int, one, many string) string {

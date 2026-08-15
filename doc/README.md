@@ -571,7 +571,7 @@ These are not hypothetical. Applied to ten candidates, they rejected four
 without further argument.
 
 `resume.json` is the one that passed cleanly, and it is deliberately the *cheap*
-half of a session: pinned files, read-only files, and the model alias — what you
+half of a session: the pins (for editing and read-only) and the model alias — what you
 would otherwise retype. Not the conversation. Storing `doneMessages` would make
 Strument re-send a context the user pays for, assert something about what the
 model remembers, and blur the turn boundary; the transcript already exists for

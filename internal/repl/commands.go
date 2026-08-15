@@ -33,21 +33,21 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> [file ...]", "Add files for the model to edit (globs allowed)", cmdAdd},
+		{"add", "<file> [file ...]", "Pin files for the model to edit (globs allowed)", cmdAdd},
 		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
 		{"clear", "", "Clear the conversation history", cmdClear},
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
-		{"drop", "[file ...]", "Remove files from this session (all if none given)", cmdDrop},
+		{"drop", "[file ...]", "Unpin files (all if none given)", cmdDrop},
 		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
-		{"ls", "", "List this session's files", cmdLs},
+		{"ls", "", "List the pinned files", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"quit", "", "Exit Strument", cmdExit},
-		{"read-only", "<file> [file ...]", "Pin reference files the model may read but never edit (may be outside the project)", cmdReadOnly},
+		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
-		{"reset", "", "Drop all files and clear the history", cmdReset},
+		{"reset", "", "Unpin everything and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"squash", "[n]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
 		{"symbol", "<name> [reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
@@ -228,7 +228,7 @@ func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
 			rel, err := filepath.Rel(r.coder.Root, m)
 			if err != nil || strings.HasPrefix(rel, "..") {
 				if !outside {
-					r.out.Warningf("Skipping %s: outside the project root. Use /read-only to reference it.", m)
+					r.out.Warningf("Skipping %s: outside the project root. Pin it with /read-only instead.", m)
 					continue
 				}
 				abs, err := filepath.Abs(m)
@@ -303,7 +303,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), false) {
 		r.coder.AddFile(rel)
-		r.printf("Added %s for editing.", rel)
+		r.printf("Pinned %s for editing.", rel)
 	}
 	r.saveResume()
 	return ""
@@ -316,7 +316,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), true) {
 		r.coder.AddReadOnlyFile(rel)
-		r.printf("Added %s for reference.", rel)
+		r.printf("Pinned %s read-only.", rel)
 	}
 	r.saveResume()
 	return ""
@@ -325,7 +325,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 func cmdDrop(_ context.Context, r *REPL, args string) string {
 	if args == "" {
 		r.coder.DropAll()
-		r.printf("Dropped all files.")
+		r.printf("Unpinned everything.")
 		return ""
 	}
 
@@ -341,10 +341,10 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 			}
 		}
 		for _, rel := range dropped {
-			r.printf("Dropped %s.", rel)
+			r.printf("Unpinned %s.", rel)
 		}
 		if len(dropped) == 0 {
-			r.out.Warningf("No files in this session matched %q.", pat)
+			r.out.Warningf("No pinned file matched %q.", pat)
 		}
 	}
 	r.saveResume()
@@ -355,17 +355,17 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 	chat := r.coder.ChatFiles()
 	ro := r.coder.ReadOnlyFiles()
 	if len(chat) == 0 && len(ro) == 0 {
-		r.printf("No files in this session.")
+		r.printf("No files pinned in this session.")
 		return ""
 	}
 	if len(chat) > 0 {
-		r.printf("For editing:")
+		r.printf("Pinned for editing:")
 		for _, f := range chat {
 			r.printf("  %s", f)
 		}
 	}
 	if len(ro) > 0 {
-		r.printf("For reference (the model reads these here; it cannot reach them with tools):")
+		r.printf("Pinned read-only (the model reads these here; it cannot reach them with tools):")
 		for _, f := range ro {
 			r.printf("  %s", f)
 		}
@@ -382,7 +382,7 @@ func cmdClear(_ context.Context, r *REPL, _ string) string {
 func cmdReset(_ context.Context, r *REPL, _ string) string {
 	r.coder.DropAll()
 	r.coder.ClearHistory()
-	r.printf("Dropped all files and cleared the chat history.")
+	r.printf("Unpinned everything and cleared the chat history.")
 	r.saveResume()
 	return ""
 }

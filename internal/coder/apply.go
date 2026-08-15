@@ -105,7 +105,11 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 	// worst thing to edit by accident — it is outside the repo, outside the
 	// diff they are watching, and outside git's undo.
 	if slices.Contains(c.absReadOnlyFnames, full) {
-		c.Out.Warningf("Skipping edits to %s, which is pinned as read-only reference.", rel)
+		// The user-facing warning uses the interface's vocabulary ("pinned
+		// read-only"); the tool result below keeps the prompt's, which the
+		// read-only live trial settled (see prompts.readOnlyFilesPrefix). The two
+		// registers do not have to match — nobody reads both.
+		c.Out.Warningf("Skipping edits to %s, which is pinned read-only.", rel)
 		return false, "that file is pinned as read-only reference, so it was not changed. " +
 			"Make the change elsewhere, or ask the user to add it with /add if it should be editable."
 	}
