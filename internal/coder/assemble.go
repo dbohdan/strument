@@ -390,10 +390,27 @@ func (c *Coder) formatMessages() *chatChunks {
 // the prompt.
 func (c *Coder) cacheHeadersEnabled() bool { return c.Model != nil && c.Model.Cache }
 
+// countMessages estimates the tokens a slice of messages will cost.
+//
+// Tool calls are counted, and that is not a refinement. m.Text() reads Content
+// only, so an assistant message carrying nothing but tool calls counted as
+// zero — and in this harness every action is a tool call, with an edit's
+// old_string/new_string often the largest thing in the request. A twelve-step
+// turn could report a few hundred tokens of history while sending several
+// thousand. checkTokens counts the same way, so the guard that warns before a
+// request overruns the declared window was blind to the same bytes.
+//
+// Still missing, deliberately for now: the tool *schemas*, which ride on every
+// request and are worth on the order of a thousand tokens. They are a property
+// of the request rather than of a message slice, so they belong in a row of
+// their own rather than smuggled into this sum.
 func (c *Coder) countMessages(msgs []llm.Message) int {
 	n := 0
 	for _, m := range msgs {
 		n += c.Tokens.Count(m.Text())
+		for _, tc := range m.ToolCalls {
+			n += c.Tokens.Count(tc.Name) + c.Tokens.Count(tc.Arguments)
+		}
 	}
 	return n
 }

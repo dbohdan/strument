@@ -379,9 +379,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	defer func() {
 		c.commitTurn()
 		c.pushTurnSnapshot()
-		if c.editFormat == "tool" && len(c.turnEditedFiles) > 0 {
-			c.moveBackCurMessages()
-		}
+		c.endTurnHistory()
 		// Last, so the accounting closes the turn: the commit line above it, and
 		// nothing under it. This is what the per-send reorder was reaching for,
 		// now at the scope where a reader actually wants the number.

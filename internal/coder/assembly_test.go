@@ -263,7 +263,7 @@ func TestNativeReasoningNeverReachesAnswer(t *testing.T) {
 	if env.coder.partialReasoningContent != "private" {
 		t.Errorf("reasoning buffer = %q", env.coder.partialReasoningContent)
 	}
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Text() != "public" {
 		t.Errorf("history = %s", dumpHistory(hist))
 	}

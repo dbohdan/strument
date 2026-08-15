@@ -215,3 +215,11 @@ func inlineScenario(t *testing.T, jsonl string) *fixture.Scenario {
 	}
 	return sc
 }
+
+// history is the whole conversation, wherever it currently lives. done and cur
+// are adjacent on the wire and the split is bookkeeping — a turn's messages
+// settle into done when it ends — so a test asking "what does the conversation
+// look like" should not have to know which slice holds them.
+func history(c *Coder) []llm.Message {
+	return append(append([]llm.Message(nil), c.doneMessages...), c.curMessages...)
+}

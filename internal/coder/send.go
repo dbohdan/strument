@@ -401,6 +401,34 @@ func (c *Coder) moveBackCurMessages() {
 	c.maybeSummarize()
 }
 
+// endTurnHistory settles the finished turn and compacts if it has outgrown the
+// budget. Called once from runOne's defer, after the commit and the snapshot.
+//
+// It used to be gated on `editFormat == "tool" && len(turnEditedFiles) > 0`, so
+// only a turn that changed a file produced any settled history at all. A live
+// pass found what that costs: a session of questions, or any stretch of /ask,
+// kept everything in curMessages — which goes on the wire in full and which
+// maybeSummarize never examines — so the history budget existed and nothing was
+// ever measured against it.
+//
+// The gate is a vestige. In aider the rotation carried a synthetic "I applied
+// and committed your changes" pair, which only made sense after an edit;
+// moveBackCurMessages's own comment records removing the pair, and the gate
+// stayed behind. What genuinely must not happen is rotating *mid-loop*, where
+// compaction would eat the tool results the next send reacts to — and that is
+// enforced by this running in the turn-end defer, not by asking what the turn
+// did.
+//
+// Rotation does not move anything on the wire: done and cur are adjacent and
+// both sit after the read-only block, so the split is bookkeeping. What changes
+// is that compaction can now see the conversation.
+func (c *Coder) endTurnHistory() {
+	if len(c.curMessages) == 0 {
+		return
+	}
+	c.moveBackCurMessages()
+}
+
 // maxChatHistoryTokens is the settled-history budget: aider's
 // min(max(context/16, 1024), 8192), derived from the main model's window.
 func maxChatHistoryTokens(context int) int {

@@ -199,9 +199,19 @@ func TestAskModeIgnoresSearchReplaceAndShell(t *testing.T) {
 	if runner.calls != 0 {
 		t.Errorf("ask mode ran %d shell commands", runner.calls)
 	}
-	// History has the plain Q&A, no "committed" rotation.
-	if len(c.doneMessages) != 0 {
-		t.Errorf("ask mode rotated history: %s", dumpHistory(c.doneMessages))
+	// History is the plain Q&A and nothing else. This used to assert that
+	// doneMessages stayed empty, because rotation was what carried aider's
+	// synthetic "I applied and committed your changes" pair — the comment said
+	// so: no "committed" rotation. The pair is gone, and every turn settles into
+	// done now, so the assertion is written against what it was always about.
+	hist := history(c)
+	if len(hist) != 2 {
+		t.Errorf("history should be exactly the question and the answer: %s", dumpHistory(hist))
+	}
+	for _, m := range hist {
+		if strings.Contains(m.Text(), "committed your changes") || strings.TrimSpace(m.Text()) == "Ok." {
+			t.Errorf("ask mode fabricated a turn: %s", dumpHistory(hist))
+		}
 	}
 }
 

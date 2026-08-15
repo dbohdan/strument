@@ -124,7 +124,7 @@ func TestContinuationCapOutputExhausted(t *testing.T) {
 	if env.stub.Remaining() != 1 {
 		t.Errorf("consumed %d turns, want 5", 6-env.stub.Remaining())
 	}
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Role != "assistant" || hist[1].Text() != "xxxxx" {
 		t.Errorf("history = %s", dumpHistory(hist))
 	}
@@ -161,7 +161,7 @@ func TestRetryDiscardsPartialAndSumsUsage(t *testing.T) {
 	if len(clock.slept) != 1 || clock.slept[0] != 250*time.Millisecond {
 		t.Errorf("slept = %v", clock.slept)
 	}
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Text() != "clean" {
 		t.Errorf("history = %s", dumpHistory(hist))
 	}
@@ -175,7 +175,7 @@ func TestFailedAfterPartialKeepsHistoryBytes(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	env.run(t)
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[0].Role != "user" || hist[1].Role != "assistant" || hist[1].Text() != "partial thoughts" {
 		t.Errorf("history = %s", dumpHistory(hist))
 	}
@@ -189,8 +189,8 @@ func TestEmptyStreamDoesNotPoisonHistory(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	env.run(t)
-	if len(env.coder.curMessages) != 0 {
-		t.Errorf("history should be clean: %s", dumpHistory(env.coder.curMessages))
+	if len(history(env.coder)) != 0 {
+		t.Errorf("history should be clean: %s", dumpHistory(history(env.coder)))
 	}
 }
 
@@ -206,7 +206,7 @@ func TestContextExhaustedEmptyAddsDiagnostic(t *testing.T) {
 	// request did not get that far — so an assistant message here would be a
 	// fabricated turn, and one in which the model appears to report a transport
 	// error about itself.
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Role != llm.RoleSystem ||
 		!strings.Contains(hist[1].Text(), "cut off") {
 		t.Errorf("history = %s", dumpHistory(hist))
@@ -221,7 +221,7 @@ func TestContextExhaustedWithPartialKeepsPartial(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	env.run(t)
-	hist := env.coder.curMessages
+	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Text() != "some work" {
 		t.Errorf("history = %s (no diagnostic when partial present)", dumpHistory(hist))
 	}
@@ -241,8 +241,8 @@ func TestCheckTokensDeclined(t *testing.T) {
 		// zero turns in the fixture; a send would have failed loudly anyway
 		t.Error("no request should have been sent")
 	}
-	if len(env.coder.curMessages) != 0 {
-		t.Errorf("declined checkTokens must not poison history: %s", dumpHistory(env.coder.curMessages))
+	if len(history(env.coder)) != 0 {
+		t.Errorf("declined checkTokens must not poison history: %s", dumpHistory(history(env.coder)))
 	}
 }
 
@@ -306,8 +306,16 @@ func TestNoEditTurnKeepsRecentHistory(t *testing.T) {
 `)
 	env := setupScenario(t, sc, nil)
 	env.run(t)
-	if len(env.coder.doneMessages) != 0 {
-		t.Error("no-edit turn must not rotate history")
+	// The name is the assertion: a turn that changed no files still keeps its
+	// exchange in full. This used to require that doneMessages stay *empty* —
+	// that a no-edit turn not rotate at all — which is a stronger claim than
+	// "keeps", and the one that made a session of questions never compact:
+	// everything stayed in cur, which goes on the wire whole and which
+	// maybeSummarize never examines. Nothing is lost by settling it; done and
+	// cur are adjacent on the wire.
+	hist := history(env.coder)
+	if len(hist) != 2 || hist[0].Text() != "what is this?" || hist[1].Text() != "just a file" {
+		t.Errorf("no-edit turn lost its exchange: %s", dumpHistory(hist))
 	}
 }
 
