@@ -3,6 +3,7 @@ package history
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,9 @@ func TestUndoRoundTrip(t *testing.T) {
 // trouble to preserve a file's mode through an edit. World-readable copies one
 // directory over would undo that work.
 func TestUndoFileIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
 	root := undoRoot(t)
 	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("a", "x", "y", true)}}); err != nil {
 		t.Fatal(err)
