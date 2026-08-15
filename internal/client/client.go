@@ -225,19 +225,24 @@ func classifyHTTPError(resp *http.Response) *llm.StreamError {
 		msg = resp.Status
 	}
 
+	// A 4xx other than the two transient ones is the request being wrong, and
+	// the provider will say the same thing next time. Classifying the whole
+	// 4xx range as ErrServer made a typo'd model slug cost the full retry
+	// ladder — about a minute of "Retrying in 0.2 seconds..." before the one
+	// line that explains it ("nope/does-not-exist is not a valid model ID").
 	class := llm.ErrServer
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		class = llm.ErrAuth
 	case resp.StatusCode == http.StatusTooManyRequests:
 		class = llm.ErrRateLimit
-	case resp.StatusCode >= 500:
+	case resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout:
 		class = llm.ErrServer
 	case resp.StatusCode >= 400:
 		if isContextWindowMessage(msg) {
 			class = llm.ErrContextWindow
 		} else {
-			class = llm.ErrServer
+			class = llm.ErrRequest
 		}
 	}
 	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg)}

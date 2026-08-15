@@ -68,6 +68,10 @@ type sendUsage struct {
 	// estSent is the pre-send token estimate, the fallback when the turn is
 	// aborted before the provider's usage arrives.
 	estSent int
+	// rejected records how the *last* attempt ended: true when the provider
+	// refused the request rather than answering it. Last-wins, because a retry
+	// that succeeds brings real usage with it.
+	rejected bool
 }
 
 func (u *sendUsage) add(usage *llm.Usage) {
@@ -102,14 +106,17 @@ const (
 // fields before each call and decides whether to retry or continue.
 func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage) (streamResult, error) {
 	finishReason := ""
+	usage.rejected = false
 	for ev, err := range c.Client.Send(ctx, req) {
 		if err != nil {
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				return resInterrupted, nil
 			}
+			usage.rejected = true
 			var se *llm.StreamError
 			if errors.As(err, &se) {
 				if se.Class == llm.ErrContextWindow {
+					usage.rejected = false
 					return resContextExhausted, nil
 				}
 				if se.Retryable() {
@@ -444,6 +451,22 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	sent := u.prompt
 	received := u.completion
 	estimated := false
+
+	// A request the provider refused outright — a bad key, a model slug that
+	// does not exist, an account out of credit — was not processed: no usage,
+	// no reply, nothing billed. Estimating it printed
+	//
+	//	Tokens: 735 sent, 0 received. (estimated)
+	//
+	// under a 401, which reads as a charge for the failure. Returning before
+	// the counters means messageSends stays 0 and flushTurnUsage says nothing
+	// at all, which is the honest report.
+	//
+	// A stream that produced text before it broke is a different case: those
+	// tokens were generated and will be billed, so it still estimates below.
+	if u.rejected && sent == 0 && received == 0 && !u.costKnown && c.streamedText() == "" {
+		return
+	}
 
 	// No usage arrived — the turn was aborted before the provider's final
 	// usage chunk (or the provider sends none). The request still went out

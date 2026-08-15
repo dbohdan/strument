@@ -192,6 +192,11 @@ const (
 	ErrContextWindow ErrorClass = "context_window"
 	ErrAuth          ErrorClass = "auth"
 	ErrServer        ErrorClass = "server"
+	// ErrRequest is the request itself being wrong — a model slug that does
+	// not exist, an unsupported parameter, an account out of credit. The
+	// provider will answer a retry the same way, so retrying only delays the
+	// message the user needs to read.
+	ErrRequest ErrorClass = "request"
 )
 
 // StreamError is a classified failure surfaced by a model stream.

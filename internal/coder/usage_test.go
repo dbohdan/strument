@@ -6,6 +6,8 @@
 package coder
 
 import (
+	"context"
+	"iter"
 	"strings"
 	"testing"
 
@@ -45,6 +47,81 @@ func TestFinalizeUsageRealUsageNotMarked(t *testing.T) {
 	}
 	if strings.Contains(c.lastUsageReport, "(estimated)") {
 		t.Errorf("real usage must not be marked estimated: %q", c.lastUsageReport)
+	}
+}
+
+// A request the provider refused was never processed: no usage, no reply,
+// nothing billed. It used to be reported as
+//
+//	Tokens: 735 sent, 0 received. (estimated)
+//
+// — the harness's own pre-send estimate for a request that never ran, printed
+// in the one place a reader looks for what they were charged. Under a 401 that
+// is the opposite of what happened.
+func TestRefusedRequestReportsNothing(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.Model.InputCost = &llm.Money{Known: true, USD: 0.000001}
+	c.Model.OutputCost = &llm.Money{Known: true, USD: 0.000002}
+
+	c.finalizeUsage(&sendUsage{estSent: 735, rejected: true})
+
+	if sent, recv := c.SessionTokens(); sent != 0 || recv != 0 {
+		t.Errorf("session tokens = (%d, %d), want (0, 0)", sent, recv)
+	}
+	if _, known := c.SessionCost(); known {
+		t.Error("a refused request must not put a cost on the session")
+	}
+	if c.lastUsageReport != "" {
+		t.Errorf("report = %q, want none", c.lastUsageReport)
+	}
+	// Zero sends is what makes flushTurnUsage say nothing at all rather than
+	// print a line of zeroes.
+	if c.messageSends != 0 {
+		t.Errorf("messageSends = %d, want 0", c.messageSends)
+	}
+}
+
+// A stream that broke *after* the model had already said something is the other
+// case: those tokens were generated and will be billed, so the estimate stands.
+func TestStreamBrokenMidReplyStillEstimates(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.partialResponseContent = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
+
+	c.finalizeUsage(&sendUsage{estSent: 735, rejected: true})
+
+	if sent, recv := c.SessionTokens(); sent != 735 || recv == 0 {
+		t.Errorf("session tokens = (%d, %d), want (735, >0)", sent, recv)
+	}
+	if !strings.Contains(c.lastUsageReport, "(estimated)") {
+		t.Errorf("report must be marked estimated: %q", c.lastUsageReport)
+	}
+}
+
+// refuseStub is a provider that answers every request with a refusal and
+// streams nothing — a bad key, a model slug that does not exist.
+type refuseStub struct{ class llm.ErrorClass }
+
+func (s refuseStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		yield(llm.StreamEvent{}, &llm.StreamError{
+			Class: s.class, Message: "HTTP 401: No auth credentials found"})
+	}
+}
+
+// The end-to-end half: streamOnce has to mark the send refused for the check
+// above to fire on a real failure.
+func TestFailedSendAccountsForNothing(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.Client = refuseStub{llm.ErrAuth}
+
+	if out, _ := c.sendMessage(context.Background(), "hello"); out != OutcomeFailed {
+		t.Errorf("outcome = %v, want OutcomeFailed", out)
+	}
+	if sent, recv := c.SessionTokens(); sent != 0 || recv != 0 {
+		t.Errorf("session tokens = (%d, %d), want (0, 0)", sent, recv)
+	}
+	if c.messageSends != 0 {
+		t.Errorf("messageSends = %d, want 0 — a failed turn prints no usage line", c.messageSends)
 	}
 }
 

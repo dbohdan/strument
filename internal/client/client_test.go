@@ -263,10 +263,21 @@ func TestErrorClassification(t *testing.T) {
 		retry  bool
 	}{
 		{401, `{"error":{"message":"bad key"}}`, llm.ErrAuth, false},
+		{403, `{"error":{"message":"forbidden"}}`, llm.ErrAuth, false},
 		{429, `{"error":{"message":"slow down"}}`, llm.ErrRateLimit, true},
 		{500, `{"error":{"message":"boom"}}`, llm.ErrServer, true},
+		{503, `{"error":{"message":"overloaded"}}`, llm.ErrServer, true},
+		// A server that timed out waiting for the request is the one 4xx
+		// worth trying again.
+		{408, `{"error":{"message":"request timeout"}}`, llm.ErrServer, true},
 		{400, `{"error":{"message":"This model's maximum context length is 8192 tokens"}}`, llm.ErrContextWindow, false},
-		{400, `{"error":{"message":"invalid request"}}`, llm.ErrServer, true},
+		// The rest of 4xx is the request being wrong; a retry gets the same
+		// answer, so it must fail at once and say why.
+		{400, `{"error":{"message":"invalid request"}}`, llm.ErrRequest, false},
+		{400, `{"error":{"message":"nope/does-not-exist is not a valid model ID"}}`, llm.ErrRequest, false},
+		{402, `{"error":{"message":"insufficient credits"}}`, llm.ErrRequest, false},
+		{404, `{"error":{"message":"no endpoint found"}}`, llm.ErrRequest, false},
+		{422, `{"error":{"message":"unsupported parameter"}}`, llm.ErrRequest, false},
 	}
 	for _, tc := range cases {
 		c := New(config.Provider{Adapter: config.AdapterOpenRouter, APIKey: "k"})
@@ -281,11 +292,11 @@ func TestErrorClassification(t *testing.T) {
 		se := &llm.StreamError{}
 		ok := errors.As(gotErr, &se)
 		if !ok || se.Class != tc.want {
-			t.Errorf("status %d: err = %v (want class %s)", tc.status, gotErr, tc.want)
+			t.Errorf("status %d %s: err = %v (want class %s)", tc.status, tc.body, gotErr, tc.want)
 			continue
 		}
 		if se.Retryable() != tc.retry {
-			t.Errorf("status %d: retryable = %v, want %v", tc.status, se.Retryable(), tc.retry)
+			t.Errorf("status %d %s: retryable = %v, want %v", tc.status, tc.body, se.Retryable(), tc.retry)
 		}
 	}
 }
