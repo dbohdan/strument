@@ -274,25 +274,32 @@ const CommitSystem = "Write the Git commit message for the changes below. " +
 // A changelog asserts no authorship and is true regardless of who wrote it or
 // who reads it.
 //
-// It also asks for the *why* first. The diff and the commits already carry what
-// changed; the decisions and the abandoned approaches are the only part a
-// summary can lose for good.
-const Summarize = "Summarize this part of a programming conversation so the summary can stand in " +
-	"for the messages themselves.\n\n" +
-	"The conversation continues after your summary, so do not write a conclusion or a " +
-	"wrap-up phrase like \"Finally, ...\".\n\n" +
-	"Keep:\n" +
-	"- What the user asked for, in their own terms.\n" +
-	"- Decisions made, and approaches tried and dropped, with the reason. This is the part " +
-	"that cannot be recovered from the code.\n" +
-	"- Files that changed, by path, and the function, package, and library names under " +
-	"discussion.\n" +
-	"- What was left unfinished.\n\n" +
-	"Drop the narration: lookups that succeeded and surprised no one, file contents, search " +
-	"results, and fenced code blocks. Say what was learned, not how it was found.\n\n" +
-	"Give more detail to recent messages than to older ones.\n\n" +
-	"Write notes, not prose. Do not attribute actions to anyone — no \"I\", no \"you\", no " +
-	"\"the assistant\". Say what happened. Say less rather than guess."
+// The *content* instructions are still aider's, and that is a measured
+// decision. A first attempt replaced them with a structured list — what the
+// user asked for, decisions and their reasons, files changed, what was
+// unfinished — which read better and performed worse: over 24 live sessions,
+// recall of a reason the user had stated dropped from 10/12 to 5/12 (p=0.089),
+// while compactions per session rose. The failures were not vague, they were
+// losses: "the reasoning ... was not established in the context I have access
+// to", and in one case a confabulated reason ("to balance between frequent
+// updates and system load") that nobody had given.
+//
+// So only two things changed here: the impersonation clause became the
+// agentless instruction, and one line asks to keep a stated reason — which is
+// the thing the trial showed is worth protecting and the thing the code cannot
+// give back. See doc/experiments/ for the run.
+const Summarize = "Briefly summarize this partial conversation about programming. " +
+	"Give more detail to the most recent messages and less to the older ones. " +
+	"Start a new paragraph whenever the topic changes.\n\n" +
+	"This is only part of a longer conversation, so don't end with a wrap-up phrase " +
+	"like \"Finally, ...\"; the conversation continues after your summary.\n\n" +
+	"Include the function, library, and package names under discussion, along with the " +
+	"filenames the assistant references inside fenced code blocks. Leave the fenced code " +
+	"blocks themselves out of the summary.\n\n" +
+	"Keep any reason the user gave for a decision, in their own terms. A choice can be " +
+	"read back from the code; the reason for it cannot.\n\n" +
+	"Do not attribute actions to anyone — no \"I\", no \"you\", no \"the assistant\". " +
+	"Say what happened."
 
 // SummaryLabel introduces the compacted history, in the harness's own voice.
 //
