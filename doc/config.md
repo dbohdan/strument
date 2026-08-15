@@ -355,8 +355,13 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   read-only-files, and chat-files sections; it does not mark the completed or
   current conversation. This adds provider-facing metadata only: whether a
   cache is used depends on the provider and model.
-- **`context`** — the input window in tokens. `0`/unset means unknown, which
-  disables the context-limit warning.
+- **`context`** — the input window in tokens. `0`/unset means unknown, and two
+  things that depend on knowing it stop working: the warning before a request
+  overruns the window, and the summarization that keeps the settled chat history
+  inside `min(max(context/16, 1024), 8192)` tokens. Without it a long session
+  grows its history until the provider refuses the request. Both are silent when
+  it is unset — there is nothing to warn about a limit you have not stated — so
+  set it on every model you use for real work.
 - **`max_output`** — the maximum output tokens.
 - **`input_cost`, `output_cost`** — price in **US dollars per million tokens**
   (e.g. `input_cost=3`), used as a *fallback estimate*. The per-turn cost line

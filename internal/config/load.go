@@ -98,6 +98,45 @@ func parseReasoningDisplay(path string, v starlark.Value) (ReasoningDisplay, err
 	}
 }
 
+// missingConfigError is the very first thing a new user can see, so it carries
+// a config they can paste rather than a pointer to one.
+//
+// It used to say "see doc/config.md", which is a path in the source tree — and
+// someone who installed with `go install dbohdan.com/strument/cmd/strument` has
+// no source tree. The message named a file they did not have, for a program
+// that would not start until they wrote one. Four lines of Starlark is less
+// text than the sentence explaining where to find them.
+//
+// The slug is a real one that works today; `strument model-config` fills in
+// context, output limits, and pricing for any other, and it runs before a
+// config exists, which is exactly when it is needed.
+func missingConfigError(userPath string) error {
+	//nolint:revive,staticcheck // error-strings: this one is the screen a new
+	// user reads, not a clause another message wraps. Nothing wraps it — Load
+	// returns it, main prints it, the program exits.
+	return fmt.Errorf(`no configuration file yet.
+
+Strument has no model database and assumes nothing about which models you have,
+so it needs a config before it will start. Write this to
+%s:
+
+    openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
+
+    models = {"mimo": model(openrouter, "xiaomi/mimo-v2.5", context=1050000)}
+    default = "mimo"
+
+then export OPENROUTER_API_KEY and run strument again.
+
+"strument model-config <slug>" prints a fuller block — context, output limit,
+pricing — for any OpenRouter model, and it works before a config exists.
+The full reference is %s.`,
+		userPath, DocsURL+"/blob/master/doc/config.md")
+}
+
+// DocsURL is the documentation's home for someone who installed the binary and
+// has no source tree to read it from.
+const DocsURL = "https://github.com/dbohdan/strument"
+
 // Load runs the config pipeline: user config, gated project
 // config, whole-key merge, post-merge weak_model resolution, validation.
 func Load(opts Options) (*Config, error) {
@@ -124,7 +163,7 @@ func Load(opts Options) (*Config, error) {
 	userSrc, err := os.ReadFile(userPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("no user config at %s (create it; see doc/config.md)", userPath)
+			return nil, missingConfigError(userPath)
 		}
 		return nil, err
 	}

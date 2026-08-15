@@ -11,7 +11,7 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
 ## Features
 
 - One binary, no Python dependency like aider.
-  Pure Go with cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
+  Pure Go with no cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
 - [Starlark](https://starlark-lang.org/) configuration.
   A single `config.star` replaces YAML, `.env` files, and a JSON model database.
   Project-local `.strument.star` files are supported.
@@ -109,7 +109,7 @@ Put it in `~/.config/strument/config.star`:
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
 
-models = {"mimo": model(openrouter, "xiaomi/mimo-v2.5")}
+models = {"mimo": model(openrouter, "xiaomi/mimo-v2.5", context=1050000)}
 default = "mimo"
 ```
 
@@ -121,10 +121,14 @@ cd ~/src/myproject
 strument
 ```
 
-It is worth adding `context`, `max_output` per model.
-Strument can warn you before you overrun the context window and report spending for the turn.
-You can optionally add cost, although OpenRouter automatically returns it.
-The command `strument model-config <slug>` fetches model configuration and prints a pastable `model` config block.
+`context` is in the minimal config because two things quietly stop working without it.
+Strument will not warn you before a request overruns the window, and it will not summarize the settled chat history to keep it in budget, so a long session grows until the provider refuses the request.
+Neither is announced: there is no limit to enforce when you have not said what it is.
+
+`max_output` is worth adding next.
+Costs are optional, because OpenRouter reports the cost of each request in-band; a plain OpenAI-compatible endpoint may not, and then `input_cost` and `output_cost` are what the turn line is estimated from.
+The command `strument model-config <slug>` fetches all of these from OpenRouter's catalog and prints a pastable `model` block.
+It works before you have a config, which is when you need it.
 See [Configuration](#configuration).
 
 Strument counts your money by the turn.
