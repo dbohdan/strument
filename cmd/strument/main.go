@@ -185,6 +185,26 @@ func (c *chatCmd) Run() error {
 				FilesChanged: u.FilesChanged,
 			})
 		}
+
+		// The undo record, which is the only one there is without git. A write
+		// failure is worth a word here, unlike the ledger above: the user would
+		// otherwise believe a turn is undoable tomorrow when it is not.
+		cdr.SaveUndo = func(stack [][]coder.TurnEdit, commits []string, last string) {
+			st := history.UndoState{Commits: commits, Last: last}
+			for _, turn := range stack {
+				var t history.UndoTurn
+				for _, e := range turn {
+					t.Entries = append(t.Entries, history.UndoEntry{
+						Path: e.Path, Before: e.Before, After: e.After,
+						Existed: e.Existed, Mode: e.Mode,
+					})
+				}
+				st.Turns = append(st.Turns, t)
+			}
+			if err := history.SaveUndo(projectRoot, st); err != nil {
+				fmt.Fprintln(os.Stderr, "strument: could not save the undo record:", err)
+			}
+		}
 	}
 
 	var hist *history.Writer
@@ -275,6 +295,27 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) st
 		}
 		return p, true
 	}
+	// The undo record comes back before anything else, and silently: it changes
+	// nothing the user can see until they type /undo, and announcing "3 turns
+	// are undoable" on every start would be noise for a fact they can ask for.
+	// It is safe to restore optimistically because UndoLastTurn refuses any file
+	// whose contents no longer match what Strument wrote.
+	if u := history.LoadUndo(projectRoot); len(u.Turns) > 0 || len(u.Commits) > 0 {
+		stack := make([][]coder.TurnEdit, 0, len(u.Turns))
+		for _, t := range u.Turns {
+			turn := make([]coder.TurnEdit, 0, len(t.Entries))
+			for _, e := range t.Entries {
+				turn = append(turn, coder.TurnEdit{
+					Path: e.Path, Before: e.Before, After: e.After,
+					Existed: e.Existed, Mode: e.Mode,
+				})
+			}
+			stack = append(stack, turn)
+		}
+		cdr.SetUndoStack(stack)
+		cdr.RestoreSessionCommits(u.Commits, u.Last)
+	}
+
 	var files, readOnly int
 	for _, rel := range res.Files {
 		if p, ok := abs(rel); ok {

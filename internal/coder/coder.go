@@ -80,6 +80,12 @@ type Coder struct {
 	// reason. nil in a session that leaves no trace.
 	RecordUsage func(TurnUsage)
 
+	// SaveUndo, when set, receives the undo stack and the session's commit
+	// hashes whenever either changes. Same shape and same reason as
+	// RecordUsage: the coder never learns where state lives, and a session that
+	// leaves no trace passes nil.
+	SaveUndo func(stack [][]TurnEdit, commits []string, last string)
+
 	// editFormat is the active mode, "tool" or "ask". It starts as the model's
 	// EditFormat but /ask and /code switch it at runtime without changing the
 	// model, so the tool set and prompt set read this, not Model.EditFormat.

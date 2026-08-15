@@ -3,8 +3,10 @@ package coder
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // errNothingToUndo is what /undo reports when this session has changed nothing.
@@ -86,10 +88,96 @@ func (c *Coder) pushTurnSnapshot() {
 	}
 	c.undoStack = append(c.undoStack, c.turnSnap)
 	c.turnSnap = nil
+	c.saveUndo()
 }
 
 // HasTurnSnapshot reports whether there is a turn to undo.
 func (c *Coder) HasTurnSnapshot() bool { return len(c.undoStack) > 0 }
+
+// TurnEdit is one file's before and after, in the shape a caller can persist.
+// snapEntry stays unexported: the coder owns what an undo *means* — first-touch
+// before-state, latest after-state, all-or-nothing restore — and a caller that
+// could build one directly could build an incoherent one.
+type TurnEdit struct {
+	Path    string
+	Before  []byte
+	After   []byte
+	Existed bool
+	Mode    os.FileMode
+}
+
+// UndoStack exports the stack, oldest turn first, for a caller that stores it.
+func (c *Coder) UndoStack() [][]TurnEdit {
+	out := make([][]TurnEdit, 0, len(c.undoStack))
+	for _, snap := range c.undoStack {
+		turn := make([]TurnEdit, 0, len(snap.order))
+		for _, rel := range snap.order {
+			e := snap.entries[rel]
+			turn = append(turn, TurnEdit{
+				Path: rel, Before: e.before, After: e.after,
+				Existed: e.existed, Mode: e.mode,
+			})
+		}
+		out = append(out, turn)
+	}
+	return out
+}
+
+// SetUndoStack replaces the stack with one a caller loaded. Called once at
+// startup, before any turn runs.
+//
+// A stack restored from a previous session cannot do damage, and that is a
+// property of UndoLastTurn rather than of this function: it refuses any file
+// whose contents no longer match what Strument wrote, so a stale entry produces
+// the refusal "<file> has changed since Strument wrote it" instead of
+// overwriting whatever replaced it. The load is therefore allowed to be
+// optimistic — the guard is downstream and already exists.
+func (c *Coder) SetUndoStack(stack [][]TurnEdit) {
+	c.undoStack = nil
+	for _, turn := range stack {
+		snap := newTurnSnapshot()
+		for _, e := range turn {
+			snap.order = append(snap.order, e.Path)
+			snap.entries[e.Path] = &snapEntry{
+				before: e.Before, existed: e.Existed, mode: e.Mode, after: e.After,
+			}
+		}
+		if !snap.empty() {
+			c.undoStack = append(c.undoStack, snap)
+		}
+	}
+}
+
+// SessionCommits exports the auto-commit hashes /undo gates on, and
+// RestoreSessionCommits puts them back. Persisting them is what lets /undo work
+// on a repository after a restart; the gate's other halves — still HEAD,
+// unpushed, single parent, clean files — are unaffected and still run.
+func (c *Coder) SessionCommits() (hashes []string, last string) {
+	return slices.Sorted(maps.Keys(c.sessionCommits)), c.lastCommitHash
+}
+
+func (c *Coder) RestoreSessionCommits(hashes []string, last string) {
+	if c.sessionCommits == nil {
+		c.sessionCommits = map[string]bool{}
+	}
+	for _, h := range hashes {
+		c.sessionCommits[h] = true
+	}
+	if last != "" {
+		c.lastCommitHash = last
+	}
+}
+
+// saveUndo hands the stack to whoever stores it. A callback rather than a
+// writer, for the same reason RecordUsage is one: the coder knows nothing about
+// where state lives, and a session that leaves no trace passes nil.
+func (c *Coder) saveUndo() {
+	if c.SaveUndo == nil {
+		return
+	}
+	hashes, last := c.SessionCommits()
+	c.SaveUndo(c.UndoStack(), hashes, last)
+}
 
 // DropTurnSnapshot discards the most recent turn's snapshot without restoring
 // anything — what the git path calls after undoing through the repository, so
@@ -98,6 +186,7 @@ func (c *Coder) DropTurnSnapshot() {
 	if n := len(c.undoStack); n > 0 {
 		c.undoStack = c.undoStack[:n-1]
 	}
+	c.saveUndo()
 }
 
 // SquashTurns collapses the last n turns into one on the undo stack and records
@@ -112,6 +201,11 @@ func (c *Coder) SquashTurns(hash string, n int) {
 		c.sessionCommits[hash] = true
 		c.lastCommitHash = hash
 	}
+
+	// Even when there is nothing to merge, the hash above changed and has to
+	// reach disk: /undo gates on it, and a squash that recorded its commit only
+	// in memory would be un-undoable after a restart.
+	defer c.saveUndo()
 
 	if n < 2 || len(c.undoStack) < n {
 		return
@@ -183,6 +277,7 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 	}
 
 	c.undoStack = c.undoStack[:n-1]
+	c.saveUndo()
 	return restored, nil
 }
 
