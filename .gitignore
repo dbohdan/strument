@@ -1,8 +1,10 @@
+/.task/
+
+/attic/
 /dist/
-/release
+/reference/
 /strument
-/strument-subset
 /strumentrec
-attic/
-dist/
-reference/
+/strument-subset
+
+*.sw*
