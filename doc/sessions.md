@@ -236,4 +236,8 @@ the note says which side loses. No other harness states it.
 - `experiments/2026-08-compaction-summary-prompt.md` — the prompt rewrite that
   lost, and the scorer that nearly hid it.
 - `experiments/2026-08-agents-md.md` — naming `AGENTS.md` in the prompt.
+- `experiments/2026-08-session-notes.md` — notes across sessions: 8/8 vs 0/8 on
+  recovering a stated reason (p=0.0002), and 3/8 stale assertions when the tree
+  moved behind them. The conflict rule in the header does not prevent that,
+  because the failure is upstream of a conflict: the model never looked.
 - `../doc/experimenting.md` — how to run one of these without fooling yourself.
