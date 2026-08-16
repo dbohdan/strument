@@ -2,6 +2,7 @@ package coder
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -16,6 +17,14 @@ import (
 
 // ChatFiles returns the editable chat files, root-relative and sorted.
 func (c *Coder) ChatFiles() []string { return c.inchatRelativeFiles() }
+
+// TurnEditedFiles returns what the turn just finished changed, sorted.
+//
+// It stays valid until the next turn starts: turnEditedFiles is reset at the
+// top of initBeforeMessage, so a caller reading it after Run returns is reading
+// the turn that just ended. That is what lets the transcript record a turn's
+// files without the coder knowing a transcript exists.
+func (c *Coder) TurnEditedFiles() []string { return slices.Sorted(maps.Keys(c.turnEditedFiles)) }
 
 // ReadOnlyFiles returns the read-only reference files, root-relative and
 // sorted.

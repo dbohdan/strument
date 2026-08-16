@@ -448,6 +448,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 			CostKnown:      known,
 			User:           message,
 			Assistant:      answer,
+			Files:          r.coder.TurnEditedFiles(),
 		}); err != nil {
 			r.out.Warningf("Could not write chat history: %v", err)
 		}

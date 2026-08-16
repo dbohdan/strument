@@ -209,3 +209,46 @@ func TestAppendSkipsEmptyAssistant(t *testing.T) {
 		t.Errorf("empty-answer turn should not create the file: err=%v", err)
 	}
 }
+
+// The transcript records the talk; without git it is also the only durable
+// record of the work, since there are no commits and the undo spill is not
+// something a human reads. The assistant's own prose routinely says "done"
+// without naming a path.
+func TestTranscriptRecordsChangedFiles(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	p := filepath.Join(t.TempDir(), "transcript.md")
+	w := New(p)
+
+	if err := w.Append(Turn{
+		User: "rename it", Assistant: "Done.",
+		Files: []string{"internal/poll/poll.go", "internal/poll/watch.go"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(Turn{User: "what is this?", Assistant: "A poll loop."}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	for _, want := range []string{"2 files changed", "### Changed", "`internal/poll/poll.go`", "`internal/poll/watch.go`"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("transcript missing %q:\n%s", want, got)
+		}
+	}
+	// A turn that changed nothing says nothing — no empty heading, no "0 files".
+	if strings.Contains(got, "0 files changed") || strings.Count(got, "### Changed") != 1 {
+		t.Errorf("a no-edit turn should add no Changed section:\n%s", got)
+	}
+	// One file is singular. plural() elsewhere has been wrong about this before.
+	if err := w.Append(Turn{User: "x", Assistant: "y", Files: []string{"a.go"}}); err != nil {
+		t.Fatal(err)
+	}
+	body, _ = os.ReadFile(p)
+	if !strings.Contains(string(body), "1 file changed") {
+		t.Errorf("one file should be singular:\n%s", body)
+	}
+}

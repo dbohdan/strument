@@ -135,6 +135,14 @@ type Turn struct {
 	CostKnown      bool
 	User           string
 	Assistant      string
+	// Files is what the turn changed, root-relative.
+	//
+	// It makes the transcript a record of the work and not only of the talk,
+	// which helps a human immediately — the assistant's prose often says "done"
+	// without naming what it touched — and matters more without git, where
+	// there are no commits and this is the only durable account of what a
+	// session did to the tree.
+	Files []string
 }
 
 // Writer appends turns to a markdown file, creating it (and its parent
@@ -197,7 +205,20 @@ func (t Turn) render() string {
 	if t.CostKnown {
 		meta += fmt.Sprintf(" · $%.4f", t.Cost)
 	}
+	if n := len(t.Files); n > 0 {
+		meta += fmt.Sprintf(" · %d %s changed", n, map[bool]string{true: "file", false: "files"}[n == 1])
+	}
 	fmt.Fprintf(&b, "_%s_\n\n", meta)
+
+	// Paths as a list rather than folded into the italic line above: a turn can
+	// touch a dozen files, and the metadata line is scanned rather than read.
+	if len(t.Files) > 0 {
+		b.WriteString("### Changed\n\n")
+		for _, f := range t.Files {
+			fmt.Fprintf(&b, "- `%s`\n", f)
+		}
+		b.WriteString("\n")
+	}
 
 	b.WriteString("### Prompt\n\n")
 	b.WriteString(strings.TrimRight(t.User, "\n"))
