@@ -281,6 +281,9 @@ func (r *REPL) announce() {
 	for _, f := range r.coder.ChatFiles() {
 		r.printf("Pinned %s for editing.", f)
 	}
+	// After the file list, so a warning about the size of what was restored
+	// lands next to the list of what was restored.
+	r.coder.CheckRestoredContext()
 }
 
 // renderPromptHeader draws the full-width rule and the in-chat file listing

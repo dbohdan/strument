@@ -221,8 +221,14 @@ func (c *chatCmd) Run() error {
 		// for without seeing it.
 		note := ""
 		if len(c.Files) == 0 && rootErr == nil {
-			var offered bool
-			note, offered = restoreSession(cdr, projectRoot, res)
+			var offered, notesRestored bool
+			note, offered, notesRestored = restoreSession(cdr, projectRoot, res)
+			if notesRestored {
+				// Announced, never silent. The notes go into every request this
+				// session, so a user who never types /notes should still know
+				// they are there and how to look.
+				note = strings.TrimSpace(note + " Notes from your last session are in context; /notes to read them.")
+			}
 			// Record the offer immediately rather than waiting for a command to
 			// trigger a save. A session where the user pins nothing and drops
 			// nothing would otherwise never write it down, and AGENTS.md would
@@ -295,7 +301,7 @@ func historyRootFrom(dir string) string {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (note string, offered bool) {
+func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (note string, offered, notesRestored bool) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
 		if !filepath.IsAbs(p) {
@@ -325,6 +331,21 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 		}
 		cdr.SetUndoStack(stack)
 		cdr.RestoreSessionCommits(u.Commits, u.Last)
+	}
+
+	// The previous session's notes. Loaded once here rather than read per turn:
+	// they describe the session *before* this one, and refreshing them as they
+	// are regenerated would show the model a summary of turns already sitting in
+	// its own history.
+	if notes := history.LoadNotes(projectRoot); strings.TrimSpace(notes) != "" {
+		cdr.SessionNotes = notes
+		cdr.SessionNotesDate = "date unknown"
+		if p, err := history.NotesPath(projectRoot); err == nil {
+			if info, err := os.Stat(p); err == nil {
+				cdr.SessionNotesDate = info.ModTime().Format("2006-01-02 15:04")
+			}
+		}
+		notesRestored = true
 	}
 
 	// AGENTS.md is the cross-tool convention for a project's standing
@@ -374,14 +395,14 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 	// /add would have used.
 	switch {
 	case files == 0 && readOnly == 0:
-		return "", offered
+		return "", offered, notesRestored
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins")), offered
+		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins")), offered, notesRestored
 	case files == 0:
-		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins")), offered
+		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins")), offered, notesRestored
 	}
 	return fmt.Sprintf("Restored %s from your last session: %d for editing, %d read-only.",
-		plural(files+readOnly, "pin", "pins"), files, readOnly), offered
+		plural(files+readOnly, "pin", "pins"), files, readOnly), offered, notesRestored
 }
 
 func plural(n int, one, many string) string {
@@ -581,6 +602,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Notes:       func() string { return history.LoadNotes(projectRoot) },
 		DropNotes: func() {
 			notesDropped = true
+			cdr.SessionNotes, cdr.SessionNotesDate = "", ""
 			_ = history.SaveNotes(projectRoot, "")
 		},
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",

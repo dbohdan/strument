@@ -11,6 +11,7 @@ import (
 
 	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
@@ -29,6 +30,7 @@ import (
 type chatChunks struct {
 	system        []llm.Message
 	examples      []llm.Message
+	notes         []llm.Message
 	done          []llm.Message
 	readonlyFiles []llm.Message
 	cur           []llm.Message
@@ -36,10 +38,15 @@ type chatChunks struct {
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
-		len(ch.system)+len(ch.examples)+len(ch.readonlyFiles)+
+		len(ch.system)+len(ch.examples)+len(ch.notes)+len(ch.readonlyFiles)+
 			len(ch.done)+len(ch.cur))
 	out = append(out, ch.system...)
 	out = append(out, ch.examples...)
+	// Notes sit *before* the read-only files, deliberately. Breakpoints go on
+	// examples-or-system and on read-only files, so anything between them rides
+	// inside the cached prefix — and a mid-session /read-only, which rewrites
+	// that block, does not invalidate the notes with it.
+	out = append(out, ch.notes...)
 	out = append(out, ch.readonlyFiles...)
 	out = append(out, ch.done...)
 	out = append(out, ch.cur...)
@@ -305,6 +312,17 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
 		}
+	}
+
+	// A system message, like the compaction summary and the context-exhausted
+	// note. The notes are the harness's artifact: not something the user said,
+	// and not something this model said either — a different model usually wrote
+	// them, and a different model again is reading them now. The read-only block
+	// above is a user message for historical reasons its own comment records;
+	// that is the precedent not to follow.
+	if notes := strings.TrimSpace(c.SessionNotes); notes != "" {
+		chunks.notes = []llm.Message{llm.TextMessage(llm.RoleSystem,
+			prompts.SessionNotesPrefix(c.SessionNotesDate)+"\n"+notes+"\n")}
 	}
 
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)

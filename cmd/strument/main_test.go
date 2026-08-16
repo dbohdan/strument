@@ -205,7 +205,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 
 	// First session: nothing recorded, so it is offered.
 	c1 := newCoder()
-	_, offered := restoreSession(c1, root, history.Resume{})
+	_, offered, _ := restoreSession(c1, root, history.Resume{})
 	if !offered {
 		t.Fatal("a project with AGENTS.md and no record should be offered it")
 	}
@@ -216,7 +216,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// Second session, with the offer recorded and the user having dropped it:
 	// dropped stays dropped.
 	c2 := newCoder()
-	_, offered = restoreSession(c2, root, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
+	_, offered, _ = restoreSession(c2, root, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
 	if offered {
 		t.Error("the offer must not repeat once recorded")
 	}
@@ -227,7 +227,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// And with it recorded *and* still pinned, it comes back as an ordinary
 	// resume entry rather than as a fresh offer.
 	c3 := newCoder()
-	_, offered = restoreSession(c3, root, history.Resume{
+	_, offered, _ = restoreSession(c3, root, history.Resume{
 		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
 	})
 	if offered {
@@ -246,7 +246,7 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	root := t.TempDir()
 	c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
 
-	if _, offered := restoreSession(c, root, history.Resume{}); offered {
+	if _, offered, _ := restoreSession(c, root, history.Resume{}); offered {
 		t.Error("nothing to offer in a project with no AGENTS.md")
 	}
 	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {

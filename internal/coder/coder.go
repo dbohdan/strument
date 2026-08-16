@@ -91,6 +91,14 @@ type Coder struct {
 	// model, so the tool set and prompt set read this, not Model.EditFormat.
 	editFormat string
 
+	// SessionNotes is the previous session's notes, and SessionNotesDate says
+	// when they were written. Set once at startup and never refreshed
+	// mid-session: they describe the session *before* this one, and re-reading
+	// them as they are regenerated would show the model a summary of the very
+	// turns already sitting in its history. "" leaves the slot out entirely.
+	SessionNotes     string
+	SessionNotesDate string
+
 	// Chat state.
 	absFnames         []string // ordered, deduped
 	absReadOnlyFnames []string

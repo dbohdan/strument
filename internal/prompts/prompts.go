@@ -6,6 +6,8 @@
 // must therefore be doubled ({{ and }}).
 package prompts
 
+import "fmt"
+
 // Example is one few-shot example message.
 type Example struct {
 	Role    string
@@ -300,6 +302,34 @@ const Summarize = "Briefly summarize this partial conversation about programming
 	"read back from the code; the reason for it cannot.\n\n" +
 	"Do not attribute actions to anyone — no \"I\", no \"you\", no \"the assistant\". " +
 	"Say what happened."
+
+// sessionNotesPrefix introduces the previous session's notes.
+//
+// Modelled on readOnlyFilesPrefix, whose live trial settled two rules: say
+// where the contents came from, and say what is *enforced* rather than what is
+// preferred. Here the second becomes an explicit conflict rule, and it is the
+// most important sentence in the block — it is the counter-metric turned into
+// an instruction. The failure this feature can actually cause is a model acting
+// confidently on a note the tree has moved past, so the note itself says which
+// side loses.
+//
+// It says "written by Strument" because that is true and because the
+// alternative readings are both false: the notes are not something the user
+// said, and not something the previous model said either — a different model
+// usually wrote them, and a different model again is reading them now.
+const sessionNotesPrefix = "Notes from earlier work on this project, written by Strument at the end of " +
+	"the last session (%s).\n" +
+	"They are a summary, not a record: they may be incomplete, and the project may have " +
+	"changed since.\n" +
+	"Where they disagree with what you find in the files, the files are right.\n"
+
+// SessionNotesPrefix renders the notes header for a given date.
+func SessionNotesPrefix(when string) string {
+	if when == "" {
+		when = "date unknown"
+	}
+	return fmt.Sprintf(sessionNotesPrefix, when)
+}
 
 // SessionNotes asks the weak model for notes a *later* session can start from.
 //

@@ -200,6 +200,7 @@ func (c *Coder) TokensReport() string {
 		// this table entirely while being sent with every single request.
 		{"tool schemas", c.countTools()},
 		{"examples", c.countMessages(chunks.examples)},
+		{"session notes", c.countMessages(chunks.notes)},
 		{"read-only files", c.countMessages(chunks.readonlyFiles)},
 		// Pinned files no longer have a section of their own: their names ride
 		// in the system prompt and their contents arrive as tool results, which

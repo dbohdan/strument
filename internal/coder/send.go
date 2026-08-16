@@ -363,6 +363,33 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 	return req
 }
 
+// CheckRestoredContext warns if what a session *starts* with already overruns
+// the declared window.
+//
+// Restored context is invisible until the first request, and by then the request
+// has failed. aider #2979 is the shape: an 80k-token restored history fails on
+// the wire, and configuring the weak model for summarization does not help,
+// because compaction runs at the end of a turn and there has not been one yet.
+// Strument restores less — pins, notes, and the read-only block rather than a
+// conversation — but the same trap is available, and a user who pinned a large
+// spec last session should hear about it before typing rather than after.
+//
+// It warns rather than asking. A confirmation before the user has typed
+// anything is a toll on every start, and there is nothing to decide yet: the
+// remedy is /drop or /notes drop, which they can reach either way.
+func (c *Coder) CheckRestoredContext() {
+	if c.Model == nil || c.Model.Context <= 0 {
+		return
+	}
+	n := c.countMessages(c.formatMessages().allMessages()) + c.countTools()
+	if n < c.Model.Context {
+		return
+	}
+	c.Out.Warningf("This session starts with about %d tokens of context, which already reaches "+
+		"the %d-token limit for %s.", n, c.Model.Context, c.Model.QualifiedSlug())
+	c.Out.Printf("Use /drop to unpin files, /notes drop to discard the session notes, or /tokens to see the split.")
+}
+
 // checkTokens warns when the estimate reaches the input window and asks to
 // proceed.
 func (c *Coder) checkTokens(messages []llm.Message) bool {
