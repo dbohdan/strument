@@ -44,7 +44,7 @@ func init() {
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List the pinned files", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
-		{"notes", "", "Show the session notes written for a later session", cmdNotes},
+		{"notes", "[drop]", "Show the session notes a later session starts from; drop discards them", cmdNotes},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
@@ -388,10 +388,36 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
-// cmdNotes shows what a later session would start from. The notes are written
-// by the weak model and go into a future prompt, so they have to be readable —
-// a summary nobody can inspect is a summary nobody should trust.
-func cmdNotes(_ context.Context, r *REPL, _ string) string {
+// cmdNotes shows what a later session would start from, and discards it.
+//
+// The notes are written by the weak model and go into a future prompt, so they
+// have to be readable: a summary nobody can inspect is a summary nobody should
+// trust.
+//
+// "drop" is a subcommand rather than an argument to /drop, which would have
+// read as unpinning a file called "notes" — a plausible real filename, and
+// ambiguous the moment a project has one. It also keeps notes out of the pin
+// vocabulary entirely, which is right: /drop unpins things the *user* chose,
+// and the notes are something the harness wrote.
+func cmdNotes(_ context.Context, r *REPL, args string) string {
+	switch strings.TrimSpace(args) {
+	case "":
+	case "drop":
+		if r.opts.DropNotes == nil {
+			r.printf("Session notes are off for this session.")
+			return ""
+		}
+		r.opts.DropNotes()
+		// Suppressing regeneration matters as much as deleting the file. Left
+		// to the debounce, the notes would simply come back a few turns later,
+		// which is the "will not take no for an answer" shape the AGENTS.md
+		// rule was written to avoid.
+		r.printf("Discarded the session notes; none will be written for the rest of this session.")
+		return ""
+	default:
+		r.out.Errorf("Usage: /notes [drop]")
+		return ""
+	}
 	if r.opts.Notes == nil {
 		r.printf("Session notes are off for this session.")
 		return ""

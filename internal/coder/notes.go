@@ -51,16 +51,7 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 		if transcript == "" {
 			return ""
 		}
-		if len(transcript) > maxNotesInput {
-			// Cut at a turn boundary so the model is not handed half an
-			// exchange, which reads as a truncated thought rather than as a
-			// window onto a longer session.
-			cut := transcript[len(transcript)-maxNotesInput:]
-			if i := strings.Index(cut, "\n## "); i >= 0 {
-				cut = cut[i+1:]
-			}
-			transcript = cut
-		}
+		transcript = sampleTranscript(transcript)
 
 		ctx, cancel := context.WithTimeout(context.Background(), notesTimeout)
 		defer cancel()
@@ -90,4 +81,47 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 		}
 		return strings.TrimSpace(answer.String())
 	}
+}
+
+// notesHeadShare is how much of the input budget goes to the *oldest* turns.
+//
+// A tail-only window was the obvious first cut and the wrong one. A session has
+// a shape: the opening turns carry the intent and the constraints the user
+// stated, the recent turns carry the working state, and the middle is mechanics
+// that the code itself now records. Taking only the tail meant that in a long
+// session the reason for a decision — the one thing notes exist to preserve, and
+// the one thing no diff can give back — fell out of the input while the
+// step-by-step of the last hour stayed in.
+const notesHeadShare = 4 // one quarter
+
+// sampleTranscript trims a transcript to the input budget, keeping both ends.
+//
+// The alternative was to feed the previous notes back in alongside the
+// transcript, which would also carry the opening forward. It is rejected
+// deliberately: regenerating purely from the record is *self-healing*, because a
+// confabulated reason has exactly one life and the next regeneration wipes it,
+// while folding the previous notes in is *self-reinforcing* — the invention gets
+// re-endorsed every cycle and becomes indistinguishable from a real decision.
+// The compaction trial produced exactly that failure once, which is what makes
+// it worth designing against rather than hoping about.
+//
+// Cuts land on turn boundaries ("## " headings) so the model is never handed
+// half an exchange, which reads as a truncated thought rather than as a window
+// onto a longer session.
+func sampleTranscript(transcript string) string {
+	if len(transcript) <= maxNotesInput {
+		return transcript
+	}
+	head := maxNotesInput / notesHeadShare
+	tail := maxNotesInput - head
+
+	front := transcript[:head]
+	if i := strings.LastIndex(front, "\n## "); i > 0 {
+		front = front[:i+1]
+	}
+	back := transcript[len(transcript)-tail:]
+	if i := strings.Index(back, "\n## "); i >= 0 {
+		back = back[i+1:]
+	}
+	return front + "\n(Turns from the middle of this record are omitted here.)\n\n" + back
 }

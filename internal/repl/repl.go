@@ -58,6 +58,9 @@ type Options struct {
 	// command.
 	Notes func() string
 
+	// DropNotes discards the notes and stops writing more for this session.
+	DropNotes func()
+
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 

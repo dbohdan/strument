@@ -431,6 +431,16 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 // measurement, where one per turn would be closer to 9%.
 const notesTurnInterval = 3
 
+// notesDropped is set by /notes drop and read by the per-turn updater.
+//
+// Deleting the file is not enough on its own: the debounce would regenerate it
+// two or three turns later, and the user would watch a thing they discarded
+// come back — the same "will not take no for an answer" shape the AGENTS.md
+// offer-once rule exists to avoid. Session-scoped, so the next session starts
+// writing them again, which is right: dropping says "these are wrong now", not
+// "never again".
+var notesDropped bool
+
 // notesUpdater returns the per-turn hook that refreshes a project's session
 // notes, or nil when the session leaves no trace.
 //
@@ -451,6 +461,9 @@ func notesUpdater(cdr *coder.Coder, cfg *config.Config, hist *history.Writer,
 	write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage)
 	turns := 0
 	return func() {
+		if notesDropped {
+			return
+		}
 		turns++
 		if turns%notesTurnInterval != 0 {
 			return
@@ -566,6 +579,10 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		},
 		UpdateNotes: notesUpdater(cdr, cfg, hist, projectRoot, keepState),
 		Notes:       func() string { return history.LoadNotes(projectRoot) },
+		DropNotes: func() {
+			notesDropped = true
+			_ = history.SaveNotes(projectRoot, "")
+		},
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		IsTerminal:  drivingATerminal,
 		HistoryFile: inputHistory,
