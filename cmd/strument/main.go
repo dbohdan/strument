@@ -229,7 +229,7 @@ func (c *chatCmd) Run() error {
 			// be offered again next time — which is only "once" in the sense
 			// that it happens once per session.
 			if offered && keepState {
-				res.AutoPinned = append(res.AutoPinned, agentsFile)
+				res.AutoPinned = append(res.AutoPinned, coder.AgentsFileName)
 				_ = history.SaveResume(projectRoot, resumeWithPins(cdr, projectRoot, res))
 			}
 		}
@@ -295,10 +295,6 @@ func historyRootFrom(dir string) string {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-// agentsFile is the cross-tool conventional name for a project's standing
-// instructions to a coding agent. See https://agents.md/.
-const agentsFile = "AGENTS.md"
-
 func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (note string, offered bool) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
@@ -347,7 +343,7 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 	//
 	// Never created, only noticed. On a live configuration directory with no
 	// AGENTS.md, nothing happens.
-	if p, ok := abs(agentsFile); ok && !slices.Contains(res.AutoPinned, agentsFile) {
+	if p, ok := abs(coder.AgentsFileName); ok && !slices.Contains(res.AutoPinned, coder.AgentsFileName) {
 		cdr.AddFile(p)
 		offered = true
 	}

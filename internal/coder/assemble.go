@@ -367,8 +367,30 @@ func (c *Coder) pinnedFilesNote() string {
 			plural(len(missing), "file", "files"), does, strings.Join(missing, ", "))
 		fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
 	}
+	// Naming AGENTS.md is what makes it work, and that is measured rather than
+	// assumed. Over 24 live sessions on a rule contrary to habit — every
+	// exported function gets a "Contract:" doc comment — compliance was 0/8
+	// with no AGENTS.md at all, 2/8 with it merely pinned, and 6/8 with this
+	// clause (none vs slot p=0.007). Pinned and unexplained, a model reads it as
+	// one more source file it happens to have been given.
+	//
+	// It goes here rather than in MainSystem because it must not claim standing
+	// instructions exist when none do: a project without the file should say
+	// nothing about it.
+	if slices.Contains(existing, AgentsFileName) {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "%s holds the project's standing instructions. "+
+			"Follow them for every change you make here.\n", AgentsFileName)
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// AgentsFileName is the cross-tool conventional name for a project's standing
+// instructions (https://agents.md/). cmd/strument pins it; this is where the
+// model is told what it is.
+const AgentsFileName = "AGENTS.md"
 
 // formatMessages = formatChatChunks + cache decoration; decoration
 // applies only when the provider supports caching.

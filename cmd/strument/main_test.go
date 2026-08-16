@@ -196,7 +196,7 @@ func TestTerminalDetectionIsWired(t *testing.T) {
 func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, agentsFile), []byte("# rules\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, coder.AgentsFileName), []byte("# rules\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	newCoder := func() *coder.Coder {
@@ -209,14 +209,14 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	if !offered {
 		t.Fatal("a project with AGENTS.md and no record should be offered it")
 	}
-	if got := c1.ChatFiles(); len(got) != 1 || got[0] != agentsFile {
-		t.Fatalf("pinned files = %v, want [%s]", got, agentsFile)
+	if got := c1.ChatFiles(); len(got) != 1 || got[0] != coder.AgentsFileName {
+		t.Fatalf("pinned files = %v, want [%s]", got, coder.AgentsFileName)
 	}
 
 	// Second session, with the offer recorded and the user having dropped it:
 	// dropped stays dropped.
 	c2 := newCoder()
-	_, offered = restoreSession(c2, root, history.Resume{AutoPinned: []string{agentsFile}})
+	_, offered = restoreSession(c2, root, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
 	if offered {
 		t.Error("the offer must not repeat once recorded")
 	}
@@ -228,7 +228,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// resume entry rather than as a fresh offer.
 	c3 := newCoder()
 	_, offered = restoreSession(c3, root, history.Resume{
-		AutoPinned: []string{agentsFile}, Files: []string{agentsFile},
+		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
 	})
 	if offered {
 		t.Error("a file already in Files is a restore, not an offer")
@@ -249,7 +249,7 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	if _, offered := restoreSession(c, root, history.Resume{}); offered {
 		t.Error("nothing to offer in a project with no AGENTS.md")
 	}
-	if _, err := os.Stat(filepath.Join(root, agentsFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {
 		t.Error("AGENTS.md must not be created")
 	}
 	if got := c.ChatFiles(); len(got) != 0 {
