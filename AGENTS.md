@@ -131,6 +131,15 @@ any price answers nothing. Reach past the default deliberately: to check
 something specific to a vendor, or when a result hinges on capability and you
 want a frontier model to confirm it.
 
+### Before you run one: the handbook
+
+[`doc/experimenting.md`](doc/experimenting.md) collects what has actually gone
+wrong running these — equipment faults, not statistics. Read it while designing
+the arms, not while debugging the result. The one-line version: a scorer broken
+by Strument's own escape sequences turned a real effect (10/12 vs 5/12) into a
+clean null (5/12 vs 4/12, p=1.0), and a clean null is the shape that gets a bad
+change shipped.
+
 ### Comparing two prompts (or two anything) against live models
 
 A live A/B is a different discipline from a live pass, and the trap is not the

@@ -635,6 +635,14 @@ knowing nothing about where state lives.
   safety-critical behaviors (`rollback_test.go`, `snapshot_test.go`,
   `unsafepath_test.go`, `usage_test.go`) have tests that fail if the
   invariant drifts.
+- **Live experiments** are the other half, and the one that keeps finding what
+  the suite cannot. [`doc/experimenting.md`](experimenting.md) is the handbook:
+  what has actually gone wrong when running them, and in what order to doubt a
+  result. Read it before designing an arm. The short version is that most of
+  what goes wrong is equipment rather than statistics — a scorer broken by the
+  harness's own escape sequences turned a real effect (10/12 vs 5/12) into a
+  clean null (5/12 vs 4/12, p=1.0), which is the shape that gets a bad change
+  shipped.
 
 ## Common tasks
 
