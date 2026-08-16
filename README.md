@@ -1,5 +1,7 @@
 # Strument
 
+<img alt="Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows." src="doc/logo/256x256.png" width=128>
+
 Strument is an AI pair-programming tool for the terminal.
 It is designed for making precise code changes under human oversight.
 It implements a reviewable, diff-centric development loop rather than an autonomous one.
