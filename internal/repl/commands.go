@@ -183,9 +183,9 @@ func (r *REPL) switchFormat(target, args string) string {
 		r.coder.SetEditFormat(target)
 		r.rl.SetPrompt(r.prompt())
 		if r.coder.EditFormat() == "ask" {
-			r.printf("Ask mode: I will answer questions without editing files. Use /code to switch back.")
+			r.printf("Ask mode: the model will answer questions without editing files. Use /code to switch back.")
 		} else {
-			r.printf("Code mode: I will edit files again.")
+			r.printf("Code mode: the model will edit files again.")
 		}
 		return ""
 	}
