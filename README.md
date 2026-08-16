@@ -18,37 +18,27 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   A single `config.star` replaces YAML, `.env` files, and a JSON model database.
   Project-local `.strument.star` files are supported.
   They stay inert until authorized with `strument trust` in the directory.
-  This is the [direnv](https://direnv.net/) model of trust based on recorded content hashes.
-- Nine [tool calls](https://towardsdatascience.com/tool-calling-explained-how-ai-agents-decide-what-to-do-next/) in three groups.
-  Models get access to `read`, `grep`, `glob`, `ls`, and `symbol` for lookup.
-  Those tools are freely available and require no use confirmation.
-  They never see a file the project ignores, and none of them reaches outside the project root.
-  `symbol` answers "where is this defined" using the language parser (tree-sitter and `go/parser`) rather than text.
-  `edit` and `write` change text.
-  Their edits are written immediately after the call.
-  `bash` runs a command behind a confirmation using the embedded pure-Go
-  [mvdan/sh](https://github.com/mvdan/sh) shell, and `verify` runs a check you pre-configured.
-  The confirmation shows the model's stated purpose above the command, and it is skipped when the command is one of your configured checks verbatim.
+  (This is the [direnv](https://direnv.net/) model of trust based on recorded content hashes.)
+- [Tool calls](https://towardsdatascience.com/tool-calling-explained-how-ai-agents-decide-what-to-do-next/).
+  `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
 - Every turn is undoable, with or without Git.
   Strument records each file before the first time it writes to it.
   `/undo` can restore a whole turn even in a directory that is not a repository,
   like a live configuration directory or a checkout under another SCM.
-  An edit preserves the file's mode and writes through a symlink instead of replacing it.
-  A tool-call batch that fails partway is rolled back.
-  Where there is a repository, a turn is also one commit described as one piece of work in the message.
-  The command `/squash [n]` merges several commits.
+  In a Git repository, a turn is one commit.
+  The command `/squash [n]` merges commits.
 - Configured checks.
-  The `verify` dictionary names your project's verification commands, like tests, a linter, and a build, that the model can run by name.
-  `project_checks()` fills it in from your project's marker files across thirteen ecosystems.
+  The `verify` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
+  The model can run them by name.
+  `project_checks()` detects standard checks for your project type.
   `verify_auto` runs a list of `verify` commands at the end of any turn that changed a file.
-  Only failing checks print their output.
 - URL scraping.
-  URLs you mention, or `/web <url>`, are fetched and converted to Markdown using either a built-in HTTPS client or an external browser command.
-  For pages that rely on JavaScript, the `scraper` setting starts an external command to download them.
+  URLs you mention, or `/web <url>`, are fetched and converted to Markdown.
+  This can use either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
 
 The terminal interface has stayed deliberately close to aider's with a similar green/blue palette (with `--dark-mode` and `--light-mode`).
 Strument diverges where its programming loop is different.
-Reasoning is delimited with `‹thinking›` and `‹/›` rather than a banner because there are multiple reasoning blocks per turn and most reasoning is one line.
+Reasoning is delimited with `‹thinking›` and `‹/›` because there are multiple reasoning blocks per turn and most reasoning is one line.
 Syntax highlighting and the inverted code-block background are omitted.
 
 
