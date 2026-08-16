@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -389,6 +390,40 @@ func (c *Coder) formatMessages() *chatChunks {
 // repo map was the one part that changed every turn, and it is no longer in
 // the prompt.
 func (c *Coder) cacheHeadersEnabled() bool { return c.Model != nil && c.Model.Cache }
+
+// countTools estimates what the tool schemas cost on the wire.
+//
+// They are the last part of a request that /tokens could not see, and they are
+// not small: nine tools with their descriptions and JSON Schema parameters are
+// worth more than the system prompt on a fresh session. They also ride on
+// *every* request, so a twelve-step turn pays for them twelve times.
+//
+// The envelope is mirrored from client.BuildBody rather than marshalling the
+// ToolDefs directly, because the wire form wraps each one in
+// {"type":"function","function":{…}} and counting the Go struct would
+// under-report by that much on every tool. Duplicating four keys is the cheaper
+// error: the alternative is for the coder to hold a client just to ask what a
+// request weighs.
+func (c *Coder) countTools() int {
+	defs := c.toolDefs()
+	if len(defs) == 0 {
+		return 0
+	}
+	wire := make([]map[string]any, len(defs))
+	for i, t := range defs {
+		wire[i] = map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name": t.Name, "description": t.Description, "parameters": t.Parameters,
+			},
+		}
+	}
+	data, err := json.Marshal(wire)
+	if err != nil {
+		return 0
+	}
+	return c.Tokens.Count(string(data))
+}
 
 // countMessages estimates the tokens a slice of messages will cost.
 //

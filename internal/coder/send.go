@@ -202,7 +202,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// --- Stream ---
 	c.multiResponseContent = "" // per-send reset (H1)
 
-	usage := &sendUsage{estSent: c.countMessages(messages)}
+	usage := &sendUsage{estSent: c.countMessages(messages) + c.countTools()}
 	defer c.finalizeUsage(usage)
 
 	backoff := retryBackoff{delay: initialRetryDelay}
@@ -370,7 +370,10 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	if maxInput <= 0 {
 		return true
 	}
-	inputTokens := c.countMessages(messages)
+	// The schemas count: they go out with this request like everything else,
+	// and leaving them out made the guard cheerful about a prompt 1.3k tokens
+	// closer to the limit than it reported.
+	inputTokens := c.countMessages(messages) + c.countTools()
 	if inputTokens < maxInput {
 		return true
 	}
