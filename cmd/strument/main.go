@@ -421,6 +421,50 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 	}
 }
 
+// notesTurnInterval is how many turns pass between regenerations.
+//
+// Debounced rather than written at exit, because sessions do not reliably end
+// with /exit: Ctrl-C, a closed terminal and a dropped connection are all
+// ordinary, and those are exactly the times you want the notes. Debounced
+// rather than every turn, because each regeneration is a weak-model call — one
+// per three turns is roughly 3% of a turn's cost by the commit-message
+// measurement, where one per turn would be closer to 9%.
+const notesTurnInterval = 3
+
+// notesUpdater returns the per-turn hook that refreshes a project's session
+// notes, or nil when the session leaves no trace.
+//
+// Regenerated from the transcript rather than from the previous notes. Folding
+// a summary into a summary is what makes every iterative compaction scheme
+// degrade — the documented failure of compaction in every harness surveyed —
+// and the transcript is a durable record that makes the fold avoidable.
+func notesUpdater(cdr *coder.Coder, cfg *config.Config, hist *history.Writer,
+	projectRoot string, keepState bool,
+) func() {
+	if !keepState || hist == nil || cfg == nil {
+		return nil
+	}
+	weak := cdr.Model.WeakModel
+	if weak == nil {
+		return nil
+	}
+	write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage)
+	turns := 0
+	return func() {
+		turns++
+		if turns%notesTurnInterval != 0 {
+			return
+		}
+		transcript := history.ReadTranscript(hist.Path())
+		if transcript == "" {
+			return
+		}
+		if notes := write(transcript); notes != "" {
+			_ = history.SaveNotes(projectRoot, notes)
+		}
+	}
+}
+
 // resumeWithPins fills in what is currently pinned, keeping everything else in
 // base. Shared by the per-command save above and the one-off write that records
 // an auto-pin at startup, so both produce the same shape — a second path that
@@ -520,6 +564,8 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
+		UpdateNotes: notesUpdater(cdr, cfg, hist, projectRoot, keepState),
+		Notes:       func() string { return history.LoadNotes(projectRoot) },
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		IsTerminal:  drivingATerminal,
 		HistoryFile: inputHistory,

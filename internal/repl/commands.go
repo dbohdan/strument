@@ -44,6 +44,7 @@ func init() {
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List the pinned files", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
+		{"notes", "", "Show the session notes written for a later session", cmdNotes},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
@@ -384,6 +385,23 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	r.coder.ClearHistory()
 	r.printf("Unpinned everything and cleared the chat history.")
 	r.saveResume()
+	return ""
+}
+
+// cmdNotes shows what a later session would start from. The notes are written
+// by the weak model and go into a future prompt, so they have to be readable —
+// a summary nobody can inspect is a summary nobody should trust.
+func cmdNotes(_ context.Context, r *REPL, _ string) string {
+	if r.opts.Notes == nil {
+		r.printf("Session notes are off for this session.")
+		return ""
+	}
+	notes := r.opts.Notes()
+	if strings.TrimSpace(notes) == "" {
+		r.printf("No session notes yet; they are written as a session goes on.")
+		return ""
+	}
+	r.printf("%s", strings.TrimRight(notes, "\n"))
 	return ""
 }
 

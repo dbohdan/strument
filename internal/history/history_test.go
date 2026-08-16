@@ -252,3 +252,48 @@ func TestTranscriptRecordsChangedFiles(t *testing.T) {
 		t.Errorf("one file should be singular:\n%s", body)
 	}
 }
+
+// Notes are a convenience, so every path is forgiving: absent reads as "",
+// empty writes as absent, and the file is owner-only like the rest of a
+// project's state.
+func TestNotesRoundTrip(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	if got := LoadNotes(project); got != "" {
+		t.Errorf("no notes should read as empty, got %q", got)
+	}
+	if err := SaveNotes(project, "Renamed the constant; 45 not 30 because the LB idles at 60."); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadNotes(project); !strings.Contains(got, "idles at 60") {
+		t.Errorf("notes = %q", got)
+	}
+
+	// "No notes" has one representation on disk, so a later read cannot find a
+	// blank file and treat it as content.
+	if err := SaveNotes(project, "   \n"); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := NotesPath(project)
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Error("empty notes should remove the file rather than blank it")
+	}
+	if got := LoadNotes(project); got != "" {
+		t.Errorf("after clearing, notes = %q", got)
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
+	if err := SaveNotes(project, "x"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != fileMode {
+		t.Errorf("notes.md mode = %04o, want %04o", perm, fileMode)
+	}
+}

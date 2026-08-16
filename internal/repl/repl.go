@@ -48,6 +48,16 @@ type Options struct {
 	// (--no-history).
 	History *history.Writer
 
+	// UpdateNotes is called after each turn is recorded, to refresh the session
+	// notes a later session starts from. It decides for itself whether this
+	// turn is worth the weak-model call — the REPL only says when a turn ended.
+	// nil when the session leaves no trace.
+	UpdateNotes func()
+
+	// Notes returns the current session notes for /notes. nil disables the
+	// command.
+	Notes func() string
+
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
@@ -452,6 +462,12 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 		}); err != nil {
 			r.out.Warningf("Could not write chat history: %v", err)
 		}
+	}
+	// After the transcript, because that is what the notes are regenerated
+	// from: refreshing them first would summarize a record missing the turn
+	// that just happened.
+	if r.opts.UpdateNotes != nil {
+		r.opts.UpdateNotes()
 	}
 }
 

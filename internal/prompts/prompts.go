@@ -301,6 +301,37 @@ const Summarize = "Briefly summarize this partial conversation about programming
 	"Do not attribute actions to anyone — no \"I\", no \"you\", no \"the assistant\". " +
 	"Say what happened."
 
+// SessionNotes asks the weak model for notes a *later* session can start from.
+//
+// A different job from Summarize, which serves "continue this thread now". What
+// survives a night is the why and the state, not the mechanics — so this asks
+// for reasons and abandoned approaches and explicitly declines the diff, which
+// git and the transcript's own file list already carry.
+//
+// Agentless for the same reason the summary is: a different model usually
+// writes it, and a different model again usually reads it, so any first person
+// would be a claim about authorship that is not true. A changelog is true
+// whoever wrote it.
+//
+// "Say less rather than guess" is the anti-confabulation clause, and it is
+// there because the compaction trial produced exactly that failure — an invented
+// rationale ("to balance between frequent updates and system load") that nobody
+// had given. A fabricated reason is worse than a missing one: downstream nothing
+// distinguishes it from a real one.
+const SessionNotes = "Write notes on a programming session, to be read at the start of the next " +
+	"one by someone who was not present.\n\n" +
+	"Cover only what cannot be recovered from the code and its history:\n" +
+	"- What the work was for.\n" +
+	"- Decisions and their reasons, including approaches that were tried and abandoned.\n" +
+	"- Constraints or preferences the user stated.\n" +
+	"- What was in progress, and what came next.\n\n" +
+	"The record below already lists which files changed, and the reader can see the code. " +
+	"Do not restate the diff.\n\n" +
+	"Do not attribute actions to anyone — no \"I\", no \"you\", no \"the assistant\". Say what " +
+	"happened. Keep it under 300 words. Say less rather than guess: leave a thing out before " +
+	"inventing it.\n\n" +
+	"Reply with the notes and nothing else — no preamble, no heading, no code fence."
+
 // SummaryLabel introduces the compacted history, in the harness's own voice.
 //
 // It replaces SummaryPrefix — "I spoke to you previously about a number of
