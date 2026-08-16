@@ -158,3 +158,31 @@ func TestResumePathsAreProjectRelative(t *testing.T) {
 		t.Errorf("files = %v, want [sub/b.go]", got)
 	}
 }
+
+// The REPL has always had Options.IsTerminal, and interactive() defaults to
+// true when it is nil — so an unwired seam does not fail, it silently makes the
+// binary believe a pipe is a terminal. Piping the output then wrote the banner,
+// a full-width rule before every prompt, and the waiting line's "\r\x1b[K"
+// erase into the file.
+//
+// That was not merely untidy. A trial scored model answers with a line anchor,
+// the stray erase sequence sat at the start of the line it anchored to, and
+// half the sessions read as unanswered — turning a real effect (10/12 vs 5/12)
+// into a clean null (5/12 vs 4/12, p=1.0). See doc/experimenting.md.
+//
+// The check is on the wiring rather than on rendering, because rendering is
+// already covered (internal/repl's pipe and pty tests both set IsTerminal
+// explicitly, which is exactly why neither of them could catch this).
+func TestTerminalDetectionIsWired(t *testing.T) {
+	// go test gives the process a pipe for stdout, so this must report false.
+	// If it reports true here it would report true under a shell redirect too.
+	if drivingATerminal() {
+		t.Error("stdout is a pipe under `go test`, so this must not claim a terminal")
+	}
+	// And the halves are independent: colour is a different question from
+	// terminal-ness, so gating the erase on Color would leave NO_COLOR=1 users
+	// staring at an unerased "Waiting for ..." line.
+	if isCharDevice(os.Stdout) {
+		t.Error("isCharDevice(os.Stdout) should be false under a pipe")
+	}
+}

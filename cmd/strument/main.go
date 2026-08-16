@@ -463,6 +463,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
+		IsTerminal:  drivingATerminal,
 		HistoryFile: inputHistory,
 		Version:     version,
 		Theme:       c.paletteTheme(),
@@ -477,9 +478,28 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 	return r.Run(context.Background())
 }
 
-func stdoutIsTerminal() bool {
-	st, err := os.Stdout.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+func stdoutIsTerminal() bool { return isCharDevice(os.Stdout) }
+
+// drivingATerminal reports whether a human is at both ends: line editing needs
+// stdin, and the banner, the per-prompt rules, and the "Waiting for <model>"
+// line need stdout.
+//
+// The REPL has had this seam since it was written — Options.IsTerminal, with
+// interactive() defaulting to true when it is nil — and main never wired it, so
+// the real binary always believed it was interactive. Piping its output
+// therefore wrote the banner, a full-width rule before every prompt, and the
+// waiting line's "\r\x1b[K" erase into the file.
+//
+// That last one was not merely ugly. A trial scored answers with a line anchor,
+// and the stray erase sequence sat at the start of the line it was anchored to,
+// so half the sessions read as unanswered and a real effect (10/12 vs 5/12)
+// came back as a clean null (5/12 vs 4/12, p=1.0). See doc/experimenting.md.
+//
+// Gating on Color instead would have been the wrong fix: NO_COLOR=1 in a real
+// terminal would then leave the waiting line on screen, unerased, forever.
+// Colour and terminal-ness are different questions.
+func drivingATerminal() bool {
+	return isCharDevice(os.Stdin) && isCharDevice(os.Stdout)
 }
 
 // terminalConfirmer asks y/n questions on the terminal in script mode, where
