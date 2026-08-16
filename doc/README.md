@@ -635,6 +635,11 @@ knowing nothing about where state lives.
   safety-critical behaviors (`rollback_test.go`, `snapshot_test.go`,
   `unsafepath_test.go`, `usage_test.go`) have tests that fail if the
   invariant drifts.
+- **Sessions and compaction**: [`doc/sessions.md`](sessions.md) is why picking a
+  project back up works the way it does — compaction at a turn boundary, session
+  notes instead of a replayed conversation, and the alternatives that were
+  rejected. Read it before changing anything in that area; the arguments are not
+  reconstructible from the code alone.
 - **Live experiments** are the other half, and the one that keeps finding what
   the suite cannot. [`doc/experimenting.md`](experimenting.md) is the handbook:
   what has actually gone wrong when running them, and in what order to doubt a

@@ -152,6 +152,7 @@ Slash commands perform actions initiated by you rather than the model:
 | --- | --- |
 | `/add <file>`, `/drop`, `/ls` | Pin the files you already know need changing. Strument names them for the model, which reads them itself; it finds everything else on its own. |
 | `/ask <question>` | Ask about the project without giving the model editing tools. `/code` switches back. |
+| `/notes`, `/notes drop` | Show the notes a later session starts from, or discard them. Strument writes a short summary as a session goes on and puts it in context next time, instead of replaying the conversation. See [`doc/sessions.md`](doc/sessions.md). |
 | `/read-only <file>` | Pin a file the model can read but never edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |
 | `/squash [n]` | Fold the last n turns' commits into one. |
