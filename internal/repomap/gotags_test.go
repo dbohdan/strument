@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -188,7 +189,10 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the tree-sitter half of this comparison costs about three seconds")
 	}
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+
+	_, filename, _, _ := runtime.Caller(0)
+
+	root, err := filepath.Abs(filepath.Join(filename, "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
