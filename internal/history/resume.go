@@ -37,6 +37,17 @@ type Resume struct {
 	// it was opened, so that later editing `default` in config.star would
 	// mysteriously not take effect there.
 	Model string `json:"model,omitempty"`
+
+	// AutoPinned records files Strument pinned on its own initiative, so it
+	// does each exactly once. Today that is only AGENTS.md.
+	//
+	// It cannot be inferred from Files: /drop would erase the evidence and the
+	// file would come back next session, which is the shape of an assistant
+	// that will not take no for an answer. Offer once, then the pin set is
+	// authoritative — dropped stays dropped, and /add brings it back the
+	// ordinary way. The same principle as Model recording only a *chosen*
+	// alias.
+	AutoPinned []string `json:"auto_pinned,omitempty"`
 }
 
 // ResumePath is the resume file for a project root.

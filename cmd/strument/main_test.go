@@ -186,3 +186,73 @@ func TestTerminalDetectionIsWired(t *testing.T) {
 		t.Error("isCharDevice(os.Stdout) should be false under a pipe")
 	}
 }
+
+// AGENTS.md is the cross-tool convention for a project's standing instructions
+// (agents.md), and this repository's own CLAUDE.md is a symlink to it. Strument
+// pins it once and then gets out of the way.
+//
+// The lifecycle is the point, not the pin: an assistant that re-adds a file you
+// dropped is worse than one that never offered.
+func TestAgentsFileIsOfferedOnce(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, agentsFile), []byte("# rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	newCoder := func() *coder.Coder {
+		return coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+	}
+
+	// First session: nothing recorded, so it is offered.
+	c1 := newCoder()
+	_, offered := restoreSession(c1, root, history.Resume{})
+	if !offered {
+		t.Fatal("a project with AGENTS.md and no record should be offered it")
+	}
+	if got := c1.ChatFiles(); len(got) != 1 || got[0] != agentsFile {
+		t.Fatalf("pinned files = %v, want [%s]", got, agentsFile)
+	}
+
+	// Second session, with the offer recorded and the user having dropped it:
+	// dropped stays dropped.
+	c2 := newCoder()
+	_, offered = restoreSession(c2, root, history.Resume{AutoPinned: []string{agentsFile}})
+	if offered {
+		t.Error("the offer must not repeat once recorded")
+	}
+	if got := c2.ChatFiles(); len(got) != 0 {
+		t.Errorf("pinned files = %v, want none — the user dropped it", got)
+	}
+
+	// And with it recorded *and* still pinned, it comes back as an ordinary
+	// resume entry rather than as a fresh offer.
+	c3 := newCoder()
+	_, offered = restoreSession(c3, root, history.Resume{
+		AutoPinned: []string{agentsFile}, Files: []string{agentsFile},
+	})
+	if offered {
+		t.Error("a file already in Files is a restore, not an offer")
+	}
+	if got := c3.ChatFiles(); len(got) != 1 {
+		t.Errorf("pinned files = %v, want it restored", got)
+	}
+}
+
+// A project without one is left alone. Strument never creates the file — on a
+// live configuration directory, which the harness is meant to be usable on,
+// writing an AGENTS.md nobody asked for would be its own small rudeness.
+func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+
+	if _, offered := restoreSession(c, root, history.Resume{}); offered {
+		t.Error("nothing to offer in a project with no AGENTS.md")
+	}
+	if _, err := os.Stat(filepath.Join(root, agentsFile)); !os.IsNotExist(err) {
+		t.Error("AGENTS.md must not be created")
+	}
+	if got := c.ChatFiles(); len(got) != 0 {
+		t.Errorf("pinned files = %v, want none", got)
+	}
+}

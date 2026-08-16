@@ -221,7 +221,17 @@ func (c *chatCmd) Run() error {
 		// for without seeing it.
 		note := ""
 		if len(c.Files) == 0 && rootErr == nil {
-			note = restoreSession(cdr, projectRoot, res)
+			var offered bool
+			note, offered = restoreSession(cdr, projectRoot, res)
+			// Record the offer immediately rather than waiting for a command to
+			// trigger a save. A session where the user pins nothing and drops
+			// nothing would otherwise never write it down, and AGENTS.md would
+			// be offered again next time — which is only "once" in the sense
+			// that it happens once per session.
+			if offered && keepState {
+				res.AutoPinned = append(res.AutoPinned, agentsFile)
+				_ = history.SaveResume(projectRoot, resumeWithPins(cdr, projectRoot, res))
+			}
 		}
 		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, keepState, note)
 	}
@@ -285,7 +295,11 @@ func historyRootFrom(dir string) string {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) string {
+// agentsFile is the cross-tool conventional name for a project's standing
+// instructions to a coding agent. See https://agents.md/.
+const agentsFile = "AGENTS.md"
+
+func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (note string, offered bool) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
 		if !filepath.IsAbs(p) {
@@ -317,6 +331,27 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) st
 		cdr.RestoreSessionCommits(u.Commits, u.Last)
 	}
 
+	// AGENTS.md is the cross-tool convention for a project's standing
+	// instructions to a coding agent (Codex, Cursor, Amp, Gemini CLI read it;
+	// Claude Code's CLAUDE.md is the outlier, and this repository's own
+	// CLAUDE.md is a symlink to it). Supporting it costs one rule and adds no
+	// filename of Strument's own.
+	//
+	// It is pinned for *editing*, not read-only, and that needs no new safety
+	// story: updating it is then an ordinary edit, which already shows a diff,
+	// is snapshotted before the write, is one /undo away with or without git,
+	// and lands in the turn's commit where there is one. Strument already has a
+	// review surface for model-authored durable state, and it is called an
+	// edit. A read-only pin would instead *refuse* the update, on a file whose
+	// whole purpose is being kept current.
+	//
+	// Never created, only noticed. On a live configuration directory with no
+	// AGENTS.md, nothing happens.
+	if p, ok := abs(agentsFile); ok && !slices.Contains(res.AutoPinned, agentsFile) {
+		cdr.AddFile(p)
+		offered = true
+	}
+
 	var files, readOnly int
 	for _, rel := range res.Files {
 		if p, ok := abs(rel); ok {
@@ -334,16 +369,23 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) st
 	// first thing on the line. "2 pins: 1 for editing, 1 read-only" also stays on
 	// one line where "1 file and 1 read-only file" was already the longer half of
 	// a sentence that grows with every category.
+	//
+	// An auto-pinned AGENTS.md is deliberately not counted here. This line says
+	// what a *previous session* left, and the first time AGENTS.md is noticed it
+	// came from the project rather than from a session. It needs no announcement
+	// of its own either: the banner lists every pinned file directly below, so
+	// "Pinned AGENTS.md for editing." is already on screen, in the same words
+	// /add would have used.
 	switch {
 	case files == 0 && readOnly == 0:
-		return ""
+		return "", offered
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins"))
+		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins")), offered
 	case files == 0:
-		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins"))
+		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins")), offered
 	}
 	return fmt.Sprintf("Restored %s from your last session: %d for editing, %d read-only.",
-		plural(files+readOnly, "pin", "pins"), files, readOnly)
+		plural(files+readOnly, "pin", "pins"), files, readOnly), offered
 }
 
 func plural(n int, one, many string) string {
@@ -367,43 +409,62 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 		return nil
 	}
 	return func(alias string) {
-		// Project-relative where possible, absolute where not. A read-only
-		// reference reached outside the project has no project-relative form,
-		// and dropping it would silently forget the entry that took the most
-		// effort to find. Editable files are always inside, so this only ever
-		// produces an absolute path for a reference.
-		toProject := func(rels []string) []string {
-			out := make([]string, 0, len(rels))
-			base := projectRoot
-			if resolved, err := filepath.EvalSymlinks(base); err == nil {
-				base = resolved
-			}
-			for _, rel := range rels {
-				p := rel
-				if !filepath.IsAbs(p) {
-					p = filepath.Join(cdr.Root, filepath.FromSlash(rel))
-				}
-				if resolved, err := filepath.EvalSymlinks(p); err == nil {
-					p = resolved
-				}
-				r, err := filepath.Rel(base, p)
-				if err != nil || strings.HasPrefix(r, "..") {
-					out = append(out, filepath.ToSlash(p))
-					continue
-				}
-				out = append(out, filepath.ToSlash(r))
-			}
-			return out
-		}
-		res := history.Resume{
-			Files:    toProject(cdr.ChatFiles()),
-			ReadOnly: toProject(cdr.ReadOnlyFiles()),
-		}
+		// Carry AutoPinned forward by re-reading rather than by remembering. A
+		// save that dropped it would re-offer AGENTS.md next session, and the
+		// first /add of any session would be enough to trigger that — so the one
+		// field whose whole job is "this happened once" would be erased by
+		// ordinary use. Re-reading a small JSON file per /add costs nothing and
+		// cannot go out of sync with what is on disk.
+		res := resumeWithPins(cdr, projectRoot, history.Resume{
+			AutoPinned: history.LoadResume(projectRoot).AutoPinned,
+		})
 		if alias != cfg.Default {
 			res.Model = alias
 		}
 		_ = history.SaveResume(projectRoot, res)
 	}
+}
+
+// resumeWithPins fills in what is currently pinned, keeping everything else in
+// base. Shared by the per-command save above and the one-off write that records
+// an auto-pin at startup, so both produce the same shape — a second path that
+// wrote paths differently would resume to a different set of files than the
+// first, which is the kind of divergence nobody notices until it matters.
+func resumeWithPins(cdr *coder.Coder, projectRoot string, base history.Resume) history.Resume {
+	base.Files = toProjectPaths(cdr, projectRoot, cdr.ChatFiles())
+	base.ReadOnly = toProjectPaths(cdr, projectRoot, cdr.ReadOnlyFiles())
+	return base
+}
+
+// toProjectPaths rewrites coder-relative paths as project-relative where
+// possible and absolute where not.
+//
+// A read-only reference reached outside the project has no project-relative
+// form, and dropping it would silently forget the entry that took the most
+// effort to find. Editable files are always inside, so this only ever produces
+// an absolute path for a reference.
+func toProjectPaths(cdr *coder.Coder, projectRoot string, rels []string) []string {
+	out := make([]string, 0, len(rels))
+	base := projectRoot
+	if resolved, err := filepath.EvalSymlinks(base); err == nil {
+		base = resolved
+	}
+	for _, rel := range rels {
+		p := rel
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cdr.Root, filepath.FromSlash(rel))
+		}
+		if resolved, err := filepath.EvalSymlinks(p); err == nil {
+			p = resolved
+		}
+		r, err := filepath.Rel(base, p)
+		if err != nil || strings.HasPrefix(r, "..") {
+			out = append(out, filepath.ToSlash(p))
+			continue
+		}
+		out = append(out, filepath.ToSlash(r))
+	}
+	return out
 }
 
 // resolveHistoryPath is the config override (absolute, or relative to the
