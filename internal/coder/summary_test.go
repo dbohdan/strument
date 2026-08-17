@@ -37,7 +37,14 @@ func (*summaryOutput) StreamText(string)                     {}
 func (*summaryOutput) StreamReasoning(string)                {}
 func (*summaryOutput) StreamToolCall(int, string, string) {}
 func (*summaryOutput) FlushStream()                      {}
-// summaryErrStub always fails the weak-model call.
+type summaryEmptyStub struct{ calls int }
+
+func (s *summaryEmptyStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
 type summaryErrStub struct{}
 
 func (summaryErrStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
@@ -221,7 +228,35 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	}
 }
 
-// captureStub records what the weak model was actually asked to summarize, so
+func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
+	c := testCoder(t)
+	out := &summaryOutput{}
+	c.Out = out
+	c.Model.Context = 16384
+	stub := &summaryEmptyStub{}
+	c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens)
+	c.doneMessages = []llm.Message{
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 50), msgTok("assistant", 50),
+	}
+
+	c.maybeSummarize()
+	c.maybeSummarize()
+	if stub.calls != 1 {
+		t.Errorf("weak model called %d times during backoff, want 1", stub.calls)
+	}
+
+	c.maybeSummarize()
+	if stub.calls != 2 {
+		t.Errorf("weak model called %d times after backoff, want 2", stub.calls)
+	}
+	if !strings.Contains(strings.Join(out.lines, "\n"), "result was not smaller") {
+		t.Error("mechanical validation warning was not printed")
+	}
+}
+
 // the tests below assert on the wire rather than on the rendering function.
 type captureStub struct{ sent string }
 

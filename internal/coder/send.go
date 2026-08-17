@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // SendOutcome is the terminal state of one sendMessage.
@@ -476,7 +477,19 @@ func countSummaryMessages(msgs []llm.Message) int {
 	return n
 }
 
-// maybeSummarize compacts the settled history when it outgrows the chat-history
+func validCompaction(msgs []llm.Message, beforeTokens, beforeMessages, afterTokens int) bool {
+	return len(msgs) < beforeMessages && afterTokens < beforeTokens && hasSummaryContent(msgs)
+}
+
+func hasSummaryContent(msgs []llm.Message) bool {
+	for _, m := range msgs {
+		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(m.Text(), prompts.SummaryLabel)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // budget. It runs only when a summarizer is wired and the model's window is
 // known (Context > 0) — mirroring checkTokens, which treats an unknown window
 // as "no limit to enforce". Synchronous: the weak-model call happens here,
@@ -489,16 +502,26 @@ func (c *Coder) maybeSummarize() {
 	if !c.Summarizer.tooBig(c.doneMessages, budget) {
 		return
 	}
+	if c.summaryBackoff {
+		c.summaryBackoff = false
+		return
+	}
 	c.Out.Printf("Summarizing chat history to fit the context window...")
 	beforeTokens := c.Summarizer.total(c.doneMessages)
 	beforeMessages := len(c.doneMessages)
 	out, err := c.Summarizer.summarize(c.doneMessages, budget)
 	if err != nil {
+		c.summaryBackoff = true
 		c.Out.Warningf("Could not summarize chat history: %v", err)
 		return
 	}
-	c.doneMessages = out
 	afterTokens := c.Summarizer.total(out)
+	if !validCompaction(out, beforeTokens, beforeMessages, afterTokens) {
+		c.summaryBackoff = true
+		c.Out.Warningf("Could not summarize chat history: the result was not smaller than the original history")
+		return
+	}
+	c.doneMessages = out
 	c.Out.Printf("Chat history compacted: %d tokens/%d messages -> %d tokens/%d messages; %d summaries retained.",
 		beforeTokens, beforeMessages, afterTokens, len(out), countSummaryMessages(out))
 }
