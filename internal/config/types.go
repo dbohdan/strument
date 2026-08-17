@@ -165,6 +165,15 @@ type Config struct {
 	// ReasoningDisplay is how much of the model's thinking to show. The zero
 	// value shows all of it.
 	ReasoningDisplay ReasoningDisplay
+	// MaxSteps overrides the work-step budget per turn. 0 uses the built-in
+	// default (25). The budget is a checkpoint, not a wall: on exhaustion the
+	// user is shown what the turn has done and asked whether to keep going.
+	MaxSteps int
+	// MaxErrorReflections overrides the error-reflection budget per turn. 0
+	// uses the built-in default (3). An error reflection is the model
+	// recovering from its own mistake — a failed edit match, a bad shell
+	// command — and should stay rare.
+	MaxErrorReflections int
 }
 
 // ReasoningMode is what ReasoningDisplay does with a thinking block.

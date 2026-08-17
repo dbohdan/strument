@@ -29,6 +29,8 @@ The loader reads these module-level variables after running your file:
 | `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
 | `verify_auto` | list of strings | Optional. Names of `verify` checks Strument runs itself at the end of a turn that changed files. See below. |
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
+| `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
+| `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -295,6 +297,44 @@ them, set `reasoning="off"` on the model instead — that changes the request,
 where this changes only the screen. Keeping them apart matters: otherwise a
 project's `.strument.star` could change what a turn costs by way of a display
 preference.
+
+### `max_steps`
+
+The number of work steps the model can take in one turn before Strument pauses
+and asks whether to keep going.
+
+```python
+max_steps = 25    # the default
+max_steps = 50    # for long refactors
+max_steps = 10    # for tighter control
+```
+
+Each step is the model reading a tool result and carrying on — ordinary
+progress. When the limit is reached, Strument prints a summary (steps taken,
+files edited, and optionally cost) and prompts **"Keep going?"**. Answering yes
+resets the counter and buys another batch; answering no ends the turn with the
+work so far already applied and committed.
+
+This is a checkpoint, not a wall. It exists because a long turn should not run
+away unnoticed — the user should see what is happening and decide whether to
+continue. Setting it high is fine for deliberate long refactors; setting it low
+gives more frequent check-ins.
+
+### `max_error_reflections`
+
+The number of times the model can recover from its own errors in one turn
+before Strument stops and hands back to the user.
+
+```python
+max_error_reflections = 3    # the default
+max_error_reflections = 5    # for models that need more retries
+```
+
+An error reflection is the model reacting to a tool failure — an `old_string`
+that didn't match, a bad shell command — and trying again. It is distinct from
+a work step: the model is recovering, not progressing. Keeping the budget small
+means a model that is stuck in a fix-break cycle hands back to the human rather
+than burning the work-step budget on retries nobody asked for.
 
 ## Built-in functions
 

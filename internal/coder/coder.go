@@ -22,11 +22,6 @@ import (
 // mistake and should stay rare; a work step is the model reading a tool result
 // and carrying on, which is ordinary progress.
 const (
-	maxErrorReflections = 3
-	// maxSteps bounds the work rounds in one turn. It is a checkpoint, not a
-	// wall: on exhaustion the user is shown what the turn has done so far and
-	// asked whether to keep going.
-	maxSteps = 25
 	// maxAutoVerify bounds the rounds the harness itself starts by running the
 	// project's checks. It is small and separate on purpose: a model caught in a
 	// fix-break cycle should hand back to the human rather than spend the work
@@ -49,6 +44,15 @@ type Coder struct {
 	UseSystemPrompt      bool
 	SystemPromptPrefix   string
 	ChatLanguage         string
+
+	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
+	// On exhaustion the user is shown what the turn has done and asked
+	// whether to keep going. Configurable; the default (25) is set by New.
+	MaxSteps int
+	// MaxErrorReflections is the error-reflection budget per turn. An error
+	// reflection is the model recovering from its own mistake and should
+	// stay rare. Configurable; the default (3) is set by New.
+	MaxErrorReflections int
 
 	// Ports.
 	Client     llm.ModelClient
@@ -203,6 +207,8 @@ func New(root string, model *config.Model) *Coder {
 		Stream:               true,
 		PrefillSupported:     true,
 		UseSystemPrompt:      true,
+		MaxSteps:             25,
+		MaxErrorReflections:  3,
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
@@ -403,8 +409,8 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 
 		switch outcome {
 		case OutcomeReflect:
-			if c.numReflections >= maxErrorReflections {
-				c.Out.Warningf("Only %d reflections allowed, stopping.", maxErrorReflections)
+			if c.numReflections >= c.MaxErrorReflections {
+				c.Out.Warningf("Only %d reflections allowed, stopping.", c.MaxErrorReflections)
 				return
 			}
 			c.numReflections++
@@ -412,7 +418,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 
 		case OutcomeContinue:
 			c.numSteps++
-			if c.numSteps >= maxSteps && !c.confirmMoreSteps() {
+			if c.numSteps >= c.MaxSteps && !c.confirmMoreSteps() {
 				return
 			}
 			message = "" // the tool results are the message
@@ -483,7 +489,7 @@ func (c *Coder) runAutoVerify(ctx context.Context) (message string, keepGoing bo
 // should not run away unnoticed, so the user is shown what it has done so far
 // and asked whether to keep going. Declining ends the turn normally, with the
 // work up to that point already applied and committed. Answering yes buys
-// another maxSteps.
+// another MaxSteps.
 func (c *Coder) confirmMoreSteps() bool {
 	files := len(c.turnEditedFiles)
 	noun := "files"

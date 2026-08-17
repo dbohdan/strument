@@ -414,11 +414,12 @@ and the turn *sends again* — `applyToolCalls` returns `OutcomeContinue` and
 `runOne` goes round. That is the whole pivot: a reply ending in a tool call
 carries `finish_reason: "tool_calls"`, so hanging up on it breaks the
 protocol every post-trained model was fitted to. The loop is bounded by
-`maxSteps` (25), which is a checkpoint rather than a wall: the turn reports
-what it has done and asks whether to continue. `maxErrorReflections` (3)
-bounds the rounds an *error* starts, and `maxAutoVerify` (3) the rounds the
-harness itself starts, so a model in a fix-break cycle hands back to the human
-instead of eating the work budget.
+`max_steps` (default 25, configurable), which is a checkpoint rather than a
+wall: the turn reports what it has done and asks whether to continue.
+`max_error_reflections` (default 3, configurable) bounds the rounds an *error*
+starts, and `maxAutoVerify` (3) the rounds the harness itself starts, so a
+model in a fix-break cycle hands back to the human instead of eating the work
+budget.
 
 **Reflection is a tool error, not a synthetic user turn.** When an
 `old_string` doesn't match, its call's tool result carries the failure (with

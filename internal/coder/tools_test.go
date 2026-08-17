@@ -549,7 +549,7 @@ func TestToolLoopSpansFiles(t *testing.T) {
 }
 
 // TestToolLoopBudgetStops confirms the step budget is a checkpoint the user
-// clears: at maxSteps the turn reports what it has done and stops when the
+// clears: at MaxSteps the turn reports what it has done and stops when the
 // user declines, leaving the work so far applied.
 func TestToolLoopBudgetStops(t *testing.T) {
 	var b strings.Builder
@@ -561,7 +561,7 @@ func TestToolLoopBudgetStops(t *testing.T) {
 `)
 	// One more stream than the budget would let run, so an off-by-one that
 	// overshot the checkpoint would consume it and fail the Remaining check.
-	for i := range maxSteps + 1 {
+	for i := range 25 + 1 {
 		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"write","tool_args":"{\"path\":\"a.txt\",\"content\":\"pass %d\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, i)
 	}
 	sc := inlineScenario(t, b.String())
@@ -573,8 +573,8 @@ func TestToolLoopBudgetStops(t *testing.T) {
 	})
 	env.coder.Run(t.Context(), sc.User)
 
-	if env.coder.numSteps != maxSteps {
-		t.Errorf("steps = %d, want %d", env.coder.numSteps, maxSteps)
+	if env.coder.numSteps != env.coder.MaxSteps {
+		t.Errorf("steps = %d, want %d", env.coder.numSteps, env.coder.MaxSteps)
 	}
 	if env.stub.Remaining() != 1 {
 		t.Errorf("remaining turns = %d, want 1 (the loop must stop at the budget)", env.stub.Remaining())
@@ -588,7 +588,7 @@ func TestToolLoopBudgetStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != fmt.Sprintf("pass %d\n", maxSteps-1) {
+	if got := string(data); got != fmt.Sprintf("pass %d\n", env.coder.MaxSteps-1) {
 		t.Errorf("a.txt = %q, want the last applied edit to stand", got)
 	}
 }

@@ -56,6 +56,27 @@ type fileGlobals struct {
 
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
+
+	hasMaxSteps             bool
+	maxStepsVal             int
+	hasMaxErrorReflections  bool
+	maxErrorReflectionsVal  int
+}
+
+// parsePositiveInt reads a Starlark int that must be at least 1.
+func parsePositiveInt(path, name string, v starlark.Value) (int, error) {
+	iv, ok := v.(starlark.Int)
+	if !ok {
+		return 0, fmt.Errorf("%s: `%s` must be a positive integer, got %s", path, name, v.Type())
+	}
+	n, ok := iv.Int64()
+	if !ok {
+		return 0, fmt.Errorf("%s: `%s` is out of range", path, name)
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("%s: `%s` must be at least 1, got %d", path, name, n)
+	}
+	return int(n), nil
 }
 
 // parseReasoningDisplay reads `reasoning_display`: "full", a line count, or
@@ -229,6 +250,12 @@ func Load(opts Options) (*Config, error) {
 	if user.hasReasoningDisplay {
 		cfg.ReasoningDisplay = user.reasoningDisplayVal
 	}
+	if user.hasMaxSteps {
+		cfg.MaxSteps = user.maxStepsVal
+	}
+	if user.hasMaxErrorReflections {
+		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -256,6 +283,12 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasReasoningDisplay {
 			cfg.ReasoningDisplay = project.reasoningDisplayVal
+		}
+		if project.hasMaxSteps {
+			cfg.MaxSteps = project.maxStepsVal
+		}
+		if project.hasMaxErrorReflections {
+			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
 		}
 	}
 
@@ -476,6 +509,24 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasVerifyAuto = true
 		out.verifyAutoVal = names
+	}
+
+	if ms, ok := globals["max_steps"]; ok {
+		n, err := parsePositiveInt(path, "max_steps", ms)
+		if err != nil {
+			return nil, err
+		}
+		out.hasMaxSteps = true
+		out.maxStepsVal = n
+	}
+
+	if er, ok := globals["max_error_reflections"]; ok {
+		n, err := parsePositiveInt(path, "max_error_reflections", er)
+		if err != nil {
+			return nil, err
+		}
+		out.hasMaxErrorReflections = true
+		out.maxErrorReflectionsVal = n
 	}
 
 	return out, nil
