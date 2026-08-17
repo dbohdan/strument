@@ -35,9 +35,8 @@ func (o *summaryOutput) Errorf(format string, args ...any)   { o.Printf(format, 
 func (o *summaryOutput) Toolf(format string, args ...any)    { o.Printf(format, args...) }
 func (*summaryOutput) StreamText(string)                     {}
 func (*summaryOutput) StreamReasoning(string)                {}
-func (*summaryOutput) StreamToolCall(int, string, string)    {}
-func (*summaryOutput) FlushStream()                          {}
-
+func (*summaryOutput) StreamToolCall(int, string, string) {}
+func (*summaryOutput) FlushStream()                      {}
 type summaryEmptyStub struct{ calls int }
 
 func (s *summaryEmptyStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
@@ -46,7 +45,6 @@ func (s *summaryEmptyStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.
 		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
 	}
 }
-
 type summaryErrStub struct{}
 
 func (summaryErrStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
@@ -58,19 +56,6 @@ func (summaryErrStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.Strea
 // msgTok builds a message of exactly `tokens` tokens under RuneCounter (runes/4).
 func msgTok(role string, tokens int) llm.Message {
 	return llm.TextMessage(role, strings.Repeat("x", tokens*4))
-}
-
-func TestChatHistorySlack(t *testing.T) {
-	t.Setenv("STRUMENT_COMPACTION_SLACK", "")
-	for _, tc := range []struct{ budget, want int }{
-		{1024, 128},
-		{2048, 256},
-		{8192, 256},
-	} {
-		if got := chatHistorySlack(tc.budget); got != tc.want {
-			t.Errorf("chatHistorySlack(%d) = %d, want %d", tc.budget, got, tc.want)
-		}
-	}
 }
 
 func TestMaxChatHistoryTokens(t *testing.T) {
@@ -88,24 +73,6 @@ func TestMaxChatHistoryTokens(t *testing.T) {
 	}
 }
 
-func TestMaybeSummarizeSlackDelaysCompaction(t *testing.T) {
-	c := testCoder(t)
-	c.Model.Context = 16384
-	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
-	c.doneMessages = []llm.Message{msgTok("user", 550), msgTok("assistant", 550)}
-
-	t.Setenv("STRUMENT_COMPACTION_SLACK", "")
-	c.maybeSummarize()
-	if len(c.doneMessages) != 2 {
-		t.Fatalf("compacted within slack: %d messages", len(c.doneMessages))
-	}
-
-	t.Setenv("STRUMENT_COMPACTION_SLACK", "0")
-	c.maybeSummarize()
-	if len(c.doneMessages) == 2 {
-		t.Error("did not compact after disabling slack")
-	}
-}
 func TestChatSummaryTooBig(t *testing.T) {
 	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{})
 	msgs := []llm.Message{msgTok("user", 60), msgTok("assistant", 60)} // 120 tokens
@@ -227,6 +194,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		}
 	})
 }
+
 
 func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	c := testCoder(t)

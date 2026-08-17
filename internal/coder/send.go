@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -467,15 +466,7 @@ func maxChatHistoryTokens(context int) int {
 	return min(max(context/16, 1024), 8192)
 }
 
-// chatHistorySlack is the bounded allowance above the history budget before
-// compaction starts. It only delays compaction; summarize still targets budget.
-func chatHistorySlack(budget int) int {
-	if value, err := strconv.Atoi(os.Getenv("STRUMENT_COMPACTION_SLACK")); err == nil && value >= 0 {
-		return value
-	}
-	return min(256, max(128, budget/8))
-}
-
+// countSummaryMessages reports how many retained history messages are compaction summaries.
 func countSummaryMessages(msgs []llm.Message) int {
 	n := 0
 	for _, m := range msgs {
@@ -499,8 +490,7 @@ func hasSummaryContent(msgs []llm.Message) bool {
 	return false
 }
 
-// maybeSummarize compacts the settled history when it outgrows the chat-history
-// budget plus a small trigger-only slack. It runs only when a summarizer is wired and the model's window is
+// budget. It runs only when a summarizer is wired and the model's window is
 // known (Context > 0) — mirroring checkTokens, which treats an unknown window
 // as "no limit to enforce". Synchronous: the weak-model call happens here,
 // before the next prompt is assembled. On failure the history is left intact.
@@ -509,7 +499,7 @@ func (c *Coder) maybeSummarize() {
 		return
 	}
 	budget := maxChatHistoryTokens(c.Model.Context)
-	if !c.Summarizer.tooBig(c.doneMessages, budget+chatHistorySlack(budget)) {
+	if !c.Summarizer.tooBig(c.doneMessages, budget) {
 		return
 	}
 	if c.summaryBackoff {

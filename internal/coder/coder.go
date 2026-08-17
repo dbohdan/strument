@@ -120,8 +120,7 @@ type Coder struct {
 	// unchanged tree can only produce the identical output.
 	editedSinceVerify bool
 	lastSendOutcome   SendOutcome // observability for tests/REPL status
-	// summaryBackoff skips one compaction attempt after a failure.
-	summaryBackoff bool
+	summaryBackoff    bool        // skip one compaction attempt after a failure
 
 	// Send-scoped buffers.
 	partialResponseContent  string
