@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"dbohdan.com/strument/internal/coder"
@@ -38,6 +39,7 @@ func init() {
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
 		{"clear", "", "Clear the conversation history", cmdClear},
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
+		{"context", "[n]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
 		{"drop", "[file ...]", "Unpin files (all if none given)", cmdDrop},
 		{"exit", "", "Exit Strument", cmdExit},
@@ -433,6 +435,25 @@ func cmdNotes(_ context.Context, r *REPL, args string) string {
 
 func cmdTokens(_ context.Context, r *REPL, _ string) string {
 	r.printf("%s", r.coder.TokensReport())
+	return ""
+}
+
+// cmdContext shows the conversation the way the model currently reads it: the
+// compaction summaries in order, then the live tail the summaries do not cover.
+// /tokens says how full the window is and the transcript says what was actually
+// said; what neither shows is the fold — the thing the model sees — which is the
+// niche this command fills.
+func cmdContext(_ context.Context, r *REPL, args string) string {
+	n := -1
+	if arg := strings.TrimSpace(args); arg != "" {
+		parsed, err := strconv.Atoi(arg)
+		if err != nil || parsed <= 0 {
+			r.out.Errorf("Usage: /context [n], where n is the number of summaries to show.")
+			return ""
+		}
+		n = parsed
+	}
+	r.printf("%s", strings.TrimRight(r.coder.ViewContext(n), "\n"))
 	return ""
 }
 

@@ -149,6 +149,7 @@ Slash commands perform actions initiated by you rather than the model:
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |
 | `/squash [n]` | Fold the last n turns' commits into one. |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
+| `/context [n]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
 | `/symbol <name> [reference]` | Find where a name is defined, or used, from the language parser rather than from text. |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |

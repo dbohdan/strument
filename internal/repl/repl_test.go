@@ -155,6 +155,30 @@ func TestScriptedSession(t *testing.T) {
 	}
 }
 
+// /context is a pure view: it sends nothing and mutates no state. The bare form
+// renders everything; an [n] caps the number of summaries; a non-numeric [n] is
+// a usage error.
+func TestContextCommandSendsNothingAndMutatesNothing(t *testing.T) {
+	input := strings.NewReader("/context\n/context 2\n/context bogus\n/exit\n")
+	stub := &fixture.StreamStub{} // whatever Send reaches is an error
+	r, _, out := newTestREPL(t, stub, input)
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if n := strings.Count(got, "Context as the model sees it:"); n != 2 {
+		t.Errorf("bare and [n] should each render, got %d render(s):\n%s", n, got)
+	}
+	if !strings.Contains(got, "Usage: /context [n]") {
+		t.Errorf("bad [n] should give usage:\n%s", got)
+	}
+	if stub.Remaining() != 0 {
+		t.Errorf("/context must never reach the client: %d turn(s) consumed", -stub.Remaining())
+	}
+}
+
 func TestBannerAndPromptHeader(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows requires a real console for ANSI mode")
@@ -621,6 +645,7 @@ func TestWebCommandScrapesAndStages(t *testing.T) {
 func TestSymbolCommand(t *testing.T) {
 	r, cdr, out := newTestREPL(t, answerStub("ok\n"), strings.NewReader("/exit\n"))
 	defer r.Close()
+
 	if err := os.WriteFile(filepath.Join(cdr.Root, "lib.go"),
 		[]byte("package lib\n\nfunc VerySpecificName() int { return 1 }\n"), 0o644); err != nil {
 		t.Fatal(err)
