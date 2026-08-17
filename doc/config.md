@@ -265,7 +265,15 @@ they are listed. Nothing runs after a turn that only read files, or under
 `--dry-run`, since no edit lands. The `verify` tool stays available either way,
 so the model can still check something mid-turn.
 
-### `reasoning_display`
+### `--continue` / `-c`
+
+When starting an interactive session, regenerate the session notes from the
+project's existing transcript before restoring the session. The fresh notes are
+then placed in context for the new session. This makes continuation explicit and
+uses the transcript as the source rather than feeding older notes back into the
+summarizer. The option does nothing when history is disabled, unavailable, or
+empty.
+
 
 How much of the model's thinking to show, in both the interactive REPL and
 `--message` script mode:

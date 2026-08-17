@@ -35,6 +35,7 @@ var version = "0.0.0-dev"
 
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
+	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup." name:"continue"                                               short:"c"`
 	Model         string   `help:"Model alias from config; defaults to the config's default."    short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
@@ -218,6 +219,16 @@ func (c *chatCmd) Run() error {
 	if keepState {
 		if p, err := resolveHistoryPath(cfg, projectRoot); err == nil {
 			hist = history.New(p)
+		}
+	}
+
+	if c.Continue && hist != nil {
+		transcript := history.ReadTranscript(hist.Path())
+		if transcript != "" {
+			write := coder.NotesWriter(client.New(model.WeakModel.Provider), model.WeakModel, nil)
+			if notes := write(transcript); notes != "" {
+				_ = history.SaveNotes(projectRoot, notes)
+			}
 		}
 	}
 
