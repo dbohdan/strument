@@ -522,8 +522,10 @@ func (c *Coder) maybeSummarize() {
 		return
 	}
 	c.doneMessages = out
-	c.Out.Printf("Chat history compacted: %d tokens/%d messages -> %d tokens/%d messages; %d summaries retained.",
-		beforeTokens, beforeMessages, afterTokens, len(out), countSummaryMessages(out))
+	c.Out.Printf("Chat history compacted: %d tokens/%s -> %d tokens/%s; %s retained.",
+		beforeTokens, plural(beforeMessages, "message", "messages"),
+		afterTokens, plural(len(out), "message", "messages"),
+		plural(countSummaryMessages(out), "summary", "summaries"))
 }
 
 // finalizeUsage resolves cost — (1) in-band cost, (2) config

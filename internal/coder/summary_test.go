@@ -223,7 +223,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	if !strings.Contains(report, "1900 tokens/8 messages ->") {
 		t.Errorf("report does not include before counts: %q", report)
 	}
-	if !strings.Contains(report, "1 summaries retained") {
+	if !strings.Contains(report, "1 summary retained") {
 		t.Errorf("report does not include retained summary count: %q", report)
 	}
 }
