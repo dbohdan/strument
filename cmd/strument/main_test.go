@@ -187,6 +187,45 @@ func TestTerminalDetectionIsWired(t *testing.T) {
 	}
 }
 
+// A file argument resolved through a symlinked working directory must still be
+// accepted when it is genuinely inside the project — the same case /add handles
+// by joining the pattern with the already-resolved coder root. The project root
+// is git's symlink-resolved path while cwd can sit in the symlink namespace, so
+// the containment check has to resolve both before comparing. Without that, a
+// real in-project file arrived as "../../link/..." and was refused — the CLI
+// and /add disagreeing about the same rule.
+func TestFileInProjectThroughSymlink(t *testing.T) {
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A symlinked alias for the real project, like a symlinked checkout or a
+	// working directory reached through a symlink.
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	// git reports the resolved root; the working directory uses the symlink.
+	root := realDir
+	cwd := filepath.Join(link, "sub")
+
+	if !fileInProject(root, filepath.Join(cwd, "file.go")) {
+		t.Error("an in-project file reached through a symlink must be accepted")
+	}
+	if !fileInProject(root, filepath.Join(cwd, "nested", "file.go")) {
+		t.Error("a not-yet-created in-project file must be accepted")
+	}
+	// A sibling directory is genuinely outside, symlink or not.
+	outside := filepath.Join(base, "other", "file.go")
+	if err := os.MkdirAll(filepath.Dir(outside), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if fileInProject(root, outside) {
+		t.Error("a file in a sibling directory must still be refused")
+	}
+}
+
 // AGENTS.md is the cross-tool convention for a project's standing instructions
 // (agents.md), and this repository's own CLAUDE.md is a symlink to it. Strument
 // pins it once and then gets out of the way.

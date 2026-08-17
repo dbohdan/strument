@@ -157,7 +157,14 @@ func (c *chatCmd) Run() error {
 		// out-of-root file that /add would have refused — two layers disagreeing
 		// about the same rule. Reference material outside the project goes
 		// through /read-only, which is the one sanctioned way in.
-		if rel, err := filepath.Rel(root, f); err != nil || strings.HasPrefix(rel, "..") {
+		//
+		// The check runs before AddFile, which resolves the path itself, so it
+		// must resolve here too: the project root is git's symlink-resolved path,
+		// while cwd may be in the symlink namespace (a symlinked working
+		// directory, or a path reached through one). Comparing the two
+		// un-resolved names puts a genuine in-project file at "../../link/..." and
+		// rejects it — exactly the divergence from /add this fixes.
+		if !fileInProject(root, f) {
 			fmt.Fprintf(os.Stderr, "strument: skipping %s: outside the project root; pin it with /read-only instead.\n", f)
 			continue
 		}
@@ -310,6 +317,53 @@ func historyRootFrom(dir string) string {
 		return filepath.Clean(g.Root())
 	}
 	return filepath.Clean(dir)
+}
+
+// fileInProject reports whether file — resolved against the invocation
+// directory and possibly absolute — lies inside the project root.
+//
+// Both paths are normalized through EvalSymlinks before comparison, so a
+// working directory reached through a symlink, or a file argument that names
+// one, is judged in the same namespace the /add path uses (it joins the pattern
+// with the already-resolved coder root). Without this, a real in-project file
+// arrived through the symlink namespace as "../../link/..." and was refused —
+// the CLI and /add disagreeing about the same rule.
+//
+// A not-yet-created file resolves through its deepest existing ancestor, so
+// `strument newdir/file.go` is accepted when newdir/ is inside the project.
+func fileInProject(root, file string) bool {
+	resolved := resolvePath(filepath.Clean(file))
+	rootResolved := resolvePath(root)
+	rel, err := filepath.Rel(rootResolved, resolved)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolvePath follows symlinks as far as the path exists, then re-appends the
+// not-yet-created tail, so a path naming a file that is not there yet still
+// resolves through the directories that are. Copies the logic already in
+// internal/coder and internal/workspace rather than importing it, because the
+// CLI is the top layer and must not reach down into those internals for a
+// containment check.
+func resolvePath(abs string) string {
+	rest := ""
+	dir := abs
+	for {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			if rest == "" {
+				return resolved
+			}
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return abs // reached the root without resolving anything
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+	}
 }
 
 // restoreSession re-pins what the last session had pinned, returning a line for
