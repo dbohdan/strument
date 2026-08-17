@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"strings"
 	"testing"
@@ -24,6 +25,18 @@ func (s *summaryStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.Strea
 	}
 }
 
+type summaryOutput struct{ lines []string }
+
+func (o *summaryOutput) Printf(format string, args ...any) {
+	o.lines = append(o.lines, fmt.Sprintf(format, args...))
+}
+func (o *summaryOutput) Warningf(format string, args ...any) { o.Printf(format, args...) }
+func (o *summaryOutput) Errorf(format string, args ...any)   { o.Printf(format, args...) }
+func (o *summaryOutput) Toolf(format string, args ...any)    { o.Printf(format, args...) }
+func (*summaryOutput) StreamText(string)                     {}
+func (*summaryOutput) StreamReasoning(string)                {}
+func (*summaryOutput) StreamToolCall(int, string, string) {}
+func (*summaryOutput) FlushStream()                      {}
 // summaryErrStub always fails the weak-model call.
 type summaryErrStub struct{}
 
@@ -173,6 +186,39 @@ func TestMaybeSummarizeGating(t *testing.T) {
 			t.Error("weak model was never called")
 		}
 	})
+}
+
+
+func TestMaybeSummarizeReportsCompaction(t *testing.T) {
+	c := testCoder(t)
+	out := &summaryOutput{}
+	c.Out = out
+	c.Model.Context = 16384
+	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
+	c.doneMessages = []llm.Message{
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 50), msgTok("assistant", 50),
+	}
+
+	c.maybeSummarize()
+
+	var report string
+	for _, line := range out.lines {
+		if strings.HasPrefix(line, "Chat history compacted:") {
+			report = line
+		}
+	}
+	if report == "" {
+		t.Fatalf("compaction report not printed: %v", out.lines)
+	}
+	if !strings.Contains(report, "1900 tokens/8 messages ->") {
+		t.Errorf("report does not include before counts: %q", report)
+	}
+	if !strings.Contains(report, "1 summaries retained") {
+		t.Errorf("report does not include retained summary count: %q", report)
+	}
 }
 
 // captureStub records what the weak model was actually asked to summarize, so

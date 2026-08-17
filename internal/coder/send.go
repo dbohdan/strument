@@ -465,6 +465,17 @@ func maxChatHistoryTokens(context int) int {
 	return min(max(context/16, 1024), 8192)
 }
 
+// countSummaryMessages reports how many retained history messages are compaction summaries.
+func countSummaryMessages(msgs []llm.Message) int {
+	n := 0
+	for _, m := range msgs {
+		if isSummaryMessage(m) {
+			n++
+		}
+	}
+	return n
+}
+
 // maybeSummarize compacts the settled history when it outgrows the chat-history
 // budget. It runs only when a summarizer is wired and the model's window is
 // known (Context > 0) — mirroring checkTokens, which treats an unknown window
@@ -479,12 +490,17 @@ func (c *Coder) maybeSummarize() {
 		return
 	}
 	c.Out.Printf("Summarizing chat history to fit the context window...")
+	beforeTokens := c.Summarizer.total(c.doneMessages)
+	beforeMessages := len(c.doneMessages)
 	out, err := c.Summarizer.summarize(c.doneMessages, budget)
 	if err != nil {
 		c.Out.Warningf("Could not summarize chat history: %v", err)
 		return
 	}
 	c.doneMessages = out
+	afterTokens := c.Summarizer.total(out)
+	c.Out.Printf("Chat history compacted: %d tokens/%d messages -> %d tokens/%d messages; %d summaries retained.",
+		beforeTokens, beforeMessages, afterTokens, len(out), countSummaryMessages(out))
 }
 
 // finalizeUsage resolves cost — (1) in-band cost, (2) config
