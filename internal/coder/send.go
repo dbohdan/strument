@@ -460,10 +460,10 @@ func (c *Coder) endTurnHistory() {
 	c.moveBackCurMessages()
 }
 
-// maxChatHistoryTokens is the settled-history budget: aider's
-// min(max(context/16, 1024), 8192), derived from the main model's window.
+// maxChatHistoryTokens is the settled-history budget: aider's context/16,
+// derived from the main model's window, with a 1024 floor for small windows.
 func maxChatHistoryTokens(context int) int {
-	return min(max(context/16, 1024), 8192)
+	return max(context/16, 1024)
 }
 
 // countSummaryMessages reports how many retained history messages are compaction summaries.

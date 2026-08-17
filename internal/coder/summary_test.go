@@ -64,8 +64,8 @@ func TestMaxChatHistoryTokens(t *testing.T) {
 		{8000, 1024},      // 500 -> clamped up
 		{16384, 1024},     // exactly the floor
 		{100000, 6250},    // within range
-		{200000, 8192},    // 12500 -> clamped down
-		{1_000_000, 8192}, // clamped down
+		{200000, 12500},   // within range
+		{1_000_000, 62500}, // within range
 	} {
 		if got := maxChatHistoryTokens(c.ctx); got != c.want {
 			t.Errorf("maxChatHistoryTokens(%d) = %d, want %d", c.ctx, got, c.want)
