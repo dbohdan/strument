@@ -530,6 +530,14 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		return ""
 	}
 	r.opts.Config = cfg
+	r.coder.MaxSteps = 25
+	if cfg.MaxSteps > 0 {
+		r.coder.MaxSteps = cfg.MaxSteps
+	}
+	r.coder.MaxErrorReflections = 3
+	if cfg.MaxErrorReflections > 0 {
+		r.coder.MaxErrorReflections = cfg.MaxErrorReflections
+	}
 
 	// Re-resolve the active alias so edits to that model take effect; if it was
 	// removed, keep the running model rather than stranding the session.

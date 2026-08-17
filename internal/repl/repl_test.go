@@ -304,16 +304,24 @@ func TestRunCommandAddsExchange(t *testing.T) {
 func TestReloadConfig(t *testing.T) {
 	// A reload that adds a model makes it selectable without a restart.
 	input := strings.NewReader("/reload\n/model newmodel\n/exit\n")
-	r, _, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
 	defer r.Close()
 	r.opts.ReloadConfig = func() (*config.Config, error) {
 		cfg := testConfig(testModel())
+		cfg.MaxSteps = 50
+		cfg.MaxErrorReflections = 7
 		cfg.Models["newmodel"] = testModel()
 		return cfg, nil
 	}
 
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if cdr.MaxSteps != 50 {
+		t.Errorf("MaxSteps = %d, want 50 after reload", cdr.MaxSteps)
+	}
+	if cdr.MaxErrorReflections != 7 {
+		t.Errorf("MaxErrorReflections = %d, want 7 after reload", cdr.MaxErrorReflections)
 	}
 	got := out.String()
 	if !strings.Contains(got, "Config reloaded.") {
