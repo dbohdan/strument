@@ -31,6 +31,7 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
+| `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -335,6 +336,23 @@ that didn't match, a bad shell command — and trying again. It is distinct from
 a work step: the model is recovering, not progressing. Keeping the budget small
 means a model that is stuck in a fix-break cycle hands back to the human rather
 than burning the work-step budget on retries nobody asked for.
+
+### `git_sign`
+
+Sign the commits Strument makes with Git's own signing, passed through as
+`git commit -S`:
+
+```python
+git_sign = True         # sign with the default key: `git commit -S`
+git_sign = "ABC123"     # sign with that key: `git commit -SABC123`
+```
+
+`False` (the default) and an empty string leave commits unsigned. A string is
+always used as the key id, so write the key alone — Strument adds the `-S`.
+Everything else about signing is Git's domain: which key `-S` uses is decided by
+`user.signingkey`. As with any `git commit`, a failure to sign makes the turn's
+commit fail; the edits stay in the working tree, where `/undo` still reaches
+them through the turn's snapshot.
 
 ## Built-in functions
 

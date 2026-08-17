@@ -137,6 +137,7 @@ func (c *chatCmd) Run() error {
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.New(weak.Provider), weak,
 			cdr.Platform.Language, cdr.RecordSideUsage)
+		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits
 		cdr.Platform.InGit = true

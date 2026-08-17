@@ -123,6 +123,57 @@ func TestHistoryFileOptionalAndOverridable(t *testing.T) {
 	}
 }
 
+// TestGitSignParsing covers the three shapes of `git_sign`: a boolean for a
+// plain -S, a key-id string for -S<keyid>, and an explicit false/empty string
+// for unsigned. false must override (not silently merge with) a user setting,
+// because the project file wins and the user's `git_sign = True` must be
+// turned off, not combined with it.
+func TestGitSignParsing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		expr string
+		want string
+	}{
+		{"absent", "", ""},
+		{"true", "git_sign = True", "-S"},
+		{"false", "git_sign = False", ""},
+		{"keyid", `git_sign = "ABC123"`, "-SABC123"},
+		{"empty string", `git_sign = ""`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := userConfig + "\n" + tc.expr + "\n"
+			cfg, err := Load(harness(t, src, "", testEnv))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.GitSign != tc.want {
+				t.Errorf("GitSign = %q, want %q", cfg.GitSign, tc.want)
+			}
+		})
+	}
+
+	// A project can turn a signed user config off.
+	user := userConfig + "\ngit_sign = True\n"
+	proj := "git_sign = False\n"
+	opts := harness(t, user, proj, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GitSign != "" {
+		t.Errorf("project git_sign = False should win, got %q", cfg.GitSign)
+	}
+
+	// A non-boolean, non-string value is rejected.
+	if _, err := Load(harness(t, userConfig+"\ngit_sign = 7\n", "", testEnv)); err == nil ||
+		!strings.Contains(err.Error(), "git_sign") {
+		t.Errorf("non-bool/string git_sign should fail: %v", err)
+	}
+}
+
 func TestAskEditFormatRejectedInConfig(t *testing.T) {
 	// "ask" is a runtime-only format; a config that sets it must fail.
 	src := `

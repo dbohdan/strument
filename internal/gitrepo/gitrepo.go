@@ -25,6 +25,12 @@ type Repo struct {
 	// context (the weak-model call); nil or an empty result falls
 	// back to aider's "(no commit message provided)".
 	Message func(diffs, context string) string
+
+	// Sign, when non-empty, is the `git commit` signing flag passed
+	// through as its own argv: "-S" to sign with the default key, or
+	// "-S<keyid>" to pick one (git_sign = true / "keyid"). Empty means
+	// unsigned.
+	Sign string
 }
 
 // Discover finds the repository containing dir, or returns an error when
@@ -160,7 +166,11 @@ func (r *Repo) Commit(fnames []string, context string, attributed bool) (hash, m
 		message = "(no commit message provided)"
 	}
 
-	commitArgs := []string{"commit", "-m", message}
+	commitArgs := []string{"commit"}
+	if r.Sign != "" {
+		commitArgs = append(commitArgs, r.Sign)
+	}
+	commitArgs = append(commitArgs, "-m", message)
 	if attributed && r.CommitTrailer != "" {
 		commitArgs = append(commitArgs, "--trailer", r.CommitTrailer)
 	}

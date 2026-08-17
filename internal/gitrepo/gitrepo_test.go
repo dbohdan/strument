@@ -181,6 +181,65 @@ func TestCommitContract(t *testing.T) {
 	}
 }
 
+// TestCommitSignFlag verifies the git_sign setting reaches `git commit` as the
+// expected argv, without depending on a working gpg setup: a fake git shim logs
+// the invocation and short-circuits the commit (so no real signing is attempted),
+// while delegating everything else to the real git binary.
+func TestCommitSignFlag(t *testing.T) {
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not installed")
+	}
+
+	for _, tc := range []struct {
+		name string
+		sign string
+		want string
+	}{
+		{"plain", "-S", "-S"},
+		{"keyid", "-SABC123", "-SABC123"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := initRepo(t)
+			g, err := gitrepo.Discover(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g.Sign = tc.sign
+			g.CommitTrailer = gitrepo.Trailer("test-model")
+
+			if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			// A shim git that logs its argv and fakes a successful commit so no
+			// real gpg signing run can hang or fail the test.
+			shimDir := t.TempDir()
+			logFile := filepath.Join(shimDir, "git.log")
+			shim := filepath.Join(shimDir, "git")
+			script := "#!/bin/sh\necho \"$@\" >> \"" + logFile + "\"\n" +
+				"if [ \"$3\" = \"commit\" ]; then exit 0; fi\n" +
+				"exec \"" + realGit + "\" \"$@\"\n"
+			if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", true); err != nil || !ok {
+				t.Fatalf("Commit: ok=%v err=%v", ok, err)
+			}
+
+			log, err := os.ReadFile(logFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(log), " "+tc.want+" ") {
+				t.Errorf("git commit argv %q not found in %q", tc.want, log)
+			}
+		})
+	}
+}
+
 func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)

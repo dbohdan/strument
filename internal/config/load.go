@@ -57,10 +57,13 @@ type fileGlobals struct {
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
 
-	hasMaxSteps             bool
-	maxStepsVal             int
-	hasMaxErrorReflections  bool
-	maxErrorReflectionsVal  int
+	hasMaxSteps            bool
+	maxStepsVal            int
+	hasMaxErrorReflections bool
+	maxErrorReflectionsVal int
+
+	hasGitSign bool
+	gitSignVal string
 }
 
 // parsePositiveInt reads a Starlark int that must be at least 1.
@@ -256,6 +259,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
 	}
+	if user.hasGitSign {
+		cfg.GitSign = user.gitSignVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -289,6 +295,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
+		}
+		if project.hasGitSign {
+			cfg.GitSign = project.gitSignVal
 		}
 	}
 
@@ -527,6 +536,27 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasMaxErrorReflections = true
 		out.maxErrorReflectionsVal = n
+	}
+
+	if gs, ok := globals["git_sign"]; ok {
+		switch v := gs.(type) {
+		case starlark.Bool:
+			out.hasGitSign = true
+			if bool(v) {
+				out.gitSignVal = "-S"
+			}
+		case starlark.String:
+			// A key-id string becomes `-S<keyid>`, e.g. git_sign = "ABC123"
+			// -> -SABC123. An empty string is an explicit "unsigned", so it
+			// overrides a project or user setting rather than being ignored.
+			out.hasGitSign = true
+			if s := string(v); s != "" {
+				out.gitSignVal = "-S" + s
+			}
+		default:
+			return nil, fmt.Errorf(
+				"%s: `git_sign` must be a boolean or a key-id string, got %s", path, gs.Type())
+		}
 	}
 
 	return out, nil
