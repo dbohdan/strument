@@ -426,7 +426,7 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`context`** — the input window in tokens. `0`/unset means unknown, and two
   things that depend on knowing it stop working: the warning before a request
   overruns the window, and the summarization that keeps the settled chat history
-  inside `max(context/16, 1024)` tokens. Without it a long session
+  inside `max(context/8, 2048)` tokens. Without it a long session
   grows its history until the provider refuses the request. Both are silent when
   it is unset — there is nothing to warn about a limit you have not stated — so
   set it on every model you use for real work.

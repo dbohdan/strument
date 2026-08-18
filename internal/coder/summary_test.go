@@ -62,12 +62,12 @@ func msgTok(role string, tokens int) llm.Message {
 
 func TestMaxChatHistoryTokens(t *testing.T) {
 	for _, c := range []struct{ ctx, want int }{
-		{0, 1024},          // unknown => floor
-		{8000, 1024},       // 500 -> clamped up
-		{16384, 1024},      // exactly the floor
-		{100000, 6250},     // within range
-		{200000, 12500},    // within range
-		{1_000_000, 62500}, // within range
+		{0, 2048},           // unknown => floor
+		{8000, 2048},        // 500 -> clamped up
+		{16384, 2048},       // exactly the floor
+		{100000, 12500},     // within range
+		{200000, 25000},     // within range
+		{1_000_000, 125000}, // within range
 	} {
 		if got := maxChatHistoryTokens(c.ctx); got != c.want {
 			t.Errorf("maxChatHistoryTokens(%d) = %d, want %d", c.ctx, got, c.want)
@@ -139,9 +139,10 @@ func TestChatSummarizeErrorLeavesHistoryIntact(t *testing.T) {
 }
 
 func TestMaybeSummarizeGating(t *testing.T) {
-	// ~1900 tokens of settled history, so it clears the 1024 floor threshold.
+	// ~2500 tokens of settled history, so it clears the 2048 floor threshold.
 	bigHistory := func() []llm.Message {
 		return []llm.Message{
+			msgTok("user", 300), msgTok("assistant", 300),
 			msgTok("user", 300), msgTok("assistant", 300),
 			msgTok("user", 300), msgTok("assistant", 300),
 			msgTok("user", 300), msgTok("assistant", 300),
@@ -155,7 +156,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
-		if len(c.doneMessages) != 8 {
+		if len(c.doneMessages) != 10 {
 			t.Errorf("summarized despite an unknown window: %d", len(c.doneMessages))
 		}
 	})
@@ -165,30 +166,30 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		c.Model.Context = 16384
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
-		if len(c.doneMessages) != 8 {
+		if len(c.doneMessages) != 10 {
 			t.Errorf("summarized without a summarizer wired: %d", len(c.doneMessages))
 		}
 	})
 
 	t.Run("under budget is a no-op", func(t *testing.T) {
 		c := testCoder(t)
-		c.Model.Context = 1_000_000 // threshold 8192; ~1900 tokens fits
+		c.Model.Context = 1_000_000 // threshold 125_000; ~2500 tokens fits
 		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
-		if len(c.doneMessages) != 8 {
+		if len(c.doneMessages) != 10 {
 			t.Errorf("summarized while under budget: %d", len(c.doneMessages))
 		}
 	})
 
 	t.Run("over budget compacts", func(t *testing.T) {
 		c := testCoder(t)
-		c.Model.Context = 16384 // threshold 1024; ~1900 tokens overflows
+		c.Model.Context = 16384 // threshold 2048; ~2500 tokens overflows
 		stub := &summaryStub{}
 		c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
-		if len(c.doneMessages) >= 8 {
+		if len(c.doneMessages) >= 10 {
 			t.Errorf("did not compact over-budget history: %d", len(c.doneMessages))
 		}
 		if stub.calls == 0 {
@@ -207,6 +208,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 50), msgTok("assistant", 50),
 	}
 
@@ -221,7 +223,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	if report == "" {
 		t.Fatalf("compaction report not printed: %v", out.lines)
 	}
-	if !strings.Contains(report, "1900 tokens/8 messages ->") {
+	if !strings.Contains(report, "2500 tokens/10 messages ->") {
 		t.Errorf("report does not include before counts: %q", report)
 	}
 	if !strings.Contains(report, "1 summary retained") {
@@ -237,6 +239,7 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 	stub := &summaryEmptyStub{}
 	c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens)
 	c.doneMessages = []llm.Message{
+		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
