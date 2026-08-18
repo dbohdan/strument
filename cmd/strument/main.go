@@ -270,7 +270,7 @@ func (c *chatCmd) Run() error {
 				// Announced, never silent. The notes go into every request this
 				// session, so a user who never types /notes should still know
 				// they are there and how to look.
-				note = strings.TrimSpace(note + " Notes from your last session are in context; /notes to read them.")
+				note = strings.TrimSpace(note + "\n/notes from your last session are in context.")
 			}
 			// Record the offer immediately rather than waiting for a command to
 			// trigger a save. A session where the user pins nothing and drops
