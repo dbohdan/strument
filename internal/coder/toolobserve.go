@@ -291,7 +291,14 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
-	i.Out.Toolf("Listed %s (%s)", quoteToolArg(displayDir(a.Path)), plural(len(entries), "entry", "entries"))
+	// The quotes quoteToolArg adds say "a literal argument with whitespace in
+	// it" — true of a path, false of the phrase that stands in for the empty
+	// one, which quoted reads as a directory named "the project root".
+	dir := displayDir(a.Path)
+	if strings.TrimSpace(a.Path) != "" {
+		dir = quoteToolArg(dir)
+	}
+	i.Out.Toolf("Listed %s (%s)", dir, plural(len(entries), "entry", "entries"))
 
 	if len(entries) == 0 {
 		return displayDir(a.Path) + " is empty."
