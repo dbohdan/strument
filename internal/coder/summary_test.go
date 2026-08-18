@@ -35,8 +35,9 @@ func (o *summaryOutput) Errorf(format string, args ...any)   { o.Printf(format, 
 func (o *summaryOutput) Toolf(format string, args ...any)    { o.Printf(format, args...) }
 func (*summaryOutput) StreamText(string)                     {}
 func (*summaryOutput) StreamReasoning(string)                {}
-func (*summaryOutput) StreamToolCall(int, string, string) {}
-func (*summaryOutput) FlushStream()                      {}
+func (*summaryOutput) StreamToolCall(int, string, string)    {}
+func (*summaryOutput) FlushStream()                          {}
+
 type summaryEmptyStub struct{ calls int }
 
 func (s *summaryEmptyStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
@@ -45,6 +46,7 @@ func (s *summaryEmptyStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.
 		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
 	}
 }
+
 type summaryErrStub struct{}
 
 func (summaryErrStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
@@ -60,11 +62,11 @@ func msgTok(role string, tokens int) llm.Message {
 
 func TestMaxChatHistoryTokens(t *testing.T) {
 	for _, c := range []struct{ ctx, want int }{
-		{0, 1024},         // unknown => floor
-		{8000, 1024},      // 500 -> clamped up
-		{16384, 1024},     // exactly the floor
-		{100000, 6250},    // within range
-		{200000, 12500},   // within range
+		{0, 1024},          // unknown => floor
+		{8000, 1024},       // 500 -> clamped up
+		{16384, 1024},      // exactly the floor
+		{100000, 6250},     // within range
+		{200000, 12500},    // within range
 		{1_000_000, 62500}, // within range
 	} {
 		if got := maxChatHistoryTokens(c.ctx); got != c.want {
@@ -194,7 +196,6 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		}
 	})
 }
-
 
 func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	c := testCoder(t)

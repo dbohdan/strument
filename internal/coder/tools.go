@@ -24,7 +24,7 @@ const (
 	toolGlob   = "glob"
 	toolLS     = "ls"
 	toolSymbol = "symbol"
-	toolCheck = "check"
+	toolCheck  = "check"
 )
 
 // strProp is a JSON-Schema string property with a description.

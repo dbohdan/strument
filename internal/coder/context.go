@@ -82,10 +82,13 @@ func renderTail(msgs []llm.Message) string {
 		role := strings.ToUpper(m.Role)
 		body := m.Text()
 		if body == "" && len(m.ToolCalls) > 0 {
+			var calls strings.Builder
 			for _, tc := range m.ToolCalls {
-				body += "calls " + tc.Name + "\n"
+				calls.WriteString("calls ")
+				calls.WriteString(tc.Name)
+				calls.WriteByte('\n')
 			}
-			body = strings.TrimRight(body, "\n")
+			body = strings.TrimRight(calls.String(), "\n")
 		}
 		if body == "" {
 			continue

@@ -112,15 +112,15 @@ type Coder struct {
 
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
-	autoChecks   int // automatic check rounds this turn (maxAutoCheck)
+	autoChecks     int // automatic check rounds this turn (maxAutoCheck)
 	// editedSinceCheck gates the automatic checks: they run only when a file
 	// has changed since the last time they ran. Without it, a model that
 	// answers a failure in prose — "that break was already there and isn't
 	// mine" — gets asked the identical question again, because re-running an
 	// unchanged tree can only produce the identical output.
 	editedSinceCheck bool
-	lastSendOutcome   SendOutcome // observability for tests/REPL status
-	summaryBackoff    bool        // skip one compaction attempt after a failure
+	lastSendOutcome  SendOutcome // observability for tests/REPL status
+	summaryBackoff   bool        // skip one compaction attempt after a failure
 
 	// Send-scoped buffers.
 	partialResponseContent  string

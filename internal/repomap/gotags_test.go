@@ -190,7 +190,10 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 		t.Skip("the tree-sitter half of this comparison costs about three seconds")
 	}
 
-	_, filename, _, _ := runtime.Caller(0)
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
 
 	root, err := filepath.Abs(filepath.Join(filename, "..", ".."))
 	if err != nil {

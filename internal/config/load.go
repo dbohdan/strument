@@ -49,10 +49,10 @@ type fileGlobals struct {
 	proxyVal       string
 	hasScraper     bool
 	scraperVal     []string
-	hasCheck      bool
-	checkVal      []Check
-	hasCheckAuto  bool
-	checkAutoVal  []string
+	hasCheck       bool
+	checkVal       []Check
+	hasCheckAuto   bool
+	checkAutoVal   []string
 
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
