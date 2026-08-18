@@ -127,6 +127,14 @@ linters = [
     "prealloc",
 ]
 
+[[linters.exclusions.rules]]
+# The round-trip test dereferences a map-lookup pointer behind an explicit
+# nil check; SA5011 does not recognize the guard.
+path = 'internal/modelconfig/roundtrip_test\.go'
+linters = [
+    "staticcheck",
+]
+
 [linters.settings.exhaustive]
 default-signifies-exhaustive = true
 
