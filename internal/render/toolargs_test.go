@@ -338,7 +338,7 @@ func TestToolDiffSetSkipsBash(t *testing.T) {
 // no diff beneath it. Their outcome is reported when they run, not while their
 // arguments stream.
 func TestToolDiffSetSkipsObservationTools(t *testing.T) {
-	for _, tool := range []string{"read", "ls", "grep", "glob", "verify"} {
+	for _, tool := range []string{"read", "ls", "grep", "glob", "check"} {
 		var buf bytes.Buffer
 		s := NewToolDiffSet(&buf, false, DefaultTheme())
 		s.Write(0, tool, `{"path":"internal/parse/parse.go","pattern":"x"}`)

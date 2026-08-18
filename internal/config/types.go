@@ -154,14 +154,14 @@ type Config struct {
 	// URL) run to fetch pages instead of the built-in HTTP scraper — the opt-in
 	// path for JavaScript-rendered pages. The global proxy does not apply to it.
 	Scraper []string
-	// Verify is the project's named verification commands, in declared order.
-	// The `verify` tool runs them by name; a run with no name runs all of them
+	// Check is the project's named verification commands, in declared order.
+	// The `check` tool runs them by name; a run with no name runs all of them
 	// in order and stops at the first failure, so fast checks belong first.
-	Verify []VerifyCheck
-	// VerifyAuto names the checks the harness runs on its own at the end of a
+	Check []Check
+	// CheckAuto names the checks the harness runs on its own at the end of a
 	// turn that edited files, in the order given. Empty means the model is the
 	// only thing that ever runs a check.
-	VerifyAuto []string
+	CheckAuto []string
 	// ReasoningDisplay is how much of the model's thinking to show. The zero
 	// value shows all of it.
 	ReasoningDisplay ReasoningDisplay
@@ -207,19 +207,19 @@ type ReasoningDisplay struct {
 	Lines int // meaningful only for ReasoningCapped
 }
 
-// VerifyCheck is one named verification command: an argv, never a shell string.
+// Check is one named verification command: an argv, never a shell string.
 //
-// The name is what the model passes to the verify tool, which is the point of
+// The name is what the model passes to the check tool, which is the point of
 // naming them. The model never supplies a command, so there is nothing to
-// classify and nothing to smuggle through — which is what lets verification run
+// classify and nothing to smuggle through — which is what lets checks run
 // without the confirmation `bash` requires.
-type VerifyCheck struct {
+type Check struct {
 	Name string
 	Argv []string
 }
 
-// indexVerify returns the position of the named check, or -1.
-func indexVerify(checks []VerifyCheck, name string) int {
+// indexCheck returns the position of the named check, or -1.
+func indexCheck(checks []Check, name string) int {
 	for i, c := range checks {
 		if c.Name == name {
 			return i
@@ -228,10 +228,10 @@ func indexVerify(checks []VerifyCheck, name string) int {
 	return -1
 }
 
-// VerifyNames lists the configured check names in declared order.
-func (c *Config) VerifyNames() []string {
-	out := make([]string, 0, len(c.Verify))
-	for _, v := range c.Verify {
+// CheckNames lists the configured check names in declared order.
+func (c *Config) CheckNames() []string {
+	out := make([]string, 0, len(c.Check))
+	for _, v := range c.Check {
 		out = append(out, v.Name)
 	}
 	return out

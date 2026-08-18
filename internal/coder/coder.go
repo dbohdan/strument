@@ -22,11 +22,11 @@ import (
 // mistake and should stay rare; a work step is the model reading a tool result
 // and carrying on, which is ordinary progress.
 const (
-	// maxAutoVerify bounds the rounds the harness itself starts by running the
+	// maxAutoCheck bounds the rounds the harness itself starts by running the
 	// project's checks. It is small and separate on purpose: a model caught in a
 	// fix-break cycle should hand back to the human rather than spend the work
 	// budget on rounds nobody asked for.
-	maxAutoVerify = 3
+	maxAutoCheck = 3
 )
 
 // Coder is the chat loop state.
@@ -69,12 +69,12 @@ type Coder struct {
 	// Files is the workspace behind read/ls/glob/grep. It never consults git,
 	// so the tools behave the same in a plain directory.
 	Files *workspace.Workspace
-	// Verify is the project's named verification commands. Empty means no
-	// verify tool is offered.
-	Verify []config.VerifyCheck
-	// VerifyAuto names the checks the harness runs itself at the end of a turn
+	// Check is the project's named verification commands. Empty means no
+	// check tool is offered.
+	Check []config.Check
+	// CheckAuto names the checks the harness runs itself at the end of a turn
 	// that edited files. Empty means the model is the only thing that runs one.
-	VerifyAuto []string
+	CheckAuto []string
 
 	Prompts prompts.Set
 
@@ -112,13 +112,13 @@ type Coder struct {
 
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
-	autoVerifies   int // automatic check rounds this turn (maxAutoVerify)
-	// editedSinceVerify gates the automatic checks: they run only when a file
+	autoChecks   int // automatic check rounds this turn (maxAutoCheck)
+	// editedSinceCheck gates the automatic checks: they run only when a file
 	// has changed since the last time they ran. Without it, a model that
 	// answers a failure in prose — "that break was already there and isn't
 	// mine" — gets asked the identical question again, because re-running an
 	// unchanged tree can only produce the identical output.
-	editedSinceVerify bool
+	editedSinceCheck bool
 	lastSendOutcome   SendOutcome // observability for tests/REPL status
 	summaryBackoff    bool        // skip one compaction attempt after a failure
 
@@ -329,8 +329,8 @@ func (c *Coder) initBeforeMessage() {
 	c.turnAutoApprove = map[string]bool{}
 	c.numReflections = 0
 	c.numSteps = 0
-	c.autoVerifies = 0
-	c.editedSinceVerify = false
+	c.autoChecks = 0
+	c.editedSinceCheck = false
 	c.turnSnap = nil
 	c.messageCost = 0
 	c.costKnown = false
@@ -427,7 +427,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 		case OutcomeSuccess:
 			// The model has nothing more to call, so it believes it is done.
 			// That is the moment to check, if the project asked us to.
-			report, ok := c.runAutoVerify(ctx)
+			report, ok := c.runAutoCheck(ctx)
 			if !ok {
 				return
 			}
@@ -439,12 +439,12 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	}
 }
 
-// runAutoVerify runs the project's verify_auto checks at the end of a turn that
+// runAutoCheck runs the project's check_auto checks at the end of a turn that
 // edited files, and reports whether the turn should continue.
 //
 // It fires here rather than after each edit because a mid-turn state is
 // legitimately broken: edit one file, then its caller, and in between nothing
-// compiles. Verifying there would spend budget on failures the model was already
+// compiles. Checking there would spend budget on failures the model was already
 // about to fix. At turn end the model has declared itself finished, which is
 // exactly when an independent check is worth something — and the reason to make
 // it independent is that the model's judgement about *which* check mattered is
@@ -455,22 +455,22 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 // exception to the rule that reflection is a tool error. There is no call to
 // answer here: the model did not ask for this, the harness is speaking
 // unprompted, and a user message is the honest shape for that.
-func (c *Coder) runAutoVerify(ctx context.Context) (message string, keepGoing bool) {
+func (c *Coder) runAutoCheck(ctx context.Context) (message string, keepGoing bool) {
 	// Nothing changed since the last run — either the turn edited nothing at
 	// all, or the model replied to a failure without touching a file, which is
 	// a considered answer ("that isn't mine") and not something to re-ask.
-	if len(c.VerifyAuto) == 0 || !c.editedSinceVerify {
+	if len(c.CheckAuto) == 0 || !c.editedSinceCheck {
 		return "", false
 	}
-	c.editedSinceVerify = false
-	if c.autoVerifies >= maxAutoVerify {
-		c.Out.Warningf("The automatic checks have run %d times without passing; stopping here.", maxAutoVerify)
+	c.editedSinceCheck = false
+	if c.autoChecks >= maxAutoCheck {
+		c.Out.Warningf("The automatic checks have run %d times without passing; stopping here.", maxAutoCheck)
 		return "", false
 	}
-	c.autoVerifies++
+	c.autoChecks++
 
 	c.Out.Toolf("Running the automatic checks.")
-	transcript, passed := c.runChecks(ctx, c.VerifyAuto)
+	transcript, passed := c.runChecks(ctx, c.CheckAuto)
 	if passed {
 		return "", false
 	}
@@ -508,8 +508,8 @@ func (c *Coder) confirmMoreSteps() bool {
 		return false
 	}
 	c.numSteps = 0
-	c.autoVerifies = 0
-	c.editedSinceVerify = false
+	c.autoChecks = 0
+	c.editedSinceCheck = false
 	return true
 }
 

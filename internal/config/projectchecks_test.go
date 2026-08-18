@@ -32,7 +32,7 @@ func projectWith(t *testing.T, files map[string]string) string {
 	return root
 }
 
-func checkNamesOf(checks []VerifyCheck) []string {
+func checkNamesOf(checks []Check) []string {
 	out := make([]string, 0, len(checks))
 	for _, c := range checks {
 		out = append(out, c.Name)
@@ -234,7 +234,7 @@ func TestProjectChecksWithoutARootDetectsNothing(t *testing.T) {
 }
 
 // TestProjectChecksBuiltinReturnsADict exercises it as configs use it —
-// `verify = project_checks()` — through the real loader, including the dict()
+// `check = project_checks()` — through the real loader, including the dict()
 // idiom the documentation gives for extending it.
 func TestProjectChecksBuiltinReturnsADict(t *testing.T) {
 	root := projectWith(t, map[string]string{"go.mod": "module x\n"})
@@ -244,8 +244,8 @@ func TestProjectChecksBuiltinReturnsADict(t *testing.T) {
 p = provider(adapter = "openrouter", api_key = "k")
 models = {"m": model(p, "a/b")}
 default = "m"
-verify = dict(project_checks(), lint = ["golangci-lint", "run"])
-verify_auto = ["go-vet"]
+check = dict(project_checks(), lint = ["golangci-lint", "run"])
+check_auto = ["go-vet"]
 `
 	if err := os.WriteFile(userPath, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
@@ -262,16 +262,16 @@ verify_auto = ["go-vet"]
 		t.Fatal(err)
 	}
 
-	got := checkNamesOf(cfg.Verify)
+	got := checkNamesOf(cfg.Check)
 	for _, want := range []string{"go-vet", "go-test", "lint"} {
 		if !slices.Contains(got, want) {
-			t.Errorf("verify = %v, want it to contain %q", got, want)
+			t.Errorf("check = %v, want it to contain %q", got, want)
 		}
 	}
-	// verify_auto validates its names against the merged verify dict, so a
+	// check_auto validates its names against the merged check dict, so a
 	// detected name having reached it is the end-to-end proof.
-	if !slices.Equal(cfg.VerifyAuto, []string{"go-vet"}) {
-		t.Errorf("verify_auto = %v", cfg.VerifyAuto)
+	if !slices.Equal(cfg.CheckAuto, []string{"go-vet"}) {
+		t.Errorf("check_auto = %v", cfg.CheckAuto)
 	}
 }
 

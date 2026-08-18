@@ -8,7 +8,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// matchConfiguredCheck reports which of the project's verify checks the command
+// matchConfiguredCheck reports which of the project's checks the command
 // *is*, verbatim, and false when it is none of them.
 //
 // This is an allowlist, and the choice matters more than the mechanism. A
@@ -29,7 +29,7 @@ import (
 // typed in a form this accepts, so it always prompts. That is the direction to
 // be wrong in, and it keeps this function free of unquoting — `$'…'` escapes and
 // backslashes inside `"…"` are exactly where a matcher like this grows a hole.
-func matchConfiguredCheck(command string, checks []config.VerifyCheck) (string, bool) {
+func matchConfiguredCheck(command string, checks []config.Check) (string, bool) {
 	words, ok := literalWords(command)
 	if !ok {
 		return "", false

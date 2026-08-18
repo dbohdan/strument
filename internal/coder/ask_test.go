@@ -242,7 +242,7 @@ func TestAskRequestCarriesReadOnlyTools(t *testing.T) {
 	}
 	// The withheld half is what makes it ask mode, and it is withheld by the
 	// tool set rather than by the prompt.
-	for _, gone := range []string{"edit", "write", "bash", "verify"} {
+	for _, gone := range []string{"edit", "write", "bash", "check"} {
 		if got[gone] {
 			t.Errorf("ask mode must not offer %s", gone)
 		}

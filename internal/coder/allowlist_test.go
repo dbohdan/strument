@@ -9,7 +9,7 @@ import (
 )
 
 // fixtureChecks is the configured set every case here is matched against.
-var fixtureChecks = []config.VerifyCheck{
+var fixtureChecks = []config.Check{
 	{Name: "lint", Argv: []string{"golangci-lint", "run"}},
 	{Name: "test", Argv: []string{"go", "test", "./..."}},
 	{Name: "quoted", Argv: []string{"pytest", "-k", "not slow"}},
@@ -83,7 +83,7 @@ func TestMatchConfiguredCheck(t *testing.T) {
 }
 
 // TestNoChecksConfiguredMatchesNothing: the allowlist is opt-in through the
-// verify dict, so a project without one keeps every command behind the prompt.
+// check dict, so a project without one keeps every command behind the prompt.
 func TestNoChecksConfiguredMatchesNothing(t *testing.T) {
 	if _, ok := matchConfiguredCheck("go test ./...", nil); ok {
 		t.Error("matched with no checks configured")
@@ -105,15 +105,15 @@ func (r refusingRunner) Run(_ context.Context, block, _ string) (int, string, er
 // for, at the seam where it is used: a configured check does not ask and does
 // not go through a shell, and anything else does both.
 func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
-	// A real subprocess, as the other verify tests use, so "it ran the
+	// A real subprocess, as the other check tests use, so "it ran the
 	// configured argv" is observed rather than asserted against a fake.
-	checks := []config.VerifyCheck{{Name: "test", Argv: []string{"echo", "ran-the-configured-argv"}}}
+	checks := []config.Check{{Name: "test", Argv: []string{"echo", "ran-the-configured-argv"}}}
 
 	t.Run("configured", func(t *testing.T) {
 		rc, out := &recordingConfirmer{}, &captureOut{}
 		c := &Coder{
 			Out: out, Confirm: rc, SuggestShellCommands: true,
-			Verify: checks, Runner: refusingRunner{t},
+			Check: checks, Runner: refusingRunner{t},
 		}
 		result := c.runShellTool(context.Background(),
 			toolCommand{callID: "call_1", command: "echo ran-the-configured-argv", purpose: "check the change"})
@@ -124,12 +124,12 @@ func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
 		if !strings.Contains(result, "ran-the-configured-argv") {
 			t.Errorf("the check did not run:\n%s", result)
 		}
-		if !strings.Contains(result, `verify("test")`) {
+		if !strings.Contains(result, `check("test")`) {
 			t.Errorf("the result should point at the direct call:\n%s", result)
 		}
 
-		// What the *user* sees. This path reads exactly like verify's, because
-		// it is verify's code printing it: the matched check named beside its
+		// What the *user* sees. This path reads exactly like check's, because
+		// it is check's code printing it: the matched check named beside its
 		// argv, then how it went. The purpose is not among it — a purpose
 		// informs a decision, and nothing was decided here.
 		shown := strings.Join(out.lines, "\n")
@@ -149,7 +149,7 @@ func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
 		rc := &recordingConfirmer{answer: false}
 		c := &Coder{
 			Out: &captureOut{}, Confirm: rc, SuggestShellCommands: true,
-			Verify: checks, Runner: echoRunner{exit: 0, output: "ok\n"},
+			Check: checks, Runner: echoRunner{exit: 0, output: "ok\n"},
 		}
 		c.runShellTool(context.Background(),
 			toolCommand{callID: "call_1", command: "echo ran-the-configured-argv && rm -rf /", purpose: "check"})

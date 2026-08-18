@@ -166,7 +166,7 @@ var Tool = Set{
 }
 
 // Ask is the discussion mode. What it withholds is enforced by the tool set,
-// not by this prompt: toolDefs drops edit, write, bash, and verify, so there is
+// not by this prompt: toolDefs drops edit, write, bash, and check, so there is
 // nothing to parse back out and nothing to discard.
 //
 // What it *keeps* has to be said here, though, and for a while was not. Ask

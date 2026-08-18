@@ -68,7 +68,7 @@ func TestToolRequestCarriesTools(t *testing.T) {
 		t.Errorf("tool_choice = %q, want auto", choice)
 	}
 	// The read-only tools always come first; bash is gated off here, and no
-	// verify is configured.
+	// check is configured.
 	want := []string{"read", "grep", "glob", "ls", "edit", "write"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v (bash gated off)", names, want)
@@ -76,7 +76,7 @@ func TestToolRequestCarriesTools(t *testing.T) {
 }
 
 // TestToolSetGating covers the two conditional parts of the tool set: bash
-// appears only when shell commands are enabled, verify only when the project
+// appears only when shell commands are enabled, check only when the project
 // configured checks, and ask mode offers nothing that changes anything.
 func TestToolSetGating(t *testing.T) {
 	for _, tc := range []struct {
@@ -85,18 +85,18 @@ func TestToolSetGating(t *testing.T) {
 		want   []string
 	}{
 		{
-			"shell enabled, no verify configured",
+			"shell enabled, no check configured",
 			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
 			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash"},
 		},
 		{
-			"verify configured",
+			"check configured",
 			func(c *Coder) {
 				c.editFormat = "tool"
 				c.SuggestShellCommands = true
-				c.Verify = []config.VerifyCheck{{Name: "test", Argv: []string{"go", "test", "./..."}}}
+				c.Check = []config.Check{{Name: "test", Argv: []string{"go", "test", "./..."}}}
 			},
-			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash", "verify"},
+			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash", "check"},
 		},
 		{
 			"ask mode is read-only",
@@ -118,11 +118,11 @@ func TestToolSetGating(t *testing.T) {
 	}
 }
 
-// TestVerifyToolListsChecksInDescription confirms the schema tells the model
+// TestCheckToolListsChecksInDescription confirms the schema tells the model
 // which names exist and what each one runs — the tool takes a name and never a
 // command, so the description is the only place that information can live.
-func TestVerifyToolListsChecksInDescription(t *testing.T) {
-	def := verifyTool([]config.VerifyCheck{
+func TestCheckToolListsChecksInDescription(t *testing.T) {
+	def := checkTool([]config.Check{
 		{Name: "lint", Argv: []string{"golangci-lint", "run"}},
 		{Name: "test", Argv: []string{"go", "test", "./..."}},
 	})

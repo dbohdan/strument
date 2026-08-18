@@ -22,7 +22,7 @@ import (
 // rather than from memory.
 //
 // The tools it offers are the ones that only look. edit, write, bash, and
-// verify are deliberately absent: they change files or run processes, they need
+// check are deliberately absent: they change files or run processes, they need
 // the confirmation machinery a chat session provides, and putting them on a
 // command line is a different feature with a different risk profile.
 type toolCmd struct {

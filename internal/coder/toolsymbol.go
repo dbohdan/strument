@@ -36,7 +36,7 @@ func symbolTool() llm.ToolDef {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"name": strProp("The exact identifier, e.g. \"runAutoVerify\" or \"Workspace\"."),
+				"name": strProp("The exact identifier, e.g. \"runAutoCheck\" or \"Workspace\"."),
 				"kind": map[string]any{
 					"type": "string",
 					"enum": []any{"definition", "reference"},

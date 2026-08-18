@@ -109,10 +109,10 @@ func (c *chatCmd) Run() error {
 	if cfg.MaxErrorReflections > 0 {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
-	// The project's named checks, which the verify tool runs without asking:
+	// The project's named checks, which the check tool runs without asking:
 	// the model supplies only a name, so nothing it says can change what runs.
-	cdr.Verify = cfg.Verify
-	cdr.VerifyAuto = cfg.VerifyAuto
+	cdr.Check = cfg.Check
+	cdr.CheckAuto = cfg.CheckAuto
 	if std, ok := cdr.Out.(*coder.StdOutput); ok {
 		// Script mode's output; the REPL swaps in its own and reads the setting
 		// from the config it already carries.

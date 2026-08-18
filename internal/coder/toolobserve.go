@@ -31,7 +31,7 @@ func quoteToolArg(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
 }
 
-// This file holds the observation tools — read, grep, glob, ls, and verify.
+// This file holds the observation tools — read, grep, glob, ls, and check.
 // None of them changes anything, so none of them asks for confirmation, and
 // each answers immediately rather than being batched like the edits.
 //
@@ -322,25 +322,25 @@ func displayDir(p string) string {
 	return p
 }
 
-// runVerify runs the configured checks and returns their output.
+// runCheckTool runs the configured checks and returns their output.
 //
 // It never takes a command, only a name, so nothing the model says can change
 // what runs. Each check is executed as argv without a shell, the same rule the
 // git port follows.
-func (c *Coder) runVerify(ctx context.Context, tc llm.ToolCall) string {
+func (c *Coder) runCheckTool(ctx context.Context, tc llm.ToolCall) string {
 	var a struct {
 		Name string `json:"name"`
 	}
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg
 	}
-	if len(c.Verify) == 0 {
+	if len(c.Check) == 0 {
 		return "No checks are configured for this project."
 	}
 
-	names := checkNames(c.Verify)
+	names := checkNames(c.Check)
 	if name := strings.TrimSpace(a.Name); name != "" {
-		if indexCheck(c.Verify, name) < 0 {
+		if indexCheck(c.Check, name) < 0 {
 			return fmt.Sprintf("There is no check named %q. Configured checks: %s.",
 				name, strings.Join(names, ", "))
 		}
@@ -355,28 +355,28 @@ func (c *Coder) runVerify(ctx context.Context, tc llm.ToolCall) string {
 // runChecks runs the named checks in the order given, stopping at the first
 // failure. It returns the transcript and whether everything passed.
 //
-// Order is the caller's, wherever the list came from: verify() uses the order
-// the checks were declared in, verify_auto uses the order that list was written
+// Order is the caller's, wherever the list came from: check() uses the order
+// the checks were declared in, check_auto uses the order that list was written
 // in. One rule, stated once — checks run in the order they are listed.
 func (c *Coder) runChecks(ctx context.Context, names []string) (transcript string, passed bool) {
 	var b strings.Builder
 	for _, name := range names {
-		i := indexCheck(c.Verify, name)
+		i := indexCheck(c.Check, name)
 		if i < 0 {
 			// Unreachable through either caller: the tool validates the name and
-			// config validates verify_auto at load. Report rather than skip, so a
+			// config validates check_auto at load. Report rather than skip, so a
 			// future third caller cannot silently check nothing.
 			fmt.Fprintf(&b, "%s: no such check is configured.\n", name)
 			return truncateResult(b.String()), false
 		}
-		ch := c.Verify[i]
+		ch := c.Check[i]
 
 		// The command prints before it runs, because a suite can take a minute
 		// and silence in the middle of a turn reads as a hang.
 		c.Out.Toolf("%s $ %s", ch.Name, strings.Join(ch.Argv, " "))
 		exit, output := c.runCheck(ctx, ch)
 		if exit == 0 {
-			// A passing check's output is noise to the user — with verify_auto on
+			// A passing check's output is noise to the user — with check_auto on
 			// it lands on every editing turn and buries the diffs they are here to
 			// read. The model still gets the whole transcript below: to it, what a
 			// passing run printed is information.
@@ -409,7 +409,7 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 }
 
 // runCheck executes one check's argv, merging stdout and stderr.
-func (c *Coder) runCheck(ctx context.Context, ch config.VerifyCheck) (int, string) {
+func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// The argv is the user's own configuration, reached by name; the model
 	// never supplies any part of it, which is what makes running it without a
 	// confirmation prompt reasonable.
@@ -427,7 +427,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.VerifyCheck) (int, strin
 	return exit, string(out)
 }
 
-func indexCheck(checks []config.VerifyCheck, name string) int {
+func indexCheck(checks []config.Check, name string) int {
 	for i, ch := range checks {
 		if ch.Name == name {
 			return i
@@ -436,7 +436,7 @@ func indexCheck(checks []config.VerifyCheck, name string) int {
 	return -1
 }
 
-func checkNames(checks []config.VerifyCheck) []string {
+func checkNames(checks []config.Check) []string {
 	out := make([]string, 0, len(checks))
 	for _, ch := range checks {
 		out = append(out, ch.Name)

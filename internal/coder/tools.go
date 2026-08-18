@@ -24,7 +24,7 @@ const (
 	toolGlob   = "glob"
 	toolLS     = "ls"
 	toolSymbol = "symbol"
-	toolVerify = "verify"
+	toolCheck = "check"
 )
 
 // strProp is a JSON-Schema string property with a description.
@@ -57,8 +57,8 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if c.SuggestShellCommands {
 		defs = append(defs, bashTool())
 	}
-	if len(c.Verify) > 0 {
-		defs = append(defs, verifyTool(c.Verify))
+	if len(c.Check) > 0 {
+		defs = append(defs, checkTool(c.Check))
 	}
 	return defs
 }
@@ -203,11 +203,11 @@ func bashTool() llm.ToolDef {
 	}
 }
 
-// verifyTool runs the project's configured checks. It takes a name, never a
+// checkTool runs the project's configured checks. It takes a name, never a
 // command: everything it can run was written by the user in their config, so
 // there is nothing for the model to alter or append. That is what lets it run
 // without the confirmation bash requires.
-func verifyTool(checks []config.VerifyCheck) llm.ToolDef {
+func checkTool(checks []config.Check) llm.ToolDef {
 	names := make([]any, 0, len(checks))
 	var desc strings.Builder
 	desc.WriteString("Run the project's configured checks and return their output. " +
@@ -219,7 +219,7 @@ func verifyTool(checks []config.VerifyCheck) llm.ToolDef {
 	}
 
 	return llm.ToolDef{
-		Name:        toolVerify,
+		Name:        toolCheck,
 		Description: desc.String(),
 		Parameters: map[string]any{
 			"type": "object",
@@ -353,8 +353,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runLS(tc)
 		case toolSymbol:
 			results[tc.ID] = c.runSymbol(tc)
-		case toolVerify:
-			results[tc.ID] = c.runVerify(ctx, tc)
+		case toolCheck:
+			results[tc.ID] = c.runCheckTool(ctx, tc)
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
 		}
@@ -368,7 +368,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		if !c.DryRun {
 			// Nothing landed under --dry-run, so there is nothing for the
 			// automatic checks to check.
-			c.editedSinceVerify = true
+			c.editedSinceCheck = true
 		}
 	}
 
@@ -432,16 +432,16 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	// only version where what ran is certainly what was compared. Sending the
 	// model's string back through a shell would reopen word splitting and
 	// globbing between the check and the execution.
-	if name, ok := matchConfiguredCheck(command, c.Verify); ok {
+	if name, ok := matchConfiguredCheck(command, c.Check); ok {
 		// The purpose is deliberately not printed. It exists to inform a
 		// decision, and here there is no decision; what the user needs is which
 		// check matched and how it went, which runChecks' own two lines say.
 		transcript, _ := c.runChecks(ctx, []string{name})
 		// %q rather than quoteToolArg, which drops the quotes on a word that
 		// does not need them: this sentence is showing the model a call it can
-		// copy, and verify(test) is not one.
+		// copy, and check(test) is not one.
 		return fmt.Sprintf("That command is the configured check %q, so it ran without asking the "+
-			"user. Call verify(%q) to run it directly.\n\n%s", name, name, transcript)
+			"user. Call check(%q) to run it directly.\n\n%s", name, name, transcript)
 	}
 
 	// No Group, so no "a=all turn" here. A blanket turn-scoped yes is the last

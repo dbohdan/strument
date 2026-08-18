@@ -49,10 +49,10 @@ type fileGlobals struct {
 	proxyVal       string
 	hasScraper     bool
 	scraperVal     []string
-	hasVerify      bool
-	verifyVal      []VerifyCheck
-	hasVerifyAuto  bool
-	verifyAutoVal  []string
+	hasCheck      bool
+	checkVal      []Check
+	hasCheckAuto  bool
+	checkAutoVal  []string
 
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
@@ -244,11 +244,11 @@ func Load(opts Options) (*Config, error) {
 	if user.hasScraper {
 		cfg.Scraper = user.scraperVal
 	}
-	if user.hasVerify {
-		cfg.Verify = user.verifyVal
+	if user.hasCheck {
+		cfg.Check = user.checkVal
 	}
-	if user.hasVerifyAuto {
-		cfg.VerifyAuto = user.verifyAutoVal
+	if user.hasCheckAuto {
+		cfg.CheckAuto = user.checkAutoVal
 	}
 	if user.hasReasoningDisplay {
 		cfg.ReasoningDisplay = user.reasoningDisplayVal
@@ -276,16 +276,16 @@ func Load(opts Options) (*Config, error) {
 		if project.hasScraper {
 			cfg.Scraper = project.scraperVal
 		}
-		if project.hasVerify {
+		if project.hasCheck {
 			// Per-key rather than wholesale, so a project can override one check
 			// or add its own without restating the user's whole set.
-			cfg.Verify = mergeVerify(cfg.Verify, project.verifyVal)
+			cfg.Check = mergeChecks(cfg.Check, project.checkVal)
 		}
-		if project.hasVerifyAuto {
-			// Whole-value, unlike verify: this is one ordered decision about what
+		if project.hasCheckAuto {
+			// Whole-value, unlike check: this is one ordered decision about what
 			// runs unattended, and merging two such lists element-wise would give
 			// an order nobody wrote.
-			cfg.VerifyAuto = project.verifyAutoVal
+			cfg.CheckAuto = project.checkAutoVal
 		}
 		if project.hasReasoningDisplay {
 			cfg.ReasoningDisplay = project.reasoningDisplayVal
@@ -368,16 +368,16 @@ func Load(opts Options) (*Config, error) {
 		return nil, fmt.Errorf("default model alias %q is not a key of `models`", cfg.Default)
 	}
 	// Validated after the merge, since a project may supply the check a user's
-	// verify_auto names, or vice versa. A typo here would otherwise mean the
-	// harness silently verifies nothing — the one failure mode this feature
+	// check_auto names, or vice versa. A typo here would otherwise mean the
+	// harness silently runs nothing — the one failure mode this feature
 	// exists to prevent.
-	for _, name := range cfg.VerifyAuto {
-		if indexVerify(cfg.Verify, name) < 0 {
+	for _, name := range cfg.CheckAuto {
+		if indexCheck(cfg.Check, name) < 0 {
 			known := "none are configured"
-			if len(cfg.Verify) > 0 {
-				known = "configured checks: " + strings.Join(cfg.VerifyNames(), ", ")
+			if len(cfg.Check) > 0 {
+				known = "configured checks: " + strings.Join(cfg.CheckNames(), ", ")
 			}
-			return nil, fmt.Errorf("`verify_auto` names %q, which is not a `verify` check (%s)", name, known)
+			return nil, fmt.Errorf("`check_auto` names %q, which is not a `check` entry (%s)", name, known)
 		}
 	}
 	// Adapter, edit_format, and extra_params were validated at
@@ -395,7 +395,7 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		"model":    starlark.NewBuiltin("model", builtinModel),
 		"env":      builtinEnv(lookup),
 		// The project's root, not the config file's directory, in both configs:
-		// a user-level `verify = project_checks()` should adapt to whatever
+		// a user-level `check = project_checks()` should adapt to whatever
 		// project the session opened.
 		"project_checks": builtinProjectChecks(root),
 	}
@@ -493,31 +493,31 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		out.reasoningDisplayVal = d
 	}
 
-	if vv, ok := globals["verify"]; ok {
-		checks, err := parseVerify(path, vv)
+	if vv, ok := globals["check"]; ok {
+		checks, err := parseChecks(path, vv)
 		if err != nil {
 			return nil, err
 		}
-		out.hasVerify = true
-		out.verifyVal = checks
+		out.hasCheck = true
+		out.checkVal = checks
 	}
 
-	if av, ok := globals["verify_auto"]; ok {
+	if av, ok := globals["check_auto"]; ok {
 		list, ok := av.(*starlark.List)
 		if !ok {
 			return nil, fmt.Errorf(
-				"%s: `verify_auto` must be a list of check names from `verify`, got %s", path, av.Type())
+				"%s: `check_auto` must be a list of check names from `check`, got %s", path, av.Type())
 		}
 		names := make([]string, 0, list.Len())
 		for i := range list.Len() {
 			s, ok := starlark.AsString(list.Index(i))
 			if !ok {
-				return nil, fmt.Errorf("%s: `verify_auto`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+				return nil, fmt.Errorf("%s: `check_auto`[%d] must be a string, got %s", path, i, list.Index(i).Type())
 			}
 			names = append(names, s)
 		}
-		out.hasVerifyAuto = true
-		out.verifyAutoVal = names
+		out.hasCheckAuto = true
+		out.checkAutoVal = names
 	}
 
 	if ms, ok := globals["max_steps"]; ok {
@@ -562,53 +562,53 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 	return out, nil
 }
 
-// parseVerify decodes the top-level `verify` dict: check name -> argv. Starlark
+// parseChecks decodes the top-level `check` dict: check name -> argv. Starlark
 // dicts iterate in insertion order, so the declared order is preserved and
-// meaningful — a bare verify run stops at the first failure, so fast checks go
+// meaningful — a bare check run stops at the first failure, so fast checks go
 // first.
-func parseVerify(path string, v starlark.Value) ([]VerifyCheck, error) {
+func parseChecks(path string, v starlark.Value) ([]Check, error) {
 	dict, ok := v.(*starlark.Dict)
 	if !ok {
 		return nil, fmt.Errorf(
-			"%s: `verify` must be a dict of name -> argv list, e.g. {\"test\": [\"go\", \"test\", \"./...\"]}, got %s",
+			"%s: `check` must be a dict of name -> argv list, e.g. {\"test\": [\"go\", \"test\", \"./...\"]}, got %s",
 			path, v.Type())
 	}
-	checks := make([]VerifyCheck, 0, dict.Len())
+	checks := make([]Check, 0, dict.Len())
 	for _, item := range dict.Items() {
 		name, ok := starlark.AsString(item[0])
 		if !ok {
-			return nil, fmt.Errorf("%s: `verify` keys must be strings, got %s", path, item[0].Type())
+			return nil, fmt.Errorf("%s: `check` keys must be strings, got %s", path, item[0].Type())
 		}
 		if strings.TrimSpace(name) == "" {
-			return nil, fmt.Errorf("%s: `verify` has an empty check name", path)
+			return nil, fmt.Errorf("%s: `check` has an empty check name", path)
 		}
 		list, ok := item[1].(*starlark.List)
 		if !ok {
-			return nil, fmt.Errorf("%s: `verify[%q]` must be a list of strings (argv), got %s", path, name, item[1].Type())
+			return nil, fmt.Errorf("%s: `check[%q]` must be a list of strings (argv), got %s", path, name, item[1].Type())
 		}
 		argv := make([]string, 0, list.Len())
 		for i := range list.Len() {
 			s, ok := starlark.AsString(list.Index(i))
 			if !ok {
-				return nil, fmt.Errorf("%s: `verify[%q]`[%d] must be a string, got %s", path, name, i, list.Index(i).Type())
+				return nil, fmt.Errorf("%s: `check[%q]`[%d] must be a string, got %s", path, name, i, list.Index(i).Type())
 			}
 			argv = append(argv, s)
 		}
 		if len(argv) == 0 {
-			return nil, fmt.Errorf("%s: `verify[%q]` must not be empty", path, name)
+			return nil, fmt.Errorf("%s: `check[%q]` must not be empty", path, name)
 		}
-		checks = append(checks, VerifyCheck{Name: name, Argv: argv})
+		checks = append(checks, Check{Name: name, Argv: argv})
 	}
 	return checks, nil
 }
 
-// mergeVerify applies the project's checks over the user's: a shared name is
+// mergeChecks applies the project's checks over the user's: a shared name is
 // replaced in place, keeping the user's ordering, and a project-only name is
 // appended. This is the ordered form of the whole-key merge `models` uses.
-func mergeVerify(user, project []VerifyCheck) []VerifyCheck {
+func mergeChecks(user, project []Check) []Check {
 	out := slices.Clone(user)
 	for _, p := range project {
-		if i := slices.IndexFunc(out, func(c VerifyCheck) bool { return c.Name == p.Name }); i >= 0 {
+		if i := slices.IndexFunc(out, func(c Check) bool { return c.Name == p.Name }); i >= 0 {
 			out[i] = p
 			continue
 		}

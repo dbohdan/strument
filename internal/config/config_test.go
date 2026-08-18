@@ -596,12 +596,12 @@ default = "m"
 	}
 }
 
-// TestVerifyParsesInDeclaredOrder pins the two properties the verify tool
+// TestCheckParsesInDeclaredOrder pins the two properties the check tool
 // depends on: a dict of name -> argv, kept in the order it was written, because
-// a bare verify run stops at the first failure and fast checks belong first.
-func TestVerifyParsesInDeclaredOrder(t *testing.T) {
+// a bare check run stops at the first failure and fast checks belong first.
+func TestCheckParsesInDeclaredOrder(t *testing.T) {
 	src := userConfig + `
-verify = {
+check = {
     "lint": ["golangci-lint", "run"],
     "test": ["go", "test", "./..."],
     "build": ["go", "build", "./..."],
@@ -612,26 +612,26 @@ verify = {
 		t.Fatal(err)
 	}
 	want := []string{"lint", "test", "build"}
-	if got := cfg.VerifyNames(); strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("VerifyNames() = %v, want %v (declaration order is meaningful)", got, want)
+	if got := cfg.CheckNames(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("CheckNames() = %v, want %v (declaration order is meaningful)", got, want)
 	}
-	if got := cfg.Verify[1].Argv; strings.Join(got, " ") != "go test ./..." {
-		t.Errorf("verify[test] argv = %v", got)
+	if got := cfg.Check[1].Argv; strings.Join(got, " ") != "go test ./..." {
+		t.Errorf("check[test] argv = %v", got)
 	}
 }
 
-// TestVerifyProjectMergesPerKey covers the override the top-level placement is
+// TestCheckProjectMergesPerKey covers the override the top-level placement is
 // for: a project replaces one check and adds another without restating the
 // user's set, and the user's ordering survives.
-func TestVerifyProjectMergesPerKey(t *testing.T) {
+func TestCheckProjectMergesPerKey(t *testing.T) {
 	user := userConfig + `
-verify = {
+check = {
     "lint": ["user-lint"],
     "test": ["user-test"],
 }
 `
 	project := `
-verify = {
+check = {
     "test": ["project-test", "-race"],
     "typecheck": ["project-tsc"],
 }
@@ -646,24 +646,24 @@ verify = {
 	}
 
 	want := []string{"lint", "test", "typecheck"}
-	if got := cfg.VerifyNames(); strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("VerifyNames() = %v, want %v", got, want)
+	if got := cfg.CheckNames(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("CheckNames() = %v, want %v", got, want)
 	}
-	if got := strings.Join(cfg.Verify[0].Argv, " "); got != "user-lint" {
+	if got := strings.Join(cfg.Check[0].Argv, " "); got != "user-lint" {
 		t.Errorf("lint = %q, want the user's (untouched by the project)", got)
 	}
-	if got := strings.Join(cfg.Verify[1].Argv, " "); got != "project-test -race" {
+	if got := strings.Join(cfg.Check[1].Argv, " "); got != "project-test -race" {
 		t.Errorf("test = %q, want the project's override in the user's slot", got)
 	}
 }
 
-func TestVerifyRejectsBadShapes(t *testing.T) {
+func TestCheckRejectsBadShapes(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
-		{"not a dict", `verify = ["go", "test"]`},
-		{"argv not a list", `verify = {"test": "go test"}`},
-		{"argv element not a string", `verify = {"test": ["go", 1]}`},
-		{"empty argv", `verify = {"test": []}`},
-		{"empty name", `verify = {"  ": ["go"]}`},
+		{"not a dict", `check = ["go", "test"]`},
+		{"argv not a list", `check = {"test": "go test"}`},
+		{"argv element not a string", `check = {"test": ["go", 1]}`},
+		{"empty argv", `check = {"test": []}`},
+		{"empty name", `check = {"  ": ["go"]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := Load(harness(t, userConfig+"\n"+tc.src+"\n", "", testEnv)); err == nil {
@@ -673,46 +673,46 @@ func TestVerifyRejectsBadShapes(t *testing.T) {
 	}
 }
 
-// TestVerifyAutoValidatesAgainstMergedChecks pins the property that makes the
+// TestCheckAutoValidatesAgainstMergedChecks pins the property that makes the
 // feature trustworthy: a name that isn't a real check fails at load. A typo
-// here would otherwise mean the harness silently verifies nothing, which is the
-// one failure mode automatic verification exists to prevent.
-func TestVerifyAutoValidatesAgainstMergedChecks(t *testing.T) {
+// here would otherwise mean the harness silently runs nothing, which is the
+// one failure mode automatic checking exists to prevent.
+func TestCheckAutoValidatesAgainstMergedChecks(t *testing.T) {
 	good := userConfig + `
-verify = {"lint": ["golangci-lint", "run"], "test": ["go", "test", "./..."]}
-verify_auto = ["lint", "test"]
+check = {"lint": ["golangci-lint", "run"], "test": ["go", "test", "./..."]}
+check_auto = ["lint", "test"]
 `
 	cfg, err := Load(harness(t, good, "", testEnv))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(cfg.VerifyAuto, ",") != "lint,test" {
-		t.Errorf("VerifyAuto = %v", cfg.VerifyAuto)
+	if strings.Join(cfg.CheckAuto, ",") != "lint,test" {
+		t.Errorf("CheckAuto = %v", cfg.CheckAuto)
 	}
 
 	bad := userConfig + `
-verify = {"test": ["go", "test", "./..."]}
-verify_auto = ["lnit"]
+check = {"test": ["go", "test", "./..."]}
+check_auto = ["lnit"]
 `
 	_, err = Load(harness(t, bad, "", testEnv))
 	if err == nil {
-		t.Fatal("a verify_auto name with no matching check must fail at load")
+		t.Fatal("a check_auto name with no matching check must fail at load")
 	}
 	if !strings.Contains(err.Error(), "lnit") || !strings.Contains(err.Error(), "test") {
 		t.Errorf("error should name the typo and the real checks, got: %v", err)
 	}
 }
 
-// TestVerifyAutoValidatesAfterTheProjectMerge covers why validation is
-// post-merge: the project can supply the check the user's verify_auto names.
-func TestVerifyAutoValidatesAfterTheProjectMerge(t *testing.T) {
-	user := userConfig + "\nverify_auto = [\"typecheck\"]\n"
-	project := `verify = {"typecheck": ["tsc", "--noEmit"]}`
+// TestCheckAutoValidatesAfterTheProjectMerge covers why validation is
+// post-merge: the project can supply the check the user's check_auto names.
+func TestCheckAutoValidatesAfterTheProjectMerge(t *testing.T) {
+	user := userConfig + "\ncheck_auto = [\"typecheck\"]\n"
+	project := `check = {"typecheck": ["tsc", "--noEmit"]}`
 	opts := harness(t, user, project, testEnv)
 	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(opts); err != nil {
-		t.Errorf("a project-supplied check should satisfy the user's verify_auto: %v", err)
+		t.Errorf("a project-supplied check should satisfy the user's check_auto: %v", err)
 	}
 }

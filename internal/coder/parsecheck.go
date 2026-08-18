@@ -10,7 +10,7 @@ import (
 // when there is nothing to say.
 //
 // It warns; it does not refuse. When this was planned there was no
-// verify_auto — now the project's own checks run at turn end, and a compiler
+// check_auto — now the project's own checks run at turn end, and a compiler
 // names a syntax error far better than tree-sitter's error recovery can. What
 // the check still adds is immediacy: the model hears about it in the same step
 // instead of at turn end. That survives without the power to reject, and a

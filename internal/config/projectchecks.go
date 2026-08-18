@@ -17,15 +17,15 @@ import (
 // checks returns names already prefixed with the ecosystem — "go-test", not
 // "test". Prefixing always, rather than only on collision, means a polyglot
 // repository never silently loses one language's suite to another's, and the
-// names are visible to the model in the verify tool's description anyway.
+// names are visible to the model in the check tool's description anyway.
 type detector struct {
 	// name is for the doc comment's sake and for tests to point at.
 	name   string
-	checks func(root string) []VerifyCheck
+	checks func(root string) []Check
 }
 
 // detectors run in this order, and each ecosystem lists its own checks fast to
-// slow, because a bare verify() runs them in order and stops at the first
+// slow, because a bare check() runs them in order and stops at the first
 // failure. The order is fixed rather than derived so that two runs over one
 // directory produce byte-identical config.
 //
@@ -52,29 +52,29 @@ type detector struct {
 // opt-in: it takes effect because someone wrote it in a config, never because a
 // file happened to be on disk.
 var detectors = []detector{
-	{"go", func(root string) []VerifyCheck {
+	{"go", func(root string) []Check {
 		if !exists(root, "go.mod") {
 			return nil
 		}
-		return []VerifyCheck{
+		return []Check{
 			{Name: "go-vet", Argv: []string{"go", "vet", "./..."}},
 			{Name: "go-test", Argv: []string{"go", "test", "./..."}},
 		}
 	}},
 
-	{"rust", func(root string) []VerifyCheck {
+	{"rust", func(root string) []Check {
 		if !exists(root, "Cargo.toml") {
 			return nil
 		}
 		// cargo check and cargo test ship with cargo; clippy is a rustup
 		// component that may not be installed, so it stays out under rule 1.
-		return []VerifyCheck{
+		return []Check{
 			{Name: "cargo-check", Argv: []string{"cargo", "check"}},
 			{Name: "cargo-test", Argv: []string{"cargo", "test"}},
 		}
 	}},
 
-	{"python", func(root string) []VerifyCheck {
+	{"python", func(root string) []Check {
 		// The project's own config has to name pytest; Python ships no test
 		// runner that a bare `pytest` would be.
 		declared := fileContains(root, "pyproject.toml", "[tool.pytest.ini_options]") ||
@@ -84,10 +84,10 @@ var detectors = []detector{
 		if !declared {
 			return nil
 		}
-		return []VerifyCheck{{Name: "py-test", Argv: []string{"pytest"}}}
+		return []Check{{Name: "py-test", Argv: []string{"pytest"}}}
 	}},
 
-	{"node", func(root string) []VerifyCheck {
+	{"node", func(root string) []Check {
 		if !hasJSONScript(root, "package.json", "test") {
 			return nil
 		}
@@ -103,78 +103,78 @@ var detectors = []detector{
 		case exists(root, "bun.lock") || exists(root, "bun.lockb"):
 			argv = []string{"bun", "run", "test"}
 		}
-		return []VerifyCheck{{Name: "node-test", Argv: argv}}
+		return []Check{{Name: "node-test", Argv: argv}}
 	}},
 
-	{"deno", func(root string) []VerifyCheck {
+	{"deno", func(root string) []Check {
 		if !exists(root, "deno.json") && !exists(root, "deno.jsonc") {
 			return nil
 		}
 		// Both take the project from deno.json when given no arguments.
-		return []VerifyCheck{
+		return []Check{
 			{Name: "deno-check", Argv: []string{"deno", "check"}},
 			{Name: "deno-test", Argv: []string{"deno", "test"}},
 		}
 	}},
 
-	{"make", func(root string) []VerifyCheck {
+	{"make", func(root string) []Check {
 		return targetChecks(root, "make", makefileTarget,
 			[]string{"Makefile", "makefile", "GNUmakefile"},
 			[]string{"lint", "check", "test"})
 	}},
 
-	{"task", func(root string) []VerifyCheck {
+	{"task", func(root string) []Check {
 		return targetChecks(root, "task", yamlKey,
 			[]string{"Taskfile.yml", "Taskfile.yaml", "Taskfile.dist.yml", "Taskfile.dist.yaml"},
 			[]string{"lint", "test"})
 	}},
 
-	{"just", func(root string) []VerifyCheck {
+	{"just", func(root string) []Check {
 		return targetChecks(root, "just", justRecipe,
 			[]string{"justfile", "Justfile", ".justfile"},
 			[]string{"lint", "test"})
 	}},
 
-	{"maven", func(root string) []VerifyCheck {
+	{"maven", func(root string) []Check {
 		if !exists(root, "pom.xml") {
 			return nil
 		}
-		return []VerifyCheck{{Name: "mvn-test", Argv: []string{"mvn", "test"}}}
+		return []Check{{Name: "mvn-test", Argv: []string{"mvn", "test"}}}
 	}},
 
-	{"gradle", func(root string) []VerifyCheck {
+	{"gradle", func(root string) []Check {
 		// The wrapper only. A bare `gradle` may not be installed, and the
 		// wrapper is the form a Gradle project is meant to be built with.
 		if runtime.GOOS == "windows" {
 			if exists(root, "gradlew.bat") {
-				return []VerifyCheck{{Name: "gradle-test", Argv: []string{"gradlew.bat", "test"}}}
+				return []Check{{Name: "gradle-test", Argv: []string{"gradlew.bat", "test"}}}
 			}
 			return nil
 		}
 		if exists(root, "gradlew") {
-			return []VerifyCheck{{Name: "gradle-test", Argv: []string{"./gradlew", "test"}}}
+			return []Check{{Name: "gradle-test", Argv: []string{"./gradlew", "test"}}}
 		}
 		return nil
 	}},
 
-	{"dotnet", func(root string) []VerifyCheck {
+	{"dotnet", func(root string) []Check {
 		if !globExists(root, "*.sln") && !globExists(root, "*.csproj") && !globExists(root, "*.slnx") {
 			return nil
 		}
-		return []VerifyCheck{
+		return []Check{
 			{Name: "dotnet-build", Argv: []string{"dotnet", "build"}},
 			{Name: "dotnet-test", Argv: []string{"dotnet", "test"}},
 		}
 	}},
 
-	{"php", func(root string) []VerifyCheck {
+	{"php", func(root string) []Check {
 		if !hasJSONScript(root, "composer.json", "test") {
 			return nil
 		}
-		return []VerifyCheck{{Name: "php-test", Argv: []string{"composer", "test"}}}
+		return []Check{{Name: "php-test", Argv: []string{"composer", "test"}}}
 	}},
 
-	{"ruby", func(root string) []VerifyCheck {
+	{"ruby", func(root string) []Check {
 		// rspec has to be in the bundle for `bundle exec rspec` to resolve.
 		// There is deliberately no rake row: telling whether a Rakefile defines
 		// a test task needs `rake -T`, which means running the project's own
@@ -182,34 +182,34 @@ var detectors = []detector{
 		if !isDir(root, "spec") || !fileContains(root, "Gemfile", "rspec") {
 			return nil
 		}
-		return []VerifyCheck{{Name: "rspec", Argv: []string{"bundle", "exec", "rspec"}}}
+		return []Check{{Name: "rspec", Argv: []string{"bundle", "exec", "rspec"}}}
 	}},
 
-	{"elixir", func(root string) []VerifyCheck {
+	{"elixir", func(root string) []Check {
 		if !exists(root, "mix.exs") {
 			return nil
 		}
-		return []VerifyCheck{
+		return []Check{
 			{Name: "mix-compile", Argv: []string{"mix", "compile"}},
 			{Name: "mix-test", Argv: []string{"mix", "test"}},
 		}
 	}},
 
-	{"crystal", func(root string) []VerifyCheck {
+	{"crystal", func(root string) []Check {
 		if !exists(root, "shard.yml") || !isDir(root, "spec") {
 			return nil
 		}
-		return []VerifyCheck{{Name: "crystal-spec", Argv: []string{"crystal", "spec"}}}
+		return []Check{{Name: "crystal-spec", Argv: []string{"crystal", "spec"}}}
 	}},
 
-	{"haskell", func(root string) []VerifyCheck {
+	{"haskell", func(root string) []Check {
 		if exists(root, "stack.yaml") {
-			return []VerifyCheck{{Name: "stack-test", Argv: []string{"stack", "test"}}}
+			return []Check{{Name: "stack-test", Argv: []string{"stack", "test"}}}
 		}
 		if !exists(root, "cabal.project") && !globExists(root, "*.cabal") {
 			return nil
 		}
-		return []VerifyCheck{
+		return []Check{
 			{Name: "cabal-build", Argv: []string{"cabal", "build"}},
 			{Name: "cabal-test", Argv: []string{"cabal", "test"}},
 		}
@@ -218,11 +218,11 @@ var detectors = []detector{
 
 // ProjectChecks returns the checks detected in root, in a fixed order. An empty
 // root — no project this session — detects nothing.
-func ProjectChecks(root string) []VerifyCheck {
+func ProjectChecks(root string) []Check {
 	if root == "" {
 		return nil
 	}
-	var out []VerifyCheck
+	var out []Check
 	for _, d := range detectors {
 		out = append(out, d.checks(root)...)
 	}
@@ -235,7 +235,7 @@ func ProjectChecks(root string) []VerifyCheck {
 // take that dependency as an argument so a test can supply its own.
 //
 // The root is the *project's*, not the config file's, which is deliberate: a
-// user-level config may write `verify = project_checks()` once and get
+// user-level config may write `check = project_checks()` once and get
 // per-project detection everywhere it opens.
 func builtinProjectChecks(root string) *starlark.Builtin {
 	return starlark.NewBuiltin("project_checks", func(
@@ -244,7 +244,7 @@ func builtinProjectChecks(root string) *starlark.Builtin {
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs); err != nil {
 			return nil, err
 		}
-		// A dict, so it drops straight into `verify` and extends with the
+		// A dict, so it drops straight into `check` and extends with the
 		// documented dict(...) idiom rather than needing a syntax of its own.
 		dict := starlark.NewDict(0)
 		for _, ch := range ProjectChecks(root) {
@@ -311,7 +311,7 @@ func hasJSONScript(root, name, script string) bool {
 
 // targetChecks emits `<tool> <target>` for each target the first present marker
 // file actually defines, in the order the targets are listed.
-func targetChecks(root, tool string, defines func(body, target string) bool, markers, targets []string) []VerifyCheck {
+func targetChecks(root, tool string, defines func(body, target string) bool, markers, targets []string) []Check {
 	var body string
 	for _, m := range markers {
 		if b, ok := readMarker(root, m); ok {
@@ -322,10 +322,10 @@ func targetChecks(root, tool string, defines func(body, target string) bool, mar
 	if body == "" {
 		return nil
 	}
-	var out []VerifyCheck
+	var out []Check
 	for _, target := range targets {
 		if defines(body, target) {
-			out = append(out, VerifyCheck{Name: tool + "-" + target, Argv: []string{tool, target}})
+			out = append(out, Check{Name: tool + "-" + target, Argv: []string{tool, target}})
 		}
 	}
 	return out

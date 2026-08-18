@@ -26,8 +26,8 @@ The loader reads these module-level variables after running your file:
 | `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). See below. |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
-| `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
-| `verify_auto` | list of strings | Optional. Names of `verify` checks Strument runs itself at the end of a turn that changed files. See below. |
+| `check` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
+| `check_auto` | list of strings | Optional. Names of `check` entries Strument runs itself at the end of a turn that changed files. See below. |
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
@@ -124,48 +124,48 @@ on the first request.
 A `scraper` command is the one exception: it does its own networking, and the
 global `proxy` does not reach it.
 
-### `verify`
+### `check`
 
-`verify` names the commands that check your project — tests, a linter, a build.
+`check` names the commands that check your project — tests, a linter, a build.
 Each value is an argv list, run without a shell.
 
 ```python
-verify = {
+check = {
     "lint": ["golangci-lint", "run"],
     "test": ["go", "test", "./..."],
 }
 ```
 
-The model reaches these through the `verify` tool, and — unlike `bash`, which
+The model reaches these through the `check` tool, and — unlike `bash`, which
 always asks — they run **without confirmation**. That is safe because the model
-supplies only a *name*: it calls `verify("lint")` and never a command, so there
+supplies only a *name*: it calls `check("lint")` and never a command, so there
 is nothing for it to alter or append. Everything runnable is written by you, in
 this file. This is the observation half of the harness running freely while
 mutation stays gated.
 
-Declared order matters. `verify()` with no name runs every check in order and
-stops at the first failure, so put the fast ones first. `verify("test")` runs
+Declared order matters. `check()` with no name runs every check in order and
+stops at the first failure, so put the fast ones first. `check("test")` runs
 just that one.
 
-A project's `.strument.star` merges into your `verify` **per key**: it can
+A project's `.strument.star` merges into your `check` **per key**: it can
 replace one check or add its own without restating the rest.
 
 ```python
 # .strument.star — override just the test command, keep the user's lint.
-verify = {"test": ["go", "test", "-race", "./..."]}
+check = {"test": ["go", "test", "-race", "./..."]}
 ```
 
 Because the key replaces rather than appends, extend a check by building the
 dict explicitly:
 
 ```python
-verify = dict(verify, lint=["golangci-lint", "run", "--fast"])
+check = dict(check, lint=["golangci-lint", "run", "--fast"])
 ```
 
-Unset, no `verify` tool is offered and every command goes through `bash` and its
+Unset, no `check` tool is offered and every command goes through `bash` and its
 confirmation prompt.
 
-Naming a check buys one more thing, and it is a property of `verify` rather than
+Naming a check buys one more thing, and it is a property of `check` rather than
 of `bash`: a `bash` command that *is* one of these checks, **verbatim**, runs
 without the confirmation prompt. You wrote that command here, so the prompt
 would be asking you to re-approve your own decision — and a prompt that fires on
@@ -184,10 +184,10 @@ certainly what was compared.
 ### `project_checks()`
 
 `project_checks()` detects a project's usual checks from its marker files, so
-you don't have to write a `verify` dict for every repository:
+you don't have to write a `check` dict for every repository:
 
 ```python
-verify = project_checks()
+check = project_checks()
 ```
 
 It is opt-in: nothing happens because a file is on disk, only because you wrote
@@ -196,7 +196,7 @@ this. Names are always prefixed with the ecosystem — `go-test`, `node-test`,
 losing to the other. Extend and drop with ordinary dict operations:
 
 ```python
-verify = dict(project_checks(), lint=["golangci-lint", "run"])
+check = dict(project_checks(), lint=["golangci-lint", "run"])
 ```
 
 The root it looks in is the *project's*, not the config file's, so this works in
@@ -237,16 +237,16 @@ project's own committed configuration — which is why this is opt-in, and why i
 is worth glancing at what it detected the first time you use it on an unfamiliar
 repository. Every check's argv is printed when it runs.
 
-### `verify_auto`
+### `check_auto`
 
-`verify_auto` lists the checks Strument runs *itself*, without being asked, at
+`check_auto` lists the checks Strument runs *itself*, without being asked, at
 the end of a turn that changed files.
 
 ```python
-verify_auto = ["lint", "test"]
+check_auto = ["lint", "test"]
 ```
 
-The names must be keys of `verify`; a name that isn't fails at load, so a typo
+The names must be keys of `check`; a name that isn't fails at load, so a typo
 can't leave you believing the project is checked when nothing runs.
 
 This exists because the model deciding *whether* and *which* to check is the
@@ -260,9 +260,9 @@ back to you — a model that can't get the checks green should not spend your
 budget trying.
 
 Order is the order you write here, stopping at the first failure, which is the
-same rule `verify` follows: checks run in the order they are listed, wherever
+same rule `check` follows: checks run in the order they are listed, wherever
 they are listed. Nothing runs after a turn that only read files, or under
-`--dry-run`, since no edit lands. The `verify` tool stays available either way,
+`--dry-run`, since no edit lands. The `check` tool stays available either way,
 so the model can still check something mid-turn.
 
 ### `--continue` / `-c`

@@ -260,7 +260,7 @@ func TestEachFileNamedOnceInARun(t *testing.T) {
 	}
 }
 
-// TestObservationOnlySendLeavesNoBlankLine: read, grep, glob, ls, and verify
+// TestObservationOnlySendLeavesNoBlankLine: read, grep, glob, ls, and check
 // draw nothing in the stream — they print their own one-line outcome when they
 // run — so a send made only of those must not leave a separator behind it. It
 // did, and the blank landed above the outcome line, where it read as a gap in

@@ -232,38 +232,38 @@ func TestGlobAndLS(t *testing.T) {
 	}
 }
 
-// TestVerifyRunsNamedCheck is the security-relevant one: the tool takes a name,
+// TestCheckRunsNamedCheck is the security-relevant one: the tool takes a name,
 // looks the argv up in the config, and runs that — nothing the model sends can
 // change what executes.
-func TestVerifyRunsNamedCheck(t *testing.T) {
+func TestCheckRunsNamedCheck(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{
+	c.Check = []config.Check{
 		{Name: "ok", Argv: []string{"true"}},
-		{Name: "echo", Argv: []string{"echo", "hello from verify"}},
+		{Name: "echo", Argv: []string{"echo", "hello from check"}},
 	}
 
-	got := c.runVerify(t.Context(), call("verify", `{"name":"echo"}`))
-	if !strings.Contains(got, "hello from verify") || !strings.Contains(got, "Exit status: 0") {
-		t.Errorf("verify result:\n%s", got)
+	got := c.runCheckTool(t.Context(), call("check", `{"name":"echo"}`))
+	if !strings.Contains(got, "hello from check") || !strings.Contains(got, "Exit status: 0") {
+		t.Errorf("check result:\n%s", got)
 	}
 
-	unknown := c.runVerify(t.Context(), call("verify", `{"name":"nope"}`))
+	unknown := c.runCheckTool(t.Context(), call("check", `{"name":"nope"}`))
 	if !strings.Contains(unknown, "no check named") || !strings.Contains(unknown, "ok, echo") {
 		t.Errorf("an unknown name must list the real ones, got:\n%s", unknown)
 	}
 }
 
-// TestVerifyStopsAtFirstFailure pins the ordering contract: checks run in the
+// TestCheckStopsAtFirstFailure pins the ordering contract: checks run in the
 // order the user declared, and a failure ends the run so the user's fast checks
 // can shield the slow ones.
-func TestVerifyStopsAtFirstFailure(t *testing.T) {
+func TestCheckStopsAtFirstFailure(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{
+	c.Check = []config.Check{
 		{Name: "fails", Argv: []string{"false"}},
 		{Name: "never", Argv: []string{"echo", "should not run"}},
 	}
 
-	got := c.runVerify(t.Context(), call("verify", `{}`))
+	got := c.runCheckTool(t.Context(), call("check", `{}`))
 	if strings.Contains(got, "should not run") {
 		t.Errorf("a later check ran after a failure:\n%s", got)
 	}
@@ -272,9 +272,9 @@ func TestVerifyStopsAtFirstFailure(t *testing.T) {
 	}
 }
 
-func TestVerifyWithoutConfigSaysSo(t *testing.T) {
+func TestCheckWithoutConfigSaysSo(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	if got := c.runVerify(t.Context(), call("verify", `{}`)); !strings.Contains(got, "No checks are configured") {
+	if got := c.runCheckTool(t.Context(), call("check", `{}`)); !strings.Contains(got, "No checks are configured") {
 		t.Errorf("result = %q", got)
 	}
 }
@@ -304,17 +304,17 @@ func TestSymlinksAreNamedAsSuch(t *testing.T) {
 	}
 }
 
-// TestVerifyIsQuietWhenItPasses pins the asymmetry between the two audiences.
-// With verify_auto on, a green suite lands on every editing turn, and dumping
+// TestCheckIsQuietWhenItPasses pins the asymmetry between the two audiences.
+// With check_auto on, a green suite lands on every editing turn, and dumping
 // its transcript buries the diffs the user is there to read; the model gets the
 // whole thing either way, because to it a passing run's output is information.
-func TestVerifyIsQuietWhenItPasses(t *testing.T) {
+func TestCheckIsQuietWhenItPasses(t *testing.T) {
 	c, out := observeEnv(t, nil)
 	// The command computes its output rather than echoing a literal, so the
 	// assertion below can tell the printed argv from the printed output.
-	c.Verify = []config.VerifyCheck{{Name: "suite", Argv: []string{"sh", "-c", "echo $((6 * 7)) tests passed"}}}
+	c.Check = []config.Check{{Name: "suite", Argv: []string{"sh", "-c", "echo $((6 * 7)) tests passed"}}}
 
-	got := c.runVerify(t.Context(), call("verify", `{}`))
+	got := c.runCheckTool(t.Context(), call("check", `{}`))
 	if !strings.Contains(got, "42 tests passed") {
 		t.Errorf("the model must still get the output:\n%s", got)
 	}
@@ -327,13 +327,13 @@ func TestVerifyIsQuietWhenItPasses(t *testing.T) {
 	}
 }
 
-// TestVerifyShowsAFailure is the other half: a failure is the one thing here
+// TestCheckShowsAFailure is the other half: a failure is the one thing here
 // the user has to read, so all of it reaches them.
-func TestVerifyShowsAFailure(t *testing.T) {
+func TestCheckShowsAFailure(t *testing.T) {
 	c, out := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{{Name: "suite", Argv: []string{"sh", "-c", "echo boom; exit 2"}}}
+	c.Check = []config.Check{{Name: "suite", Argv: []string{"sh", "-c", "echo boom; exit 2"}}}
 
-	c.runVerify(t.Context(), call("verify", `{}`))
+	c.runCheckTool(t.Context(), call("check", `{}`))
 	joined := strings.Join(out.lines, "\n")
 	if !strings.Contains(joined, "boom") || !strings.Contains(joined, "suite failed (exit status 2)") {
 		t.Errorf("a failing check must print its verdict and output:\n%s", joined)
@@ -359,106 +359,106 @@ func TestObservationToolsAnnounceThemselves(t *testing.T) {
 	}
 }
 
-// TestAutoVerifyFiresOnlyAfterEdits pins the trigger. A turn that changed
+// TestAutoCheckFiresOnlyAfterEdits pins the trigger. A turn that changed
 // nothing has nothing to check, and running the suite anyway would be noise the
 // user pays for.
-func TestAutoVerifyFiresOnlyAfterEdits(t *testing.T) {
+func TestAutoCheckFiresOnlyAfterEdits(t *testing.T) {
 	c, out := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
-	c.VerifyAuto = []string{"fails"}
+	c.Check = []config.Check{{Name: "fails", Argv: []string{"false"}}}
+	c.CheckAuto = []string{"fails"}
 
-	if msg, keep := c.runAutoVerify(t.Context()); keep || msg != "" {
-		t.Errorf("a turn that edited nothing must not verify; got keep=%v msg=%q", keep, msg)
+	if msg, keep := c.runAutoCheck(t.Context()); keep || msg != "" {
+		t.Errorf("a turn that edited nothing must not check; got keep=%v msg=%q", keep, msg)
 	}
 	if strings.Contains(strings.Join(out.lines, "\n"), "automatic checks") {
 		t.Error("nothing should have been announced")
 	}
 
-	c.editedSinceVerify = true
-	msg, keep := c.runAutoVerify(t.Context())
+	c.editedSinceCheck = true
+	msg, keep := c.runAutoCheck(t.Context())
 	if !keep || !strings.Contains(msg, "did not pass") {
 		t.Errorf("a failing check after an edit must continue the loop; got keep=%v msg=%q", keep, msg)
 	}
 }
 
-// TestAutoVerifyDoesNotReAskAnUnchangedTree is the fix for something only live
+// TestAutoCheckDoesNotReAskAnUnchangedTree is the fix for something only live
 // testing showed. Faced with a pre-existing failure the model answered, quite
 // correctly, that the break was not its doing and it would leave it alone — and
 // the harness ran the same check again, and again, until the budget ran out. An
 // unchanged tree can only produce the same output, so a considered answer must
 // end the turn rather than be re-asked.
-func TestAutoVerifyDoesNotReAskAnUnchangedTree(t *testing.T) {
+func TestAutoCheckDoesNotReAskAnUnchangedTree(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
-	c.VerifyAuto = []string{"fails"}
-	c.editedSinceVerify = true
+	c.Check = []config.Check{{Name: "fails", Argv: []string{"false"}}}
+	c.CheckAuto = []string{"fails"}
+	c.editedSinceCheck = true
 
-	if _, keep := c.runAutoVerify(t.Context()); !keep {
+	if _, keep := c.runAutoCheck(t.Context()); !keep {
 		t.Fatal("the first failing round should continue the loop")
 	}
 	// The model replies in prose and edits nothing.
-	if _, keep := c.runAutoVerify(t.Context()); keep {
+	if _, keep := c.runAutoCheck(t.Context()); keep {
 		t.Error("a reply that edited nothing must end the turn, not re-run the same check")
 	}
-	if c.autoVerifies != 1 {
-		t.Errorf("auto-verify rounds = %d, want 1 — the budget should be untouched", c.autoVerifies)
+	if c.autoChecks != 1 {
+		t.Errorf("auto-check rounds = %d, want 1 — the budget should be untouched", c.autoChecks)
 	}
 }
 
-// TestAutoVerifyPassingEndsTheTurn is the other half: when the checks pass the
+// TestAutoCheckPassingEndsTheTurn is the other half: when the checks pass the
 // model is not sent anything, so the turn ends where it would have.
-func TestAutoVerifyPassingEndsTheTurn(t *testing.T) {
+func TestAutoCheckPassingEndsTheTurn(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{{Name: "ok", Argv: []string{"true"}}}
-	c.VerifyAuto = []string{"ok"}
-	c.editedSinceVerify = true
+	c.Check = []config.Check{{Name: "ok", Argv: []string{"true"}}}
+	c.CheckAuto = []string{"ok"}
+	c.editedSinceCheck = true
 
-	if msg, keep := c.runAutoVerify(t.Context()); keep || msg != "" {
+	if msg, keep := c.runAutoCheck(t.Context()); keep || msg != "" {
 		t.Errorf("passing checks must end the turn; got keep=%v msg=%q", keep, msg)
 	}
 }
 
-// TestAutoVerifyIsBounded pins the budget for the case it is actually for: a
+// TestAutoCheckIsBounded pins the budget for the case it is actually for: a
 // model that keeps editing and keeps failing. Each round edits, so the
 // unchanged-tree gate never fires and only the counter stops it.
-func TestAutoVerifyIsBounded(t *testing.T) {
+func TestAutoCheckIsBounded(t *testing.T) {
 	c, out := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{{Name: "fails", Argv: []string{"false"}}}
-	c.VerifyAuto = []string{"fails"}
+	c.Check = []config.Check{{Name: "fails", Argv: []string{"false"}}}
+	c.CheckAuto = []string{"fails"}
 
 	rounds := 0
 	for {
-		c.editedSinceVerify = true // the model edited something each round
-		_, keep := c.runAutoVerify(t.Context())
+		c.editedSinceCheck = true // the model edited something each round
+		_, keep := c.runAutoCheck(t.Context())
 		if !keep {
 			break
 		}
 		rounds++
-		if rounds > maxAutoVerify+2 {
-			t.Fatal("runAutoVerify never gave up")
+		if rounds > maxAutoCheck+2 {
+			t.Fatal("runAutoCheck never gave up")
 		}
 	}
-	if rounds != maxAutoVerify {
-		t.Errorf("auto-verify rounds = %d, want %d", rounds, maxAutoVerify)
+	if rounds != maxAutoCheck {
+		t.Errorf("auto-check rounds = %d, want %d", rounds, maxAutoCheck)
 	}
 	if !strings.Contains(strings.Join(out.lines, "\n"), "without passing") {
 		t.Error("the user should be told why it stopped")
 	}
 }
 
-// TestAutoVerifyRunsInTheListedOrder confirms the one ordering rule: checks run
-// in the order they are listed, which for verify_auto is that list's order, not
-// the verify dict's.
-func TestAutoVerifyRunsInTheListedOrder(t *testing.T) {
+// TestAutoCheckRunsInTheListedOrder confirms the one ordering rule: checks run
+// in the order they are listed, which for check_auto is that list's order, not
+// the check dict's.
+func TestAutoCheckRunsInTheListedOrder(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.Verify = []config.VerifyCheck{
+	c.Check = []config.Check{
 		{Name: "slow", Argv: []string{"echo", "slow ran"}},
 		{Name: "fast", Argv: []string{"false"}},
 	}
-	c.VerifyAuto = []string{"fast", "slow"} // deliberately not the dict order
-	c.editedSinceVerify = true
+	c.CheckAuto = []string{"fast", "slow"} // deliberately not the dict order
+	c.editedSinceCheck = true
 
-	msg, keep := c.runAutoVerify(t.Context())
+	msg, keep := c.runAutoCheck(t.Context())
 	if !keep {
 		t.Fatal("a failing check must continue the loop")
 	}

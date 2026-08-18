@@ -451,7 +451,7 @@ type ToolDiffSet struct {
 	seq   []seqItem
 	diffs map[int]*ToolDiff
 	bufs  map[int]*bytes.Buffer // set for indexes that buffer instead of streaming live
-	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/verify)
+	skip  map[int]bool          // indexes whose tool draws nothing (read/grep/glob/ls/check)
 	live  int                   // the index streaming to w; -1 until the first is seen
 
 	// drew records that at least one call had something to draw, so a send of
@@ -530,7 +530,7 @@ func (s *ToolDiffSet) Text(b []byte) {
 }
 
 // Drew reports whether any call in this set had something to render. read,
-// grep, glob, ls, and verify draw nothing — they print their own one-line
+// grep, glob, ls, and check draw nothing — they print their own one-line
 // outcome when they run — so a send made only of those has written nothing here
 // and needs no separator after it.
 func (s *ToolDiffSet) Drew() bool { return s.drew }

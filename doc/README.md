@@ -95,7 +95,7 @@ inherited from aider.
 
 - **Scope.** Essentials only: a standard tool set driven in a closed loop
   (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
-  `bash` and `verify` to run things), turn-scoped snapshots with `/undo` and
+  `bash` and `check` to run things), turn-scoped snapshots with `/undo` and
   `/squash`, git auto-commit where there is a repository, `/ask`, `/symbol`,
   reflection, chat-history summarization.
   Architect mode, voice, GUI, and analytics are out of scope for v1.
@@ -223,7 +223,7 @@ reaching around it.
 | `llm.ModelClient` | one streaming send | `client.Client` / `fixture.StreamStub` |
 | `Output` | user-facing printing + live stream | `repl.termOutput`, `StdOutput` / test buffers |
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
-| `CommandRunner` | `/run`, the `bash` tool, `verify` checks | `PipeRunner` / replay stub |
+| `CommandRunner` | `/run`, the `bash` tool, `check` checks | `PipeRunner` / replay stub |
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
 | `Clock` | retry backoff sleeps | `RealClock` / instant fake |
@@ -369,9 +369,9 @@ Nine tools, in three natures:
   model actually emits), with one platform gap: process substitution is
   unimplemented on Windows, where `<(…)` yields a TODO notice from the
   interpreter instead of running.
-  `verify(check)` runs a *configured* argv from the `verify` dict by name, so
+  `check(check)` runs a *configured* argv from the `check` dict by name, so
   it needs no gate — the model supplies a key, never a command, and there is
-  nothing to classify or smuggle. It is offered only when `verify` is
+  nothing to classify or smuggle. It is offered only when `check` is
   configured.
 
   A check inherits Strument's environment — `PATH`, `HOME`, `GOCACHE`, the
@@ -425,7 +425,7 @@ budget.
 `old_string` doesn't match, its call's tool result carries the failure (with
 the did-you-mean) and the turn re-sends on those results — no injected "please
 fix" user message. `runOne` is outcome-driven, so a text-free tool reflection
-still loops. There is one deliberate exception: a failing `verify_auto` speaks
+still loops. There is one deliberate exception: a failing `check_auto` speaks
 as a *user* message, because the harness is talking unprompted and no tool
 call is waiting for an answer.
 
