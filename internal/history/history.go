@@ -108,6 +108,19 @@ func DefaultPath(projectRoot string) (string, error) {
 	return filepath.Join(dir, "transcript.md"), nil
 }
 
+// LockPath is the advisory-lock file for a project's state directory. Two
+// harness copies keyed to the same project root compute the same path; whoever
+// holds the lock owns the transcript, cost ledger, and undo spill for the
+// session. The file is created 0600 like the rest of the state, but its
+// contents are meaningless — only the open file description's lock counts.
+func LockPath(projectRoot string) (string, error) {
+	dir, err := ProjectDir(projectRoot)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "lock"), nil
+}
+
 // InputHistoryPath is the readline input-history file for a project root,
 // beside that project's transcript.
 //

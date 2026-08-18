@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gofrs/flock"
 )
 
 func TestDefaultPathKeying(t *testing.T) {
@@ -296,4 +298,70 @@ func TestNotesRoundTrip(t *testing.T) {
 	if perm := info.Mode().Perm(); perm != fileMode {
 		t.Errorf("notes.md mode = %04o, want %04o", perm, fileMode)
 	}
+}
+
+// The lock file sits beside the transcript so two harness copies keyed to the
+// same root cannot write its state at once. Verified here the way the harness
+// takes it: two distinct open file descriptions over the same path, the second
+// TryLock reporting (false, nil) rather than an error.
+func TestProjectLock(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	// The harness creates the project directory (EnsureProjectDir) before taking
+	// the lock, so the lock file's parent always exists. Mirror that here.
+	if _, err := EnsureProjectDir(project); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LockPath(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(p) != "lock" {
+		t.Errorf("lock path = %q, want a file named lock", p)
+	}
+
+	first := flock.New(p)
+	if ok, err := first.TryLock(); err != nil || !ok {
+		t.Fatalf("first TryLock = (%v, %v), want (true, nil)", ok, err)
+	}
+	defer first.Close()
+
+	second := flock.New(p)
+	ok, err := second.TryLock()
+	if err != nil {
+		t.Fatalf("second TryLock error = %v, want nil with ok=false", err)
+	}
+	if ok {
+		second.Close()
+		t.Fatal("second TryLock = (true, nil), want (false, nil): lock did not exclude a concurrent holder")
+	}
+}
+
+func TestProjectLockReleasedOnClose(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	if _, err := EnsureProjectDir(project); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LockPath(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first := flock.New(p)
+	if ok, err := first.TryLock(); err != nil || !ok {
+		t.Fatalf("first TryLock = (%v, %v), want (true, nil)", ok, err)
+	}
+	// Releasing by closing must clear the lock so a fresh holder can take it.
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	second := flock.New(p)
+	if ok, err := second.TryLock(); err != nil || !ok {
+		t.Fatalf("after close, second TryLock = (%v, %v), want (true, nil)", ok, err)
+	}
+	second.Close()
 }

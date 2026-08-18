@@ -18,6 +18,8 @@ import (
 	"github.com/alecthomas/kong"
 	"golang.org/x/term"
 
+	"github.com/gofrs/flock"
+
 	"dbohdan.com/strument/internal/client"
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
@@ -177,8 +179,24 @@ func (c *chatCmd) Run() error {
 	// make the flag a bigger behavior change than its name suggests.
 	keepState := !c.NoHistory && rootErr == nil
 	if keepState {
-		if _, err := history.EnsureProjectDir(projectRoot); err != nil {
+		dir, err := history.EnsureProjectDir(projectRoot)
+		if err != nil {
 			keepState = false
+		} else {
+			// One harness per project root at a time: two copies would otherwise
+			// append to, and atomic-rename over, each other's transcript, cost
+			// ledger, and undo spill, silently corrupting them. The lock is held
+			// for the whole session and dropped on return (Close unlocks and
+			// closes the fd), so a crash or kill cannot leave a stale lock the
+			// way a PID-file scheme would.
+			lk, locked, err := acquireProjectLock(projectRoot)
+			if err != nil {
+				return fmt.Errorf("could not lock the project state directory %s: %w", dir, err)
+			}
+			if !locked {
+				return fmt.Errorf("an instance is already running in this project (%s); exit it before starting another", dir)
+			}
+			defer lk.Close()
 		}
 	}
 
@@ -317,6 +335,32 @@ func historyRootFrom(dir string) string {
 		return filepath.Clean(g.Root())
 	}
 	return filepath.Clean(dir)
+}
+
+// acquireProjectLock takes a non-blocking exclusive advisory lock on the
+// project's state directory, so two harness copies keyed to the same root
+// cannot write its transcript, cost ledger, or undo spill concurrently. The
+// returned *Flock must be Closed to release the lock; Close also closes the
+// underlying file descriptor, and the kernel drops the lock if the process
+// exits without it. A false locked means another instance holds it; the error
+// is non-nil only for genuine failures (a missing directory is not one — the
+// caller has just created it).
+func acquireProjectLock(projectRoot string) (*flock.Flock, bool, error) {
+	p, err := history.LockPath(projectRoot)
+	if err != nil {
+		return nil, false, err
+	}
+	lk := flock.New(p)
+	locked, err := lk.TryLock()
+	if err != nil {
+		_ = lk.Close()
+		return nil, false, err
+	}
+	if !locked {
+		_ = lk.Close()
+		return nil, false, nil
+	}
+	return lk, true, nil
 }
 
 // fileInProject reports whether file — resolved against the invocation

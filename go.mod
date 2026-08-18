@@ -8,6 +8,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/alecthomas/kong v1.15.0
 	github.com/creack/pty v1.1.24
+	github.com/gofrs/flock v0.13.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/odvcencio/gotreesitter v0.36.0
 	go.starlark.net v0.0.0-20260708150628-5395d018f003
