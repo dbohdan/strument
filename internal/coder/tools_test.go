@@ -535,7 +535,7 @@ func TestAskUserReplay(t *testing.T) {
 		!strings.Contains(result.Text(), `"Which format?" → "RFC 3339"`) {
 		t.Errorf("result = %q, want the question and the chosen label", result.Text())
 	}
-	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, `‹ask› "Which format?" → RFC 3339`) {
+	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, `‹answer› RFC 3339`) {
 		t.Errorf("missing the narration line:\n%s", joined)
 	}
 	// An ask is an ordinary work step, so it must have spent the step budget.

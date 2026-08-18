@@ -377,10 +377,7 @@ func (c *Coder) runAskUser(tc llm.ToolCall, needsReflection *bool) string {
 			answer = "(no answer)"
 		}
 		fmt.Fprintf(&b, "\n- %q → %q", q.Question, answer)
-		// The narration mirrors the ‹shell› purpose-line convention: the
-		// decision is recorded in the scroll at the moment it was made, which
-		// is the only record if the terminal clears.
-		c.Out.Toolf("‹ask› %q → %s", q.Question, answer)
+		c.Out.Toolf("‹answer› %s", answer)
 	}
 	return b.String()
 }

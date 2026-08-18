@@ -599,7 +599,6 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 			r.out.Printf("%d. %s", i+1, opt.Label)
 		}
 	}
-	r.out.Printf("%d. Other — type your own answer", len(req.Options)+1)
 
 	// An empty line re-prompts once rather than looping forever: a user who
 	// hits Enter twice has said "skip", and the empty free-text answer that

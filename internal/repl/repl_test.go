@@ -508,7 +508,6 @@ func TestAskerRendersTheQuestion(t *testing.T) {
 		"‹question› Which timestamp format should the new log lines use?",
 		"1. RFC 3339 — matches every other logger in this repo",
 		"2. Unix epoch — compact, but needs conversion to read",
-		"3. Other — type your own answer",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)
