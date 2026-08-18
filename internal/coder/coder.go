@@ -95,11 +95,11 @@ type Coder struct {
 	// model, so the tool set and prompt set read this, not Model.EditFormat.
 	editFormat string
 
-	// SessionNotes is the previous session's notes, and SessionNotesDate says
-	// when they were written. Set once at startup and never refreshed
-	// mid-session: they describe the session *before* this one, and re-reading
-	// them as they are regenerated would show the model a summary of the very
-	// turns already sitting in its history. "" leaves the slot out entirely.
+	// SessionNotes are the session's notes, regenerated from the transcript
+	// on demand (--continue at startup, /notes generate mid-session).
+	// SessionNotesDate says when they were generated. "" leaves the slot
+	// out of the prompt entirely. Notes live in memory only; the transcript
+	// is the durable artifact they derive from.
 	SessionNotes     string
 	SessionNotesDate string
 

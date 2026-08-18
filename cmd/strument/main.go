@@ -252,7 +252,8 @@ func (c *chatCmd) Run() error {
 		if transcript != "" {
 			write := coder.NotesWriter(client.New(model.WeakModel.Provider), model.WeakModel, nil)
 			if notes := write(transcript); notes != "" {
-				_ = history.SaveNotes(projectRoot, notes)
+				cdr.SessionNotes = notes
+				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
 			}
 		}
 	}
@@ -449,20 +450,9 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 		cdr.RestoreSessionCommits(u.Commits, u.Last)
 	}
 
-	// The previous session's notes. Loaded once here rather than read per turn:
-	// they describe the session *before* this one, and refreshing them as they
-	// are regenerated would show the model a summary of turns already sitting in
-	// its own history.
-	if notes := history.LoadNotes(projectRoot); strings.TrimSpace(notes) != "" {
-		cdr.SessionNotes = notes
-		cdr.SessionNotesDate = "date unknown"
-		if p, err := history.NotesPath(projectRoot); err == nil {
-			if info, err := os.Stat(p); err == nil {
-				cdr.SessionNotesDate = info.ModTime().Format("2006-01-02 15:04")
-			}
-		}
-		notesRestored = true
-	}
+	// Notes are in memory when --continue regenerated them from the transcript
+	// at startup. Report them; the REPL serves /notes from the same field.
+	notesRestored = strings.TrimSpace(cdr.SessionNotes) != ""
 
 	// AGENTS.md is the cross-tool convention for a project's standing
 	// instructions to a coding agent (Codex, Cursor, Amp, Gemini CLI read it;
@@ -555,63 +545,6 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 			res.Model = alias
 		}
 		_ = history.SaveResume(projectRoot, res)
-	}
-}
-
-// notesTurnInterval is how many turns pass between regenerations.
-//
-// Debounced rather than written at exit, because sessions do not reliably end
-// with /exit: Ctrl-C, a closed terminal and a dropped connection are all
-// ordinary, and those are exactly the times you want the notes. Debounced
-// rather than every turn, because each regeneration is a weak-model call — one
-// per three turns is roughly 3% of a turn's cost by the commit-message
-// measurement, where one per turn would be closer to 9%.
-const notesTurnInterval = 3
-
-// notesDropped is set by /notes drop and read by the per-turn updater.
-//
-// Deleting the file is not enough on its own: the debounce would regenerate it
-// two or three turns later, and the user would watch a thing they discarded
-// come back — the same "will not take no for an answer" shape the AGENTS.md
-// offer-once rule exists to avoid. Session-scoped, so the next session starts
-// writing them again, which is right: dropping says "these are wrong now", not
-// "never again".
-var notesDropped bool
-
-// notesUpdater returns the per-turn hook that refreshes a project's session
-// notes, or nil when the session leaves no trace.
-//
-// Regenerated from the transcript rather than from the previous notes. Folding
-// a summary into a summary is what makes every iterative compaction scheme
-// degrade — the documented failure of compaction in every harness surveyed —
-// and the transcript is a durable record that makes the fold avoidable.
-func notesUpdater(cdr *coder.Coder, cfg *config.Config, hist *history.Writer,
-	projectRoot string, keepState bool,
-) func() {
-	if !keepState || hist == nil || cfg == nil {
-		return nil
-	}
-	weak := cdr.Model.WeakModel
-	if weak == nil {
-		return nil
-	}
-	write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage)
-	turns := 0
-	return func() {
-		if notesDropped {
-			return
-		}
-		turns++
-		if turns%notesTurnInterval != 0 {
-			return
-		}
-		transcript := history.ReadTranscript(hist.Path())
-		if transcript == "" {
-			return
-		}
-		if notes := write(transcript); notes != "" {
-			_ = history.SaveNotes(projectRoot, notes)
-		}
 	}
 }
 
@@ -714,12 +647,30 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
-		UpdateNotes: notesUpdater(cdr, cfg, hist, projectRoot, keepState),
-		Notes:       func() string { return history.LoadNotes(projectRoot) },
+		Notes: func() string { return cdr.SessionNotes },
 		DropNotes: func() {
-			notesDropped = true
 			cdr.SessionNotes, cdr.SessionNotesDate = "", ""
-			_ = history.SaveNotes(projectRoot, "")
+		},
+		GenerateNotes: func(_ context.Context) error {
+			if hist == nil {
+				return errors.New("no transcript available")
+			}
+			weak := cdr.Model.WeakModel
+			if weak == nil {
+				return errors.New("no weak model configured")
+			}
+			write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage)
+			transcript := history.ReadTranscript(hist.Path())
+			if transcript == "" {
+				return errors.New("transcript is empty")
+			}
+			notes := write(transcript)
+			if notes == "" {
+				return errors.New("the model returned no notes")
+			}
+			cdr.SessionNotes = notes
+			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
+			return nil
 		},
 		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		IsTerminal:  drivingATerminal,

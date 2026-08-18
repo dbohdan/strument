@@ -241,58 +241,6 @@ func (t Turn) render() string {
 	return b.String()
 }
 
-// NotesPath is the session-notes file for a project root.
-func NotesPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "notes.md"), nil
-}
-
-// LoadNotes reads a project's session notes, or "" when there are none. Like
-// LoadResume, never an error: notes are a convenience, and a session that
-// cannot read them is still a session.
-func LoadNotes(projectRoot string) string {
-	p, err := NotesPath(projectRoot)
-	if err != nil {
-		return ""
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return ""
-	}
-	return string(data)
-}
-
-// SaveNotes writes the session notes atomically, owner-only. Empty content
-// removes the file rather than leaving a blank one, so "no notes" has exactly
-// one representation on disk.
-func SaveNotes(projectRoot, notes string) error {
-	p, err := NotesPath(projectRoot)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(notes) == "" {
-		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(p), dirMode); err != nil {
-		return err
-	}
-	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, []byte(strings.TrimRight(notes, "\n")+"\n"), fileMode); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, p); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
-}
-
 // ReadTranscript returns a project's transcript, or "" if there is none. It is
 // the source session notes are regenerated from — regenerating from the record
 // rather than from the previous notes is what stops the telephone game that

@@ -268,10 +268,12 @@ so the model can still check something mid-turn.
 ### `--continue` / `-c`
 
 When starting an interactive session, regenerate the session notes from the
-project's existing transcript before restoring the session. The fresh notes are
-then placed in context for the new session. This makes continuation explicit and
-uses the transcript as the source rather than feeding older notes back into the
-summarizer. The option does nothing when history is disabled, unavailable, or
+project's existing transcript and load them into context for the new session.
+Without it, a session starts clean — no notes in context, no model call, no
+cost. The notes live in memory for the session and are never persisted; the next
+`--continue` regenerates from a transcript that now includes the full prior
+session. `/notes generate` achieves the same thing mid-session at the user's
+request. The option does nothing when history is disabled, unavailable, or
 empty.
 
 

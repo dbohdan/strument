@@ -46,7 +46,7 @@ func init() {
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List the pinned files", cmdLs},
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
-		{"notes", "[drop]", "Show the session notes a later session starts from; drop discards them", cmdNotes},
+		{"notes", "[generate|drop]", "Show, regenerate, or discard the session notes", cmdNotes},
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
@@ -390,7 +390,7 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
-// cmdNotes shows what a later session would start from, and discards it.
+// cmdNotes shows, generates, or discards the session notes.
 //
 // The notes are written by the weak model and go into a future prompt, so they
 // have to be readable: a summary nobody can inspect is a summary nobody should
@@ -401,35 +401,39 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 // ambiguous the moment a project has one. It also keeps notes out of the pin
 // vocabulary entirely, which is right: /drop unpins things the *user* chose,
 // and the notes are something the harness wrote.
-func cmdNotes(_ context.Context, r *REPL, args string) string {
+func cmdNotes(ctx context.Context, r *REPL, args string) string {
 	switch strings.TrimSpace(args) {
-	case "":
+	case "generate":
+		if r.opts.GenerateNotes == nil {
+			r.printf("Session notes are off for this session.")
+			return ""
+		}
+		if err := r.opts.GenerateNotes(ctx); err != nil {
+			r.out.Errorf("Could not generate notes: %v", err)
+			return ""
+		}
+		r.printf("Session notes regenerated from the transcript.")
 	case "drop":
 		if r.opts.DropNotes == nil {
 			r.printf("Session notes are off for this session.")
 			return ""
 		}
 		r.opts.DropNotes()
-		// Suppressing regeneration matters as much as deleting the file. Left
-		// to the debounce, the notes would simply come back a few turns later,
-		// which is the "will not take no for an answer" shape the AGENTS.md
-		// rule was written to avoid.
-		r.printf("Discarded the session notes; none will be written for the rest of this session.")
-		return ""
+		r.printf("Discarded the session notes.")
+	case "":
+		notes := r.opts.Notes
+		if notes == nil {
+			r.printf("Session notes are off for this session.")
+			return ""
+		}
+		if strings.TrimSpace(notes()) == "" {
+			r.printf("No session notes. Use /notes generate to create them from the transcript.")
+			return ""
+		}
+		r.printf("%s", strings.TrimRight(notes(), "\n"))
 	default:
-		r.out.Errorf("Usage: /notes [drop]")
-		return ""
+		r.out.Errorf("Usage: /notes [generate|drop]")
 	}
-	if r.opts.Notes == nil {
-		r.printf("Session notes are off for this session.")
-		return ""
-	}
-	notes := r.opts.Notes()
-	if strings.TrimSpace(notes) == "" {
-		r.printf("No session notes yet; they are written as a session goes on.")
-		return ""
-	}
-	r.printf("%s", strings.TrimRight(notes, "\n"))
 	return ""
 }
 
