@@ -427,7 +427,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 			return ""
 		}
 		if strings.TrimSpace(notes()) == "" {
-			r.printf("No session notes. Use /notes generate to create them from the transcript.")
+			r.printf(`No session notes. Use "/notes generate" to create them from the transcript.`)
 			return ""
 		}
 		r.printf("%s", strings.TrimRight(notes(), "\n"))
