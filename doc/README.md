@@ -223,6 +223,7 @@ reaching around it.
 | `llm.ModelClient` | one streaming send | `client.Client` / `fixture.StreamStub` |
 | `Output` | user-facing printing + live stream | `repl.termOutput`, `StdOutput` / test buffers |
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
+| `Asker` | the `ask_user_question` tool's multiple-choice questions | readline asker / replay stub (nil in script mode) |
 | `CommandRunner` | `/run`, the `bash` tool, `check` checks | `PipeRunner` / replay stub |
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
@@ -243,7 +244,7 @@ data — which is what lets the harness edit its own prompt strings. `diff`,
 `diff-fenced`, and `whole` have been removed, and `edit_format` now exists
 only to give the old values a migration error.
 
-Nine tools, in three natures:
+Ten tools, in three natures:
 
 - **Observation is free**, because the cost of looking is what makes a model
   guess. `read(path, offset, limit)` returns a `cat -n`-style window with a
@@ -403,6 +404,28 @@ Nine tools, in three natures:
   left this gate. What reaches it is the open-ended remainder after every
   observation tool has taken its share, and the repetition that option was
   answering now belongs to the allowlist.
+
+- **Asking the user is a tool call, and a different channel from the gate.**
+  `ask_user_question(questions)` lets the model pause mid-turn and collect a
+  bounded decision it genuinely cannot proceed without — "which of these two
+  config keys did you mean", "REPLACE the whole function or just the body".
+  Questions are multiple-choice (2–4 options, 1–5 questions per call, free
+  text always available to the user as an implicit last row), print as
+  ordinary scroll with a numbered list, and are read through the `Asker` port
+  — a separate port from `Confirmer`, because a yes/no shape cannot carry a
+  choice and because `--yes`/`--yes-shell` must structurally not answer one:
+  those flags skip permission prompts, and a question is the model asking for
+  information, not permission. Without a terminal (script mode, a nil Asker)
+  the call answers the model with "proceed using your best judgment and state
+  the assumption you made" rather than hanging or silently picking option 1 —
+  a decision the user never made must never be attributed to them. An answer
+  typed as indices resolves to labels only when *every* comma-separated token
+  is a valid index; anything else is the whole raw line as free text
+  (`ParseAskAnswer` — one rule, shared by the terminal prompt and the fixture
+  stub so a replay cannot interpret an answer differently from the session it
+  stands in for). An ask is an ordinary work step: no reflection budget unless
+  the arguments were malformed, and the turn continues on the result like any
+  other tool call.
 
 The tools live in `internal/coder/tools.go` (`toolobserve.go` for the
 observation half, `toolsymbol.go` for `symbol`); `applyToolCalls` dispatches a

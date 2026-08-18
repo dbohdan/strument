@@ -4,6 +4,8 @@ package coder
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -72,6 +74,70 @@ type ConfirmRequest struct {
 	// not about what Enter means at one.
 	RequiresYesShell bool
 	Group            string // ConfirmGroup key ("all"/"skip" scope)
+}
+
+// AskRequest is one question put to the user on the attached terminal. The
+// options are the modeled choices; the rendered list always adds a final
+// "Other — type your own answer" row, which is why an answer can come back
+// as raw text rather than a label.
+type AskRequest struct {
+	Question    string
+	Options     []AskOption
+	MultiSelect bool
+}
+
+// Asker puts one question to the user and returns their answer: the chosen
+// labels (one entry, or several for multiSelect), or the raw text they typed.
+// A nil Asker means no interactive terminal is attached (script mode); the
+// caller answers the model with an error result rather than asking.
+//
+// A port of its own rather than a widening of Confirmer, whose yes/no/always
+// shape cannot carry a multiple-choice question. The split is also the reason
+// --yes/--yes-shell cannot answer one: those flags skip permission prompts,
+// and a question is not a permission prompt — it is the model asking for
+// information it cannot proceed without.
+type Asker interface {
+	Ask(req AskRequest) []string
+}
+
+// ParseAskAnswer maps the line the user typed at a question prompt to the
+// answer the model receives: the labels the indices select, or the raw input
+// as one free-text answer. It is exported because two implementations of
+// Asker need the identical rule — the REPL's terminal prompt and the fixture
+// harness's scripted rows — and an answer interpreted differently between the
+// two would make a replay lie about what a live session did.
+//
+// The rule, mirroring Claude Code's reference implementation: split on
+// commas, and only if *every* token is a valid index in range do the indices
+// select labels. Anything else — an out-of-range number, a multi-index
+// answer to a single-select question, prose — is the whole raw input, never
+// a partial interpretation, because silently dropping the tokens that didn't
+// parse produces answers the user didn't intend.
+//
+// The index of the "Other" row (len(Options)+1) is the one special case: typed
+// alone it is a custom answer the user left blank, so the answer is empty
+// rather than the meaningless raw string "3".
+func ParseAskAnswer(req AskRequest, input string) []string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil
+	}
+	if n, err := strconv.Atoi(input); err == nil && n == len(req.Options)+1 {
+		return nil
+	}
+	tokens := strings.Split(input, ",")
+	labels := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		i, err := strconv.Atoi(strings.TrimSpace(tok))
+		if err != nil || i < 1 || i > len(req.Options) {
+			return []string{input}
+		}
+		labels = append(labels, req.Options[i-1].Label)
+	}
+	if !req.MultiSelect && len(labels) != 1 {
+		return []string{input}
+	}
+	return labels
 }
 
 // AutoConfirmer implements --yes / --yes-shell (--yes never auto-runs

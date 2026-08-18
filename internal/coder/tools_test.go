@@ -67,9 +67,9 @@ func TestToolRequestCarriesTools(t *testing.T) {
 	if choice != "auto" {
 		t.Errorf("tool_choice = %q, want auto", choice)
 	}
-	// The read-only tools always come first; bash is gated off here, and no
-	// check is configured.
-	want := []string{"read", "grep", "glob", "ls", "edit", "write"}
+	// The read-only tools always come first, ask_user_question with them (it
+	// mutates nothing); bash is gated off here, and no check is configured.
+	want := []string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v (bash gated off)", names, want)
 	}
@@ -87,7 +87,7 @@ func TestToolSetGating(t *testing.T) {
 		{
 			"shell enabled, no check configured",
 			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash"},
 		},
 		{
 			"check configured",
@@ -96,12 +96,12 @@ func TestToolSetGating(t *testing.T) {
 				c.SuggestShellCommands = true
 				c.Check = []config.Check{{Name: "test", Argv: []string{"go", "test", "./..."}}}
 			},
-			[]string{"read", "grep", "glob", "ls", "edit", "write", "bash", "check"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash", "check"},
 		},
 		{
 			"ask mode is read-only",
 			func(c *Coder) { c.editFormat = "ask"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -411,6 +411,216 @@ func TestBashRequiresAPurpose(t *testing.T) {
 	}
 	if !slices.Contains(required, any("command")) || !slices.Contains(required, any("purpose")) {
 		t.Errorf("required = %v, want both command and purpose", required)
+	}
+}
+
+// askToolArgs is a one-question argument object with two options.
+const askToolArgs = `{"questions":[{"question":"Which format?","options":[` +
+	`{"label":"RFC 3339","description":"matches the other loggers"},` +
+	`{"label":"Unix epoch","description":"compact"}]}]}`
+
+// askToolArgsJSONL is the same arguments JSON-escaped for embedding in a
+// fixture stream row's tool_args.
+const askToolArgsJSONL = `{\"questions\":[{\"question\":\"Which format?\",\"options\":[` +
+	`{\"label\":\"RFC 3339\",\"description\":\"matches the other loggers\"},` +
+	`{\"label\":\"Unix epoch\",\"description\":\"compact\"}]}]}`
+
+// askStreamTurn is a stream row whose one tool call asks the question above.
+const askStreamTurn = `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1",` +
+	`"tool_name":"ask_user_question","tool_args":"` + askToolArgsJSONL + `"},` +
+	`{"kind":"Finish","finish_reason":"tool_calls"}]}`
+
+// TestParseAskAnswer pins the whole-fallback rule from the spec: the typed
+// line resolves to labels only when every comma-separated token is a valid
+// in-range index; anything else is the entire raw input as one free-text
+// answer, never a partial interpretation.
+func TestParseAskAnswer(t *testing.T) {
+	req := AskRequest{Question: "q", Options: []AskOption{
+		{Label: "one"}, {Label: "two"}, {Label: "three"},
+	}}
+	for _, tc := range []struct {
+		input string
+		multi bool
+		want  []string
+	}{
+		{"1", false, []string{"one"}},
+		{" 2 ", false, []string{"two"}},
+		{"1, 3", true, []string{"one", "three"}},
+		// The "Other" row (index 4) is a blank custom answer.
+		{"4", false, nil},
+		// Out of range and unparseable tokens fall through to raw text.
+		{"0", false, []string{"0"}},
+		{"5", false, []string{"5"}},
+		{"1.5", false, []string{"1.5"}},
+		{"rfc3339, but with milliseconds", false, []string{"rfc3339, but with milliseconds"}},
+		// A partial parse never partially selects.
+		{"1, x", true, []string{"1, x"}},
+		// Multi-index to a single-select question is out of range for it.
+		{"1,2", false, []string{"1,2"}},
+		{"", false, nil},
+	} {
+		req.MultiSelect = tc.multi
+		got := ParseAskAnswer(req, tc.input)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("ParseAskAnswer(%q, multi=%v) = %v, want %v", tc.input, tc.multi, got, tc.want)
+		}
+	}
+}
+
+// TestParseAskArgs covers the decode-and-validate half: the caps the schema
+// states are enforced on the Go side too, and a violation is a model-facing
+// message.
+func TestParseAskArgs(t *testing.T) {
+	q := func(n int) string {
+		var b strings.Builder
+		b.WriteString(`{"questions":[`)
+		for i := range n {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			fmt.Fprintf(&b, `{"question":"q%d","options":[{"label":"a","description":""},{"label":"b","description":""}]}`, i)
+		}
+		b.WriteString(`]}`)
+		return b.String()
+	}
+	for _, tc := range []struct {
+		name, args, wantErr string
+	}{
+		{"valid", askToolArgs, ""},
+		{"bad json", `{`, "not valid JSON"},
+		{"no questions", `{"questions":[]}`, "1 to 5 questions"},
+		{"too many questions", q(6), "1 to 5 questions"},
+		{"one question", q(1), ""},
+		{"five questions", q(5), ""},
+		{"one option", `{"questions":[{"question":"q","options":[{"label":"a","description":""}]}]}`, "2 to 4 options"},
+		{"missing question text", `{"questions":[{"options":[{"label":"a","description":""},{"label":"b","description":""}]}]}`, "no \"question\" text"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, msg := parseAskArgs(call(toolAskUser, tc.args))
+			if tc.wantErr == "" {
+				if msg != "" {
+					t.Fatalf("parse error = %q, want none", msg)
+				}
+				return
+			}
+			if !strings.Contains(msg, tc.wantErr) {
+				t.Errorf("parse error = %q, want it to contain %q", msg, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestAskUserReplay drives a full ask_user_question turn through the fixture
+// harness: the scripted "ask" row answers the question by index, the result
+// text carries question and label, the narration line prints, and the turn is
+// a plain work step — no reflection was spent.
+func TestAskUserReplay(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"ask-user","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"add a timestamp to the log line"}
+{"kind":"ask","question":"Which format?","answer":"1"}
+`+askStreamTurn+`
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`+closingTurn)
+	out := &captureOut{}
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.Out = out
+	})
+	env.run(t)
+
+	result := lastToolResult(t, env.coder)
+	if !strings.Contains(result.Text(), "The user answered:") ||
+		!strings.Contains(result.Text(), `"Which format?" → "RFC 3339"`) {
+		t.Errorf("result = %q, want the question and the chosen label", result.Text())
+	}
+	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, `‹ask› "Which format?" → RFC 3339`) {
+		t.Errorf("missing the narration line:\n%s", joined)
+	}
+	// An ask is an ordinary work step, so it must have spent the step budget.
+	if env.coder.numSteps != 1 {
+		t.Errorf("steps = %d, want 1", env.coder.numSteps)
+	}
+}
+
+// TestAskUserFreeTextAnswer pins the escape hatch end to end: a scripted
+// answer that is not an index is the whole raw string, exactly as if the user
+// had typed it.
+func TestAskUserFreeTextAnswer(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"ask-user-free-text","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"add a timestamp to the log line"}
+{"kind":"ask","question":"Which format?","answer":"rfc3339, but with milliseconds"}
+`+askStreamTurn+`
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`+closingTurn)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	if result := lastToolResult(t, env.coder).Text(); !strings.Contains(result, `"rfc3339, but with milliseconds"`) {
+		t.Errorf("result = %q, want the raw free-text answer", result)
+	}
+}
+
+// TestAskUserNoTerminal is script mode: a nil Asker must not hang and must
+// not silently pick option 1 — the model is told to proceed on its best
+// judgment, and that answer is not the model's fault, so no reflection is
+// spent.
+func TestAskUserNoTerminal(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"ask-user-no-terminal","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"add a timestamp"}
+`+askStreamTurn+`
+{"kind":"expect_outcome","outcome":"Success","reflections":0}
+`+closingTurn)
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.Asker = nil
+	})
+	env.run(t)
+
+	result := lastToolResult(t, env.coder).Text()
+	if !strings.Contains(result, "unavailable without an interactive terminal") {
+		t.Errorf("result = %q, want the no-terminal message", result)
+	}
+	if strings.Contains(result, "RFC 3339") {
+		t.Errorf("result = %q: a nil Asker must never auto-select an option", result)
+	}
+	if env.coder.numReflections != 0 {
+		t.Errorf("reflections = %d, want 0 (not the model's fault)", env.coder.numReflections)
+	}
+}
+
+// TestAskUserValidationReflects pins that a malformed call reflects like any
+// other bad tool argument: the failure is the call's tool result and the turn
+// re-sends on it.
+func TestAskUserValidationReflects(t *testing.T) {
+	sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"ask-user-bad-args","source":"authored"}
+{"kind":"chat","editable":[]}
+{"kind":"user","text":"ask me something"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"ask_user_question","tool_args":"{\"questions\":[]}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"ask_user_question","tool_args":"`+askToolArgsJSONL+`"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"ask","question":"Which format?","answer":"2"}
+{"kind":"expect_outcome","outcome":"Success","reflections":1}
+`+closingTurn)
+	env := setupScenario(t, sc, toolMode)
+	env.run(t)
+
+	hist := history(env.coder)
+	// user, assistant(call_1), tool(error), assistant(call_2), tool(answer),
+	// assistant(closing).
+	if len(hist) != 6 {
+		t.Fatalf("history = %s", dumpHistory(hist))
+	}
+	if !strings.Contains(hist[2].Text(), "1 to 5 questions") {
+		t.Errorf("first tool result = %q, want the validation failure", hist[2].Text())
+	}
+	if !strings.Contains(hist[4].Text(), `"Unix epoch"`) {
+		t.Errorf("second tool result = %q, want the answered label", hist[4].Text())
 	}
 }
 

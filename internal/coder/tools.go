@@ -25,6 +25,11 @@ const (
 	toolLS     = "ls"
 	toolSymbol = "symbol"
 	toolCheck  = "check"
+	// toolAskUser is the model's channel for asking the user a structured
+	// question mid-turn. It mutates nothing, so it sits with the read-only
+	// tools — a discussion turn is precisely where a clarifying question is
+	// most useful.
+	toolAskUser = "ask_user_question"
 )
 
 // strProp is a JSON-Schema string property with a description.
@@ -45,6 +50,9 @@ func intProp(desc string) map[string]any {
 // engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
 	defs := readOnlyTools()
+	// ask_user_question is always offered: it has no side effect to gate, and
+	// a discussion turn is exactly where a clarifying question belongs.
+	defs = append(defs, askTool())
 	if c.RepoMap != nil {
 		// symbol reads the same tree-sitter layer the repo map is built from,
 		// so it is offered exactly when that layer is available.
@@ -234,6 +242,149 @@ func checkTool(checks []config.Check) llm.ToolDef {
 	}
 }
 
+// askTool lets the model ask the user a structured, multiple-choice question
+// mid-turn. Free text is always available to the user as an implicit extra
+// option — never a modeled flag to turn on — so there is one less knob for the
+// model to reason about.
+//
+// The questions-per-call and options-per-question caps keep one call legible
+// as a single block of scroll in a plain scrolling terminal: a question whose
+// options the user must scroll back to read whole is a badly formed question.
+func askTool() llm.ToolDef {
+	return llm.ToolDef{
+		Name: toolAskUser,
+		Description: "Ask the user a multiple-choice question. Use it when a task has a genuinely " +
+			"ambiguous, multiple-valid-approaches decision point — not for questions you could " +
+			"resolve by reading the codebase with read/grep/glob/symbol. Prefer 1 question over " +
+			"several when the decisions are independent; batch only questions that are genuinely " +
+			"related. Options should be mutually exclusive and skimmable: label is the fast scan, " +
+			"description carries the actual tradeoff. Order options with your recommended choice " +
+			"first when you have one, and say so in the description (e.g. \"— recommended, matches " +
+			"existing config style\"). The user can always answer with their own free text instead " +
+			"of picking an option. Do not use this tool to ask permission to do something — that " +
+			"is what the confirmation prompt is for. Use it only when you cannot proceed without " +
+			"the user's input.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"questions": map[string]any{
+					"type":        "array",
+					"minItems":    1,
+					"maxItems":    5,
+					"description": "The questions to ask, in order. Ask at most one question per decision.",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"question": strProp("Full question text shown to the user."),
+							"options": map[string]any{
+								"type":        "array",
+								"minItems":    2,
+								"maxItems":    4,
+								"description": "The choices. 2-4, mutually exclusive.",
+								"items": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"label":       strProp("The short answer, as it reads in the list."),
+										"description": strProp("The tradeoff the label stands for; this is what the user actually decides on."),
+									},
+									"required": []any{"label", "description"},
+								},
+							},
+							"multiSelect": map[string]any{
+								"type":        "boolean",
+								"default":     false,
+								"description": "Allow several answers to this one question (comma-separated indices).",
+							},
+						},
+						"required": []any{"question", "options"},
+					},
+				},
+			},
+			"required": []any{"questions"},
+		},
+	}
+}
+
+// AskOption is one modeled choice of a question. Exported because an Asker
+// implementation outside this package (the REPL's, the fixture stub's)
+// constructs the request the coder hands it.
+type AskOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// askQuestion is one question of an ask_user_question call.
+type askQuestion struct {
+	Question string      `json:"question"`
+	Options  []AskOption `json:"options"` // 2-4 entries
+	// camelCase on the wire, matching Claude Code's AskUserQuestion shape —
+	// the name a post-trained model has seen — rather than the repo's
+	// snake_case convention.
+	MultiSelect bool `json:"multiSelect"` //nolint:tagliatelle
+}
+
+// askUserArgs is the decoded argument object of an ask_user_question call.
+type askUserArgs struct {
+	Questions []askQuestion `json:"questions"` // 1-5 entries
+}
+
+// parseAskArgs decodes an ask_user_question call. The second return is a
+// model-facing failure message, "" on success.
+func parseAskArgs(tc llm.ToolCall) (askUserArgs, string) {
+	var a askUserArgs
+	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
+		return askUserArgs{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
+	}
+	if len(a.Questions) == 0 || len(a.Questions) > 5 {
+		return askUserArgs{}, "The \"questions\" argument must hold 1 to 5 questions."
+	}
+	for i, q := range a.Questions {
+		if q.Question == "" {
+			return askUserArgs{}, fmt.Sprintf("Question %d has no \"question\" text.", i+1)
+		}
+		if len(q.Options) < 2 || len(q.Options) > 4 {
+			return askUserArgs{}, fmt.Sprintf("Question %d must offer 2 to 4 options; it offered %d.", i+1, len(q.Options))
+		}
+	}
+	return a, ""
+}
+
+// runAskUser asks each of the call's questions in order through the Asker and
+// formats the result text both sides of the exchange can read back: the
+// question and the answer together, so the transcript stays self-describing.
+//
+// A validation failure is the model's mistake and reflects like any other
+// malformed tool argument. A nil Asker is not the model's fault — it is script
+// mode with no terminal — so that answer spends no reflection budget: the
+// model is told to proceed on its best judgment, and the turn continues.
+func (c *Coder) runAskUser(tc llm.ToolCall, needsReflection *bool) string {
+	a, msg := parseAskArgs(tc)
+	if msg != "" {
+		*needsReflection = true
+		return msg
+	}
+	if c.Asker == nil {
+		return "ask_user_question is unavailable without an interactive terminal; " +
+			"proceed using your best judgment and state the assumption you made"
+	}
+
+	var b strings.Builder
+	b.WriteString("The user answered:")
+	for _, q := range a.Questions {
+		labels := c.Asker.Ask(AskRequest(q))
+		answer := strings.Join(labels, ", ")
+		if answer == "" {
+			answer = "(no answer)"
+		}
+		fmt.Fprintf(&b, "\n- %q → %q", q.Question, answer)
+		// The narration mirrors the ‹shell› purpose-line convention: the
+		// decision is recorded in the scroll at the moment it was made, which
+		// is the only record if the terminal clears.
+		c.Out.Toolf("‹ask› %q → %s", q.Question, answer)
+	}
+	return b.String()
+}
+
 // accumulateToolCall folds a streamed tool-call fragment into
 // partialToolCalls. ID and Name arrive on the first fragment for an index;
 // later fragments append Args chunks.
@@ -355,6 +506,10 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runSymbol(tc)
 		case toolCheck:
 			results[tc.ID] = c.runCheckTool(ctx, tc)
+		case toolAskUser:
+			// Not routed through confirmTurn: a question is not a permission
+			// prompt, and --yes/--yes-shell must not answer it.
+			results[tc.ID] = c.runAskUser(tc, &needsReflection)
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
 		}

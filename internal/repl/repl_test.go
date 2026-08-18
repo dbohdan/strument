@@ -484,6 +484,82 @@ func TestNonShellConfirmationShowsOnlyItsSubject(t *testing.T) {
 	}
 }
 
+// TestAskerRendersTheQuestion drives rlAsker directly, the way the
+// confirmation tests drive the confirmer: the question, the numbered options
+// with their descriptions, and the implicit "Other" row print as ordinary
+// scroll, then one line is read — an index selects the label, and free text
+// is the whole answer.
+func TestAskerRendersTheQuestion(t *testing.T) {
+	req := coder.AskRequest{
+		Question: "Which timestamp format should the new log lines use?",
+		Options: []coder.AskOption{
+			{Label: "RFC 3339", Description: "matches every other logger in this repo"},
+			{Label: "Unix epoch", Description: "compact, but needs conversion to read"},
+		},
+	}
+
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("1\n"))
+	got1 := r.Asker().Ask(req)
+	if strings.Join(got1, ",") != "RFC 3339" {
+		t.Errorf("answer = %v, want the selected label", got1)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"‹question› Which timestamp format should the new log lines use?",
+		"1. RFC 3339 — matches every other logger in this repo",
+		"2. Unix epoch — compact, but needs conversion to read",
+		"3. Other — type your own answer",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q:\n%s", want, got)
+		}
+	}
+	if s := askHint(3, false); s != "Answer (1-3, or your own text): " {
+		t.Errorf("single-select hint = %q", s)
+	}
+
+	// Free text is the whole answer, not a correction the harness interprets.
+	out.Reset()
+	r2, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("rfc3339, but with milliseconds\n"))
+	got2 := r2.Asker().Ask(req)
+	if strings.Join(got2, "|") != "rfc3339, but with milliseconds" {
+		t.Errorf("free-text answer = %v, want the raw line", got2)
+	}
+}
+
+// TestAskerMultiSelectPrompt pins the comma-separated hint, which is the only
+// user-visible difference a multiSelect question carries.
+func TestAskerMultiSelectPrompt(t *testing.T) {
+	r, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("1,2\n"))
+	got := r.Asker().Ask(coder.AskRequest{
+		Question:    "Which sections?",
+		Options:     []coder.AskOption{{Label: "Introduction"}, {Label: "Conclusion"}},
+		MultiSelect: true,
+	})
+	if strings.Join(got, ",") != "Introduction,Conclusion" {
+		t.Errorf("answer = %v, want both labels", got)
+	}
+	if s := askHint(3, true); s != "Answer (numbers separated by commas, or your own text): " {
+		t.Errorf("multiSelect hint = %q", s)
+	}
+}
+
+// TestAskerEmptyLineRepromptsOnce: an empty answer re-prompts one more time,
+// and a second empty line falls through as an empty free-text answer rather
+// than looping forever.
+func TestAskerEmptyLineRepromptsOnce(t *testing.T) {
+	r, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("\n\n"))
+	got := r.Asker().Ask(coder.AskRequest{
+		Question: "Which?",
+		Options:  []coder.AskOption{{Label: "a"}, {Label: "b"}},
+	})
+	if len(got) != 0 {
+		t.Errorf("answer = %v, want the empty fall-through", got)
+	}
+	// The prompt itself is written by readline and invisible to the captured
+	// output (see askHint); the two lines of input consumed are the count.
+}
+
 func TestPromptCtrlCChordExits(t *testing.T) {
 	// Two ^C at the prompt within the window: first prints the hint,
 	// second exits. Readline maps \x03 to ErrInterrupt in non-interactive

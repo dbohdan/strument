@@ -108,6 +108,38 @@ func (c *ConfirmScript) Ask(prompt string) (string, error) {
 // leave zero).
 func (c *ConfirmScript) Remaining() int { return len(c.Rows) - c.next }
 
+// AskScript answers ask_user_question prompts from the fixture's ask rows, in
+// file order. Like ConfirmScript it fails loudly on a mismatch: a question
+// whose wording drifted is a scenario that no longer tests what it says.
+type AskScript struct {
+	Rows []Ask
+	next int
+}
+
+// NewAskScript scripts sc's ask rows.
+func NewAskScript(sc *Scenario) *AskScript {
+	return &AskScript{Rows: sc.Asks}
+}
+
+// Answer consumes the next scripted answer for question. The raw row is
+// returned — the caller runs it through coder.ParseAskAnswer so a scripted
+// "1" resolves to the same label a live user's "1" would.
+func (a *AskScript) Answer(question string) (string, error) {
+	if a.next >= len(a.Rows) {
+		return "", fmt.Errorf("fixture: unscripted ask prompt %q", question)
+	}
+	row := a.Rows[a.next]
+	a.next++
+	if row.Question != "" && row.Question != question {
+		return "", fmt.Errorf("fixture: ask prompt %q, script expected %q", question, row.Question)
+	}
+	return row.Answer, nil
+}
+
+// Remaining reports unconsumed ask rows (a completed scenario should leave
+// zero).
+func (a *AskScript) Remaining() int { return len(a.Rows) - a.next }
+
 // CommandScript serves CommandRunner results from the fixture's command rows,
 // in order.
 type CommandScript struct {

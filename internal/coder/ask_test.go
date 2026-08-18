@@ -235,7 +235,7 @@ func TestAskRequestCarriesReadOnlyTools(t *testing.T) {
 	for _, d := range req.Tools {
 		got[d.Name] = true
 	}
-	for _, want := range []string{"read", "grep", "glob", "ls", "symbol"} {
+	for _, want := range []string{"read", "grep", "glob", "ls", "symbol", "ask_user_question"} {
 		if !got[want] {
 			t.Errorf("ask mode should offer %s, got %v", want, slices.Sorted(maps.Keys(got)))
 		}

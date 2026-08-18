@@ -59,13 +59,17 @@ type Coder struct {
 	Summarizer *ChatSummary // nil => chat-history summarization disabled
 	Tokens     TokenCounter
 	Confirm    Confirmer
-	Runner     CommandRunner
-	Repo       Repo
-	Clock      Clock
-	Out        Output
-	RepoMap    *repomap.RepoMap
-	Scrape     Scraper
-	Platform   PlatformInfo
+	// Asker answers ask_user_question calls. nil (script mode, tests) means
+	// no interactive terminal: the call is answered with an error result
+	// rather than hanging, the same convention as a nil Repo.
+	Asker    Asker
+	Runner   CommandRunner
+	Repo     Repo
+	Clock    Clock
+	Out      Output
+	RepoMap  *repomap.RepoMap
+	Scrape   Scraper
+	Platform PlatformInfo
 	// Files is the workspace behind read/ls/glob/grep. It never consults git,
 	// so the tools behave the same in a plain directory.
 	Files *workspace.Workspace

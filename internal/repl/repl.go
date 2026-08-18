@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -547,4 +548,69 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	default:
 		return coder.ConfirmResult{}
 	}
+}
+
+// Asker returns a coder.Asker that asks questions on this REPL's terminal.
+// Unlike Confirmer there is no AutoConfirmer to wrap it in: --yes and
+// --yes-shell answer permission prompts, and a question is not one.
+func (r *REPL) Asker() coder.Asker { return rlAsker{r} }
+
+// rlAsker asks multiple-choice questions through the REPL's readline so
+// prompt input, confirm input, and question answers share one reader. The
+// question prints as ordinary scroll — no widget, no redraw — and the answer
+// is one line read at a prompt.
+type rlAsker struct{ r *REPL }
+
+// readAskLine prints promptText and reads one line with the same settings a
+// y/n confirm uses: no input history (answers are not worth recalling), no
+// completion.
+func (rl rlAsker) readAskLine(promptText string) (string, bool) {
+	r := rl.r
+	cfg := r.rl.GetConfig()
+	cfg.Prompt = promptText
+	cfg.HistoryLimit = -1
+	cfg.AutoComplete = nil
+	line, err := r.rl.ReadLineWithConfig(cfg)
+	if err != nil {
+		return "", false
+	}
+	return line, true
+}
+
+// askHint is the answer line's prompt.
+//
+// Pulled out of Ask for the same reason confirmSuffix is pulled out of
+// Confirm: readline writes the prompt straight to the terminal, so the
+// scripted sessions never see it and a test cannot assert on it in place.
+func askHint(n int, multiSelect bool) string {
+	if multiSelect {
+		return "Answer (numbers separated by commas, or your own text): "
+	}
+	return "Answer (1-" + strconv.Itoa(n) + ", or your own text): "
+}
+
+func (rl rlAsker) Ask(req coder.AskRequest) []string {
+	r := rl.r
+	r.out.Toolf("‹question› %s", req.Question)
+	for i, opt := range req.Options {
+		if opt.Description != "" {
+			r.out.Printf("%d. %s — %s", i+1, opt.Label, opt.Description)
+		} else {
+			r.out.Printf("%d. %s", i+1, opt.Label)
+		}
+	}
+	r.out.Printf("%d. Other — type your own answer", len(req.Options)+1)
+
+	// An empty line re-prompts once rather than looping forever: a user who
+	// hits Enter twice has said "skip", and the empty free-text answer that
+	// falls through is the honest record of that.
+	hint := askHint(len(req.Options)+1, req.MultiSelect)
+	line, ok := rl.readAskLine(hint)
+	if ok && strings.TrimSpace(line) == "" {
+		line, ok = rl.readAskLine(hint)
+	}
+	if !ok {
+		return nil // interrupted or EOF; the coder reports "(no answer)"
+	}
+	return coder.ParseAskAnswer(req, line)
 }

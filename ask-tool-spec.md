@@ -6,7 +6,12 @@ spec set that no longer exist; this revision is written against
 `internal/coder/tools.go`, `internal/coder/ports.go`, `internal/repl/repl.go`,
 and `internal/fixture/` as they stand.
 
-Status: proposed design, ready for implementation.
+Status: implemented (2026-08-18). The code is now the source of truth; this
+document is the design record. One deliberate deviation from the letter of
+§3.2/§5: the option type is exported as `coder.AskOption` and the answer-
+parsing rule as `coder.ParseAskAnswer`, because the REPL's asker and the
+fixture stub both live outside `internal/coder` and must interpret answers
+identically to the live terminal path.
 Depends on: `doc/README.md` (the tool loop, the coder's ports),
 `internal/coder/tools.go` (dispatch), `internal/coder/ports.go` (the
 `Confirmer` port), `internal/fixture/` (scenario stubs).

@@ -683,8 +683,11 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		return err
 	}
 	defer r.Close()
-	// Route confirms through readline; --yes/--yes-shell answer first.
+	// Route confirms through readline; --yes/--yes-shell answer first. The
+	// asker has no auto variant: --yes answers permission prompts, and a
+	// question is the model asking for information it cannot proceed without.
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: r.Confirmer()}
+	cdr.Asker = r.Asker()
 	return r.Run(context.Background())
 }
 

@@ -137,6 +137,7 @@ At twenty-five steps Strument prints the number of edits and the cost so far and
 Each tool call reports one line in the log.
 Shell commands ask for permission first, which you can give for the command or all commands in a turn.
 Reading, searching, and editing do not ask for permission.
+When the model cannot proceed without your decision, it asks a structured multiple-choice question (`ask_user_question`) instead of guessing; you pick a numbered option or type your own answer, and `--yes` never answers it for you.
 
 Slash commands perform actions initiated by you rather than the model:
 

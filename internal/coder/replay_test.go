@@ -50,6 +50,23 @@ func (s scriptRunner) Run(_ context.Context, block, _ string) (int, string, erro
 	return exit, out, nil
 }
 
+// scriptAsker adapts the fixture's ask rows to the coder's Asker. The raw
+// scripted line goes through ParseAskAnswer, so a scripted "1" resolves to the
+// same label a live user's "1" would — a replay must not interpret answers
+// differently from the session it stands in for.
+type scriptAsker struct {
+	t      *testing.T
+	script *fixture.AskScript
+}
+
+func (s scriptAsker) Ask(req AskRequest) []string {
+	line, err := s.script.Answer(req.Question)
+	if err != nil {
+		s.t.Fatalf("ask: %v", err)
+	}
+	return ParseAskAnswer(req, line)
+}
+
 type testOutput struct{ t *testing.T }
 
 func (o testOutput) Printf(format string, args ...any)   { o.t.Logf("out: "+format, args...) }
@@ -67,6 +84,7 @@ type replayEnv struct {
 	coder    *Coder
 	stub     *fixture.StreamStub
 	confirms *fixture.ConfirmScript
+	asks     *fixture.AskScript
 	commands *fixture.CommandScript
 	dir      string
 }
@@ -102,8 +120,10 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	stub := fixture.NewStreamStub(sc)
 	c.Client = stub
 	confirms := fixture.NewConfirmScript(sc)
+	asks := fixture.NewAskScript(sc)
 	commands := fixture.NewCommandScript(sc)
 	c.Confirm = scriptConfirmer{t, confirms}
+	c.Asker = scriptAsker{t, asks}
 	c.Runner = scriptRunner{t, commands}
 	c.Out = testOutput{t}
 	c.Clock = RealClock{} // replay streams never sleep long; retries use Clock below
@@ -118,7 +138,7 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	if mutate != nil {
 		mutate(c)
 	}
-	return &replayEnv{sc: sc, coder: c, stub: stub, confirms: confirms, commands: commands, dir: dir}
+	return &replayEnv{sc: sc, coder: c, stub: stub, confirms: confirms, asks: asks, commands: commands, dir: dir}
 }
 
 // run executes the scenario's user message and asserts the expect rows.
@@ -170,6 +190,9 @@ func (env *replayEnv) assertExpectations(t *testing.T) {
 	// row outlived the confirmation it scripted.)
 	if n := env.confirms.Remaining(); n != 0 {
 		t.Errorf("%d scripted confirm row(s) went unused; the run asked fewer questions than the scenario expected", n)
+	}
+	if n := env.asks.Remaining(); n != 0 {
+		t.Errorf("%d scripted ask row(s) went unused", n)
 	}
 	if n := env.commands.Remaining(); n != 0 {
 		t.Errorf("%d scripted command row(s) went unused", n)

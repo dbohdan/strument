@@ -139,6 +139,31 @@ func TestConfirmAndCommandScripts(t *testing.T) {
 	}
 }
 
+func TestAskScript(t *testing.T) {
+	sc, err := Read(strings.NewReader(
+		`{"v":1,"kind":"meta","scenario":"x","source":"authored"}` + "\n" +
+			`{"kind":"ask","question":"Which format?","answer":"1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sc.Asks) != 1 || sc.Asks[0].Question != "Which format?" {
+		t.Fatalf("asks = %+v", sc.Asks)
+	}
+	ask := NewAskScript(sc)
+	ans, err := ask.Answer("Which format?")
+	if err != nil || ans != "1" {
+		t.Errorf("answer = %q, %v", ans, err)
+	}
+	if _, err := ask.Answer("Which format?"); err == nil {
+		t.Error("want error on unscripted question")
+	}
+	// A wording mismatch is a loud failure, not an off-by-one.
+	ask2 := NewAskScript(sc)
+	if _, err := ask2.Answer("Which style?"); err == nil || !strings.Contains(err.Error(), "script expected") {
+		t.Errorf("want mismatch error, got %v", err)
+	}
+}
+
 func TestLoadCapturedSmokeFixture(t *testing.T) {
 	sc, err := Load("../../testdata/fixtures/basecoder/edit-success.jsonl")
 	if err != nil {

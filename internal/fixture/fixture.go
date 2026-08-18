@@ -53,6 +53,16 @@ type Confirm struct {
 	Answer string `json:"answer"`
 }
 
+// Ask is one scripted question answer, consumed in file order. Question is
+// matched exactly, so a wording change in the model's question is a loud
+// harness failure rather than a silent off-by-one that answers the wrong
+// question; Answer is what the user typed at the prompt (an option index like
+// "1", comma-separated indices, or free text).
+type Ask struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
 // Command is one scripted CommandRunner result, consumed in file order.
 type Command struct {
 	Block  string `json:"block"`
@@ -121,6 +131,7 @@ type Scenario struct {
 	Chat     *Chat
 	User     string
 	Confirms []Confirm
+	Asks     []Ask
 	Commands []Command
 	Turns    []Turn
 
@@ -210,6 +221,12 @@ func Read(r io.Reader) (*Scenario, error) {
 				return nil, fmt.Errorf("line %d: confirm: %w", lineNo, err)
 			}
 			sc.Confirms = append(sc.Confirms, c)
+		case "ask":
+			var a Ask
+			if err := json.Unmarshal(line, &a); err != nil {
+				return nil, fmt.Errorf("line %d: ask: %w", lineNo, err)
+			}
+			sc.Asks = append(sc.Asks, a)
 		case "command":
 			var c Command
 			if err := json.Unmarshal(line, &c); err != nil {
