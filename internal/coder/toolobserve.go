@@ -372,19 +372,22 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 		ch := c.Check[i]
 
 		// The command prints before it runs, because a suite can take a minute
-		// and silence in the middle of a turn reads as a hang.
-		c.Out.Toolf("%s $ %s", ch.Name, strings.Join(ch.Argv, " "))
+		// and silence in the middle of a turn reads as a hang. The ‹check› tag
+		// marks the line as the harness announcing a check rather than a
+		// transcript of the model's own words, the same reason ‹shell› prefixes
+		// a confirmation's purpose.
+		c.Out.Toolf("‹check› %s $ %s", ch.Name, strings.Join(ch.Argv, " "))
 		exit, output := c.runCheck(ctx, ch)
 		if exit == 0 {
 			// A passing check's output is noise to the user — with check_auto on
 			// it lands on every editing turn and buries the diffs they are here to
 			// read. The model still gets the whole transcript below: to it, what a
 			// passing run printed is information.
-			c.Out.Toolf("%s passed", ch.Name)
+			c.Out.Toolf("passed")
 		} else {
 			// A failure is the one thing here that has to be read, so it keeps the
 			// plain color and all of its output.
-			c.Out.Printf("%s failed (exit status %d)", ch.Name, exit)
+			c.Out.Printf("failed (exit status %d)", exit)
 			if trimmed := strings.TrimRight(output, "\n"); trimmed != "" {
 				c.Out.Printf("%s", trimmed)
 			}

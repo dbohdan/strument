@@ -322,7 +322,7 @@ func TestCheckIsQuietWhenItPasses(t *testing.T) {
 	if strings.Contains(joined, "42 tests passed") {
 		t.Errorf("a passing check must not print its output:\n%s", joined)
 	}
-	if !strings.Contains(joined, "suite passed") {
+	if !strings.Contains(joined, "\npassed") {
 		t.Errorf("a passing check must still say so:\n%s", joined)
 	}
 }
@@ -335,7 +335,7 @@ func TestCheckShowsAFailure(t *testing.T) {
 
 	c.runCheckTool(t.Context(), call("check", `{}`))
 	joined := strings.Join(out.lines, "\n")
-	if !strings.Contains(joined, "boom") || !strings.Contains(joined, "suite failed (exit status 2)") {
+	if !strings.Contains(joined, "boom") || !strings.Contains(joined, "\nfailed (exit status 2)") {
 		t.Errorf("a failing check must print its verdict and output:\n%s", joined)
 	}
 }
