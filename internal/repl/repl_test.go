@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"iter"
 	"os"
@@ -810,7 +811,7 @@ func TestSubmitCommandOutsidePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := strings.NewReader("/submit " + outside + "\n/exit\n")
+	input := strings.NewReader(fmt.Sprintf("/submit %q\n/exit\n", outside))
 	r, _, _ := newTestREPL(t, stub, input)
 	defer r.Close()
 
