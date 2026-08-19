@@ -615,7 +615,7 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 	// An empty line re-prompts once rather than looping forever: a user who
 	// hits Enter twice has said "skip", and the empty free-text answer that
 	// falls through is the honest record of that.
-	hint := askHint(len(req.Options)+1, req.MultiSelect)
+	hint := askHint(len(req.Options), req.MultiSelect)
 	line, ok := rl.readAskLine(hint)
 	if ok && strings.TrimSpace(line) == "" {
 		line, ok = rl.readAskLine(hint)

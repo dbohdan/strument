@@ -513,7 +513,7 @@ func TestAskerRendersTheQuestion(t *testing.T) {
 			t.Errorf("output missing %q:\n%s", want, got)
 		}
 	}
-	if s := askHint(3, false); s != "Answer (1-3, or your own text): " {
+	if s := askHint(2, false); s != "Answer (1-2, or your own text): " {
 		t.Errorf("single-select hint = %q", s)
 	}
 
@@ -538,7 +538,7 @@ func TestAskerMultiSelectPrompt(t *testing.T) {
 	if strings.Join(got, ",") != "Introduction,Conclusion" {
 		t.Errorf("answer = %v, want both labels", got)
 	}
-	if s := askHint(3, true); s != "Answer (numbers separated by commas, or your own text): " {
+	if s := askHint(2, true); s != "Answer (numbers separated by commas, or your own text): " {
 		t.Errorf("multiSelect hint = %q", s)
 	}
 }
