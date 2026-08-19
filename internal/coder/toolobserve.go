@@ -392,9 +392,10 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 			// passing run printed is information.
 			c.Out.Toolf("passed")
 		} else {
-			// A failure is the one thing here that has to be read, so it keeps the
-			// plain color and all of its output.
-			c.Out.Printf("failed (exit status %d)", exit)
+			// The failure verdict matches the ‹check› line that announced it, but
+			// the output it produced is a model-run transcript of its own and keeps
+			// the plain color.
+			c.Out.Toolf("failed (exit status %d)", exit)
 			if trimmed := strings.TrimRight(output, "\n"); trimmed != "" {
 				c.Out.Printf("%s", trimmed)
 			}
