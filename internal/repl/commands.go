@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/readline"
@@ -54,6 +55,7 @@ func init() {
 		{"reset", "", "Unpin everything and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"squash", "[n]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
+		{"submit", "<file>", "Send a file's contents as your message", cmdSubmit},
 		{"symbol", "<name> [reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
@@ -106,7 +108,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 	for _, c := range commands {
 		var sub []*readline.PrefixCompleter
 		switch c.name {
-		case "add", "read-only":
+		case "add", "read-only", "submit":
 			sub = append(sub, recursiveDynamic(r.completeAddable))
 		case "drop":
 			sub = append(sub, recursiveDynamic(chatFiles))
@@ -679,4 +681,81 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	r.coder.AppendExchange(content, "Ok")
 	r.printf("Added %s to the chat.", url)
 	return ""
+}
+
+// submitLimit caps the file /submit will read. The point is not to fit the
+// context window exactly — the model may have one far smaller — but to keep a
+// stray log or binary from becoming a prompt at all.
+const submitLimit = 100 * 1024
+
+// cmdSubmit reads a file and returns its contents as the message for this
+// turn: the same path /ask's one-shot arguments take, so a submitted file goes
+// through runTurn like typed input — transcript, token accounting, Ctrl-C, the
+// undo hint — without touching readline (the typed /submit line is what input
+// history keeps; the file's contents never enter it). Unlike /add, nothing is
+// pinned: the text is sent once and only exists in the conversation.
+//
+// Paths resolve against the coder root but outside paths are allowed, like
+// /read-only's: drafting a long prompt in an editor often happens outside the
+// project, and unlike a pinned file this is the user's own words being sent
+// verbatim, not model-facing reference material.
+//
+// The returned message is not re-dispatched even when it starts with "/", so a
+// file cannot issue commands — /submit's output takes the send path, not the
+// dispatch path.
+func cmdSubmit(_ context.Context, r *REPL, args string) string {
+	paths := splitArgs(args)
+	if len(paths) != 1 || paths[0] == "" {
+		r.out.Errorf("Usage: /submit <file>")
+		return ""
+	}
+	path := paths[0]
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(r.coder.Root, path)
+	}
+
+	st, err := os.Stat(path)
+	if err != nil {
+		r.out.Errorf("Could not read %s: %v", paths[0], err)
+		return ""
+	}
+	if st.IsDir() {
+		r.out.Errorf("%s is a directory.", paths[0])
+		return ""
+	}
+	if st.Size() > submitLimit {
+		// Refuse rather than truncate: a silently shortened prompt is worse
+		// than one the user has to split themselves.
+		r.out.Errorf("%s is %s, over the %s /submit limit.", paths[0], humanBytes(st.Size()), humanBytes(submitLimit))
+		return ""
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		r.out.Errorf("Could not read %s: %v", paths[0], err)
+		return ""
+	}
+	if !utf8.Valid(data) {
+		r.out.Errorf("%s is not valid UTF-8 text.", paths[0])
+		return ""
+	}
+	msg := strings.TrimSpace(string(data))
+	if msg == "" {
+		r.out.Errorf("%s is empty.", paths[0])
+		return ""
+	}
+	return msg
+}
+
+// humanBytes renders a size for the /submit error the way a person would say
+// it ("1.5 MiB"), falling back to plain bytes under a KiB.
+func humanBytes(n int64) string {
+	switch b := float64(n); {
+	case b >= 1024*1024:
+		return fmt.Sprintf("%.1f MiB", b/(1024*1024))
+	case b >= 1024:
+		return fmt.Sprintf("%.1f KiB", b/1024)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }

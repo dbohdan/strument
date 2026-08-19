@@ -761,3 +761,103 @@ func TestSymbolCommand(t *testing.T) {
 		t.Errorf("bare /symbol:\n%s", got)
 	}
 }
+
+// /submit reads a file and sends its contents as the message for the turn:
+// the file text reaches the model request exactly once, and nothing is pinned.
+func TestSubmitCommandSendsFileContents(t *testing.T) {
+	stub := answerStub("ok\n")
+	var reqText string
+	stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		var b strings.Builder
+		for _, m := range req.Messages {
+			b.WriteString(m.Text() + "\n")
+		}
+		reqText = b.String()
+		return nil
+	}
+
+	input := strings.NewReader(`/submit "hello.txt"` + "\n/exit\n")
+	r, cdr, _ := newTestREPL(t, stub, input)
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(reqText, "hello") {
+		t.Errorf("file contents did not reach the model request:\n%s", reqText)
+	}
+	if len(cdr.ChatFiles()) != 0 {
+		t.Errorf("files pinned after /submit: %v", cdr.ChatFiles())
+	}
+}
+
+// /submit takes one path from the project root, but outside paths are allowed
+// like /read-only's — a drafted prompt often lives outside the project.
+func TestSubmitCommandOutsidePath(t *testing.T) {
+	stub := answerStub("ok\n")
+	var reqText string
+	stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		var b strings.Builder
+		for _, m := range req.Messages {
+			b.WriteString(m.Text() + "\n")
+		}
+		reqText = b.String()
+		return nil
+	}
+
+	outside := filepath.Join(t.TempDir(), "draft.md")
+	if err := os.WriteFile(outside, []byte("OUTSIDE PROMPT\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	input := strings.NewReader("/submit " + outside + "\n/exit\n")
+	r, _, _ := newTestREPL(t, stub, input)
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(reqText, "OUTSIDE PROMPT") {
+		t.Errorf("outside path did not reach the model request:\n%s", reqText)
+	}
+}
+
+// Everything that should not produce a message refuses with an error instead:
+// oversize files are not truncated, and directories, non-UTF-8, and empty
+// files are not sent.
+func TestSubmitCommandRefusals(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("ok\n"), strings.NewReader("/exit\n"))
+	defer r.Close()
+
+	big := make([]byte, submitLimit+1)
+	for i := range big {
+		big[i] = 'x'
+	}
+	if err := os.WriteFile(filepath.Join(r.coder.Root, "big.txt"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.coder.Root, "bin.dat"), []byte{0xff, 0xfe, 0x00}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.coder.Root, "empty.txt"), []byte("   \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct{ args, want string }{
+		{"", "Usage: /submit"},
+		{"a.txt b.txt", "Usage: /submit"},
+		{"big.txt", "over the 100.0 KiB /submit limit"},
+		{".", "is a directory"},
+		{"bin.dat", "not valid UTF-8"},
+		{"empty.txt", "is empty"},
+		{"no-such.txt", "Could not read no-such.txt"},
+	} {
+		out.Reset()
+		if msg := cmdSubmit(context.Background(), r, tc.args); msg != "" {
+			t.Errorf("/submit %q returned %q, want \"\"", tc.args, msg)
+		}
+		if got := out.String(); !strings.Contains(got, tc.want) {
+			t.Errorf("/submit %q output missing %q:\n%s", tc.args, tc.want, got)
+		}
+	}
+}
