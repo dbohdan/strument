@@ -383,7 +383,7 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 		// marks the line as the harness announcing a check rather than a
 		// transcript of the model's own words, the same reason ‹shell› prefixes
 		// a confirmation's purpose.
-		c.Out.Toolf("‹check› %s $ %s", ch.Name, strings.Join(ch.Argv, " "))
+		c.Out.Toolf("‹check› %s\n$ %s", ch.Name, strings.Join(ch.Argv, " "))
 		exit, output := c.runCheck(ctx, ch)
 		if exit == 0 {
 			// A passing check's output is noise to the user — with check_auto on

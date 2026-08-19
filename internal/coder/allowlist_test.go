@@ -133,7 +133,7 @@ func TestAllowlistedCommandSkipsTheConfirmation(t *testing.T) {
 		// argv, then how it went. The purpose is not among it — a purpose
 		// informs a decision, and nothing was decided here.
 		shown := strings.Join(out.lines, "\n")
-		if !strings.Contains(shown, "‹check› test $ echo ran-the-configured-argv") {
+		if !strings.Contains(shown, "‹check› test\n$ echo ran-the-configured-argv") {
 			t.Errorf("the matched check should name itself and its argv:\n%s", shown)
 		}
 		if !strings.Contains(shown, "\npassed") {
