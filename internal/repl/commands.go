@@ -42,6 +42,7 @@ func init() {
 		{"context", "[n]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
 		{"drop", "[file ...]", "Unpin files (all if none given)", cmdDrop},
+		{"env", "[add NAME... | drop NAME... | reset]", "Show or change (this session) what environment variables model-run commands see", cmdEnv},
 		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List the pinned files", cmdLs},
@@ -109,6 +110,54 @@ func (r *REPL) completer() readline.AutoCompleter {
 			sub = append(sub, recursiveDynamic(r.completeAddable))
 		case "drop":
 			sub = append(sub, recursiveDynamic(chatFiles))
+		case "env":
+			// /env takes a subcommand first, then any number of names: add
+			// offers set variables the allowlist does not yet pass, drop offers
+			// what it currently does (including the prefix families).
+			envAdd := func(string) []string {
+				var out []string
+				for _, kv := range os.Environ() {
+					name, _, _ := strings.Cut(kv, "=")
+					if !coder.EnvAllowed(name, r.coder.EnvAllow) {
+						out = append(out, name)
+					}
+				}
+				return slices.Sorted(slices.Values(out))
+			}
+			envDrop := func(string) []string {
+				seen := map[string]bool{}
+				var out []string
+				addIf := func(name string) {
+					if !seen[name] {
+						seen[name] = true
+						out = append(out, name)
+					}
+				}
+				for _, kv := range os.Environ() {
+					name, _, _ := strings.Cut(kv, "=")
+					if coder.EnvAllowed(name, r.coder.EnvAllow) {
+						addIf(name)
+					}
+				}
+				// The default names and families too, even when unset: a
+				// variable can be dropped before anything sets it.
+				for _, name := range coder.DefaultEnvAllowNames() {
+					addIf(name)
+				}
+				for _, name := range r.coder.EnvAllow {
+					addIf(name)
+				}
+				return out
+			}
+			names := readline.PcItemDynamic(envAdd)
+			namesDrop := readline.PcItemDynamic(envDrop)
+			names.SetChildren([]*readline.PrefixCompleter{names})
+			namesDrop.SetChildren([]*readline.PrefixCompleter{namesDrop})
+			sub = append(sub,
+				readline.PcItem("add", names),
+				readline.PcItem("drop", namesDrop),
+				readline.PcItem("reset"),
+			)
 		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
 		}
@@ -534,6 +583,12 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		return ""
 	}
 	r.opts.Config = cfg
+	// The config is the source of truth for the allowlist, so a reload
+	// discards /env session changes rather than carrying them over a
+	// deliberate re-read.
+	r.envAdded = map[string]bool{}
+	r.envDropped = map[string]bool{}
+	r.rebuildEnvAllow()
 	r.coder.MaxSteps = 25
 	if cfg.MaxSteps > 0 {
 		r.coder.MaxSteps = cfg.MaxSteps

@@ -112,6 +112,15 @@ type REPL struct {
 	// One-shot /ask and /code restore the previous format after one turn.
 	oneShotPending bool
 	oneShotRestore string
+
+	// envAdded / envDropped are the /env session changes: names added to or
+	// withheld from the config's env_allow for this session only. coder.EnvAllow
+	// always holds the merged result (config ∪ added − dropped), so every
+	// FilterEnv call site picks changes up without bookkeeping; these two sets
+	// exist for the /env display and for rebuilding the merge on /env reset
+	// and /reload.
+	envAdded   map[string]bool
+	envDropped map[string]bool
 }
 
 // New builds the REPL, wires the coder's Out to the live renderer, and
@@ -143,6 +152,9 @@ func New(opts Options) (*REPL, error) {
 	}
 
 	r := &REPL{opts: opts, coder: opts.Coder}
+	r.envAdded = map[string]bool{}
+	r.envDropped = map[string]bool{}
+	r.rebuildEnvAllow()
 	r.out = &termOutput{w: opts.Stdout, color: opts.Color, theme: opts.Theme, width: r.termWidth()}
 	if opts.Config != nil {
 		r.out.Thinking = coder.ThinkingDisplay(opts.Config.ReasoningDisplay)

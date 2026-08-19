@@ -128,7 +128,9 @@ func (c *chatCmd) Run() error {
 	// explicit `scraper` command overrides the built-in fetcher — the opt-in path
 	// for JavaScript-rendered pages — and does its own networking (no proxy).
 	if len(cfg.Scraper) > 0 {
-		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, coder.FilterEnv(nil, cfg.EnvAllow))
+		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
+			return coder.FilterEnv(nil, cdr.EnvAllow)
+		})
 	} else {
 		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
 		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)

@@ -75,6 +75,15 @@ func envAllowed(name string, extra []string) bool {
 	return false
 }
 
+// EnvAllowed is envAllowed for callers outside the package: the REPL's /env
+// command uses it to say which set variables a model-run command would see.
+func EnvAllowed(name string, extra []string) bool { return envAllowed(name, extra) }
+
+// DefaultEnvAllowNames and DefaultEnvAllowPrefixes expose the default list for
+// display and completion (/env). Copies, so a caller cannot widen the defaults.
+func DefaultEnvAllowNames() []string    { return slices.Clone(defaultEnvAllowNames) }
+func DefaultEnvAllowPrefixes() []string { return slices.Clone(defaultEnvAllowPrefixes) }
+
 // FilterEnv builds the environment passed to model-run commands: every
 // allowed variable from environ, as NAME=VALUE pairs. environ nil means
 // os.Environ. extra is the user's `env_allow` list, on top of the defaults.

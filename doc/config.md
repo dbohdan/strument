@@ -394,6 +394,14 @@ the token to a file, which is worse than passing it. What the allowlist buys is
 that exposure has to be *written down* — one line per variable, visible in the
 config and in a `.strument.star` you had to trust.
 
+For ad-hoc, session-scoped changes the REPL has `/env`: `/env` shows the
+effective allowlist by origin (defaults, config, session changes), `/env add`
+and `/env drop` change it until the session ends (Tab completes variable names:
+add offers set variables not yet allowed, drop offers what is), and `/env
+reset` returns to the config's list. Nothing is persisted, values are never
+displayed, and `/reload` discards session changes — the config is the source
+of truth. To make a `/env add` permanent, add the name to `env_allow`.
+
 A project's `.strument.star` **replaces** the user's `env_allow` whole-value,
 for the same reason it replaces `check_auto`: a merge of two lists could only
 widen, and the project needs to be able to narrow.

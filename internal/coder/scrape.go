@@ -128,9 +128,10 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 // Strument a single static binary and lets the user bring their own browser. The
 // command runs without a shell, so a hostile URL cannot inject arguments; the
 // global proxy does not apply here — the command manages its own networking.
-// env is the environment it runs under: the caller passes the allowlist-filtered
-// set, because the scraped page's contents reach the model's context.
-func NewCommandScraper(argv []string, timeout time.Duration, env []string) Scraper {
+// env supplies the environment per fetch: the caller passes the
+// allowlist-filtered set, because the scraped page's contents reach the model's
+// context — as a closure, so /env changes apply without rebuilding the scraper.
+func NewCommandScraper(argv []string, timeout time.Duration, env func() []string) Scraper {
 	return func(ctx context.Context, url string) (string, error) {
 		if len(argv) == 0 {
 			return "", errors.New("scraper command is empty")
@@ -145,7 +146,9 @@ func NewCommandScraper(argv []string, timeout time.Duration, env []string) Scrap
 		// The command comes from the operator's config, and the URL is a single
 		// argv element (never shell-interpreted), so this is not attacker-run.
 		cmd := exec.CommandContext(runCtx, args[0], args[1:]...) //nolint:gosec
-		cmd.Env = env
+		if env != nil {
+			cmd.Env = env()
+		}
 
 		stdout := &boundedBuffer{max: scrapeMaxBytes}
 		stderr := &boundedBuffer{max: 4096}

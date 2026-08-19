@@ -69,6 +69,15 @@ type fileGlobals struct {
 	envAllowVal []string
 }
 
+// ValidEnvAllowName reports whether s is acceptable as an env_allow entry:
+// a single non-empty word with no "=" (values always come from the real
+// environment) and no quoting characters — the config and the /env command
+// share this rule, and neither does shell-style unquoting, so a quoted string
+// must fail rather than become a name with literal quotes in it.
+func ValidEnvAllowName(s string) bool {
+	return s != "" && !strings.ContainsAny(s, `="' `)
+}
+
 // parsePositiveInt reads a Starlark int that must be at least 1.
 func parsePositiveInt(path, name string, v starlark.Value) (int, error) {
 	iv, ok := v.(starlark.Int)
@@ -584,7 +593,7 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 			if !ok {
 				return nil, fmt.Errorf("%s: `env_allow`[%d] must be a string, got %s", path, i, list.Index(i).Type())
 			}
-			if s == "" || strings.ContainsAny(s, "=") {
+			if !ValidEnvAllowName(s) {
 				return nil, fmt.Errorf("%s: `env_allow`[%d] is not an environment variable name", path, i)
 			}
 			names = append(names, s)

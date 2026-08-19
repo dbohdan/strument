@@ -152,7 +152,8 @@ Slash commands perform actions initiated by you rather than the model:
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [n]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
 | `/symbol <name> [reference]` | Find where a name is defined, or used, from the language parser rather than from text. |
-| `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. |
+| `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). |
+| `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |
 
 `/help` lists all commands.
