@@ -54,9 +54,6 @@ func (r *REPL) envDisplay() string {
 	var b strings.Builder
 	def := coder.DefaultEnvAllowNames()
 	fmt.Fprintf(&b, "default  %s", strings.Join(def, " "))
-	for _, p := range coder.DefaultEnvAllowPrefixes() {
-		fmt.Fprintf(&b, " %s*", p)
-	}
 	b.WriteString("\n")
 
 	var cfgAllow []string

@@ -14,7 +14,11 @@ var fixtureEnv = []string{
 	"HOME=/home/u",
 	"LANG=C.UTF-8",
 	"LC_ALL=C.UTF-8",
+	"LC_MESSAGES=C.UTF-8",
 	"GOPATH=/home/u/go",
+	"GOFLAGS=-mod=readonly",
+	"GOOGLE_API_KEY=g-secret",
+	"GOOGLE_TOKEN=g-token",
 	"TMPDIR=/tmp",
 	"CARGO_HOME=/home/u/.cargo",
 	"VIRTUAL_ENV=/home/u/venv",
@@ -47,7 +51,8 @@ func TestFilterEnvDefaults(t *testing.T) {
 
 	for _, name := range []string{
 		// The classes the defaults exist for.
-		"PATH", "HOME", "LANG", "LC_ALL", "GOPATH", "TMPDIR", "CARGO_HOME",
+		"PATH", "HOME", "LANG", "LC_ALL", "LC_MESSAGES", "GOPATH", "GOFLAGS",
+		"TMPDIR", "CARGO_HOME",
 		"VIRTUAL_ENV", "TERM",
 		"SOCKS5_SERVER", "HTTPS_PROXY", "NO_PROXY",
 	} {
@@ -59,6 +64,9 @@ func TestFilterEnvDefaults(t *testing.T) {
 		// Credentials — the whole point of the allowlist.
 		"OPENROUTER_API_KEY", "GITHUB_TOKEN", "MY_SERVICE_TOKEN",
 		"CI_JOB_TOKEN", "NPM_TOKEN", "DATABASE_URL",
+		// GOOGLE_API_KEY / GOOGLE_TOKEN pin that the GO* family is an exact
+		// enumeration, not a "GO" prefix match.
+		"GOOGLE_API_KEY", "GOOGLE_TOKEN",
 		// Not credentials, not on the list either: passing them would be a
 		// widening nobody asked for. HOME_BACKUP pins that a prefix of an
 		// allowed name is not the allowed name.

@@ -32,6 +32,11 @@ var defaultEnvAllowNames = []string{
 	"COMSPEC", "PATHEXT", "SystemRoot", "USERPROFILE", "TEMP", "TMP",
 	// Locale.
 	"LANG", "LANGUAGE",
+	// The LC_* family, enumerated rather than prefix-matched: an exact list is
+	// the same one rule everywhere — no prefix mechanism to widen by accident.
+	"LC_ALL", "LC_CTYPE", "LC_MESSAGES", "LC_NUMERIC", "LC_TIME",
+	"LC_COLLATE", "LC_MONETARY", "LC_PAPER", "LC_NAME", "LC_ADDRESS",
+	"LC_TELEPHONE", "LC_MEASUREMENT", "LC_IDENTIFICATION",
 	// Proxy endpoints, as a good number of tools read them (a value may embed
 	// credentials; that is the operator's choice, same as a proxy= URL in the
 	// config). NO_PROXY keeps the proxy off localhost and LAN hosts.
@@ -41,7 +46,16 @@ var defaultEnvAllowNames = []string{
 	// XDG locations; tools resolve their caches from these.
 	"XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
 	"XDG_RUNTIME_DIR",
-	// Go. The GO* family is covered by the prefix below; CGO_ENABLED is not.
+	// Go. The GO* family enumerated rather than prefix-matched: a "GO" prefix
+	// would also match GOOGLE_API_KEY and GOOGLE_TOKEN — the credential-shaped
+	// names the allowlist exists to withhold. These are the non-secret knobs
+	// cmd/go reads; CGO_ENABLED, CC and CXX carry no GO prefix.
+	"GOROOT", "GOPATH", "GOCACHE", "GOMODCACHE", "GOENV", "GOFLAGS",
+	"GOTOOLCHAIN", "GOPROXY", "GOPRIVATE", "GONOPROXY", "GOSUMDB",
+	"GONOSUMDB", "GOINSECURE", "GOTOOLDIR", "GOOS", "GOARCH", "GOARM",
+	"GO386", "GOAMD64", "GORACE", "GOTRACEBACK", "GODEBUG", "GOMEMLIMIT",
+	"GOMAXPROCS", "GOTELEMETRYDIR", "GOCOVERDIR", "GOEXPERIMENT", "GOWASM",
+	"GOFIPS140",
 	"CGO_ENABLED", "CC", "CXX",
 	// Rust.
 	"CARGO_HOME", "RUSTUP_HOME", "RUST_BACKTRACE", "RUSTFLAGS",
@@ -51,38 +65,25 @@ var defaultEnvAllowNames = []string{
 	"JAVA_HOME", "GRADLE_USER_HOME",
 }
 
-// defaultEnvAllowPrefixes matches families rather than listing every member.
-// "LC_" covers LC_ALL, LC_MESSAGES, …; "GO" covers GOPATH, GOCACHE, GOTOOLCHAIN,
-// GOPROXY, GOPRIVATE, … — all non-secret toolchain state.
-var defaultEnvAllowPrefixes = []string{"LC_", "GO"}
-
 // envAllowed reports whether name passes the allowlist. Extra names come from
-// `env_allow` and match exactly (no prefix expansion: a config that says
-// "FOO_" almost certainly means FOO_BAR, and a silent prefix match would widen
-// permissions past what was written).
+// `env_allow` and match exactly, like the defaults: there is no prefix or
+// wildcard expansion anywhere — a config that says "FOO_" almost certainly
+// means FOO_BAR, and a silent prefix match would widen permissions past what
+// was written.
 func envAllowed(name string, extra []string) bool {
 	if slices.Contains(extra, name) {
 		return true
 	}
-	if slices.Contains(defaultEnvAllowNames, name) {
-		return true
-	}
-	for _, p := range defaultEnvAllowPrefixes {
-		if strings.HasPrefix(name, p) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(defaultEnvAllowNames, name)
 }
 
 // EnvAllowed is envAllowed for callers outside the package: the REPL's /env
 // command uses it to say which set variables a model-run command would see.
 func EnvAllowed(name string, extra []string) bool { return envAllowed(name, extra) }
 
-// DefaultEnvAllowNames and DefaultEnvAllowPrefixes expose the default list for
-// display and completion (/env). Copies, so a caller cannot widen the defaults.
-func DefaultEnvAllowNames() []string    { return slices.Clone(defaultEnvAllowNames) }
-func DefaultEnvAllowPrefixes() []string { return slices.Clone(defaultEnvAllowPrefixes) }
+// DefaultEnvAllowNames exposes the default list for display (/env). A copy, so
+// a caller cannot widen the defaults.
+func DefaultEnvAllowNames() []string { return slices.Clone(defaultEnvAllowNames) }
 
 // FilterEnv builds the environment passed to model-run commands: every
 // allowed variable from environ, as NAME=VALUE pairs. environ nil means

@@ -32,8 +32,9 @@ func TestEnvShowAddDropReset(t *testing.T) {
 			"/env\n"+
 			"/exit\n")
 
-	// The bare display names the default families without printing values.
-	if !strings.Contains(addOut, "default  PATH") || !strings.Contains(addOut, " LC_*") {
+	// The bare display names the defaults without printing values — and with
+	// no "GO*"-style prefixes left, since matching is exact everywhere now.
+	if !strings.Contains(addOut, "default  PATH") || !strings.Contains(addOut, " LC_ALL") || strings.Contains(addOut, "*") {
 		t.Errorf("default list not shown:\n%s", addOut)
 	}
 	if !strings.Contains(addOut, "config   (none)") {
