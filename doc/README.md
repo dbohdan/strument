@@ -225,6 +225,11 @@ reaching around it.
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
 | `Asker` | the `ask_user_question` tool's multiple-choice questions | readline asker / replay stub (nil in script mode) |
 | `CommandRunner` | `/run`, the `bash` tool, `check` checks | `PipeRunner` / replay stub |
+
+Where a command runs, its environment follows who caused it: `/run` (the
+user typed it) inherits the whole session environment, while the `bash` tool,
+checks, and the scraper command (the model caused them) run under the env
+allowlist in `internal/coder/envallow.go` — see the security notes below.
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
 | `Clock` | retry backoff sleeps | `RealClock` / instant fake |
@@ -375,13 +380,27 @@ Ten tools, in three natures:
   nothing to classify or smuggle. It is offered only when `check` is
   configured.
 
-  A check inherits Strument's environment — `PATH`, `HOME`, `GOCACHE`, the
-  proxy variables — deliberately, and a security review's suggestion to scrub
-  it was declined. `go test` does not work without those, so scrubbing would
-  break the feature outright, and it would not buy a boundary: the threat it
-  imagines is a poisoned `package.json`, which is arbitrary execution already.
-  What guards a check is that the model supplies a *name* and the user wrote
-  the argv.
+  A check runs under the environment allowlist, not the full session
+  environment (`internal/coder/envallow.go`) — the same filtered set the
+  `bash` tool gets. The argv is trusted, but the *output* is not selected by
+  it: a failing test suite happily prints its environment, and that output
+  goes to the model as a tool result. The allowlist passes `PATH`, `HOME`,
+  `GOCACHE`, the proxy variables, and the other non-secret toolchain state;
+  it withholds everything credential-shaped, by omission rather than by a
+  name filter (a hard one would push users toward writing tokens to files,
+  which is worse). `env_allow` in the config and `/env` in the REPL widen it,
+  each widening a deliberate, visible act.
+- **The execution boundary is *who caused the command*, applied twice.** The
+  confirmation prompt already splits on it: `/run` never asks (you typed it),
+  `bash` always asks (the model asked). The environment splits on the same
+  line: `/run` keeps your full environment, while every command the model
+  caused — `bash`, `check`, the `scraper` command — gets the filtered set,
+  because both its *input* and its *output* reach the model's context.
+  Permissions are computed at use time from one piece of state
+  (`coder.EnvAllow`), so no call site needs bookkeeping to see a `/env`
+  change. One trap worth knowing when adding a subprocess path:
+  `mvdan.cc/sh`'s `interp.Env(ListEnviron(nil...))` means *empty*
+  environment, not inherit — omit the option to inherit.
 - **The gate is an allowlist, and never a blacklist.** A `bash` command that is
   a configured check *verbatim* skips the prompt (`allowlist.go`); everything
   else asks. The asymmetry is the whole argument. A blacklist — escalate on
