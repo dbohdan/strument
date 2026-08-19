@@ -117,13 +117,14 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 				r.out.Errorf("%q is not an environment variable name (names only; values come from the environment).", name)
 				continue
 			}
+			if os.Getenv(name) == "" {
+				r.out.Errorf("%s is not set in the environment and cannot be added.", name)
+				continue
+			}
 			r.envDropped[name] = false
 			r.envAdded[name] = true
 			if credentialShaped(name) {
 				r.out.Warningf("%s looks like a credential; it is now visible to model-run commands.", name)
-			}
-			if os.Getenv(name) == "" {
-				r.out.Warningf("%s is not set in the environment.", name)
 			}
 		}
 		r.rebuildEnvAllow()

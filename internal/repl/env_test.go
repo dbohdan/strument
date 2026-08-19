@@ -40,18 +40,21 @@ func TestEnvShowAddDropReset(t *testing.T) {
 		t.Errorf("empty config group not shown:\n%s", addOut)
 	}
 
-	// add: both names land on the coder's effective list (the thing every
+	// add: set names land on the coder's effective list (the thing every
 	// FilterEnv call site reads), a credential-shaped one draws a notice, and
-	// an unset one says so rather than silently completing.
+	// an unset one is rejected with an error.
 	if !strings.Contains(addOut, "MY_SERVICE_TOKEN looks like a credential") {
 		t.Errorf("credential notice missing:\n%s", addOut)
 	}
-	if !strings.Contains(addOut, "HF_MISSING is not set") {
-		t.Errorf("not-set notice missing:\n%s", addOut)
+	if !strings.Contains(addOut, "HF_MISSING is not set in the environment and cannot be added") {
+		t.Errorf("not-set error missing:\n%s", addOut)
 	}
 	if !containsName(afterAdd.EnvAllow, "STRUMENT_TEST_A") ||
 		!containsName(afterAdd.EnvAllow, "MY_SERVICE_TOKEN") {
 		t.Errorf("after add, EnvAllow = %v", afterAdd.EnvAllow)
+	}
+	if containsName(afterAdd.EnvAllow, "HF_MISSING") {
+		t.Errorf("HF_MISSING should not be in EnvAllow: %v", afterAdd.EnvAllow)
 	}
 	if !strings.Contains(addOut, "session  + STRUMENT_TEST_A") {
 		t.Errorf("session add not displayed:\n%s", addOut)

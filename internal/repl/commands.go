@@ -115,7 +115,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 		case "env":
 			// /env takes a subcommand first, then any number of names: add
 			// offers set variables the allowlist does not yet pass, drop offers
-			// what it currently does (including the prefix families).
+			// set variables that the allowlist currently does pass.
 			envAdd := func(string) []string {
 				var out []string
 				for _, kv := range os.Environ() {
@@ -129,27 +129,14 @@ func (r *REPL) completer() readline.AutoCompleter {
 			envDrop := func(string) []string {
 				seen := map[string]bool{}
 				var out []string
-				addIf := func(name string) {
-					if !seen[name] {
+				for _, kv := range os.Environ() {
+					name, _, _ := strings.Cut(kv, "=")
+					if coder.EnvAllowed(name, r.coder.EnvAllow) && !seen[name] {
 						seen[name] = true
 						out = append(out, name)
 					}
 				}
-				for _, kv := range os.Environ() {
-					name, _, _ := strings.Cut(kv, "=")
-					if coder.EnvAllowed(name, r.coder.EnvAllow) {
-						addIf(name)
-					}
-				}
-				// The default names and families too, even when unset: a
-				// variable can be dropped before anything sets it.
-				for _, name := range coder.DefaultEnvAllowNames() {
-					addIf(name)
-				}
-				for _, name := range r.coder.EnvAllow {
-					addIf(name)
-				}
-				return out
+				return slices.Sorted(slices.Values(out))
 			}
 			names := readline.PcItemDynamic(envAdd)
 			namesDrop := readline.PcItemDynamic(envDrop)
