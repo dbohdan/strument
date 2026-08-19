@@ -171,6 +171,24 @@ That is the point of it, and it is meant for a terminal you are watching rather 
 `--no-git` turns off the git integration inside a repository.
 Outside one it is already off, and `/undo` works either way.
 
+### Shell completions
+
+The `shell` subcommand prints a completion script for Bash, fish, or Zsh.
+Load the generated script in your current shell:
+
+```sh
+# Bash
+source <(strument shell bash)
+
+# fish
+strument shell fish | source
+
+# Zsh
+source <(strument shell zsh)
+```
+
+To load completions automatically, save the output in the location used by your shell's completion setup and source it from there. For example, Zsh can load a saved script with `source ~/.zsh/completions/_strument` after adding that directory to `fpath`.
+
 
 ## Configuration
 

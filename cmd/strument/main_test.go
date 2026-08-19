@@ -4,14 +4,44 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/alecthomas/kong"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/history"
 )
 
-// newRepo makes a repository with a subdirectory and returns both paths.
+func TestShellCompletionsAreGeneratedFromKong(t *testing.T) {
+	var c cli
+	parser, err := kong.New(&c, kong.Name("strument"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := parser.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, shell := range []string{"bash", "fish", "zsh"} {
+		var out strings.Builder
+		if err := writeCompletions(&out, ctx.Model.Node, shell); err != nil {
+			t.Fatalf("%s: %v", shell, err)
+		}
+		if !strings.Contains(out.String(), "shell") || !strings.Contains(out.String(), "model-config") {
+			t.Errorf("%s completion does not contain Kong commands:\n%s", shell, out.String())
+		}
+	}
+}
+
+func TestShellCompletionsRejectUnknownShell(t *testing.T) {
+	var out strings.Builder
+	if err := writeCompletions(&out, nil, "powershell"); err == nil {
+		t.Fatal("unknown shell was accepted")
+	}
+}
+
 func newRepo(t *testing.T) (root, sub string) {
 	t.Helper()
 	root = t.TempDir()
