@@ -1,12 +1,12 @@
 # Strument
 
-<img alt="Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows." src="doc/logo/256x256.png" width=128>
+<img alt="Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows on its own." src="doc/logo/1024x1024.png" width=128>
 
 Strument is an AI pair-programming tool for the terminal.
-It is designed for making precise code changes under human oversight.
-It implements a reviewable, diff-centric development loop rather than an autonomous one.
+It works with a human in the loop and is designed for the developer who wants to steer technical and UX decisions.
+Strument operates in turns started by instructions, each of which ends in a commit or snapshot (in-memory undo).
 
-Strument began as an accurate ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) [0.86.3.dev](https://github.com/Aider-AI/aider/tree/5dc9490bb35f9729ef2c95d00a19ccd30c26339c) but has since diverged.
+Strument began as an accurate ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
 See [`doc/README.md`](doc/README.md) for the developer overview.
 
 

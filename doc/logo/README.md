@@ -8,7 +8,7 @@ Edited in GIMP to remove the green glow by D. Bohdan.
 
 ## Logo
 
-![Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows.](256x256.png)
+![Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows on its own.](256x256.png)
 
 ![A higher-resolution version of the same image.](1024x1024.png)
 
