@@ -115,6 +115,7 @@ func (c *chatCmd) Run() error {
 	// the model supplies only a name, so nothing it says can change what runs.
 	cdr.Check = cfg.Check
 	cdr.CheckAuto = cfg.CheckAuto
+	cdr.EnvAllow = cfg.EnvAllow
 	if std, ok := cdr.Out.(*coder.StdOutput); ok {
 		// Script mode's output; the REPL swaps in its own and reads the setting
 		// from the config it already carries.
@@ -127,7 +128,7 @@ func (c *chatCmd) Run() error {
 	// explicit `scraper` command overrides the built-in fetcher — the opt-in path
 	// for JavaScript-rendered pages — and does its own networking (no proxy).
 	if len(cfg.Scraper) > 0 {
-		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second)
+		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, coder.FilterEnv(nil, cfg.EnvAllow))
 	} else {
 		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
 		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)

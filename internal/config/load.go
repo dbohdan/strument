@@ -64,6 +64,9 @@ type fileGlobals struct {
 
 	hasGitSign bool
 	gitSignVal string
+
+	hasEnvAllow bool
+	envAllowVal []string
 }
 
 // parsePositiveInt reads a Starlark int that must be at least 1.
@@ -262,6 +265,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasGitSign {
 		cfg.GitSign = user.gitSignVal
 	}
+	if user.hasEnvAllow {
+		cfg.EnvAllow = user.envAllowVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -298,6 +304,13 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasGitSign {
 			cfg.GitSign = project.gitSignVal
+		}
+		// Whole-value like check_auto, not per-element: this is one decision
+		// about what the model's commands may see, and a project's word must be
+		// able to narrow what the user's config widened — merging the two lists
+		// could only ever widen.
+		if project.hasEnvAllow {
+			cfg.EnvAllow = project.envAllowVal
 		}
 	}
 
@@ -557,6 +570,27 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 			return nil, fmt.Errorf(
 				"%s: `git_sign` must be a boolean or a key-id string, got %s", path, gs.Type())
 		}
+	}
+
+	if ea, ok := globals["env_allow"]; ok {
+		list, ok := ea.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `env_allow` must be a list of environment variable names, got %s", path, ea.Type())
+		}
+		names := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			s, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `env_allow`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+			}
+			if s == "" || strings.ContainsAny(s, "=") {
+				return nil, fmt.Errorf("%s: `env_allow`[%d] is not an environment variable name", path, i)
+			}
+			names = append(names, s)
+		}
+		out.hasEnvAllow = true
+		out.envAllowVal = names
 	}
 
 	return out, nil

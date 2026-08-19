@@ -117,7 +117,14 @@ func TestCommandScraper(t *testing.T) {
 		return []string{os.Args[0], "-test.run=TestScrapeHelperProcess", "--", mode, "%s"}
 	}
 
-	out, err := NewCommandScraper(helper("ok"), 10*time.Second)(context.Background(), "https://example.com/page")
+	scrapeEnv := func() []string {
+		// What production passes: the filtered environment. The helper also
+		// needs its own gate variable, which is exactly what a real command
+		// would need passed through env_allow — so this doubles as the
+		// observation that cmd.Env is really the environment used.
+		return append(FilterEnv(nil, []string{"GO_WANT_HELPER_PROCESS"}), "GO_WANT_HELPER_PROCESS=1")
+	}
+	out, err := NewCommandScraper(helper("ok"), 10*time.Second, scrapeEnv())(context.Background(), "https://example.com/page")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +140,7 @@ func TestCommandScraper(t *testing.T) {
 	}
 
 	// A non-zero exit surfaces as an error carrying the stderr tail.
-	_, err = NewCommandScraper(helper("fail"), 10*time.Second)(context.Background(), "https://x")
+	_, err = NewCommandScraper(helper("fail"), 10*time.Second, scrapeEnv())(context.Background(), "https://x")
 	if err == nil {
 		t.Fatal("expected error from failing command")
 	}

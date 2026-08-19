@@ -425,6 +425,11 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// confirmation prompt reasonable.
 	cmd := exec.CommandContext(ctx, ch.Argv[0], ch.Argv[1:]...) //nolint:gosec // Argv from the user's config, never from the model.
 	cmd.Dir = c.Root
+	// The argv is trusted, but the output is not selected by it: a failing
+	// test suite happily prints its environment, and that output goes to the
+	// model as a tool result. So checks run under the same allowlist as the
+	// bash tool, rather than inheriting the session's credentials.
+	cmd.Env = FilterEnv(nil, c.EnvAllow)
 	out, err := cmd.CombinedOutput()
 	exit := 0
 	var ee *exec.ExitError

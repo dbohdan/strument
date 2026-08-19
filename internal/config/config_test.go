@@ -59,6 +59,72 @@ func harness(t *testing.T, userSrc, projectSrc string, env map[string]string) Op
 
 var testEnv = map[string]string{"OPENROUTER_API_KEY": "test-key-not-real"}
 
+// TestEnvAllowParsing covers the shape rules: a plain list of names passes,
+// and anything that is not a name fails the load rather than being passed
+// through to a command's environment.
+func TestEnvAllowParsing(t *testing.T) {
+	t.Run("list of names", func(t *testing.T) {
+		cfg, err := Load(harness(t, userConfig+"\nenv_allow = [\"FOO\", \"BAR\"]\n", "", testEnv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(cfg.EnvAllow, ",") != "FOO,BAR" {
+			t.Errorf("EnvAllow = %v", cfg.EnvAllow)
+		}
+	})
+
+	t.Run("not a list", func(t *testing.T) {
+		if _, err := Load(harness(t, userConfig+"\nenv_allow = \"FOO\"\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "env_allow") {
+			t.Errorf("a string env_allow should fail: %v", err)
+		}
+	})
+
+	t.Run("non-string element", func(t *testing.T) {
+		if _, err := Load(harness(t, userConfig+"\nenv_allow = [1]\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "env_allow") {
+			t.Errorf("an int env_allow entry should fail: %v", err)
+		}
+	})
+
+	// "FOO=bar" as an entry is the interesting rejection: it would otherwise
+	// smuggle a value through the setting, when the setting's whole design is
+	// that values come from the real environment and the config carries only
+	// names.
+	t.Run("name with a value", func(t *testing.T) {
+		if _, err := Load(harness(t, userConfig+"\nenv_allow = [\"FOO=bar\"]\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "env_allow") {
+			t.Errorf("a NAME=VALUE env_allow entry should fail: %v", err)
+		}
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		if _, err := Load(harness(t, userConfig+"\nenv_allow = [\"\"]\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "env_allow") {
+			t.Errorf("an empty env_allow entry should fail: %v", err)
+		}
+	})
+}
+
+// TestEnvAllowProjectWins: the project file's env_allow replaces the user's
+// whole-value, for the same reason check_auto does — the project must be able
+// to narrow what the user's config widened, and merging could only widen.
+func TestEnvAllowProjectWins(t *testing.T) {
+	user := userConfig + "\nenv_allow = [\"FOO\", \"BAR\"]\n"
+	proj := "env_allow = [\"BAZ\"]\n"
+	opts := harness(t, user, proj, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(cfg.EnvAllow, ",") != "BAZ" {
+		t.Errorf("project env_allow should replace the user's, got %v", cfg.EnvAllow)
+	}
+}
+
 func TestLoadUserConfig(t *testing.T) {
 	cfg, err := Load(harness(t, userConfig, "", testEnv))
 	if err != nil {

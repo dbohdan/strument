@@ -32,6 +32,7 @@ The loader reads these module-level variables after running your file:
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
+| `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -363,6 +364,44 @@ Everything else about signing is Git's domain: which key `-S` uses is decided by
 `user.signingkey`. As with any `git commit`, a failure to sign makes the turn's
 commit fail; the edits stay in the working tree, where `/undo` still reaches
 them through the turn's snapshot.
+
+### `env_allow`
+
+Commands the model causes to run — the `bash` tool, named `check`s, the
+`scraper` command — do not inherit your whole environment. They get an
+allowlist: the variables that make builds and tests work (`PATH`, `HOME`,
+`LANG` and the `LC_*` family, `TMPDIR`, the XDG locations, the standard proxy
+variables and `SOCKS5_SERVER`, and the non-secret knobs of the common
+toolchains — the `GO*` family, `CARGO_HOME`, `JAVA_HOME`, `VIRTUAL_ENV`, and
+a handful of others). Everything else is withheld, so a
+model-run `env`, or a failing test that prints its environment, cannot carry
+`OPENROUTER_API_KEY` — or any other credential — into a tool result, the
+transcript, and the model's context.
+
+`env_allow` adds names on top of the default list:
+
+```python
+env_allow = ["HF_TOKEN", "MY_SERVICE_ENDPOINT"]
+```
+
+Matching is exact: `FOO_` does not admit `FOO_BAR`. The value always comes from
+the real environment at run time — a name containing `=` fails the load, so the
+config carries names only, never values.
+
+Adding a credential-shaped name is allowed and deliberate. There is no filter
+that rejects `HF_TOKEN` on shape: a hard one would just push you toward writing
+the token to a file, which is worse than passing it. What the allowlist buys is
+that exposure has to be *written down* — one line per variable, visible in the
+config and in a `.strument.star` you had to trust.
+
+A project's `.strument.star` **replaces** the user's `env_allow` whole-value,
+for the same reason it replaces `check_auto`: a merge of two lists could only
+widen, and the project needs to be able to narrow.
+
+Two things are untouched by the allowlist. `/run` keeps the full environment,
+because you typed that command yourself. And the API keys Strument itself uses
+(`api_key=env(...)` in this file) are read at load time and never re-exposed
+through it.
 
 ## Built-in functions
 

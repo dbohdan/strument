@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/interp"
 	"mvdan.cc/sh/v3/syntax"
 )
@@ -20,7 +21,10 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 
 	runner := c.Runner
 	if runner == nil {
-		runner = PipeRunner{}
+		// Model-run, so the allowlist applies: the block came from the model,
+		// and its output goes back to the model as a tool result. /run builds
+		// its own PipeRunner without an Env, keeping the full environment.
+		runner = PipeRunner{Env: FilterEnv(nil, c.EnvAllow)}
 	}
 	exitCode, output, err := runner.Run(ctx, command, c.Root)
 	if err != nil {
@@ -40,6 +44,11 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 type PipeRunner struct {
 	// MaxBytes caps captured output; 0 means the default (64 KiB).
 	MaxBytes int
+	// Env is the environment the block runs under: model-run commands get the
+	// allowlist-filtered set (see FilterEnv), while the zero value inherits
+	// the whole process environment — the behavior /run wants, since the user
+	// typed that command themselves.
+	Env []string
 }
 
 func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, string, error) {
@@ -54,7 +63,17 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		return -1, "", err
 	}
 
-	runner, err := interp.New(
+	// The allowlist, when one was given. A nil Env inherits the whole process
+	// environment — the caller decides, because the same runner serves
+	// model-run commands (filtered) and user-run ones (/run, unfiltered);
+	// ListEnviron(nil...) would instead give the block an empty environment.
+	//
+	// The stdin nil below is deliberate rather than the output buffer: that
+	// wiring was self-referential (a command reading stdin reads what the block
+	// has printed so far, and reading a bytes.Buffer drains it), and a
+	// tool-invoked command has no user at a keyboard, so empty stdin is the
+	// honest state.
+	opts := []interp.RunnerOption{
 		// nil stdin rather than the output buffer, which was also passed as
 		// stdin. That wiring is self-referential: a command reading stdin reads
 		// what the block has printed so far, and reading a bytes.Buffer drains
@@ -68,7 +87,11 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		// the self-reference from biting.
 		interp.StdIO(nil, &output, &output),
 		interp.Dir(cwd),
-	)
+	}
+	if r.Env != nil {
+		opts = append(opts, interp.Env(expand.ListEnviron(r.Env...)))
+	}
+	runner, err := interp.New(opts...)
 	if err != nil {
 		return -1, "", err
 	}

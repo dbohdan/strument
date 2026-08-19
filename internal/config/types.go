@@ -178,6 +178,11 @@ type Config struct {
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes
 	// from the `git_sign` setting (a boolean or a key-id string).
 	GitSign string
+	// EnvAllow names environment variables to pass to model-run commands
+	// (the bash tool, checks, the scraper command) on top of the built-in
+	// default allowlist. See coder/envallow.go. Empty means defaults only.
+	// Matching is exact; prefixes are not expanded.
+	EnvAllow []string
 }
 
 // ReasoningMode is what ReasoningDisplay does with a thinking block.

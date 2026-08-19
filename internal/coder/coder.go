@@ -79,6 +79,10 @@ type Coder struct {
 	// CheckAuto names the checks the harness runs itself at the end of a turn
 	// that edited files. Empty means the model is the only thing that runs one.
 	CheckAuto []string
+	// EnvAllow extends the default environment allowlist (envallow.go) with
+	// names from the config's `env_allow`. It applies to every command the
+	// model caused to run — bash, checks, the scraper — never to /run.
+	EnvAllow []string
 
 	Prompts prompts.Set
 
