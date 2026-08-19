@@ -52,8 +52,7 @@ func credentialShaped(name string) bool {
 // never printed, for the same reason the config carries names only.
 func (r *REPL) envDisplay() string {
 	var b strings.Builder
-	def := coder.DefaultEnvAllowNames()
-	fmt.Fprintf(&b, "default  %s", strings.Join(def, " "))
+	fmt.Fprintf(&b, "default  %s", setDefaults())
 	b.WriteString("\n")
 
 	var cfgAllow []string
@@ -90,6 +89,22 @@ func (r *REPL) envDisplay() string {
 		}
 	}
 	return b.String()
+}
+
+// setDefaults renders the default allowlist as /env shows it: only the
+// variables actually set in the environment (the unset ones are noise now that
+// the defaults are an enumeration), with " ..." when any are hidden.
+func setDefaults() string {
+	var set []string
+	for _, name := range coder.DefaultEnvAllowNames() {
+		if os.Getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) < len(coder.DefaultEnvAllowNames()) && len(set) > 0 {
+		set = append(set, "...")
+	}
+	return strings.Join(set, " ")
 }
 
 // cmdEnv is the ad-hoc allowlist command: /env shows the effective list by

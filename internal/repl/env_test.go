@@ -23,6 +23,7 @@ func runEnv(t *testing.T, lines string) (*REPL, *coder.Coder, string) {
 func TestEnvShowAddDropReset(t *testing.T) {
 	t.Setenv("STRUMENT_TEST_A", "1")
 	t.Setenv("MY_SERVICE_TOKEN", "2")
+	t.Setenv("LC_ALL", "C.UTF-8")
 
 	// The state assertions are made mid-session (before reset undoes them) by
 	// ending that script with /exit; each runEnv is one complete session.
@@ -32,10 +33,16 @@ func TestEnvShowAddDropReset(t *testing.T) {
 			"/env\n"+
 			"/exit\n")
 
-	// The bare display names the defaults without printing values — and with
-	// no "GO*"-style prefixes left, since matching is exact everywhere now.
+	// The bare display shows the set defaults only, without values. LC_ALL is
+	// set above via t.Setenv; MY_SERVICE_TOKEN is not a default, and no "*"
+	// remains now that matching is exact everywhere.
 	if !strings.Contains(addOut, "default  PATH") || !strings.Contains(addOut, " LC_ALL") || strings.Contains(addOut, "*") {
 		t.Errorf("default list not shown:\n%s", addOut)
+	}
+	// Not every default is set (GOAMD64, LC_PAPER, …), so the truncated list
+	// ends with an ellipsis rather than implying completeness.
+	if !strings.Contains(addOut, " ...") {
+		t.Errorf("ellipsis missing from the default list:\n%s", addOut)
 	}
 	if !strings.Contains(addOut, "config   (none)") {
 		t.Errorf("empty config group not shown:\n%s", addOut)
