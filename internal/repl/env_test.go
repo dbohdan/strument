@@ -68,6 +68,20 @@ func TestEnvShowAddDropReset(t *testing.T) {
 		t.Errorf("session add not displayed:\n%s", addOut)
 	}
 
+	// TestEnvAddThenShowDoesNotPrintDropLines: /env add used to leave the name
+	// keyed (as false) in envDropped, and the display iterated keys, so every
+	// add printed both a "+" and a "−" line. Add followed by show pins that.
+	_, _, showOut := runEnv(t,
+		"/env add STRUMENT_TEST_A\n"+
+			"/env\n"+
+			"/exit\n")
+	if !strings.Contains(showOut, "session  + STRUMENT_TEST_A") {
+		t.Errorf("session add not displayed:\n%s", showOut)
+	}
+	if strings.Contains(showOut, "session  − STRUMENT_TEST_A") {
+		t.Errorf("an add must not also print a drop line:\n%s", showOut)
+	}
+
 	_, afterDrop, dropOut := runEnv(t, "/env drop STRUMENT_TEST_A PATH\n/exit\n")
 	// drop: honored without asking, and dropping PATH warns rather than asks.
 	if !strings.Contains(dropOut, "without PATH") {

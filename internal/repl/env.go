@@ -72,6 +72,9 @@ func (r *REPL) envDisplay() string {
 			fmt.Fprintf(&b, "config   %s%s\n", name, mark)
 		}
 		for name := range r.envAdded {
+			if !r.envAdded[name] {
+				continue
+			}
 			mark := ""
 			if r.envDropped[name] {
 				continue // reset display: both sets never carry the same name
@@ -82,6 +85,9 @@ func (r *REPL) envDisplay() string {
 			fmt.Fprintf(&b, "session  + %s%s\n", name, mark)
 		}
 		for name := range r.envDropped {
+			if !r.envDropped[name] {
+				continue
+			}
 			if slices.Contains(cfgAllow, name) {
 				continue // shown beside its config entry above
 			}
@@ -133,7 +139,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 				r.out.Errorf("%s is not set in the environment and cannot be added.", name)
 				continue
 			}
-			r.envDropped[name] = false
+			delete(r.envDropped, name)
 			r.envAdded[name] = true
 			if credentialShaped(name) {
 				r.out.Warningf("%s looks like a credential; it is now visible to model-run commands.", name)
@@ -151,7 +157,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 				r.out.Errorf("%q is not an environment variable name.", name)
 				continue
 			}
-			r.envAdded[name] = false
+			delete(r.envAdded, name)
 			r.envDropped[name] = true
 			if name == "PATH" {
 				r.out.Warningf("Most commands will stop working without PATH.")
