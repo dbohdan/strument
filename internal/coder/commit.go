@@ -79,6 +79,7 @@ const commitMessageTimeout = 60 * time.Second
 // paid $0.00093. Nil is accepted for a caller that does not account.
 func CommitMessenger(
 	cl llm.ModelClient, model *config.Model, language string, record func(llm.Usage),
+	out Output, clock Clock,
 ) func(diffs, context string) string {
 	return func(diffs, chatContext string) string { //nolint:contextcheck // its own timeout; the turn's context is already done here.
 		languageInstruction := ""
@@ -98,8 +99,7 @@ func CommitMessenger(
 		ctx, cancel := context.WithTimeout(context.Background(), commitMessageTimeout)
 		defer cancel()
 
-		var answer strings.Builder
-		for ev, err := range cl.Send(ctx, llm.Request{
+		answer, _ := sendSide(ctx, cl, llm.Request{
 			Model: model.Slug,
 			Messages: []llm.Message{
 				llm.TextMessage("system", system),
@@ -111,17 +111,7 @@ func CommitMessenger(
 			// prompt back.
 			Temperature: model.Temperature,
 			ExtraParams: model.RequestExtraParams(),
-		}) {
-			if err != nil {
-				return ""
-			}
-			if ev.Kind == llm.EventAnswer {
-				answer.WriteString(ev.Text)
-			}
-			if ev.Kind == llm.EventUsage && ev.Usage != nil && record != nil {
-				record(*ev.Usage)
-			}
-		}
-		return strings.TrimSpace(answer.String())
+		}, out, clock, record)
+		return strings.TrimSpace(answer) // "" after exhausted retries => caller falls back
 	}
 }

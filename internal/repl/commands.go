@@ -551,7 +551,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	r.refreshTrailer(m)
 	if r.opts.MakeClient != nil {
 		r.coder.Client = r.opts.MakeClient(m)
-		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens)
+		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
 	}
 	r.opts.ModelAlias = args
 	r.saveResume()
@@ -605,7 +605,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		r.refreshTrailer(m)
 		if r.opts.MakeClient != nil {
 			r.coder.Client = r.opts.MakeClient(m)
-			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens)
+			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
 		}
 	} else {
 		r.out.Warningf("Active model %q is no longer in the config; keeping the running model.", r.opts.ModelAlias)

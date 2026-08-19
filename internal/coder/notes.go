@@ -41,11 +41,11 @@ const maxNotesInput = 24_000
 // transcript, using the weak model. Same shape as CommitMessenger, and for the
 // same reasons: a plain function so the caller owns when it runs, and a record
 // hook so the side request reaches the turn's accounting instead of being spent
-// invisibly.
+// invisibly. It shares the side-call retry (side.go).
 //
 // It returns "" on any failure. Notes are a convenience; a session that cannot
 // write them must still be a session.
-func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)) func(transcript string) string {
+func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage), out Output, clock Clock) func(transcript string) string {
 	return func(transcript string) string {
 		transcript = strings.TrimSpace(transcript)
 		if transcript == "" {
@@ -56,8 +56,7 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 		ctx, cancel := context.WithTimeout(context.Background(), notesTimeout)
 		defer cancel()
 
-		var answer strings.Builder
-		for ev, err := range cl.Send(ctx, llm.Request{
+		answer, _ := sendSide(ctx, cl, llm.Request{
 			Model: model.Slug,
 			Messages: []llm.Message{
 				llm.TextMessage(llm.RoleSystem, prompts.SessionNotes),
@@ -68,18 +67,8 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 			// paid for and invisible.
 			Temperature: model.Temperature,
 			ExtraParams: model.RequestExtraParams(),
-		}) {
-			if err != nil {
-				return ""
-			}
-			if ev.Kind == llm.EventAnswer {
-				answer.WriteString(ev.Text)
-			}
-			if ev.Kind == llm.EventUsage && ev.Usage != nil && record != nil {
-				record(*ev.Usage)
-			}
-		}
-		return strings.TrimSpace(answer.String())
+		}, out, clock, record)
+		return strings.TrimSpace(answer) // "" after exhausted retries => notes are skipped
 	}
 }
 

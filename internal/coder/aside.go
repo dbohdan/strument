@@ -48,7 +48,7 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 
 		res, streamErr := c.streamOnce(ctx, req, usage)
 		if res == resFailed {
-			if backoff.retry(c, streamErr) {
+			if backoff.retry(c.Out, c.Clock, streamErr) {
 				continue // transient error: retry with the same backoff as a turn
 			}
 			break

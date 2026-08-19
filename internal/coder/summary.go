@@ -33,11 +33,15 @@ type ChatSummary struct {
 	client llm.ModelClient
 	weak   *config.Model
 	tokens TokenCounter
+	out    Output
+	clock  Clock
 }
 
-// NewChatSummary builds a summarizer backed by the weak model.
-func NewChatSummary(client llm.ModelClient, weak *config.Model, tokens TokenCounter) *ChatSummary {
-	return &ChatSummary{client: client, weak: weak, tokens: tokens}
+// NewChatSummary builds a summarizer backed by the weak model. out and clock
+// are the same ports the coder talks through, so a compaction retry reports
+// and sleeps exactly like a turn's.
+func NewChatSummary(client llm.ModelClient, weak *config.Model, tokens TokenCounter, out Output, clock Clock) *ChatSummary {
+	return &ChatSummary{client: client, weak: weak, tokens: tokens, out: out, clock: clock}
 }
 
 func (s *ChatSummary) count(m llm.Message) int { return s.tokens.Count(m.Text()) }
@@ -136,15 +140,14 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 }
 
 // summarizeAll collapses msgs into a single summary system message via the weak
-// model, mirroring CommitMessenger's send loop (commit.go).
+// model, riding the same side-call retry as the commit message (side.go).
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 	content := renderForSummary(msgs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), summaryTimeout)
 	defer cancel()
 
-	var answer strings.Builder
-	for ev, err := range s.client.Send(ctx, llm.Request{
+	answer, err := sendSide(ctx, s.client, llm.Request{
 		Model: s.weak.Slug,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, prompts.Summarize),
@@ -153,16 +156,12 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		ReasoningEffort: s.weak.Reasoning,
 		Temperature:     s.weak.Temperature,
 		ExtraParams:     s.weak.RequestExtraParams(),
-	}) {
-		if err != nil {
-			return nil, err
-		}
-		if ev.Kind == llm.EventAnswer {
-			answer.WriteString(ev.Text)
-		}
+	}, s.out, s.clock, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	summary := prompts.SummaryLabel + strings.TrimSpace(answer.String())
+	summary := prompts.SummaryLabel + strings.TrimSpace(answer)
 	return []llm.Message{llm.TextMessage(llm.RoleSystem, summary)}, nil
 }
 

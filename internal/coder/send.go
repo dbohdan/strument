@@ -157,21 +157,23 @@ type retryBackoff struct{ delay time.Duration }
 // retry reports whether to retry a failed stream. A retryable error backs off —
 // doubling the delay (capped at retryTimeout) and sleeping — then returns true;
 // a non-retryable error, or one past the cap, reports the failure and returns
-// false. Shared by sendMessage and RunAside so /btw retries like a normal turn.
-func (rb *retryBackoff) retry(c *Coder, streamErr error) bool {
+// false. It takes Output and Clock rather than the Coder so the weak-model
+// side calls (side.go) share it without owning one; sendMessage, RunAside, and
+// those side calls all retry identically.
+func (rb *retryBackoff) retry(out Output, clock Clock, streamErr error) bool {
 	var se *llm.StreamError
 	if !errors.As(streamErr, &se) || !se.Retryable() {
-		c.Out.Errorf("%v", streamErr)
+		out.Errorf("%v", streamErr)
 		return false
 	}
 	rb.delay *= 2
 	if rb.delay > retryTimeout {
-		c.Out.Errorf("%s", se.Error())
+		out.Errorf("%s", se.Error())
 		return false
 	}
-	c.Out.Warningf("%s", se.Error())
-	c.Out.Printf("Retrying in %.1f seconds...", rb.delay.Seconds())
-	c.Clock.Sleep(rb.delay)
+	out.Warningf("%s", se.Error())
+	out.Printf("Retrying in %.1f seconds...", rb.delay.Seconds())
+	clock.Sleep(rb.delay)
 	return true
 }
 
@@ -228,7 +230,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			// A retryable error backs off and retries (the partial is discarded
 			// at the loop top; accumulated multiResponseContent is untouched);
 			// anything else is a hard failure.
-			if backoff.retry(c, streamErr) {
+			if backoff.retry(c.Out, c.Clock, streamErr) {
 				continue
 			}
 			term = resFailed

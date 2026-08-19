@@ -121,7 +121,7 @@ func (c *chatCmd) Run() error {
 		// from the config it already carries.
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
-	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens)
+	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens, cdr.Out, cdr.Clock)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	// URL scraping is a non-provider egress action, so it uses the global proxy
 	// (validated at load, so the error is dead; nil transport => direct). An
@@ -142,7 +142,7 @@ func (c *chatCmd) Run() error {
 		weak := model.WeakModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.New(weak.Provider), weak,
-			cdr.Platform.Language, cdr.RecordSideUsage)
+			cdr.Platform.Language, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits
@@ -253,7 +253,7 @@ func (c *chatCmd) Run() error {
 	if c.Continue && hist != nil {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
-			write := coder.NotesWriter(client.New(model.WeakModel.Provider), model.WeakModel, nil)
+			write := coder.NotesWriter(client.New(model.WeakModel.Provider), model.WeakModel, nil, cdr.Out, cdr.Clock)
 			if notes := write(transcript); notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
@@ -662,7 +662,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if weak == nil {
 				return errors.New("no weak model configured")
 			}
-			write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage)
+			write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 			transcript := history.ReadTranscript(hist.Path())
 			if transcript == "" {
 				return errors.New("transcript is empty")
