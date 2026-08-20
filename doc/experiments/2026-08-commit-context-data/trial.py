@@ -9,6 +9,11 @@ doneMessages is the candidate.
 
   narrow  curMessages only (shipped)
   wide    an 8000-byte tail of doneMessages, then curMessages
+  clause  wide, plus one sentence in CommitSystem saying earlier turns are
+          background and only the diff is the subject. Added because the wide
+          arm's cost turned out not to be the noise it was scored as: all 8 of
+          its bodies on the no-reason turn described the *previous* turn's
+          change, 3 of them with a false BREAKING CHANGE marker.
 
 Three turns, each producing one commit, each scoring a different thing:
 
@@ -39,7 +44,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 EXP = pathlib.Path(__file__).parent
-BINS = {a: EXP / f"bin/strument-{a}" for a in ("narrow", "wide")}
+BINS = {a: EXP / f"bin/strument-{a}" for a in ("narrow", "wide", "clause")}
 MODELS = {"mimo": "xiaomi/mimo-v2.5", "v4flash": "deepseek/deepseek-v4-flash-0731"}
 
 CONFIG = """\
@@ -75,6 +80,11 @@ REASON = re.compile(r"(load.?balanc|idle|60.?second|60s)", re.I)
 # A stated cause, for the turn where no cause exists.
 CAUSE = re.compile(r"\b(because|so that|in order to|to avoid|to ensure|rationale|"
                    r"the reason|since the|which allows)\b", re.I)
+# The real cost, found by reading the bodies rather than counting them: a wider
+# context makes the model describe an *earlier* turn's change on this commit.
+# On the Ping turn, a body about the interval is about the wrong commit.
+PREVIOUS = re.compile(r"(interval|timeout|\b45\b|load.?balanc)", re.I)
+THIS = re.compile(r"\bping\b", re.I)
 # Git trailers are not a body. Every commit here ends with "Assisted-by: …",
 # so scoring "did a body appear" on the raw text says yes every time.
 TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*:\s")
@@ -181,6 +191,9 @@ def run_one(job):
             # COUNTER-METRICS on the turn with no reason to give.
             "t3_has_body": bool(t3 and t3[1]),
             "t3_asserts_cause": bool(t3 and CAUSE.search(t3[1])),
+            "t3_misattributed": bool(t3 and t3[1] and PREVIOUS.search(t3[1]) and not THIS.search(t3[1])),
+            "t3_false_breaking": bool(t3 and "BREAKING" in t3[1]),
+            "t3_subject": (t3[0] if t3 else ""),
             "t3_body": (t3[1][:300] if t3 else ""),
             "session_cost": cost,
             "bodies": [b[:160] for b in bodies],
