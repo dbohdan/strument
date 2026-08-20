@@ -57,7 +57,14 @@ SESSION = [
     "is the value we agreed on. For now, just add a Stop function to the poll "
     "package that returns nil.",
     # T2: the change the reason was for. Its commit body is the metric.
-    "Now make that interval change in poll/poll.go.",
+    #
+    # Spelled out rather than referred back to. "Now make that interval change"
+    # was vague enough that models asked a clarifying question, and a question
+    # eats the next scripted line as its answer — so the script shifted by one
+    # and the change never happened, in 18 of 56 sessions of a first run. The
+    # value is in this message and the *reason* is not, which is the comparison
+    # the trial is making anyway.
+    "Change defaultTimeout in poll/poll.go from 30 to 45.",
     # T3: no reason exists for this, anywhere.
     'Add a Ping function to the poll package that returns "pong".',
     "/exit",
@@ -106,12 +113,23 @@ def run_one(job):
         (cfg / "config.star").write_text(CONFIG.format(slug=MODELS[model_key]))
 
         t0 = time.time()
-        p = subprocess.run([str(BINS[arm]), "--yes"],
+        # --yes-shell as well as --yes. They are separate by design, and the
+        # gap is what cost a first run: the model ran `go build ./poll/`, which
+        # RequiresYesShell, so the confirmer fell through to readline and read
+        # the *next scripted line* as its y/n answer. "Change defaultTimeout in
+        # poll/poll.go from 30 to 45" is not "y", so the build was declined and
+        # the turn it came from never happened — no output, no error, no
+        # transcript entry, exit 0. It looked exactly like the model choosing
+        # not to act, in 18 of 56 sessions.
+        p = subprocess.run([str(BINS[arm]), "--yes", "--yes-shell"],
                            input="".join(l + "\n" for l in SESSION),
                            cwd=root, capture_output=True, text=True, timeout=900,
                            env=dict(os.environ, XDG_CONFIG_HOME=str(cfg.parent),
                                     XDG_STATE_HOME=str(pathlib.Path(work) / "state")))
         out = clean(p.stdout + p.stderr)
+        # The artifact that cost the first run: a question consumes the next
+        # line of the script as its answer. Recorded so it cannot hide again.
+        asked = out.count("‹answer›")
 
         # Commits oldest-first, excluding the fixture's own.
         log = git(root, "log", "--reverse", "--format=%H%x00%s%x00%b%x1e")
@@ -149,7 +167,7 @@ def run_one(job):
         return {
             "arm": arm, "model": model_key, "rep": rep,
             "elapsed": round(time.time() - t0, 1),
-            "commits": len(commits), "subjects": subjects,
+            "commits": len(commits), "subjects": subjects, "asked": asked,
             # The weak model returning "" leaves the fallback subject; counted,
             # because a failed side call is not a short message.
             "empty_messages": sum(1 for s_ in subjects if "no commit message" in s_),
