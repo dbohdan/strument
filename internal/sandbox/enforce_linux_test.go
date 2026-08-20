@@ -60,9 +60,37 @@ func TestEnforcePolicy(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := runEnforce(t, tc.name)
+			answer := strings.TrimSpace(out)
 			t.Logf("Q: %s", tc.asks)
-			t.Logf("A: %s", strings.TrimSpace(out))
+			t.Logf("A: %s", answer)
+			assertEnforced(t, answer)
 		})
+	}
+}
+
+// assertEnforced turns the helper's answer into a verdict.
+//
+// It exists because the first run of this file reported PASS on all twelve
+// cases while the ruleset was being rejected outright and nothing whatsoever
+// was confined — the helper printed "apply failed", the parent logged it, and
+// the test suite called that success. A check that cannot fail is not a check,
+// and a green sandbox test that means nothing is worse than no test, because it
+// is the one thing that would stop anyone looking again.
+func assertEnforced(t *testing.T, answer string) {
+	t.Helper()
+	switch {
+	case answer == "":
+		t.Error("the helper produced no answer at all")
+	case strings.HasPrefix(answer, "apply failed"):
+		t.Errorf("the ruleset was not installed, so nothing was confined: %s", answer)
+	case strings.HasPrefix(answer, "BROKEN"):
+		t.Errorf("the sandbox denied something an ordinary session needs: %s", answer)
+	case strings.HasPrefix(answer, "LEAK"):
+		t.Errorf("the sandbox permitted something it must refuse: %s", answer)
+	case strings.HasPrefix(answer, "setup failed"), strings.HasPrefix(answer, "unknown case"):
+		t.Errorf("the probe did not run: %s", answer)
+	case !strings.HasPrefix(answer, "OK"):
+		t.Errorf("unrecognized answer, which means the probe changed and this check did not: %s", answer)
 	}
 }
 

@@ -39,26 +39,44 @@ func (p Policy) rules() []landlock.Rule {
 	// enumerated and nothing to keep current.
 	rules := make([]landlock.Rule, 0, 1+len(p.Writable)+len(writableDevices))
 	rules = append(rules, landlock.RODirs("/").WithResolveUnix())
-	for _, dir := range p.existing(p.Writable) {
-		rules = append(rules, landlock.RWDirs(dir).WithRefer().WithIoctlDev().WithResolveUnix())
-	}
-	for _, dev := range p.existing(writableDevices) {
-		rules = append(rules, landlock.RWDirs(dev).WithIoctlDev().WithResolveUnix())
+	for _, path := range append(append([]string{}, p.Writable...), writableDevices...) {
+		if rule, ok := writeRule(path); ok {
+			rules = append(rules, rule)
+		}
 	}
 	return rules
 }
 
-// existing drops paths that are not there. Landlock refuses a rule naming a
-// missing path, and a policy should not fail because a project has no state
-// directory yet or because this machine has no /dev/shm.
-func (p Policy) existing(paths []string) []string {
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if _, err := os.Lstat(path); err == nil {
-			out = append(out, path)
-		}
+// writeRule grants writing under one path, choosing the rule by what the path
+// actually is. It reports false for a path that is not there.
+//
+// The file/directory split is not cosmetic. Landlock's directory rights include
+// make_dir, remove_dir and the rest, and asking for them on a regular file is
+// rejected — "inconsistent access rights (using directory access rights on a
+// regular file?)" — which fails the *entire* ruleset, not just that entry. So
+// getting this wrong does not narrow the sandbox, it removes it: every rule is
+// dropped and nothing is enforced. /dev/null is a character device, and a live
+// run against the real policy is what caught it.
+//
+// The class is detected rather than declared, because it is not always the same
+// answer: /dev/pts and /dev/shm are directories while /dev/null and /dev/ptmx
+// are not, and a user's sandbox_write entry may be either.
+//
+// Stat rather than Lstat: a symlink should be classified as whatever it points
+// at, which is also the inode Landlock will anchor the rule to.
+func writeRule(path string) (landlock.FSRule, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		// Not there. A policy should not fail because a project has no state
+		// directory yet, or this machine has no /dev/shm.
+		return landlock.FSRule{}, false
 	}
-	return out
+	if info.IsDir() {
+		return landlock.RWDirs(path).WithRefer().WithIoctlDev().WithResolveUnix(), true
+	}
+	// No WithRefer on a file: refer is about reparenting entries within a
+	// directory, and asking for it here is the same category error again.
+	return landlock.RWFiles(path).WithIoctlDev(), true
 }
 
 // Apply confines the calling process, and everything it later spawns, to the
