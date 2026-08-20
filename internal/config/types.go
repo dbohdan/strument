@@ -139,6 +139,13 @@ func (m *Model) RequestExtraParams() map[string]any {
 	return out
 }
 
+// SandboxLandlock is the only confinement mechanism Strument implements. It is
+// a named string rather than a boolean because "sandboxed" is not one thing:
+// a future macOS or Windows backend would be a different mechanism with
+// different guarantees, and a config that says which one it got can be read
+// years later and still mean something.
+const SandboxLandlock = "landlock"
+
 // Config is the host-facing result of the load pipeline.
 type Config struct {
 	Models  map[string]*Model // alias -> model
@@ -174,6 +181,16 @@ type Config struct {
 	// recovering from its own mistake — a failed edit match, a bad shell
 	// command — and should stay rare.
 	MaxErrorReflections int
+
+	// Sandbox names the confinement mechanism: SandboxLandlock or "" for
+	// none. It defaults to Landlock on Linux and "" elsewhere, and when it is
+	// set it is a requirement rather than a preference — see doc/security.md.
+	Sandbox string
+
+	// SandboxWrite are extra absolute paths the sandbox permits writes under,
+	// on top of the project, the state directory, a temporary directory and
+	// the toolchain caches.
+	SandboxWrite []string
 
 	// ShellTimeout bounds one model-caused command, in seconds. 0 is unset
 	// (the coder's two-minute default); -1 is the config's `shell_timeout = 0`,

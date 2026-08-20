@@ -79,6 +79,12 @@ type Coder struct {
 	// CheckAuto names the checks the harness runs itself at the end of a turn
 	// that edited files. Empty means the model is the only thing that runs one.
 	CheckAuto []string
+	// Sandbox is what the harness knows about its own confinement. It gates
+	// model-caused execution and shapes the message shown when a command is
+	// denied; applying the sandbox happens once, in main, before any model
+	// interaction.
+	Sandbox SandboxState
+
 	// ShellTimeout bounds one model-caused command. Zero takes
 	// defaultShellTimeout; negative means no deadline. /run is never bounded.
 	ShellTimeout time.Duration

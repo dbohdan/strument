@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -62,6 +63,11 @@ type fileGlobals struct {
 	hasMaxErrorReflections bool
 	maxErrorReflectionsVal int
 
+	hasSandbox      bool
+	sandboxVal      string
+	hasSandboxWrite bool
+	sandboxWriteVal []string
+
 	hasShellTimeout bool
 	shellTimeoutVal int
 
@@ -70,6 +76,23 @@ type fileGlobals struct {
 
 	hasEnvAllow bool
 	envAllowVal []string
+}
+
+// defaultSandbox is what `sandbox` means when a config does not say.
+//
+// On by default, because a protection nobody turns on protects nobody, and
+// because this one costs nothing to run under: reads and execution are
+// untouched. A user who needs it off writes `sandbox = ""`, which is a
+// deliberate, visible, greppable act.
+//
+// A config can express the same rule itself — `sandbox = "landlock" if
+// platform.system == "Linux" else ""` — which is the example the platform
+// object was added for.
+func defaultSandbox() string {
+	if runtime.GOOS == "linux" {
+		return SandboxLandlock
+	}
+	return ""
 }
 
 // shellTimeoutSeconds maps the config's encoding onto the coder's.
@@ -276,7 +299,10 @@ func Load(opts Options) (*Config, error) {
 
 	// 4. Merge: models whole-key, project wins; default and history_file
 	// project-over-user.
-	cfg := &Config{Models: map[string]*Model{}}
+	// The sandbox is on by default where it can be, and the default is set
+	// here rather than at the point of use so `strument model-config` and any
+	// other reader sees the same answer the session will act on.
+	cfg := &Config{Models: map[string]*Model{}, Sandbox: defaultSandbox()}
 	maps.Copy(cfg.Models, user.models)
 	if user.hasDefault {
 		cfg.Default = user.defaultVal
@@ -304,6 +330,12 @@ func Load(opts Options) (*Config, error) {
 	}
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
+	}
+	if user.hasSandbox {
+		cfg.Sandbox = user.sandboxVal
+	}
+	if user.hasSandboxWrite {
+		cfg.SandboxWrite = user.sandboxWriteVal
 	}
 	if user.hasShellTimeout {
 		cfg.ShellTimeout = shellTimeoutSeconds(user.shellTimeoutVal)
@@ -347,6 +379,12 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
+		}
+		if project.hasSandbox {
+			cfg.Sandbox = project.sandboxVal
+		}
+		if project.hasSandboxWrite {
+			cfg.SandboxWrite = project.sandboxWriteVal
 		}
 		if project.hasShellTimeout {
 			cfg.ShellTimeout = shellTimeoutSeconds(project.shellTimeoutVal)
@@ -608,6 +646,43 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasMaxErrorReflections = true
 		out.maxErrorReflectionsVal = n
+	}
+
+	if sv, ok := globals["sandbox"]; ok {
+		name, ok := starlark.AsString(sv)
+		if !ok {
+			return nil, fmt.Errorf("%s: `sandbox` must be a string, got %s", path, sv.Type())
+		}
+		// An unknown value is refused rather than ignored. The whole point of
+		// this setting is that the user knows whether they are sandboxed, and a
+		// typo that silently disabled it would be the worst possible outcome.
+		if name != "" && name != SandboxLandlock {
+			return nil, fmt.Errorf(
+				"%s: `sandbox` must be %q or \"\" (off), got %q", path, SandboxLandlock, name)
+		}
+		out.hasSandbox = true
+		out.sandboxVal = name
+	}
+
+	if wv, ok := globals["sandbox_write"]; ok {
+		list, ok := wv.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf("%s: `sandbox_write` must be a list of paths, got %s", path, wv.Type())
+		}
+		paths := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			str, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `sandbox_write`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+			}
+			if !filepath.IsAbs(str) {
+				return nil, fmt.Errorf(
+					"%s: `sandbox_write`[%d] must be an absolute path, got %q — a relative path would depend on where Strument was started", path, i, str)
+			}
+			paths = append(paths, str)
+		}
+		out.hasSandboxWrite = true
+		out.sandboxWriteVal = paths
 	}
 
 	if st, ok := globals["shell_timeout"]; ok {

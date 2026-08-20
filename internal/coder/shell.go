@@ -21,6 +21,15 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	c.Out.Printf("")
 	c.Out.Toolf("Running %s", quoteToolArg(command))
 
+	// A required sandbox that is not enforcing stops the command here rather
+	// than running it and mentioning the fact. /run does not come through this
+	// function, so the user keeps their own escape hatch.
+	if c.Sandbox.blocksExecution() {
+		refusal := c.Sandbox.refusal()
+		c.Out.Errorf("%s", refusal)
+		return -1, refusal
+	}
+
 	// A model-caused block gets a deadline. The turn context is cancellable but
 	// carries none, so a command that never returns — a dev server, a `read`, a
 	// test waiting on a socket it will not get — hangs the session until a human
@@ -57,6 +66,12 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	//
 	// Only DeadlineExceeded, never Canceled — a Ctrl-C is the user's decision
 	// and does not need explaining back to them.
+	// A denial arrives as a bare errno, and an unexplained failure is the thing
+	// a coding model responds to by editing code. Naming the sandbox turns
+	// thrashing into a config change.
+	if exitCode != 0 && c.Sandbox.Active && looksDenied(output) {
+		output += c.Sandbox.deniedHint()
+	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		note := fmt.Sprintf("\nThe command was stopped after %s. Strument's `shell_timeout` did it, not the command.", deadline)
 		output += note

@@ -424,6 +424,9 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// The argv is the user's own configuration, reached by name; the model
 	// never supplies any part of it, which is what makes running it without a
 	// confirmation prompt reasonable.
+	if c.Sandbox.blocksExecution() {
+		return -1, c.Sandbox.refusal()
+	}
 	// The same deadline the bash tool gets, and for the same reason: a check is
 	// model-caused, and a test suite that waits forever on a socket hangs the
 	// session exactly as a bash block would.
@@ -447,6 +450,9 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 		exit = ee.ExitCode()
 	case err != nil:
 		return -1, fmt.Sprintf("could not run %s: %v", strings.Join(ch.Argv, " "), err)
+	}
+	if exit != 0 && c.Sandbox.Active && looksDenied(string(out)) {
+		return exit, string(out) + c.Sandbox.deniedHint()
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return -1, string(out) + fmt.Sprintf(
