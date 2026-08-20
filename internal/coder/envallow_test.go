@@ -119,6 +119,45 @@ func TestFilterEnvNeverReturnsNil(t *testing.T) {
 	}
 }
 
+// TestFilterEnvWindowsCasing runs the Windows name comparison on whatever host
+// the suite runs on. It has to: os.Environ on Windows reports the OS's own
+// spelling — "Path", "ComSpec" — while the allowlist is written in the
+// conventional upper case, and an exact match there withholds PATH from every
+// model-run command. CI is Linux, so nothing else would notice.
+func TestFilterEnvWindowsCasing(t *testing.T) {
+	windowsEnv := []string{
+		"Path=C:\\Windows\\system32",
+		"ComSpec=C:\\Windows\\system32\\cmd.exe",
+		"SystemRoot=C:\\Windows",
+		"TEMP=C:\\Temp",
+		"UserProfile=C:\\Users\\u",
+		"OpenRouter_Api_Key=sk-secret",
+	}
+
+	restore := envNamesFold
+	t.Cleanup(func() { envNamesFold = restore })
+
+	envNamesFold = true
+	got := envNames(FilterEnv(func() []string { return windowsEnv }, nil))
+	for _, name := range []string{"Path", "ComSpec", "SystemRoot", "TEMP", "UserProfile"} {
+		if !slices.Contains(got, name) {
+			t.Errorf("%s was withheld; a Windows command needs it", name)
+		}
+	}
+	// The fold widens the comparison, not the list: a credential still has to
+	// be written into env_allow, in any casing.
+	if slices.Contains(got, "OpenRouter_Api_Key") {
+		t.Error("a credential passed under case-insensitive matching")
+	}
+
+	// Unix names are case-sensitive, and `path` really is a different variable
+	// from PATH there.
+	envNamesFold = false
+	if got := envNames(FilterEnv(func() []string { return windowsEnv }, nil)); slices.Contains(got, "Path") {
+		t.Errorf("case-insensitive matching leaked onto a case-sensitive platform: %v", got)
+	}
+}
+
 // TestPipeRunnerEnvIsTheAllowlist observes the seam the model actually reaches:
 // a block through the real interpreter, with the allowlist applied the way
 // runAndShow applies it. Asserted by running `env`, not by re-deriving the

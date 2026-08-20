@@ -2,6 +2,7 @@ package coder
 
 import (
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -65,16 +66,41 @@ var defaultEnvAllowNames = []string{
 	"JAVA_HOME", "GRADLE_USER_HOME",
 }
 
+// envNamesFold reports whether variable names are compared without regard to
+// case. Windows treats them that way at the API, and os.Environ hands back the
+// OS's own spelling — "Path", "ComSpec", "SystemRoot" — so an exact-match
+// allowlist there withholds PATH from every model-run command and the tool
+// fails to find its own compiler. Unix names are case-sensitive and `path` is a
+// different variable from PATH, so the fold stays off.
+//
+// A variable rather than a runtime.GOOS test at the point of use, so the
+// Windows comparison can be exercised from a test on any host: the platform
+// this is wrong on is the one CI is least likely to catch it on.
+var envNamesFold = runtime.GOOS == "windows"
+
 // envAllowed reports whether name passes the allowlist. Extra names come from
 // `env_allow` and match exactly, like the defaults: there is no prefix or
 // wildcard expansion anywhere — a config that says "FOO_" almost certainly
 // means FOO_BAR, and a silent prefix match would widen permissions past what
 // was written.
 func envAllowed(name string, extra []string) bool {
-	if slices.Contains(extra, name) {
+	return containsEnvName(extra, name) || containsEnvName(defaultEnvAllowNames, name)
+}
+
+// containsEnvName is slices.Contains under the platform's name comparison.
+func containsEnvName(list []string, name string) bool {
+	if slices.Contains(list, name) {
 		return true
 	}
-	return slices.Contains(defaultEnvAllowNames, name)
+	if !envNamesFold {
+		return false
+	}
+	for _, n := range list {
+		if strings.EqualFold(n, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // EnvAllowed is envAllowed for callers outside the package: the REPL's /env
