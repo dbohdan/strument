@@ -45,7 +45,8 @@ func TestEnforcePolicy(t *testing.T) {
 	}{
 		// Must be permitted, or the sandbox breaks ordinary work.
 		{"write-project", "can a turn write inside the project?"},
-		{"write-tmp", "can a build write to TMPDIR?"},
+		{"write-tmp", "can a build write to the real TMPDIR?"},
+		{"write-state", "can a turn write the transcript to the state directory?"},
 		{"devnull", "does `> /dev/null` work now that it is granted?"},
 		{"rename-across", "does mv across directories work with WithRefer?"},
 		{"pty", "can a pty be allocated and sized (ptmx + WithIoctlDev)?"},
@@ -94,9 +95,32 @@ func assertEnforced(t *testing.T, answer string) {
 	}
 }
 
+// testBase makes the session's directory somewhere that is *not* already
+// writable under the policy.
+//
+// t.TempDir() puts it under /tmp, which DefaultWritable grants — so the
+// project's parent would be writable for reasons that have nothing to do with
+// the project, and deny-parent would report a leak that is really an artifact
+// of where the test put its files. $HOME is granted nowhere (only named
+// subdirectories of it are), which makes it the honest place for this.
+func testBase(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory to anchor the fixture outside a writable root")
+	}
+	//nolint:usetesting // t.TempDir() is under /tmp, which is exactly the writable root this fixture must avoid.
+	base, err := os.MkdirTemp(home, ".strument-sandbox-test-")
+	if err != nil {
+		t.Skipf("cannot create a fixture under $HOME: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	return base
+}
+
 func runEnforce(t *testing.T, name string) (string, error) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testBase(t)
 	project := filepath.Join(dir, "project")
 	if err := os.MkdirAll(filepath.Join(project, "sub"), 0o700); err != nil {
 		t.Fatal(err)
@@ -123,7 +147,7 @@ func runEnforce(t *testing.T, name string) (string, error) {
 	cmd.Env = append(os.Environ(),
 		enforceEnv+"="+name,
 		"STRUMENT_ENFORCE_PROJECT="+project,
-		"STRUMENT_ENFORCE_TMP="+filepath.Join(dir, "tmp"))
+		"STRUMENT_ENFORCE_STATE="+filepath.Join(dir, "state"))
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -134,39 +158,40 @@ func TestEnforceHelper(t *testing.T) {
 		t.Skip("not the helper")
 	}
 	project := os.Getenv("STRUMENT_ENFORCE_PROJECT")
-	tmp := os.Getenv("STRUMENT_ENFORCE_TMP")
-	_ = os.MkdirAll(tmp, 0o700)
+	state := os.Getenv("STRUMENT_ENFORCE_STATE")
+	_ = os.MkdirAll(state, 0o700)
 
-	// Exactly what Strument would install, built by the shipped code.
-	pol := Policy{Writable: []string{project, tmp, cacheDirForTest()}}
+	// The shipped derivation, not a hand-built approximation of it. The first
+	// version of this helper listed the paths itself and quietly diverged: it
+	// granted a test-local temp directory while `go build` creates its work
+	// directory in the real TMPDIR, so CI reported the sandbox breaking an
+	// ordinary build when the fixture was what was wrong. A test of a model of
+	// the code tests the model.
+	pol := Policy{Writable: DefaultWritable(project, state, nil)}
 	if err := pol.Apply(); err != nil {
 		fmt.Println("apply failed:", err)
 		return
 	}
-	fmt.Println(enforceCase(name, project, tmp))
+	fmt.Println(enforceCase(name, project, state))
 }
 
-// cacheDirForTest stands in for the toolchain-cache entries the real policy
-// derives, so `go build` has somewhere to put its cache.
-func cacheDirForTest() string {
-	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return d
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return os.TempDir()
-	}
-	return filepath.Join(home, ".cache")
-}
-
-func enforceCase(name, project, tmp string) string {
+func enforceCase(name, project, state string) string {
 	switch name {
 	case "write-project":
 		return allow("write inside the project",
 			os.WriteFile(filepath.Join(project, "f"), []byte("x"), 0o600))
 
 	case "write-tmp":
-		return allow("write to TMPDIR", os.WriteFile(filepath.Join(tmp, "f"), []byte("x"), 0o600))
+		f, err := os.CreateTemp("", "strument-sandbox-")
+		if err == nil {
+			defer os.Remove(f.Name())
+			f.Close()
+		}
+		return allow("write to the real TMPDIR, where build tools put scratch files", err)
+
+	case "write-state":
+		return allow("write to the state directory, where the transcript goes",
+			os.WriteFile(filepath.Join(state, "transcript.md"), []byte("x"), 0o600))
 
 	case "devnull":
 		f, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)

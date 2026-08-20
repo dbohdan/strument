@@ -67,12 +67,13 @@ func gitDir(projectRoot string) string {
 		return ""
 	}
 	dot := filepath.Join(projectRoot, ".git")
+	//nolint:gosec // projectRoot is the directory the user launched in, never a model-supplied path.
 	info, err := os.Lstat(dot)
 	if err != nil || info.IsDir() {
 		// A normal repository: .git is inside the project and already covered.
 		return ""
 	}
-	data, err := os.ReadFile(dot)
+	data, err := os.ReadFile(dot) //nolint:gosec // same path, same reason.
 	if err != nil {
 		return ""
 	}
