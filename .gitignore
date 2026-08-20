@@ -8,3 +8,9 @@
 /strument-subset
 
 *.sw*
+
+# Trial binaries and Python caches under doc/experiments: a trial builds one
+# binary per arm to compare them, and those are build output, not data. The
+# runner and its results.jsonl are what get committed.
+/doc/experiments/*/bin/
+__pycache__/
