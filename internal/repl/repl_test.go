@@ -862,3 +862,80 @@ func TestSubmitCommandRefusals(t *testing.T) {
 		}
 	}
 }
+
+// TestConfirmDeclinesWithoutATerminal is the regression for a turn that
+// vanished. Piped stdin is one stream, so a confirm that reads consumes the
+// user's next message as its y/n answer — and anything that is not "y" is a
+// no, so the command is declined *and* the turn is lost, with no output, no
+// error and exit 0.
+func TestConfirmDeclinesWithoutATerminal(t *testing.T) {
+	// The scripted input is what a user would type next, not an answer.
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("Change defaultTimeout from 30 to 45.\n"))
+	r.opts.StdinIsTerminal = func() bool { return false }
+
+	res := r.Confirmer().Confirm(coder.ConfirmRequest{
+		Command:          "go build ./poll/",
+		Purpose:          "Verify the poll package compiles.",
+		Prompt:           "Run it?",
+		RequiresYesShell: true,
+	})
+	if res.Yes || res.AlwaysThisTurn {
+		t.Fatal("a prompt with nobody at the keyboard was answered yes")
+	}
+
+	got := out.String()
+	// The request is still shown: what was proposed is worth reading even when
+	// the answer is a foregone no.
+	if !strings.Contains(got, "go build ./poll/") {
+		t.Errorf("the command was not shown:\n%s", got)
+	}
+	// And the decline says which flag would have answered it, naming the shell
+	// one — --yes deliberately does not cover a shell command.
+	if !strings.Contains(got, "--yes-shell") {
+		t.Errorf("the decline does not name the flag that answers it:\n%s", got)
+	}
+
+	// The load-bearing assertion: the scripted line was not eaten, so the REPL
+	// still has it to run as a turn.
+	line, err := r.rl.ReadLine()
+	if err != nil {
+		t.Fatalf("the confirm consumed the user's next message: %v", err)
+	}
+	if !strings.Contains(line, "defaultTimeout") {
+		t.Errorf("next line = %q, want the user's message", line)
+	}
+}
+
+// TestConfirmStillAsksWhenOnlyOutputIsRedirected pins that the guard reads
+// stdin and not both ends. `strument | tee log` has a human at the keyboard,
+// and folding rendering-terminal-ness into this question would refuse to ask.
+func TestConfirmStillAsksWhenOnlyOutputIsRedirected(t *testing.T) {
+	r, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+	r.opts.IsTerminal = func() bool { return false } // output is a file
+	r.opts.StdinIsTerminal = func() bool { return true }
+
+	if !r.Confirmer().Confirm(coder.ConfirmRequest{Subject: "Do it?", Prompt: "Ok?"}).Yes {
+		t.Error("a redirected stdout stopped the harness asking a human who was there")
+	}
+}
+
+// TestAskReturnsUnansweredWithoutATerminal is the same guard on the question
+// path, which has no flag to answer it and so has only one honest outcome.
+func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("Add a Ping function.\n"))
+	r.opts.StdinIsTerminal = func() bool { return false }
+
+	if got := r.Asker().Ask(coder.AskRequest{
+		Question: "Which signature?",
+		Options:  []coder.AskOption{{Label: "error"}, {Label: "nothing"}},
+	}); got != nil {
+		t.Errorf("answered without a terminal: %q", got)
+	}
+	if !strings.Contains(out.String(), "Which signature?") {
+		t.Errorf("the question was not shown:\n%s", out.String())
+	}
+	line, err := r.rl.ReadLine()
+	if err != nil || !strings.Contains(line, "Ping") {
+		t.Errorf("the question consumed the user's next message: %q %v", line, err)
+	}
+}

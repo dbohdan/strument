@@ -86,6 +86,16 @@ type Options struct {
 	// IsTerminal overrides terminal detection (readline renders line
 	// editing only on real terminals).
 	IsTerminal func() bool
+	// StdinIsTerminal reports whether there is someone at the keyboard, and
+	// gates the two places the harness asks a question mid-turn. nil means
+	// yes, which is what the tests want and what the REPL assumed before this
+	// existed.
+	//
+	// Separate from IsTerminal, which is about *rendering* and is true only
+	// when both ends are a terminal. Redirecting output alone — `strument |
+	// tee log` — leaves a human perfectly able to answer a prompt, and folding
+	// the two questions together would refuse to ask them.
+	StdinIsTerminal func() bool
 	// MakeRaw/ExitRaw override raw-mode handling; readline's default
 	// operates on the process's stdin, which tests replace with a pty.
 	MakeRaw func() error
@@ -261,6 +271,24 @@ func (r *REPL) termWidth() int {
 // rules, and file listing are shown only then, like aider's pretty mode).
 func (r *REPL) interactive() bool {
 	return r.opts.IsTerminal == nil || r.opts.IsTerminal()
+}
+
+// canAsk reports whether a mid-turn prompt has anyone to ask.
+//
+// Piped stdin is one stream: a confirm or a question reads from the same
+// reader the REPL takes user turns from, so consuming a line there does not
+// answer anything — it eats the next thing the user wrote and reads it as the
+// answer. Anything that is not "y" is a "no", so `strument --yes < script`
+// declines the command *and* loses the turn that followed it: no output, no
+// error, no transcript entry, exit 0. It looks exactly like the model choosing
+// not to act, which is how it went unnoticed until a trial lost 18 sessions of
+// 56 to it.
+//
+// So a prompt with nobody at the keyboard declines without reading. --yes and
+// --yes-shell are how a scripted session says yes; they are answered before
+// the fallback is ever reached.
+func (r *REPL) canAsk() bool {
+	return r.opts.StdinIsTerminal == nil || r.opts.StdinIsTerminal()
 }
 
 // announce prints the opening banner once at session start, mirroring
@@ -542,6 +570,17 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		r.out.Printf("%s", req.Subject)
 	}
 
+	// Shown after the request, not instead of it: what was proposed is worth
+	// reading even when the answer is a foregone no.
+	if !r.canAsk() {
+		flag := "--yes"
+		if req.RequiresYesShell {
+			flag = "--yes-shell"
+		}
+		r.out.Warningf("Declined: there is no terminal to ask on. Pass %s to answer this without one.", flag)
+		return coder.ConfirmResult{}
+	}
+
 	cfg := r.rl.GetConfig()
 	cfg.Prompt = req.Prompt + confirmSuffix(req)
 	cfg.HistoryLimit = -1 // y/n answers stay out of the input history
@@ -611,6 +650,14 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 		} else {
 			r.out.Printf("%d. %s", i+1, opt.Label)
 		}
+	}
+
+	// Same reason as the confirm guard: reading here would consume the next
+	// user turn as the answer. There is no flag that answers a question, so
+	// the honest outcome is the one a nil Asker already produces.
+	if !r.canAsk() {
+		r.out.Warningf("No terminal to answer on; the question goes back unanswered.")
+		return nil
 	}
 
 	// An empty line re-prompts once rather than looping forever: a user who

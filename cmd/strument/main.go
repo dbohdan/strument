@@ -676,12 +676,14 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
 			return nil
 		},
-		Color:       !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
-		IsTerminal:  drivingATerminal,
-		HistoryFile: inputHistory,
-		Version:     version,
-		Theme:       c.paletteTheme(),
-		GetSize:     terminalSize,
+		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
+		IsTerminal: drivingATerminal,
+		// Only stdin: `strument | tee log` still has a human to ask.
+		StdinIsTerminal: func() bool { return isCharDevice(os.Stdin) },
+		HistoryFile:     inputHistory,
+		Version:         version,
+		Theme:           c.paletteTheme(),
+		GetSize:         terminalSize,
 	})
 	if err != nil {
 		return err
@@ -727,6 +729,11 @@ func drivingATerminal() bool {
 // the Stage 9 bug; a confirmation that showed less here than there, or meant
 // something different by Enter, would be the same bug at the one prompt where
 // being wrong costs the most.
+// stdinReader is shared across confirmations. A fresh bufio.Reader per prompt
+// would refill from the pipe and then be discarded along with whatever it had
+// buffered past the line it used, which loses input that was never answered.
+var stdinReader = bufio.NewReader(os.Stdin)
+
 type terminalConfirmer struct{}
 
 func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
@@ -742,9 +749,20 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		fmt.Println(req.Subject)
 	}
 
+	// The REPL's rlConfirmer declines rather than reading when nobody is at
+	// the keyboard; this surface follows, so the two mean the same thing. Only
+	// stdin is consulted: redirecting output does not take the human away.
+	if !isCharDevice(os.Stdin) {
+		flag := "--yes"
+		if req.RequiresYesShell {
+			flag = "--yes-shell"
+		}
+		fmt.Printf("Declined: there is no terminal to ask on. Pass %s to answer this without one.\n", flag)
+		return coder.ConfirmResult{}
+	}
+
 	fmt.Printf("%s (Y/n) ", req.Prompt)
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
+	line, err := stdinReader.ReadString('\n')
 	if err != nil {
 		// No answer available at all — a closed or redirected stdin. Declining
 		// is the safe reading: nobody is there to have meant yes.
