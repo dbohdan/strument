@@ -1,0 +1,121 @@
+diff --git a/cmd/strument/main.go b/cmd/strument/main.go
+index 7dc1a75..f21e811 100644
+--- a/cmd/strument/main.go
++++ b/cmd/strument/main.go
+@@ -307,6 +307,7 @@ func (c *chatCmd) Run() error {
+ 			Assistant:      answer,
+ 			Files:          cdr.TurnEditedFiles(),
+ 			Tools:          cdr.TurnToolLines(),
++			Reasoning:      cdr.TurnReasoning(),
+ 		}); err != nil {
+ 			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
+ 		}
+diff --git a/internal/coder/coder.go b/internal/coder/coder.go
+index 47ce30e..76d9aa7 100644
+--- a/internal/coder/coder.go
++++ b/internal/coder/coder.go
+@@ -117,6 +117,9 @@ type Coder struct {
+ 	doneMessages      []llm.Message
+ 	curMessages       []llm.Message
+ 	turnEditedFiles   map[string]bool
++	// turnReasoning accumulates the turn's reasoning across every send in it.
++	// partialReasoningContent is send-scoped and cleared between sends.
++	turnReasoning string
+ 	// toolLog tees Toolf into a per-turn record, so the transcript can say what
+ 	// the turn did and not only what it said about it. Installed lazily by
+ 	// recordToolLines; see toollog.go.
+@@ -338,6 +341,7 @@ func (c *Coder) inchatRelativeFiles() []string {
+ // initBeforeMessage resets per-top-level-message state.
+ func (c *Coder) initBeforeMessage() {
+ 	c.recordToolLines()
++	c.turnReasoning = ""
+ 	c.turnEditedFiles = map[string]bool{}
+ 	c.turnAutoApprove = map[string]bool{}
+ 	c.numReflections = 0
+diff --git a/internal/coder/send.go b/internal/coder/send.go
+index 57038e3..380c4f5 100644
+--- a/internal/coder/send.go
++++ b/internal/coder/send.go
+@@ -132,6 +132,7 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
+ 			c.Out.StreamText(ev.Text)
+ 		case llm.EventReasoning:
+ 			c.partialReasoningContent += ev.Text
++			c.turnReasoning += ev.Text
+ 			c.Out.StreamReasoning(ev.Text)
+ 		case llm.EventToolCall:
+ 			c.accumulateToolCall(ev.ToolCall)
+diff --git a/internal/coder/toollog.go b/internal/coder/toollog.go
+index 7957b2a..6d72135 100644
+--- a/internal/coder/toollog.go
++++ b/internal/coder/toollog.go
+@@ -89,3 +89,27 @@ func (c *Coder) TurnToolLines() []string {
+ 	}
+ 	return c.toolLog.recorded()
+ }
++
++// maxTurnReasoning caps the reasoning kept for one turn.
++//
++// Per turn rather than per session: one thinky turn would otherwise consume a
++// whole session's record. The *tail* is kept, not the head — reasoning is
++// conclusion-last, so head-truncation keeps the exploration and drops the
++// finding, which is exactly inverted. The elision is marked, because a
++// mid-truncated trace that reads as complete is worse than none.
++const maxTurnReasoning = 1500
++
++// TurnReasoning returns the turn's reasoning, tail-truncated. Same lifetime
++// rule as TurnEditedFiles and TurnToolLines.
++func (c *Coder) TurnReasoning() string {
++	r := strings.TrimSpace(c.turnReasoning)
++	if len(r) <= maxTurnReasoning {
++		return r
++	}
++	r = r[len(r)-maxTurnReasoning:]
++	// Snap forward to a line break so the kept part starts on a whole thought.
++	if i := strings.IndexByte(r, '\n'); i >= 0 && i < 200 {
++		r = r[i+1:]
++	}
++	return "(Earlier reasoning omitted.)\n" + r
++}
+diff --git a/internal/history/history.go b/internal/history/history.go
+index ebad88c..901088c 100644
+--- a/internal/history/history.go
++++ b/internal/history/history.go
+@@ -167,6 +167,13 @@ type Turn struct {
+ 	// prose alone, so a turn that made a dozen tool calls and closed with one
+ 	// sentence was, to the next session, that sentence.
+ 	Tools []string
++	// Reasoning is the turn's thinking, tail-truncated by the caller.
++	//
++	// Folded into <details> for the human reader, who is scanning a record of
++	// what happened and did not ask for the derivation. The weak model that
++	// regenerates session notes from this file folds nothing and reads every
++	// byte, which is the whole question this field exists to settle.
++	Reasoning string
+ }
+ 
+ // Writer appends turns to a markdown file, creating it (and its parent
+@@ -255,6 +262,12 @@ func (t Turn) render() string {
+ 		b.WriteString("\n")
+ 	}
+ 
++	if strings.TrimSpace(t.Reasoning) != "" {
++		b.WriteString("<details>\n<summary>Thinking.</summary>\n\n")
++		b.WriteString(strings.TrimRight(t.Reasoning, "\n"))
++		b.WriteString("\n\n</details>\n\n")
++	}
++
+ 	b.WriteString("### Prompt\n\n")
+ 	b.WriteString(strings.TrimRight(t.User, "\n"))
+ 	b.WriteString("\n\n### Response\n\n")
+diff --git a/internal/repl/repl.go b/internal/repl/repl.go
+index f4d8a5a..aaf15f9 100644
+--- a/internal/repl/repl.go
++++ b/internal/repl/repl.go
+@@ -477,6 +477,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
+ 			Assistant:      answer,
+ 			Files:          r.coder.TurnEditedFiles(),
+ 			Tools:          r.coder.TurnToolLines(),
++			Reasoning:      r.coder.TurnReasoning(),
+ 		}); err != nil {
+ 			r.out.Warningf("Could not write chat history: %v", err)
+ 		}

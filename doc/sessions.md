@@ -286,4 +286,11 @@ the note says which side loses. No other harness states it.
   that opened the file asserted the stale name, and no wording reliably causes
   the opening. It also records that `--continue` can produce no notes and say
   nothing, in 3 to 5 sessions of 48.
+- `experiments/2026-08-transcript-depth.md` — how deep the transcript should
+  go. Tool lines shipped; reasoning did not, on a result that went against the
+  argument made against it. Reasoning recovers what a check wanted 19/26
+  against 2/26, and the rationale that check stated in the same breath 0/62 —
+  it summarizes what it reads rather than transcribing it, so it improves
+  recall of what the code already carries and not of what only the
+  conversation had. The predicted confabulation did not appear, 0/26.
 - `../doc/experimenting.md` — how to run one of these without fooling yourself.
