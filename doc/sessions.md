@@ -280,4 +280,10 @@ the note says which side loses. No other harness states it.
   recovering a stated reason (p=0.0002), and 3/8 stale assertions when the tree
   moved behind them. The conflict rule in the header does not prevent that,
   because the failure is upstream of a conflict: the model never looked.
+- `experiments/2026-08-notes-header.md` — the follow-up that tried to fix that
+  with a stronger instruction, and could not: 8/24 vs 6/24, p=0.75. Its real
+  finding is that reading is perfectly predictive — across 48 sessions, not one
+  that opened the file asserted the stale name, and no wording reliably causes
+  the opening. It also records that `--continue` can produce no notes and say
+  nothing, in 3 to 5 sessions of 48.
 - `../doc/experimenting.md` — how to run one of these without fooling yourself.

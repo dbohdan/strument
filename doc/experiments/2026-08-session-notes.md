@@ -81,6 +81,14 @@ The counter-metric for *that* trial is the obvious one: whether it makes models
 re-read files they already have in context, spending steps to reconfirm things
 nothing has changed.
 
+**It was run, and it lost.** See
+[`2026-08-notes-header.md`](2026-08-notes-header.md): 8/24 against 6/24 on
+stale assertions, p=0.75, with the counter-metric trending the wrong way. The
+diagnosis above holds and the remedy does not follow from it — across all 48
+sessions of that trial, no session that read the file ever asserted the stale
+name, and the sentence moved reading from 14/24 to 16/24. The lever is
+mechanical, not rhetorical.
+
 ## Why ship it anyway
 
 Because the benefit is certain and the harm is bounded and visible. The reason a
