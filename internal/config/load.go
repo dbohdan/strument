@@ -408,11 +408,11 @@ func Load(opts Options) (*Config, error) {
 	return cfg, nil
 }
 
-// execConfig executes one Starlark file with the three builtins predeclared
-// and extracts the required globals.
-func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
-	thread := &starlark.Thread{Name: path}
-	predeclared := starlark.StringDict{
+// predeclaredGlobals is everything a config file can reach without defining it.
+// Factored out of execConfig so the set has one definition and a test can
+// evaluate an expression against exactly what a real config sees.
+func predeclaredGlobals(lookup func(string) (string, bool), root string) starlark.StringDict {
+	return starlark.StringDict{
 		"provider": starlark.NewBuiltin("provider", builtinProvider),
 		"model":    starlark.NewBuiltin("model", builtinModel),
 		"env":      builtinEnv(lookup),
@@ -420,7 +420,17 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		// a user-level `check = project_checks()` should adapt to whatever
 		// project the session opened.
 		"project_checks": builtinProjectChecks(root),
+		// Read-only facts about the host, so a config can branch on the OS —
+		// the sandbox setting is the first thing that needs to.
+		"platform": platformValue{},
 	}
+}
+
+// execConfig executes one Starlark file with the builtins predeclared and
+// extracts the required globals.
+func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
+	thread := &starlark.Thread{Name: path}
+	predeclared := predeclaredGlobals(lookup, root)
 	fileOpts := &syntax.FileOptions{
 		Set:             true,
 		While:           false,

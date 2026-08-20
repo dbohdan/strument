@@ -513,6 +513,43 @@ makes the variable optional and yields `None`, which omitting the keyword does
 not. Note that `provider()` wants a string for `api_key`, so an optional key
 wants `default=""` rather than `default=None`.
 
+## Built-in values
+
+### `platform`
+
+Read-only facts about the machine, for a config that has to branch on the OS:
+
+```python
+sandbox = "landlock" if platform.system == "Linux" else ""
+```
+
+It imitates CPython's `platform` module rather than Go's vocabulary, because a
+Starlark config is a Python dialect and the shape you reach for is the Python
+one. So the values are the ones CPython would give you, not the ones Go uses
+internally:
+
+| attribute | example | source |
+| --- | --- | --- |
+| `platform.system` | `"Linux"`, `"Darwin"`, `"Windows"` | capitalized, never Go's `"linux"` |
+| `platform.machine` | `"x86_64"`, `"aarch64"` | `uname` on Unix, never Go's `"amd64"` |
+| `platform.bits` | `"64bit"` | pointer width |
+| `platform.node` | `"houdini"` | hostname, `""` if unreadable |
+| `platform.release` | `"6.18.5"` | `uname` release; `""` without `uname` |
+| `platform.version` | `"#1 SMP ..."` | `uname` version; `""` without `uname` |
+
+Writing `platform.system == "linux"` and having it silently never match is the
+mistake the capitalization exists to prevent.
+
+CPython's `platform()` and `processor()` are **absent** rather than
+approximated. The first is a composite string assembled differently on every OS
+with no faithful translation; the second is empty even in CPython on Linux and
+comes from places Go cannot portably reach. Referring to either is an error you
+see when you edit the config, which is better than a plausible wrong value you
+ship.
+
+The attributes are read-only, and `platform` is not a function — these are facts
+about the host, not a computation.
+
 ## Model methods
 
 ### `model.with_extra_params(**overrides)`
