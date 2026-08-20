@@ -88,11 +88,18 @@ func DefaultEnvAllowNames() []string { return slices.Clone(defaultEnvAllowNames)
 // FilterEnv builds the environment passed to model-run commands: every
 // allowed variable from environ, as NAME=VALUE pairs. environ nil means
 // os.Environ. extra is the user's `env_allow` list, on top of the defaults.
+//
+// The result is never nil, even when nothing matches. Both consumers read nil
+// as "inherit the whole environment" — exec.Cmd.Env by documented contract,
+// PipeRunner.Env by the zero-value rule that gives /run its unfiltered
+// environment — so a nil return would turn the filter's strictest possible
+// outcome into no filter at all. An empty environment is the correct answer to
+// "nothing was allowed"; failing that way is a broken build, not a leaked key.
 func FilterEnv(environ func() []string, extra []string) []string {
 	if environ == nil {
 		environ = os.Environ
 	}
-	var out []string
+	out := []string{}
 	for _, kv := range environ() {
 		name, _, _ := strings.Cut(kv, "=")
 		if envAllowed(name, extra) {

@@ -104,6 +104,21 @@ func TestFilterEnvUserAdditions(t *testing.T) {
 	}
 }
 
+// TestFilterEnvNeverReturnsNil pins the failure direction of the filter. Both
+// consumers read a nil environment as "inherit everything" — exec.Cmd.Env by
+// documented contract, PipeRunner.Env by its zero-value rule — so the one case
+// where the filter passes nothing must not be the case where it stops
+// filtering.
+func TestFilterEnvNeverReturnsNil(t *testing.T) {
+	got := FilterEnv(func() []string { return []string{"OPENROUTER_API_KEY=sk-secret"} }, nil)
+	if got == nil {
+		t.Fatal("a fully filtered environment came back nil, which both call sites read as inherit-everything")
+	}
+	if len(got) != 0 {
+		t.Errorf("nothing should have passed, got %v", got)
+	}
+}
+
 // TestPipeRunnerEnvIsTheAllowlist observes the seam the model actually reaches:
 // a block through the real interpreter, with the allowlist applied the way
 // runAndShow applies it. Asserted by running `env`, not by re-deriving the
