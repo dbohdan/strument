@@ -72,9 +72,26 @@ func (c *Coder) commitTurn() {
 // leading, identifying part: the path, the query, the purpose.
 const maxCommitArgs = 300
 
+// maxCommitHistory bounds the earlier turns fed to the commit-message model.
+// The tail is kept: the reason for a change is usually stated a turn or two
+// before the change lands, not at the start of the session.
+const maxCommitHistory = 8000
+
 func (c *Coder) commitContext() string {
+	prior := renderCommitMessages(c.doneMessages)
+	if len(prior) > maxCommitHistory {
+		prior = prior[len(prior)-maxCommitHistory:]
+		if i := strings.IndexByte(prior, '\n'); i >= 0 {
+			prior = prior[i+1:]
+		}
+		prior = "(Earlier conversation omitted.)\n" + prior
+	}
+	return prior + renderCommitMessages(c.curMessages)
+}
+
+func renderCommitMessages(msgs []llm.Message) string {
 	var b strings.Builder
-	for _, m := range c.curMessages {
+	for _, m := range msgs {
 		b.WriteString("\n" + strings.ToUpper(m.Role) + ": " + m.Text() + "\n")
 		for _, tc := range m.ToolCalls {
 			args := strings.Join(strings.Fields(tc.Arguments), " ")

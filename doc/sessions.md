@@ -293,4 +293,11 @@ the note says which side loses. No other harness states it.
   it summarizes what it reads rather than transcribing it, so it improves
   recall of what the code already carries and not of what only the
   conversation had. The predicted confabulation did not appear, 0/26.
+- `experiments/2026-08-commit-context.md` — widening the commit-message
+  model's view from this turn to a bounded tail of earlier ones. The reason for
+  a change is settled before the change lands, so the narrow context recorded it
+  2 times in 28 and the wide one 12 in 27. The wider view also leaks: models
+  described the *previous* turn's change on this commit, with a BREAKING CHANGE
+  marker for a break the diff did not contain. One clause removes that at no
+  cost to the benefit, and both shipped together.
 - `../doc/experimenting.md` — how to run one of these without fooling yourself.

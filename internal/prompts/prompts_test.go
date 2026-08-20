@@ -115,3 +115,16 @@ func TestAskPromptShape(t *testing.T) {
 		t.Errorf("ask main_system has an unexpected brace:\n%s", Ask.MainSystem)
 	}
 }
+
+// TestCommitSystemScopesToTheDiff pins the clause that makes the widened
+// commit context safe. Shown earlier turns, models described the *previous*
+// turn's change on this commit — with a BREAKING CHANGE marker for a break the
+// diff did not contain.
+func TestCommitSystemScopesToTheDiff(t *testing.T) {
+	if !strings.Contains(CommitSystem, "Earlier turns are background") {
+		t.Error("the commit prompt does not scope the message to the diff")
+	}
+	if !strings.Contains(CommitSystem, "not part of this commit") {
+		t.Error("the prompt permits earlier work to be described as this change")
+	}
+}

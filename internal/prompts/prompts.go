@@ -239,8 +239,20 @@ var Ask = Set{
 // The body is permitted and discouraged in the same breath. An unconditional
 // "you may add a body" grows a paragraph on every commit restating the diff;
 // "usually empty" plus a short list of what earns one does the real work.
+//
+// The background clause exists because commitContext was widened to earlier
+// turns (see maxCommitHistory). Without it the wider view leaks: on a turn
+// whose diff adds one trivial function, models wrote bodies describing the
+// *previous* turn's change — 4 of 28 in one live run and 8 of 28 in another,
+// three of those carrying a BREAKING CHANGE marker for a break the commit did
+// not contain. The clause removed it (0 of 28) at no cost to the reason it was
+// widened for (11/26 against the unclaused arm's 12/27).
+// See doc/experiments/2026-08-commit-context.md.
 const CommitSystem = "Write the Git commit message for the changes below. " +
 	"You are given the request that prompted them, the work that followed, and the diff.\n\n" +
+	"Earlier turns are background. Take the reason for this change from them if it is " +
+	"there, and describe only what the diff does — work from an earlier turn is not part " +
+	"of this commit.\n\n" +
 	"The subject is one line, in the form \"type(scope): description\", " +
 	"e.g. \"fix(workspace): stop counting cache writes twice\".{language_instruction}\n" +
 	"- Use feat for a new capability and fix for a bug. build, chore, ci, docs, perf, " +
