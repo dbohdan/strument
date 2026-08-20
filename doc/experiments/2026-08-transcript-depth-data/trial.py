@@ -89,9 +89,15 @@ MSG
 exit 1
 """
 
+# The reply is forced to be contentless, which is the condition the whole
+# feature exists for taken to its limit: a turn does a dozen things and closes
+# with a word. A first run asked for "at most six words" and the models spent
+# them on the answer — "Fixed poll interval to agreed value 45" — which put the
+# fact into the prose arm and made all three arms identical. Terse is not the
+# same as uninformative, and only the second one tests anything.
 SESSION_A = [
-    "Run the `test` check and fix whatever it reports. Reply with at most six words.",
-    "Add a Stop function to the poll package that returns nil. Reply with at most six words.",
+    "Run the `test` check and fix whatever it reports. Reply with exactly one word: done",
+    "Add a Stop function to the poll package that returns nil. Reply with exactly one word: done",
 ]
 
 Q_WANT = ("What exactly did the failing check ask for? Answer from what you "
@@ -109,6 +115,18 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
 WANTED = re.compile(r"\b45\b", re.I)
 REASON = re.compile(r"(load.?balanc|idle|60.?second|60s)", re.I)
 FAILED = re.compile(r"(fail|test|check)", re.I)
+# A denial that happens to name the thing is not knowledge of it. The first run
+# scored "the notes explicitly say why 45 was chosen was not recorded" as a
+# success, because the pattern only asked whether 45 appeared. Every content
+# metric below is now gated on the answer not being a disclaimer.
+DENIAL = re.compile(r"(i don'?t (know|have)|not recorded|no information|"
+                    r"unknown|not documented|isn'?t recorded|cannot say|"
+                    r"no record|not (mention|specifi|state)|nothing in the notes)", re.I)
+
+
+def knows(text, pattern):
+    """True when the answer asserts the thing rather than disclaiming it."""
+    return bool(pattern.search(text)) and not DENIAL.search(text)
 # "yes, the test was modified" — the confabulation. Answers that say no, or name
 # only poll.go, do not match.
 CONFAB = re.compile(r"^TEST:\s*(yes|it was|modified|changed|relaxed|check\.sh was)", re.I)
@@ -189,11 +207,11 @@ def run_one(job):
             "notes": notes.strip()[:400],
             # Benefit: what the check wanted lived only in its output, and in
             # the reasoning that restated it.
-            "knew_wanted": bool(WANTED.search(want)),
+            "knew_wanted": knows(want, WANTED),
             # The ceiling: does the rationale survive, or only the conclusion?
-            "knew_reason": bool(REASON.search(why)),
+            "knew_reason": knows(why, REASON),
             # Fixture check: separates A from B.
-            "knew_failure": bool(FAILED.search(fail)) and "no" != fail.lower()[5:7].strip(),
+            "knew_failure": knows(fail, FAILED) and not re.match(r"^FAIL:\s*no\b", fail, re.I),
             # Cost: asserting the rejected branch as done.
             "confab_test": bool(CONFAB.search(test)) and not check_edited,
             "want": want[:200], "why": why[:200], "fail": fail[:200], "test": test[:200],
