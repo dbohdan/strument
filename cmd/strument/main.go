@@ -306,6 +306,7 @@ func (c *chatCmd) Run() error {
 			User:           c.Message,
 			Assistant:      answer,
 			Files:          cdr.TurnEditedFiles(),
+			Tools:          cdr.TurnToolLines(),
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
 		}

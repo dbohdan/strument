@@ -320,3 +320,43 @@ func TestProjectLockReleasedOnClose(t *testing.T) {
 	}
 	second.Close()
 }
+
+// TestTurnRendersWork pins the Work list. Session notes regenerate from this
+// file, so what a turn did on the way — not only what it ended up changing —
+// has to survive into it.
+func TestTurnRendersWork(t *testing.T) {
+	got := Turn{
+		User:      "Fix the failing check.",
+		Assistant: "Done.",
+		Files:     []string{"poll/poll.go"},
+		Tools: []string{
+			"Read poll/poll.go (5 lines)",
+			"‹check› lint $ golangci-lint run",
+			"failed (exit status 1)",
+			"Edited poll/poll.go",
+			"passed",
+		},
+	}.render()
+
+	if !strings.Contains(got, "### Work") {
+		t.Fatalf("no Work section:\n%s", got)
+	}
+	for _, want := range []string{
+		"- Read poll/poll.go (5 lines)",
+		"- failed (exit status 1)",
+		"- passed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	// Work belongs with Changed, before the prose: a reader scanning for what
+	// happened should not have to cross the answer to find it.
+	if strings.Index(got, "### Work") > strings.Index(got, "### Prompt") {
+		t.Error("Work is rendered after the prose")
+	}
+	// A turn with no tool calls gets no empty heading.
+	if plain := (Turn{User: "hi", Assistant: "hello"}).render(); strings.Contains(plain, "### Work") {
+		t.Errorf("empty Work section rendered:\n%s", plain)
+	}
+}

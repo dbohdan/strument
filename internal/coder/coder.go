@@ -117,6 +117,10 @@ type Coder struct {
 	doneMessages      []llm.Message
 	curMessages       []llm.Message
 	turnEditedFiles   map[string]bool
+	// toolLog tees Toolf into a per-turn record, so the transcript can say what
+	// the turn did and not only what it said about it. Installed lazily by
+	// recordToolLines; see toollog.go.
+	toolLog *toolLog
 
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
@@ -333,6 +337,7 @@ func (c *Coder) inchatRelativeFiles() []string {
 
 // initBeforeMessage resets per-top-level-message state.
 func (c *Coder) initBeforeMessage() {
+	c.recordToolLines()
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
 	c.numReflections = 0

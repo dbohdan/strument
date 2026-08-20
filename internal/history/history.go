@@ -156,6 +156,17 @@ type Turn struct {
 	// there are no commits and this is the only durable account of what a
 	// session did to the tree.
 	Files []string
+	// Tools is what the harness reported doing during the turn, in order: the
+	// one-line summaries it printed to the screen ("Read poll/poll.go (5
+	// lines)", "‹check› lint $ golangci-lint run", "failed (exit status 1)").
+	//
+	// Files says what a turn ended up changing; this says what it did on the
+	// way, including the parts that changed nothing — the search that came back
+	// empty, the check that failed and was fixed. Session notes regenerate from
+	// this record, and before it existed they were derived from the model's
+	// prose alone, so a turn that made a dozen tool calls and closed with one
+	// sentence was, to the next session, that sentence.
+	Tools []string
 }
 
 // Writer appends turns to a markdown file, creating it (and its parent
@@ -229,6 +240,17 @@ func (t Turn) render() string {
 		b.WriteString("### Changed\n\n")
 		for _, f := range t.Files {
 			fmt.Fprintf(&b, "- `%s`\n", f)
+		}
+		b.WriteString("\n")
+	}
+
+	// After Changed and before the prose, because it is the same kind of thing
+	// as Changed — the record of the work — and a reader scanning for "what
+	// happened" should not have to cross the answer to find it.
+	if len(t.Tools) > 0 {
+		b.WriteString("### Work\n\n")
+		for _, line := range t.Tools {
+			fmt.Fprintf(&b, "- %s\n", line)
 		}
 		b.WriteString("\n")
 	}

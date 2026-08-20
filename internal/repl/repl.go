@@ -476,6 +476,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 			User:           message,
 			Assistant:      answer,
 			Files:          r.coder.TurnEditedFiles(),
+			Tools:          r.coder.TurnToolLines(),
 		}); err != nil {
 			r.out.Warningf("Could not write chat history: %v", err)
 		}
