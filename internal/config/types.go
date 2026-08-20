@@ -174,6 +174,11 @@ type Config struct {
 	// recovering from its own mistake — a failed edit match, a bad shell
 	// command — and should stay rare.
 	MaxErrorReflections int
+
+	// ShellTimeout bounds one model-caused command, in seconds. 0 is unset
+	// (the coder's two-minute default); -1 is the config's `shell_timeout = 0`,
+	// meaning no limit. /run is never bounded — the user typed it.
+	ShellTimeout int
 	// GitSign is the commit-signing flag passed to `git commit`: "-S" to sign
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes
 	// from the `git_sign` setting (a boolean or a key-id string).

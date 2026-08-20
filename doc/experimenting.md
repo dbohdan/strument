@@ -187,7 +187,8 @@ its own first. Then the trial has one job and the revert has one target.
   repository*, source it, `shred -u` it after. `internal/fixture/guard_test.go`
   scans the tree for key-shaped strings; do not make it the last line of
   defence.
-- **Long runs need detaching.** The Bash tool's default timeout is two minutes.
+- **Long runs need detaching.** The Bash tool's default timeout is two minutes
+  (`shell_timeout`; `/run` is exempt, since the user typed that command).
   `setsid nohup … &` with output to a log, then wait on the results file:
   `until [ "$(wc -l < results.jsonl)" -ge N ]; do sleep 20; done`.
 - **Four-way parallelism is about the ceiling.** Beyond that OpenRouter

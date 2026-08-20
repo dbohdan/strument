@@ -108,6 +108,11 @@ func (c *chatCmd) Run() error {
 	if cfg.MaxSteps > 0 {
 		cdr.MaxSteps = cfg.MaxSteps
 	}
+	if cfg.ShellTimeout != 0 {
+		// Seconds in the config, a Duration in the coder; -1 carries "no limit"
+		// through as a negative duration, which shellTimeout reads as such.
+		cdr.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
+	}
 	if cfg.MaxErrorReflections > 0 {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}

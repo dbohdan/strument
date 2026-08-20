@@ -62,11 +62,28 @@ type fileGlobals struct {
 	hasMaxErrorReflections bool
 	maxErrorReflectionsVal int
 
+	hasShellTimeout bool
+	shellTimeoutVal int
+
 	hasGitSign bool
 	gitSignVal string
 
 	hasEnvAllow bool
 	envAllowVal []string
+}
+
+// shellTimeoutSeconds maps the config's encoding onto the coder's.
+//
+// A config says `shell_timeout = 0` to mean "no limit", while the coder's zero
+// value has to mean "unset, use the default" — every other numeric setting works
+// that way and a Coder built in a test should not silently run without one. The
+// two zeroes mean opposite things, so the translation happens here, once, rather
+// than being carried as a second boolean field to every reader.
+func shellTimeoutSeconds(n int) int {
+	if n == 0 {
+		return -1
+	}
+	return n
 }
 
 // ValidEnvAllowName reports whether s is acceptable as an env_allow entry:
@@ -79,6 +96,23 @@ func ValidEnvAllowName(s string) bool {
 }
 
 // parsePositiveInt reads a Starlark int that must be at least 1.
+// parseNonNegativeInt is parsePositiveInt where zero carries a meaning of its
+// own — `shell_timeout = 0` asks for no limit rather than an instant one.
+func parseNonNegativeInt(path, name string, v starlark.Value) (int, error) {
+	iv, ok := v.(starlark.Int)
+	if !ok {
+		return 0, fmt.Errorf("%s: `%s` must be a non-negative integer, got %s", path, name, v.Type())
+	}
+	n, ok := iv.Int64()
+	if !ok {
+		return 0, fmt.Errorf("%s: `%s` is out of range", path, name)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("%s: `%s` must not be negative, got %d", path, name, n)
+	}
+	return int(n), nil
+}
+
 func parsePositiveInt(path, name string, v starlark.Value) (int, error) {
 	iv, ok := v.(starlark.Int)
 	if !ok {
@@ -271,6 +305,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
 	}
+	if user.hasShellTimeout {
+		cfg.ShellTimeout = shellTimeoutSeconds(user.shellTimeoutVal)
+	}
 	if user.hasGitSign {
 		cfg.GitSign = user.gitSignVal
 	}
@@ -310,6 +347,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
+		}
+		if project.hasShellTimeout {
+			cfg.ShellTimeout = shellTimeoutSeconds(project.shellTimeoutVal)
 		}
 		if project.hasGitSign {
 			cfg.GitSign = project.gitSignVal
@@ -568,6 +608,16 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasMaxErrorReflections = true
 		out.maxErrorReflectionsVal = n
+	}
+
+	if st, ok := globals["shell_timeout"]; ok {
+		// Not parsePositiveInt: zero is meaningful here, and means "no limit".
+		n, err := parseNonNegativeInt(path, "shell_timeout", st)
+		if err != nil {
+			return nil, err
+		}
+		out.hasShellTimeout = true
+		out.shellTimeoutVal = n
 	}
 
 	if gs, ok := globals["git_sign"]; ok {

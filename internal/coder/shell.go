@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/interp"
@@ -19,6 +21,24 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	c.Out.Printf("")
 	c.Out.Toolf("Running %s", quoteToolArg(command))
 
+	// A model-caused block gets a deadline. The turn context is cancellable but
+	// carries none, so a command that never returns — a dev server, a `read`, a
+	// test waiting on a socket it will not get — hangs the session until a human
+	// notices and presses Ctrl-C. That is survivable while every command is
+	// confirmed one at a time, and stops being survivable the moment a turn can
+	// be approved in a batch, which is why this lands before that does.
+	//
+	// It is also the timeout doc/experimenting.md has promised all along.
+	//
+	// /run gets no deadline: the user typed that command and may well have
+	// meant the twenty-minute build.
+	deadline := c.shellTimeout()
+	if deadline > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, deadline)
+		defer cancel()
+	}
+
 	runner := c.Runner
 	if runner == nil {
 		// Model-run, so the allowlist applies: the block came from the model,
@@ -30,12 +50,42 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	if err != nil {
 		c.Out.Errorf("Error running command: %v", err)
 	}
+	// Said in the output rather than only on screen, because the output is what
+	// reaches the model: a command that was killed at two minutes and one that
+	// exited on its own are otherwise indistinguishable to it, and the obvious
+	// next move after an unexplained failure is to change the code.
+	//
+	// Only DeadlineExceeded, never Canceled — a Ctrl-C is the user's decision
+	// and does not need explaining back to them.
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		note := fmt.Sprintf("\nThe command was stopped after %s. Strument's `shell_timeout` did it, not the command.", deadline)
+		output += note
+		if exitCode == 0 {
+			exitCode = -1
+		}
+	}
 	if output != "" {
 		// Printf adds the trailing newline; trim the runner's so output that
 		// already ends in one doesn't print a blank line.
 		c.Out.Printf("%s", strings.TrimRight(output, "\n"))
 	}
 	return exitCode, output
+}
+
+// defaultShellTimeout bounds a model-caused command. Two minutes is what
+// doc/experimenting.md has documented since before any such timeout existed;
+// it is long enough for a test suite and short enough that a hang is a pause
+// rather than the end of the session.
+const defaultShellTimeout = 2 * time.Minute
+
+// shellTimeout resolves the configured deadline. Zero takes the default;
+// negative means no deadline at all, which is what `shell_timeout = 0` in a
+// config asks for.
+func (c *Coder) shellTimeout() time.Duration {
+	if c.ShellTimeout == 0 {
+		return defaultShellTimeout
+	}
+	return c.ShellTimeout
 }
 
 // PipeRunner is the default deterministic CommandRunner: the whole

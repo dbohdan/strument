@@ -348,6 +348,28 @@ a work step: the model is recovering, not progressing. Keeping the budget small
 means a model that is stuck in a fix-break cycle hands back to the human rather
 than burning the work-step budget on retries nobody asked for.
 
+### `shell_timeout`
+
+Seconds a single model-caused command may run before Strument stops it.
+Defaults to 120. `0` means no limit.
+
+```python
+shell_timeout = 600   # a slow integration suite
+shell_timeout = 0     # no limit
+```
+
+It applies to the `bash` tool and to `check` commands — everything the *model*
+can cause to run. **`/run` is exempt**: the user typed that command and may well
+have meant the twenty-minute build.
+
+When the deadline stops a command, the tool result says so in those words. That
+matters more than it looks: a command killed at the deadline and one that failed
+on its own are otherwise indistinguishable to the model, and the obvious next
+move after an unexplained failure is to start changing code.
+
+A timeout is not a resource limit. It bounds how long a runaway command wastes,
+not what it can do while running.
+
 ### `git_sign`
 
 Sign the commits Strument makes with Git's own signing, passed through as

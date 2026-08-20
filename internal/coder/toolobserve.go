@@ -424,6 +424,14 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// The argv is the user's own configuration, reached by name; the model
 	// never supplies any part of it, which is what makes running it without a
 	// confirmation prompt reasonable.
+	// The same deadline the bash tool gets, and for the same reason: a check is
+	// model-caused, and a test suite that waits forever on a socket hangs the
+	// session exactly as a bash block would.
+	if d := c.shellTimeout(); d > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+	}
 	cmd := exec.CommandContext(ctx, ch.Argv[0], ch.Argv[1:]...) //nolint:gosec // Argv from the user's config, never from the model.
 	cmd.Dir = c.Root
 	// The argv is trusted, but the output is not selected by it: a failing
@@ -439,6 +447,10 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 		exit = ee.ExitCode()
 	case err != nil:
 		return -1, fmt.Sprintf("could not run %s: %v", strings.Join(ch.Argv, " "), err)
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return -1, string(out) + fmt.Sprintf(
+			"\nThe check was stopped after %s. Strument's `shell_timeout` did it, not the check.", c.shellTimeout())
 	}
 	return exit, string(out)
 }
