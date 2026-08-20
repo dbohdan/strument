@@ -57,10 +57,32 @@ func (c *Coder) commitTurn() {
 
 // commitContext formats curMessages for the commit-message model (aider's
 // get_context_from_history).
+//
+// Tool calls are rendered, not only tool results. Message.Text() returns
+// Content, and a model's calls live in the separate ToolCalls field, so
+// formatting text alone gave the commit-message model the answers without the
+// questions: the contents that came back from a read with no record of what was
+// read or why, and none of the purpose strings the bash tool goes out of its way
+// to require. In a harness where the whole of a turn's work arrives as tool
+// calls, that is most of the turn.
+//
+// Arguments are capped hard. The commit model is handed the diff separately, so
+// an edit call's arguments — the entire new text of a file — are the one thing
+// here that is both enormous and already known. What the cap keeps is the
+// leading, identifying part: the path, the query, the purpose.
+const maxCommitArgs = 300
+
 func (c *Coder) commitContext() string {
 	var b strings.Builder
 	for _, m := range c.curMessages {
 		b.WriteString("\n" + strings.ToUpper(m.Role) + ": " + m.Text() + "\n")
+		for _, tc := range m.ToolCalls {
+			args := strings.Join(strings.Fields(tc.Arguments), " ")
+			if len(args) > maxCommitArgs {
+				args = args[:maxCommitArgs] + "…"
+			}
+			b.WriteString("CALL: " + tc.Name + " " + args + "\n")
+		}
 	}
 	return b.String()
 }
