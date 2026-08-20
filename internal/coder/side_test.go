@@ -110,3 +110,90 @@ func TestSendSideStopsAtTheCap(t *testing.T) {
 		t.Errorf("test took %s; the fast clock is not being used", elapsed)
 	}
 }
+
+// emptyThenStub answers blank a fixed number of times, then answers properly.
+// It counts calls, because the point of the empty-response change is that a
+// second request goes out at all.
+type emptyThenStub struct {
+	blanks int
+	calls  int
+}
+
+func (s *emptyThenStub) Send(context.Context, llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		if s.calls <= s.blanks {
+			// A 200 that streams no content: no error, and nothing but
+			// whitespace where the answer should be.
+			if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "   \n"}, nil) {
+				return
+			}
+			yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+			return
+		}
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "fix(poll): raise the interval"}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+// TestSendSideRetriesAnEmptyResponse pins the classification change. A 200 with
+// no content used to return as a real answer, so no retry went out and the
+// commit landed with "(no commit message provided)" — a phrase that reads as a
+// decision rather than a failure. Live, that was 21 of roughly 250 commits.
+func TestSendSideRetriesAnEmptyResponse(t *testing.T) {
+	stub := &emptyThenStub{blanks: 1}
+	clock := &fastClock{}
+	out := &summaryOutput{}
+
+	got, err := sendSide(context.Background(), stub, llm.Request{}, out, clock, nil)
+
+	if err != nil || got != "fix(poll): raise the interval" {
+		t.Errorf("got %q / %v, want the answer from the second attempt", got, err)
+	}
+	if stub.calls != 2 {
+		t.Errorf("%d requests went out, want 2 — the blank one was not retried", stub.calls)
+	}
+	if !strings.Contains(strings.Join(out.lines, "\n"), "Retrying in") {
+		t.Error("the retry was silent")
+	}
+}
+
+// TestSendSideStopsRetryingEmptyResponses bounds it. A provider answering
+// 200-with-nothing repeatedly is not warming up, and every further attempt is
+// another paid request for the same nothing — so the empty budget is far below
+// the nine attempts a transient error gets.
+func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
+	stub := &emptyThenStub{blanks: 99}
+	clock := &fastClock{}
+	out := &summaryOutput{}
+
+	got, err := sendSide(context.Background(), stub, llm.Request{}, out, clock, nil)
+
+	if err == nil || got != "" {
+		t.Errorf("got %q / %v, want a failure so the caller falls back", got, err)
+	}
+	if stub.calls != maxEmptyRetries+1 {
+		t.Errorf("%d requests went out, want %d", stub.calls, maxEmptyRetries+1)
+	}
+	// The caller falls back either way; what changed is that the user is told
+	// which of the two happened.
+	if !strings.Contains(strings.Join(out.lines, "\n"), emptySideResponse) {
+		t.Errorf("the failure was not reported:\n%s", strings.Join(out.lines, "\n"))
+	}
+}
+
+// TestCommitMessengerFallsBackOnEmptyResponse walks the whole path a commit
+// takes, since that is where this was found.
+func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
+	stub := &emptyThenStub{blanks: 99}
+	msg := CommitMessenger(stub, &config.Model{Slug: "weak"}, "", nil, &summaryOutput{}, &fastClock{})
+
+	if got := msg("", "diff text"); got != "" {
+		t.Errorf("message = %q, want empty so gitrepo falls back", got)
+	}
+	if stub.calls != maxEmptyRetries+1 {
+		t.Errorf("%d requests went out, want %d", stub.calls, maxEmptyRetries+1)
+	}
+}

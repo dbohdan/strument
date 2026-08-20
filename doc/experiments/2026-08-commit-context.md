@@ -158,3 +158,9 @@ family as the `--continue` failure in
 [`2026-08-notes-header.md`](2026-08-notes-header.md): a side call that fails
 quietly and leaves an artifact whose wording suggests a choice rather than a
 failure.
+
+**Fixed since.** The side-call backoff was in place and could not see this: it
+fires on a retryable `*llm.StreamError`, and a 200 that streams no content
+returned `("", nil)`. An empty answer is now a failure like any other — retried
+twice, then reported — for commit messages, session notes, compaction summaries
+and `/btw` alike.

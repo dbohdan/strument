@@ -34,21 +34,54 @@ func sendSide(
 	record func(llm.Usage),
 ) (string, error) {
 	backoff := retryBackoff{delay: initialRetryDelay}
+	empties := 0
 	for {
 		attempt, err := sideOnce(ctx, cl, req, record)
-		if err != nil {
-			if ctx.Err() != nil || !backoff.retry(out, clock, err) {
+		if err == nil && strings.TrimSpace(attempt) != "" {
+			return attempt, nil
+		}
+		if err == nil {
+			empties++
+			err = &llm.StreamError{Class: llm.ErrServer, Message: emptySideResponse}
+			if empties > maxEmptyRetries {
+				out.Errorf("%v", err)
 				return "", err
 			}
-			continue
 		}
-		return attempt, nil
+		if ctx.Err() != nil || !backoff.retry(out, clock, err) {
+			return "", err
+		}
 	}
 }
 
-// sideOnce runs one attempt and returns its answer text. Empty text with a nil
-// error is a real (if useless) answer, not a failure — classifying it as one
-// would turn a terse model into a retry loop.
+// A 200 that streams no content is a failure, not an answer.
+//
+// It was classified the other way, on the reasoning that calling it a failure
+// would turn a terse model into a retry loop. There is no such model here: none
+// of these four callers has a use for an empty answer. There is no terse commit
+// message with no subject line, no useful summary of nothing, no session note
+// that says nothing, and no answer to a /btw that is silence. Terse is one
+// line, not zero.
+//
+// The main path already reads it this way — send.go warns "Empty response
+// received from LLM" and fails the send — so the divergence was between two
+// halves of the same codebase, and the quiet half was the one nobody watches.
+// Live, the weak model returned nothing for 21 of roughly 250 commits, each
+// landing as "(no commit message provided)": a phrase that reads as a decision
+// rather than a failure, with no retry attempted and nothing said.
+//
+// maxEmptyRetries is deliberately far below the transient-error budget, which
+// doubles from 125ms up to a 60s cap and so allows nine attempts. A network
+// blip earns those because the next attempt plausibly succeeds. A provider
+// answering 200-with-nothing twice running is not warming up, and each further
+// attempt is another paid request for the same nothing.
+const (
+	maxEmptyRetries   = 2
+	emptySideResponse = "the model returned an empty response"
+)
+
+// sideOnce runs one attempt and returns its answer text. Blank text with a nil
+// error is left for sendSide to classify.
 func sideOnce(ctx context.Context, cl llm.ModelClient, req llm.Request, record func(llm.Usage)) (string, error) {
 	var answer strings.Builder
 	for ev, err := range cl.Send(ctx, req) {

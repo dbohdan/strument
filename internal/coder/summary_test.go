@@ -246,18 +246,72 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 		msgTok("user", 50), msgTok("assistant", 50),
 	}
 
+	// One attempt plus its empty-response retries; the second call is skipped
+	// entirely by the backoff.
+	perAttempt := maxEmptyRetries + 1
+
 	c.maybeSummarize()
 	c.maybeSummarize()
-	if stub.calls != 1 {
-		t.Errorf("weak model called %d times during backoff, want 1", stub.calls)
+	if stub.calls != perAttempt {
+		t.Errorf("weak model called %d times during backoff, want %d", stub.calls, perAttempt)
 	}
 
 	c.maybeSummarize()
-	if stub.calls != 2 {
-		t.Errorf("weak model called %d times after backoff, want 2", stub.calls)
+	if stub.calls != 2*perAttempt {
+		t.Errorf("weak model called %d times after backoff, want %d", stub.calls, 2*perAttempt)
 	}
+	// The empty summary is caught at the transport, where it can still be
+	// retried, rather than downstream by validCompaction. Same backoff, named
+	// cause: "the result was not smaller" describes a summary that came back,
+	// and nothing came back.
+	if !strings.Contains(strings.Join(out.lines, "\n"), emptySideResponse) {
+		t.Errorf("the empty response was not named:\n%s", strings.Join(out.lines, "\n"))
+	}
+}
+
+// summaryBloatStub returns a summary larger than the history it replaces.
+//
+// validCompaction's own case, which used to be covered only by accident: the
+// empty stub above tripped it, and now fails earlier as a transport error, so
+// nothing would exercise the size check without a stub that actually answers.
+type summaryBloatStub struct{ calls int }
+
+func (s *summaryBloatStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: strings.Repeat("summary text ", 4000)}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+func TestMaybeSummarizeRejectsABiggerSummary(t *testing.T) {
+	c := testCoder(t)
+	out := &summaryOutput{}
+	c.Out = out
+	c.Model.Context = 16384
+	stub := &summaryBloatStub{}
+	c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+	before := []llm.Message{
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 300), msgTok("assistant", 300),
+		msgTok("user", 50), msgTok("assistant", 50),
+	}
+	c.doneMessages = before
+
+	c.maybeSummarize()
+
 	if !strings.Contains(strings.Join(out.lines, "\n"), "result was not smaller") {
-		t.Error("mechanical validation warning was not printed")
+		t.Errorf("a summary bigger than the history was accepted:\n%s", strings.Join(out.lines, "\n"))
+	}
+	if len(c.doneMessages) != len(before) {
+		t.Errorf("the history was replaced by the bigger summary: %d messages", len(c.doneMessages))
+	}
+	if !c.summaryBackoff {
+		t.Error("no backoff was set, so the next turn pays for the same failure")
 	}
 }
 
