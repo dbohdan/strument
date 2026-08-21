@@ -181,12 +181,12 @@ func (rb *retryBackoff) retry(out Output, clock Clock, streamErr error) bool {
 // OutcomeReflect, the next message to send.
 func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, string) {
 	// --- Setup ---
-	// A tool continuation re-enters on the tool result messages already
-	// appended to curMessages (reflection-as-tool-error), so it adds no user
-	// turn; inp is unused on that path.
+	// A resumed send re-enters on what is already in curMessages — tool
+	// results, or an interrupted reply the user chose to continue — so it adds
+	// no user turn; inp is unused on that path.
 	appendedUser := false
-	if c.toolContinuation {
-		c.toolContinuation = false
+	if c.resumeInPlace {
+		c.resumeInPlace = false
 	} else {
 		c.curMessages = append(c.curMessages, llm.TextMessage("user", inp))
 		appendedUser = true

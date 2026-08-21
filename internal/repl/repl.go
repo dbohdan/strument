@@ -494,7 +494,14 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 					return
 				}
 				fmt.Fprintln(r.opts.Stderr, "\n^C again to exit")
-				cancel()
+				// The send, not the turn. Cancelling the turn context here
+				// left every later call in it seeing Canceled, so a turn could
+				// only ever end at a Ctrl-C even though the conversation had
+				// survived intact; the coder now asks what you meant by it and
+				// carries on if you say so. /btw and other askless callers get
+				// the old behaviour, because a cancelled send with nothing to
+				// ask ends the turn exactly as before.
+				r.coder.InterruptSend()
 			case <-done:
 				return
 			}
@@ -660,6 +667,31 @@ func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 	cfg.HistoryLimit = -1
 	cfg.AutoComplete = nil
 	line, err := r.rl.ReadLineWithConfig(cfg)
+	if errors.Is(err, readline.ErrInterrupt) {
+		// A question prompt is a hole in the double-Ctrl-C chord, and it has to
+		// be patched here rather than left alone.
+		//
+		// The chord lives in withinTurn's signal handler, which only sees
+		// SIGINT. While a question is up readline holds the terminal in raw
+		// mode, ISIG is off, and Ctrl-C arrives as a byte that readline turns
+		// into ErrInterrupt — so the signal handler never runs and the second
+		// press of the chord vanishes. A live pty probe caught it: two Ctrl-C
+		// 50ms apart during a turn produced exactly one "^C again to exit" and
+		// no exit.
+		//
+		// That silently weakened a promise users hold: two Ctrl-C gets you out.
+		// Calling chord here restores it, and the interrupt question is the
+		// commonest place it matters, since the first press is what put the
+		// question on screen.
+		if r.chord() {
+			if r.opts.Color {
+				fmt.Fprint(r.opts.Stderr, "\x1b[?25h")
+			}
+			r.opts.Exit(130)
+		}
+		fmt.Fprintln(r.opts.Stderr, "^C again to exit")
+		return "", false
+	}
 	if err != nil {
 		return "", false
 	}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"dbohdan.com/strument/internal/config"
@@ -143,17 +144,31 @@ type Coder struct {
 	lastSendOutcome  SendOutcome // observability for tests/REPL status
 	summaryBackoff   bool        // skip one compaction attempt after a failure
 
+	// cancelSend stops the send in flight, and only that send. See
+	// sendSteerable and InterruptSend. Guarded because the caller is a signal
+	// handler on another goroutine.
+	sendMu     sync.Mutex
+	cancelSend context.CancelFunc
+
 	// Send-scoped buffers.
 	partialResponseContent  string
 	partialReasoningContent string
 	multiResponseContent    string
 
-	// Send-scoped tool-call accumulation, in first-seen
-	// index order. toolContinuation makes the next send re-enter on the tool
-	// results already appended to curMessages, without adding a user turn.
+	// Send-scoped tool-call accumulation, in first-seen index order.
 	partialToolCalls []llm.ToolCall
 	toolCallIndex    map[int]int
-	toolContinuation bool
+
+	// resumeInPlace makes the next send re-enter on what is already in
+	// curMessages, without adding a user turn for it.
+	//
+	// Two things resume that way, which is why the flag is not named after
+	// either. A tool continuation re-enters on the tool results just appended.
+	// An interrupted turn the user chose to continue re-enters on the partial
+	// reply and the note explaining it was cut off. Both have the message
+	// already; appending an empty user turn for them would put an empty message
+	// on the wire and cost a turn's worth of confusion.
+	resumeInPlace bool
 
 	// The message* fields are the *turn's* running totals, accumulated across
 	// every send in it and reset by initBeforeMessage. They used to be assigned
@@ -413,12 +428,13 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	// interrupted, or done. An interrupted turn's edits are real, so they are
 	// committed too.
 	defer func() {
-		c.commitTurn()
-		c.pushTurnSnapshot()
+		c.settleEdits()
 		c.endTurnHistory()
 		// Last, so the accounting closes the turn: the commit line above it, and
 		// nothing under it. This is what the per-send reorder was reaching for,
-		// now at the scope where a reader actually wants the number.
+		// now at the scope where a reader actually wants the number. Once per
+		// turn even when the turn was steered, because a steered turn is still
+		// one turn's spend.
 		c.flushTurnUsage()
 	}()
 
@@ -426,7 +442,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	// reflection and a tool continuation re-enter on the appended tool results
 	// — keeps the loop going.
 	for {
-		outcome, reflection := c.sendMessage(ctx, message)
+		outcome, reflection := c.sendSteerable(ctx, message)
 		c.lastSendOutcome = outcome
 
 		switch outcome {
@@ -454,9 +470,138 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 			}
 			message = report
 
+		case OutcomeInterrupted:
+			next, keepGoing := c.afterInterrupt()
+			if !keepGoing {
+				return
+			}
+			message = next
+
 		default:
 			return
 		}
+	}
+}
+
+// sendSteerable runs one send under a context of its own, so that stopping the
+// send does not have to mean ending the turn.
+//
+// This is the whole of the change that makes steering possible. Ctrl-C used to
+// cancel the *turn's* context: everything downstream saw Canceled from then on,
+// and there was no way back into the loop even though the conversation itself
+// had survived intact. A child context per send moves the blast radius to the
+// one send, and the turn context stays live to make the next one.
+//
+// The tool calls of a send run inside it too — applyToolCalls takes this same
+// context — so Ctrl-C still kills a bash command that is running, which is the
+// property worth not losing.
+func (c *Coder) sendSteerable(ctx context.Context, message string) (SendOutcome, string) {
+	sctx, cancel := context.WithCancel(ctx)
+	c.sendMu.Lock()
+	c.cancelSend = cancel
+	c.sendMu.Unlock()
+
+	defer func() {
+		c.sendMu.Lock()
+		c.cancelSend = nil
+		c.sendMu.Unlock()
+		cancel()
+	}()
+
+	return c.sendMessage(sctx, message)
+}
+
+// InterruptSend stops the send in flight without ending the turn.
+//
+// Called from the REPL's signal handler, which used to cancel the turn context
+// directly. A Ctrl-C between sends finds no send to cancel and does nothing,
+// which is correct: there is nothing in flight, and the prompt the user is
+// about to get asked is the interrupt they wanted.
+func (c *Coder) InterruptSend() {
+	c.sendMu.Lock()
+	cancel := c.cancelSend
+	c.sendMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// settleEdits commits the turn's edits so far and records a snapshot to undo
+// them by.
+//
+// Factored out of the turn-end defer because an interruption is also a place
+// this belongs. The human stopped to look at something, which makes that point
+// a review boundary: `git show` gives exactly what the model did before it was
+// stopped, separately from what it did after the correction, and /undo steps
+// through the two halves one at a time. Anyone who wanted one commit has
+// /squash.
+//
+// What is *not* here is flushTurnUsage. The spend is a property of the turn,
+// not of each leg of it, so it stays in the defer and reports once.
+func (c *Coder) settleEdits() {
+	// Nothing written since the last settle, so there is nothing to settle.
+	// Without this an interrupted-then-steered turn settles twice over the same
+	// edits: the second commit finds the tree already matching HEAD and
+	// announces "the turn left the files as they were", which is true of the
+	// second attempt and false of the turn.
+	//
+	// turnSnap is the right signal rather than turnEditedFiles, which
+	// accumulates across the whole turn because the history record at turn end
+	// wants every file the turn touched. turnSnap is emptied by
+	// pushTurnSnapshot and rebuilt by recordWrites, so it means precisely
+	// "written since the last settle".
+	if c.turnSnap.empty() {
+		return
+	}
+	c.commitTurn()
+	c.pushTurnSnapshot()
+}
+
+// afterInterrupt asks the human what a stopped turn should do next, and
+// reports the message to resume with and whether to resume at all.
+//
+// The choice is put through the Asker port, which is what ask_user_question
+// already uses to prompt in the middle of a turn — so this is a shape the
+// terminal handling has been driving all along rather than a new one. Free text
+// comes back as the raw line, which *is* the correction, so there is nothing to
+// parse. A nil Asker means no interactive terminal (script mode): stopping is
+// the only honest answer there, and it is what an interrupt has always done.
+//
+// The --yes flags deliberately do not answer this. They skip permission
+// prompts, and being asked what you meant by stopping is not a permission
+// prompt — the same line the port's own documentation draws for
+// ask_user_question.
+func (c *Coder) afterInterrupt() (message string, keepGoing bool) {
+	if c.Asker == nil {
+		return "", false
+	}
+	// The edits so far belong to the interrupt, whichever way this goes.
+	c.settleEdits()
+
+	answer := c.Asker.Ask(AskRequest{
+		Question: "You stopped the model. What now?",
+		Options: []AskOption{
+			{Label: "Continue", Description: "Carry on from where it was cut off"},
+			{Label: "Stop", Description: "End the turn here"},
+		},
+	})
+	if len(answer) == 0 {
+		return "", false
+	}
+	switch answer[0] {
+	case "Continue":
+		// The note noteInterrupt already left says the reply was cut off and
+		// that any tool call it had begun was not run. Nothing more to add, so
+		// the next send re-enters on it rather than appending an empty user
+		// turn to carry nothing.
+		c.resumeInPlace = true
+		return "", true
+	case "Stop":
+		return "", false
+	default:
+		// Anything else the user typed is the steer, and it goes in as their
+		// own words in their own voice. They really did type it.
+		return answer[0], true
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"iter"
 	"strings"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/llm"
@@ -107,5 +108,101 @@ func (s plainAnswerStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.St
 			return
 		}
 		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+// Two Ctrl-C still exits, even when the second one lands on the interrupt
+// question.
+//
+// The chord lives in withinTurn's signal handler, which only sees SIGINT.
+// While a question is up readline holds the terminal in raw mode, ISIG is off,
+// and Ctrl-C arrives as a byte that readline turns into ErrInterrupt — so the
+// signal handler never runs. A live pty probe caught it: two Ctrl-C 50ms apart
+// during a turn produced one "^C again to exit" and no exit, silently
+// weakening a promise users hold.
+//
+// Now stubbed rather than real, so the window is a fact of the test rather
+// than a race with it.
+func TestChordExitsFromTheInterruptQuestion(t *testing.T) {
+	root := t.TempDir()
+	model := testModel()
+	cdr := coder.New(root, model)
+	cdr.Client = interruptedStub{said: "Starting on that"}
+
+	var exited []int
+	now := time.Unix(1_700_000_000, 0)
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:      cdr,
+		Config:     testConfig(model),
+		ModelAlias: "test",
+		// The question is read from stdin, so the first byte it sees is the
+		// second Ctrl-C of the chord.
+		Stdin:           strings.NewReader("do the thing\n\x03"),
+		Stdout:          out,
+		Stderr:          out,
+		IsTerminal:      func() bool { return false },
+		StdinIsTerminal: func() bool { return true },
+		Now:             func() time.Time { return now },
+		Exit:            func(code int) { exited = append(exited, code) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	cdr.Asker = r.Asker()
+
+	// The interrupt that cancelled the send is the chord's first press.
+	r.chord()
+
+	_ = r.Run(context.Background())
+
+	if len(exited) == 0 {
+		t.Fatalf("the chord did not exit:\n%s", out.String())
+	}
+	if exited[0] != 130 {
+		t.Errorf("exit code = %d, want 130", exited[0])
+	}
+}
+
+// ...and a lone Ctrl-C long after the first does not exit.
+//
+// The chord is a chord. A second press outside the window means "stop", which
+// is what cancelling the question already does, and exiting there would make
+// Strument quit on a keystroke the user meant for the prompt in front of them.
+func TestLateCtrlCAtTheQuestionDoesNotExit(t *testing.T) {
+	root := t.TempDir()
+	model := testModel()
+	cdr := coder.New(root, model)
+	cdr.Client = interruptedStub{said: "Starting on that"}
+
+	var exited []int
+	clock := time.Unix(1_700_000_000, 0)
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:           cdr,
+		Config:          testConfig(model),
+		ModelAlias:      "test",
+		Stdin:           strings.NewReader("do the thing\n\x03"),
+		Stdout:          out,
+		Stderr:          out,
+		IsTerminal:      func() bool { return false },
+		StdinIsTerminal: func() bool { return true },
+		Now:             func() time.Time { return clock },
+		Exit:            func(code int) { exited = append(exited, code) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	cdr.Asker = r.Asker()
+
+	r.chord()
+	clock = clock.Add(10 * time.Second) // well outside the window
+
+	_ = r.Run(context.Background())
+
+	if len(exited) != 0 {
+		t.Errorf("exited %v on a lone Ctrl-C outside the chord window", exited)
 	}
 }

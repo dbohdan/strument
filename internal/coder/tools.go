@@ -537,7 +537,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// to curMessages, adding no user turn. The two outcomes differ only in
 	// which budget they spend: a failure the model must fix is a reflection, a
 	// result it merely needs to see is a work step.
-	c.toolContinuation = true
+	c.resumeInPlace = true
 	if needsReflection {
 		return OutcomeReflect
 	}
