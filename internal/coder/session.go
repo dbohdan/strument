@@ -26,6 +26,13 @@ func (c *Coder) ChatFiles() []string { return c.inchatRelativeFiles() }
 // files without the coder knowing a transcript exists.
 func (c *Coder) TurnEditedFiles() []string { return slices.Sorted(maps.Keys(c.turnEditedFiles)) }
 
+// LastOutcome is how the most recent send ended.
+//
+// Exported for the REPL, which says something different after an interrupted
+// turn than after a finished one: an interruption looks like a kill and is not,
+// and the difference is invisible from the outside.
+func (c *Coder) LastOutcome() SendOutcome { return c.lastSendOutcome }
+
 // ReadOnlyFiles returns the read-only reference files, root-relative and
 // sorted.
 func (c *Coder) ReadOnlyFiles() []string {

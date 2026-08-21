@@ -435,8 +435,30 @@ func (r *REPL) Run(ctx context.Context) error {
 			r.rl.SetPrompt(r.prompt())
 			r.oneShotPending = false
 		}
+		r.showInterruptHint()
 		r.showUndoHint()
 	}
+}
+
+// showInterruptHint says what Ctrl-C actually did.
+//
+// It did not throw the conversation away. The interrupted reply, the tool
+// results, and everything before them stay in the chat, so the next message
+// carries on from that point with the model's context intact — which is the
+// whole reason interrupting is cheap enough to do freely.
+//
+// Nothing on screen said so. A user saw "^C again to exit" and a fresh prompt,
+// which reads as a kill, and the capability went unused because it was
+// invisible rather than because it was missing. This line is the difference
+// between the two.
+//
+// Before the /undo hint, so the order matches the order of the decisions: what
+// just happened, then what you can do about the edits it left behind.
+func (r *REPL) showInterruptHint() {
+	if r.coder.LastOutcome() != coder.OutcomeInterrupted {
+		return
+	}
+	r.printf("Stopped. Your next message continues from here — the model keeps everything up to this point.")
 }
 
 // withinTurn runs fn with the in-turn scaffolding shared by a normal turn and a
