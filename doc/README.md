@@ -227,7 +227,7 @@ reaching around it.
 | `llm.ModelClient` | one streaming send | `client.Client` / `fixture.StreamStub` |
 | `Output` | user-facing printing + live stream | `repl.termOutput`, `StdOutput` / test buffers |
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
-| `Asker` | the `ask_user_question` tool's multiple-choice questions | readline asker / replay stub (nil in script mode) |
+| `Asker` | multiple-choice questions: the `ask_user_question` tool, and what to do about an interrupted turn | readline asker / replay stub (nil in script mode) |
 | `CommandRunner` | `/run` and the `bash` tool — one shell block through one shell | `PipeRunner` / replay stub |
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
@@ -499,6 +499,53 @@ fix" user message. `runOne` is outcome-driven, so a text-free tool reflection
 still loops. There is one deliberate exception: a failing `verify_auto` speaks
 as a *user* message, because the harness is talking unprompted and no tool
 call is waiting for an answer.
+
+**Ctrl-C stops the send, not the turn.** Each send runs under a child context
+of its own (`sendSteerable`), and the REPL's signal handler cancels *that* via
+`InterruptSend` rather than the turn's context. It used to cancel the turn's,
+which meant every later call in it saw `Canceled` and the turn could only end
+there — even though the conversation had survived intact the whole time. What
+the human meant by stopping is then a question, put through the same `Asker`
+port `ask_user_question` uses: Continue, Stop, or type a correction, where the
+free-text row *is* the correction and needs no parsing. A nil Asker (script
+mode) stops, which is what an interrupt has always done. Tool execution runs
+inside the send's context too, so Ctrl-C still kills a running `bash` command.
+
+The edits made before an interrupt are committed and snapshotted *there*
+(`settleEdits`), because the interruption is a review boundary: `git show` gives
+what the model did before you stopped it separately from what it did after your
+correction, and `/undo` steps through the two halves. `settleEdits` is gated on
+`turnSnap` so the turn-end defer does not settle the same edits twice and
+announce "the turn left the files as they were" — true of the second attempt,
+false of the turn. Usage still flushes once; a steered turn is one turn's spend.
+
+Two things about that path were only findable by running it. The double-Ctrl-C
+chord had a hole: it lives in the signal handler, which sees only SIGINT, but
+while a question is up readline holds the terminal raw, ISIG is off, and Ctrl-C
+arrives as a byte — so a pty probe found two presses 50 ms apart producing one
+"^C again to exit" and no exit. `readAskLine` now consults the chord itself. And
+**Continue must say so.** The note left at interrupt time can only report that
+the reply was cut off; on its own that reads as a full stop and the model
+obliges, or — with a partial answer above it and no instruction — starts over.
+Both were observed. The note added on Continue names the decision and rules out
+both readings, and seven interrupts across three models then resumed, two of
+them mid-word.
+
+**The harness never speaks as the assistant, and mid-conversation it speaks as a
+marked user.** `llm.HarnessNote` is the one way to say something into an ongoing
+conversation — an interruption, an `/undo`, a decision the user made. The
+honest role would be `system`, and `system` is what the *prefix* uses for
+session notes and history summaries, but it cannot be used once the conversation
+is under way: Anthropic rejects a system message that follows an assistant turn
+outright ("role 'system' must follow a 'user' message or an 'assistant' message
+ending in a server tool result"), which is exactly where such a note goes. A
+probe across five providers found the marked user turn accepted by all of them
+and heeded as well as a system message was by the four that took one. The rule
+is worth keeping whole because the tempting shortcut breaks one provider
+silently: **system in the prefix, marked user mid-conversation, assistant
+never.** Four sites used to write fabricated assistant turns — three of them
+saying "Ok." to keep roles alternating, which nothing requires — and
+`voice_test.go` now fails if any of them comes back.
 
 **Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
 in order against a shared overlay, so two edits to one file build on each
