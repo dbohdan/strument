@@ -52,10 +52,11 @@ type detector struct {
 // opt-in: it takes effect because someone wrote it in a config, never because a
 // file happened to be on disk.
 // Adding an ecosystem here means adding it to internal/sandbox's cacheDirs
-// too. A project Strument offers to run checks for is a project whose checks
-// have to work under the sandbox, and two lists that almost match are worse
-// than either: the gap shows up as one ecosystem failing for one person,
-// months later, with nothing to connect it to this file.
+// too — see "Adding an ecosystem" in doc/README.md. A project Strument offers
+// to run checks for is a project whose checks have to work under the sandbox,
+// and two lists that almost match are worse than either: the gap shows up as
+// one ecosystem failing for one person, months later, with nothing to connect
+// it to this file.
 var detectors = []detector{
 	{"go", func(root string) []Check {
 		if !exists(root, "go.mod") {

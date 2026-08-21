@@ -182,6 +182,57 @@ an extra question rather than a command you did not approve. On a match Strument
 runs the argv from this file, never the model's string, so what runs is
 certainly what was compared.
 
+## Language support
+
+Two features need to know which ecosystems Strument understands, and they need
+to agree. `project_checks()` decides what to *run*; the sandbox decides what a
+run is allowed to *write*. A project Strument offers to run checks for is a
+project whose checks have to work under the sandbox, so the list lives here
+once and both features read it.
+
+Two lists that almost match would be worse than either. The gap does not show
+up as a bug report — it shows up as one ecosystem failing for one person,
+months later, with nothing to connect it back to a decision anyone made.
+
+| Ecosystem | Marker | Checks | Writable paths |
+| --- | --- | --- | --- |
+| Go | `go.mod` | `go-vet`, `go-test` | `GOCACHE`, `GOMODCACHE`, subdirectories of `GOPATH` |
+| Rust | `Cargo.toml` | `cargo-check`, `cargo-test` | subdirectories of `CARGO_HOME`, `RUSTUP_HOME` |
+| Python | `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` declaring pytest | `py-test` | `PIP_CACHE_DIR`, `UV_CACHE_DIR` |
+| Node | `package.json` with a `test` script | `node-test` (`npm`/`pnpm`/`yarn`/`bun` per the lockfile) | `npm_config_cache`, `YARN_CACHE_FOLDER`, subdirectories of `PNPM_HOME`, `BUN_INSTALL`, `~/.yarn` |
+| Deno | `deno.json`/`deno.jsonc` | `deno-check`, `deno-test` | `DENO_DIR`, subdirectories of `DENO_INSTALL_ROOT` |
+| Java (Maven) | `pom.xml` | `mvn-test` | `~/.m2` |
+| Java (Gradle) | `gradlew` | `gradle-test` | `GRADLE_USER_HOME` |
+| .NET | `*.sln`/`*.csproj` | `dotnet-build`, `dotnet-test` | `NUGET_PACKAGES`, subdirectories of `DOTNET_CLI_HOME` |
+| PHP | `composer.json` with a `test` script | `php-test` | `COMPOSER_HOME`, `COMPOSER_CACHE_DIR` |
+| Ruby | `Gemfile` naming rspec, plus `spec/` | `rspec` | subdirectories of `GEM_HOME`, `BUNDLE_USER_HOME` |
+| Elixir | `mix.exs` | `mix-compile`, `mix-test` | `MIX_HOME`, `HEX_HOME` |
+| Crystal | `shard.yml` plus `spec/` | `crystal-spec` | `SHARDS_CACHE_PATH` |
+| Haskell | `*.cabal`/`cabal.project`, or `stack.yaml` | `cabal-build`/`cabal-test`, or `stack-test` | `STACK_ROOT`, subdirectories of `CABAL_DIR` |
+| Task runners | `Makefile`, `Taskfile.yml`, or `justfile` with a `lint`/`check`/`test` target | `make-*`, `task-*`, `just-*` | — |
+
+Every path is read from that ecosystem's own environment variable, falling back
+to the conventional location, so relocating a cache moves what the sandbox
+grants. `XDG_CACHE_HOME` (default `~/.cache`) is granted for everyone, which is
+where most of these default anyway — Go's build cache, pip, uv, Deno, Yarn 1,
+composer's cache and Crystal's shards all land there, so their variables above
+matter only when someone has moved them.
+
+Task runners have no last column because they have no cache of their own. They
+run whatever your project told them to, and that command's ecosystem supplies
+the paths.
+
+**"Subdirectories of"** is not a shorthand. Several toolchains keep a cache and
+an executable directory side by side — `~/.cargo` holds `bin/` next to
+`registry/`, `~/.bun` holds `bin/` next to `install/`, and pnpm keeps its store
+*inside* the directory that is on `PATH`. Granting the root would hand over the
+executables, so their contents are granted one subdirectory at a time, minus
+anything on `PATH`. `~/go/pkg` is writable; `~/go/bin` is not.
+
+The cost of that is worth knowing: a toolchain that has never run once has no
+subdirectories to grant, so its first run inside the sandbox fails. Name the
+path you need and it works from then on.
+
 ### `project_checks()`
 
 `project_checks()` detects a project's usual checks from its marker files, so
@@ -204,24 +255,8 @@ The root it looks in is the *project's*, not the config file's, so this works in
 your user config as well as in a `.strument.star` — write it once and every
 project you open gets its own checks.
 
-| Marker | Checks |
-| --- | --- |
-| `go.mod` | `go-vet`, `go-test` |
-| `Cargo.toml` | `cargo-check`, `cargo-test` |
-| `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` declaring pytest | `py-test` |
-| `package.json` with a `test` script | `node-test` (`npm`/`pnpm`/`yarn`/`bun` per the lockfile) |
-| `deno.json`/`deno.jsonc` | `deno-check`, `deno-test` |
-| `Makefile` with a `lint`, `check`, or `test` rule | `make-lint`, `make-check`, `make-test` |
-| `Taskfile.yml` with a `lint` or `test` task | `task-lint`, `task-test` |
-| `justfile` with a `lint` or `test` recipe | `just-lint`, `just-test` |
-| `pom.xml` | `mvn-test` |
-| `gradlew` | `gradle-test` |
-| `*.sln`/`*.csproj` | `dotnet-build`, `dotnet-test` |
-| `composer.json` with a `test` script | `php-test` |
-| `Gemfile` naming rspec, plus `spec/` | `rspec` |
-| `mix.exs` | `mix-compile`, `mix-test` |
-| `shard.yml` plus `spec/` | `crystal-spec` |
-| `*.cabal`/`cabal.project`, or `stack.yaml` | `cabal-build`/`cabal-test`, or `stack-test` |
+The ecosystems, their markers, and the paths the sandbox grants each one are
+listed under [Language support](#language-support).
 
 Two rules decide what is on that list. Only commands the marker's own toolchain
 ships, or ones your project's config names: `go vet` comes with Go, but pytest

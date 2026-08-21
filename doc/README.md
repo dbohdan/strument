@@ -716,6 +716,31 @@ knowing nothing about where state lives.
 4. Regenerate `script/grammar-tags.txt` (a test keeps it in sync) and add
    a fixture row to the language matrix test.
 
+### Adding an ecosystem
+
+An ecosystem has **two** consumers, and they have to agree. `project_checks()`
+decides what to run; the sandbox decides what a run may write. A project
+Strument offers to run checks for is a project whose checks have to work under
+the sandbox — so an ecosystem added to one and not the other does not fail
+visibly. It fails for whoever uses that language, months later, with a build
+error that looks like their own.
+
+1. Add the detector to `detectors` (`internal/config/projectchecks.go`). The two
+   rules there: only commands the marker's own toolchain ships or the project's
+   own config names, and a target the command runs has to actually exist.
+2. Add its cache to `cacheDirs` (`internal/sandbox/writable.go`), reading the
+   toolchain's own environment variable before falling back. If the toolchain
+   keeps a cache beside a `bin/` — Cargo, Bun, pnpm, gem, cabal all do — put the
+   *root* in the scanned list instead, and `writableSubdirs` will grant its
+   contents without granting anything on `PATH`.
+3. Add a row to `TestFlatEcosystemOverridesAreHonoured` or
+   `TestScannedEcosystemOverridesAreHonoured`. This is the step that matters:
+   two dozen environment-variable names is two dozen chances to misspell one,
+   and a misspelling fails *silently* — the default is granted, the relocated
+   cache is not, and only people who moved it are affected.
+4. Add the row to the table in [`doc/config.md`](config.md#language-support),
+   which is where both consumers are documented together.
+
 ### Adding a `model()` or `provider()` parameter
 
 1. Extend the struct in `internal/config/types.go` and the builtin in

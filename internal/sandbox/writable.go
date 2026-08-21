@@ -203,7 +203,9 @@ func writableSubdirs(root string) []string {
 // order, and that is the point: a project Strument offers to run checks for is
 // a project whose checks must work under the sandbox. Two lists that almost
 // match are worse than either — the gap shows up as one ecosystem mysteriously
-// failing, months later, in someone else's session.
+// failing, months later, in someone else's session. The list and both its
+// consumers are documented together under "Language support" in doc/config.md;
+// adding one is "Adding an ecosystem" in doc/README.md.
 //
 // Each entry reads its own toolchain's environment variable before falling
 // back, so a relocated cache is respected. Those variable names are largely
