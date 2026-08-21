@@ -3,6 +3,7 @@ package sandbox
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -159,10 +160,27 @@ func TestDefaultWritableSkipsEmptyEntries(t *testing.T) {
 	}
 }
 
-// TestTempDirsAlwaysIncludeSlashTmp: plenty of tools write to /tmp whatever
-// TMPDIR says, and denying it would break them while protecting nothing —
-// /tmp is world-writable already, and this policy protects the user's files.
-func TestTempDirsAlwaysIncludeSlashTmp(t *testing.T) {
+// TestTempDirIsAlwaysGranted holds on every platform, because build tools
+// assume a temp directory exists and os.TempDir is how each platform answers
+// that: TMPDIR on Unix, TMP/TEMP on Windows.
+func TestTempDirIsAlwaysGranted(t *testing.T) {
+	if got := DefaultWritable(t.TempDir(), t.TempDir(), nil); !has(t, got, os.TempDir()) {
+		t.Errorf("the platform's temp directory was not granted:\n%v", got)
+	}
+}
+
+// TestSlashTmpIsGrantedBesideAMovedTMPDIR: plenty of tools write to /tmp
+// whatever TMPDIR says, and denying it would break them while protecting
+// nothing — /tmp is world-writable already, and this policy protects the user's
+// own files.
+//
+// Unix only. Windows has no second conventional temp location, and asking for
+// "/tmp" there does not fail — filepath.Abs invents a path on the current
+// drive, which is how a D:\tmp ended up in the ruleset on CI.
+func TestSlashTmpIsGrantedBesideAMovedTMPDIR(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no /tmp on Windows; os.TempDir reads TMP/TEMP and is the only answer there")
+	}
 	moved := t.TempDir()
 	t.Setenv("TMPDIR", moved)
 
@@ -172,6 +190,23 @@ func TestTempDirsAlwaysIncludeSlashTmp(t *testing.T) {
 	}
 	if !has(t, got, "/tmp") {
 		t.Errorf("/tmp was not granted alongside a relocated TMPDIR:\n%v", got)
+	}
+}
+
+// TestTempDirsShape checks the list directly, because the platform assumption
+// it guards is not visible in the result on the platform that has it right.
+//
+// filepath.Abs("/tmp") on Windows does not fail. It resolves against whatever
+// the current drive is and produces a confident-looking D:\tmp, so a Unix
+// constant became a rule nobody would question. CI found it; nothing on a Linux
+// machine could have.
+func TestTempDirsShape(t *testing.T) {
+	got := tempDirs()
+	if len(got) == 0 || got[0] != os.TempDir() {
+		t.Fatalf("tempDirs() = %v; the platform's own answer must come first", got)
+	}
+	if runtime.GOOS == "windows" && len(got) != 1 {
+		t.Errorf("tempDirs() = %v on Windows; there is no second conventional temp directory there", got)
 	}
 }
 

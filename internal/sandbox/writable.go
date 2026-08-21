@@ -3,6 +3,7 @@ package sandbox
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -66,9 +67,14 @@ func DefaultWritable(projectRoot, stateDir string, extra []string) []string {
 // write there, and the integrity this policy protects is the user's own files.
 // Refusing /tmp would deny nothing an attacker wants and break builds that
 // hardcode it.
+//
+// Only where /tmp is a real convention. Windows has no such second location,
+// and filepath.Abs("/tmp") there does not fail — it silently invents a path on
+// whatever the current drive happens to be, so the ruleset would carry a
+// D:\tmp that means nothing to anyone.
 func tempDirs() []string {
 	dirs := []string{os.TempDir()}
-	if os.TempDir() != "/tmp" {
+	if runtime.GOOS != "windows" && os.TempDir() != "/tmp" {
 		dirs = append(dirs, "/tmp")
 	}
 	return dirs
