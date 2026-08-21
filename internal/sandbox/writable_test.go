@@ -153,3 +153,19 @@ func TestDefaultWritableSkipsEmptyEntries(t *testing.T) {
 		}
 	}
 }
+
+// TestTempDirsAlwaysIncludeSlashTmp: plenty of tools write to /tmp whatever
+// TMPDIR says, and denying it would break them while protecting nothing —
+// /tmp is world-writable already, and this policy protects the user's files.
+func TestTempDirsAlwaysIncludeSlashTmp(t *testing.T) {
+	moved := t.TempDir()
+	t.Setenv("TMPDIR", moved)
+
+	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	if !has(t, got, moved) {
+		t.Errorf("TMPDIR was not granted:\n%v", got)
+	}
+	if !has(t, got, "/tmp") {
+		t.Errorf("/tmp was not granted alongside a relocated TMPDIR:\n%v", got)
+	}
+}

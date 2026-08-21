@@ -45,17 +45,34 @@ func DefaultWritable(projectRoot, stateDir string, extra []string) []string {
 
 	add(projectRoot, stateDir)
 	add(gitDir(projectRoot))
-	add(tempDir())
+	add(tempDirs()...)
 	add(cacheDirs()...)
 	add(extra...)
 
 	return dedupe(out)
 }
 
-// tempDir is TMPDIR when set, /tmp otherwise. os.TempDir already applies that
-// rule, and using it keeps the sandbox agreeing with every Go program that
-// asks the same question.
-func tempDir() string { return os.TempDir() }
+// tempDirs is where scratch files may go: TMPDIR when set, and /tmp either way.
+//
+// os.TempDir applies the TMPDIR-else-/tmp rule, which keeps the sandbox
+// agreeing with every Go program that asks the same question — and with
+// envallow.go, which passes TMPDIR through to model-run commands, so the
+// directory a command picks is the directory the sandbox granted.
+//
+// /tmp is granted even when TMPDIR points elsewhere, because a great many
+// tools write to /tmp regardless of TMPDIR — shell scripts spelling
+// /tmp/thing.$$ by hand, libraries with the path compiled in. This costs
+// nothing that matters: /tmp is mode 1777, so every local process can already
+// write there, and the integrity this policy protects is the user's own files.
+// Refusing /tmp would deny nothing an attacker wants and break builds that
+// hardcode it.
+func tempDirs() []string {
+	dirs := []string{os.TempDir()}
+	if os.TempDir() != "/tmp" {
+		dirs = append(dirs, "/tmp")
+	}
+	return dirs
+}
 
 // gitDir returns the real git directory when .git is a file rather than a
 // directory — a worktree or a submodule, where it holds a `gitdir:` line
@@ -134,7 +151,7 @@ func cacheDirs() []string {
 		pick("RUSTUP_HOME", under(".rustup")),
 		pick("UV_CACHE_DIR", ""),
 		pick("PIP_CACHE_DIR", ""),
-		under(".npm"),
+		pick("npm_config_cache", under(".npm")),
 		under(".m2"),
 		pick("GRADLE_USER_HOME", under(".gradle")),
 	}
