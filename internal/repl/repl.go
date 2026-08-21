@@ -317,6 +317,21 @@ func (r *REPL) announce() {
 	} else {
 		r.printf("Language parser: off")
 	}
+	// Whether there is a boundary is the one thing about it a user has to know
+	// before typing, because it decides what a careless "yes" can cost. The
+	// unavailable case is a warning rather than a line of banner: it changes
+	// what the session can do, and the model cannot run commands at all.
+	//
+	// Only the working states are reported here. "Required but unavailable"
+	// changes what the session can do at all, so main announces that one in
+	// every mode — a scripted run would otherwise meet a wall of refusals with
+	// nothing on screen to explain them.
+	switch sb := r.coder.Sandbox; {
+	case sb.Active:
+		r.printf("Sandbox: on, writes confined to %d paths (/sandbox to list them)", len(sb.Writable))
+	case !sb.Required:
+		r.printf("Sandbox: off")
+	}
 	for _, f := range r.coder.ChatFiles() {
 		r.printf("Pinned %s for editing.", f)
 	}

@@ -31,6 +31,7 @@ import (
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
+	"dbohdan.com/strument/internal/sandbox"
 )
 
 var version = "0.0.0-dev"
@@ -186,11 +187,13 @@ func (c *chatCmd) Run() error {
 	// session left is still fine — that writes nothing, and refusing it would
 	// make the flag a bigger behavior change than its name suggests.
 	keepState := !c.NoHistory && rootErr == nil
+	stateDir := ""
 	if keepState {
 		dir, err := history.EnsureProjectDir(projectRoot)
 		if err != nil {
 			keepState = false
 		} else {
+			stateDir = dir
 			// One harness per project root at a time: two copies would otherwise
 			// append to, and atomic-rename over, each other's transcript, cost
 			// ledger, and undo spill, silently corrupting them. The lock is held
@@ -205,6 +208,37 @@ func (c *chatCmd) Run() error {
 				return fmt.Errorf("an instance is already running in this project (%s); exit it before starting another", dir)
 			}
 			defer lk.Close()
+		}
+	}
+
+	// Confinement goes on here, after the state directory exists and the lock is
+	// held, and before anything the model can influence has run.
+	//
+	// Landlock is monotonic and applies to the whole process, so this is the
+	// only chance: after this line nothing — not this process, not any command
+	// it spawns, not a bug in the edit tools — can write outside the set below.
+	// Applying it to Strument itself rather than to a re-exec'd child per
+	// command is what makes it cover the seams for free, including runCheck,
+	// which reaches exec.CommandContext directly and never touches
+	// CommandRunner.
+	//
+	// The cost of that choice, documented rather than hidden: /run is confined
+	// too, even though the user typed it, because there is no way to hold back
+	// a right and hand it out later.
+	cdr.Sandbox = coder.SandboxState{Required: cfg.Sandbox != ""}
+	if cfg.Sandbox == config.SandboxLandlock {
+		writable := sandbox.DefaultWritable(projectRoot, stateDir, cfg.SandboxWrite)
+		if err := (sandbox.Policy{Writable: writable}).Apply(); err != nil {
+			cdr.Sandbox.Unavailable = err.Error()
+			// In every mode, not just the banner's. This changes what the
+			// session can do — the model cannot run a command at all — and a
+			// scripted run would otherwise meet a wall of refusals with nothing
+			// on screen to say why.
+			fmt.Fprintf(os.Stderr, "strument: a sandbox is required but unavailable (%v).\n", err)
+			fmt.Fprintln(os.Stderr, "strument: the model cannot run commands. /run still works, or set `sandbox = \"\"` in your config.")
+		} else {
+			cdr.Sandbox.Active = true
+			cdr.Sandbox.Writable = writable
 		}
 	}
 

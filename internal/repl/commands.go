@@ -50,6 +50,7 @@ func init() {
 		{"model", "[alias]", "Show or switch the active model", cmdModel},
 		{"notes", "[generate|drop]", "Show, regenerate, or discard the session notes", cmdNotes},
 		{"quit", "", "Exit Strument", cmdExit},
+		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
 		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
 		{"reset", "", "Unpin everything and clear the history", cmdReset},
