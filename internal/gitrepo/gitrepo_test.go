@@ -156,7 +156,7 @@ func TestCommitContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", true)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", "", true)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -182,7 +182,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", true); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -240,7 +240,7 @@ func TestCommitSignFlag(t *testing.T) {
 			}
 			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", true); err != nil || !ok {
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true); err != nil || !ok {
 				// Missing gpg (notably on Windows CI, where the shim is ignored)
 				// is environmental; don't fail the plumbing check over it.
 				if strings.Contains(errOrEmpty(err), "gpg") || strings.Contains(errOrEmpty(err), "GPG") {
@@ -271,7 +271,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, "", false)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, "", "", false)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -292,7 +292,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", "", true); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {

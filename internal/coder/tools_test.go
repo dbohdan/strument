@@ -69,15 +69,16 @@ func TestToolRequestCarriesTools(t *testing.T) {
 	}
 	// The read-only tools always come first, ask_user_question with them (it
 	// mutates nothing); bash is gated off here, and no check is configured.
-	want := []string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write"}
+	want := []string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "commit"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v (bash gated off)", names, want)
 	}
 }
 
-// TestToolSetGating covers the two conditional parts of the tool set: bash
-// appears only when shell commands are enabled, check only when the project
-// configured checks, and ask mode offers nothing that changes anything.
+// TestToolSetGating covers the conditional parts of the tool set: bash appears
+// only when shell commands are enabled, check only when the project configured
+// checks, and ask mode offers nothing that changes anything — which is why the
+// ask-mode row is the one that pins commit's absence.
 func TestToolSetGating(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -87,7 +88,7 @@ func TestToolSetGating(t *testing.T) {
 		{
 			"shell enabled, no check configured",
 			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash", "commit"},
 		},
 		{
 			"check configured",
@@ -96,7 +97,7 @@ func TestToolSetGating(t *testing.T) {
 				c.SuggestShellCommands = true
 				c.Check = []config.Check{{Name: "test", Argv: []string{"go", "test", "./..."}}}
 			},
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash", "check"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "edit", "write", "bash", "check", "commit"},
 		},
 		{
 			"ask mode is read-only",
@@ -149,7 +150,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit([]string, string, bool) (string, string, bool, error) {
+func (r *committingRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
 	return "abc1234", "feat: change world to mars", true, nil
 }
 
@@ -227,14 +228,16 @@ type countingRepo struct {
 	dirty bool // report every file as dirty, as a tree with the user's own work is
 	calls [][]string
 	attrs []bool
+	msgs  []string // what the caller asked for, "" when it wanted one generated
 }
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
-func (r *countingRepo) Commit(fnames []string, context string, attributed bool) (string, string, bool, error) {
+func (r *countingRepo) Commit(fnames []string, context, message string, attributed bool) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
 	r.attrs = append(r.attrs, attributed)
-	return r.committingRepo.Commit(fnames, context, attributed)
+	r.msgs = append(r.msgs, message)
+	return r.committingRepo.Commit(fnames, context, message, attributed)
 }
 
 // TestOneCommitPerTurn is the point of moving the commit to turn end. A turn

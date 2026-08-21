@@ -25,6 +25,7 @@ const (
 	toolLS     = "ls"
 	toolSymbol = "symbol"
 	toolCheck  = "check"
+	toolCommit = "commit"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -68,6 +69,12 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if len(c.Check) > 0 {
 		defs = append(defs, checkTool(c.Check))
 	}
+	// Offered whenever editing is, including where it will decline: a session
+	// without git, or with auto-commits off, answers the call with the reason
+	// rather than hiding the tool. Withholding it would leave a model that
+	// wanted a commit boundary with no way to find out why it could not have
+	// one, which is how the plan it wrote silently became one commit.
+	defs = append(defs, commitTool())
 	return defs
 }
 
@@ -467,6 +474,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 
 	var edits []plannedEdit
 	var commands []toolCommand
+	var commit *commitArgs
 	results := map[string]string{} // call id -> result text
 	needsReflection := false
 
@@ -491,6 +499,26 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			commands = append(commands, cmd)
+		case toolCommit:
+			ca, msg := parseCommitArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			if commit != nil {
+				// One per step. Edits in a message apply as one atomic batch —
+				// that is what makes sequential edits to a file compose — so a
+				// second commit here has nothing of its own to close. Two
+				// commits are two steps, which the loop already gives for free
+				// once these results re-send.
+				results[tc.ID] = "One commit per step. This call closed nothing: " +
+					"make the next chunk of edits, then commit that."
+				needsReflection = true
+				continue
+			}
+			parsed := ca
+			commit = &parsed
 		case toolRead:
 			results[tc.ID] = c.runRead(tc)
 		case toolGrep:
@@ -528,6 +556,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// the edited files.
 	for _, cmd := range commands {
 		results[cmd.callID] = c.runShellTool(ctx, cmd)
+	}
+
+	// The commit closes the work, so it runs after both the edits and the
+	// commands: "commit what I did" includes the test that proved it. A model
+	// that wants to gate a commit on a result has to see that result first,
+	// which is a second step by construction.
+	if commit != nil {
+		results[commit.callID] = c.runCommitTool(*commit)
 	}
 
 	// Append one tool result per call, in call order, then re-send on them.

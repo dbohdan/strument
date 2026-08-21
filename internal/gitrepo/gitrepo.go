@@ -134,7 +134,11 @@ func (r *Repo) HeadSHA() string {
 // trailer (auto-commits of model edits); dirty commits stay unattributed.
 // ok=false means there was nothing to commit. GIT_AUTHOR_* and
 // GIT_COMMITTER_* are never overridden; hooks run normally.
-func (r *Repo) Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error) {
+//
+// want is the message to use. Empty means generate one from the staged diff
+// through the Message hook, which is the automatic path; a non-empty one is
+// used verbatim, for the commit tool where the model writes its own.
+func (r *Repo) Commit(fnames []string, context, want string, attributed bool) (hash, message string, ok bool, err error) {
 	if len(fnames) == 0 {
 		return "", "", false, nil
 	}
@@ -153,7 +157,12 @@ func (r *Repo) Commit(fnames []string, context string, attributed bool) (hash, m
 		return "", "", false, nil
 	}
 
-	if r.Message != nil {
+	// A message the caller supplied wins; generating one is what happens when
+	// nobody wrote it. The commit tool writes its own, and the model that made
+	// the change is better placed to say why than a weak model reading the
+	// diff afterwards.
+	message = strings.TrimSpace(want)
+	if message == "" && r.Message != nil {
 		diffArgs := append([]string{"diff", "--cached", "--"}, fnames...)
 		diffs, _ := r.git(diffArgs...)
 		message = strings.TrimSpace(r.Message(diffs, context))

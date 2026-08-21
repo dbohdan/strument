@@ -26,7 +26,7 @@ import (
 //
 // A no-op without a repo, with auto-commits off, or in dry-run — the edits are
 // still applied, and /undo still reaches them through the snapshot.
-func (c *Coder) commitTurn() {
+func (c *Coder) commitTurn(message string) {
 	// What is new since the last commit, not what the turn has touched.
 	//
 	// These were the same set while a turn made one commit. They stopped being
@@ -44,7 +44,7 @@ func (c *Coder) commitTurn() {
 	}
 	slices.Sort(edited)
 
-	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), true)
+	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), message, true)
 	if err != nil {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.

@@ -428,7 +428,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	// interrupted, or done. An interrupted turn's edits are real, so they are
 	// committed too.
 	defer func() {
-		c.settleEdits()
+		c.settleEdits("")
 		c.endTurnHistory()
 		// Last, so the accounting closes the turn: the commit line above it, and
 		// nothing under it. This is what the per-send reorder was reaching for,
@@ -538,7 +538,7 @@ func (c *Coder) InterruptSend() {
 //
 // What is *not* here is flushTurnUsage. The spend is a property of the turn,
 // not of each leg of it, so it stays in the defer and reports once.
-func (c *Coder) settleEdits() {
+func (c *Coder) settleEdits(message string) {
 	// Nothing written since the last settle, so there is nothing to settle.
 	// Without this an interrupted-then-steered turn settles twice over the same
 	// edits: the second commit finds the tree already matching HEAD and
@@ -553,7 +553,7 @@ func (c *Coder) settleEdits() {
 	if c.turnSnap.empty() {
 		return
 	}
-	c.commitTurn()
+	c.commitTurn(message)
 	c.pushTurnSnapshot()
 }
 
@@ -576,7 +576,7 @@ func (c *Coder) afterInterrupt() (message string, keepGoing bool) {
 		return "", false
 	}
 	// The edits so far belong to the interrupt, whichever way this goes.
-	c.settleEdits()
+	c.settleEdits("")
 
 	answer := c.Asker.Ask(AskRequest{
 		Question: "You stopped the model. What now?",

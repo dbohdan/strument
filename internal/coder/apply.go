@@ -173,7 +173,7 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 		return
 	}
 	files := slices.Sorted(maps.Keys(need))
-	if _, _, _, err := c.Repo.Commit(files, "", false); err != nil {
+	if _, _, _, err := c.Repo.Commit(files, "", "", false); err != nil {
 		c.Out.Errorf("Unable to commit dirty files: %v", err)
 	}
 }

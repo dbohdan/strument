@@ -187,12 +187,12 @@ func TestSettleEditsIsIdempotent(t *testing.T) {
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "after")
 
-	c.settleEdits()
+	c.settleEdits("")
 	if got := len(c.undoStack); got != 1 {
 		t.Fatalf("undo stack = %d after the first settle, want 1", got)
 	}
 
-	c.settleEdits()
+	c.settleEdits("")
 	if got := len(c.undoStack); got != 1 {
 		t.Errorf("undo stack = %d after settling again, want 1 — /undo would need two presses", got)
 	}
@@ -260,14 +260,14 @@ func TestSecondCommitNamesOnlyWhatIsNew(t *testing.T) {
 	c.turnEditedFiles["a.go"] = true
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "one")
-	c.settleEdits()
+	c.settleEdits("")
 
 	// Second batch: b.go only. turnEditedFiles still holds both, because the
 	// turn's history record wants every file the turn touched.
 	c.turnEditedFiles["b.go"] = true
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("b.go", snapEntry{}, "two")
-	c.settleEdits()
+	c.settleEdits("")
 
 	staged := repo.calls
 	if len(staged) != 2 {

@@ -183,11 +183,16 @@ type Repo interface {
 	IsDirty(rel string) bool
 	GitIgnored(rel string) bool
 	HeadSHA() string
-	// Commit commits fnames with a generated message; returns hash and
-	// message, or ok=false when there was nothing to commit. attributed
-	// marks auto-commits of model edits, which get the trailer;
-	// dirty commits of user changes stay unattributed.
-	Commit(fnames []string, context string, attributed bool) (hash, message string, ok bool, err error)
+	// Commit commits fnames; returns hash and message, or ok=false when there
+	// was nothing to commit. attributed marks auto-commits of model edits,
+	// which get the trailer; dirty commits of user changes stay unattributed.
+	//
+	// An empty message is generated from the staged diff and context, which is
+	// the automatic path and the only one there used to be. A non-empty one is
+	// used verbatim: the commit tool lets the model write its own, and the
+	// model that made the change knows why it made it, where the generator is
+	// a weak model inferring intent from a diff.
+	Commit(fnames []string, context, message string, attributed bool) (hash, message2 string, ok bool, err error)
 }
 
 // Clock injects time so retry/continuation tests don't sleep.
