@@ -590,10 +590,27 @@ func (c *Coder) afterInterrupt() (message string, keepGoing bool) {
 	}
 	switch answer[0] {
 	case "Continue":
-		// The note noteInterrupt already left says the reply was cut off and
-		// that any tool call it had begun was not run. Nothing more to add, so
-		// the next send re-enters on it rather than appending an empty user
-		// turn to carry nothing.
+		// Say what the user decided, or the model is answering the wrong
+		// question.
+		//
+		// noteInterrupt runs before this prompt, so all it can say is that the
+		// reply was cut off. On its own that reads as a full stop, and the
+		// model obliges: "No problem — I'll stop here. What would you like me
+		// to do next?" It is not misreading anything. Asked afterwards what it
+		// had been told, it quoted the cut-off note and said no continue choice
+		// had reached it, which was exactly right.
+		//
+		// The rest of the wording closes the other failure mode. With a whole
+		// partial reply above it and no instruction about what to do with it, a
+		// model will also quite reasonably begin again from the top — which is
+		// what an earlier live pass showed, and what was wrongly written up as
+		// the cost of keeping the partial rather than as this bug.
+		c.curMessages = append(c.curMessages, llm.HarnessNote(
+			"The user chose to continue. Pick up exactly where your reply above "+
+				"stops and carry on from there — do not start over, do not repeat "+
+				"or summarize what you already wrote, and do not ask what to do next."))
+		// The notes are the message, so the next send re-enters on them rather
+		// than appending an empty user turn to carry nothing.
 		c.resumeInPlace = true
 		return "", true
 	case "Stop":

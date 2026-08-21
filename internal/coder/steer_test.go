@@ -196,3 +196,43 @@ func TestSettleEditsIsIdempotent(t *testing.T) {
 		t.Errorf("undo stack = %d after settling again, want 1 — /undo would need two presses", got)
 	}
 }
+
+// Continuing must tell the model it was asked to continue.
+//
+// This is the check the other Continue tests should have been. They assert a
+// second send went out and that *a* harness note is present — both true of the
+// broken version, where the only note said "your reply was cut off" and nothing
+// said what the user decided. The model read that as a full stop and stopped,
+// which was the correct reading of what it was actually sent.
+//
+// So this asserts on content, and on the *last* message, because position is
+// the half that matters: an instruction to resume is only an instruction to
+// resume if it is the thing the model is answering.
+func TestSteerContinueSaysToContinue(t *testing.T) {
+	c, client, _ := steerCoder(t, "1") // "Continue"
+
+	c.runOne(context.Background(), "do the thing", false)
+
+	if client.sends != 2 {
+		t.Fatalf("sends = %d, want 2", client.sends)
+	}
+	resumed := client.requests[1]
+	last := resumed[len(resumed)-1]
+
+	if last.Role != llm.RoleUser || !strings.HasPrefix(last.Text(), llm.HarnessMarker) {
+		t.Fatalf("the resumed send ends on a %s message, want the harness's note: %q",
+			last.Role, last.Text())
+	}
+	text := strings.ToLower(last.Text())
+	if !strings.Contains(text, "continue") {
+		t.Errorf("the note never says the user chose to continue:\n%s", last.Text())
+	}
+	// Both failure modes seen live were the model doing something reasonable
+	// with a note that did not rule them out: it stopped and asked what next,
+	// or it restarted from the top. The note has to close both.
+	for _, want := range []string{"start over", "repeat"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the note does not rule out restarting (%q missing):\n%s", want, last.Text())
+		}
+	}
+}
