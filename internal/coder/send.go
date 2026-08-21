@@ -324,14 +324,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	}
 
 	if interrupted {
-		// Interrupt shape.
-		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
-			c.curMessages[n-1] = llm.TextMessage("user", c.curMessages[n-1].Text()+"\n^C KeyboardInterrupt")
-		} else {
-			c.curMessages = append(c.curMessages, llm.TextMessage("user", "^C KeyboardInterrupt"))
-		}
-		c.curMessages = append(c.curMessages,
-			llm.TextMessage("assistant", "I see that you interrupted my previous reply."))
+		c.noteInterrupt()
 		return OutcomeInterrupted, ""
 	}
 
@@ -341,6 +334,62 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// mentions — those were the text formats' way of saying what a tool call
 	// says directly.
 	return c.applyToolCalls(ctx), ""
+}
+
+// noteInterrupt records that the human stopped the reply, in a shape the next
+// request can be built from.
+//
+// Two things it deliberately does not do, both of which it used to.
+//
+// It does not put words in the model's mouth. The old shape appended an
+// assistant turn saying "I see that you interrupted my previous reply", which
+// the model never said; the harness's own voice is the honest one, and the rest
+// of this file already says so about the context-exhausted note.
+//
+// It does not edit "^C KeyboardInterrupt" into the user's own message. Whatever
+// the human typed is what the human typed. assemble.go makes the same argument
+// about the system reminder, and this was the last place still doing it.
+//
+// The partial reply itself stays. It is real output the model produced, and
+// keeping it is what makes "continue as before" continue rather than restart.
+// Its *tool calls* do not stay — see dropPartialToolCalls.
+func (c *Coder) noteInterrupt() {
+	c.dropPartialToolCalls()
+	c.curMessages = append(c.curMessages, llm.HarnessNote(
+		"The user pressed Ctrl-C, so your reply above was cut off where it stops. "+
+			"Anything you were part-way through saying was not finished, and any tool "+
+			"call you had begun was not run — nothing it would have changed has changed."))
+}
+
+// dropPartialToolCalls strips tool calls from the assistant message an
+// interrupted send just appended.
+//
+// Not tidiness — correctness. An unanswered tool_call makes the *next* request
+// malformed, and after an interrupt no result will ever answer one: the call is
+// either half-streamed and unparseable, or complete but never dispatched,
+// because the interrupt landed before applyToolCalls ran. Either way the model
+// must be told it did not happen, which the note above does, rather than shown
+// a call it may assume succeeded.
+//
+// The message's text survives. Only an assistant message can carry tool calls,
+// so this looks at one message and only when it is the last.
+func (c *Coder) dropPartialToolCalls() {
+	c.partialToolCalls = nil
+	n := len(c.curMessages)
+	if n == 0 {
+		return
+	}
+	last := &c.curMessages[n-1]
+	if last.Role != llm.RoleAssistant || len(last.ToolCalls) == 0 {
+		return
+	}
+	if last.Text() == "" {
+		// Nothing but the abandoned calls: drop the whole turn rather than
+		// leave an empty assistant message in the history.
+		c.curMessages = c.curMessages[:n-1]
+		return
+	}
+	last.ToolCalls = nil
 }
 
 // buildRequest translates state into an llm.Request.

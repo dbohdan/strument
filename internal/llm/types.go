@@ -48,6 +48,36 @@ func TextMessage(role, text string) Message {
 	return Message{Role: role, Content: TextContent(text)}
 }
 
+// HarnessMarker prefixes anything the harness itself says inside a
+// conversation, so neither the model nor a reader of the transcript can mistake
+// it for something the human typed.
+const HarnessMarker = "[strument]"
+
+// HarnessNote is the harness speaking into an ongoing conversation: "the reply
+// was interrupted", "that tool call was not run". It is a *user*-role message,
+// and the role is a wire constraint rather than a preference.
+//
+// The honest role would be system, and system is what this package uses for the
+// harness's voice in the prefix — session notes, a history summary. It cannot
+// be used mid-conversation. Anthropic rejects a system message that follows an
+// assistant turn outright:
+//
+//	messages.2: role 'system' must follow a 'user' message or an 'assistant'
+//	message ending in a server tool result
+//
+// and "after an assistant turn" is exactly where an interruption note has to
+// go. A live probe across five providers found this shape accepted by all of
+// them and heeded as well as a system message was by the four that accepted
+// one, so the marker carries the meaning the role cannot.
+//
+// The rule this encodes, worth keeping whole: the system role belongs to the
+// prefix; anything the harness says once the conversation is under way is a
+// marked user turn. What it must never be is an assistant turn — putting words
+// in the model's mouth is the one thing no provider will catch for us.
+func HarnessNote(text string) Message {
+	return TextMessage(RoleUser, HarnessMarker+" "+text)
+}
+
 // Content is either a plain string or a list of blocks (needed once
 // cache-control decoration applies).
 //
