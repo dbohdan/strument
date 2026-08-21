@@ -71,7 +71,12 @@ reason from source** — the byte you capture beats the byte you predicted.
 
 Drive each tool through a pty with `pexpect` (`pip install pexpect`; answer the
 `\x1b[6n` cursor query with `\x1b[1;1R` or readline blocks), pin the width with
-`dimensions=(rows, cols)`, capture raw bytes, strip ANSI, and diff. For startup
+`dimensions=(rows, cols)`, capture raw bytes, strip ANSI, and diff. Answer that
+query **every time it appears**, not once at startup: readline re-queries on
+each redraw, so a one-shot reply gets exactly one command out and then silence
+— and silence from a process that is still alive and still accepting input
+looks like the command was wrong rather than like a wedged handshake. Scan each
+chunk you read and reply per occurrence. For startup
 chrome (banner, the per-prompt rule, the file list) no API key is needed —
 launch, let it reach the prompt, send `/exit`. For streamed answers and
 reasoning, run against a live model with `OPENROUTER_API_KEY` in the
