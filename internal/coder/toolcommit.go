@@ -39,8 +39,11 @@ func commitTool() llm.ToolDef {
 			"last commit. Files that a bash command changed — a formatter, a code " +
 			"generator — are not included, and are left for you to edit or for the user " +
 			"to commit.\n\n" +
-			"One commit per step: make the edits for a chunk of work, commit it, and the " +
-			"next step begins the next chunk. Prefer boundaries where the tree still " +
+			"Call it as you finish each part, not once at the end: make the edits for one " +
+			"part and commit them in the same step, then start the next part when that " +
+			"result comes back. Edits you make in one step all land in one commit, so a " +
+			"turn that edits everything before committing can only produce a single " +
+			"commit. Prefer boundaries where the tree still " +
 			"builds; if a step cannot stand on its own, fold it into the next one rather " +
 			"than committing something broken. Nothing here refuses a commit — the " +
 			"judgment is yours.",
