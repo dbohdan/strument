@@ -1,6 +1,18 @@
 package repl
 
-import "context"
+import (
+	"context"
+	"os"
+	"strings"
+)
+
+func displayPath(path string) string {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return path
+	}
+	return strings.TrimRight(path, "/") + "/"
+}
 
 // cmdSandbox answers "what can this session write?".
 //
@@ -17,7 +29,7 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 
 	switch {
 	case sb.Active:
-		r.printf("Sandbox: on (landlock).")
+		r.printf("Sandbox: on (Landlock).")
 	case sb.Required:
 		r.out.Errorf("Sandbox: required but unavailable (%s).", sb.Unavailable)
 		r.printf("Nothing the model can cause to run will run. /run still works — you typed it.")
@@ -30,7 +42,7 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 
 	r.printf("Reads and running programs are not restricted. Writes are permitted only under:")
 	for _, p := range sb.Writable {
-		r.printf("  %s", p)
+		r.printf("  %s", displayPath(p))
 	}
 	// Said plainly, because it is the half people get wrong about this feature:
 	// it buys integrity, not confidentiality.

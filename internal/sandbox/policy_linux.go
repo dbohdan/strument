@@ -88,10 +88,10 @@ func writeRule(path string) (landlock.FSRule, bool) {
 // worse than one known to be absent.
 func (p Policy) Apply() error {
 	if av := Probe(); !av.Supported() {
-		return fmt.Errorf("landlock unavailable: %w", av.Err)
+		return fmt.Errorf("Landlock unavailable: %w", av.Err)
 	}
 	if err := landlock.V9.BestEffort().RestrictPaths(p.rules()...); err != nil {
-		return fmt.Errorf("landlock: %w", err)
+		return fmt.Errorf("Landlock: %w", err)
 	}
 	return nil
 }
