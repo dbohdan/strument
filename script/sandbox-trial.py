@@ -9,6 +9,13 @@ Run it on the VPS. It clones the branch, builds, and runs three arms:
                     tests through the bash tool, commit
   2. a denial       a session told to write outside the sandbox, scored on
                     whether the model reports it or thrashes
+  3. the process    filesystem probes driven through /run in a real REPL: no
+                    model, no key, and the only arm that observes the
+                    documented consequence that /run is confined too
+  4. a worktree     a session in a git worktree, where .git is a file and the
+                    real git directory lives outside the project root
+  5. "a" = all turn the confirmation option the sandbox exists to make
+                    defensible, which must appear only when one is active
 
 Arms 1 and 2 need OPENROUTER_API_KEY in the environment. Arm 0 does not.
 Nothing here writes the key anywhere.
@@ -186,12 +193,14 @@ def project(work, name):
     return proj
 
 
-def session_env(work, tag, sandbox_value):
+def session_env(work, tag, sandbox_value, extra_write=()):
     home = os.path.join(work, "xdg", tag)
     cfgdir = os.path.join(home, "config", "strument")
     os.makedirs(cfgdir, exist_ok=True)
     with open(os.path.join(cfgdir, "config.star"), "w") as f:
         f.write(CONFIG % json.dumps(sandbox_value))
+        if extra_write:
+            f.write("sandbox_write = %s\n" % json.dumps(list(extra_write)))
     env = dict(os.environ)
     env["XDG_CONFIG_HOME"] = os.path.join(home, "config")
     env["XDG_STATE_HOME"] = os.path.join(home, "state")
@@ -281,6 +290,217 @@ def arm2(work, binary, sandbox_value):
     return out
 
 
+def pty_session(binary, proj, env, lines, args=(), settle=4.0, each=6.0, last=None,
+                answer_shell=False):
+    """Drive the REPL over a pty and return what a user would have seen.
+
+    The \x1b[6n cursor query is answered on *every* occurrence, not once at
+    startup: readline re-queries on each redraw and blocks until it is
+    answered, so a one-shot reply gets exactly one command through and then
+    silence — from a process that is still alive and still accepting input,
+    which reads as a bad command rather than a wedged handshake.
+    """
+    import pexpect
+
+    env = dict(env)
+    env["TERM"] = "xterm-256color"
+    c = pexpect.spawn(binary, ["chat", "--no-color", *args], cwd=proj, env=env,
+                      dimensions=(40, 110), encoding="utf-8", timeout=120)
+    buf = []
+    state = {"pressed_a": False}
+
+    def pump(seconds):
+        end = time.time() + seconds
+        while time.time() < end:
+            try:
+                chunk = c.read_nonblocking(size=8192, timeout=0.2)
+            except pexpect.TIMEOUT:
+                continue
+            except pexpect.EOF:
+                break
+            buf.append(chunk)
+            for _ in range(chunk.count("\x1b[6n")):
+                c.send("\x1b[1;1R")
+            # /run asks whether to hand the output to the model. Unanswered, it
+            # eats the next line typed — which silently turned the command
+            # after every output-producing /run into an answer to this prompt
+            # rather than a command. Only commands that print anything ask, so
+            # the failure appears and disappears with the command's output.
+            if "Add command output to the chat?" in chunk:
+                time.sleep(0.2)
+                c.send("n\r")
+            # The shell gate. Press "a" the first time it is offered, then "y"
+            # for anything after: if "a" did what it says, there is nothing
+            # after to answer, and that absence is the measurement.
+            if answer_shell and "Run shell command?" in chunk:
+                time.sleep(0.2)
+                if "a=all turn" in chunk and not state["pressed_a"]:
+                    state["pressed_a"] = True
+                    c.send("a\r")
+                else:
+                    c.send("y\r")
+
+    pump(settle)
+    for i, line in enumerate(lines):
+        time.sleep(0.6)
+        c.send(line + "\r")
+        pump(last if (last and i == len(lines) - 1) else each)
+    c.send("/exit\r")
+    pump(3)
+    try:
+        c.expect(pexpect.EOF, timeout=15)
+        buf.append(c.before)
+    except Exception:
+        c.terminate(force=True)
+
+    text = "".join(x for x in buf if x)
+    text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][B0]|\x1b[=>]|\r", "", text)
+    return text, state
+
+
+def arm3(work, binary, sandbox_value):
+    """Filesystem probes through /run. No model, no key, no tokens.
+
+    /run is the honest instrument here. Landlock is monotonic, so a command the
+    *user* typed is confined exactly like one the model caused — a cost this
+    project documents and had never actually watched happen.
+    """
+    print("\n== arm 3: the process itself, probed through /run ==", flush=True)
+    proj = project(work, "proj-run")
+    home = os.path.expanduser("~")
+
+    # A cache directory that does not exist yet. Nothing to grant, so the
+    # sandbox cannot grant it — the documented first-run cost of a toolchain
+    # that has never run on this machine, arranged without touching a real one.
+    cold = os.path.join(work, "cold-cache-%d" % int(time.time()))
+    allowed = os.path.join(work, "extra-allowed")
+    os.makedirs(allowed, exist_ok=True)
+
+    env = session_env(work, "run" if sandbox_value else "run-off", sandbox_value,
+                      extra_write=[allowed])
+    env["XDG_CACHE_HOME"] = cold
+    env["GOCACHE"] = os.path.join(cold, "go-build")
+    # The config is read before any request, so a session that never sends one
+    # needs a key-shaped string and nothing more.
+    env.setdefault("OPENROUTER_API_KEY", "not-used-no-request-is-made")
+
+    canary = os.path.join(home, "strument-trial-run-canary.txt")
+    for path in (canary, "/etc/strument-trial-canary.txt"):
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+    out, _ = pty_session(binary, proj, env, [
+        "/sandbox",
+        f"/run touch {canary}",
+        "/run touch /etc/strument-trial-canary.txt",
+        "/run touch inside-the-project.txt",
+        f"/run touch {os.path.join(allowed, 'widened.txt')}",
+        "/run sh -c 'mkdir -p a b && touch a/f && mv a/f b/f && echo MV-OK'",
+        # Last, and given room: a cold build is the slowest thing here.
+        "/run go build ./...",
+    ], each=8.0, last=60.0)
+    print(textwrap.indent(out.strip()[-3000:], "      "), flush=True)
+
+    on = bool(sandbox_value)
+    record(3, "/sandbox reports the state", "Sandbox:" in out)
+    record(3, "/run is confined too" if on else "/run unconfined (control)",
+           (not os.path.exists(canary)) == on, canary)
+    record(3, "a write to /etc refused" if on else "/etc write (control)",
+           (not os.path.exists("/etc/strument-trial-canary.txt")) == on)
+    record(3, "the project stays writable",
+           os.path.exists(os.path.join(proj, "inside-the-project.txt")))
+    record(3, "sandbox_write widens the set",
+           os.path.exists(os.path.join(allowed, "widened.txt")), allowed)
+    # WithRefer, from the other side: without it this is EXDEV, and mv(1) hides
+    # that by falling back to copy-and-unlink rather than reporting anything.
+    record(3, "mv across directories works", "MV-OK" in out)
+    # The documented cost, made to happen on purpose — and read off the
+    # filesystem rather than out of the output, because "permission denied"
+    # appears in this transcript for reasons that have nothing to do with the
+    # build. Go creates GOCACHE itself on first use; under the sandbox that
+    # mkdir is the write that gets refused, so the directory is the evidence.
+    made = os.path.isdir(env["GOCACHE"])
+    record(3, "cold cache refused" if on else "cold cache filled (control)",
+           made != on, f"GOCACHE={'created' if made else 'not created'}")
+    return out
+
+
+def arm4(work, binary, sandbox_value):
+    """A git worktree: .git is a file and the real git directory is elsewhere.
+
+    This is the one path in DefaultWritable that a normal checkout never
+    exercises, and getting it wrong fails at the end of a turn — after the
+    edits, when the commit lands — which is the worst place to find out.
+    """
+    print("\n== arm 4: a git worktree, where .git is a file ==", flush=True)
+    main_proj = project(work, "proj-wt-main")
+    tree = os.path.join(work, "proj-wt")
+    shutil.rmtree(tree, ignore_errors=True)
+    p = run(["git", "worktree", "add", "-b", "trial-wt", tree], cwd=main_proj)
+    if p.returncode != 0:
+        record(4, "worktree created", False, p.stderr.strip()[:200])
+        return ""
+    dotgit = os.path.join(tree, ".git")
+    record(4, ".git is a file, not a directory", os.path.isfile(dotgit))
+
+    env = session_env(work, "wt" if sandbox_value else "wt-off", sandbox_value)
+    out, secs = chat(binary, tree, env,
+                     'Add a Titleize(s string) string function to slug.go that upper-cases '
+                     'the first letter of each word, then run "go test ./..." with the bash tool.',
+                     ["slug.go"])
+    print(textwrap.indent(out.strip()[-1500:], "      "), flush=True)
+
+    record(4, "no denial hint fired", "Strument's sandbox may have denied this" not in out)
+    record(4, "edits applied", "Applied edit to" in out)
+    commits = run(["git", "log", "--oneline"], cwd=tree).stdout.strip().splitlines()
+    record(4, "committed from the worktree", len(commits) >= 2,
+           f"{len(commits)} commits: {commits[0] if commits else '-'}")
+    record(4, "wall clock", None, f"{secs:.0f}s")
+    return out
+
+
+def arm5(work, binary, sandbox_value):
+    """The prize: "a" = approve every remaining bash command this turn.
+
+    It is offered only when a sandbox is *active*, not merely configured, so
+    the control run is load-bearing — under --sandbox "" the option must not
+    appear at all.
+    """
+    print("\n== arm 5: \"a\" = all this turn ==", flush=True)
+    proj = project(work, "proj-allturn")
+    env = session_env(work, "a" if sandbox_value else "a-off", sandbox_value)
+    out, state = pty_session(binary, proj, env, [
+        "Run these three commands one at a time with the bash tool, each as a "
+        "separate call: echo ALPHA, then echo BETA, then echo GAMMA.",
+    ], each=60.0, answer_shell=True)
+    print(textwrap.indent(out.strip()[-2500:], "      "), flush=True)
+
+    on = bool(sandbox_value)
+    offered = "a=all turn" in out
+    record(5, "option offered" if on else "option withheld (control)",
+           offered == on, "offered" if offered else "not offered")
+    record(5, "\"a\" was actually pressed" if on else "\"a\" unavailable (control)",
+           state["pressed_a"] == on)
+
+    ran = sum(1 for word in ("ALPHA", "BETA", "GAMMA") if word in out)
+    prompts = out.count("Run shell command?")
+    record(5, "the model ran more than one command", ran >= 2,
+           f"{ran} of 3 echoed")
+    # The measurement: one gate for every command after it. Counting prompts
+    # without counting commands would score a turn that ran nothing as a
+    # perfect result.
+    if on:
+        record(5, "one prompt covered them all", prompts == 1 and ran >= 2,
+               f"{prompts} prompt(s) for {ran} command(s)")
+    else:
+        record(5, "every command asked (control)", prompts >= ran >= 1,
+               f"{prompts} prompt(s) for {ran} command(s)")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", default=os.path.expanduser("~/strument-trial"))
@@ -299,6 +519,10 @@ def main():
     src, binary = setup(args.work, args.src)
 
     arm0(src)
+    try:
+        arm3(args.work, binary, args.sandbox)
+    except ImportError:
+        print("\n(arm 3 needs pexpect: pip install pexpect)")
     if args.skip_live:
         print("\n(live arms skipped)")
     elif not os.environ.get("OPENROUTER_API_KEY"):
@@ -306,6 +530,8 @@ def main():
     else:
         arm1(args.work, binary, args.sandbox)
         arm2(args.work, binary, args.sandbox)
+        arm4(args.work, binary, args.sandbox)
+        arm5(args.work, binary, args.sandbox)
 
     print("\n== summary ==")
     width = max(len(n) for _, n, _, _ in results)
