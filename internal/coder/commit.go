@@ -2,7 +2,6 @@ package coder
 
 import (
 	"context"
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -28,10 +27,22 @@ import (
 // A no-op without a repo, with auto-commits off, or in dry-run — the edits are
 // still applied, and /undo still reaches them through the snapshot.
 func (c *Coder) commitTurn() {
-	if len(c.turnEditedFiles) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
+	// What is new since the last commit, not what the turn has touched.
+	//
+	// These were the same set while a turn made one commit. They stopped being
+	// the same when a turn could commit twice — first through an interrupt the
+	// user steered, now through the commit tool — because turnEditedFiles
+	// accumulates across the whole turn for the end-of-turn history record.
+	// Handing git the earlier commit's paths is invisible while only Strument
+	// is writing, since git commits what differs and those files no longer do.
+	// It stops being invisible the moment the user edits one of them
+	// themselves between two commits, and their work joins a model-authored
+	// commit they never saw.
+	edited := c.turnSnap.paths()
+	if len(edited) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
 		return
 	}
-	edited := slices.Sorted(maps.Keys(c.turnEditedFiles))
+	slices.Sort(edited)
 
 	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), true)
 	if err != nil {

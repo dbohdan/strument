@@ -57,6 +57,17 @@ func (s *turnSnapshot) record(path string, before snapEntry, after string) {
 
 func (s *turnSnapshot) empty() bool { return s == nil || len(s.order) == 0 }
 
+// paths lists what has been written since the last settle, in first-touch
+// order. It is the set a commit should name — turnEditedFiles accumulates
+// across the whole turn, because the end-of-turn history record wants every
+// file the turn touched.
+func (s *turnSnapshot) paths() []string {
+	if s == nil {
+		return nil
+	}
+	return slices.Clone(s.order)
+}
+
 // wrote reports whether this turn has already written path.
 func (s *turnSnapshot) wrote(path string) bool {
 	if s == nil {
