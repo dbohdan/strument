@@ -33,6 +33,8 @@ The loader reads these module-level variables after running your file:
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
+| `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
+| `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -467,6 +469,86 @@ Two things are untouched by the allowlist. `/run` keeps the full environment,
 because you typed that command yourself. And the API keys Strument itself uses
 (`api_key=env(...)` in this file) are read at load time and never re-exposed
 through it.
+
+### `sandbox`
+
+Which confinement mechanism to apply to the session. `"landlock"` or `""`:
+
+```python
+sandbox = "landlock"   # the default on Linux
+sandbox = ""           # off; the default everywhere else
+```
+
+There is no boolean and no `"auto"`, because "sandboxed" is not one thing —
+naming the mechanism keeps the setting honest when there is a second one.
+Anything other than those two values fails the load rather than falling back,
+since the whole value of this setting is knowing whether you are confined.
+
+The default is the rule you would write yourself, and you can write it: the
+`platform` value is available, so `sandbox = "landlock" if platform.system ==
+"Linux" else ""` is exactly the built-in behavior spelled out.
+
+With it on, Strument applies a [Landlock](https://landlock.io/) ruleset to its
+own process at startup. Reading and executing are unrestricted anywhere on the
+filesystem; writing is permitted only under a derived set of paths:
+
+- the project root, including `.git`, and the real git directory when `.git` is
+  a file (a worktree or a submodule)
+- the session's state directory under `$XDG_STATE_HOME/strument`
+- `TMPDIR`, and `/tmp` besides
+- this machine's toolchain caches — the last column of
+  [Language support](#language-support) above
+- `/dev/null` and the other harmless devices, plus your terminal
+- everything in `sandbox_write`
+
+Landlock is inherited across `fork`/`exec` and cannot be undone, so the `bash`
+tool, `check` commands, the `scraper` command, and every process they start are
+confined by the same policy. **So is `/run`**, even though you typed it — there
+is no call that removes a ruleset. That is the accepted cost of confining the
+process instead of each command.
+
+`/sandbox` in the REPL prints the effective writable set for the session. It
+cannot be changed mid-session; edit the config and restart.
+
+**On a kernel without Landlock**, `sandbox = "landlock"` does not proceed
+unsandboxed. Strument starts, and reading, editing and committing work, but
+everything the model can cause to execute refuses with one line naming this
+setting. `/run` still works. Off Linux, the setting must be `""` — there is no
+mechanism to fall back to.
+
+What this buys is integrity, not confidentiality: writes are confined, reads
+are not. [`doc/security.md`](security.md) is the full account, including the
+places the policy is deliberately loose.
+
+### `sandbox_write`
+
+Extra absolute paths the sandbox may write to:
+
+```python
+sandbox_write = [
+    "/srv/scratch",
+    env("HOME", "") + "/.local/share/my-tool",
+]
+```
+
+Paths must be absolute — a relative one would depend on where Strument was
+started, which is not a property a security decision should have. A path that
+does not exist is skipped rather than failing the load, so a list can name a
+cache directory that is not there yet.
+
+Reach for this when a denial names a path outside the derived set. The two
+common cases are a toolchain that has never run on this machine, so its cache
+directory does not exist yet and there was nothing to grant, and a project that
+writes somewhere genuinely outside itself.
+
+Granting a directory grants everything under it, so grant the narrowest thing
+that works. In particular, do not grant a directory on your `PATH`: the derived
+set excludes those on purpose, since a writable `bin/` is a program that runs
+as you the next time you type its name.
+
+A project's `.strument.star` **replaces** the user's `sandbox_write`
+whole-value, like `env_allow` and for the same reason: merging could only
+widen, and a project needs to be able to narrow.
 
 ## Built-in functions
 

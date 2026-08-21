@@ -317,6 +317,17 @@ A project-local `.strument.star` can extend or override any of this, once you ha
 See [`doc/config.md`](doc/config.md) for details.
 
 
+## Security and the sandbox
+
+On Linux, Strument confines itself with [Landlock](https://landlock.io/) before the session starts, and everything it spawns inherits that: the `bash` tool, your checks, and every child of theirs can write only to your project, a temporary directory, the session's state directory, and this machine's toolchain caches.
+`/sandbox` lists the effective paths; `sandbox_write` adds to them; `sandbox = ""` turns it off, which is the default on other platforms.
+
+What that buys is **integrity, not confidentiality**.
+Writes are confined, reads are not confined at all, so a mistaken or injected command cannot touch your dotfiles or your other repositories — and it can read every one of them.
+The threat model is mistakes and prompt injection with you watching, not a misaligned agent working over hundreds of turns.
+[`doc/security.md`](doc/security.md) says exactly what is and is not confined, and where the policy is deliberately loose.
+
+
 ## Caveats and limitations
 
 Strument is very pre-1.0 and not stable.

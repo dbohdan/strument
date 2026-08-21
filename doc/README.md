@@ -197,6 +197,10 @@ inherited from aider.
     ergochat/readline (MIT, taken at v0.1.3) with a flicker-free single-write
     redraw adapted from jart/bestline and Ctrl+arrow word motion. Kept in
     upstream style and excluded from Strument's linters; see its `NOTICE`.
+  - `sandbox/` — the Landlock policy: which paths a session may write to, and
+    the one call that confines the process. Linux-only, with a stub that
+    refuses elsewhere; the writable-set derivation is pure and tested without
+    a kernel. See [`security.md`](security.md).
   - `gitrepo/` — the git port; always argv, never a shell string.
   - `history/` — per-project markdown chat transcripts under
     `$XDG_STATE_HOME/strument`.
@@ -224,15 +228,28 @@ reaching around it.
 | `Output` | user-facing printing + live stream | `repl.termOutput`, `StdOutput` / test buffers |
 | `Confirmer` | y/n/don't-ask questions | readline confirmer wrapped in `AutoConfirmer` |
 | `Asker` | the `ask_user_question` tool's multiple-choice questions | readline asker / replay stub (nil in script mode) |
-| `CommandRunner` | `/run`, the `bash` tool, verification commands | `PipeRunner` / replay stub |
-
-Where a command runs, its environment follows who caused it: `/run` (the
-user typed it) inherits the whole session environment, while the `bash` tool,
-checks, and the scraper command (the model caused them) run under the env
-allowlist in `internal/coder/envallow.go` — see the security notes below.
+| `CommandRunner` | `/run` and the `bash` tool — one shell block through one shell | `PipeRunner` / replay stub |
 | `Repo` | git operations | `gitrepo.Repo` / nil (no-git mode) |
 | `TokenCounter` | advisory token estimates | `RuneCounter` (runes/4, measured) |
 | `Clock` | retry backoff sleeps | `RealClock` / instant fake |
+
+Checks are **not** a `CommandRunner` client, which is easy to assume and wrong:
+`runCheck` (`toolobserve.go`) runs a configured argv with `exec.CommandContext`
+directly, deliberately without a shell, because the argv comes from the user's
+config and never from the model. The scraper command (`scrape.go`) does the
+same, for the same reason. What they share with the port is not the port — it
+is the two policies below.
+
+Where a command runs, its environment follows who caused it: `/run` (the user
+typed it) inherits the whole session environment, while the `bash` tool,
+checks, and the scraper command (the model caused them) run under the env
+allowlist in `internal/coder/envallow.go` — see the security notes below.
+
+Confinement does not follow who caused it, because it cannot. The Landlock
+policy in `internal/sandbox` is applied to the whole process at startup and is
+inherited by everything it spawns, so it covers all three paths — the port, the
+two direct `exec` sites, and any future one — without a seam to remember. See
+[`security.md`](security.md).
 
 The REPL has the same philosophy: `repl.Options` exposes seams
 (`Stdin/Stdout`, `IsTerminal`, `MakeRaw/ExitRaw`, `Notify`, `Exit`, `Now`,
@@ -419,10 +436,22 @@ Ten tools, in three natures:
   is deliberate: the earlier `y/N` made the common case cost a keystroke it did
   not need to, and friction in the common case is exactly what erodes a prompt
   into reflex. Cheapening the answer is only defensible alongside making the
-  question informative — which is also why the blanket "all this turn" option
-  left this gate. What reaches it is the open-ended remainder after every
-  observation tool has taken its share, and the repetition that option was
-  answering now belongs to the allowlist.
+  question informative. What reaches the prompt at all is the open-ended
+  remainder after every observation tool and the check allowlist have taken
+  their share.
+- **"All this turn" is offered only under a sandbox.** `a` blanket-approves the
+  turn's remaining `bash` commands, and it was removed once for the obvious
+  reason: an option that answers a question you have not read is the reflex,
+  not a defence against it. It is back because the cost of a bad approval is
+  now bounded — `internal/sandbox` confines writes to the project and a known
+  list, so the worst case is a `git diff` and an `/undo` rather than an
+  afternoon of finding out what else changed. The option is gated on
+  `Sandbox.Active`, not on the setting: a required-but-unavailable sandbox does
+  not offer it, because there the bound does not exist. That ordering is the
+  reason the sandbox landed before `a` came back, along with `shell_timeout` —
+  Landlock does nothing about a command that spins forever, and blanket
+  approval is exactly the mode where nobody is watching it happen.
+  [`security.md`](security.md) is the threat model this rests on.
 
 - **Asking the user is a tool call, and a different channel from the gate.**
   `ask_user_question(questions)` lets the model pause mid-turn and collect a
