@@ -41,7 +41,6 @@ type Coder struct {
 	Stream               bool
 	PrefillSupported     bool // continuation on finish_reason=length
 	ExamplesAsSysMsg     bool
-	UseSystemPrompt      bool
 	SystemPromptPrefix   string
 	ChatLanguage         string
 
@@ -229,7 +228,6 @@ func New(root string, model *config.Model) *Coder {
 		SuggestShellCommands: true,
 		Stream:               true,
 		PrefillSupported:     true,
-		UseSystemPrompt:      true,
 		MaxSteps:             25,
 		MaxErrorReflections:  3,
 		Tokens:               RuneCounter{},

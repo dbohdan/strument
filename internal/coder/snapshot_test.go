@@ -432,12 +432,17 @@ func TestNoteUndoTellsTheModel(t *testing.T) {
 	c.NoteUndo([]string{"a.go", "b.go"})
 
 	added := c.doneMessages[before:]
-	if len(added) != 2 {
-		t.Fatalf("added %d messages, want a user note and an assistant ack", len(added))
+	if len(added) != 1 {
+		t.Fatalf("added %d messages, want one note", len(added))
 	}
-	if added[0].Role != "user" || added[1].Role != "assistant" {
-		t.Errorf("roles = %q, %q; want user then assistant so the turn alternates",
-			added[0].Role, added[1].Role)
+	// One marked user turn. The fabricated "Understood, I'll treat those files
+	// as unchanged" that used to follow it was a reply the model never gave,
+	// written to keep the roles alternating — which nothing requires.
+	if added[0].Role != llm.RoleUser {
+		t.Errorf("role = %q, want %q", added[0].Role, llm.RoleUser)
+	}
+	if !strings.HasPrefix(added[0].Text(), llm.HarnessMarker) {
+		t.Errorf("the note is not marked as the harness speaking: %q", added[0].Text())
 	}
 	text := added[0].Text()
 	for _, want := range []string{"/undo", "a.go", "b.go"} {
@@ -448,7 +453,7 @@ func TestNoteUndoTellsTheModel(t *testing.T) {
 
 	// Nothing undone, nothing to say: an empty list must not add a turn.
 	c.NoteUndo(nil)
-	if len(c.doneMessages) != before+2 {
-		t.Errorf("an empty undo added %d messages", len(c.doneMessages)-before-2)
+	if len(c.doneMessages) != before+1 {
+		t.Errorf("an empty undo added %d messages", len(c.doneMessages)-before-1)
 	}
 }

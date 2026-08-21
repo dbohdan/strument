@@ -641,7 +641,7 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		// The result shape, so /run context reads like
 		// model-proposed shell output.
 		result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", args, exitCode, output)
-		r.coder.AppendExchange(result, "Ok")
+		r.coder.AppendContext(result)
 		r.printf("Added the command output to the chat.")
 	}
 	return ""
@@ -666,7 +666,7 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 		r.out.Errorf("Unable to fetch %s: %v", url, err)
 		return ""
 	}
-	r.coder.AppendExchange(content, "Ok")
+	r.coder.AppendContext(content)
 	r.printf("Added %s to the chat.", url)
 	return ""
 }

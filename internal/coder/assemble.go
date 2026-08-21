@@ -248,10 +248,12 @@ func (c *Coder) formatChatChunks() *chatChunks {
 			exampleMessages = append(exampleMessages, llm.TextMessage(msg.Role, c.fmtSystemPrompt(msg.Content)))
 		}
 		if len(c.Prompts.ExampleMessages) > 0 {
-			exampleMessages = append(exampleMessages,
-				llm.TextMessage("user", "I switched to a new code base. Please don't consider the above files or try to edit them any longer."),
-				llm.TextMessage("assistant", "Ok."),
-			)
+			// The bridge from illustration to the real conversation. It used to
+			// be a fabricated user turn answered by a fabricated "Ok.", which
+			// is two lies to draw one line; the harness can just say it.
+			exampleMessages = append(exampleMessages, llm.HarnessNote(
+				"The exchange above is an example, not part of this conversation. "+
+					"The files and history that follow are the real ones."))
 		}
 	}
 
@@ -284,14 +286,15 @@ func (c *Coder) formatChatChunks() *chatChunks {
 
 	chunks := &chatChunks{}
 
-	if c.UseSystemPrompt {
-		chunks.system = []llm.Message{llm.TextMessage("system", mainSys)}
-	} else {
-		chunks.system = []llm.Message{
-			llm.TextMessage("user", mainSys),
-			llm.TextMessage("assistant", "Ok."),
-		}
-	}
+	// The system prompt goes in a system message, full stop.
+	//
+	// There used to be a UseSystemPrompt == false branch that sent it as a user
+	// turn answered by a fabricated "Ok." — aider's shape for models with no
+	// system role. It was unreachable: the field was set true in New and never
+	// set false anywhere, by any flag or config. It is also no longer needed by
+	// anything. Gemma was the last major family without a system role, and
+	// Gemma 4 added native support for one in April 2026.
+	chunks.system = []llm.Message{llm.TextMessage(llm.RoleSystem, mainSys)}
 
 	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages

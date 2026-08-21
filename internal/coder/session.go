@@ -98,14 +98,21 @@ func (c *Coder) ClearHistory() {
 	c.curMessages = nil
 }
 
-// AppendExchange records a user/assistant pair in the current history
-// without sending anything — the /run command's "add output to the chat"
-// path, mirroring the shape for model-proposed shell output.
-func (c *Coder) AppendExchange(user, assistant string) {
-	c.curMessages = append(c.curMessages,
-		llm.TextMessage("user", user),
-		llm.TextMessage("assistant", assistant),
-	)
+// AppendContext adds material to the current history without sending
+// anything — the "add output to the chat" path behind /run and /web.
+//
+// One message, not a pair. It used to append a fabricated "Ok." in the
+// assistant's voice so the roles alternated, which bought nothing: two
+// consecutive user messages are accepted by every provider, and a reply the
+// model never gave is the one thing worth not writing. The user turn itself is
+// honest — the user chose to add this — so it carries the material as typed.
+//
+// Deliberately unmarked, unlike the harness's own notes. This is not the
+// harness speaking; it is material, and the "Command: … Output: …" shape the
+// callers build says what it is. A marker claiming otherwise would blur the one
+// distinction the marker exists to make.
+func (c *Coder) AppendContext(text string) {
+	c.curMessages = append(c.curMessages, llm.TextMessage(llm.RoleUser, text))
 }
 
 // SetModel switches the chat to a different model (/model). The caller
@@ -147,18 +154,19 @@ func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[sho
 // /undo moves HEAD, restores files, and pops the snapshot stack, all outside
 // any tool call it could be answered through.
 //
-// A user-role message is the honest shape here, and it is not the synthetic
-// turn this harness otherwise refuses to write: the user really did type /undo.
-// The assistant line after it only keeps the roles alternating.
+// The action was the user's — they really did type /undo — but the sentence is
+// the harness's, so it goes out marked as such rather than in the user's voice.
+// It used to be followed by a fabricated "Understood, I'll treat those files as
+// unchanged", which the model never said; the alternation that line existed for
+// is not something any provider requires.
 func (c *Coder) NoteUndo(files []string) {
 	if len(files) == 0 {
 		return
 	}
-	c.doneMessages = append(c.doneMessages,
-		llm.TextMessage("user", "I ran /undo. The edits from that turn are gone and "+
+	c.doneMessages = append(c.doneMessages, llm.HarnessNote(
+		"The user ran /undo. The edits from that turn are gone and "+
 			strings.Join(files, ", ")+" are back to what they were before it. "+
-			"Don't assume anything you changed there is still in place; read a file before building on it."),
-		llm.TextMessage("assistant", "Understood. I'll treat those files as unchanged by that turn."))
+			"Don't assume anything you changed there is still in place; read a file before building on it."))
 }
 
 // CommitsBeforeMessage returns the HEAD hashes captured at the start of
