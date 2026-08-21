@@ -189,6 +189,23 @@ the same reason it is not exempt from the sandbox — the allowlist is a policy
 Strument chooses to apply, and Landlock is a property of the process.
 
 
+## How this was verified
+
+The policy was developed on kernels without Landlock, where the enforcement
+tests skip — and a skip reads as a pass in a summary line. It was checked on a
+kernel that has it (ABI 8) before the feature shipped:
+[`doc/experiments/2026-08-landlock-live.md`](experiments/2026-08-landlock-live.md)
+records the run. Three claims on this page rest on it rather than on reading:
+that read-only `/` still permits execution, that a cross-directory rename is
+denied as EXDEV rather than EACCES, and that a nested rule cannot reduce
+rights — which is why `.git/hooks` is a documented hole rather than a fixed
+one.
+
+`script/sandbox-trial.py` re-runs that trial. `--sandbox ""` is its control,
+and the point of it: with confinement off every ordinary-work check should go
+green and every denial check should go red. A run where those do not flip is
+measuring something other than the sandbox.
+
 ## Reporting a problem
 
 Strument is pre-1.0 and developed in the open. Open an issue; if you would
