@@ -169,3 +169,72 @@ func TestTempDirsAlwaysIncludeSlashTmp(t *testing.T) {
 		t.Errorf("/tmp was not granted alongside a relocated TMPDIR:\n%v", got)
 	}
 }
+
+// TestEveryEcosystemOverrideIsHonoured walks the same ecosystems
+// project_checks() detects, in the same order, and checks that each one's
+// environment variable actually reaches the writable set.
+//
+// The risk this covers is dull and likely: a list of two dozen variable names
+// is a list of two dozen chances to misspell one, and a misspelled name fails
+// silently — the default is granted, the relocated cache is not, and the
+// ecosystem breaks only for the people who moved it.
+func TestEveryEcosystemOverrideIsHonoured(t *testing.T) {
+	for _, tc := range []struct{ ecosystem, env string }{
+		{"generic XDG", "XDG_CACHE_HOME"},
+		{"Go build cache", "GOCACHE"},
+		{"Go module cache", "GOMODCACHE"},
+		{"Rust", "RUSTUP_HOME"},
+		{"Python pip", "PIP_CACHE_DIR"},
+		{"Python uv", "UV_CACHE_DIR"},
+		{"npm", "npm_config_cache"},
+		{"pnpm", "PNPM_HOME"},
+		{"Yarn", "YARN_CACHE_FOLDER"},
+		{"Bun", "BUN_INSTALL"},
+		{"Deno cache", "DENO_DIR"},
+		{"Deno installs", "DENO_INSTALL_ROOT"},
+		{"Gradle", "GRADLE_USER_HOME"},
+		{".NET packages", "NUGET_PACKAGES"},
+		{".NET CLI", "DOTNET_CLI_HOME"},
+		{"PHP composer", "COMPOSER_HOME"},
+		{"PHP composer cache", "COMPOSER_CACHE_DIR"},
+		{"Ruby gems", "GEM_HOME"},
+		{"Ruby bundler", "BUNDLE_USER_HOME"},
+		{"Elixir mix", "MIX_HOME"},
+		{"Elixir hex", "HEX_HOME"},
+		{"Crystal shards", "SHARDS_CACHE_PATH"},
+		{"Haskell stack", "STACK_ROOT"},
+		{"Haskell cabal", "CABAL_DIR"},
+	} {
+		t.Run(tc.ecosystem, func(t *testing.T) {
+			moved := t.TempDir()
+			t.Setenv(tc.env, moved)
+			if got := DefaultWritable(t.TempDir(), t.TempDir(), nil); !has(t, got, moved) {
+				t.Errorf("%s moved to %s via %s and was not granted; check the variable's spelling",
+					tc.ecosystem, moved, tc.env)
+			}
+		})
+	}
+}
+
+// TestRootedEcosystemOverridesResolveInsideTheNewRoot: for toolchains whose
+// variable names a *root* rather than a cache, moving the root has to move
+// what is granted inside it, not leave a rule pointing at the old home.
+func TestRootedEcosystemOverridesResolveInsideTheNewRoot(t *testing.T) {
+	for _, tc := range []struct{ env, sub string }{
+		{"GOPATH", "pkg"},
+		{"CARGO_HOME", "registry"},
+		{"CARGO_HOME", "git"},
+	} {
+		t.Run(tc.env+"/"+tc.sub, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv(tc.env, root)
+			got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+			if !has(t, got, filepath.Join(root, tc.sub)) {
+				t.Errorf("%s/%s was not granted after %s moved:\n%v", root, tc.sub, tc.env, got)
+			}
+			if has(t, got, root) {
+				t.Errorf("all of %s was granted; only %s should be", tc.env, tc.sub)
+			}
+		})
+	}
+}

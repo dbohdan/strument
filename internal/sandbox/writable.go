@@ -113,13 +113,24 @@ func gitDir(projectRoot string) string {
 	return path
 }
 
-// cacheDirs is where the common toolchains put things they will rebuild.
+// cacheDirs is where the toolchains put things they will rebuild.
 //
-// Each is read from the environment variable that toolchain honours before
-// falling back to its default, so a machine that has moved its cache is
-// respected. The variable names are deliberately the same ones envallow.go
-// already passes through to model-run commands: if a variable is worth telling
-// the command about, the directory it names is worth letting the command write.
+// The ecosystems are exactly the ones project_checks() detects, in the same
+// order, and that is the point: a project Strument offers to run checks for is
+// a project whose checks must work under the sandbox. Two lists that almost
+// match are worse than either — the gap shows up as one ecosystem mysteriously
+// failing, months later, in someone else's session.
+//
+// Each entry reads its own toolchain's environment variable before falling
+// back, so a relocated cache is respected. Those variable names are largely
+// the ones envallow.go already passes through to model-run commands: if a
+// variable is worth telling a command about, the directory it names is worth
+// letting the command write.
+//
+// Several toolchains need nothing here because their default already sits
+// under ~/.cache: Go's build cache, pip, uv, Deno, Yarn 1, composer's cache
+// and Crystal's shards all land there. They appear below only as overrides,
+// for the case where someone has moved them.
 func cacheDirs() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -137,23 +148,77 @@ func cacheDirs() []string {
 		}
 		return fallback
 	}
+	// in resolves a toolchain's root, which may itself have moved, and returns
+	// a path inside it.
+	in := func(env, fallback string, rest ...string) string {
+		root := pick(env, fallback)
+		if root == "" {
+			return ""
+		}
+		return filepath.Join(append([]string{root}, rest...)...)
+	}
 
 	return []string{
+		// Everything XDG. The single biggest entry: most toolchains default
+		// their cache to somewhere under here.
 		pick("XDG_CACHE_HOME", under(".cache")),
+
+		// Go. GOPATH holds bin/ beside pkg/, and bin/ stays read-only.
 		pick("GOCACHE", ""),
 		pick("GOMODCACHE", ""),
-		// GOPATH holds bin/ as well as pkg/, and bin/ must stay read-only:
-		// a writable ~/go/bin is a way to replace a binary the user will run
-		// later, which is exactly the durable foothold this policy denies.
-		filepath.Join(pick("GOPATH", under("go")), "pkg"),
-		filepath.Join(pick("CARGO_HOME", under(".cargo")), "registry"),
-		filepath.Join(pick("CARGO_HOME", under(".cargo")), "git"),
+		in("GOPATH", under("go"), "pkg"),
+
+		// Rust.
+		in("CARGO_HOME", under(".cargo"), "registry"),
+		in("CARGO_HOME", under(".cargo"), "git"),
 		pick("RUSTUP_HOME", under(".rustup")),
-		pick("UV_CACHE_DIR", ""),
+
+		// Python.
 		pick("PIP_CACHE_DIR", ""),
+		pick("UV_CACHE_DIR", ""),
+
+		// Node and the other JavaScript runtimes. Their install roots are
+		// granted whole, bin/ included, so that `pnpm add -g`, `bun add -g`
+		// and `deno install` work: for pnpm the store lives *inside* the
+		// directory that is on PATH, so the two are hard to separate anyway.
+		// This is a real widening — see doc/security.md.
 		pick("npm_config_cache", under(".npm")),
+		pick("PNPM_HOME", under(".local", "share", "pnpm")),
+		pick("YARN_CACHE_FOLDER", ""),
+		under(".yarn"),
+		pick("BUN_INSTALL", under(".bun")),
+
+		// Deno.
+		pick("DENO_DIR", ""),
+		pick("DENO_INSTALL_ROOT", under(".deno")),
+
+		// Java: Maven, then Gradle.
 		under(".m2"),
 		pick("GRADLE_USER_HOME", under(".gradle")),
+
+		// .NET.
+		pick("NUGET_PACKAGES", under(".nuget", "packages")),
+		pick("DOTNET_CLI_HOME", under(".dotnet")),
+
+		// PHP.
+		pick("COMPOSER_HOME", under(".composer")),
+		pick("COMPOSER_CACHE_DIR", ""),
+
+		// Ruby.
+		pick("GEM_HOME", under(".gem")),
+		pick("BUNDLE_USER_HOME", under(".bundle")),
+
+		// Elixir.
+		pick("MIX_HOME", under(".mix")),
+		pick("HEX_HOME", under(".hex")),
+
+		// Crystal: shards installs into the project's own lib/, so only a
+		// relocated cache needs naming.
+		pick("SHARDS_CACHE_PATH", ""),
+
+		// Haskell: stack, then cabal.
+		pick("STACK_ROOT", under(".stack")),
+		pick("CABAL_DIR", under(".cabal")),
 	}
 }
 
