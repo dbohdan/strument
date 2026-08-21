@@ -121,3 +121,54 @@ func TestLooksDenied(t *testing.T) {
 		}
 	}
 }
+
+// TestAllTurnOfferedOnlyUnderASandbox pins the condition that licenses the
+// affordance rather than just its presence.
+//
+// "a = all this turn" was removed on the argument that approving an unseen
+// command because the last one was fine is the reflex the prompt exists to
+// interrupt. That argument is about consequences, and a sandbox bounds
+// consequences — so the offer comes back exactly when a bad approval can no
+// longer write outside the project, and not before.
+func TestAllTurnOfferedOnlyUnderASandbox(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sandbox   SandboxState
+		wantGroup bool
+	}{
+		{"active", SandboxState{Required: true, Active: true}, true},
+		{"off", SandboxState{}, false},
+		{"required but unavailable", SandboxState{Required: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rc := &recordingConfirmer{}
+			c := &Coder{
+				Out:                  &captureOut{},
+				Root:                 t.TempDir(),
+				Sandbox:              tc.sandbox,
+				Confirm:              rc,
+				SuggestShellCommands: true,
+			}
+			c.turnAutoApprove = map[string]bool{}
+
+			_ = c.runShellTool(context.Background(), toolCommand{command: "echo hi", purpose: "say hi"})
+
+			if tc.sandbox.blocksExecution() {
+				// Refused before the prompt: asking someone to approve a
+				// command that is refused either way teaches them the prompt
+				// does not matter.
+				if len(rc.got) != 0 {
+					t.Errorf("the user was asked about a command that could not run: %+v", rc.got)
+				}
+				return
+			}
+			if len(rc.got) != 1 {
+				t.Fatalf("expected exactly one confirmation, got %d", len(rc.got))
+			}
+			if got := rc.got[0].Group != ""; got != tc.wantGroup {
+				t.Errorf("Group=%q, want offered=%v — the offer must follow the sandbox, not the other way round",
+					rc.got[0].Group, tc.wantGroup)
+			}
+		})
+	}
+}

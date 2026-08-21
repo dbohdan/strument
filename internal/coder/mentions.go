@@ -12,6 +12,18 @@ var urlRe = regexp.MustCompile(`(https?://[^\s/$.?#].[^\s"]*[^\s,.])`)
 
 // checkForUrls offers to scrape URLs in the input (minus rejectedUrls) and
 // appends the content.
+//
+// Deliberately not gated by the sandbox, unlike bash and check. This runs on
+// what the *user* typed — preprocUserInput is its only caller, and there is no
+// tool a model can call to fetch a URL — so a scrape is the user's action,
+// confirmed by the user, in the same class as /run.
+//
+// envallow.go does treat the scraper command as model-caused, and that is not a
+// contradiction: it answers a different question. Filtering the environment is
+// about what leaks *out*, since the fetched page lands in the model's context
+// and a scraper that echoed its environment would carry the API key there. The
+// execution gate is about what runs unconfined, and nothing the model can cause
+// runs here.
 func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 	if c.Scrape == nil {
 		return inp

@@ -572,6 +572,14 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	if !c.SuggestShellCommands {
 		return "Shell commands are disabled in this session; the command was not run."
 	}
+	// Refused here rather than in runAndShow, which is where the same check
+	// also lives for the paths that do not come through this tool. Leaving it
+	// only there meant the user was asked to approve a command that was then
+	// refused regardless — a prompt whose answer changes nothing, which is the
+	// precise way to teach someone that prompts are noise.
+	if c.Sandbox.blocksExecution() {
+		return c.Sandbox.refusal()
+	}
 	command := strings.TrimSpace(cmd.command)
 
 	// A command that *is* one of the project's configured checks runs without
@@ -596,16 +604,31 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 			"user. Call check(%q) to run it directly.\n\n%s", name, name, transcript)
 	}
 
-	// No Group, so no "a=all turn" here. A blanket turn-scoped yes is the last
-	// thing this gate should offer: what reaches it is the open-ended remainder
-	// left over once every observation tool has taken its share, and approving
-	// the next unseen one because the last was fine is exactly the reflex the
-	// prompt exists to interrupt. The repetition it was answering is the case
-	// just handled above.
+	// "a = all this turn" is offered only when the sandbox is enforcing, and the
+	// condition is the whole argument rather than a detail of it.
+	//
+	// Without one, a blanket turn-scoped yes is the last thing this gate should
+	// offer: what reaches it is the open-ended remainder left over once every
+	// observation tool has taken its share, and approving the next unseen
+	// command because the last one was fine is exactly the reflex the prompt
+	// exists to interrupt. That argument is about *consequences*, though, not
+	// about the reflex — and a sandbox is precisely a bound on consequences. A
+	// command approved unseen can no longer write outside the project, so the
+	// worst case stops being unbounded and starts being "a wasted turn and a
+	// /undo".
+	//
+	// Tying the affordance to the property that licenses it also puts the
+	// incentive the right way round: the way to be asked less is to turn the
+	// sandbox on, not to reach for --yes-shell.
+	group := ""
+	if c.Sandbox.Active {
+		group = "shell"
+	}
 	if !c.confirmTurn(ConfirmRequest{
 		Prompt:           "Run shell command?",
 		Command:          command,
 		Purpose:          cmd.purpose,
+		Group:            group,
 		RequiresYesShell: true,
 	}) {
 		return "The user chose not to run the command."

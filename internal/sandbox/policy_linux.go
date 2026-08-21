@@ -87,11 +87,14 @@ func writeRule(path string) (landlock.FSRule, bool) {
 // enforcing nothing, because a sandbox believed to be present and absent is
 // worse than one known to be absent.
 func (p Policy) Apply() error {
+	// "Landlock" stays capitalized as the proper noun it is, but not as the
+	// first word: staticcheck's ST1005 cannot tell a name from a sentence, and
+	// rephrasing reads better than silencing it.
 	if av := Probe(); !av.Supported() {
-		return fmt.Errorf("Landlock unavailable: %w", av.Err)
+		return fmt.Errorf("no Landlock on this kernel: %w", av.Err)
 	}
 	if err := landlock.V9.BestEffort().RestrictPaths(p.rules()...); err != nil {
-		return fmt.Errorf("Landlock: %w", err)
+		return fmt.Errorf("could not apply the Landlock ruleset: %w", err)
 	}
 	return nil
 }
