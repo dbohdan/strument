@@ -97,6 +97,27 @@ so `checkTokens` never fires and never blocks on a confirmation.
 pilot. Here that meant counting `Summarizing chat history` lines. If the
 mechanism count is zero, no amount of n will help you.
 
+The same rule caught a whole model producing nothing to measure. Verifying that
+an interrupted turn resumes needs a turn to interrupt *mid-answer*, and two
+GLM-5.3 runs came back looking like clean passes when nothing had been cut off
+at all: it defaults to `"max"` reasoning effort, so the interrupt kept landing
+during its thinking. One curl settled it — same prompt, 900-token cap:
+
+| effort | reasoning tokens | answer characters |
+| --- | --- | --- |
+| default (`"max"`) | 897 | **0** |
+| `"low"` | 0 | 4700 |
+
+At its default this model cannot be observed streaming an answer at all inside
+a short window, because within 900 tokens it has not started one. `reasoning`
+on the `model()` call fixes it, and the two runs after that resumed *mid-word*
+— cut at "their famous mathematica", picked up at "achievements".
+
+**Do:** when a model is the instrument, check that it emits the thing you plan
+to measure before you count anything. A model that spends the budget thinking
+is not a null result, it is a broken instrument, and the two are indistinguishable
+in a summary table.
+
 ## 6. Choose a target the system cannot leak
 
 Two probes were scored. Recall of the *value* (`45`) came out 11/12 vs 9/12 —
