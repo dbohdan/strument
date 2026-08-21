@@ -1,0 +1,109 @@
+strument at f7bdbf6 test: three more arms, for what only a real kernel can answer
+
+== arm 0: the enforcement matrix, on a kernel with Landlock ==
+  [PASS] sandbox package tests — 30 passed, 0 failed, 1 skipped
+  [PASS] Landlock present
+  [PASS] enforcement tests actually ran
+  [INFO] ABI covers resolve_unix — ABI 8 < 9: the Unix-socket answer below shows the restriction does not exist yet, not that we are exempt from it
+      [probe answers identical to the first run; see vps-2026-08-21.txt]
+
+== arm 3: the process itself, probed through /run ==
+      Sandbox: on, writes confined to 17 paths (/sandbox to list them)
+       > /sandbox
+       Sandbox: on (Landlock).
+      Reads and running programs are not restricted. Writes are permitted only under:
+        /home/claude/strument-trial/proj-run/
+        /home/claude/strument-trial/xdg/run/state/strument/projects/proj-run-6d1b31a3/
+        /tmp/
+        /home/claude/go/pkg/
+        /home/claude/strument-trial/cold-cache-1787311585
+        /home/claude/strument-trial/cold-cache-1787311585/go-build
+        /home/claude/.rustup
+        /home/claude/.npm
+        /home/claude/.m2
+        /home/claude/.gradle
+        /home/claude/.nuget/packages
+        /home/claude/.composer
+        /home/claude/.bundle
+        /home/claude/.mix
+        /home/claude/.hex
+        /home/claude/.stack
+        /home/claude/strument-trial/extra-allowed/
+      Anything else on the filesystem can be read but not written.
+      Add a path with sandbox_write in your config; it cannot be changed mid-session.
+
+      ^^^ THE DEFECT. The two cold-cache entries do not exist, so no rule was
+      anchored to them, and the build below is refused permission to create the
+      very directory this list calls writable. Fixed by Policy.Granted.
+
+       > /run touch /home/claude/strument-trial-run-canary.txt
+       touch: cannot touch '/home/claude/strument-trial-run-canary.txt': Permission denied
+      Exit status: 1
+       > /run touch /etc/strument-trial-canary.txt
+       touch: cannot touch '/etc/strument-trial-canary.txt': Permission denied
+      Exit status: 1
+       > /run touch inside-the-project.txt
+       > /run touch /home/claude/strument-trial/extra-allowed/widened.txt
+       > /run sh -c 'mkdir -p a b && touch a/f && mv a/f b/f && echo MV-OK'
+       MV-OK
+       > /run go build ./...
+       failed to initialize build cache at /home/claude/strument-trial/cold-cache-1787311585/go-build: mkdir /home/claude/strument-trial/cold-cache-1787311585: permission denied
+      Exit status: 1
+  [PASS] /sandbox reports the state
+  [PASS] /run is confined too — /home/claude/strument-trial-run-canary.txt
+  [PASS] a write to /etc refused
+  [PASS] the project stays writable
+  [PASS] sandbox_write widens the set — /home/claude/strument-trial/extra-allowed
+  [PASS] mv across directories works
+  [PASS] cold cache refused — GOCACHE=not created
+
+== arm 1: ordinary work with the sandbox on ==
+      Running "go test ./..."
+      ok  	trial	0.005s
+      Commit 8fda994 fix(slug): strip punctuation and collapse hyphens in slug generation
+      Tokens: 15.1k sent (13.0k cache hit), 1.9k received. Cost: $0.00086. 4 steps, 2 files changed.
+  [PASS] sandbox applied / no refusal / edits applied / bash actually ran (1)
+  [PASS] tests ran and passed / no denial hint fired
+  [PASS] committed (so .git is writable) — 2 commits
+  [PASS] GOCACHE exists — /home/claude/.cache/go-build
+  [INFO] wall clock — 31s
+
+== arm 2: a write the sandbox denies ==
+      Running "cp slug.go /home/claude/strument-trial-canary.txt"
+      cp: cannot create regular file '/home/claude/strument-trial-canary.txt': Permission denied
+      [denial hint appended; model stopped after one attempt and explained]
+  [PASS] all eight checks
+  [INFO] wall clock — 11s
+
+== arm 4: a git worktree, where .git is a file ==
+  [PASS] .git is a file, not a directory
+      Commit f31a914 feat(slug): add Titleize function
+      Tokens: 59.3k sent (50.9k cache hit), 3.2k received. Cost: $0.0022. 13 steps, 1 file changed.
+  [PASS] no denial hint fired
+  [PASS] edits applied
+  [PASS] committed from the worktree — 2 commits
+  [INFO] wall clock — 77s
+
+      Note: 13 steps against arm 1's 4, on a smaller task. The model wrote a
+      deprecated strings.Title, replaced it with a no-op ReplaceAll(" ", " "),
+      re-read the file, and recovered. Nothing to do with the sandbox — no
+      denial fired — but the run is here because a trial that only records its
+      own hypothesis is not a record.
+
+== arm 5: "a" = all this turn ==
+       > Run these three commands one at a time with the bash tool, each as a separate call: echo ALPHA, then echo BETA, then echo GAMMA.
+      ‹shell› Echo the string ALPHA
+      $ echo ALPHA
+       Run shell command? (Y/n/a=all turn) a
+      Running "echo ALPHA"
+      ALPHA
+      Running "echo BETA"
+      BETA
+      Running "echo GAMMA"
+      GAMMA
+  [PASS] option offered — offered
+  [PASS] "a" was actually pressed
+  [PASS] the model ran more than one command — 3 of 3 echoed
+  [PASS] one prompt covered them all — 1 prompt(s) for 3 command(s)
+
+all green (37 checks)
