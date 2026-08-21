@@ -113,6 +113,90 @@ func gitDir(projectRoot string) string {
 	return path
 }
 
+// executableDirs is every directory whose contents get run by name: the
+// entries of PATH, plus the conventional names in case PATH grows later.
+//
+// This is the answer to a question the filesystem cannot express. "Bytes that
+// will be rebuilt" and "code that will later execute as me" are the security
+// distinction that matters, and a path carries no trace of which it is —
+// ~/go/pkg and ~/go/bin are one directory apart and mean entirely different
+// things. But the distinction *is* recorded, just not in the filesystem: PATH
+// is precisely the list of directories whose contents get executed by name.
+// So the policy reads it rather than guessing from layout.
+//
+// bin and sbin are excluded too, even when not currently on PATH. They cost
+// nothing to withhold, and PATH is read once at startup while a user's shell
+// may add to it tomorrow.
+func executableDirs() map[string]bool {
+	out := map[string]bool{}
+	mark := func(dir string) {
+		if dir == "" || !filepath.IsAbs(dir) {
+			// A relative PATH entry, or an empty one meaning the working
+			// directory. Neither names a stable place to protect.
+			return
+		}
+		out[filepath.Clean(dir)] = true
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			out[resolved] = true
+		}
+	}
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		mark(dir)
+	}
+	return out
+}
+
+// conventionalExecutableNames are withheld regardless of PATH.
+var conventionalExecutableNames = map[string]bool{"bin": true, "sbin": true}
+
+// writableSubdirs grants a toolchain root's contents without granting the root.
+//
+// The tools that made this necessary put a cache and an executable directory
+// side by side: ~/.cargo holds bin/ next to registry/, ~/.bun holds bin/ next
+// to install/, and pnpm keeps its store *inside* the directory that is on
+// PATH. Granting the root would hand over the executables; granting nothing
+// breaks the build. Granting the subdirectories, minus the ones things get run
+// from, is the line that separates them.
+//
+// Not granting the root has a second effect worth naming: pnpm's global shims
+// are files directly in $PNPM_HOME, so leaving the root ungranted keeps them
+// unwritable without needing to know their names.
+//
+// Symlinked subdirectories are skipped. Landlock anchors a rule to the inode a
+// path resolves to, so granting a symlink that points at /usr would grant
+// /usr — a link inside a toolchain directory is not worth that risk.
+//
+// A subdirectory that does not exist yet cannot be granted, so a toolchain
+// that has never run once has nothing to grant and its first run fails. That
+// is the documented cost; `sandbox_write` is the answer.
+func writableSubdirs(root string) []string {
+	if root == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	onPath := executableDirs()
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() || conventionalExecutableNames[e.Name()] {
+			// IsDir is false for a symlink here: ReadDir reports the link
+			// itself, which is what we want.
+			continue
+		}
+		full := filepath.Join(root, e.Name())
+		if onPath[full] {
+			continue
+		}
+		if resolved, err := filepath.EvalSymlinks(full); err == nil && onPath[resolved] {
+			continue
+		}
+		out = append(out, full)
+	}
+	return out
+}
+
 // cacheDirs is where the toolchains put things they will rebuild.
 //
 // The ecosystems are exactly the ones project_checks() detects, in the same
@@ -127,10 +211,12 @@ func gitDir(projectRoot string) string {
 // variable is worth telling a command about, the directory it names is worth
 // letting the command write.
 //
-// Several toolchains need nothing here because their default already sits
-// under ~/.cache: Go's build cache, pip, uv, Deno, Yarn 1, composer's cache
-// and Crystal's shards all land there. They appear below only as overrides,
+// Several toolchains need nothing named here because their default already
+// sits under ~/.cache: Go's build cache, pip, uv, Deno, Yarn 1, composer's
+// cache and Crystal's shards all land there. They appear only as overrides,
 // for the case where someone has moved them.
+//
+// The roots in scannedRoots are handled differently — see writableSubdirs.
 func cacheDirs() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -148,49 +234,48 @@ func cacheDirs() []string {
 		}
 		return fallback
 	}
-	// in resolves a toolchain's root, which may itself have moved, and returns
-	// a path inside it.
-	in := func(env, fallback string, rest ...string) string {
-		root := pick(env, fallback)
-		if root == "" {
-			return ""
-		}
-		return filepath.Join(append([]string{root}, rest...)...)
+
+	// Roots that hold a cache and an executable directory side by side. Their
+	// contents are granted one subdirectory at a time and the root itself
+	// never is, so nothing that later runs as the user becomes writable.
+	var out []string
+	for _, root := range []string{
+		pick("GOPATH", under("go")),                         // pkg/ beside bin/
+		pick("CARGO_HOME", under(".cargo")),                 // registry/, git/ beside bin/
+		pick("PNPM_HOME", under(".local", "share", "pnpm")), // store/ inside the PATH dir itself
+		pick("BUN_INSTALL", under(".bun")),                  // install/cache beside bin/
+		pick("DENO_INSTALL_ROOT", under(".deno")),           // bin/ only
+		under(".yarn"),                            // berry/cache beside bin/
+		pick("GEM_HOME", under(".gem")),           // gems/ beside bin/
+		pick("CABAL_DIR", under(".cabal")),        // packages/ beside bin/
+		pick("DOTNET_CLI_HOME", under(".dotnet")), // tools/ is on PATH when used
+	} {
+		out = append(out, writableSubdirs(root)...)
 	}
 
-	return []string{
+	return append(out, []string{
 		// Everything XDG. The single biggest entry: most toolchains default
 		// their cache to somewhere under here.
 		pick("XDG_CACHE_HOME", under(".cache")),
 
-		// Go. GOPATH holds bin/ beside pkg/, and bin/ stays read-only.
+		// Go.
 		pick("GOCACHE", ""),
 		pick("GOMODCACHE", ""),
-		in("GOPATH", under("go"), "pkg"),
 
-		// Rust.
-		in("CARGO_HOME", under(".cargo"), "registry"),
-		in("CARGO_HOME", under(".cargo"), "git"),
+		// Rust. rustup holds toolchains/, whose bin directories are reached
+		// through the rustup shim rather than by being on PATH themselves.
 		pick("RUSTUP_HOME", under(".rustup")),
 
 		// Python.
 		pick("PIP_CACHE_DIR", ""),
 		pick("UV_CACHE_DIR", ""),
 
-		// Node and the other JavaScript runtimes. Their install roots are
-		// granted whole, bin/ included, so that `pnpm add -g`, `bun add -g`
-		// and `deno install` work: for pnpm the store lives *inside* the
-		// directory that is on PATH, so the two are hard to separate anyway.
-		// This is a real widening — see doc/security.md.
+		// Node and the other JavaScript runtimes.
 		pick("npm_config_cache", under(".npm")),
-		pick("PNPM_HOME", under(".local", "share", "pnpm")),
 		pick("YARN_CACHE_FOLDER", ""),
-		under(".yarn"),
-		pick("BUN_INSTALL", under(".bun")),
 
 		// Deno.
 		pick("DENO_DIR", ""),
-		pick("DENO_INSTALL_ROOT", under(".deno")),
 
 		// Java: Maven, then Gradle.
 		under(".m2"),
@@ -198,14 +283,12 @@ func cacheDirs() []string {
 
 		// .NET.
 		pick("NUGET_PACKAGES", under(".nuget", "packages")),
-		pick("DOTNET_CLI_HOME", under(".dotnet")),
 
 		// PHP.
 		pick("COMPOSER_HOME", under(".composer")),
 		pick("COMPOSER_CACHE_DIR", ""),
 
 		// Ruby.
-		pick("GEM_HOME", under(".gem")),
 		pick("BUNDLE_USER_HOME", under(".bundle")),
 
 		// Elixir.
@@ -218,8 +301,7 @@ func cacheDirs() []string {
 
 		// Haskell: stack, then cabal.
 		pick("STACK_ROOT", under(".stack")),
-		pick("CABAL_DIR", under(".cabal")),
-	}
+	}...)
 }
 
 func dedupe(paths []string) []string {
