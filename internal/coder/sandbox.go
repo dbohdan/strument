@@ -13,8 +13,16 @@ type SandboxState struct {
 	// Active is true when one is actually enforcing.
 	Active bool
 	// Writable lists the roots writes may land under, for the message shown
-	// when something is denied.
+	// when something is denied. It is the *enforced* set, not the derived
+	// one: a path that did not exist when the ruleset went in grants nothing,
+	// and reporting it would promise a write that is about to be refused.
 	Writable []string
+	// Skipped are paths the user asked for in sandbox_write that were not
+	// there to grant. Only the user's own entries, never the derived defaults
+	// — most machines have no ~/.m2, and saying so every session is noise,
+	// whereas a sandbox_write path silently doing nothing is the surprise
+	// worth naming.
+	Skipped []string
 	// Unavailable is why there is no sandbox, when one was required.
 	Unavailable string
 }

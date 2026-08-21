@@ -47,6 +47,12 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 	// Said plainly, because it is the half people get wrong about this feature:
 	// it buys integrity, not confidentiality.
 	r.printf("Anything else on the filesystem can be read but not written.")
+	// A sandbox_write entry that was not there to grant. Said plainly because
+	// the alternative is finding out from a denied command that the setting
+	// looked applied and was not.
+	for _, p := range sb.Skipped {
+		r.out.Errorf("Not granted: %s does not exist, so nothing was granted for it.", p)
+	}
 	r.printf("Add a path with sandbox_write in your config; it cannot be changed mid-session.")
 	return ""
 }

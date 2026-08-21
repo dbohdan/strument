@@ -99,6 +99,61 @@ three times in three ways. Naming the mechanism turned that into one attempt
 and a sentence to the user.
 
 
+## Arms 3 to 5, and the defect they found
+
+A second run added three arms. All green — 37 checks — and one of them
+produced the only real bug the trial has turned up.
+
+**Arm 3 drives `/run`**, with no model and no key. It is the only place the
+consequence this design accepts has actually been watched: Landlock is
+monotonic, so `touch ~/canary` typed by the *user* is refused exactly like one
+the model caused. `/etc` refused, the project writable, a `sandbox_write` path
+writable, `mv` across directories working.
+
+**Arm 4 runs a session in a git worktree**, where `.git` is a file and the real
+git directory lives outside the project root. It committed. That is the one
+branch of `DefaultWritable` a normal checkout never reaches, and it fails at
+the end of a turn, after the edits, when the commit lands.
+
+**Arm 5 presses `a`.** One prompt for three commands. That single line is the
+feature's whole justification: the option is defensible because a bad approval
+is now bounded, and it is offered only when a sandbox is *active* rather than
+merely configured.
+
+### `/sandbox` was promising writes the kernel would refuse
+
+Arm 3 points `XDG_CACHE_HOME` at a directory that does not exist, to reproduce
+the documented first-run cost without touching a real toolchain. The build
+failed as intended. But `/sandbox`, four lines above it, had listed that
+directory as writable:
+
+    /home/claude/strument-trial/cold-cache-1787311585
+    /home/claude/strument-trial/cold-cache-1787311585/go-build
+    …
+    > /run go build ./...
+    failed to initialize build cache: mkdir …/cold-cache-1787311585: permission denied
+
+Landlock resolves a path to an inode when the ruleset is installed, so a path
+that is not there grants nothing — `writeRule` skips it and the enforced policy
+is quietly narrower than the list it was built from. Skipping is correct; a
+project need not have a state directory yet and most machines have no `~/.m2`.
+Reporting the unskipped list is not. The command that exists to answer "what
+can this session write?" was answering with the question rather than the
+result.
+
+Fixed by `Policy.Granted()`, the enforced subset, which is now what
+`SandboxState.Writable` carries — so the hint on a denied command stopped
+overstating too. A `sandbox_write` entry that was not there to grant is
+reported by name, because a setting that looks applied and is not is the case
+where the user finds out from a denied command instead of from the config. A
+test pins `Granted()` against the rule builder, since they are two separate
+walks over the same list and drifted apart in exactly the direction that
+matters.
+
+Two things in this section were only findable by running it. Neither is
+reachable by reading the code, and the second one had been printing a wrong
+answer confidently for as long as `/sandbox` has existed.
+
 ## The scorer defect
 
 Arm 0 reported one failure: `TestEnforceHelper` skipped. It is supposed to.
@@ -106,6 +161,15 @@ Each enforcement case re-execs the test binary into that helper in a fresh
 process; in the parent it skips itself with "not the helper". The scorer, which
 was written to catch enforcement tests skipping for lack of Landlock, could not
 tell the mechanism working from a case that never ran.
+
+Two more turned up building arms 3 to 5, both caught by the control rather
+than by the VPS. The cold-cache check read `permission denied` out of the
+transcript, where it appears for reasons unrelated to the build, and now reads
+the cache directory off the filesystem. And `/run` asks whether to hand its
+output to the model — unanswered, that prompt eats the next line typed, so
+every command after an output-producing `/run` was being submitted as an answer
+to a question. Only commands that print anything ask, so the fault appeared and
+vanished with the command's output.
 
 **This is the fourth scorer in this project to misreport a clean result**, after
 a denial regex that counted denials as knowledge, a `git show` split on a

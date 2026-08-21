@@ -228,7 +228,8 @@ func (c *chatCmd) Run() error {
 	cdr.Sandbox = coder.SandboxState{Required: cfg.Sandbox != ""}
 	if cfg.Sandbox == config.SandboxLandlock {
 		writable := sandbox.DefaultWritable(projectRoot, stateDir, cfg.SandboxWrite)
-		if err := (sandbox.Policy{Writable: writable}).Apply(); err != nil {
+		policy := sandbox.Policy{Writable: writable}
+		if err := policy.Apply(); err != nil {
 			cdr.Sandbox.Unavailable = err.Error()
 			// In every mode, not just the banner's. This changes what the
 			// session can do — the model cannot run a command at all — and a
@@ -238,7 +239,13 @@ func (c *chatCmd) Run() error {
 			fmt.Fprintln(os.Stderr, "strument: the model cannot run commands. /run still works, or set `sandbox = \"\"` in your config.")
 		} else {
 			cdr.Sandbox.Active = true
-			cdr.Sandbox.Writable = writable
+			// What was enforced, not what was asked for. Granted drops the
+			// paths that did not exist to anchor a rule to, so neither
+			// /sandbox nor the hint on a denied command can promise a write
+			// the kernel is about to refuse.
+			granted := policy.Granted()
+			cdr.Sandbox.Writable = granted
+			cdr.Sandbox.Skipped = missingPaths(cfg.SandboxWrite, granted)
 		}
 	}
 
@@ -946,6 +953,25 @@ type cli struct {
 	Tool        toolCmd          `cmd:""                         help:"Run one observation tool and print what a model would see."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
+}
+
+// missingPaths reports which of want the sandbox did not grant.
+//
+// Used only for the user's own sandbox_write entries: a path listed there and
+// silently ignored is a config that looks applied and is not, and the user
+// finds out from a denied command rather than from the setting.
+func missingPaths(want, granted []string) []string {
+	have := make(map[string]bool, len(granted))
+	for _, p := range granted {
+		have[p] = true
+	}
+	var missing []string
+	for _, p := range want {
+		if !have[p] {
+			missing = append(missing, p)
+		}
+	}
+	return missing
 }
 
 func main() {

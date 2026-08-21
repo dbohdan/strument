@@ -1,5 +1,7 @@
 package sandbox
 
+import "os"
+
 // Policy is what the sandbox permits. Reads and execution are unrestricted;
 // this is only ever a list of places writes may land.
 type Policy struct {
@@ -8,6 +10,29 @@ type Policy struct {
 	// rather than failing the policy: a project may have no state directory
 	// yet, and a toolchain cache appears the first time the toolchain runs.
 	Writable []string
+}
+
+// Granted is the subset of Writable a rule can actually be anchored to.
+//
+// Landlock resolves a path to an inode when the ruleset is installed, so a path
+// that does not exist grants nothing: writeRule skips it, and the enforced
+// policy is quietly narrower than the list it was built from. Skipping is the
+// right behavior — a project need not have a state directory yet, and most
+// machines have no ~/.m2 — but it is the wrong thing to *report*. A live run
+// caught /sandbox listing a cache directory immediately above a build that was
+// then refused permission to create it.
+//
+// Membership is decided when the policy is applied and does not change
+// afterwards. A directory created later in the session is still not writable,
+// because there was nothing to anchor a rule to when the ruleset went in.
+func (p Policy) Granted() []string {
+	out := make([]string, 0, len(p.Writable))
+	for _, path := range p.Writable {
+		if _, err := os.Stat(path); err == nil {
+			out = append(out, path)
+		}
+	}
+	return out
 }
 
 // writableDevices are the device files a build needs to *write*, as opposed to

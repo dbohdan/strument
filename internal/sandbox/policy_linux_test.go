@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -90,5 +91,48 @@ func TestRulesSkipDevicesThatAreNotThere(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestGrantedMatchesTheRules pins the agreement between what /sandbox reports
+// and what the kernel is actually told.
+//
+// These are two separate walks over the same list — Granted stats each path,
+// rules() builds one rule per path that writeRule accepts — and they are the
+// difference between a report and a policy. A live run found them disagreeing
+// in the direction that matters: /sandbox listed a cache directory that had
+// never been created, directly above a build the sandbox then refused
+// permission to create it.
+func TestGrantedMatchesTheRules(t *testing.T) {
+	dir := t.TempDir()
+	present := filepath.Join(dir, "there")
+	if err := os.MkdirAll(present, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "a-file")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	absent := filepath.Join(dir, "not-there")
+
+	p := Policy{Writable: []string{present, file, absent}}
+
+	granted := p.Granted()
+	want := []string{present, file}
+	if !slices.Equal(granted, want) {
+		t.Errorf("Granted() = %v, want %v", granted, want)
+	}
+
+	// Every granted path produces a rule, and nothing else does. Counted
+	// against the rule set the kernel receives, minus the read rule over "/"
+	// and whichever devices this machine happens to have.
+	var built int
+	for _, path := range p.Writable {
+		if _, ok := writeRule(path); ok {
+			built++
+		}
+	}
+	if built != len(granted) {
+		t.Errorf("writeRule accepted %d paths, Granted() reported %d", built, len(granted))
 	}
 }

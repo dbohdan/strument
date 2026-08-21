@@ -211,9 +211,13 @@ def chat(binary, proj, env, message, files, timeout=600):
     cmd = [binary, "chat", "--no-color", "--yes", "--yes-shell",
            "-m", message] + files
     t0 = time.time()
+    # One stream, not two concatenated. Appending stderr after stdout put the
+    # session's warnings and its last failed edit *after* the commit line in
+    # the captured transcript, which reads as the coder doing things in an
+    # impossible order.
     p = subprocess.run(cmd, cwd=proj, env=env, timeout=timeout,
-                       capture_output=True, text=True)
-    return p.stdout + p.stderr, time.time() - t0
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return p.stdout, time.time() - t0
 
 
 def arm1(work, binary, sandbox_value):
