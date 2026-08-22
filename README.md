@@ -3,19 +3,19 @@
 <img alt="Two crossed hand tools: a network cable crimping tool and a screwdriver/voltage tester with a transparent handle. The screwdriver handle glows on its own." src="doc/logo/1024x1024.png" width=128>
 
 Strument is an AI pair-programming tool for the terminal.
-It works with a human in the loop and is designed for the developer who wants to steer technical and UX decisions.
-Strument operates in turns started by instructions, each of which ends in a commit or snapshot (in-memory undo).
+It is designed for a human in the loop, the kind of developer who wants to see and steer technical and UX decisions.
+Work with Strument is divided into turns, each beginning with the human's instructions for the model and ending in a commit (or a snapshot for undo, outside Git).
 
-Strument began as an accurate ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
-See [`doc/README.md`](doc/README.md) for the developer overview.
+Strument started as an accurate ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
+See [`doc/`](doc/README.md) for the developer overview.
 
 
 ## Features
 
-- One binary, no Python dependency like aider.
+- A single binary; no Python runtime like aider.
   Pure Go with no cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
 - [Starlark](https://starlark-lang.org/) configuration.
-  A single `config.star` replaces YAML, `.env` files, and a JSON model database.
+  One `config.star` file replaces YAML, `.env` files, and a JSON model database.
   Project-local `.strument.star` files are supported.
   They stay inert until authorized with `strument trust` in the directory.
   (This is the [direnv](https://direnv.net/) model of trust based on recorded content hashes.)
@@ -27,15 +27,15 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   like a live configuration directory or a checkout under another SCM.
   In a Git repository, a turn is one commit.
   The command `/squash [n]` merges commits.
-- Configured checks.
+- Checks.
   The `check` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
-  The model can run them by name.
+  The model can run them by name without the harness asking permission.
   `project_checks()` detects standard checks for your project type.
-  `check_auto` runs a list of `check` commands at the end of any turn that changed a file.
+  `check_auto` lists which of the `check` commands Strument runs at the end of any turn that changed a file.
 - URL scraping.
   URLs you mention, or `/web <url>`, are fetched and converted to Markdown.
   This can use either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
-- You can [interrupt](#interrupting-and-steering) and steer the model.
+- You can [interrupt and steer](#interrupting-and-steering) a turn.
 
 The terminal interface has stayed deliberately close to aider's with a similar green/blue palette (with `--dark-mode` and `--light-mode`).
 Strument diverges where its programming loop is different.
@@ -88,13 +88,13 @@ Tokens: 12.4k sent, 1.8k received. Cost: $0.03 turn, $0.03 session. 4 steps, 2 f
 
 ## Getting started
 
-Go 1.26 or later is required, but no C toolchain:
+Go 1.26 or later is required, but not a C toolchain:
 
 ```sh
 go install dbohdan.com/strument/cmd/strument@latest
 ```
 
-Strument needs a configuration file before it will start.
+Strument needs a configuration file before it will start in chat mode.
 There is no model database, and nothing is assumed about which models you have.
 The following is the minimal config that works.
 Put it in `~/.config/strument/config.star`:
@@ -114,18 +114,18 @@ cd ~/src/myproject
 strument
 ```
 
-`context` is in the minimal config because two things quietly stop working without it.
-Strument will not warn you before a request overruns the window, and it will not summarize the settled chat history to keep it in budget, so a long session grows until the provider refuses the request.
-Neither is announced: there is no limit to enforce when you have not said what it is.
+`context` is in the minimal config because Strument needs it to warn you before a request overruns the context window and to summarize settled chat history.
+A long session without `context` grows until the provider refuses the request.
 
-`max_output` is worth adding next.
-Costs are optional, because OpenRouter reports the cost of each request in-band; a plain OpenAI-compatible endpoint may not, and then `input_cost` and `output_cost` are what the turn line is estimated from.
-The command `strument model-config <slug>` fetches all of these from OpenRouter's catalog and prints a pastable `model` block.
-It works before you have a config, which is when you need it.
+The cost fields are optional: OpenRouter reports the cost of each request in-band, so they can be omitted.
+A plain OpenAI-compatible endpoint may not report costs.
+In that case, `input_cost` and `output_cost` are what the turn's cost estimate comes from.
+The command `strument model-config <slug>` fetches all of this information from OpenRouter's catalog and prints a pastable `model` block.
+It works before you have a config.
 See [Configuration](#configuration).
 
 Strument counts your money by the turn.
-A turn can run up to twenty-five steps.
+A turn can run up to twenty-five steps by default (or `max_steps`).
 Start on a small request against a cheap model and watch the cost line before you turn it loose on something large.
 
 
@@ -136,17 +136,19 @@ The model will work until it finishes or runs out of steps.
 At twenty-five steps Strument prints the number of edits and the cost so far and asks whether to continue.
 
 Each tool call reports one line in the log.
-Shell commands ask for permission first, which you can give for the command or all commands in a turn.
+Shell commands ask for permission first, which you can grant for that command or for all commands in a turn.
 Reading, searching, and editing do not ask for permission.
-When the model is streaming or running a tool, press `Ctrl-C` once to stop the current send. Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction. Press `Ctrl-C` twice within two seconds to exit. In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
+
+When the model is streaming or running a tool, press `Ctrl-C` once to stop the current send.
+Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction.
+Press `Ctrl-C` twice within two seconds to exit Strument.
+In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
 
 ### Interrupting and steering
 
-For example, you can stop a long response and redirect the model without starting over:
+You can stop a long response and redirect the model without starting over:
 
 ```none
-> Refactor the authentication package and update all tests.
-
 ‹thinking› I’ll inspect the authentication package first...
 Reading internal/auth/auth.go
 ^C
@@ -155,28 +157,28 @@ Reading internal/auth/auth.go
 ‹question› You stopped the model. What now?
 1. Continue — Carry on from where it was cut off
 2. Stop — End the turn here
-Answer (1-2, or your own text): use the existing token helper instead
+Answer (1-2, or your own text): Use the existing token helper instead
 
 ‹thinking› I’ll continue from the interrupted response using the existing token helper.
 ...
 ```
 
-`Continue` resumes from the partial response and preserves the model’s context. Typing your own answer sends it as a correction; `Stop` ends the turn. Edits made before the interruption remain undoable with `/undo`.
-
-
+`Continue` lets the model resume from the partial response with its context preserved.
+Typing your own answer sends it as a correction, and `Stop` ends the turn.
+Edits made before the interruption remain undoable with `/undo`.
 
 | | |
 | --- | --- |
-| `/add <file>`, `/drop`, `/ls` | Pin the files you already know need changing. Strument names them for the model, which reads them itself; it finds everything else on its own. |
-| `/ask <question>` | Ask about the project without giving the model editing tools. `/code` switches back. |
-| `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the transcript, or discard them. Notes are generated on demand (`--continue` at startup, or `/notes generate` mid-session) and live in memory for the session — they are never persisted to disk. See [`doc/sessions.md`](doc/sessions.md). |
-| `/read-only <file>` | Pin a file the model can read but never edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
+| `/add <file>`, `/drop`, `/ls` | Pin the files you already know need to be read or changed. Strument names them for the model, which reads them itself; it finds everything else on its own. |
+| `/ask <question>` | Ask about the project without giving the model editing tools. `/ask` on its own activates ask mode, and `/code` switches back. |
+| `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the transcript, or discard them. Notes are generated on demand (`--continue` at startup, or `/notes generate` mid-session) and live in memory for the session. They are never persisted to disk. See [`doc/sessions.md`](doc/sessions.md). |
+| `/read-only <file>` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |
-| `/squash [n]` | Fold the last n turns' commits into one. |
+| `/squash [n]` | Fold the last `n` turns' commits into one. |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [n]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
-| `/symbol <name> [reference]` | Find where a name is defined, or used, from the language parser rather than from text. |
-| `/submit <file>` | Send a file's contents as your message, as if you had typed them. Outside-project paths are allowed. Files over 100 KiB are refused rather than truncated. |
+| `/symbol <name> [reference]` | Find where a name is defined or used from the language parser rather than from text. |
+| `/submit <file>` | Send a file's contents as your message, as if you had typed them. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |
@@ -192,23 +194,25 @@ strument --yes -m 'Update the changelog for v0.3.0.'  # Answer confirmations; st
 ```
 
 `--yes-shell` is the flag that lets the model run shell commands unattended.
-Combined with `-m`, it gives a model up to 25 unattended steps of arbitrary shell in your project.
-That is the point of it, and it is meant for a terminal you are watching rather than for CI or cron, where a prompt-injected message becomes remote code execution.
+Combined with `-m`, it gives a model up to 25 (or `max_steps`) unattended steps of arbitrary shell in your project.
+This feature is meant for a terminal you are watching rather than for CI or cron, where a prompt-injected message can become remote code execution.
+You want a different harness from Strument for long-term autonomy.
 `--no-git` turns off the git integration inside a repository.
-Outside one it is already off, and `/undo` works either way.
+Outside one it is already off.
+`/undo` works either way.
 
-`--jsonl FILE` records the session as JSONL alongside the normal output, one JSON object per line: a `session` header, then a `message` per conversation turn — with roles, tool calls, their arguments verbatim, and their results — a `reasoning` record wherever the model thought, and a `turn` record with the outcome and the token and cost accounting.
+`--jsonl FILE` records the session as [JSON Lines](https://jsonlines.org/) alongside the normal output.
+The file is a stream of records with different `type` fields: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token count, and cost.
 
 ```sh
 strument --jsonl run.jsonl -m 'Which functions call settleEdits?'
 jq -r 'select(.type=="message" and .role=="assistant") | .text' run.jsonl
 ```
 
-It is a second sink rather than a mode, so the terminal output is unchanged.
-Write it **outside the project directory**: a log inside the tree is part of the
-workspace, so `grep` and `glob` will match it and the model can read its own
-transcript back. In one 300-session trial a search hit the log in 46 of them.
-It exists because scoring a session by parsing rendered terminal text is how most of this project's measurement bugs happened: tool results never appear there at all, and an escape sequence or a reasoning delimiter in the wrong place silently moves the boundary a script is looking for.
+JSONL is a second output sink, not a mode; the terminal output is unchanged.
+Write the file **outside the project directory**: a log inside the tree is part of the workspace, so `grep` and `glob` will match it and the model can read its own transcript back.
+(In a 300-session trial, a search hit the log in 46 of them.)
+The JSONL output exists because parsing rendered terminal text was the main source of this project's measurement bugs in live trials.
 
 ### Shell completions
 
@@ -226,7 +230,7 @@ strument shell fish | source
 source <(strument shell zsh)
 ```
 
-To load completions automatically, save the output in the location used by your shell's completion setup and source it from there. For example, Zsh can load a saved script with `source ~/.zsh/completions/_strument` after adding that directory to `fpath`.
+To load completions automatically, add the command to your shell configuration.
 
 
 ## Configuration
@@ -309,21 +313,21 @@ default = "mimo"
 ```
 
 `cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to stable prompt sections.
-Anthropic models reached through OpenRouter honor them explicitly.
-Other providers may ignore them or provide their own prompt-caching behavior.
-When a turn used the cache, the usage line breaks the figure down in parentheses — `12.4k sent (4.2k cache write, 3.2k cache hit)`.
+Anthropic models reached through OpenRouter explicitly honor them.
+Other providers may ignore them or implement their own prompt-caching behavior.
+When a turn used the cache, the usage line breaks down the figure in parentheses: `12.4k sent (4.2k cache write, 3.2k cache hit)`.
 Those are parts of what was sent, not extra tokens beside it.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
-Instead, `strument model-config anthropic/claude-haiku-4.5` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.
+Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.
 It leaves the judgment calls (`reasoning`, `reasoning_tag`, `side_model`) as commented-out placeholders.
 The catalog is fetched on demand with caching.
 
 Some settings live at the top level rather than on a model:
 
 - `check` names the commands that check your project.
-- `check_auto` says which of them Strument should run itself at the end of an editing turn.
-- `reasoning_display` says how much of the model's thinking to show:
+- `check_auto` lists which checks should run automatically at the end of an editing turn.
+- `reasoning_display` says how much of the model's thinking to show.
 
 ```python
 check = {
@@ -338,36 +342,42 @@ reasoning_display = 10  # "full" (the default), a line count, or "off".
 Checks run in the order they are listed and stop at the first failure, so put the fast ones first.
 
 Naming a check also quiets the shell prompt for it.
-A `bash` command that is one of your checks *verbatim* runs without asking, because you already approved it by writing it here.
-Anything that is not an exact match — an added flag, a `&&`, a redirection — asks as usual.
+A `bash` command that is one of your checks _verbatim_ runs without asking, because you already approved it by writing it in the config.
+Anything that is not an exact match, like an added flag, asks as usual.
 
 `check = project_checks()` fills the dictionary in from your project's marker files, for Go, Rust, Python, Node, Deno, `make`/`task`/`just`, Java, .NET, PHP, Ruby, Elixir, Crystal, and Haskell.
 It is opt-in and never runs a target your project doesn't define.
 Note that these are your project's own commands, not commands that are inherently safe: `npm test` runs whatever your `package.json` says.
+
 Hiding reasoning is not the same as disabling it.
 The reasoning tokens are still generated, logged, and billed.
-Set `reasoning="off"` on the model to disable it.
+Set `reasoning="off"` on a model that supports this to disable it.
 
 On a network that can't reach a provider directly, a `proxy` on the `provider()` call routes requests to that provider through [SOCKS5](https://en.wikipedia.org/wiki/SOCKS5).
 A top-level `proxy` is applied to all providers and every outbound HTTPS action Strument takes.
+
 A project-local `.strument.star` can extend or override any of this, once you have run `strument trust` in the directory.
 See [`doc/config.md`](doc/config.md) for details.
 
 
 ## Security and the sandbox
 
-On Linux, Strument confines itself with [Landlock](https://landlock.io/) before the session starts, and everything it spawns inherits that: the `bash` tool, your checks, and every child of theirs can write only to your project, a temporary directory, the session's state directory, and this machine's toolchain caches.
-`/sandbox` lists the effective paths; `sandbox_write` adds to them; `sandbox = ""` turns it off, which is the default on other platforms.
+On Linux, Strument confines itself with [Landlock](https://landlock.io/) before the session starts.
+Every process it spawns inherits this, as does the `bash` tool.
+It means your checks, and every child process of theirs, can write only to your project, a temporary directory, the session's state directory, and the machine's toolchain caches.
+`/sandbox` lists the effective paths.
+`sandbox_write` in the config adds to them; `sandbox = ""` turns the sandbox off, which is the default on non-Linux platforms.
 
-What that buys is **integrity, not confidentiality**.
-Writes are confined, reads are not confined at all, so a mistaken or injected command cannot touch your dotfiles or your other repositories — and it can read every one of them.
+The sandbox buys **integrity, not confidentiality**.
+While writes are confined, reads are not confined at all.
+A mistaken or injected command cannot edit your dotfiles or your other repositories, and it can read them all.
 The threat model is mistakes and prompt injection with you watching, not a misaligned agent working over hundreds of turns.
-[`doc/security.md`](doc/security.md) says exactly what is and is not confined, and where the policy is deliberately loose.
+[`doc/security.md`](doc/security.md) says what exactly is and is not confined, and where the policy is deliberately loose.
 
 
 ## Caveats and limitations
 
-Strument is very pre-1.0 and not stable.
+Strument is pre-1.0 and its behavior is not stable.
 Expect settings to change and read the commit log before upgrading.
 
 Known limits:
