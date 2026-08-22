@@ -9,13 +9,13 @@ import (
 )
 
 // A deterministic render of the fold the model reads. The coder is given a
-// synthetic compaction summary (a system message with the SummaryLabel prefix)
+// synthetic compaction summary (a marked harness turn carrying SummaryLabel)
 // sitting in settled history, and a live turn on top of it; the view must show
 // the summary in order, then the live tail.
 func TestViewContextRendersSummaryAndTail(t *testing.T) {
 	c := testCoder(t)
 	c.doneMessages = []llm.Message{
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"EARLIER WORK"),
+		llm.HarnessNote(prompts.SummaryLabel + "EARLIER WORK"),
 		llm.TextMessage("user", "did someone fix the poll loop?"),
 		llm.TextMessage("assistant", "yes, done"),
 	}
@@ -53,9 +53,9 @@ func TestViewContextRendersSummaryAndTail(t *testing.T) {
 func TestViewContextCapsSummaries(t *testing.T) {
 	c := testCoder(t)
 	c.doneMessages = []llm.Message{
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"ONE"),
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"TWO"),
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"THREE"),
+		llm.HarnessNote(prompts.SummaryLabel + "ONE"),
+		llm.HarnessNote(prompts.SummaryLabel + "TWO"),
+		llm.HarnessNote(prompts.SummaryLabel + "THREE"),
 		llm.TextMessage("user", "live tail"),
 	}
 
@@ -100,7 +100,7 @@ func TestViewContextNoSummary(t *testing.T) {
 func TestViewContextDoesNotMutate(t *testing.T) {
 	c := testCoder(t)
 	c.doneMessages = []llm.Message{
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"S"),
+		llm.HarnessNote(prompts.SummaryLabel + "S"),
 		llm.TextMessage("user", "u"),
 	}
 	c.curMessages = []llm.Message{llm.TextMessage("user", "c")}

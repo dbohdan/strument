@@ -139,8 +139,26 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 	return s.summarizeReal(combined, maxTokens, depth+1)
 }
 
-// summarizeAll collapses msgs into a single summary system message via the side
+// summarizeAll collapses msgs into a single marked harness turn via the side
 // model, riding the same side-call retry as the commit message (side.go).
+//
+// A marked user turn, not a system message, and the reason is the one
+// HarnessNote's own comment gives: the system role belongs to the prefix, and
+// this is mid-conversation. It escaped Anthropic's rejection of a system
+// message after an assistant turn only by always landing at index 0 of done,
+// with nothing assistant-role ahead of it — three unpinned facts holding up an
+// invariant a five-provider probe established.
+//
+// Two more reasons, both the project's own. The label says "it is not something
+// anyone said" while the role said "trust this most", and prose fighting
+// mechanism is a pattern this codebase has paid for before. And a compaction
+// summary is the least reliable artifact in the request — the trial in
+// doc/experiments/ caught one inventing a rationale nobody gave — so the
+// highest-trust channel is the wrong place for it.
+//
+// Every other harness surveyed agrees: Codex CLI and Kimi CLI both use a
+// prefixed user message, OpenCode an assistant message flagged as a summary.
+// None uses system.
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 	content := renderForSummary(msgs)
 
@@ -161,8 +179,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		return nil, err
 	}
 
-	summary := prompts.SummaryLabel + strings.TrimSpace(answer)
-	return []llm.Message{llm.TextMessage(llm.RoleSystem, summary)}, nil
+	return []llm.Message{llm.HarnessNote(prompts.SummaryLabel + strings.TrimSpace(answer))}, nil
 }
 
 // renderForSummary lays the messages out for the side model.
@@ -180,10 +197,11 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 // exactly what the prompt asks the model to drop, so they are cut to a budget:
 // enough to see what came back, not enough to pay for it twice.
 //
-// System messages have to be included, and this is the subtle one. Once the
-// summary itself became a system message, skipping the role would have silently
-// dropped every earlier summary on a second pass — compaction erasing its own
-// output, which is worse than the fold it replaced.
+// No role is skipped, and that is the subtle one: an earlier summary must
+// survive into a later fold, or compaction erases its own output — worse than
+// the fold it replaced. That held when the summary was a system message and
+// holds now that it is a marked user turn; not filtering by role at all is what
+// makes it robust to the carrier changing again.
 func renderForSummary(msgs []llm.Message) string {
 	var b strings.Builder
 	for _, m := range msgs {

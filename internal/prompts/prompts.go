@@ -406,12 +406,15 @@ const SessionNotes = "Write notes on a programming session, to be read at the st
 
 // SummaryLabel introduces the compacted history, in the harness's own voice.
 //
+// It rides in a marked harness turn rather than a system message; summary.go's
+// summarizeAll has the reasoning and the survey of what other harnesses do.
+//
 // It replaces SummaryPrefix — "I spoke to you previously about a number of
 // things." — which was a user turn the user never wrote, and which the coder
 // followed with a fabricated assistant "Ok." agreeing to it. The summary is the
-// harness's artifact, so it goes in the harness's voice, as a system message.
-// The precedent is the context-exhausted note in coder/send.go, which is a
-// system message for the same reason: the model did not say this.
+// harness's artifact, so it goes in the harness's voice — which is what the
+// marker is for. The role it does *not* take is assistant: the model did not
+// say this.
 const SummaryLabel = "Summary of the earlier part of this conversation, written by Strument to " +
 	"keep it inside the context window. It replaces those messages; it is not something " +
 	"anyone said.\n\n"

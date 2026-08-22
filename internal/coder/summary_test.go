@@ -108,8 +108,7 @@ func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 	if len(out) >= len(msgs) {
 		t.Fatalf("no compaction: %d -> %d", len(msgs), len(out))
 	}
-	if out[0].Role != llm.RoleSystem ||
-		!strings.Contains(out[0].Text(), prompts.SummaryLabel) ||
+	if !isSummaryMessage(out[0]) ||
 		!strings.Contains(out[0].Text(), "CONDENSED") {
 		t.Errorf("first message is not the summary: %s %q", out[0].Role, out[0].Text())
 	}
@@ -354,8 +353,16 @@ func TestSummaryFabricatesNoTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, m := range out {
-		if strings.Contains(m.Text(), "CONDENSED") && m.Role != llm.RoleSystem {
-			t.Errorf("the summary is a %s message; it is the harness's artifact, not anyone's turn", m.Role)
+		if strings.Contains(m.Text(), "CONDENSED") {
+			// It rides in a user-role message, so the marker is the whole of
+			// what keeps it from reading as the user's own words. Without it
+			// this is aider's shape again with better prose.
+			if !strings.HasPrefix(m.Text(), llm.HarnessMarker) {
+				t.Errorf("the summary is unmarked; it reads as something %s said", m.Role)
+			}
+			if m.Role == llm.RoleAssistant {
+				t.Error("the summary is an assistant turn; the model did not say this")
+			}
 		}
 		if m.Role == llm.RoleAssistant && strings.TrimSpace(m.Text()) == "Ok." {
 			t.Errorf("message %d is a fabricated assistant agreement", i)
@@ -392,7 +399,7 @@ func TestSummarySeesToolWork(t *testing.T) {
 		llm.ToolResult("c1", "internal/poll/poll.go:3: "+big),
 		// A prior summary, which is a system message now. Skipping the role
 		// would erase compaction's own output on the next pass.
-		llm.TextMessage(llm.RoleSystem, prompts.SummaryLabel+"EARLIER-WORK-MARKER"),
+		llm.HarnessNote(prompts.SummaryLabel + "EARLIER-WORK-MARKER"),
 		msgTok("user", 10), msgTok("assistant", 10),
 	}
 	if _, err := s.summarizeAll(msgs); err != nil {

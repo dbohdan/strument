@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 )
 
 // SendOutcome is the terminal state of one sendMessage.
@@ -550,7 +549,7 @@ func validCompaction(msgs []llm.Message, beforeTokens, beforeMessages, afterToke
 
 func hasSummaryContent(msgs []llm.Message) bool {
 	for _, m := range msgs {
-		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(m.Text(), prompts.SummaryLabel)) != "" {
+		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(m.Text(), summaryPrefix)) != "" {
 			return true
 		}
 	}

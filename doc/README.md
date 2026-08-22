@@ -541,7 +541,7 @@ them mid-word.
 marked user.** `llm.HarnessNote` is the one way to say something into an ongoing
 conversation — an interruption, an `/undo`, a decision the user made. The
 honest role would be `system`, and `system` is what the *prefix* uses for
-session notes and history summaries, but it cannot be used once the conversation
+session notes, but it cannot be used once the conversation
 is under way: Anthropic rejects a system message that follows an assistant turn
 outright ("role 'system' must follow a 'user' message or an 'assistant' message
 ending in a server tool result"), which is exactly where such a note goes. A
@@ -552,6 +552,21 @@ silently: **system in the prefix, marked user mid-conversation, assistant
 never.** Four sites used to write fabricated assistant turns — three of them
 saying "Ok." to keep roles alternating, which nothing requires — and
 `voice_test.go` now fails if any of them comes back.
+
+The compaction summary was the last exception and is one no longer. It was a
+`system` message on the reasoning that a summary is the harness's artifact —
+true, and the wrong conclusion, because it lands in `done`, mid-conversation,
+which is precisely the position the rule above is about. It escaped the
+rejection only by always being spliced at index 0 of `done` with nothing
+assistant-role ahead of it: three facts no test pinned. Two further reasons to
+move it. The label says "it is not something anyone said" while the role said
+"trust this most", and a summary is the *least* reliable thing in the request —
+the compaction trial caught one inventing a rationale nobody had given, so the
+highest-trust channel was the wrong home for it. Every other harness surveyed
+agrees: Codex CLI and Kimi CLI both re-inject the summary as a prefixed user
+message, OpenCode as an assistant message flagged `summary: true`. None uses
+`system`. Session notes stay in the prefix, because they genuinely are
+scaffolding read every turn rather than history.
 
 **Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
 in order against a shared overlay, so two edits to one file build on each

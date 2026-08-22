@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // No path by which the harness adds to the conversation may write an assistant
@@ -53,6 +54,46 @@ func TestTheHarnessNeverSpeaksAsTheAssistant(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The compaction summary is a marked harness turn, not a system message.
+//
+// It was a system message, on the reasoning that the summary is the harness's
+// artifact — true, and the wrong conclusion. The system role belongs to the
+// prefix; this lands mid-conversation, in done, which is the position
+// HarnessNote exists for. It stayed legal only because it is always spliced at
+// index 0 of done with nothing assistant-role ahead of it, three facts no test
+// pinned. This pins the carrier, and checks the assembled request for the one
+// shape a five-provider probe found universally rejected.
+//
+// Codex CLI and Kimi CLI both use a prefixed user message; OpenCode an
+// assistant message flagged as a summary. None uses system.
+func TestTheCompactionSummaryIsAMarkedHarnessTurn(t *testing.T) {
+	c := testCoder(t)
+	c.doneMessages = []llm.Message{
+		llm.HarnessNote(prompts.SummaryLabel + "EARLIER WORK"),
+		llm.TextMessage(llm.RoleUser, "and then?"),
+		llm.TextMessage(llm.RoleAssistant, "I read the file."),
+	}
+	c.curMessages = []llm.Message{llm.TextMessage(llm.RoleUser, "carry on")}
+
+	summary := c.doneMessages[0]
+	if summary.Role == llm.RoleSystem {
+		t.Error("the summary is a system message again; it is mid-conversation history")
+	}
+	if summary.Role == llm.RoleAssistant {
+		t.Error("the summary is an assistant turn; the model did not say this")
+	}
+	if !strings.HasPrefix(summary.Text(), llm.HarnessMarker) {
+		t.Errorf("the summary is unmarked, so it reads as the user's own words: %q", summary.Text())
+	}
+
+	msgs := c.formatChatChunks().allMessages()
+	for i := 1; i < len(msgs); i++ {
+		if msgs[i].Role == llm.RoleSystem && msgs[i-1].Role == llm.RoleAssistant {
+			t.Errorf("message %d is a system message following an assistant turn", i)
+		}
 	}
 }
 

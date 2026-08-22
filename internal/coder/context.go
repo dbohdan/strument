@@ -66,12 +66,16 @@ func (c *Coder) ViewContext(n int) string {
 	return b.String()
 }
 
-// isSummaryMessage reports whether a message is a compaction summary: a system
-// message carrying the SummaryLabel prefix. An earlier summary is itself a
-// system message, so this must check by content, not by role alone — otherwise
-// every earlier summary would be silently dropped on a later fold.
+// summaryPrefix is what every compaction summary begins with on the wire: the
+// marker HarnessNote prepends, then the label.
+var summaryPrefix = llm.HarnessMarker + " " + prompts.SummaryLabel
+
+// isSummaryMessage reports whether a message is a compaction summary: a marked
+// harness turn carrying the SummaryLabel. An earlier summary is itself one of
+// these, so this must check by content, not by role alone — otherwise every
+// earlier summary would be silently dropped on a later fold.
 func isSummaryMessage(m llm.Message) bool {
-	return m.Role == llm.RoleSystem && strings.HasPrefix(m.Text(), prompts.SummaryLabel)
+	return m.Role == llm.RoleUser && strings.HasPrefix(m.Text(), summaryPrefix)
 }
 
 // renderTail lays out the message slice as the model reads it — the turns the
