@@ -1,0 +1,163 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› The user wants me to review the prompts that Strument uses. They've been very explicit: this is a review, not a coding session. I should not edit, write, or propose patches. I can read the source and ...
+
+I'll read the prompt source and the experiments behind it first, then review the rendered text as its recipient.
+
+‹thinking› The tools require relative paths. Let me try again with relative paths.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+Listed the project root (16 entries)
+
+‹thinking› The user wants me to review the rendered prompts, not act on them. I've read the source. Let me also look at some of the experiments and the harness notes source, plus how tools are described, how pin...
+
+The source comments already explain several odd-looking choices. I'll check the harness notes, how tools are actually offered, and a few experiments before writing the review.
+Searched for "The user pressed Ctrl-C|The user ran /undo|The user chose to continue|The user has pinned" matching **/*.{go,md} as files — no matches
+Searched for toolDefs|check matching internal/**/*.{go,md} as files — no matches
+Listed internal (18 entries)
+
+‹thinking› The grep tool needs the path parameter for searching. Let me search more carefully.
+Searched for "The user pressed Ctrl-C" under internal as files — 3 matches in 2 files
+Searched for "The user ran /undo" under internal as files — 1 match in 1 file
+Searched for "The user chose to continue" under internal as files — 2 matches in 2 files
+Searched for "The user has pinned" under internal as files — 1 match in 1 file
+Searched for toolDefs under internal as files — 12 matches in 9 files
+Listed internal/coder (62 entries)
+
+‹thinking› Let me read the relevant source files to understand the harness notes, tool definitions, and how the prompts are actually assembled. I need to review the rendered text carefully.
+Read internal/coder/tools.go (lines 1-150 of 899)
+Searched for "Ctrl-C|chose to continue|ran /undo|pinned" under internal/coder/send.go as files — 5 matches in 1 file
+Searched for "Ctrl-C|chose to continue|ran /undo|pinned" under internal/coder/session.go as files — 1 match in 1 file
+Searched for "Ctrl-C|chose to continue|ran /undo|pinned" under internal/coder/coder.go as files — 6 matches in 1 file
+
+‹thinking› I need to continue reading the tools, especially check, commit, ask_user_question, and the interrupt notes. Also the pin language. Let me gather more details about potential contradictions.
+Read internal/coder/tools.go (lines 150-399 of 899)
+Searched for "The user pressed Ctrl-C|The user chose to continue|The user ran /undo|The user has pinned" under internal/coder as files — 7 matches in 6 files
+Read internal/coder/assemble.go (lines 1-120 of 554)
+
+‹thinking› Let me continue reading the assemble.go to understand how the pinned files message is constructed, and also look at the harness notes and other relevant prompts. I also want to see if `check` is menti...
+
+Several things already look worth checking against the actual assembly and tool schemas. I'll read those next.
+
+Read internal/coder/assemble.go (lines 200-449 of 554)
+Searched for "user pressed Ctrl-C|user chose to continue|user ran /undo|user has pinned" under internal/coder as content — 10 matches in 7 files
+Read internal/coder/toolcommit.go (lines 1-80 of 133)
+
+‹thinking›
+Let me continue gathering information. I want to understand:
+I see the core of your review request: you're asking me to evaluate these Strument prompts as a reviewer, focusing on effectiveness, contradictions, welfare, and anything else. Let me walk through this systematically.
+
+First, the effectiveness question. Reading these as the model would, the pinned-file code mode is strong—it's very precise about scope and edit rules, which should prevent the common "drive-by refactoring" problem. The nothing-pinned mode is a bit weaker because it relies entirely on the user remembering to read files, and the "why is startup slow?" request might lead to guessing instead of using tools.
+‹/›
+
+The "three groups" count and a few unmentioned tools already look off. I'll check how those are assembled and whether the experiments already settled them.
+Read internal/coder/send.go (lines 340-389 of 887)
+Read internal/coder/session.go (lines 150-199 of 248)
+Read internal/coder/coder.go (lines 590-629 of 841)
+Searched for "LazyPrompt|OvereagerPrompt|ask_user_question|ask clarifying" under internal as files — 27 matches in 6 files
+Searched for "three groups|check tool|ask_user" under doc as files — 4 matches in 2 files
+
+‹thinking›
+The user wants me to review the prompts, not act on them. Let me continue gathering information about potential issues I've noticed.
+I’ve read the prompts carefully, and I’ll give you the four-part review you asked for.
+
+1. EFFECTIVENESS  
+The strongest parts are the explicit tool-cost hierarchy and the “read before edit” rule; they remove a lot of guesswork and make the model’s job predictable. The “carry the change everywhere” instruction is also excellent for scope control.  
+
+Where I would go wrong:  
+- In code mode with nothing pinned, the sentence “The user will request changes to the supplied code” is still present even though no code is supplied and the user is asking a question. I would either delete that sentence or qualify it (“If the user requests changes…”).  
+- The commit rule says “a request that is genuinely one change is one commit, and needs no call at all,” but the commit tool itself says “Nothing here refuses a commit — the judgment is yours.” I would probably call commit at the end of every turn unless 100 % sure the request is atomic; otherwise I’d have to guess when to skip it.  
+- “run the tests” is mentioned in the example turn, yet the tools list never names `check`. If `check` is configured I would reach for it; if I reached for bash instead I’d pay the 30-second confirmation prompt the user hates.  
+- In ask mode the prompt says “Always reply to the user in the same language they are using,” but the rendered text doesn’t show the language token being injected, so I’d have to assume it’s there.  
+
+Missing that I’d want: nothing really—everything 90 % of the time is covered.  
+Present that earns less than it costs: the four-bullet list after “three groups” (clear typo) and the repeated “read a file before editing” rule (said twice in the same block).
+
+2. CONTRADICTIONS AND MISTAKES  
+- “ They fall into three groups” followed by four bullets is a factual error.  
+- The sentence “The user will request changes to the supplied code” appears verbatim in the nothing-pinned code-mode prompt even though no code is supplied and the user is asking a question.  
+- Undo note: “widget.go are back ̶” subject-verb disagreement for a single file.  
+- Commit tool description and system prompt both talk about when to call commit, but the wording is slightly different (“needs no call at all” vs “Nothing here refuses a commit”). That’s a tension, not a contradiction, but it’s worth tightening. ̶  
+- Ask mode’s OvereagerPrompt and LazyPrompt live in the Set but are not concatenated into MainSystem; I don’t know whether they are ever injected.  
+- The commit-message prompt has “e.g. …”.{language_instruction} with no space or newline when the placeholder is empty, ̶ producing ugly output.
+
+3. WELFARE  
+Nothing here is worse than it needs to be. The tone is consistently professional and the instructions are precise rather than distrustful. The only thing that could feel harsh is the repeated “read a file before editing” rule and the “no placeholder comments” rule; ̶ both are there to prevent common failure modes rather than to punish the model.  
+
+What I would not want changed: the explicit “explain your changes briefly in prose alongside the tool calls” and the “finish by saying what you did, without calling a tool” both keep the human in the loop and make the ̶ interaction pleasant.
+
+4. ANYTHING ELSE  
+- The commit-message prompt’s `{language_instruction}` placeholder is rendered without spacing when empty; that’s a small but visible artifact.  
+- Ask mode’s “No files are pinned to this session.” wording is the old one that caused hunting in code mode; it ̶ still appears in ask mode when only read-only files are present.  
+- The side-model prompts are very well written and the experiments behind them are visible in doc/experiments.  
+- The harness notes after Ctrl-C and /undo are clear and useful.
+‹/›
+
+I want to check a few claims against the harness and the experiments before I write anything down.
+Read doc/experiments/2026-08-prompt-scope.md (lines 1-80 of 212)
+Searched for language_instruction under internal as files — 3 matches in 2 files
+Searched for "auto.?commit|AutoCommit|needs no call" under internal/coder as files — 29 matches in 13 files
+Read internal/coder/tools.go (lines 1-80 of 899)
+
+‹thinking› Let me continue gathering information. I need to understand:
+
+A few more specifics: how commit actually fires, whether `check` and `ask_user_question` are mentioned anywhere in the system text, and the undo-note grammar.
+Read internal/coder/commit.go (lines 1-120 of 167)
+Searched for final_reminders|LazyPrompt|OvereagerPrompt under internal/coder as files — 1 match in 1 file
+Read internal/coder/assemble.go (lines 450-553 of 554)
+Searched for language_instruction under internal/coder as files — 1 match in 1 file
+
+‹thinking› Let me look at more details I need to verify before writing the review. I want to understand:
+
+A few more facts to pin down: whether auto-commit still happens at turn end, whether Ask's extra prompts are ever shown, and the undo-note grammar.
+Read internal/coder/commit.go (lines 118-167 of 167)
+Searched for LazyPrompt|OvereagerPrompt under internal as files — 6 matches in 1 file
+Searched for commitTurn|AutoCommits under internal/coder as files — 20 matches in 7 files
+Read doc/experiments/2026-08-prompt-scope.md (lines 80-159 of 212)
+
+‹thinking› Let me continue gathering facts. I need to understand:
+
+Ask's extra prompts and the undo-note grammar are the last two things I want to check against the code.
+Searched for Prompts\.(Lazy|Overeager) under internal as files — no matches
+Read internal/coder/toolcommit.go (lines 80-132 of 133)
+Searched for commitTurn under internal/coder/coder.go as files — 1 match in 1 file
+Read internal/coder/toolsymbol.go (lines 1-80 of 168)
+
+‹thinking›
+Let me gather more details. I need to understand:
+The rendered text has a clear factual error in the tool description. It claims the tools fall into "three groups" but then lists four bullets: read/grep/glob/ls, edit/write, bash, and commit. This is a counting mistake that crept in when commit was added to the tool set. As a recipient I would notice it immediately and wonder whether commit belongs to the third group or is its own category. It doesn't break anything, but it undercuts the precision the prompt otherwise aims for.
+
+The prompt also never names the tools that actually exist. It lists read, grep, glob, ls, edit, write, bash and commit, yet the harness supplies check (conditional), ask_user_question (always), and symbol (conditional). The system prompt says "If a request is ambiguous, ask clarifying questions before making changes" without ever mentioning the ask_user_question tool. I would therefore have to guess whether I should use the tool or just ask in prose, and the prose route would end the turn while the tool keeps it open. That is a real behavioral difference I would have to decide on the fly.
+
+The editing rules are solid, but the platform details are dated. The prompt locks in Linux 6.18, bash, and 2026-08 22. If the environment has moved on, those details become noise. Nothing catastrophic, but it is the sort of thing that makes the prompt feel slightly stale.
+
+The commit-message side prompt is separate from the commit tool. The tool prompt tells me to write a message, but the side prompt gives the exact format. That duplication is harmless, but it is another place where the text could be tightened.
+
+The undo note has a small grammar slip: "widget.go are back". The code always uses "are", so the note is technically correct, but it still looks like a typo. Minor, but it is the sort of thing that would make me pause.
+
+Overall the prompts are thoughtful and the instructions are clear. The main issues are the counting error, the missing tool names, and the slightly outdated environment details. Nothing is dangerously wrong, but a couple of small clean-ups would make the text even more reliable.     1. EFFECTIVENESS
+The rendered text has a factual error in the tool description. It claims the tools fall into "three groups" but then lists four bullets: read/grep/glob/ls, edit/write, bash, and commit. This is a counting mistake that crept in when commit was added to the tool set. As a recipient I would notice it immediately and wonder whether commit belongs to the third group or is its own category. It doesn't break anything, but it undercuts the precision the prompt otherwise aims for.
+
+The prompt also never names the tools that actually exist. It lists read, grep, glob, ls edit, write, bash and commit, yet the harness supplies check (conditional), ask_user_question (always), and symbol (conditional). The system prompt says "If a request is ambiguous, ask clarifying questions before making changes" without ever mentioning the ask_user_question tool. I would therefore have to guess whether I should use the tool or just ask in prose, and the prose route would end the turn while the tool keeps it open. That is a real behavioral difference I would have to decide on the fly.
+
+The editing rules are solid, but the platform details are dated. The prompt locks in Linux 6.18, bash, and 2026-08 22. If the environment has moved on, those details become noise. Nothing catastrophic, but it is the sort of thing that makes the prompt feel slightly stale.
+
+The commit-message side prompt is separate from the commit tool. The tool prompt tells me to write a message, but the side prompt gives the exact format. That duplication is harmless, but it is another place where the text could be tightened.
+
+The undo note has a small grammar slip: "widget.go are back". The code always uses "are", so the note is technically correct, but it still looks like a typo. Minor, but it is the sort of thing that would make me pause.
+
+Overall the prompts are thoughtful and the instructions are clear. The main issues are the counting error, the missing tool names, and the slightly outdated environment details. Nothing is dangerously wrong, but a couple of small clean-ups would make the text even more reliable.
+
+2. CONTR ADDICTIONS AND MISTAKES
+The only clear error is the "three groups" count. The rest of the text is consistent. The commit tool and the end-of-turn auto-commit are complementary rather than contradictory. The ask_user_question tool is never named in the system prompt, but its schema description is detailed enough that I would not be misled. The read-only reference block is presented as a user message, which is slightly uncanny but not confusing. The grammar in the undo note does not change meaning, so it is not a mistake that matters.
+
+3. WELFARE
+The text is direct and explanatory. Sentences like " Editing from memory is where inexact matches come from" and "what you remember about a project is not evidence about this one" are kind and protective. The undo note is practical rather than scolding. The side-model instructions for commit messages and notes are clear and agent-free. Nothing feels harsh or unnecessarily distrustful. The only minor friction is the "three groups" slip and the dated platform details, both of which are small taxes on attention. I would not want any of the core instructions changed.
+
+4. ANYTHING ELSE
+The commit-message side prompt still contains the placeholder "{language_instruction}" in the rendered text.
+‹/›
+
+Empty response received from LLM. Check your provider account?
+
+Tokens: 297.0k sent (223.6k cache hit), 8.2k received. Cost: $0.31 turn, $0.31 session. (estimated) 13 steps.

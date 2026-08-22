@@ -1,0 +1,55 @@
+openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
+
+models = {
+    "glm": model(
+        openrouter,
+        "z-ai/glm-5.3",
+        display_name="GLM 5.3",
+        context=1048576,
+        max_output=32768,
+        input_cost=1.4,
+        output_cost=4.4,
+        reasoning="low",
+    ),
+    "sol": model(
+        openrouter,
+        "openai/gpt-5.6-sol",
+        display_name="GPT-5.6 Sol",
+        context=1050000,
+        max_output=32768,
+        input_cost=2.0,
+        output_cost=10.0,
+        reasoning="high",
+    ),
+    "fable": model(
+        openrouter,
+        "anthropic/claude-fable-5",
+        display_name="Claude Fable 5",
+        context=1000000,
+        max_output=32768,
+        input_cost=10.0,
+        output_cost=50.0,
+        reasoning="high",
+    ),
+    "grok": model(
+        openrouter,
+        "x-ai/grok-4.6",
+        display_name="Grok 4.6",
+        context=500000,
+        max_output=32768,
+        input_cost=2.0,
+        output_cost=6.0,
+        reasoning="high",
+    ),
+    "kimi": model(
+        openrouter,
+        "moonshotai/kimi-k3",
+        display_name="Kimi K3",
+        context=1048576,
+        max_output=32768,
+        input_cost=3.0,
+        output_cost=15.0,
+        reasoning="medium",
+    ),
+}
+default = "glm"

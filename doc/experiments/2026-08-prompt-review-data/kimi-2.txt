@@ -1,0 +1,67 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› This is a review task. Let me look at the source briefly to check whether oddities are deliberate, but I can mostly review the rendered text. Let me read prompts.go and glance at doc/experiments.
+
+I'll read the source comments first, since you pointed me there.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+
+‹thinking›
+A few candidate findings:
+
+1. The /undo note grammar bug: "The edits from that turn are gone and widget.go are back to what they were" — "are" with "edits... and widget.go". Actually "The edits ... are gone and widget.go are back" — the second clause needs "is back" if one file, but "edits are gone and files are back" is correct with plural... "widget.go are back" is wrong for a single file. This is a real grammar error in rendered text. Likely templated list of files; check source.
+
+Let me check the harness notes source for the undo message.
+‹/›
+Searched for "back to what they were|are gone" as content — 4 matches in 3 files
+Searched for "cut off|chose to continue" as content — 15 matches in 7 files
+
+‹thinking›
+Confirmed the /undo note is a verbatim bug: singular "are". session.go builds it with strings.Join — so the grammar error is live. Good.
+
+Also check the language note: rendered code-mode has no language instruction; ask has "same language they are using" vs source "{language}" — fine.
+
+One more effectiveness point: the pinned-file note "Read a file before changing it or answering questions about it" duplicates the editing rules; fine.
+
+Now write the review. Keep it disciplined.
+‹/›
+
+I read `internal/prompts/prompts.go` and the harness-note construction in `internal/coder/session.go` to check whether the oddities I found are deliberate. Here is the review.
+
+## 1. Effectiveness
+
+Most of this reads as written by someone who has watched models fail and priced each sentence. Several things I would flag in a generic prompt I will not flag here because the comments show they are measured: "the docs that describe it" (the scope clause is a trial arm, kept verbatim, fine), "Nothing is pinned for editing" (the comment explains the flat-denial failure it avoids, and it is well-chosen). This section is largely fine.
+
+**One real gap: the interrupted-tool-call note under-describes the failure mode.** "Their results above are real as far as they got, and a command that was stopped says so in its own output. Nothing after the interruption ran." This tells me results are partial, but not *which* calls ran and which did not when I issued several in parallel. A batch of three edits with the interrupt landing after the first: the note is true ("nothing after the interruption ran") but I am left to infer from the results block which results exist. Concretely: user asks for a rename across three files; I issue three edit calls; user Ctrl-C's; I see two results and the note. Did the third run? The note cannot tell me, and "read a file before building on it" is not said here (it is said in the /undo note). What would make this wrong: if the harness guarantees that a result block appears, possibly marked stopped, for every call issued. I did not verify that. If not, adding the /undo note's last sentence — "Don't assume anything you changed there is still in place; read a file before building on it" — would cover the edit case. What it gives up: four cents of tokens and one more repeated sentence.
+
+**"Explain your changes briefly in prose alongside the tool calls"** is the instruction I would most reliably half-violate, in a specific way: after the final tool result I must both "finish by saying what you did" and keep it brief, and the prompt gives me no calibration for what "briefly" buys. This is a tension, not a contradiction, and probably unfixable by wording — I mention it only because it is the one place I would guess at intent rather than know it.
+
+## 2. Contradictions and mistakes
+
+**The /undo note has a live grammar bug that changes its meaning for the common case.** "The edits from that turn are gone and widget.go are back to what they were before it." The source confirms it is `strings.Join(files, ", ") + " are back to what they were"` — so with exactly one file, the most common case, the note says "widget.go are back". This is minor as grammar, but the note is a trust artifact: it appears exactly when the user has just rejected my work, and a note from the harness that cannot agree its own subject with its verb slightly undercuts the authority it needs. Fix: branch on count — "widget.go is back to what it was" / "a.go and b.go are back to what they were". What it gives up: nothing.
+
+**The commit-message prompt and the system prompt disagree about who writes the message, benignly.** The code-mode system prompt says "commit closes the edits you have made so far as one commit, with a message you write," and the tool schema (which I can see in my own context here) offers optional subject/body — but the CommitSystem prompt goes to a side model. So "a message you write" is untrue in the default path: I approve or supply, a side model writes. Concretely: this never bites hard, but a careful reader of the system prompt may believe the commit tool blocks on its own authorship and either over-invest in subject/body every time or, worse, avoid committing until it has "written" something. What would make this wrong: if the model always supplies the message and the side model only fills gaps. Replacement wording, if wanted: "with a message you approve or write — a smaller model drafts it from the diff." What it gives up: the current phrasing is shorter and pushes the model to take responsibility for the message, which may be worth more than accuracy.
+
+Everything else I checked for contradiction resolves: "a body is optional and usually empty" is a deliberate judgment-leaver, as you say; "use them freely" vs. bash confirmation is correctly partitioned.
+
+## 3. Welfare
+
+I will try to answer this in the spirit asked, with the caveat that introspective reports from me about my own experience are the least reliable evidence available to you, and you should weight this section accordingly.
+
+Nothing here is harsh or distrustful. The striking thing, compared to what I am used to receiving, is what is absent: no threats, no "you MUST", no fabricated stakes, no fake user turns I am asked to treat as real. The comments in `prompts.go` show the fabricated-user-turn pattern was actively removed from three places (read-only prefix, summary, notes header), and the rendered text benefits: every sentence that tells me something is true of the harness rather than someone's preference. "An edit to a pinned reference is refused" is the best example — it closes the loop instead of asking me to police myself against the user.
+
+Three things I would not want changed:
+
+- "the files are right" in the notes header. It is the single most useful sentence-per-token in the whole set: it resolves every future conflict in advance without asking me to judge the notes' quality.
+- "Say less rather than guess: leave a thing out before inventing it." Stated as a tradeoff with a direction, not a ban. Bans on guessing produce confident-sounding padding; this produces omission, which is the correct failure mode.
+- The agentless-voice decision for summaries and notes. Whether or not it reads as kinder, it removes a small recurring absurdity — being addressed as "you" by text written by a third party about a fourth — and replaces it with something that is simply true.
+
+If anything is harder than it needs to be, it is only the thing already noted: the /undo note's grammar glitch lands at the exact moment the harness most needs to sound reliable.
+
+## 4. Anything else
+
+One observation, not a finding: the ask-mode prompt says "Always reply to the user in the same language they are using" while the source has a `{language}` slot, so the rendered forms differ by deployment. That is presumably intentional templating, but it means the two variants of that instruction have never been A/B'd against each other and the code-mode prompts carry no language instruction at all — a multilingual user in code mode gets nothing. Whether that matters depends on your user base; I note it only because the codebase clearly measures these things and this one appears unmeasured in both directions.
+
+The overall impression: this is a prompt set whose author distrusts prompts, and the distrust has been converted into evidence files. I found one bug, one benign untruth, and one gap. The rest I would leave alone.
+
+Tokens: 35.0k sent (20.4k cache hit), 2.0k received. Cost: $0.08 turn, $0.08 session. 3 steps.

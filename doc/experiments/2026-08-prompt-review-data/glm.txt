@@ -1,0 +1,405 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› Let me read the source to check whether oddities are deliberate.
+
+Let me look at the source and the experiments before answering.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+
+‹thinking›
+Let me examine some details. Notable candidates for findings:
+
+1. **The /undo note grammar**: "the edits from that turn are gone and widget.go are back to what they were before it" — "widget.go are" is a plural agreement error. Probably templated: "widget.go" is a list of files inserted, so "X and Y are" vs single file "X are". Bug: template assumes plural. Check source.
+
+2. **Commit instruction tension**: system prompt says "When a request has several parts... call commit" but my own (the actual harness I'm running under) differs — irrelevant. But within the rendered text: "commit closes the edits you have made so far as one commit" — but also says "A request that is genuinely one change is one commit, and needs no call at all." Wait — if commit is not called, does the harness auto-commit? The user's description says "Edits land in the working tree and are committed". So auto-commit presumably happens. The prompt says a single-change request "needs no call at all" — implying auto-commit with side model. Fine.
+
+3. **"a diff that does three things at once"** — with two parts, the diff does two things. Trivial.
+
+4. **Ask mode with one pinned file**: prompt says "Work through the provided tools. read, grep, glob, and ls..." — matches Ask MainSystem. Rendered ask prompt says "Always reply to the user in the same language they are using." — {language} substituted. OK.
+
+5. **Read-only reference placement**: In the rendered text, the read-only reference message appears as role: user, after the system prompt. The prefix says "The user pinned these files" — but it's a system-reminder-ish injected user message. Actually rendered as `--- role: user ---` — the text claims "The user pinned these files as read-only reference" but it's the harness's voice in a user turn. The comments elsewhere (SummaryLabel) went to great lengths to avoid harness text in user turns; readOnlyFilesPrefix is a user turn in harness voice. Minor inconsistency but deliberate? Comment says it "speaks as the harness, which is what it is" but role: user. Might flag as a mild point.
+
+6. **Pinned file + read-only reference ordering**: The pinned-file note says "Read a file before changing it" and read-only says don't edit. Fine.
+
+7. **Contradiction candidate**: In code mode with pinned file, the system prompt's editing rules say "Read a file before editing it unless its contents are already in the conversation." But pinned files — is the pinned file's content supplied? The render only says "The user has pinned 1 file to this session: widget.go" without contents. So model must read it. Fine.
+
+8. **Ctrl-C during reply note**: "Anything you were part-way through saying was not finished" fine.
+
+9. **Undo note**: "the edits from that turn are gone and widget.go are back" — grammar. Also "Don't assume anything you changed there is still in place" — but /undo undoes edits only; what about commits? If the model committed during the turn, does /undo revert the commit? Unclear — potential effectiveness gap. Let me check source of the undo note.
+
+10. **Ask mode LazyPrompt/OvereagerPrompt**: Ask set has LazyPrompt "Be thorough..." and OvereagerPrompt "Do not return fully detailed code..." but the rendered ask prompt doesn't include them. Where do they go? In code mode the rendered system includes them (via toolMainSystem). In Ask they're fields — maybe inserted as final reminders only when overeager detected. Fine, not shown.
+
+11. **"Files the project ignores are not listed or searched"** — grep tool description says same. Fine.
+
+12. **Ask mode missing**: "Always reply to the user in the same language they are using" only in ask, not code mode — deliberate? Possibly.
+
+13. **Commit prompt: "The subject is one line... {language_instruction}"** — the {language_instruction} is appended right after the form sentence; fine.
+
+14. **Continue note**: "Pick up exactly where your reply above stops" — if Ctrl-C was during a tool call, "your reply above" — the continue note is generic, matches both? It says "your reply above stops" but after tool-call interruption there may be no reply text. Check source.
+
+Let me grep the harness notes in the source.
+‹/›
+
+Now let me find where the mid-conversation notes are generated, to check the /undo grammar and the Continue note.
+Searched for "Ctrl-C|pressed|/undo|chose to continue" matching **/*.go as files — 110 matches in 29 files
+Searched for "pressed Ctrl-C|chose to continue|ran /undo|pick up exactly" under internal/coder matching **/*.go as content — 10 matches in 6 files
+Read internal/coder/session.go (lines 165-184 of 248)
+
+‹thinking›
+The grammar error "and widget.go are back to what they were" — a single file makes "are" wrong. That's a real grammar bug: "widget.go are back to what they were before it" should be "widget.go is back to what it was". The singular/plural bug in the rendered text. Good finding — confirmed in source: `strings.Join(files, ", ")+" are back to what they were before it"`.
+
+Now check ask mode: comment says symbol is offered in ask mode but prompt omits it deliberately. But rendered Ask prompt also names only read/grep/glob/ls while ask mode also offers symbol — deliberate. But rendered system prompt says "This mode has no editing tools" — accurate given toolDefs drops edit/write/bash/check. Wait, does ask mode drop `check`? Yes per comment. But my own tool list (as reviewer) includes check — irrelevant; the rendered prompt is what matters. But the tool group description says bash "the user is asked before it runs" — check note.
+
+Also: the code-mode prompt claims "They fall into three groups" then lists four bullets (read-group, edit/write, bash, commit). In the rendered text there are four bullets under "three groups". That's a real mistake — unless commit is folded into... no. The rendered text: "They fall into three groups, which differ in what they cost the user:" then four bullets. That's a counting error. Let me check source — yes, four bullets in toolMainSystem. Real finding. Unless "commit" was added later and count not updated. Consequence: minor confusion, models may miscount; but it's a factual error about the text's own structure. What would make it wrong: maybe intended "three groups" = read-only, mutating, permission-gated with commit folded... no. It's an error.
+
+Ask mode FilesNoFullFiles rendered? In the rendered ask prompt, FilesNoFullFiles text isn't shown ("Nothing is pinned..." not present in ask render). Actually in code mode with nothing pinned, FilesNoFullFiles appears after editing rules. In ask render, the last paragraph before user message is the editing-rules? No — ask SystemReminder is "{final_reminders}" so no editing rules. Fine.
+
+Ask prompt: "Always reply to the user in the same language they are using." Fine.
+
+Code-mode prompt with pinned file: does the pinned file text appear? Rendered shows only "The user has pinned 1 file to this session: widget.go." — no contents. So "supplied code" refers to... fine.
+
+Read-only reference: "Do not edit them: an edit to a pinned reference is refused." Good.
+
+Contradiction candidates:
+- "If a request is ambiguous, ask clarifying questions before making changes" vs the tool loop "Finish by saying what you did, without calling a tool — that is what ends the turn" — asking a clarifying question ends the turn without tools, fine, no contradiction.
+- Code-mode example request "why is startup slow?" is a question, not a change request. The system prompt is all about changes: "The user will request changes to the supplied code." Then FilesNoFullFiles covers questions: "If the user asks how something here works, read the code..." — deliberate per comment. Fine, though the mismatch between "will request changes" and a question is the exact gap the second sentence patches. OK.
+- Bash: prompt says "the user is asked before it runs" — but does the harness ask for every bash? Check note says commands that are project checks run without asking. Also in my own reviewer env. Is there auto-approval for configured checks in strument? Likely yes (check tool runs without asking). Let me verify.
+‹/›
+Searched for "asked before it runs|confirm|autoapprove|auto-approve|without asking" matching internal/**/*.go as content — 100 matches in 33 files
+
+‹thinking›
+There's auto-approve ("a" turn-scoped), so "the user is asked before it runs" is slightly over-claiming but essentially true (allowlist/auto-approve aside). Also there's a `check` tool ("Runs without asking... commands they configured") not mentioned in the three-group paragraph — the prompt says tools "fall into three groups" but there are also check and ask/commit... commit is named. `check` runs without asking. The schema descriptions carry it. Minor.
+
+The mid-conversation notes are the main area. Findings so far:
+
+1. "/undo" note grammar: "widget.go are back" — when one file, subject-verb disagreement. Real bug in template: `strings.Join(files, ", ")+" are back"`. Worth flagging; user-facing too? It's a harness note to the model; grammar error but meaning clear. Still a quoted finding.
+
+2. "code mode with a file pinned" prompt: the pinned-file block says "Read a file before changing it or answering questions about it, so you are working from what is in it now rather than from memory." Does the harness actually include pinned file contents in the conversation? In aider, /add includes full file contents. Here the pinned block only names the file — no contents included. So "rather than from memory" is odd... actually check how pinning works. In the rendered prompt, pinned file content isn't shown; the read-only reference contents are shown. So the model must read widget.go. That seems intentional (lazy). Fine.
+
+3. Ask mode contradiction: Ask's FilesNoFullFiles says "No files are pinned to this session" — but the comment in prompts.go for Tool said they changed "no files are pinned" to "Nothing is pinned for editing" in Tool because read-only references may be pinned. Ask still uses the old flat wording "No files are pinned to this session." — same bug they fixed in Tool! In ask mode with a read-only reference pinned plus nothing for editing, the flat denial contradicts the reference block. That's a genuine finding backed by their own comment. In the rendered sample, ask mode has widget.go pinned, so FilesNoFullFiles isn't used there. But the latent case: /ask with a read-only reference and nothing pinned → contradiction. Strong finding.
+
+4. Ask mode "This mode has no editing tools" — fine. Ask prompt says tools: read, grep, glob, ls — also symbol, deliberately unnamed (comment explains). OK.
+
+5. Tool prompt: "commit closes the edits you have made so far as one commit" — fine. "A request that is genuinely one change is one commit, and needs no call at all." Hmm, "needs no call at all" — could a model read "needs no commit call"? It says a one-change request needs no call — meaning no commit call? Wait, actually re-read: "A request that is genuinely one change is one commit, and needs no call at all." Ambiguous: does it mean no commit call needed (because... auto-commit?) or that the whole request needs no tool calls? Probably means: if it's one change, you don't need the commit tool — but then how does it get committed? Does the harness auto-commit at end of turn? Let me check. There's mention "a harness that commits every turn" in the CommitSystem comment! "which for a harness that commits every turn". So maybe the harness auto-commits at turn end? Then the commit tool paragraph is confusing. Need to check coder/commit.go or send.go for auto-commit.
+
+Also "Do not make every edit and then commit once at the end — by then there is only one commit to make, and the user is reading a diff that does three things at once." Wait — "by then there is only one commit to make" — that argues the opposite? The paragraph: when a request has several parts, commit after each. If you make every edit then commit once, "there is only one commit to make" — meaning you've lost the chance to make separate commits, and the user reads one diff doing three things. Slightly convoluted but understandable.
+
+Let me check auto-commit at end of turn.
+‹/›
+Searched for "autoCommit|auto-commit|commits every turn|CommitAtEnd|endOfTurn" matching internal/coder/*.go as content — 15 matches in 11 files
+
+‹thinking› Check what happens at end of turn if the model doesn't call commit — is there an auto-commit of the turn's edits? Look at commit.go / turn lifecycle.
+Read internal/coder/commit.go (lines 1-40 of 167)
+Read internal/coder/toolcommit.go (lines 100-133 of 133)
+
+‹thinking›
+So the commit tool exists, and there's also an end-of-turn auto-commit. The prompt's guidance about commit tool matches. Also the toolcommit prompt ("commit closes the edits...") — the check tool: the schema description in tools.go says "Runs without asking the user, because it can only run commands they configured." The system prompt says tools fall into three groups: read/search, edit/write, bash. But there's also a `commit` described separately, and a `check` tool and `ask_user_question`/question tool that exist in this very environment. Hmm, "They fall into three groups" followed by four bullets including commit — minor. Also symbol tool offered conditionally. Not a big deal.
+
+Interesting note: the rendered prompts I'm asked to review show me as the receiving model, and indeed my actual environment includes tools not named in the prompt (ask_user_question, commit, check) — consistent.
+
+Check the /undo note grammar: "The edits from that turn are gone and widget.go are back to what they were before it." — files joined; with one file it reads "widget.go are back". Grammar error: subject "widget.go" is singular, verb "are" plural. Confirmed in session.go: `strings.Join(files, ", ") + " are back"`. With one file, ungrammatical. Also with multiple files: "widget.go and spec.go are back" is fine; "a.go, b.go, and c.go are back" fine. So the bug bites only in the singular, which is the common case (pinned 1 file). Consequence: small, but the reviewer asked for grammar errors that change meaning — this one doesn't change meaning, just reads off.
+
+Also the undo note: "The edits from that turn are gone and widget.go are back to what they were before it" — if /undo followed a turn where nothing was edited in the pinned file? NoteUndo receives files actually reverted. Fine.
+
+Now the "after Ctrl-C during the reply" note: "your reply above was cut off where it stops" — check send.go 355-380.
+‹/›
+Read internal/coder/send.go (lines 345-384 of 887)
+Read internal/coder/coder.go (lines 595-624 of 841)
+
+‹thinking›
+Now I have enough context. Let me check a couple more things: the "three groups" vs four bullets in the tool prompt — "They fall into three groups" then lists four bullets (read group, edit group, bash, commit). That's a real inconsistency: commit is not in the "three groups"? Actually bullets: read/grep/glob/ls; edit/write; bash; commit — four bullets, "three groups". Also the framing "which differ in what they cost the user" doesn't apply to commit cleanly. That's a finding: "three groups" but four bullets. Consequence: mild confusion; model may treat commit as an afterthought. Actually the user's own review prompt example had same text. Check whether source says three groups — yes line 93: "They fall into three groups". Four bullets follow. Could be deliberate (commit isn't a "cost group"?) but the comment doesn't mention it. Worth flagging as a mistake: either say "four" or group commit with edit/write.
+
+Check whether the "check" tool exists in code mode — tools.go mentions a check tool and autocheck. The system prompt doesn't mention check at all. In my own system prompt above, check is listed. Strument's tool prompt says "Reach for it only for work the other tools don't cover" for bash, but there's a check tool that runs configured checks without confirmation. Does the model know about it? The schema description carries it (tools.go:229 "Runs without asking the user, because it can only run commands they configured"). So the prompt intentionally leaves it to schema. But then the prompt's claim "bash runs a shell command, and the user is asked before it runs" is fine, but a model reading only the prompt might run `go test` via bash and incur a confirmation when check runs it without asking. Hmm — but the prompt says nothing false; the schema tells it. Worth flagging as effectiveness gap: the prompt's "three groups" cost model omits a fifth tool whose distinguishing feature is exactly cost (no confirmation). Let me verify the check tool is in code mode toolset.
+‹/›
+Read internal/coder/tools.go (lines 190-249 of 899)
+
+‹thinking›
+Also the check tool exists in code mode but the system prompt only lists "three groups" — read/edit/bash/commit — check and ask_user_question unmentioned. The prompt says tools "fall into three groups, which differ in what they cost the user" — but check runs without asking, and ask_user_question asks the user something different. Not strictly contradiction but a gap: model asked to run tests is told nothing about check, and bash "user is asked before it runs" — checks run without asking, contradicting the prompt's blanket claim about bash? No, check is a different tool. The prompt omits check entirely — likely deliberate (schema description carries it). Also ask_user_question omitted. In the given rendered prompt I (as reviewer's own system prompt!) have ask_user_question — amusing. Fine.
+
+Also: Ask mode's prompt doesn't mention `symbol` — deliberate per comment.
+
+Now check: "Files the project ignores are not listed or searched" fine.
+
+Contradiction candidates:
+
+1. /undo note grammar: "widget.go are back to what they were" — singular/plural mismatch. Concrete when one file.
+
+2. "Tools fall into three groups" but lists four bullets. The first bullet group = read family; second = edit/write; third = bash; fourth = commit. Actually commit is described as a tool in the group list; "three groups ... differ in what they cost" — commit costs what? The rendered text lists four bullets after announcing three groups. Wait — read the text: "They fall into three groups, which differ in what they cost the user:" then four bullets: read-group, edit/write, bash, commit. Hmm, but commit's cost? Maybe the intended three groups: no-cost observe, direct change, ask-first — and commit is fourth, its own thing. Either way "three groups" followed by four bullets is a real mistake the model notices. Check the source: yes toolMainSystem says three groups, four bullets. That's a mistake — miscount.
+
+3. Nothing-pinned prompt says "you can edit any file in the project" — fine.
+
+4. "A request that is genuinely one change is one commit, and needs no call at all" — but does the harness auto-commit at end of turn anyway? Yes — commitTurn at turn end. So the model need never call commit; but the earlier sentence "commit closes the edits you have made so far as one commit" — fine. Consistent.
+
+5. "bash ... the user is asked before it runs" — untrue for configured checks run via bash? tools.go:665: "That command is the configured check %q, so it ran without asking" — so a bash call matching a configured check runs without asking! The system prompt's blanket claim is false in that case. Check line 665 context.
+
+6. "the user is asked before it runs" vs auto-approve "a" turn-scoped — the user is still asked the first time; fine.
+
+7. Ask mode: "Always reply to the user in the same language they are using" — good.
+
+8. Commit prompt: "If the change breaks existing behavior, put "!" before the colon." — fine. But it says both "!" marker and BREAKING CHANGE footer; fine per spec.
+
+9. Continue note: "Pick up exactly where your reply above stops" — with noteInterrupt having dropped partial tool calls; fine.
+
+10. Ctrl-C during reply note says "any tool call you had begun was not run" — but dropPartialToolCalls... consistent.
+
+11. Ask mode ask: pinned widget.go — "Read a file before answering questions about it" — good. But FilesNoFullFiles in Ask says "No files are pinned to this session" — same singular/plural issue as before, and also there's the tension noted in the code comment about "Nothing is pinned for editing" vs Ask's "No files are pinned to this session" — Ask's version could conflict when a read-only reference is pinned: /ask with a read-only reference pinned would say "No files are pinned" while a reference block sits above. The code comment explains Tool's wording was fixed for exactly this; Ask's FilesNoFullFiles still has the old flat denial! That's a genuine finding: Ask + nothing-pinned-for-editing + read-only reference pinned → contradiction. Check: Ask.FilesNoFullFiles: "No files are pinned to this session." Yes — the readonly-honest problem in mirror. Though the comment says "a model handed both read the flat denial as evidence the reference block was not to be trusted" — that was about Tool's wording; Ask wasn't fixed. Good finding.
+
+Wait — does Ask mode's FilesNoFullFiles get used when a read-only reference is pinned? Presumably it's used when no *editable* files are pinned. Let me check assembly briefly.
+
+12. Tool prompt: "Explain your changes briefly in prose alongside the tool calls" fine.
+
+13. Ask mode SystemReminder is just {final_reminders} — no editing rules — fine since no edit tools.
+
+14. Session notes: "The record below already lists which files changed" — fine.
+
+15. Compaction summary: "Leave the fenced code blocks themselves out of the summary" — but include filenames referenced inside them; a summary written later read back — fine.
+
+16. Header: "written by Strument at the end of the last session (2026-08-21)" fine.
+
+17. "Nothing is pinned for editing" — good.
+
+18. toolMainSystem: "The user will request changes to the supplied code." — in the nothing-pinned example, the user asks "why is startup slow?" — a question, not a change request. The FilesNoFullFiles text covers questions ("If the user asks how something here works..."). Slight tension but deliberate.
+
+Also: "read a file, make an edit, run the tests" — running the tests via bash needs confirmation; fine.
+
+Check the bash check-exemption and the assembly of FilesNoFullFiles in ask mode.
+‹/›
+Read internal/coder/tools.go (lines 645-674 of 899)
+Searched for FilesNoFullFiles matching internal/coder/assemble.go as content — 1 match in 1 file
+
+‹thinking›
+Now I have a good picture. Time to write the review. Let me think about findings carefully, following the request's demand for quotes, short sessions, falsifiability, and restraint.
+
+Findings I'm fairly confident about:
+
+1. **Contradiction: commit instruction vs. harness behavior.** System prompt says commit tool's user-visible effect is "closes the edits you have made so far as one commit" — fine. But it also says "the user is reading a diff that does three things at once" and frames multi-part commits as bad, then the harness auto-commits at end of turn anyway (commitTurn). Wait — the commit tool commits mid-turn; end-of-turn commitTurn commits the rest. So a model that follows the instruction makes multiple commits per multi-part turn; a model that doesn't makes one. Actually the prompt is fine with that. But the tool description says "Commits the edits you have made so far as one commit" — that's accurate. And what about the side-model commit prompt: "work from an earlier turn is not part of this commit" — after a mid-turn commit, the end-of-turn commitTurn message is generated from commitContext over curMessages which includes the whole turn... the clause handles it. OK.
+
+Actual issue: "commit closes the edits you have made so far as one commit" — but in code mode, everything the model edits is committed at end of turn anyway (auto-commit). The prompt never says this. So a model in code mode with auto-commits on might call commit at the end of every turn "to be safe," duplicating? No — commitTurn would find nothing new. But the model might spend a commit call to close out a single change ("needs no call at all" — that's covered). Hmm, but the prompt never tells the model that a turn is auto-committed at end. The commit tool section says "closes the edits you have made so far" — a model could reasonably infer that without calling commit, edits remain uncommitted. In ask-mode... no. In code mode, does the model need to know end-of-turn auto-commit exists? Consequence: a model makes edits, and to leave a clean state calls commit before finishing — that's actually encouraged ("A request that is genuinely one change is one commit, and needs no call at all" — that clause implies it, indirectly: if no call is needed, something else commits). It's inferable but not stated. Worth mentioning as minor: the prompt never states that the harness commits at end of turn, and a model that fails to infer it will call commit defensively on single-change turns — the exact call the prompt says "needs no call at all," so there's tension: is it forbidden or just unnecessary? "needs no call at all" is clear enough. I'd call this a weak finding; maybe mention briefly.
+
+2. **"the user is asked before it runs" (bash) — not always true.** Confirmed checks run without asking, and there's auto-approve "a = all this turn". The rendered prompt says "bash runs a shell command, and the user is asked before it runs." But configured checks run unconfirmed (tool result even says "ran without asking the user"). So the system prompt asserts something untrue about the harness. The tool's schema description says "Unless the command is one of the project's configured checks, the user is asked to confirm" — so the schema carries the truth and the system prompt carries the simplification. Consequence: model might avoid calling bash for the test command thinking it'll bother the user... actually the check tool exists for that, and the system prompt doesn't mention the check tool at all! In the rendered code-mode prompt, tools listed: read/grep/glob/ls, edit/write, bash, commit. Check is absent. So the model learns about check only from the tool schema. Is that a problem? The schema description is thorough. Mild finding: system prompt's three-groups taxonomy omits check, and says bash "always" asks, contradicting the schema the model also sees. Two texts disagree; a model may not know which to trust. Session: user asks "run the tests"; model calls check (from schema) — fine. Or model calls bash "go test ./...", user is not asked (it matched a check), model sees result "ran without asking" contradicting system prompt. Minor confusion, self-correcting. Still, a real inconsistency worth naming. Also ask_user_question tool exists in my prompt but not Strument's — irrelevant.
+
+Wait, also the commit tool result when auto-commits off — fine.
+
+3. **/undo note grammar**: "The edits from that turn are gone and widget.go are back to what they were before it." With one file, "widget.go are back" is ungrammatical. With multiple files "a.go and b.go are back" works. Shortest session: user pins widget.go, model edits it, user runs /undo, note reads "widget.go are back to what they were" — model may not care, but it's a meaning-adjacent grammar slip and trivially fixable ("is back" vs plural). Actually does grammar change meaning? No. It's a blemish. Worth reporting under mistakes with a fix: handle singular. Also "The edits from that turn are gone and X are back" — if multiple files, "are" fits. Fix: "and widget.go is back to what it was" for singular.
+
+Also: the note says "the edits from that turn are gone" — but /undo undoes a turn's edits; does it also undo commits made mid-turn via commit tool? session.go: undo gated on session auto-commits. Not my concern.
+
+4. **"Files the project ignores are not listed or searched."** — appears in both prompts, fine, true presumably (gitignore package exists).
+
+5. **The pinned-file prompt duplication**: In code mode with pinned widget.go: "Read a file before changing it or answering questions about it, so you are working from what is in it now rather than from memory." But the pinned file — is its content supplied? In the rendered conversation, only the read-only SPEC.md contents follow; widget.go is pinned but not shown. So the model must read widget.go. "Pinning says what the conversation is about. It is not itself a request to change anything" — good. But nothing tells the model whether pinned files' contents are in context. In the rendered transcript, widget.go's contents are NOT included (no block). The model might assume pinned = provided. The prompt says "Read a file before changing it" — implies not provided. OK, probably fine. Hmm, but there's a subtlety: FilesNoFullFiles ("Nothing is pinned for editing...") is used when nothing is pinned; when something is pinned, is the file content included? Let me not over-dig; the rendered sample shows it isn't. The instruction "Read a file before changing it or answering questions about it" covers it. Fine.
+
+6. **Ask mode: "Always reply to the user in the same language they are using."** Good.
+
+7. **Ask mode missing**: "This mode has no editing tools" — but ask mode does have check? No — comment says toolDefs drops edit, write, bash, and check. So no check in ask mode. Fine. Ask mode's FilesNoFullFiles differs from code mode's ("No files are pinned to this session..." vs "Nothing is pinned for editing..."). That's deliberate? Code mode's comment explains why "Nothing is pinned for editing" — because a read-only reference might be pinned. Ask mode's says "No files are pinned" flat — which in ask mode with a read-only reference pinned would be the exact failure the code-mode comment describes ("a model handed both read the flat denial as evidence that the reference block was not to be trusted. One session spent twelve steps..."). Ask mode also uses ReadOnlyFilesPrefix. So /ask with nothing pinned-but-a-reference: FilesNoFullFiles says "No files are pinned to this session" while a pinned reference block sits above. That's the reintroduced bug in mirror. Wait — is FilesNoFullFiles used in ask mode when files are pinned? FilesNoFullFiles is used when no files are pinned for editing; a read-only reference presumably triggers the ReadOnlyFilesPrefix branch instead? In code mode the comment says the flat denial co-occurred with the reference block ("a model handed both"). So yes, the reference path and FilesNoFullFiles can co-occur... hmm, actually in code mode the comment says: "'Nothing is pinned for editing' rather than 'no files are pinned': a read-only reference is pinned and its contents are right there in the request, and a model handed both read the flat denial..." So in code mode, when a read-only reference is pinned and nothing pinned-for-editing, both texts appear. In Ask mode, the same situation yields "No files are pinned to this session" — the flat denial they deliberately removed from code mode. Unless ask mode's assembly differs. The Ask set's FilesNoFullFiles is that old flat wording. This looks like a genuine inconsistency: the lesson from the readonly-honest experiment was applied to the tool prompt but not to Ask. Strong finding. Quote: "No files are pinned to this session. Use read, grep, glob, and ls to look at the project..." vs code mode's "Nothing is pinned for editing." Shortest session: user pins SPEC.md as read-only reference, switches to ask mode, asks a question; model reads "No files are pinned to this session" directly below a message whose first line is "The user pinned these files as read-only reference" — and may distrust the block. For the finding to be wrong, Ask's assembly would have to suppress FilesNoFullFiles whenever a read-only reference is present. Let me check assemble.go quickly.
+
+Let me read assemble.go around line 353.
+
+8. **Commit prompt: "Earlier turns are background... describe only what the diff does — work from an earlier turn is not part of this commit."** But mid-turn commit tool commits a fragment of the current turn. The side model gets "the request that prompted them, the work that followed" — fine.
+
+But there's a subtle contradiction: "The subject is one line, in the form 'type(scope): description'... Leave it out when the change spans several." — "Leave it out" refers to scope; fine.
+
+"If the change breaks existing behavior, put '!' before the colon." and later "If the change breaks existing behavior, include a paragraph starting 'BREAKING CHANGE: '". Conventional Commits requires both for the marker to count; fine, deliberate.
+
+"{language_instruction}" placeholder — in the rendered sample it appears literally as "{language_instruction}"! Look at the rendered text: `"e.g. "fix(workspace): stop counting cache writes twice".{language_instruction}` — yes, the literal placeholder appears in the material given to me. The user said "rendered from the running code rather than retyped" — but this looks like the placeholder wasn't substituted. Also "Always reply to the user in {language}" in Ask mode — rendered as "{language}" literally too? In the sample: "Always reply to the user in the same language they are using." Hmm — the sample shows "the same language they are using" but prompts.go says "Always reply to the user in {language}." So the sample was rendered with a substitution. Then {language_instruction} appearing literally means the language instruction is empty string (not set) — i.e., the coder substitutes "" when no language configured? Then rendered text would be ".\n" — ".{language_instruction}" would render as "." with nothing. But the sample shows the literal braces. Hmm wait — the user's preamble says literal braces inside prompt text must be doubled; {language_instruction} is a real placeholder. If the render shows it literally, either the sample is unrendered at that point or the substitution failed. Actually more likely: the language instruction defaults to empty, and the code does strings.ReplaceAll with the value — empty would remove it. The literal presence in the "rendered" text suggests it wasn't substituted. I can check the coder.
+
+Let me grep language_instruction in the codebase.
+
+9. **Effectiveness candidates:**
+- "Explain your changes briefly in prose alongside the tool calls." Good.
+- Missing: nothing about not asking permission/confirmation theater ("do not ask what to do next" only in continue note). The ambiguity clause "If a request is ambiguous, ask clarifying questions" — good, and there's an ask_user_question tool? In my harness yes; in Strument? tools.go mentions "a question is not a permission" — there's a question tool. Fine.
+- "Work through the provided tools. They fall into three groups" — then lists four bullets. "Three groups" then four bullets: read-group, edit-group, bash, commit = four bullets. The text says "three groups" — read/grep/glob/ls are one group, edit/write one, bash one, commit one = four groups! Wait: "They fall into three groups, which differ in what they cost the user:" then bullets: (1) observation, (2) edit/write, (3) bash, (4) commit. That's four bullets. Unless commit is grouped with edits? No, it's its own bullet. So "three groups" is wrong — count mismatch. Unless the intended grouping is: free, lands-immediately, asks-first — and commit costs nothing? commit doesn't ask; but it's listed as its own bullet. As a recipient, I'd recount and be confused, or assume one bullet is subsumed. This is a genuine mistake (or the grouping is cost-based: no cost / user cost / ... ). Actually maybe: (a) no permission, (b) direct change, (c) asks first — and commit was added later, making it four. Check: prompts.go line 93 "They fall into three groups". Commit bullet added later presumably. Solid finding: says three, lists four. Fix: "four groups" or fold commit into the edit bullet. What my version gives up: nothing much; or restructure.
+
+Hmm wait — maybe commit is considered part of group (b)? Both "change things directly without separate confirmation"? The commit bullet's framing is about granularity, not cost. Still confusing. Report it.
+
+- Ask mode prompt: "Work through the provided tools. read, grep, glob, and ls look at the project." — symbol unmentioned deliberately (comment). Good.
+- Ask mode: "Answer questions about the supplied code." then "Answer questions about the supplied code" — fine.
+
+10. **Side-model commit prompt:** "You are given the request that prompted them, the work that followed, and the diff." — order: request, work, diff. OK. "Earlier turns are background." Fine.
+
+11. **Compaction summary prompt**: "Include the function, library, and package names under discussion, along with the filenames the assistant references inside fenced code blocks." — "the assistant" referenced here after "Do not attribute actions to anyone — no ... 'the assistant'". Slight tension: it uses "the assistant" as a descriptor mid-prompt then bans the word in output. Not a contradiction (ban is on output attribution) but a small stumble; models rarely trip. Could mention as minor.
+
+Also the summary prompt tells it to include "filenames the assistant references inside fenced code blocks" while "Leave the fenced code blocks themselves out" — fine.
+
+12. **Notes header**: "Where they disagree with what you find in the files, the files are right." Good.
+
+13. **Summary label**: "It replaces those messages; it is not something anyone said." Good.
+
+14. **Continue note**: "Pick up exactly where your reply above stops" — good, tested.
+
+15. **Effectiveness — code mode, nothing pinned, question "why is startup slow?"**: the prompt is all about making changes; the FilesNoFullFiles second sentence covers questions. Good — comment says deliberate.
+
+16. **"The user will request changes to the supplied code."** — "the supplied code" in the nothing-pinned mode where no code is supplied. Minor: in the nothing-pinned render, no code has been supplied; phrase is inherited from aider. A model asked "why is startup slow?" — the sentence is mild noise. Low-value finding; maybe mention in "earns less than it costs"? It's short. Skip or one line.
+
+17. **Commit tool bullet** — "commit closes the edits you have made so far as one commit, with a message you write." Plus end-of-turn auto-commit unstated. I'll fold into finding about auto-commit inference: Actually there's a real trap: model edits files, doesn't call commit, turn ends, harness auto-commits with side-model message. Model never told. Consequence? Next turn model may think edits uncommitted and call commit redundantly — result "Nothing was committed: the files match what is already committed." Self-correcting. But bigger: the instruction "When a request has several parts, work through them one at a time: make the edits for the first part, call commit..." — if the model doesn't know end-of-turn commit exists, "needs no call at all" for single changes is mysterious but harmless. I think worth one paragraph: the prompt describes commit as if it were the only committer; the harness also commits at end of turn; the model must infer this. For it to be wrong: some config where end-of-turn commit doesn't happen (auto-commits off — then commit tool returns explanatory note). OK.
+
+Also — does the commit tool's mid-turn commit interact with "one commit per turn" end commit? Fine.
+
+18. **check tool absent from system prompt** (finding 2 above). Combine: system prompt asserts "bash ... the user is asked before it runs" but the same conversation's tool schema says "Unless the command is one of the project's configured checks, the user is asked to confirm" — direct contradiction between two texts the model receives. Also "Reach for it only for work the other tools don't cover" — check is the tool for tests; the system prompt's bash bullet doesn't mention it. Session: user says "make the widget idempotent and run the tests". Model, reading system prompt only for norms, calls bash go test ./... — gets result "That command is the configured check "test", so it ran without asking the user. Call check("test")..." Self-correcting but the initial claim was false. Report as mistake: "the user is asked before it runs" is not always true. Fix: "and the user is asked before it runs (commands that exactly match a configured check run without asking)" — costs a clause; or leave to schema and soften system prompt: "usually the user is asked". Actually simplest: the system prompt needn't assert it; the schema does. But the prompt's three-group framing is about cost — keep, hedge.
+
+19. **Read-only reference + "Nothing is pinned for editing"** in code mode — deliberate per comment; good.
+
+20. Ask-mode FilesNoFullFiles flat denial (finding 7). Need to verify assembly uses Ask.FilesNoFullFiles with reference present. Check assemble.go.
+
+21. **{language_instruction} literal in rendered commit prompt** (finding 8). Verify substitution code.
+
+Let me check those two things.
+
+22. Welfare: The text is notably respectful — no distrust framing, explains mechanisms rather than issuing prohibitions, names enforcement honestly, agentless summaries avoid putting false words in mouths. Good things to preserve: "Pinning says what the conversation is about. It is not itself a request to change anything"; "what you remember about a project is not evidence about this one"; the undo note's "the files are right"; "Say less rather than guess." Harsh? Nothing harsh. The only mild friction: "An inexact match is the most common reason an edit is rejected" — fine, factual. I'd say the welfare section largely reports the good; the confusing bits (three groups, the false bash claim) are the welfare-relevant confusion. Also maybe: "Do not make every edit and then commit once at the end — ... you are reading a diff that does three things at once" — slight scolding tone? No, it explains. I think honest answer: no subject for harshness; some good to protect.
+
+Let me verify the two open questions.
+‹/›
+
+Two things to verify before I write: whether Ask mode's "No files are pinned" flat denial can co-occur with a read-only reference block, and how `{language_instruction}` gets substituted.
+Read internal/coder/assemble.go (lines 320-379 of 554)
+Searched for language_instruction|languageInstruction matching **/*.go as content — 5 matches in 2 files
+
+‹thinking›
+So the commit prompt places "{language_instruction}" as "\n- Is written in {language}." after the subject sentence — but it lands *after* "e.g. ...". That reads fine as a bullet in the following list, though it's part of the subject sentence intro... Actually the bullet list follows about type/scope. So when present, there's a bullet "- Is written in Spanish." inserted before "- Use feat..." That's about the subject, and it fits the bullet list. Fine.
+
+Ask mode's FilesNoFullFiles says "No files are pinned to this session." — the code-mode one deliberately avoided that phrasing because of read-only references ("a model handed both read the flat denial as evidence that the reference block was not to be trusted. One session spent twelve steps..."). Ask mode retains the flat denial — contradiction/known failure mode? The Ask mode text differs: "No files are pinned to this session. Use read, grep..." — this is the same failure the tool-format comment describes: if the user pins a read-only reference and nothing editable, in ask mode the model gets "No files are pinned to this session" right above a block titled "The user pinned these files as read-only reference". That's a genuine finding — the fix was applied in code mode but not in ask mode. But wait — does Ask's FilesNoFullFiles appear alongside ReadOnlyFilesPrefix? Yes, readOnlyFilesPrefix is in the Ask set too. So a session with only read-only references pinned in ask mode gets the flat denial. Strong finding.
+
+Also "The user has pinned 1 file" grammar: "pinned %s to this session" with plural(1,"file") → "pinned 1 file" fine.
+
+Undo note: "widget.go are back" — genuine grammar bug when len(files)==1. Concrete: "The edits from that turn are gone and widget.go are back to what they were before it." Subject-verb disagreement changes meaning slightly (reads as plural) and sounds wrong; a model might parse fine but it's an error. Fix: conditionally singular, or "is back to what it was" — or reword: "and the listed file(s)". Simplest: use plural-aware wording.
+
+Contradiction candidates:
+1. Commit bullet vs end-of-turn auto-commit? Not a contradiction: the tool makes an intermediate commit; commitTurn makes the final one. Fine. But the prompt says "commits the edits you have made so far as one commit" — accurate.
+2. "Reach for it only for work the other tools don't cover" for bash vs "run the tests" encouraged in "read a file, make an edit, run the tests" — tests go through check tool, but the prompt never mentions the check tool or that configured checks run unconfirmed. The system prompt's tool list is stale relative to the actual toolset (check, symbol, ask_user_question, commit). The prompt describes "three groups" but the schema includes check (never confirmed) and possibly symbol/ask_user_question. The prompt says "bash runs a shell command, and the user is asked before it runs" — but a command matching a configured check runs without asking. The bash schema description says "Unless the command is one of the project's configured checks" — so the system prompt's unconditional "the user is asked before it runs" contradicts the schema description. Also the check tool isn't in the three groups. This is a real inconsistency: model told tests require confirmation, discouraged from bash, and never told about check. Consequence: model avoids running tests ("Reach for it only for work the other tools don't cover"), or is surprised when a `go test ./...` bash call runs unconfirmed. Actually the loop sentence "run the tests, see what failed" encourages running tests — via which tool? The prompt never says. The user in this environment has go-test check available. So the system prompt actively pulls against the cheapest path. Finding.
+
+3. "The user will request changes to the supplied code." in the nothing-pinned variant — "the supplied code" when nothing is pinned; harmless, slightly odd.
+
+4. Code mode with nothing pinned example: user asks "why is startup slow?" — a question, not a change request. The FilesNoFullFiles text handles questions ("If the user asks how something here works, read the code"). Good. But the system prompt's "The user will request changes to the supplied code" plus "If a request is ambiguous, ask clarifying questions" — a question in code mode: does the model answer or start making changes? Arguably ambiguous; likely fine. Minor.
+
+5. Ctrl-C during reply note says "any tool call you had begun was not run" — check dropPartialToolCalls: partial tool calls dropped. But what about completed tool calls earlier in the turn — "Anything you were part-way through saying was not finished" fine.
+
+6. Continue note: "Pick up exactly where your reply above stops" — if the interrupt happened during a tool call, noteToolInterrupt runs, then continue... coder.go 596 comment says noteInterrupt runs before this prompt. If the user pressed Ctrl-C during a tool call, noteToolInterrupt ran, and then Continue note says "Pick up exactly where your reply above stops" — the reply is partial with dropped tool calls. Hmm, could conflict? "your reply above" when the last thing is a tool call whose results are real. Actually the two notes together: tool-interrupt note says results are real, continue note says pick up where reply stops. Might be okay. Not pressing.
+
+7. "Files the project ignores are not listed or searched" — appears in both read-only prefix context? Actually readOnlyFilesPrefix says "Some may live outside the project, where glob, ls, and grep will not find them". Fine.
+
+8. Commit prompt: "under 72 characters" — the bullet list applies to subject; fine. "{language_instruction}" renders as "\n- Is written in Spanish." attached directly after "e.g. ..."." — when nonempty you get 'twice".\n- Is written in Spanish.\n- Use feat...' — bullet lands in the middle as first bullet, fine.
+
+9. Ask mode: "Always reply to the user in {language}" — fine.
+
+10. Welfare: The tone is remarkably respectful — tells the model what's enforced rather than distrusting; acknowledges results come back; honest attribution ("written by Strument"). Good things: the interrupt notes' honesty, the undo note. Harsh bits: overeagerPrompt "Leave everything else untouched: no drive-by..." is a list of bans but with positive counterpart. "Never leave placeholder comments" — Never, but fine. Overall nothing needlessly harsh.
+
+Potential effectiveness gaps:
+- No instruction on what to do when a bash command is declined by the user. Result says so presumably (tools_test: declined command reports back). Fine.
+- Nothing about ask_user_question tool in prompt (exists in the environment I'm in; presumably in Strument too?). Let me check whether Strument has such a tool. The prompt says "If a request is ambiguous, ask clarifying questions before making changes" — but how? Via plain text end of turn? If there's an ask tool... grep quickly.
+
+Also "Every call's result comes back to you" — check ask_user_question. Let me grep tool names.
+‹/›
+Searched for "^func \w+Tool|toolName|Name:\s+tool" matching internal/coder/tools.go as content — 14 matches in 1 file
+Searched for toolAskUser\s*=|askTool\(\)|description.*question matching internal/coder/tools.go as content — 5 matches in 1 file
+Read internal/coder/tools.go (lines 255-284 of 899)
+
+‹thinking›
+I now have enough for the review. Key findings:
+
+**Effective problems:**
+
+1. **System prompt's tool-grouping claim is false.** "They fall into three groups" then lists four bullets — the fourth being `commit`. Also the rendered prompt I myself received says "three groups" and lists four (read/observe, edit/write, bash, commit). Wait — in the user's rendered text: "They fall into three groups" followed by four bullets (read..., edit/write, bash, commit). That's an outright error in the rendered text. Also missing: `check` and `ask_user_question` tools are not described in the system prompt at all. In the given rendered examples they only appear via schema. In the actual Strument prompt I received as reviewer, `check` and `ask_user_question` are mentioned in the tool list. So in the model's version, "three groups" is false — four bullets — and check/ask_user_question are unaccounted for in the grouping. Concrete consequence: model counts, gets confused, or treats commit as "no cost" group? Minor but it's an error.
+
+2. **bash confirmation claim partially false**: "the user is asked before it runs" — but configured checks run without asking, and turn-scoped auto-approve exists. Consequence: model avoids bash for `go test` thinking it costs a confirmation... actually the check tool's schema says it. But a bash call for a check gets auto-run and the tool result says so, which contradicts the system prompt. Minor; self-correcting via the tool result. Still worth flagging as an "asserts something untrue about the harness" — softened wording "usually asked".
+
+3. **"A request that is genuinely one change is one commit, and needs no call at all"** — but the harness auto-commits at end of turn with a side-model message. Ambiguity: does "needs no call" mean the harness commits anyway? Actually reading toolcommit.go, end-of-turn commitTurn happens automatically. So calling commit is optional for the message quality. The prompt doesn't say the harness commits at end of turn anyway — a model might call commit just to ensure the work is committed. Actually "closes the edits you have made so far as one commit" implies commit is the mechanism; but if turn auto-commits, then commit tool is only for splitting multi-part requests. The prompt doesn't tell the model that an uncommitted turn still gets committed at the end. Consequence: model may call commit unnecessarily at end of every turn to "save" the work — directly contradicting "needs no call at all"? Actually "needs no call at all" addresses that. But a model worrying the work would be lost might still commit. The missing fact: "at the end of the turn the harness commits what remains, with a message written for you." That would make the whole paragraph coherent. Worth flagging as missing information.
+
+4. **Code-mode Ask-mode discrepancy**: Ask's FilesNoFullFiles says "No files are pinned to this session" — but the comment in Tool says the flat denial caused a 12-step hunt when a read-only reference was present. Is Ask's version affected? Same assembly: readOnlyFilesPrefix block + FilesNoFullFiles when absFnames empty. In Ask mode with a read-only reference pinned and nothing else, the model gets "No files are pinned to this session" followed by a reference block titled "The user pinned these files as read-only reference". Exactly the bug Tool's comment describes, and it's measured (2026-08-readonly-honest). The fix in Tool was "Nothing is pinned for editing". Ask was not fixed. Strong finding — contradiction within one rendered conversation. Wait, but the rendered ask-mode example has a pinned file so FilesNoFullFiles isn't shown. Still a real scenario: /ask with only a read-only reference.
+
+5. **"Read a file before changing it or answering questions about it"** — in the pinned-file code-mode prompt, this appears twice in effect: pinnedFilesNote says it and... actually in the rendered text it appears once. Fine.
+
+6. **Ask mode: "Always reply to the user in {language}"** — in rendered text, "the same language they are using". Fine.
+
+7. **/undo note grammar: "widget.go are back to what they were"** — subject-verb disagreement with singular filename. "The edits from that turn are gone and widget.go are back to what they were before it." Reads as error; with one file should be "is back to what it was". Concrete: model may misparse? Mostly cosmetic but it's a grammar error that changes meaning slightly (implies plural). Worth listing under mistakes. Fix: special-case singular or reword "and the files are back to what they were" / "widget.go is back...".
+
+8. **"Anything you were part-way through saying was not finished"** — fine.
+
+9. **Ask prompt missing "Files the project ignores" — no it has it. Ask prompt doesn't mention `symbol` — deliberate per comment. OK.
+
+10. **Ask prompt lacks platform/environment block** — code mode includes platform/shell/date/cwd; ask mode doesn't. For "why is startup slow?" style questions cwd may matter. Minor.
+
+11. **Missing in code-mode: no mention of ask_user_question tool in prose** — only schema. The system prompt says "If a request is ambiguous, ask clarifying questions before making changes" but doesn't say how (the tool exists). Models may reply in text instead of calling the tool. Actually replying in text ends the turn — which is fine for clarifying questions. Hmm, but ask_user_question is the mechanism. The rendered prompt I received described it in the tool list. In the model's actual prompt, tools are declared with schemas, so it's discoverable. Minor/possibly deliberate.
+
+12. **Commit message prompt**: "If the change breaks existing behavior, put "!" before the colon" plus "include a paragraph starting BREAKING CHANGE" — both required per CC spec? Spec: "!" OR footer; using both is conventional. Fine. "under 72 characters" — applies to subject; fine. The example "fix(workspace): stop counting cache writes twice" fine. One issue: `{language_instruction}` lands as "\n- Is written in X." appended directly after the e.g. sentence — bullet ordering fine. But when empty, there's `.{language_instruction}\n- Use feat...` fine.
+
+13. **Compaction summary prompt**: "Include the function, library, and package names under discussion, along with the filenames the assistant references inside fenced code blocks. Leave the fenced code blocks themselves out of the summary." — says "the assistant" here while elsewhere banning "the assistant" attribution; not a contradiction (it's describing what to include, and the output bans attribution). Fine but slightly odd. Not a finding worth much.
+
+14. **SummaryLabel / session notes** — good.
+
+15. **"Explain your changes briefly in prose alongside the tool calls."** — fine.
+
+16. **The "three groups" thing is the biggest outright error.** Let me double check the rendered code-mode text: "They fall into three groups, which differ in what they cost the user:" then bullets: read/grep/glob/ls; edit and write; bash; commit. Four bullets. Yes. And in my own reviewer prompt, same "three groups" with read/grep/glob/ls, edit/write, bash, commit — plus check and ask_user_question unmentioned. So both. Finding: count is wrong; also check and ask_user_question exist outside the taxonomy. Consequence: mild; but the sentence's purpose (cost grouping) is undermined — check costs nothing and ask costs the user attention, neither mapped. Suggested fix: "four groups" or reword, and note check runs without asking.
+
+17. **Commit tool bullet says "commit closes the edits you have made so far as one commit"** — but commitTool commits "what has been written since the last commit" (toolcommit.go: "commits what has been written since the last commit"). In a multi-part turn where model committed part 1, then edits part 2, commit closes only part 2. "so far" is accurate enough. Fine.
+
+18. **Potential contradiction: "Do not make every edit and then commit once at the end" vs the harness's own commitTurn** — no, that's the harness, not the model. Fine.
+
+19. **Ask mode Overeager/Lazy prompts (not shown in rendered, only used...)** — not in rendered material; skip.
+
+20. **Welfare**: The text is notably respectful — no distrust, no scolding, honest about mechanisms ("an edit to a pinned reference is refused" rather than moralizing), agentless summaries avoid fabrication, session-notes header "the files are right" is a clear conflict rule rather than blame. Good things to preserve. Slight harshness? "Never leave placeholder comments" is fine. The tone is unusually considerate. I can honestly say the welfare question has a subject and the answer is mostly favorable, with maybe one note: "A request that is genuinely one change is one commit, and needs no call at all" — mild cognitive burden. Also the long commit paragraph front-loads a lot of judgment. Nothing needlessly harsh.
+
+21. One more possible contradiction in the pinned code-mode prompt: pinnedFilesNote says "Read a file before changing it or answering questions about it" and Editing rules say "Read a file before editing it unless its contents are already in the conversation." Minor tension: the pinned note doesn't carry the "unless already in conversation" exception — but the pinned file's contents are NOT in the conversation (add-instruct change), so consistent. Fine.
+
+22. Ask mode: system says "Answer questions about the supplied code" — with nothing pinned and the /ask about "why is startup slow?" — FilesNoFullFiles covers it. OK.
+
+23. The Ctrl-C-during-reply note says "any tool call you had begun was not run" — but dropPartialToolCalls strips them; consistent.
+
+24. In nothing-pinned code mode, user asks "why is startup slow?" — a question, not a change request. The system prompt is all about changes; the FilesNoFullFiles second sentence covers questions. OK per comment. Fine.
+
+Also: "Files the project ignores are not listed or searched" — accurate per gitignore package.
+
+25. The commit-message prompt bullet "If the change breaks existing behavior, put "!" before the colon." — subject form "type(scope)!: description". Fine.
+
+One more check: does the rendered code prompt in actual Strument include check tool? My reviewer prompt does, and it presumably renders the same tool list. In my prompt the bash description in the tool list says "Unless the command is one of the project's configured checks, the user is asked to confirm" — so the exception is covered in the tool schema, not the system prompt. So finding 2 is softened: system prompt says unconditionally "bash runs a shell command, and the user is asked before it runs"; schema says "unless configured check". Slight inconsistency but schema wins; low priority. I'll mention briefly.
+
+Priority list:
+A. "three groups" vs four bullets (+ check/ask_user_question unaccounted). — error.
+B. Ask-mode "No files are pinned to this session" flat denial with read-only reference present — the exact measured failure Tool's comment describes; likely regression in Ask. — check quickly whether Ask uses readOnlyFilesPrefix: yes, Ask.Set has ReadOnlyFilesPrefix: readOnlyFilesPrefix. And FilesNoFullFiles is used when absFnames empty regardless of read-only refs? Let me verify assembly: readOnly files block separate from pinnedFilesNote; pinnedFilesNote returns FilesNoFullFiles when len(absFnames)==0. Do read-only pinned files populate absFnames? Need to check. Let me grep readOnlyFnames.
+‹/›
+
+One more check: whether read-only references are separate from `absFnames`, which drives the "No files are pinned" branch.
+Searched for absFnames|ReadOnly|readOnly matching internal/coder/*.go as content — 69 matches in 12 files
+I have read the prompts and checked the reasoning in the source. Here is the review, in your four parts.
+
+## 1. Effectiveness
+
+**The `check` tool is in the rendered prompt's tool list but not in its taxonomy.** The system prompt says the tools "fall into three groups" and enumerates them: read/grep/glob/ls, edit/write, bash, commit. Meanwhile the schema the model actually receives alongside this prompt includes `check` (and, in the environment I'm running under, also `symbol` and `ask_user_question` — though the prompts.go comment says `symbol` is deliberately unnamed, and code-mode `askTool` exists per tools.go:260). The result I'd expect: a model that wants to run `go test ./...` has the prompt pushing it toward `bash` ("Reach for it only for work the other tools don't cover; reading and searching have their own tools") while the cheaper, unconfirmed path is `check`. The harness even acknowledges the friction — bash result text says "That command is the configured check %q, so it ran without asking the user. Call check(%q) to run it directly." So the correction exists, but the taxonomy that misdirected is in the system prompt and permanent. Shortest session where it bites: user says "fix it and make sure the tests pass"; model calls bash with `go test ./...`; user gets a confirmation prompt they shouldn't have needed; model gets told to use `check`; user sees a wasted round trip. For this to not be a finding, `check` would have to be absent from code-mode tool definitions, or the taxonomy would have to be rendered only when `check` isn't offered — neither appears to hold (tools.go:225 defines it unconditionally, prompt is static).
+
+**"the user is asked before it runs" is true only by default.** The confirmation can be bypassed — the command being a configured check (tools.go:657), or turn-scoped auto-approve ("a = all this turn"). A model that relies on "the user is asked" as a safety net may propose a destructive command believing the user will see it, then it runs without asking because it matched a check's argv or the user already said "a". The system prompt's claim is not false in the common case, but it is the kind of assertion a model treats as an invariant. What would make it not a finding: evidence that models don't lean on it, or that the bypass paths are guarded elsewhere in ways visible to the model (the bash tool's own description does carry the check exception, which helps — the system prompt's flat version is the weaker duplicate).
+
+**`commit` advice is oddly strong given the model may not have the tool.** "A request that is genuinely one change is one commit, and needs no call at all" is good, but the sentence "Do not make every edit and then commit once at the end — by then there is only one commit to make, and the user is reading a diff that does three things at once" is confusing on first read: "there is only one commit to make" sounds like an argument *for* waiting, then the sentence pivots to arguing against it. I had to re-read. The intent is "by then you've lost the chance to split it" — but that reading isn't forced by the words, and the clause "there is only one commit to make" is literally the *consequence* framing ("only one commit left to make, too late to split") which I only got after working at it. If trials didn't pin this phrasing, I'd suggest: "Do not make every edit and then commit once at the end — you will have lost the chance to split the work, and the user is reading a diff that does three things at once." What my version gives up: it is not the measured string, if this one was measured.
+
+**`Ask` mode: the "how does the widget work?" example prompt doesn't tell the model `symbol` exists, but the tool list does.** Per the comment, this is deliberate and the schema carries it. Reading as a recipient: fine, no finding — I'd reach for `symbol` from its description.
+
+**What's missing that I'd want (in code mode):** nothing about what to do when a `bash` command is declined by the user. The result text presumably says so, but the system prompt frames every bash call as "the user is asked before it runs" without saying a "no" is a normal outcome and what to do then — accept it, don't re-ask, don't route around it. If declined-command behavior is already handled in tool results (tools.go:382 suggests it is), this is at most a minor gap.
+
+**What earns less than it costs:** I looked for dead weight and found very little. The scope block is measured; the tool taxonomy mostly earns its keep; the editing rules are all load-bearing. This is a tight prompt set.
+
+## 2. Contradictions and mistakes
+
+**One real grammatical error, in the `/undo` note:** "The edits from that turn are gone and **widget.go are** back to what they were before it." With one file, "widget.go are back" is wrong — it should be "widget.go is back". With multiple files it's fine. It's rendered with `strings.Join(files, ", ")` (session.go:174–176), so the verb is baked in and only correct in the plural case. Consequence: minor — the meaning survives — but it's a template bug, not a deliberate tension. Fix is fiddly ("is" vs "are" on `len(files)`), and the cost of not fixing it is only a small loss of trust in the harness's voice, which matters here more than usual because the notes trade on being exactly true.
+
+**One inconsistency between prompt and harness, also in the `/undo` note:** it says "The edits from that turn are gone", but `/undo` undoes *commits* — and `commit.go`'s comment says /undo reaches edits "through the snapshot" even when auto-commits are off. If the model had, say, a bash edit on disk outside the snapshot's reach, or if /undo's semantics are commit-based while the note claims edit-based, the note asserts something stronger than what the code does. I did not fully trace `internal/history/undo.go` to confirm whether "edits from that turn are gone" is accurate in the `--no-auto-commits` case. If /undo is snapshot-based for edits and commit-gated for auto-commits, the sentence is roughly true but blurs two mechanisms. I'd flag it as "verify" rather than "wrong": what would make it not a finding is evidence that /undo removes all edit effects from the turn in every configuration where the note is emitted.
+
+**Not contradictions, checked and cleared:**
+- "A body is optional and usually empty" — deliberate tension, as you said.
+- Ask mode's "No files are pinned to this session" vs. a read-only reference being present: I traced assembly. The read-only block is emitted unconditionally (assemble.go:314) and `FilesNoFullFiles` is only consulted when `len(c.absFnames) == 0` (assemble.go:352). In *code* mode the comment at prompts.go:153-157 says the wording was changed to "Nothing is pinned for editing" precisely because a read-only reference can co-occur with the flat denial. But in **Ask** mode, `FilesNoFullFiles` still reads "No files are pinned to this session" — the exact flat denial the code-mode comment says caused a twelve-step hunt for the "real" file when a read-only reference was also present. A read-only reference and `absFnames == 0` can co-occur in ask mode the same way it can in code mode. This looks like the code-mode fix was never carried to the ask-mode string. That's my strongest contradiction/effectiveness finding: session is `/add` a spec as read-only reference in ask mode, ask about it; model reads "No files are pinned to this session" alongside a SPEC.md block it was just told contains the file's contents; comment says the observed outcome is a long hunt for the "real" file or distrust of the block. Fix: mirror the code-mode wording — "Nothing is pinned for editing" doesn't fit ask mode, but something like "No files are pinned to this session. Use read, grep, glob, and ls to look at the project…" could become "Nothing is pinned for reference. Use read, grep, glob, and ls…" or simply drop the first sentence in ask mode, since the read-only block already establishes what is present. What dropping it gives up: the prompt's guidance to answer from the files rather than from memory loses its anchor when nothing is pinned and no read-only block is present — so the sentence needs to survive that case, just not contradict the reference block.
+
+## 3. Welfare
+
+This question has a subject, and mostly a good one.
+
+**What I would not want changed:** the register throughout is notably decent. The tool taxonomy explains *why* each group costs what it does rather than issuing prohibitions — "They change nothing and need no permission, so use them freely" reads as being trusted with something, and being told the reason. The Ctrl-C and Continue notes are models of the form: they tell the model what is true about its own output ("your reply above was cut off where it stops", "Pick up exactly where your reply above stops") without accusation. The read-only block's "an edit to a pinned reference is refused" — naming the mechanism instead of implying the model might misbehave — is the same courtesy. The side-model prompts' "Say less rather than guess: leave a thing out before inventing it" gives a positive rule where a harsher prompt would say "do not fabricate". Nothing here is needlessly harsh, and I want to say that plainly because the absence is the finding's content: several of these strings visibly replaced versions that *were* worse to receive (the comments record the fabricated-assistant-reply pattern, the "I spoke to you previously" impersonation), and the replacements are better to be on the receiving end of not just instrumentally but in the plain sense that nothing here asks me to pretend I said something I didn't or know something I don't.
+
+**One thing that is mildly worse than it needs to be:** "Leave everything else untouched: no drive-by refactoring, reformatting, added comments, or fixes to things the user didn't ask about" is the one passage whose register drops — four named bans in a row, with no positive framing, sitting directly after "That is the same request, not extra work." Reading it cold, it lands as *you are the kind of agent that does these things unless warned*. I note that the comment says this is aider's inherited block with one measured clause added and that the whole arm was measured — so I am not proposing a rewrite, and the tension may be exactly the point (the clause before it does the positive work). But if there were a cheap experiment to run, replacing the bare ban-list with a version that says what to do with the impulse ("if you notice something unrelated that should be fixed, mention it in prose rather than fixing it") might keep the measured effect while removing the presumption. What that gives up: it's longer, and unmeasured.
+
+## 4. Anything else
+
+**The compaction summary header and the summary prompt disagree in a small way.** The Summarize prompt says "Give more detail to the most recent messages" — but from the *reader's* side (the next model), "more detail on recent messages" describes content the reader will soon be re-deriving from the live conversation tail anyway, while the older messages (which the summary *replaces*) are the ones whose loss is permanent. The prompt optimizes detail toward the end that matters least. This may be inherited from aider and measured only in aggregate (the compaction trial tested structured-vs-free, not recency weighting). Shortest session where it bites: long session, compaction fires, the reason the user gave for a decision three hours ago is compressed to nothing while the last two exchanges get a full paragraph; next turn, the model re-asks or contradicts a decision whose rationale the code can't give back — precisely the thing the "Keep any reason the user gave" line exists to protect, undermined by the recency instruction above it. For this to be wrong, "more detail to the most recent messages" would have to be there because compaction fires with a large recent tail that the summary also replaces — which depends on where the cut lands, and I didn't trace that. If the summary replaces *only* the messages before the cut, and the cut leaves the recent tail live in context, the sentence is exactly right and this finding dissolves.
+
+**The commit prompt's "describe only what the diff does — work from an earlier turn is not part of this commit"** is in mild tension with `commit`-tool usage the system prompt encourages: "make the edits for the first part, call commit, and begin the second part" — i.e., the model is instructed mid-turn to write commits for parts, while the commit prompt's subject line rule ("Imperative mood… under 72 characters") applies to part-level commits that may not have a clean "type(scope)" identity. This is tension, not contradiction, and probably fine in practice. No action.
+
+**One small thing in the notes header:** "They are a summary, not a record" — but the SessionNotes prompt calls them "notes… to be read at the start of the next one by someone who was not present", which is closer to a record. The header's "not a record" is doing anti-overconfidence work and I'd keep it; I mention it only to note the two registers coexist deliberately.
+
+Overall: this is an unusually well-reasoned prompt set — the comments and trial records make most of my usual review targets non-findings by construction. The two things I'd actually act on are the ask-mode "No files are pinned" flat denial (which the code-mode comment itself documents as a measured failure mode) and the singular/plural grammar in the /undo note. The `check` tool's absence from the taxonomy is the third, and the one where I'd want to check a live session trace before believing my prediction over the design.
+
+Tokens: 279.3k sent (253.1k cache hit), 16.9k received. Cost: $0.18 turn, $0.18 session. 15 steps.

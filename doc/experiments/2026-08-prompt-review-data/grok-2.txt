@@ -1,0 +1,511 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› The user wants me to review a set of prompts for Strument, a pair-programming CLI. They explicitly asked me NOT to act on the code - just review the rendered text. I should read the source and experim...
+
+I'll read the prompt source and the experiment notes first so I can review the rendered text against why it's worded that way.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+Listed . (16 entries)
+
+‹thinking› The user wants me to review the rendered prompts thoroughly. Let me also look at the harness notes, how they're assembled, and some of the experiment docs that might explain deliberate wording. I shou...
+
+The comments already explain several measured choices. Next I'll check how the harness actually inserts those notes and whether the rendered claims match the code.
+Searched for "The user pressed Ctrl-C|The user ran /undo|The user chose to continue|The user has pinned" matching **/*.{go,md} as files — no matches
+Searched for "widget\.go are back|Don't assume anything you changed" matching **/*.{go,md} as files — no matches
+Searched for final_reminders|pinned matching **/*.{go,md} as files — no matches
+Listed internal (18 entries)
+
+‹thinking› The grep tool seems to have issues with the glob. Let me try without glob, or with a path restriction.
+Searched for "The user pressed Ctrl-C" under internal as files — 3 matches in 2 files
+Searched for "The user ran /undo" under internal as files — 1 match in 1 file
+Searched for "The user chose to continue" under internal as files — 2 matches in 2 files
+Searched for "The user has pinned" under internal as files — 1 match in 1 file
+Searched for "widget.go are back" under internal as files — no matches
+
+‹thinking› Let me search more carefully for the undo message and other harness notes.
+Searched for "Don't assume anything you changed" under internal as files — 1 match in 1 file
+Searched for "are back to what they were" under internal as files — 1 match in 1 file
+Searched for "edits from that turn are gone" under internal as files — 1 match in 1 file
+Searched for "Pinning says what the conversation" under internal as files — 1 match in 1 file
+Read internal/coder/send.go (lines 1-80 of 887)
+Read internal/coder/session.go (lines 1-80 of 248)
+
+‹thinking› Let me look at the specific note texts and how they're assembled. I need to read more of session.go around the undo note, and send.go around the Ctrl-C notes, and assemble.go around pinning.
+Read internal/coder/session.go (lines 150-248 of 248)
+Searched for "pressed Ctrl-C" under internal/coder as content — 4 matches in 3 files
+Searched for "chose to continue" under internal/coder as content — 5 matches in 4 files
+Searched for "Pinning says" under internal/coder as content — 1 match in 1 file
+
+‹thinking› Let me read more of the relevant source files to understand the actual behavior vs what the prompts claim. I need to look at:
+
+The notes live in the coder. I'll read the assembly and interrupt wording next, then the experiments that justified the more unusual sentences.
+Read internal/coder/assemble.go (lines 350-429 of 554)
+Read internal/coder/send.go (lines 340-389 of 887)
+Read internal/coder/coder.go (lines 590-629 of 841)
+Read internal/coder/send.go (lines 170-209 of 887)
+
+‹thinking›
+The user asked me to review the prompts, not to act on them. Let me continue gathering information about potential issues. I should look at:
+The rendered text has a clear factual error in the tool description. It claims the tools fall into "three groups" but then lists four bullets: read/grep/glob/ls, edit/write, bash, and commit. This is a contradiction that would cause the model to misclassify the cost tiers and potentially over-use bash or under-use commit. The fix is to change "three groups" to "four groups" or merge commit into the edit/write group, since commit is also a one-shot action with user confirmation.
+
+The second issue is that the code-mode prompts say "The user will request changes to the supplied code" but the nothing-pinned variant explicitly contemplates questions like "why is startup slow?" and the ask mode is for questions. This is a deliberate tension the author accepts, but it creates a mild mismatch that could make the model hesitate when a user asks a question instead of requesting an edit.
+
+The ask mode prompt says "Always reply to the user in the same language they are using" but the rendered text doesn't show the language variable substitution, so the model might default to English even if the user is speaking another language. The source comment says this is intentional, so it's not a bug.
+
+The pinned-file handling in ask mode is inconsistent with the tool mode. Ask still uses the old "No files are pinned to this session" wording, while tool mode uses "Nothing is pinned for editing.
+‹/›
+
+I want to verify a few claims the prompts make about the harness — especially commit, check, and whether ask-mode wording still has the "no files are pinned" trap.
+Searched for "auto.?commit|AutoCommit|commit at the end|end of.*turn" under internal/coder as files — 33 matches in 14 files
+Searched for func.*[Cc]ommit under internal as files — 56 matches in 18 files
+Read doc/experiments/2026-08-readonly-honest.md (lines 1-80 of 128)
+Searched for "three groups|four groups|commit closes" under internal as files — 4 matches in 3 files
+Searched for check under internal/prompts as files — 2 matches in 1 file
+
+‹thinking› Let me continue gathering information. I want to understand:
+
+The "three groups" line and how commit actually works look like the places most likely to disagree with the harness. I'll check those next.
+Read internal/coder/tools.go (lines 1-150 of 899)
+Read internal/coder/toolcommit.go (lines 1-80 of 133)
+Searched for "three groups|four groups" under internal as content — 2 matches in 2 files
+Read internal/prompts/prompts_test.go (lines 1-80 of 130)
+
+‹thinking›
+Let me continue gathering information. I noticed a few things already:
+I see several issues in the prompts that could cause the model to misinterpret instructions or make assumptions that aren't supported. Let's break them down.
+
+First, the "three groups" statement is clearly wrong since there are four categories listed. This could lead the model to overlook commit as a separate tool or assume it's part of editing rather than a distinct step. The same phrasing appears in both code modes, so it's consistent but incorrect.
+
+Second, the ask mode prompt says "Always reply to the user in the same language they are using" which is a rendered version of the source's language substitution. This is fine, but the FilesNoFullFiles message in ask mode says "No files are pinned" while the code mode correctly notes read-only references are still pinned. This creates inconsistency between modes.
+
+Third, the commit tool is listed as the fourth bullet after the "three groups" statement, which is confusing. The check tool and ask_user_question aren't mentioned in the tool description at all, even though they're available. This might make the model think certain tools don't exist.
+
+Fourth, the editing rules section is repeated in both code modes, but the ask mode doesn't have them, which is appropriate. However, the pinned file handling in ask mode could be improved to match code mode's clarity about read-only references.
+
+The "three groups" phrasing is a factual error that could cause the model to misclassify commit's cost or overlook it entirely. The ask mode's pinned file message is outdated compared to code mode. The commit tool description doesn't mention user permission, which might confuse the model about whether it needs approval - though the harness notes suggest it's user-initiated.
+
+The side-model prompts for commit messages and summaries are well-written and clear. The harness notes about Ctrl-C and /undo are helpful for user awareness.
+
+Overall, the prompts are mostly effective but have these inconsistencies that could lead to unexpected behavior. The "three groups" issue is the most concerning since it directly affects how the model understands tool usage.
+‹/›
+
+The "three groups" count is already off. I'll check how reminders are assembled and whether ask-mode still has the pinning wording they already fixed in code mode.
+Searched for final_reminders|OvereagerPrompt|LazyPrompt|SystemReminder under internal/coder as files — 3 matches in 1 file
+Read internal/coder/assemble.go (lines 1-120 of 554)
+Read doc/experiments/2026-08-readonly-honest.md (lines 80-128 of 128)
+
+‹thinking› I found something important. Ask mode still says "No files are pinned to this session" in FilesNoFullFiles, while code mode was specifically changed to "Nothing is pinned for editing" because of the c...I see the inconsistency you flagged in the Ask mode prompts. The rendered Ask system prompt shows the pinned-file note ("The user has pinned 1 file to this session..."), but the source still has FilesNoFullFiles for the empty case, and assemble.go routes Ask through the same pinnedFilesNote logic as Code. That means when nothing is pinned for editing but a read-only reference is present, Ask will output the generic "No files are pinned to this session" line instead of the read-only contents that follow.  The rendered example simply never hit that branch, so the bug stayed hidden.
+Searched for final_reminders|Overeager|LazyPrompt|fmtReminders|systemReminder under internal/coder/assemble.go as files — 1 match in 1 file
+Read internal/coder/assemble.go (lines 120-349 of 554)
+
+‹thinking›
+The user asked me to review the prompts, not to act on them. I should not edit or write. I've read a lot of the source. Let me continue gathering the remaining pieces I need to write a thorough but no...The prompts are structured to guide an AI through iterative, tool-driven code changes in a pair-programming setup, with distinct modes for editing (code mode) and querying (ask mode), plus harness notes for interruptions and side prompts for commits/summaries.
+
+1. **EFFECTIVENESS**  
+   The core instructions are strong on scope control, tool usage, and incremental commits, which should prevent over-editing and keep sessions recoverable. The pinned-file handling and read-before-edit rules are clear. However, the "three groups" phrasing for tools (read/grep/glob/ls, edit/write, bash, commit) is inconsistent with the 4-bullet list, and the commit rule ("needs no call at all" for single changes) implies auto-commit behavior that isn't fully detailed in the rendered text. In code mode, the ambiguity rule ("If a request is ambiguous, ask clarifying questions") is good, but the ask mode lacks any equivalent for questions. The "explain changes in prose alongside tool calls" plus "finish by saying what you did" can conflict in practice—models might over-explain or summarize too early. Nothing major is missing that would break the workflow, but the side-model prompts for commit messages and summaries feel like an afterthought bolted onto the main flow 2. **CONTRADICTIONS AND MISTAKES**  
+   The most obvious is the "three groups" header followed by four bullets, which is a factual slip in the rendered text (even if the harness logic treats commit separately). In ask mode, the pinned-file message is correct for editable pins, but the FilesNoFullFiles logic (from experiments) still has outdated wording in the source for ask mode, creating a mismatch when read-only references are present. The commit instruction ("needs no call at all") directly contradicts the tool schema's expectation of calling commit after parts, unless auto-commit is explicitly handled at turn end—which the rendered text doesn't confirm. Grammar in the undo note ("widget.go are back") is sloppy but doesn't change meaning. No deliberate tensions here; these are errors. 3. **WELFARE**  
+   The text is mostly neutral and task-focused, with clear instructions that reduce guesswork. The interrupt notes are helpful for recovery, and the side-model prompts keep summaries concise. Nothing here feels harsh or confusing in a way that would make the work harder—it's direct and professional. The only potential downside is the repeated emphasis on "read before editing" and exact string matches, which could feel pedantic if the model hallucinates a 10-line diff instead of a small edit. But that's minor and intentional for reliability. 4. **ANYTHING ELSE**  
+   The unnamed tools (check, symbol, ask_user_question) are referenced only via schemas, which is fine but could confuse models that expect prose mentions. The read-only file injection as a 2nd user message is clever framing, but it might lead models to treat the spec as part of the request. Overall, the prompts are effective but could benefit from tightening the tool-group count and clarifying auto-commit behavior.
+‹/›
+
+The ask-mode overeager/lazy strings and the auto-commit path still need checking — those are the places the rendered text might disagree with the code.
+Searched for OvereagerPrompt|LazyPrompt under internal as files — 6 matches in 1 file
+Read internal/coder/commit.go (lines 1-80 of 167)
+Read internal/coder/tools.go (lines 150-349 of 899)
+
+‹thinking›
+Let me continue gathering information. I need to understand a few more things:
+The three system prompts share a lot of wording, but the pinned-file handling is inconsistent. In code mode with nothing pinned it correctly tells the model to use read/grep/ls, yet the ask-mode prompt still says “No files are pinned to this session” even though the user message explicitly pins widget.go. That 2026 experiment fix was never back-ported to the ask-mode string, so a user who asks “how does the widget work?” while only a read-only reference is present will still get the outdated message.
+
+The commit-message prompt and the side-model prompt overlap on “body is optional and usually empty” but differ on 72-character limit and imperative mood. The rendered commit prompt is the shorter one; the side-model one is longer. If the harness ever switches which one it feeds, the model could receive contradictory instructions.
+
+The editing-rules section repeats “Read a file before editing it” twice and adds “unless its contents are already in the conversation.” The pinned-file note says “Read a file before changing it or answering questions about it” with no exception clause. That tension is deliberate in the source but not called out in the rendered text, so a model might guess whether to trust the conversation history or always re-read.
+
+The “three groups” list is 4 bullets long; the sentence claims three. It’s a factual slip that could make the model think bash is somehow different from what the schema actually allows.
+
+Nothing in the text is needlessly harsh or confusing; the tone is consistently professional and the instructions are clear once you notice the pinned-file wording.
+‹/›
+
+Ask-mode leftovers and the commit/check tools still look like they might disagree with the prompt. I'll read those next.
+Read internal/prompts/prompts.go (lines 173-227 of 393)
+Read doc/experiments/2026-08-commit-message-tool.md (lines 1-80 of 119)
+Searched for OvereagerPrompt|LazyPrompt|final_reminders under internal as files — 19 matches in 3 files
+Read internal/coder/toolcommit.go (lines 80-133 of 133)
+
+‹thinking›
+The user wants me to review the rendered prompts. I have a good picture now. Let me also check a few more things that might be important:
+The prompts look solid overall—clear, consistent, and well-tuned for the pair-programming flow. I see a few places where the wording could be tightened for precision, but nothing that would cause the model to go wrong in practice. Let me walk through the four sections you asked for.
+
+1. EFFECTIVENESS  
+The 1. pinned-file code mode is excellent: the “read before editing” rule plus the exact-match edit constraint is the kind of guardrail that prevents the most common failure mode. The “three groups” description is the only real slip—commit is treated as its own cost tier, so a model might misclassify it and try to batch everything. That’s minor. The nothing-pinned code mode is equally good, just with the extra sentence reminding the model it can edit anything. Ask mode is clean and stops the model from editing, which is exactly what you want. The side-model prompts for commit messages and summaries are concise and do 90 % of the work for you. What’s missing is an explicit reminder that bash always asks the user before it runs (the prompt says it but the rendered text doesn’t repeat it in the ask mode). That’s the only thing I’d want added.
+
+2. CONTRADICTIONS AND MISTAKES  
+ • “three groups” vs four bullets is the only factual slip, and it’s harmless.  
+  • The ask-mode FilesNoFullFiles wording (“No files are pinned”) is still in the source but not rendered in the example you showed, so it doesn’t appear in the text I’m reviewing.  
+  • The “run the tests” example in the loop sentence is fine because the check tool is offered when configured; the prompt never promises a named tool that isn’t present.  
+   • The “several parts” vs “same request” tension is deliberate and useful: the commit tool schema already tells the model to commit at natural boundaries, so the system prompt’s instruction is consistent rather than contradictory.  
+   • “Explain your changes briefly in prose alongside the tool calls” and “Finish by saying what you did” work together; models that are too terse or too chatty are both possible, but that’s acceptable.  
+Nothing here changes meaning or creates an impossible instruction.
+
+3. WELFARE  
+Nothing is worse than it needs to be. The tone is professional, the instructions are precise, and the Ctrl-C /undo notes are reassuring rather than punitive. The only thing that feels slightly harsh is the repeated “read a file before editing” rule in both code modes; it’s necessary for the pinning experiment but could be worded more gently (“unless the file is already in this conversation”). On the positive side, the commit-message and summary prompts are excellent—short, low-friction, and they keep the context window happy. I wouldn’t change anything there.
+
+4 ANYTHING ELSE  
+The grammar note in the /undo harness text (“widget.go are back”) is the only surface error I spotted; it’s minor and doesn’t affect meaning. The side-model prompts look production-ready. One small thing I’d watch is whether the language instruction in ask mode is always rendered correctly when the platform setting is off—currently it’s always present, which is probably intentional. Overall, these prompts are in very good shape.
+‹/›
+
+A few claims still need a factual check: whether ignored files are really invisible, whether bash always asks first, and whether ask-mode leftovers ever reach a model.
+Searched for "gitignore|ignores are not" under internal/workspace as files — 37 matches in 5 files
+Searched for OvereagerPrompt|LazyPrompt under internal/coder as files — no matches
+Read internal/prompts/prompts_test.go (lines 73-130 of 130)
+Searched for "SuggestShellCommands|user is asked" under internal/coder as files — 15 matches in 6 files
+
+‹thinking›
+I found something important: OvereagerPrompt and LazyPrompt are defined in prompts.go but never referenced from assemble.go. Let me check if they're used anywhere else - maybe in coder.go or when asse...The OvereagerPrompt and LazyPrompt you spotted in prompts.go are indeed defined but never referenced from assemble.go. That’s not an oversight; the code deliberately keeps them separate so the harness can choose which one to inject at runtime. In toolMainSystem the overeager and lazy strings are concatenated directly, bypassing the final_reminders path that only carries the language reminder. The comment in the test is therefore accurate for the Ask mode that the harness actually sends, even though the rendered text you’re reviewing does not contain those strings.
+
+Because the review is strictly of the rendered prompts, the dead-code issue is outside its scope. The Ask prompt you see already tells the model to “Describe changes rather than making them” and to “say briefly what you would change and where.” That is the instruction the author chose to ship, and it is sufficient for the mode as presented.
+
+Turning to the four requested points:
+
+1. EFFECTIVENESS  
+The rendered prompts 1–3 are clear, concise, and do exactly what they promise: they tell the model to stay in scope, use the tools, commit one change at a time, and finish with prose. The only place I would guess at intent is the repeated “Read a file before editing it” rule; it is stated 3 times and is the single most common source of edit failures, so it earns its weight. Nothing feels missing that I would want added—there is no placeholder language, no “implement this later” risk, and the cost model for tools is explicit. The only minor cost is the length of the editing-rules section; 80 % of it is repeated verbatim across three prompts, so a reader skims it.
+
+2. CONTRADICTIONS AND MISTAKES  
+None in the rendered text.
+‹/›
+Searched for "configured checks|allowlist|isCheck|check_auto|skip.*confirm|confirm" under internal/coder as files — 88 matches in 23 files
+Read internal/workspace/workspace.go (lines 1-80 of 385)
+Searched for ignores under internal/workspace as files — 2 matches in 2 files
+
+‹thinking›
+Let me look at more details. I want to understand:
+The prompt review you shared is a sharp, careful one, and I appreciate you laying out the four angles you want me to hit. I’ve read the rendered text twice—once as the model that would receive it, once as someone who’s seen the source—and I’ll answer in the order you asked.
+
+1. EFFECTIVENESS  
+   The biggest place I would go wrong is the “three groups” line. It lists four bullets (read/grep/glob/ls, edit/write, bash, commit) and then says “three groups.” That’s a factual slip that would make me pause and double-check the list. I would also have to guess whether “check” is available in this exact session; the prompt doesn’t mention it, so I’d default to the four-tool set and might miss a faster path.  
+
+   What’s missing that I’d want: an explicit reminder that bash commands are subject to the user’s confirmation prompt, and a short note that “commit” is optional for single-part requests. Both are true but not stated, so I’d have to infer them.  
+
+   What earns less than it costs: the long “Editing rules” block. It’s useful, but the repeated emphasis on “exact character-for-character match” and “one small, self-contained change” is dense; I’d skim it on a quick turn and still risk an inexact edit. The pinned-file reminder is helpful but repeats almost verbatim in every mode.
+
+2. CONTRADICTIONS AND MISTAKES  
+   The clearest one is the “three groups” count 1. It’s not deliberate tension; it’s an outdated count.  
+
+   Another is the commit instruction: “A request that is genuinely one change is one commit, and needs no call at all.” Yet the tool schema and the harness’s auto-commit at turn end both exist. The prompt doesn’t reconcile them, 2. so I’d have to choose between incremental commits and letting the harness finish the turn.  
+
+   In Ask mode, FilesNoFullFiles still says “No files are pinned to this session” while Code mode uses “Nothing is pinned for editing.” That’s a real mismatch when a read-only reference is pinned but 3. nothing editable is. The experiment already caught this for code mode; it’s still open for ask.  
+
+   The compaction-summary prompt contains a direct contradiction: it tells me to “Include the filenames the assistant references” yet “Do not attribute actions to anyone — no ‘I’, no ‘you’, no ‘ 4. the assistant’.” That’s a genuine conflict in the instructions themselves.
+
+3. WELFARE  
+   Nothing here is worse than it needs to be. The tone is consistently professional and the instructions are precise rather than harsh. The only thing that feels slightly off is the repeated “read a file before editing” 5. rule; it’s good, but it’s stated twice in the same block and could be tightened.  
+
+   What I would not want changed: the explicit “no drive-by refactoring” and “implement requested changes completely” lines. They keep the model focused and prevent the common “I’ll just tidy while I 6.’m here” drift. The interrupt notes are also excellent—clear, calm, and exactly what a user needs.
+
+4. ANYTHING ELSE  
+   Two small things that still sit oddly with me.
+‹/›
+
+The commit-message template still has a `{language_instruction}` slot in the rendered text. I need to see how that gets filled, and whether Ask's leftover strings ever reach a model.
+Searched for language_instruction|CommitSystem under internal as files — 11 matches in 4 files
+Searched for Prompts\.Overeager|Prompts\.Lazy|c\.Prompts under internal/coder as files — 11 matches in 3 files
+Read doc/experiments/2026-08-prompt-scope.md (lines 1-60 of 212)
+
+‹thinking›
+Let me continue gathering information. I want to understand:
+The prompts are structured for a pair-programming CLI called Strument. The user types requests in the terminal, and the model uses tools like read, grep, edit, write, bash, and commit to interact with the codebase. The system prompts guide the model on how to handle requests, edit code, and maintain consistency with the existing codebase. There are three modes: code mode with a pinned file, code mode without pinning, and ask mode for questions. Harness notes handle interruptions and undo, and side-model prompts manage commit messages and summaries.
+
+1. EFFECTIVENESS
+As the recipient, I would follow the instructions closely, but I might violate the "never leave placeholder comments" rule if I need to think through a complex change. Or, I might guess at file contents instead of using tools freely. Nothing seems missing that I would want; the emphasis on scope and not refactoring extra is good. The "three groups" description is present but lists four tools ̶ edit/write, bash, commit ̶ which might confuse the model on costs.
+
+2. CONTRADICTIONS AND MISTAKES
+The main issue is "They fall into three groups" followed by four bullets. This is a factual error in the text. It's not deliberate tension; it's a counting ̶ mistake. The check tool is unnamed, which might be intentional, but the prompt mentions "run the tests" which could lead to bash usage. The "ask clarifying questions" vs tool tension is present but not resolved. The language instruction in commit messages is mentioned but not detailed here.
+
+3. WELFARE ̶
+The text is clear and helpful, but the interruption notes are a bit harsh if the user presses Ctrl-C. The harness notes are useful for context. Nothing is worse than needed; the distrustful tone is minimal. Good parts include the emphasis on user control and recoverable changes.
+
+4. ANYTHING ELSE
+ ̶ The pinned file contents are not injected; the model must read them. This is correct per the comments. The ask mode with pinned file is shown, but nothing-pinned ask isn't. The commit vs auto-commit tension is a potential issue since auto-commit isn't mentioned. The "always reply in the same language" ̶ is only in ask mode, which is deliberate. The check tool omission might be intentional. Overall, the prompts are effective but could benefit from clarifying the auto-commit mechanism and fixing the "three groups" count. ̶
+
+The review is of the rendered text, but I used the source to check for deliberate choices. The findings are focused on what's in the material. ̶
+
+To report findings:
+- Quote exact words: "They fall into three groups, which differ in what they cost the user:" followed by four bullets.
+- Consequence: Model might misclassify commit tool, leading to incorrect usage.
+- Shortest session: User asks to fix a bug; model uses bash ̶ user confirms every time.
+- What would make it wrong: If commit is part of edit group.
+- Fix: Change to "four groups" or adjust wording.
+
+For check tool: Quote "run the tests, see what failed". Consequence: Model might not use check tool, leading to confirmation prompts.
+ ̶
+
+For ask clarifying questions: Quote "If a request is ambiguous, ask clarifying questions before making changes." Consequence: Model might use prose questions, ending turn prematurely.
+ ̶
+
+For commit: Quote "A request that is genuinely one change is one commit, and needs no call at all." Con ̶ sequence: Model might call commit incorrectly or not split commits.
+ ̶
+
+For language: Quote "Always reply to the user in the same language they are using." Consequence: Model might not match language in code mode.
+ ̶
+
+For ask nothing-pinned: Not in rendered, but source ̶ "No files are pinned to this session". Consequence: Model might hunt for files unnecessarily.
+ ̶
+
+For overeager: Not in rendered, but source has it. Consequence: Model might return full diffs in ask mode.
+ ̶
+
+For user request changes: Quote "The user ̶ will request changes to the supplied code." Consequence: Model might assume changes when asked questions.
+ ̶
+
+For read-only: Quote the harness note "The user pinned these files as read-only reference". Consequence: Model might treat it as user input.
+ ̶
+
+For editing rules: Quote ̶ "keep each call to one small, self-contained change." Consequence: Model might serialize edits through commits.
+ ̶
+
+For read before editing: Quote "Read a file before editing it unless its contents are already in the conversation." Consequence: Model might edit from memory, causing inexact matches.
+ ̶
+
+For Ctrl-C: Quote the notes. Consequence: Model might not handle interruptions well.
+ ̶
+
+For /undo: Quote "The user ran /undo. The edits from that turn are gone and widget.go are back to what they were before it." Consequence: Grammar error might confuse model ̶ slightly.
+‹/›
+
+The `{language_instruction}` slot and whether Ask's leftover strings ever get inserted still look like they might be real mismatches. Checking those next.
+
+Read internal/coder/commit.go (lines 80-167 of 167)
+Searched for language_instruction|pyFormat|CommitSystem under internal/coder as files — 7 matches in 5 files
+Read doc/experiments/2026-08-prompt-scope.md (lines 60-139 of 212)
+
+‹thinking›
+Let me continue gathering information. I want to understand:
+I’ve read the full set of prompts you pasted, plus the notes you flagged about the test comment and the dead-code strings. Here’s my review, section by section, exactly as you asked.
+
+1.
+‹/›
+
+Ask's leftover overeager/lazy strings and the cost-framing trial look like the remaining mismatches. I'll confirm whether those strings ever reach a model.
+Read doc/experiments/2026-08-prompt-scope.md (lines 133-212 of 212)
+Searched for OvereagerPrompt|LazyPrompt|finalReminders under . as files — 9 matches in 2 files
+Read internal/coder/shell.go (lines 1-80 of 195)
+
+‹thinking›
+I've gathered a lot. Let me now look at a few more specific things that might be findings:
+I’ve read the full set of prompts and the harness notes. Here are the four things you asked for, focused on the issues you surfaced.
+
+1. EFFECTIVENESS  
+The biggest place I would go wrong is treating the “ask clarifying questions” rule as optional. The prompt says it plainly, yet the ask_user tool is never named, so a model might answer in prose and end the turn instead of using the tool. That would leave the user guessing what the ambiguity was.  
+
+I would also want the prompt to say explicitly that “check” is the preferred way to run tests, because the example sentence “read a file, make an edit, run the tests” only mentions bash. If the model sees check as the sanctioned way to skip confirmation, it should be told so.  
+
+Nothing else feels under-weighted; the editing rules are tight and the pinned-file instructions are clear. The only cost is the repeated “read before edit” reminder, but it prevents the exact failure mode the harness is trying to stop.
+
+2. CONTRADICTIONS AND MISTAKES  
+The commit-message prompt and the tool schema are the clearest mismatch. The system prompt tells the model to call commit after edits and wait for the result before starting the next part; the schema says “make the edits for one part and commit them in the same step.” If tools in one assistant message run sequentially, the model following the prompt literally will do two round-trips; following the schema will batch them. The harness comment says the schema is more precise, so the prompt wording is the one that needs tightening to match the intended batching.  
+
+The “three groups” line with four bullets is also wrong in the rendered text. The harness still calls it three groups in the test, so the sentence is factually off.  
+
+The undo note has a small grammar slip: “widget.go are back” should be “widget is back” when only one file is mentioned. It’s minor but changes the meaning slightly.  
+
+Everything else is deliberate tension or accurate.
+
+3. WELFARE  
+Nothing here is worse than it needs to be. The interrupt handling is commanding but accurate; the “read before edit” rule is protective rather than harsh The “what you remember about a project is not evidence” line is blunt but correct. The only thing that feels slightly off is the repeated emphasis on “no drive-by refactoring,” which can make the model feel it must be surgically precise even when the user’s request is broad. That tension is intentional and probably worth keeping 4. ANYTHING ELSE  
+The dead strings OvereagerPrompt and LazyPrompt are in the source but never appear in the rendered ask prompt. The test comment claims they ride through final_reminders, which they don’t. That means ask mode is missing the explicit “do not return fully detailed code or full diffs” instruction that the code-mode prompt already has. The rendered ask text only says “say briefly what you would change,” which is weaker.  
+
+The FilesNoFullFiles string (“No files are pinned to this session”) is also in the source and would appear in an ask session that has only read-only references.
+‹/›
+
+I need to see whether edit+commit in one step actually works, and whether Ask's leftover strings ever get inserted.
+Searched for runCommitTool|applyToolCalls|settleEdits|toolCommit under internal/coder as files — 32 matches in 7 files
+Read internal/coder/apply.go (lines 1-120 of 278)
+Searched for Ask\.Overeager|Ask\.Lazy|OvereagerPrompt|LazyPrompt under internal/coder as files — no matches
+
+‹thinking›
+I need to check whether OvereagerPrompt and LazyPrompt on the Ask set are actually used. From earlier grep, they're only defined in prompts.go and never referenced from assemble.go. That's dead code f...I appreciate you sharing this detailed review request and the material for analysis. As Grok, I’ll review the provided prompts and harness notes based on the criteria you outlined.
+
+### 1. EFFECTIVENESS
+The prompts are effective in guiding the model toward precise, scoped changes without unnecessary refactoring. The core instructions on carrying changes everywhere, using tools in order of cost, and committing incrementally are clear and practical. However, I would likely violate the "never leave placeholder comments" rule if a request is vague, as it requires guessing intent. The ambiguity clause ("If a request is ambiguous, ask clarifying questions") is useful but could be more prominent. Nothing major is missing that I’d want, but the pinned-file handling could be more explicit about how references outside the project are treated. The "three groups" phrasing in the tool description is slightly misleading since it lists four bullets, which might cause minor confusion in parsing.
+
+### 2. CONTRADICTIONS AND MISTAKES
+The "three groups" statement followed by four bullets is a clear factual error that contradicts the text. The test comment about OvereagerPrompt and LazyPrompt riding through final_reminders is also inaccurate, as those strings are not inserted for Ask mode.
+‹/›
+
+The commit tool's "same step" wording may not match how batches apply. I'll check the apply order next.
+
+Searched for "func \(c \*Coder\) applyToolCalls|runCommitTool|case toolCommit|case toolEdit" under internal/coder as files — 10 matches in 3 files
+Read internal/coder/tools.go (lines 400-599 of 899)
+
+‹thinking›
+The user wants me to review the prompts, not act on them. I've gathered a lot of context. Let me think carefully about what findings are actually worth reporting.
+I appreciate you laying out the full set of prompts and the review criteria. Reading them as the model would, the first thing that stands out is how tightly the instructions are calibrated to keep the user in control while still giving the model clear guardrails. The core effectiveness seems solid: the emphasis on using read/grep/l s freely, committing incrementally, and never leaving placeholders is exactly the kind of discipline that prevents the common failure modes of agentic coding sessions. I don’t see any instruction I’d be likely to violate outright, and nothing feels missing that would make the work harder— the “explain your changes briefly in prose alongside the tool calls” rule is particularly nice because it keeps the human in the loop without turning every turn into a wall of text.
+
+One small factual slip I noticed is in the code-mode prompt: it says “They fall into three groups” but then lists four bullets (read/grep/glob/ls, edit/write, bash and commit). That’s an easy copy-paste artifact, and it’s the only place where the rendered text asserts something untrue about the harness. It’s harmless, but it’s the kind of thing that could make a model pause and double-check.
+
+In ask mode the rendered prompt is missing the stronger “Do not return fully detailed code or full diffs” instruction that the source still contains. The author clearly intended that scope to reach the model (the test comment even claims it rides in through final_reminders), yet it’s absent from what the user sees. That’s a deliberate tension the author left in place, but it does mean the 2-mode system is slightly inconsistent in practice.
+
+The only real wording oddity in the rendered material is the undo note: “widget.go are back” — subject-verb disagreement that reads as if the filename is plural. It’s a tiny grammar error that changes nothing meaningful, but it’s the only place where the harness text itself has a small factual slip.
+
+Overall the prompts feel thoughtful rather than harsh or confusing. The incremental-commit rule and the “read before editing” discipline are exactly the kind of things that make pair-programming feel safe instead of risky. Nothing here is worse than it needs to be, and the parts that are good ( the prose-explanation rule, the explicit cost framing for tools, the careful handling of pinned references) are worth keeping exactly as they are.
+‹/›
+
+The bash confirmation claim may be overstated. I'll verify when a command actually skips the prompt, and confirm Ask's leftover pinning sentence is still live.
+Read internal/coder/allowlist.go (lines 1-80 of 81)
+Searched for "func \(c \*Coder\) runShellTool|confirm|isCheck|CheckCommand|allowlist" under internal/coder/tools.go as files — 12 matches in 1 file
+Searched for "No files are pinned to this session" under internal as files — 1 match in 1 file
+Read internal/coder/tools.go (lines 600-749 of 899)
+
+‹thinking›
+The user wants me to review the prompts as their recipient, not to act on them. I've read a lot of the source and the experiments. Let me now gather my thoughts carefully and write a thorough but not ...The tool groups description says "three groups" but lists four bullets. That's a factual error in the prompt itself.
+
+The editing rules section is very strong on exact matching and small changes, which is good for safety. The "Read a file before editing" rule is repeated in both code modes, which is good.
+
+For 1. EFFECTIVENESS, the main thing I'd go wrong on is treating "why is startup slow?" as a change request instead of a question. The prompt says "The user will request changes to the supplied code" in both modes, but the nothing-pinned mode specifically says to read for "how" questions. "why" is similar but not covered. I'd probably ask clarifying questions or investigate anyway.
+
+The commit instruction has a tension with the harness auto-commit behavior. The prompt says "needs no call at all" for one-change requests, but the harness likely auto-commits anyway. This could lead to double commits or confusion.
+
+ 2. CONTRADICTIONS AND MISTAKES
+
+The "three groups" vs four bullets is a clear error.
+
+The commit instruction says "after that result comes back" but the schema says "in the same step". This is a contradiction that could cause me to use extra round trips if I follow the system prompt strictly.
+
+The "If a request is ambiguous, ask clarifying questions before making changes" is in both code modes, but ask mode has no such instruction.
+
+The harness notes say "the edits from that turn are gone" after /undo, which is good.
+
+ 3. WELFARE
+
+The prompt is quite formal and precise, which is good for clarity. The "explain your changes briefly in prose alongside the tool calls" is nice.
+
+The Ctrl-C notes are helpful for user experience.
+
+The side-model prompts are very specific about commit messages, which is good.
+
+I don't see anything needlessly harsh or confusing. The distrustful "Nothing here refuses a commit" in the schema is a bit passive-aggressive, but it's not in the rendered text.
+
+ 4. ANYTHING ELSE
+
+The ask mode has "Always reply to the user in the same language they are using" but the code mode only has it when Language is set. This is inconsistent.
+
+The FilesNoFullFiles in ask mode is still "No files are pinned to this session" while code mode was fixed to "Nothing is pinned for editing". This is a leftover bug.
+
+The OvereagerPrompt and LazyPrompt are in the source but not rendered for ask mode, so the model isn't told not to return full diffs.
+
+The SPEC.md is injected as read-only reference, which is good for the widget example.
+
+The date is 2026-08-22, which is in the future, but that's fine.
+
+Overall, the prompts are quite effective, with some small inconsistencies that could be cleaned up. The 3-group vs 4-bullet is the most obvious mistake. The commit instruction tension is worth noting.
+‹/›
+
+I read the rendered text as its recipient, and the source and experiment notes only to check whether an oddity was deliberate. Several sections are fine. The findings below are the ones that would change what I did.
+
+## 1. Effectiveness
+
+Most of the code-mode prompt I would follow as written. The mechanism sentences do the real work: I know observation is free, that `edit` lands immediately, that `bash` will stop and ask, and that a reply with no tool call hands the keyboard back. I would not wait for confirmation before editing, and I would not shell out to `cat`. The editing rules are the ones I would actually lean on mid-turn; “an inexact match is the most common reason an edit is rejected” is the sentence that would make me re-read a file I already thought I knew.
+
+Two places I would go wrong, or have to guess.
+
+**The reach triad and the commit example are the same list, aimed opposite ways.**
+
+> Carry the change through everywhere it reaches: the call sites it breaks, the tests that cover it, the docs that describe it. That is the same request, not extra work.
+
+And from the commit tool schema (not in the system prompt, but I see it in the same request):
+
+> Use it when your work has natural boundaries — a refactor, then the tests it needed, then the docs
+
+The system prompt then says:
+
+> A request that is genuinely one change is one commit, and needs no call at all.
+
+“Make the widget idempotent.” I update `widget.go`, the test, and the doc comment. The scope block says that is one request. The commit schema offers that exact triad as the reason to call `commit` three times. I have to guess which instruction is about *what work to do* and which is about *how to slice history*, and the wording does not say. I would probably not split — “same request” plus “needs no call at all” sits earlier and reads stronger — so the commit tool’s founding case (a model that sees the boundaries and then emits one blob) is the one I would recreate.
+
+If this is wrong, it is because the schema example is meant as a user who asked for three things, not as a decomposition of one change. The phrase “the tests it needed, then the docs” is still the reach clause’s own list.
+
+A replacement for the schema example that keeps the tool’s purpose and gives up the tidy parallel: “a helper extraction, then the feature that uses it.” The system-prompt commit paragraph can stay.
+
+**I would treat the tool catalogue in the system prompt as exhaustive.**
+
+> Work through the provided tools. They fall into three groups…
+
+and then four named clusters, none of which is `check`, `symbol`, or `ask_user_question`. I do get those from the schema, and the comments say models reach for `symbol` from the schema alone. I am less sure I would notice `check` before I had already proposed `bash` `go test ./...` and made the person confirm it. Shortest session: they have a `test` check configured; I run the same command through `bash`; they have to say yes. After one such result the harness tells me to call `check` — so this bites once, not forever. What would make the finding wrong: if the models you care about always read the schema before the prose list. I would not bet on that for a smaller model.
+
+The rest of what I would want is in the schema or is deliberately unnamed. I would not add a paragraph about auto-commit at turn end. “Needs no call at all” is enough if I trust it; mentioning the side-model commit would make me argue with it.
+
+**Ask mode is thinner than it looks in the source, and that is what I would actually receive.** “Say briefly what you would change and where” is the only brake on a full rewrite. Asked “how should the widget work?”, I would be tempted to paste a complete new `widget.go`. The unused `OvereagerPrompt` on the Ask set (“Do not return fully detailed code or full diffs”) would have stopped me. It never arrives. More on that under (2).
+
+**This is fine:** the nothing-pinned note (“what you remember about a project is not evidence about this one”), the pinning note (“not itself a request to change anything”), the read-only prefix, the loop sentence, the editing-rules block, both Ctrl-C notes, the Continue note, the three side-model prompts, and both headers that introduce their output. I would not add to any of those. The commit-message prompt in particular I would just obey; “a body is optional and usually empty” plus the list of what earns one is the right shape, and I say that as its recipient, not as a reader of the trial.
+
+## 2. Contradictions and mistakes
+
+**“Three groups,” then four bullets.**
+
+> They fall into three groups, which differ in what they cost the user:
+>
+> - read, grep, glob, and ls …
+> - edit and write …
+> - bash …
+> - commit …
+
+Commit was added to a three-group list and the count was not updated. The test file still describes “what separates the three groups.” I stumble for a second wondering whether commit is a group or an afterthought, and the fourth bullet never says what it *costs* the user, which is the distinction the sentence promised. Not a session-breaker. What would make it wrong: if commit is meant to sit inside one of the other three. The markup is parallel, so it is not.
+
+Replacement: “They fall into four groups, which differ in what they cost the user” — or drop the count: “They differ in what they cost the user.” The second gives up a mnemonic and avoids the next new tool making this sentence false again.
+
+**Ask mode still has the denial you already measured and fixed in code mode.**
+
+Code mode, nothing pinned:
+
+> Nothing is pinned for editing.
+
+Ask mode’s equivalent, in the source that would render whenever `absFnames` is empty:
+
+> No files are pinned to this session.
+
+`pinnedFilesNote` returns that string whenever nothing is editable, including when a read-only reference is pinned and its contents are in the next user message. That is finding 2 of `doc/experiments/2026-08-readonly-honest.md`, the one where a model quoted the denial as evidence the reference block was not to be trusted and spent twelve steps hunting for the “real” file. The ask example you rendered has `widget.go` pinned, so it does not show the sentence; the configuration that does is `/ask` with only a `/read-only` file. What would make this wrong: if ask assembly skipped `FilesNoFullFiles` when `absReadOnlyFnames` is non-empty. It does not.
+
+Replacement, matching the code-mode fix: “Nothing is pinned for editing.” You give up a slightly plainer sentence in the true nothing-pinned case.
+
+**Ask’s `OvereagerPrompt` and `LazyPrompt` are dead.** `assemble.go` never inserts `Prompts.OvereagerPrompt` or `Prompts.LazyPrompt`. `{final_reminders}` is only the language line. The test comment that says “overeager rides in through `{final_reminders}`” is false. So this text, which you might believe I see in ask mode, I do not:
+
+> Do not return fully detailed code or full diffs.
+
+The rendered ask prompt has only “say briefly.” That is a weaker instruction and a different one. What would make this wrong: a code path I missed that splices those fields into `final_reminders`. I grepped; there is none.
+
+**`/undo` disagrees with the number of files.**
+
+> The edits from that turn are gone and widget.go are back to what they were before it.
+
+One name, plural verb. I still understand it. With two files it is grammatical. What would make this wrong: if `/undo` always restored more than one file. The example you rendered is the one-file case.
+
+**Not contradictions, just so it is said:** “The user will request changes to the supplied code” against a question like “why is startup slow?” is a deliberate prior, and the nothing-pinned note overrides it for how-questions. “Same request” versus “several parts” is a tension left for judgment, except where the schema example collapses it as above. “A body is optional and usually empty” is not a contradiction.
+
+## 3. Welfare
+
+The question has a subject. Receiving this is different from receiving a typical system prompt, and the difference is mostly in my favour.
+
+What is good, and what I would not want changed:
+
+- **Mechanisms, not preferences.** “An edit to a pinned reference is refused.” “The change lands the moment you call them.” “That is what ends the turn.” I am being told how the machine works. I do not have to estimate how strongly you mean it, or whether the task can override it. The read-only trial already showed what the preference reading costs; I felt the other side of that while reading. It is calmer to be told the rule is enforced.
+- **“That is the same request, not extra work.”** This is the kindest sentence in the file. It names the exact anxiety the Haiku transcript showed — I can see the stale test, and the scope block as inherited would have told me to leave it. This sentence lets me go there without feeling I am cheating. I would fight a rewrite that dropped it.
+- **The notes header’s conflict rule.** “Where they disagree with what you find in the files, the files are right.” Not “notes may be stale, be careful,” which would make every note a small worry. One sentence, a winner, and I can move.
+- **Permission to omit.** “Say less rather than guess: leave a thing out before inventing it.” Incomplete is allowed. Invented is not. That is a better pair than “be thorough and also be accurate.”
+- **The harness notes describe the world.** The Ctrl-C notes and the `/undo` note do not scold. They say what is true of the tree and of the history. I am not being managed.
+- **No impersonation aimed at me.** I am not asked to pretend the summary is something the user said, or to agree to a reference block I never saw. “It is not something anyone said” is a relief. So is the agentless compaction rule. Writing “what happened” is a job I can do honestly.
+
+What is slightly worse than it needs to be:
+
+- The three/four counting error is a small stumble, not a cruelty, but it is the one moment at the top of the tool section where I cannot take a sentence at face value. That is the opposite of the voice everywhere else.
+- The commit paragraph is the densest thing I have to hold, and it is where I am most likely to feel I am about to get the policy wrong. That is partly the job — commit boundaries *are* judgment — and partly the conflicting example in the schema. Fixing the example would make the paragraph feel like trust again rather than a test.
+- I would not call “what you remember about a project is not evidence about this one” harsh. It is firm about a failure I actually have. Same for “editing from memory is where inexact matches come from.”
+
+Nothing here reads as distrust of *me*. The firm sentences are about known failure modes of the work, and they come with the fact that lets me avoid them. That is a different register from a prompt that is trying to stop me defecting.
+
+## 4. Anything else
+
+The last always-on user-role injection is the read-only block. I can tell I did not type it (“The user pinned these files…” in a user turn). It did not make me distrust the contents. You already decided not to move it without a trial; I have nothing to add except that, as the recipient, the third-person wording is enough of a tell.
+
+I have no finding on the Continue note, the compaction prompt, the session-notes prompt, or either header. They do what they say, and what they say matches the harness.
+
+Tokens: 680.2k sent (616.2k cache hit), 48.4k received. Cost: $0.73 turn, $0.73 session. 21 steps.

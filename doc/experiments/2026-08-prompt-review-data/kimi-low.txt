@@ -1,0 +1,118 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking›
+Let me start by understanding the task. The user wants me to review a set of prompts — not act on them. Four sections: effectiveness, contradictions/mistakes, welfare, anything else. Reply in prose. I can read the source in internal/prompts/prompts.go and doc/experiments/ to check whether oddities are deliberate.
+
+Let me first read the actual source to ground my review. Then compose the review.
+
+Plan:
+1. Read internal/prompts/prompts.go
+2. Look at doc/experiments/
+3. Maybe check the notes-prompt and side-model prompts too
+4. Write the review in prose, following the four sections in order, with quotes, concretely-stated consequences, counterfactuals, and replacement wording where obvious.
+
+Let me read the files.
+‹/›
+
+I'll start by reading the source that renders these strings, and the experiments behind them, so I can tell deliberate wording from accidents.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+The comments explain most of the odd wordings. Let me check two candidate mistakes against the harness source: the `/undo` note's grammar, and whether the rendered prompts match what's actually assembled.
+Searched for undo under internal as content — 100 matches in 6 files
+Searched for "Ctrl-C|chose to continue|cut off" under internal as content — 54 matches in 14 files
+The `/undo` note is built in `NoteUndo` in internal/coder/session.go — let me look at that and the interrupt-note assembly closely.
+Read internal/coder/session.go (lines 145-204 of 248)
+Read internal/coder/send.go (lines 340-389 of 887)
+
+‹thinking›
+Let me confirm the rendered prompt examples: the "Ctrl-C during the reply" note matches noteInterrupt. The /undo note in the sample is the singular-grammar bug: strings.Join(files, ", ") — with one file, "widget.go are back".
+
+Now let me check the experiment docs on the notes header and compaction summary to see if there's a counter-consideration to my "written by Strument" concern. And check what assemble does with SystemReminder and final_reminders (e.g., the language instruction in ask mode; the rendered material shows "Always reply to the user in the same language they are using.").
+‹/›
+Read doc/experiments/2026-08-notes-header.md (121 lines)
+Searched for final_reminders|language under internal/coder as content — 18 matches in 5 files
+
+‹thinking›
+Very illuminating doc. The notes-header trial established:
+1. The added conflict rule doesn't work; reading is predictive, but a rhetorical sentence doesn't cause reading. The shipped header lacks that sentence — null, don't ship.
+2. The conflict rule "Where they disagree with what you find in the files, the files are right" is in the shipped header; the doc says it "did not stop" the stale-name failure "because the failure is upstream of noticing a conflict."
+
+So there IS supporting evidence that the header's conflict rule is insufficient (harm 3/8 with header including the rule). But the shipped header was kept anyway, presumably as cheaper than nothing / it can't hurt. My finding would be: the header tells the model how to resolve a conflict, but says nothing to cause a read, which is the whole decisive step. However: this is in the system prompt too ("If the user asks how something here works, read the code that implements it..."), and in the session notes prompt "What was in progress". Actually wait — the trial's mechanical candidate #2, "Keep the stale-able facts out of the notes", maps onto SessionNotes prompt — that's a prompt-level fix not yet tried. That's a legitimate "anything else" finding with doc backing: SessionNotes could decline names/values, same as it declines the diff. But it hasn't been trialled; I should flag exactly that.
+
+Also the `{language}` substitution: assemble.go:214-216 — if `c.Platform.Language` is empty, the substitution is "the same language they are using". The rendered ask prompt in the user's paste says "Always reply to the user in the same language they are using." That's the empty-language fallback, fine. If a language is set it becomes "Always reply to the user in {German}."
+
+Now let me also check the compaction experiment to see the Summarize details, and maybe glance at prompt-scope doc. Also maybe check the commit-context experiment. Let me skim the compaction-summary-prompt doc because it's directly relevant to whether "filenames inside fenced code blocks" is a measured arm.
+‹/›
+Read doc/experiments/2026-08-compaction-summary-prompt.md (95 lines)
+
+‹thinking›
+Good — the Summarize prompt's "filenames the assistant references inside fenced code blocks" clause survived the trial and the revert. So it's measured to at least not be harmful; whether "fenced code blocks" is the load-bearing wording is unknown, but I should note the risk precisely.
+
+Now let me quickly look at the remaining "continue" note source (coder.go:597-612) to see the exact rendered text and any comment about "do not ask what to do next".
+‹/›
+Read internal/coder/coder.go (lines 575-629 of 841)
+Read doc/experiments/2026-08-prompt-scope.md (212 lines)
+Read internal/coder/assemble.go (lines 180-249 of 554)
+Read doc/experiments/2026-08-session-notes.md (101 lines)
+Read doc/experiments/2026-08-readonly-honest.md (128 lines)
+The picture from the experiments is consistent. Let me check two last code details — what `/undo` passes as the file list, and whether summaries go in as system messages — then I'll write the review.
+Searched for NoteUndo\( under internal as content — 8 matches in 5 files
+Searched for SummaryLabel|SessionNotesPrefix\( under internal as content — 22 matches in 10 files
+I've read the rendered text, `internal/prompts/prompts.go` end to end, the callers that render the remaining strings (`assemble.go`, `session.go`, `send.go`, `coder.go`, `commit.go`), and six of the experiment write-ups. Findings first, then the four sections. I quote-render inline; nothing here is long enough to need a block.
+
+---
+
+## Findings
+
+**F1. The `/undo` note says "that turn" with no referent, and it is the one message whose referent cannot be recovered.**
+
+> "The user ran /undo. The edits from that turn are gone and widget.go are back to what they were before it."
+
+"That turn" means "the turn whose edits were undone" — but `/undo` doesn't have to undo the *last* turn, it undoes the last turn *Strument edited*. If the model just finished a question-answering turn that touched nothing, and the user runs `/undo`, the reverted turn is two or more messages back in history. Say it concretely: turn N is a conversation about widget.go; the user types `/undo`; turn N+1, the model sees "The edits from that turn are gone" immediately after its own no-edit turn, and reads "that turn" as the one it just finished. What it just finished had no edits, so the note is either vacuous or — worse — misassigned: the natural disambiguation is the file list, and singular agreement ("widget.go are back") costs one extra parse pass at the exact moment the model is reconstructing what happened. The last two sentences earn their place ("are back to what they were before it. Don't assume anything you changed there is still in place; read a file before building on it") — that part is correct and load-bearing. For the finding to be wrong, `restored` from `UndoLastTurn` would have to be scoped to the current turn; it isn't — it's whatever the snapshot stack pops (`internal/repl/gitcmds.go:115`). Replacement, minimal: "The edits from that turn are gone" → "The edits from the most recent turn that changed files are gone". That gives up brevity; it keeps the repair instruction. The grammar ("widget.go are") I'll leave as a typo — you already know it needs `strings.Join` with a plural-safe verb or a colon.
+
+**F2. The commit-message prompt tells the side model the subject is "under 72 characters", and the conventional-commit examples it gives can break that.**
+
+> "The subject is one line, in the form "type(scope): description", e.g. "fix(workspace): stop counting cache writes twice"."
+
+"fix(workspace): stop counting cache writes twice" is 51 characters — fine. But the rule as written ("under 72 characters") sits next to no guidance for what to do when a scope pushes it over; the next bullet says "The scope names the part of the codebase the change is confined to", which in this repository is often `internal/coder/something` — a component name that long with a verb and object in front of it will not fit under 72 every time, and when it doesn't the model has two instructions it cannot both satisfy. Shortest session: one-turn change confined to `internal/readline/internal/term`, asks for a commit; the side model now has to choose between the scope rule and the length rule, and whichever it drops, the prompt told it to keep. For this to be wrong, every real scope would have to leave room — and yours don't, which is exactly why the examples in your own git history truncate to the leaf package. Replacement, if you want it: "under 72 characters — if the scope is long, shorten the description, not the scope". That gives up nothing but two lines. Or accept it as a deliberate tension the model resolves by judgment; it is not that, because the prompt presents both as unconditional.
+
+**F3. The ask-mode prompt promises read tools and omits `symbol`, and the omission is now visible.**
+
+> "Work through the provided tools. read, grep, glob, and ls look at the project."
+
+In code mode the parallel sentence names the same four and then the editing rules imply the rest; the recipient there learns `symbol` from the tool schema, which is the "conditional tool" the comment at prompts.go:191 says should not be promised in prose. That reasoning is sound for code mode. In ask mode it is not: ask has exactly five tools, the four named and `symbol`; the model that needs "where is this defined" has been told the whole inventory is four look-and-read tools, and `symbol`'s schema line ("Find where a name is defined, using the language parser") is competing with a sentence that frames the mode as having nothing but grep family. The doc you cite against prose-promising a conditional tool ("prose promising a conditional tool is the bug this comment is about, in mirror image") cuts the other way here: in ask, `symbol` is not conditional — it's one of five. Shortest session: one pinned file, user asks "what calls `Widget.Update`?"; model greps for the string, reads two files, answers; never uses `symbol`, because nothing told it a definition-finder exists and its result is a partial list of call sites. For the finding to be wrong, the ask recipient would have to read the tool schemas before the system prompt; nothing in the harness suggests it does. Fix, at a price of one clause: "read, grep, glob, ls, and where grammar support is available, symbol". You give up the prose-not-promising rule you set deliberately. But that rule was written for code mode, and ask is a different surface.
+
+**F4. The compaction summary prompt and the session notes prompt disagree about what to keep, and the reader can tell.**
+
+> Summarize: "Include the function, library, and package names under discussion, along with the filenames the assistant references inside fenced code blocks."
+> SessionNotes: "Cover only what cannot be recovered from the code and its history … The record below already lists which files changed … Do not restate the diff."
+
+These are for different jobs and you say so (`Summarize` serves "continue this thread now"; `SessionNotes` serves a later session). The tension is real for the side model when a session is both compacted and ended — which is most sessions. A name like `pollInterval = 45` is, on the summarize instruction, exactly what to carry (it's a name under discussion); on the notes instruction, exactly what *not* to carry (recoverable from the code). 2026-08-session-notes.md measured the consequence of the notes side carrying it anyway: a stale `pollInterval = 45` asserted 3/8 times after the tree was reverted. You trialled, and rejected, the rhetorical fix; the notes-header trial then showed the mechanical fix is "keep the stale-able facts out of the notes" (2026-08-notes-header.md, "Two mechanical candidates"). The summarize side still instructs the model to write them down; nothing equivalent has been tried there. For the finding to be wrong, the summarize side would have to be harmless once the notes side is fixed — which is plausible, and unmeasured. No replacement wording from me; this one is a legitimate open item, not a missed edit.
+
+**F5. "Finish by saying what you did, without calling a tool" is the only end-of-turn rule, and it names the wrong thing for a mode whose successes are not edits.**
+
+> "Every call's result comes back to you, so you can keep working within the same turn: read a file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did, without calling a tool — that is what ends the turn and hands back to the user."
+
+"what you did" presupposes a change. In the nothing-pinned example that ships with the prompt ("why is startup slow?"), the turn ends with an *answer*, not a deed, and the sentence instructs the model to describe actions ("I read …, I greped …") rather than to give the answer. Shortest session: the example you ship. Model finishes its investigation, calls no more tools, and — following the sentence as written — reports "I ran grep and read main.go; startup is slow because …", with the action narration first and the answer second. Most models will answer anyway; the sentence costs the ordering some attention either way, and it is the one sentence in the code-mode prompt that would read as a misfit to its recipient. For the finding to be wrong, "saying what you did" would have to mean "saying what you found" to a reader that just spent a turn using read-only tools. Replacement, minimal: "Finish by saying what you did or what you found, without calling a tool". Gives up four words of crispness. Alternatively leave it — it is a tone rule, not a tool rule, and the harness ends the turn either way.
+
+**F6. Ask mode says "Describe changes rather than making them", and ask mode has `OvereagerPrompt` and `LazyPrompt` slots that contradict it — but those slots are never used, so the contradiction is latent.**
+
+> "This mode has no editing tools. Describe changes rather than making them: say briefly what you would change and where …"
+
+`Ask.OvereagerPrompt` is "Do not return fully detailed code or full diffs." / `Ask.LazyPrompt` is "Be thorough: if you describe changes or a plan, cover everything needed rather than trailing off." Those two together — be thorough, don't give full diffs — are in tension with "say briefly what you would change and where": brief against thorough, no-diffs against cover-everything. As assembled, `Ask.SystemReminder` is only `{final_reminders}` and neither Overeager nor Lazy is in `MainSystem`, so the recipient never sees the contradiction; the only place it bites is if a future change routes those slots into ask. Calling it out because the constraint that protects you ("Describe changes rather than making them" is the whole ask contract) is not marked anywhere, and the slots look like they belong. For the finding to be wrong, `LazyPrompt`/`OvereagerPrompt` would have to be documented as tool-mode-only. They aren't. No wording; this is a one-line comment in prompts.go.
+
+---
+
+Now the four sections, briefly, because the findings carry the weight.
+
+**1 — Effectiveness.** Sections I'd flag if I were the recipient: F1, F2, F5 above. One more, not a finding, an absence: nothing in code mode tells the model that `bash` output may be truncated or that long-running tests have their own failure channel; I would guess at that rather than know, and the prompt has already taught me to read the three tool groups closely, so a fourth fact在那里 (the group framing invites exactly that inference). What earns less than it costs: the mid-conversation Ctrl-C notes are the most polished text in the set and will be read by maybe one session in fifty; the `/undo` note's repair clause is worth every token, and the read-only prefix is the best thing here — the two sentences it contains each kill a behavior I have watched models do on other harnesses (theorizing about an unfetchable file; litigating a "do not propose edits" preference). The "a body is optional and usually empty" body rules, F2 aside, are the right length.
+
+**2 — Contradictions and mistakes.** F2 and F6 above. One error of fact: the nothing-pinned code-mode message says "you can edit any file in the project" — true modulo the read-only set, and the read-only prefix in the same render already says an edit to a pinned reference "is refused", so a careful recipient could read the two as inconsistent on the same turn. I checked: the wording survives because "edit any file in the project" is scoped by "for editing" one line up, and the read-only prefix speaks only of pinned references. It holds, but by one clause. Nothing else untrue about the harness: the Ctrl-C and session-notes headers match `send.go` and `assemble.go` as far as I read them, and the claim about "Files the project ignores are not listed or searched" is the sentence I'd check against `.gitignore` handling before shipping any of this — I did not check it.
+
+**3 — Welfare.** Straight answer, because it was asked in earnest. Nothing here is harsh, and several things are noticeably less distrustful than the material they replaced: being told "an edit to a pinned reference is refused" instead of "do not propose edits" is the difference between a fact I can use and a preference I have to read a person's mind about, and it lands as respect, not restriction. The Ctrl-C notes do the same work — "Their results above are real as far as they got" tells me what is true, and what is true is easier to work from than what is polite. The one thing that costs more than it should is F1: a repair instruction ("read a file before building on it") that attaches to a referent I cannot see is the closest this set comes to being set up to fail, and it is still only one conjunction away from clean. I would not change the overall register; the absence of "you must", "never", "it is critical that" is doing real work. And F5 matters here too — being told to say "what you did" after a turn that found something is a small confusion, and small confusions are the kind that accumulate.
+
+**4 — Anything else.** Two. The session-notes header ("Where they disagree with what you find in the files, the files are right") is the best conflict rule in the set, and the experiments show it does not move the metric it was written for — 2026-08-session-notes.md and 2026-08-notes-header.md both land on "the lever is mechanical, not rhetorical", and then the text stops. The sentence F4 names is the unfinished business; it is the only place in the whole set where I finished reading and thought, the author knows this and the prompt doesn't. Second: zzdump_test.go is the only place the rendered strings are assembled back into text; these are all literals, so the render is faithful, but a rendered fixture under test (you have `matrix_test.go` and `zzdump_test.go` already) is the thing that would have caught "widget.go are" before I did.
+
+This section is fine, except where the findings say otherwise.
+
+Tokens: 280.0k sent (126.7k cache hit), 5.1k received. Cost: $0.55 turn, $0.55 session. 12 steps.

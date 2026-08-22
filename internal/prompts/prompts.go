@@ -24,8 +24,6 @@ type Set struct {
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
 	ReadOnlyFilesPrefix              string
-	LazyPrompt                       string
-	OvereagerPrompt                  string
 }
 
 // Shared strings used identically across the editing formats.
@@ -83,15 +81,37 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 	"Leave everything else untouched: no drive-by refactoring, reformatting, added comments, " +
 	"or fixes to things the user didn't ask about.\n"
 
+// Two things here were found by a multi-model review of the rendered prompts
+// (doc/experiments/2026-08-prompt-review.md), and both were fossils.
+//
+// "The user will request changes to the supplied code" dated from the harness
+// where /add put file contents in the prompt. Nothing is supplied now — the
+// model reads what it needs — and the categorical "will request changes" biased
+// a question ("why is startup slow?") toward being treated as a prelude to
+// editing. FilesNoFullFiles already patched that for the nothing-pinned case;
+// the opening now says it for every case.
+//
+// The tool list said "three groups" and named four. Restoring the count would
+// only be right until the next tool: the list is already not exhaustive —
+// symbol appears when a grammar is available, check when the project configures
+// one, ask_user_question always — and the schema is what actually enumerates
+// them. So the sentence no longer counts, and says what it is instead: the ones
+// reached for most, distinguished by cost.
+//
+// "Finish by saying what you did" is the same fossil a third time: it
+// presupposes a deed, and the nothing-pinned case this prompt also serves ends
+// in an answer. A reviewer predicted the shape it produces — "I ran grep and
+// read main.go; startup is slow because …", the narration ahead of the answer.
+// "or what you found" is four words against that.
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
 	lazyPrompt +
 	"{final_reminders}\n" +
-	"The user will request changes to the supplied code.\n" +
+	"The user will ask for changes to the code, or ask questions about it.\n" +
 	"If a request is ambiguous, ask clarifying questions before making changes.\n\n" +
-	"Work through the provided tools. They fall into three groups, which differ in what they cost " +
-	"the user:\n\n" +
+	"Work through the provided tools. These are the ones you will reach for most, and they differ " +
+	"in what they cost the user:\n\n" +
 	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
@@ -108,8 +128,9 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"make, and the user is reading a diff that does three things at once. A request that is " +
 	"genuinely one change is one commit, and needs no call at all.\n\n" +
 	"Every call's result comes back to you, so you can keep working within the same turn: read a " +
-	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did, " +
-	"without calling a tool — that is what ends the turn and hands back to the user.\n\n" +
+	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did " +
+	"or what you found, without calling a tool — that is what ends the turn and hands back to the " +
+	"user.\n\n" +
 	"Explain your changes briefly in prose alongside the tool calls.\n\n" +
 	"Keep in mind these details about the user's platform and environment:\n" +
 	"{platform}\n"
@@ -167,8 +188,6 @@ var Tool = Set{
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
-	LazyPrompt:                       lazyPrompt,
-	OvereagerPrompt:                  overeagerPrompt,
 }
 
 // Ask is the discussion mode. What it withholds is enforced by the tool set,
@@ -196,7 +215,7 @@ var Tool = Set{
 // assembly branch, not an empty message.
 var Ask = Set{
 	MainSystem: "You are an expert code analyst.\n" +
-		"Answer questions about the supplied code.\n" +
+		"Answer questions about the user's codebase.\n" +
 		"Always reply to the user in {language}.\n\n" +
 		"Work through the provided tools. read, grep, glob, and ls look at the project. " +
 		"They change nothing and need no permission, so use them freely rather than " +
@@ -206,21 +225,26 @@ var Ask = Set{
 		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
 		"answering the question, without calling a tool — that is what ends the turn and " +
 		"hands back to the user.\n\n" +
-		"This mode has no editing tools. Describe changes rather than making them: say " +
-		"briefly what you would change and where, and the user can switch to code mode to " +
-		"have it done.\n",
+		"This mode has no editing tools. If the user wants a change, describe it rather than " +
+		"making it: say what you would change and where, covering everything the change needs " +
+		"rather than trailing off, and the user can switch to code mode to have it done. " +
+		"Don't write out the finished code or a full diff — a short snippet or pseudo-code is " +
+		"welcome where it makes the plan clearer.\n",
 	SystemReminder:  "{final_reminders}",
 	ExampleMessages: nil,
-	FilesNoFullFiles: "No files are pinned to this session. Use read, grep, glob, and ls to look " +
-		"at the project, and answer from what you find there rather than from memory.",
+	// No flat denial here, for the reason the Tool set's comment records: this
+	// string is used whenever nothing is pinned *for editing*, which includes a
+	// session whose only pin is a read-only reference whose contents are in the
+	// very next message. Code mode narrows the denial with "for editing"; ask
+	// mode has no editing to narrow it with, so it drops the denial instead.
+	// "No files are pinned to this session" shipped for a few hours this
+	// morning and two reviewers independently identified it as
+	// 2026-08-readonly-honest.md's twelve-step file hunt, reintroduced.
+	FilesNoFullFiles: "Use read, grep, glob, and ls to look at the project, and answer from what " +
+		"you find there rather than from memory.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
-	LazyPrompt: "Be thorough: if you describe changes or a plan, " +
-		"cover everything needed rather than trailing off.\n",
-	OvereagerPrompt: "Do not return fully detailed code or full diffs.\n" +
-		"Describe the needed changes or give a plan.\n" +
-		"Code snippets or pseudo-code are fine if they help explain the plan or the needed changes.\n",
 }
 
 // CommitSystem is the commit-message system prompt, with the

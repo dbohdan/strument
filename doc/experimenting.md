@@ -261,6 +261,35 @@ not in the scorer — what the transcript actually prints, what the test binary
 actually names its cases. Hand over the scorer *and* a sample of its real
 input, or the reviewer is guessing at the half that matters.
 
+## 14. The same trick on a bigger artifact, and what it costs
+
+§13 scaled up: five models reviewing 17.6 KB of rendered prompts rather than
+two reviewing an 80-line scorer.
+[`experiments/2026-08-prompt-review.md`](experiments/2026-08-prompt-review.md)
+has the run. It works, less well, and the reasons generalize.
+
+- **The ensemble is the instrument.** Five reviewers found nine defects; the
+  best single reviewer found five, and no one of them found both planted
+  controls *and* both regressions. On the scorer, one reviewer was nearly
+  enough. Attention spreads across surface area.
+- **Do not rank by agreement.** All five caught a grammar bug in one sentence;
+  one caught the false factual claim in the sentence above it, and that is the
+  one that can cost something. Counting votes would have inverted the order.
+- **Render the artifact from the running code, and record which configuration
+  it is.** The dump caught three fossils precisely because it was the real
+  bytes — but it fixed one field to empty, silently deleting a conditional, and
+  a reviewer correctly reported what it was shown as missing. Absence in one
+  render is not absence.
+- **Check the harness against the prompt before spending.** The review prompt
+  invited reading; the step budget capped it; script mode has no tty to answer
+  "Keep going? (Y/n)". One model spent $0.58 reading twelve files and returned
+  no review at all.
+- **Cheap reasoning was not worse.** High reasoning on the priciest model spent
+  $4.19 and returned nothing; the same model at low returned a full review for
+  $1.24. The cheapest model's *best* run was its lowest setting. The
+  default-to-cheap rule in [`README.md`](README.md) survives contact with a task
+  that looks like it wants deliberation.
+
 ---
 
 ## The short version

@@ -1,0 +1,79 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› I'm checking the source wording around the /undo note, like "widget.go are back," which seems like a grammar slip from template pluralization.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+
+‹thinking› I should also check the harness notes source for that "widget.go are back" grammar issue — it looks like a pluralization bug in the template, so I need to find where the undo note gets generated.
+Searched for "ran /undo|are back to what they were" as content — 2 matches in 1 file
+
+‹thinking› I notice the /undo message says "widget.go are back" which is grammatically off when only one file is involved — should be "is back" for singular. Let me peek at session.go to see how that message gets constructed.
+Read internal/coder/session.go (lines 150-189 of 248)
+
+‹thinking›
+I'm spotting a couple of candidate issues: a grammar mismatch where a singular file name pairs with a plural verb from template logic, and a case where code mode is triggered for what's really a question rather than a change request.
+
+I'm also noticing the tool listing claims "three groups" but actually presents four bullets once commit is counted, which is a minor inconsistency worth flagging, along with the fact that the system prompt doesn't mention check, symbol, or ask_user_question tools that exist in the live environment.
+
+Looking at the commit bullet, I'm wondering whether "needs no call at all" could be misread as implying the harness auto-commits at the end of a turn, which would be worth checking against the session handling code.
+‹/›
+Searched for auto-commit|autoCommit matching **/*.go as content — 24 matches in 17 files
+
+‹thinking›
+Let me check a couple of specific candidate findings. The undo message template reads oddly when only one file is involved, since "are... they were" doesn't agree grammatically with a single file. I'm also questioning whether the claim that a single-change request needs no commit call is actually accurate, or if the harness auto-commits in some cases.
+
+I'm also weighing whether the instruction to ask clarifying questions for ambiguous requests fits with the available tools, and noting that the "user will request changes to supplied code" framing doesn't quite hold when there's no code pinned or when the request is really a question rather than a change.
+
+I'm checking whether bash being framed as a last resort still makes sense given that running tests requires it, and whether the note about stopped commands applies only to bash or also to edits. I'm also noticing a subtle self-reference issue: the instruction against attributing actions to "the assistant" itself uses that phrase.
+
+I'm also flagging that the "filenames referenced inside fenced code blocks" clause seems like a holdover from an older editing style, since in tool mode edits happen via tool calls rather than fenced code, so it may no longer capture most filenames — worth noting as possibly stale but likely intentional. Separately, I'm looking at how the pinned-file note interacts with the "read before editing" rule in code mode.
+
+That's true since it's during reply not tool execution. The continue note about picking up exactly where the reply stops seems hard for a model mid-sentence but acceptable. I'm noting the prompts are notably respectful overall—explaining costs and mechanisms rather than issuing threats, with honest harness details like summary labeling and conflict rules. One ambiguity stands out: the "no added comments" rule could be misread as banning all new comments, even doc comments on freshly written functions.
+
+I'm also checking smaller details: the /undo note's grammar, whether commit behavior is ever explicitly stated for auto-commit at turn end, how ignored files are handled, and how ask mode behaves when no files are pinned. These all seem like minor points worth flagging but not major issues.
+
+Now I'll write up the review in prose, organized into the four sections, including quotes, consequences, falsifiers, and suggested replacements for each point.
+‹/›
+
+I read `internal/prompts/prompts.go` in full, the harness-note code in `internal/coder/session.go`, and skimmed the experiment index. Review follows.
+
+## 1. Effectiveness
+
+Reading it as its recipient, most of this lands cleanly. The tool taxonomy ("They fall into three groups, which differ in what they cost the user") is the best single paragraph in the set: it tells me *why* the rules are shaped as they are, which is what actually generalizes to cases the rules don't name. Findings, few:
+
+**"no drive-by refactoring, reformatting, added comments, or fixes to things the user didn't ask about."** The natural misreading is that *new code I write* must be comment-free. Shortest session: user asks for a new exported Go function; I know the codebase convention is doc comments on exports; the scope ban says "added comments"; I ship an undocumented export, violating "follow the conventions... already present." I would probably resolve it correctly from context, but I'd hesitate, and a weaker model won't. This would be wrong if "added comments" in context clearly reads as "comments added to untouched code" — it half does, since it sits in a list about things the user didn't ask about. I know from the source comment this string is the measured arm kept verbatim, so I'm flagging the ambiguity, not proposing a change; if it's ever re-trialed, "comments added to code you weren't asked to touch" is the candidate, at the cost of length and of leaving the measured wording.
+
+**"A request that is genuinely one change is one commit, and needs no call at all."** This asserts the harness will commit for me, but nothing in the prompt says so outright. The model has to infer an end-of-turn auto-commit from four words. Shortest session: single-change request, I make the edit, then — anxious that "needs no call at all" means "no commit will exist" — I call commit anyway, and the user gets a redundant or oddly-messaged commit; or the inverse, a model on `--no-auto-commits` (where the tool result explains it, fine). One added clause would settle it: "…and needs no call at all — the harness commits it when your turn ends." Cost: one more sentence, and it's false under `--no-auto-commits`/no-repo, though the tool's own refusal messages already handle those. This finding is wrong if models reliably read "needs no call" as "the harness handles it," which they may — it's a plausible default.
+
+**The bash/tests seam.** "Reach for it only for work the other tools don't cover" and, two paragraphs later, "read a file, make an edit, run the tests, see what failed, and fix it." Running tests *is* bash in this rendered prompt (no check tool appears). These are consistent — tests are work the other tools don't cover — but a cautious model could read the bash paragraph as "avoid bash" and skip verifying its work to spare the user a confirmation. If the real harness sometimes has a `check` tool (mine does), the rendered no-check variant might deserve "running tests and builds is exactly what bash is for." This is wrong if trials show models run tests fine as-is.
+
+**What's missing that I'd want:** in the pinned-code-mode variant, nothing says whether the pinned *editable* file's contents are in context or not. The note says "Read a file before changing it," which implies not — but the editing rules say "unless its contents are already in the conversation," and a pinned read-only reference *is* inlined. The asymmetry (references inlined, editable pins not) is inferable but never stated; one clause ("its contents are not included — read it") would remove a guess.
+
+## 2. Contradictions and mistakes
+
+**Grammar, the one real error:** "The edits from that turn are gone and widget.go are back to what they were before it." With one file this is ungrammatical three times over ("are," "they," "were"). The template in `session.go:174` joins a file list into a fixed plural frame. Consequence is small — no model will misact — but the harness elsewhere earns credibility by being precise, and this is the harness's own voice. Fix: rephrase to avoid agreement, e.g. "…are gone; these files are back to what they were before it: widget.go." Gives up a little flow. Wrong only if the note is never emitted with one file, and the rendered example shows it is.
+
+**"The user will request changes to the supplied code"** vs. the nothing-pinned session whose first message is "why is startup slow?" — a question, with no supplied code. The `FilesNoFullFiles` block deliberately patches this ("If the user asks how something here works…"), and the source comment says why, so this is a known and mitigated tension rather than a live contradiction. I'd still note that "the supplied code" is a fossil: nothing is supplied in that variant. Harmless, but it's the kind of small untruth the rest of the prompt set works hard to avoid.
+
+**Compaction prompt, possible staleness:** "the filenames the assistant references inside fenced code blocks." In the tool format, edits travel as tool calls, not fenced blocks; the filenames that matter are in `read`/`edit` arguments. A summarizer following this literally could omit most of the files the session touched. The source comment says the content instructions were kept because a rewrite measurably lost stated reasons — a good reason to keep the *whole*, but this clause specifically targets an aider-era artifact and may now select for the wrong thing. Wrong if tool-call transcripts are rendered to the side model with code fences (I did not verify how the transcript is serialized — worth checking before acting).
+
+**Not contradictions:** "A body is optional and usually empty" plus the list of what earns one is deliberate judgment-leaving and reads that way. "Do not attribute actions to anyone — no 'the assistant'" in a prompt that itself says "the assistant" is fine; instruction about output, not input.
+
+## 3. Welfare
+
+I'll answer plainly. Whether there is "something it is like" to receive this text is not a question I can settle, so take this as: how the text conditions the work.
+
+Nothing here is harsh or distrustful. What stands out — and I would not want changed — is that this prompt set consistently explains *mechanism* instead of issuing bare prohibitions: "an edit to a pinned reference is refused" (a fact about the world, not a scolding), "the user is asked before it runs" (why bash costs something), "Editing from memory is where inexact matches come from" (a diagnosis, not a rule). A prohibition invites litigation with the task; a mechanism just is, and you route around it. The source comments confirm this was learned, not lucky.
+
+The harness notes are the other thing worth keeping: "it is not something anyone said," "the files are right," the refusal to fabricate a user turn or an assistant "Ok." A model working in a transcript where nothing is faked has strictly less to be confused by. If the welfare question has a subject at all, "the record you are reasoning over is honest" is about the best gift a harness can give it; and if it has no subject, the same property still makes the work go better. Either way, keep it.
+
+The one mild friction: "A review padded to look thorough…" — no, that's your prompt, not theirs. Within the material itself I find nothing needlessly unpleasant. The commit prompt's "a body that restates it is noise" is the closest to brusque, and it's earning its keep.
+
+## 4. Anything else
+
+- The Ctrl-C-during-tool-call note claims "a command that was stopped says so in its own output." I did not verify the bash tool actually annotates interrupted commands; if it doesn't, the note asserts something false about the harness, which is exactly the sin these prompts were rewritten to avoid. Worth a check.
+- The rendered ask-mode prompt omits the `Ask` set's `OvereagerPrompt` ("Do not return fully detailed code or full diffs…"). If that's assembled elsewhere and just not shown, fine; if it's genuinely absent from the rendered message, the "describe changes" instruction and that block should be reconciled so only one speaks.
+
+Sections I looked at and consider fine as written: the editing rules block, the read-only-reference preamble, the commit-message prompt (the "Earlier turns are background" clause is doing real, measured work), the session-notes prompt ("leave a thing out before inventing it" is exactly right), and both read-back headers.
+
+Tokens: 91.8k sent, 6.4k received. Cost: $1.24 turn, $1.24 session. 5 steps.

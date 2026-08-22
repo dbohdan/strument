@@ -28,12 +28,21 @@ const maxCommitSubject = 100
 // shape is structural: a wall of text cannot land in the summary line, and the
 // body — the *why*, which the diff cannot carry — has somewhere to go that the
 // model has to decide about rather than trail off after.
+//
+// The example used to be "a refactor, then the tests it needed, then the docs",
+// which is word for word the reach clause's own list — "the call sites it
+// breaks, the tests that cover it, the docs that describe it. That is the same
+// request, not extra work." One says the triad is a single request; the other
+// held it up as three commits. A reviewer reading both said it would side with
+// the system prompt and emit one blob, which is precisely the failure this tool
+// was built for. The example now names a boundary the reach clause does not
+// claim.
 func commitTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolCommit,
 		Description: "Commit the edits you have made so far in this turn, as one commit. " +
-			"Use it when your work has natural boundaries — a refactor, then the tests " +
-			"it needed, then the docs — so each lands as its own reviewable change " +
+			"Use it when your work has natural boundaries — a helper extracted, then the " +
+			"feature that uses it — so each lands as its own reviewable change " +
 			"instead of one undifferentiated diff.\n\n" +
 			"Commits exactly the files your edit and write calls have changed since your " +
 			"last commit. Files that a bash command changed — a formatter, a code " +

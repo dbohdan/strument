@@ -166,13 +166,35 @@ func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[sho
 // It used to be followed by a fabricated "Understood, I'll treat those files as
 // unchanged", which the model never said; the alternation that line existed for
 // is not something any provider requires.
+// Two things the note used to get wrong, both found by the prompt review in
+// doc/experiments/2026-08-prompt-review.md.
+//
+// It said "the edits from that turn are gone", and a turn is not the unit —
+// nor is "that turn" a phrase the reader can resolve. /undo pops the snapshot
+// stack, so the reverted work may be several messages back, and a model that
+// has just finished a question-answering turn reads "that turn" as the one it
+// just did, which changed nothing.
+// settleEdits pushes a snapshot per commit, so a turn that called commit twice
+// left three snapshots and one /undo pops one of them — the design says so
+// itself ("/undo steps through the two halves one at a time"). A model told the
+// turn was reverted, when only its last part was, reapplies work that is still
+// there.
+//
+// And the verb was welded to the plural by strings.Join, so the single-file
+// case — the common one — read "widget.go are back to what they were". All five
+// reviewers caught that; only one caught the sentence above it, which is the
+// one that can cost something.
 func (c *Coder) NoteUndo(files []string) {
 	if len(files) == 0 {
 		return
 	}
+	subject := files[0] + " is back to what it was"
+	if len(files) > 1 {
+		subject = strings.Join(files, ", ") + " are back to what they were"
+	}
 	c.doneMessages = append(c.doneMessages, llm.HarnessNote(
-		"The user ran /undo. The edits from that turn are gone and "+
-			strings.Join(files, ", ")+" are back to what they were before it. "+
+		"The user ran /undo. Strument's most recent batch of edits is reverted, and "+
+			subject+" before it. Anything Strument committed before that batch is still in place. "+
 			"Don't assume anything you changed there is still in place; read a file before building on it."))
 }
 

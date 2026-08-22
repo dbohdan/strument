@@ -1,0 +1,156 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› I should look at internal/prompts/prompts.go and the experiments docs to understand the reasoning behind the prompts before reviewing them.
+
+I'll read the source and the experiment notes before writing the review, since several findings depend on whether an oddity is deliberate.
+Read internal/prompts/prompts.go (393 lines)
+Listed doc/experiments (30 entries)
+
+‹thinking› I should check whether harness notes like Ctrl-C or /undo appear elsewhere, since they weren't in prompts.go, so I'll grep for them.
+
+The mid-conversation notes aren't in prompts.go — let me find where they live, and check a couple of experiment writeups.
+Searched for "pressed Ctrl-C|ran /undo|chose to continue" as content — 10 matches in 6 files
+Read doc/experiments/2026-08-synthetic-turns.md (150 lines)
+
+‹thinking› I'm noticing a grammatical issue in the /undo message in session.go, where it says "widget.go are back to what they were" — seems like a file-listing template with a number mismatch. Let me check that code.
+Read internal/coder/session.go (lines 150-194 of 248)
+Read internal/coder/send.go (lines 340-394 of 887)
+
+‹thinking› I'm noticing the rendered prompt under review lists tools like read, grep, glob, ls, edit, write, bash, and commit, but my actual environment also includes check, symbol, and ask_user_question that aren't mentioned there.  The prompts.go comment explains symbol is deliberately left unnamed since the schema carries it, and similarly notes toolDefs drops edit, write, bash, and check — so check likely exists in code mode but stays unnamed in the prompt, possibly only appearing when checks are configured, much like symbol. I want to verify this by looking at toolDefs directly.
+Searched for check|symbol|ask_user_question under internal/coder matching **/tooldefs*.go as files — no matches
+Searched for toolDefs as files — 14 matches in 10 files
+
+‹thinking› I'm checking tools.go to see whether the code mode tool set actually includes symbol, ask_user_question, and check, since the reviewed prompt only lists read, grep, glob, ls, edit, write, bash, and commit — a discrepancy worth flagging.
+Searched for Name:\s+" under internal/coder/tools.go as content — no matches
+Searched for "(read|grep|glob|ls|edit|write|bash|commit|check|symbol|ask_user_question)" under internal/coder/tools.go as content — 13 matches in 1 file
+
+‹thinking›
+I notice the actual tools available—check, symbol, ask_user_question—aren't mentioned in the system prompt's grouping description, which claims "three groups" but actually lists four: observation tools, edit/write, bash, and commit. That looks like a counting discrepancy in the prompt itself.
+
+I'm also noticing my actual environment's bash description phrases the confirmation slightly differently than the review material does. And I'm puzzling over the "three groups" versus four bullets discrepancy — read/grep/glob/ls, edit/write, bash, and commit — wondering if commit was meant to fold into another category by cost, since it doesn't change files but also doesn't require confirmation, making it an odd fourth item under a "three groups" label.
+
+I'm also catching a grammar slip in the undo message: when only one file is affected, the phrasing "widget.go are back to what they were" reads awkwardly since "are" doesn't agree with a single file — worth flagging as a minor but genuine issue, along with a similar oddity in the ask-mode description claiming code is "supplied" even when nothing is pinned.
+
+So the pinned file must actually be read via tools rather than included inline, which the "read before changing" instruction already covers. I'm also noticing that the read-only prefix appears as a user-role message describing "the user" in third person — the harness speaking about the user rather than as the user, which is a subtle but distinct voice from genuine user turns.
+
+I also notice an inconsistency: harness notes mid-conversation carry an explicit attribution marker, but this read-only prefix block doesn't, even though it's described as speaking "as the harness." That's a minor tension worth flagging, though low priority.
+
+Shifting to effectiveness concerns, I'm questioning the ambiguity in guidance about commits — saying a single genuine change "needs no call at all" leaves unclear whether that means no commit call is needed at all.
+‹/›
+
+The commit bullet's last sentence — "A request that is genuinely one change is one commit, and needs no call at all" — hinges on whether the harness auto-commits at turn end. Let me verify that.
+Searched for "auto.?commit|AutoCommit|commit at the end|end of turn" under internal/coder as content — 29 matches in 13 files
+Read internal/coder/commit.go (lines 1-60 of 167)
+Read doc/experiments/2026-08-readonly-honest.md (lines 1-60 of 128)
+
+‹thinking›
+I'm checking whether the "check" tool appears in the rendered prompt's tool list, and noticing the shown tools are just read, grep, glob, ls, edit, write, bash, and commit.  I also spot a grammar issue in the /undo example text — "widget.go are back to what they were" should use "is" for a single file, which is a real finding worth flagging.
+
+There's also a subtle tension: the code mode system claims "the user will request changes," but one example user message is just a question ("why is startup slow?"), not a change request. The prompt does acknowledge this gap elsewhere, so it's a minor, self-aware inconsistency rather than a clear bug.
+
+The commit bullet also leans on an unstated assumption — that edits auto-commit at end of turn if no explicit commit call is made — which isn't spelled out anywhere in the rendered system prompt, leaving the model to infer harness behavior it's never told about.
+
+I should check the actual commit tool description in tools.go since the schema might carry info the rendered prompt doesn't. I'm also noting other issues: the interrupt/continue note's handling when tool calls are dropped mid-call seems fine on reflection, but the /undo note still has a grammar mismatch treating a single file as plural.
+
+Looking at ask mode, the language instruction renders correctly, but the overeager/lazy prompt text about not returning full diffs isn't actually present in the rendered ask system prompt — those Set fields must be assembled conditionally elsewhere, which isn't my concern unless it creates a contradiction.
+
+Now I'm noticing the readOnlyFilesPrefix block is delivered as a user-role message but written in third person about the user ("The user pinned these files") — that's the harness speaking within a user turn rather than genuine user voice, which echoes their own synthetic-turns finding that user-voice fabrication persists in some places. It may be a deliberate compromise due to role placement constraints, but by their own standards this looks like a notable inconsistency worth flagging.
+
+Moving to the commit message prompt, the instructions about earlier turns being background and the example format seem consistent, though I notice the breaking-change guidance ("!" before the colon) is stated redundantly in both a bullet point and a body paragraph.
+
+Looking at the summarize instructions, there's a subtle tension: the prompt tells the summarizer not to attribute actions to "the assistant" while simultaneously asking it to track filenames "the assistant references" inside code blocks — not a real contradiction, but worth noting the awkward phrasing.
+
+I'm also noticing this instruction seems inherited from an older text-based edit format, since in tool-calling mode the assistant rarely writes fenced code blocks — filenames typically show up in tool call arguments instead, so this instruction may be pointing at something that barely exists in practice.
+
+I should check how the summarization input actually renders tool calls before flagging this as stale. Moving on, I'm checking the session notes and Ctrl-C interruption notes for accuracy — the claims about dropped partial tool calls and unchanged state both look correct.
+
+For the code-mode pinned-file prompt, I notice it says "the user will request changes to the supplied code," but no code is actually supplied in tool mode — the model reads files itself. That phrase seems like a leftover assumption from a different mode, and could mislead the model into expecting code to be included when it isn't.
+
+I'm not sure whether the pinned file content actually gets included anywhere, or if the model is just expected to read it itself — seems fine either way.
+
+The welfare-related notes strike me as notably honest and non-blaming, avoiding threats or all-caps demands except one "Never leave placeholder comments" rule. Even the blunter lines, like warning that memory of other projects isn't evidence about this one, or that edits to pinned references get refused, read as fair and actually reduce friction for the recipient by stating enforcement upfront.
+
+Now I'm digging into the check tool question — whether it's conditional on configuration, since the rendered prompt's bash bullet implies the user is asked before running it, and I want to see how tools.go handles the case without git or with auto-commits off.
+‹/›
+Read internal/coder/tools.go (lines 40-179 of 899)
+
+‹thinking›
+I'm noticing the system prompt lists tools like read, grep, glob, ls, edit, write, bash, and commit, but leaves out check, symbol, and ask_user_question—symbol seems deliberately unnamed, and check appears conditionally based on configured checks rather than in the rendered code-mode prompt.
+
+Also, the prompt claims tools "fall into three groups" but then lists four bullets: observation tools, edit/write, bash, and commit. That's a small inconsistency worth flagging—four categories presented under a claim of three groups.
+
+I also notice a grammar slip in the /undo description: when only one file is affected, the text still says "widget.go are back to what they were," which is a number-agreement error since the code always joins filenames with "are" regardless of count.
+
+And in ask-mode, the prompt says "no editing tools" but doesn't mention that bash is also unavailable in that mode—an incomplete description of what's actually restricted.
+
+I notice the pinned-file note lacks the "unless contents already in conversation" exception found in the editing rule. Since pinned editable files' contents aren't actually injected under the new /add design, this is mostly a non-issue, though it could slightly over-instruct if a pinned file was already read earlier in the conversation.
+
+On the commit bullet, it says a single-change request "needs no call at all," relying on an implicit auto-commit-at-turn-end mechanism that's never actually named in the prompt. That gap could leave a model uncertain whether unstated edits get committed, possibly prompting it to call commit defensively anyway.
+
+Checking the bash tool description against my actual environment — it says the user is asked to confirm unless a configured check applies, while the rendered prompt's bullet just states the user is always asked, which holds for that sample since no checks are configured there. Then I'm looking at the Ctrl-C interruption note, which claims results shown are real and nothing after the interruption ran, and cross-checking that against the appended text in shell.go.
+
+The "after choosing Continue" note tells the model to pick up exactly where it left off without repeating or summarizing, which could produce an awkward mid-word splice if the reply was cut off there. Then I notice the commit-message prompt has a literal "{language_instruction}" placeholder still showing unrendered in the text given to me, even though it's supposed to be rendered from running code.
+
+I'm wondering whether that's intentional—kept raw for review purposes—or an actual rendering bug, and whether the substituted text would need a leading space depending on whether the instruction is empty. Separately, I notice the summarize instructions use "the assistant" even though the same prompt elsewhere forbids that phrase for attribution, which seems like a possible inconsistency worth flagging.
+
+I'm also noticing the read-only prefix mentions glob, ls, and grep as scoped to the workspace root but doesn't mention read — I should check whether the read tool can actually access files outside the project root, since a model might try an absolute path there.
+
+On the "three groups" claim, I'm counting the actual bullets: read, edit/write, bash, and commit — that's four items, not three, so the text's framing doesn't match what's rendered and I should flag this discrepancy.
+
+Next I'm checking the undo note's grammar — it says "widget.go are back to what they were" which is a singular file paired with plural verb agreement, confirming a bug in how the file list gets joined into that sentence.
+
+Then I'm weighing a possible contradiction between the general editing rule (read before editing unless already in conversation) and the pinned-file note (read before changing or answering questions about it) — trying to figure out whether a file read several turns ago still counts as "already in the conversation" for a later edit request.
+
+I also want to verify the commit tool's description matches what commit.go actually does — checking that "closes the edits you've made so far" lines up with committing files changed since the last commit.
+
+Looking at the conventional commit types list, the lowercase "build" after a period is a minor stylistic quirk, likely intentional since it's naming a type. The bash tool's scope seems fine for covering edge cases like running tests without a configured check tool.
+
+One gap I notice: the code prompt never mentions that edits are recoverable or that undo exists, so the model has no way to reassure a user when something goes wrong mid-turn.
+
+On the welfare side, these prompts strike me as unusually respectful — they explain mechanisms instead of issuing bare prohibitions, keep an honest harness voice, and include lines like "say less rather than guess" that reduce anxiety around scope and judgment calls. Phrases like "that is the same request, not extra work" and "nothing here refuses a commit — the judgment is yours" seem designed to relieve uncertainty rather than police behavior.
+
+I'm also noticing a tension in the code-mode prompt: it demands complete implementation but also asks for clarifying questions on ambiguous requests. More notably, "the user will request changes to the supplied code" is a false assumption when the user is just asking a question rather than requesting a change, and "the supplied code" phrase has no referent at all when nothing is actually pinned — this looks like inherited boilerplate from aider that doesn't fit the no-pin variant.
+
+I notice the ask_user_question tool schema itself (per my environment) warns against using it to ask permission, though that's not in the reviewed material. The pinned code-mode note about reading files before changing them checks out since widget.go's contents aren't actually provided. I'm also noting the read-only prefix message is oddly voiced — it's tagged "role: user" but speaks about "the user" in third person, which looks like harness voice injected into a user slot, likely deliberate for the add-authority experiment.
+
+Moving through more checks: the compaction label correctly clarifies it's not something anyone said, SessionNotes' 300-word cap is fine, and the summarize instruction lacks an explicit length bound but that's inherited intentionally from aider. The ignored-files behavior matches across system prompt and tools, the platform/date info looks correct, and the commit message length constraint seems reasonable too.
+
+Now I want to verify where the language_instruction rendering happens and where the pinned-file note lives, plus double-check whether file reads are restricted to the project root.I'll check where the pinned-file note is assembled, how `{language_instruction}` renders, and whether `read` can access files outside the project root.
+‹/›
+Searched for "Pinning says what the conversation is about" as content — 1 match in 1 file
+Searched for language_instruction as content — 3 matches in 2 files
+Searched for "outside the (project|workspace|root)" under internal/coder as content — 9 matches in 6 files
+Read internal/coder/assemble.go (lines 340-419 of 554)
+
+‹thinking›
+I'm noticing a grammar slip in the /undo note — with only one file, "widget.go are back to what they were" reads oddly since that phrasing comes from joining multiple filenames with commas. It's a minor issue, but worth flagging since the join logic at session.go:174 doesn't account for singular cases.
+
+I'm also spotting a counting discrepancy in the tool-mode prompt: it claims tools "fall into three groups" but then lists four bullets — observation, edit/write, bash, and commit. Either commit should be folded into an existing group or the count needs updating; this looks like a stale description after commit was added later.
+
+Counting the bullets, I actually find four listed under "three groups" — read/grep/glob/ls, edit/write, bash, and commit — which looks like a genuine mismatch worth flagging. I also notice the pinned-reference block says glob, ls, and grep won't find files outside the project but omits read, which seems like it should be included too if read is similarly scoped to the project root.
+
+Looking further, the /undo message has a subject-verb mismatch ("widget.go are back to what they were") that's minor but worth a low-cost grammar fix, and I'm checking how the language_instruction placeholder gets inserted into the commit message template to see if it renders cleanly when non-empty.
+
+The ask-mode prompt correctly reminds the model to reply in the user's language and to read pinned files before answering, but I notice the OvereagerPrompt about avoiding full diffs doesn't appear in the rendered ask prompt — it's probably conditional on final_reminders, so it's not something I need to flag unless it's actually missing when expected.
+
+Asking a clarifying question in prose still ends the turn, so no real contradiction there. Tenth issue: the claim "the user will request changes to the supplied code" doesn't hold when nothing is pinned and the sample question is just "why is startup slow?" rather than a change request — but the FilesNoFullFiles note and the harness's own acknowledgment of this tension already patch it, so it's only worth a minor mention.
+
+Checking the interrupt-during-tools note next — verified against shell.go:91 that a stopped command's output does get a note appended, and "nothing after the interruption ran" holds up. Then looking at the continue note's claim to "pick up exactly where your reply stops" against how noteInterrupt drops partial tool calls — the text survives but tool calls get dropped, and the Ctrl-C note separately clarifies that any begun tool call wasn't run, so both notes together cover the gap.
+
+Now I'm examining the commit bullet's claim that a single-change request "needs no call at all" — this relies on the harness auto-committing remaining edits at turn end, but the prompt never actually states that mechanism exists. It's only implied by the phrasing, which could leave a model uncertain whether its edits get committed.
+
+Fifteenth: there's a subtle tension between the pinned-file note ("read before changing") stated unconditionally and the editing rules' exception for content already in the conversation — after an initial read, subsequent edits in the same turn shouldn't require re-reading, but the pinned note's phrasing could be misread as requiring a read before every single change. Mild ambiguity, mostly harmless.
+
+On welfare, the tone throughout is notably honest and non-blaming — reassurances like "the files are right" and "nothing it would have changed has changed" avoid ventriloquism, and the Ctrl-C handling stays neutral rather than implying the user did something wrong. Clarifying lines like "That is the same request, not extra work" genuinely help reduce confusion.
+
+I want to verify the claim about the read tool being scoped to the project by checking its path validation logic directly.
+
+Checking the phrasing about filenames referenced inside fenced code blocks — seems fine, just legacy wording. The word count limit on session notes looks fine too, and the commit prompt's boundary between "the request that prompted them" and "earlier turns" seems like deliberate, measured wording rather than a real ambiguity. The notes header and compaction label both look fine as written.
+
+Now I want to check how the read tool handles paths to resolve the outside-project question.
+‹/›
+Searched for "func \(c \*Coder\) (runRead|toolReadRun|readTool)|case toolRead" under internal/coder as content — 4 matches in 3 files
+Read internal/coder/commit.go (lines 110-166 of 167)
+request: HTTP 402: This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 51416. To increase, visit https://openrouter.ai/settings/keys (redacted) and adjust the key's total limit
+
+Tokens: 322.1k sent, 19.5k received. Cost: $4.19 turn, $4.19 session. 13 steps.

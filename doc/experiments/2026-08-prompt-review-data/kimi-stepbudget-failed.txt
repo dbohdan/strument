@@ -1,0 +1,307 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking›
+The user is asking me to review a set of prompts for their tool, Strument. They've explicitly said: don't edit, don't write, don't propose a patch. Reply in prose. I have read/grep/glob/ls available and the source is at internal/prompts/prompts.go, with doc/experiments/ holding trials.
+
+This is a review task. I should:
+
+1. Read the source to understand context (optional but useful — the user says the reasoning is documented there).
+2. Produce a review with four sections: effectiveness, contradictions/mistakes, welfare, anything else.
+3. Findings need exact quotes, concrete failure scenarios, what would have to be true for the finding to be wrong, and suggested replacement wording where obvious.
+
+The user warns against padding. Fewer, better-founded findings > long list. "This section is fine" is useful.
+
+Let me actually read the material carefully first, then check the source for the commented reasoning where it matters.
+
+Let me think hard about the rendered text as its recipient (a model receiving this system prompt).
+
+**Code mode system prompt analysis:**
+
+Paragraph 1: role + conventions + scope. Fine.
+
+"The user will request changes to the supplied code." — "supplied code"? In code mode with nothing pinned, nothing is supplied. The code isn't supplied; it's on disk. Minor mismatch. Actually the prompt says "the supplied code" in both variants — even the nothing-pinned variant. Hmm, in the nothing-pinned version, no code is supplied at all. That's a small inaccuracy: "the user's codebase" would be more accurate. Would a model go wrong? Probably not badly, but it's a candidate finding — the user asked for "places where the text asserts something untrue about the harness." Let me check: CODE MODE, nothing pinned says "The user will request changes to the supplied code." and then "Nothing is pinned for editing." So "supplied code" is slightly untrue — nothing is supplied; access is via tools. Also ask mode says "the supplied code" too ("Answer questions about the supplied code"). And the pinned variant says supplied code — well, the pinned file's contents are NOT included in the prompt (only read-only references are included). The pinned file is named but not supplied. So "the supplied code" is wrong-ish in all modes: code is never supplied; it's accessed through tools. Conveniently the next paragraph tells you to use tools. This is a minor correctness finding. Concrete bite: model might wait for code or complain nothing was supplied... unlikely; more likely no effect. But the user wants errors of fact — this qualifies as small.
+
+"If a request is ambiguous, ask clarifying questions before making changes." — How does the model ask a question? By replying without a tool call. But the prompt also says "Finish by saying what you did" — tension: in the ambiguous case the model didn't do anything. Fine. Also there's an ask_user_question tool in MY environment, but in the described Strument material there is no such tool — the model just asks in prose. OK.
+
+Tools section: three groups. "commit closes the edits you have made so far as one commit" — the commit tool description says commit applies to "the edits you have made so far as one commit". Then the nothing-pinned vs pinned distinction. One potential contradiction: the commit paragraph says "A request that is genuinely one change is one commit, and needs no call at all." Wait — "needs no call at all"?? That reads oddly: if a request is one change, the commit still needs a call to happen; the sentence means "needs no call [beyond the one]..." Hmm, actually re-reading: "A request that is genuinely one change is one commit, and needs no call at all." That says a one-change request needs NO commit call? That can't be intended — surely even a single-change request should be committed once. Let me re-read.
+
+"commit closes the edits you have made so far as one commit, with a message you write. When a request has several parts, work through them one at a time: make the edits for the first part, call commit, and begin the second part after that result comes back. Do not make every edit and then commit once at the end — by then there is only one commit to make, and the user is reading a diff that does three things at once. A request that is genuinely one change is one commit, and needs no call at all."
+
+Hmm. "needs no call at all" — I think the intended meaning is "needs no [special/extra] call" i.e., you don't need to think about splitting; one commit naturally. But literally it says a one-change request needs no commit call at all — which would leave work uncommitted. Wait — maybe the harness auto-commits? Let me check the source. Actually the /undo note says "The edits from that turn are gone" — implies edits happen in working tree and are committed via commit tool. If a one-change request "needs no call at all", then commits would often be skipped for simple requests. Is that the intent? Perhaps the harness commits automatically at turn end? Let me look at prompts.go and the code.
+
+Actually, reading again: "A request that is genuinely one change is one commit, and needs no call at all." Maybe it means "one commit, and needs no call at all" = the harness commits for you? No — the earlier sentence says commit is a tool you call. Contradiction candidate. Let me check the source for comments.
+
+Alternatively parse: "A request that is genuinely one change is one commit, and needs no call at all." Could mean "no call" = "no deliberation/agonizing"? "needs no call" as in "needs no judgment call"? That's a stretch but possible reading: "it's one commit, and requires no decision on your part." But a model will likely read it literally: don't call commit for one-change requests. Then edits never get committed for the most common case. That seems like a real finding unless the harness commits automatically. I need to check the source.
+
+Let me hold that thought and check internal/prompts/prompts.go.
+
+Environment block: fine.
+
+Editing rules: fine. "Read a file before editing it unless its contents are already in the conversation." Good.
+
+Pinned section (variant 1): "The user has pinned 1 file to this session: widget.go. Pinning says what the conversation is about. It is not itself a request to change anything... Read a file before changing it or answering questions about it..." — fine.
+
+Read-only reference block: role: user, contents inline. "Do not edit them: an edit to a pinned reference is refused." Fine — matches harness behavior presumably.
+
+User message: "make the widget idempotent" — just an example.
+
+Ask mode: "This mode has no editing tools. Describe changes rather than making them." Fine. "Always reply to the user in the same language they are using." — only in ask mode. Why? Maybe deliberate (ask is chat-oriented). Not a contradiction across modes but an inconsistency: code mode answers "why is startup slow?" might reply in English to a German user. Maybe deliberate; check comments in source. This could be a "deliberate tension" the user acknowledges. Hmm, they explicitly flag "a body is optional and usually empty" as deliberate. The language instruction asymmetry might be deliberate too (side prompts have {language_instruction} placeholder too). Actually in ask mode it's a hard "Always reply ... in the same language." In code mode, absent. If deliberate, fine; but worth noting the asymmetry invites inconsistency between modes. The user asked to distinguish deliberate tensions from contradictions. I'll check source comments.
+
+Harness notes:
+
+1. Ctrl-C during reply: "your reply above was cut off where it stops... any tool call you had begun was not run — nothing it would have changed has changed." OK — is that true? If a tool call was "begun" during the reply phase... it says not run. Fine, asserts harness guarantees.
+
+2. Ctrl-C during tool call: "Their results above are real as far as they got" — "Their" refers to "your tool calls". Slightly awkward ("results above are real") but fine.
+
+3. /undo: "[strument] The user ran /undo. The edits from that turn are gone and widget.go are back to what they were before it." — GRAMMAR ERROR: "The edits ... are gone and widget.go are back" — "widget.go are" should be "widget.go is". "The edits from that turn are gone and widget.go are back to what they were" — the subject of the second clause is widget.go (singular) → "is back". Unless multiple files: "widget.go are back" — with one pinned file it's singular. The template presumably interpolates file names; with 1 file, "is", with many, "are"? If the template hardcodes "are", it's wrong for single file. This is an actual grammar error that changes... meaning? Not meaning, but grammar. The user asked for "errors of fact or grammar that change the meaning" — this is grammar; does it change meaning? Mildly; it also signals sloppy templating. Worth reporting with exact quote. Fix: make verb agree, or restructure: "The edits from that turn are gone; the following files are back to what they were: widget.go." Something number-agnostic.
+
+4. Continue: fine.
+
+Also note: the /undo note says "Don't assume anything you changed there is still in place; read a file before building on it." Fine.
+
+Note: the Ctrl-C-during-reply note says "any tool call you had begun was not run" — but in these tool formats, tool calls are discrete; "begun but not run" is odd but plausible for streaming. OK.
+
+Side-model prompts:
+
+Commit message prompt: "Write the Git commit message" — "Git" capitalization; style guides say "git" lowercase for the tool, "Git" for the system... Convention: the VCS is "Git" when referring to it as a product. Fine.
+
+"{language_instruction}" placeholder is rendered literally?! In the rendered material, the commit message prompt contains the literal text "{language_instruction}" — that looks like an unfilled template placeholder leaking into the prompt! The user said "rendered from the running code rather than retyped". If the actual output contains "{language_instruction}" literally, that's a bug (or the place where a language instruction is interpolated, and in this rendering it was empty/left as-is). Let me check prompts.go. If it's a Go template or fmt placeholder, and the code failed to substitute... Or maybe in the code it's `%s` and the harness substitutes; the user rendering showed `{language_instruction}` as the placeholder name. The user said "rendered from the running code" — so maybe in the code there is a function that replaces it, and the rendering intentionally showed the placeholder for the reviewer? Hmm. But ask mode shows the language instruction fully rendered ("Always reply to the user in the same language they are using."), suggesting the commit-message prompt's placeholder is substituted in production with something like " Reply in the same language..." The rendering here might show the template pre-substitution. Actually the material says "rendered from the running code rather than retyped" — if the running code renders with a placeholder empty when no language is known, you'd get dangling "". But here we see the literal "{language_instruction}". So either (a) the rendering deliberately shows the template, or (b) bug. I should check the source. If there is a placeholder mechanism, I'll check what the empty case looks like: if empty, the text "...e.g. "fix(workspace): stop counting cache writes twice".{language_instruction}\n- Use feat..." might render as "...twice\".\n- Use feat" — fine. The placeholder being visible in the review material is probably how the user presented it (they may have shown template). I'll check.
+
+Commit message prompt details:
+- "Escape hatches": "If the change breaks existing behavior, put "!" before the colon." — that's unconventional: conventional commits use "!" after type/scope, before colon — yes "fix(scope)!: ...". OK consistent.
+- "A body is optional and usually empty." — user flagged as deliberate tension.
+- "The subject is one line, in the form "type(scope): description"" then "- The scope names the part of the codebase ... Leave it out when the change spans several." OK.
+- "under 72 characters" — conventional commits often 50; 72 fine.
+
+Compaction summary: "Include the function, library, and package names under discussion, along with the filenames the assistant references inside fenced code blocks." — wait: "the filenames the assistant references" but the next prompt says "Do not attribute actions to anyone — no "I", no "you", no "the assistant"." The compaction prompt says "the filenames the assistant references" — using "the assistant" in the instruction itself is fine (it's meta), but slightly odd alongside the no-attribution rule. Not a real problem.
+
+"Start a new paragraph whenever the topic changes." fine.
+
+"Do not attribute actions to anyone — no "I", no "you", no "the assistant". Say what happened." — side effect: summaries become passive; deliberate.
+
+End-of-session notes: fine. "Keep it under 300 words. Say less rather than guess."
+
+Header on notes read-back: "written by Strument at the end of the last session (2026-08-21). They are a summary, not a record: they may be incomplete, and the project may have changed since. Where they disagree with what you find in the files, the files are right." Good.
+
+Header on compaction summary: "It replaces those messages; it is not something anyone said." Good.
+
+Now, effectiveness as recipient:
+
+- The commit tool description conflates "commit" with turn structure. The "needs no call at all" reading is my top candidate.
+- Nothing tells the model how to ask clarifying questions (just ask in prose), which is implicit. Fine.
+- No instruction about running tests. "run the tests" appears in an example ("run the tests, see what failed"). bash requires confirmation; running tests via bash may prompt the user each time. Fine.
+- The prompt never says what happens with `write` vs `edit` for new files; write "creates it — or completely overwriting it" — fine, that's a tool spec, not the prompt.
+- "Explain your changes briefly in prose alongside the tool calls." — recipient might produce verbose narration. Fine.
+- Missing: what to do when bash is refused by the user? No guidance. Minor.
+- Missing: how to handle “user pinned files” plural may differ. Fine.
+
+Now contradictions:
+
+1. "The user will request changes to the supplied code." in nothing-pinned mode: no code is supplied; also ask mode same phrase. Minor factual mismatch. And in pinned mode, the pinned file's contents are NOT supplied — only its name. So "the supplied code" is wrong everywhere except the read-only reference case. The fix: "the user's codebase" or rely on tools.
+
+2. "needs no call at all" — literal reading forbids commit for single-change requests; contradicts "commit closes the edits you have made so far as one commit". Unless harness auto-commits — must check source. Actually, wait. Maybe the intended reading is "is one commit, and needs no call at all" where "call" = "judgment call"? Hmm. "needs no call" — I think the author intended "needs no call [to action / no ceremony]"? No. Let me read the source comment — the user says prompts.go has comments explaining why each is worded as it is. Check.
+
+3. Grammar: "The edits from that turn are gone and widget.go are back..." subject-verb agreement; also template presumably lists files; for N files "are" fits, for 1 file it's wrong. Fix: restructure to avoid agreement: "The edits from that turn are gone; the files it touched are back to what they were: widget.go."
+
+4. "{language_instruction}" literal placeholder — check source whether substituted.
+
+5. Ask mode: "This mode has no editing tools." True. And "the supplied code" again.
+
+6. Code mode: "Files the project ignores are not listed or searched." Asserted twice (both variants) fine.
+
+7. Anything untrue about the harness: "edit and write change files directly: the change lands the moment you call them, with no separate confirmation step" — presumably true per tool descriptions. "bash ... the user is asked before it runs" true.
+
+8. The /undo note: "The edits from that turn are gone and widget.go are back to what they were before it." — asserts specific file restoration; if turn edited files not pinned, does note list them? It says widget.go — the pinned file? or the actual edited files? If it lists actual edited files, fine. If it always names the pinned file, it could assert something untrue when the turn edited other files. Check prompts.go.
+
+Welfare section: The user asks earnestly. I should answer honestly and not overproduce. The tone of these prompts: "Never leave placeholder comments" — fine. "Do not make every edit and then commit once at the end — by then there is only one commit to make, and the user is reading a diff that does three things at once." This gives the reason — good, respectful, treats the model as a collaborator. The notes phrase "written by Strument" is nice. The /undo note "Don't assume anything you changed there is still in place" — fine.
+
+Is anything needlessly harsh? "Reach for it only for work the other tools don't cover" — fine. Honestly the material is notably considerate: it explains why (attention cost framing: "differ in what they cost the user"). The opening of the welfare question itself — as the recipient of this review request, I can note that the meta-question is welcome. The user says "If you think this question has no subject, say so." I should give a genuine answer: the prompts are mostly respectful; the attention-cost framing treats the reader as an agent whose effort matters, which is good. The only potentially grating bit: "Do not attribute actions to anyone — no 'I', no 'you', no 'the assistant'" forbids first person for the side model — that's fine for a notes generator.
+
+Also: the ask-mode prompt "Always reply to the user in the same language they are using." Fine.
+
+Welfare negatives: the double negative maze in Ctrl-C note: "Nothing after the interruption ran." fine. Hmm, "so your reply above was cut off where it stops" — fine.
+
+One welfare-good: "Explain your changes briefly in prose alongside the tool calls." and the whole cost framing. And "the user can switch to code mode to have it done" in ask mode — helpful.
+
+Honestly, for the welfare section I will say: nothing here reads as harsh or distrustful; the instructions typically give reasons ("the user is reading a diff that does three things at once") which treats the recipient better than bare prohibitions. And the question does have a subject for me in the sense that clarity and reason-giving are the properties that matter; I'd report one small thing if any: maybe "Never leave placeholder comments" uses "Never" absolutes; fine.
+
+Let me now actually go read the source to check:
+- prompts.go for the "needs no call at all" wording and comments.
+- Whether the /undo note interpolates actual edited files or pinned file.
+- The language_instruction placeholder.
+- doc/experiments for trial results on specific sentences.
+
+Let me start by listing the repo and reading prompts.go. The user explicitly invited reading. I'll do a few reads/greps. Given "Read as much or as little of that as you find useful" — I'll do a targeted pass: prompts.go fully (it's the source of truth), grep doc/experiments for relevant experiment notes (commit message, language instruction, undo note, pinning).
+
+I must not edit/write/commit. Only read/grep/glob/ls. Then produce the review in prose.
+
+Let me do the tool calls now. First: ls root, read prompts.go (maybe long; page through), glob doc/experiments.
+
+I'll batch independent calls: ls + glob + read prompts.go (limit default). Then follow up.
+
+After reading, compose the final answer with the four sections, exact quotes, concrete bites, falsifiers, and fixes with tradeoffs. Keep it disciplined; user warned against padding. I'll aim for the real findings:
+
+Candidate findings list (verify against source):
+
+A. Commit instruction: "A request that is genuinely one change is one commit, and needs no call at all." Ambiguity — literal reading says don't commit. Need source comment to see intent. If intent = "it's a single commit; no need to manage/split", the wording misfires. Fix suggestion: "A request that is genuinely one change is one commit — call commit once when it is done." or clarify. What finding-wrong would require: models reliably parse "needs no call at all" as "no deliberation". Also check whether harness auto-commits at turn end (if so, the sentence is true!). CRITICAL: check source for auto-commit behavior. If Strument auto-commits each turn's edits unless... no, the /undo note + commit tool suggest manual. Let me check.
+
+B. "the supplied code" — untrue in three of the renderings; nothing is supplied in code mode; pinned file contents aren't supplied either (must read). In ask mode with pinned file, again not supplied. Only reference files are supplied. Effect: mostly none, but it contradicts the later "Nothing is pinned for editing. Use read, grep, glob, and ls to find what you need". Fix: "the user's codebase". Trade-off: none really.
+
+C. /undo note grammar + possibly wrong file list: "The edits from that turn are gone and widget.go are back to what they were before it." Check how file list is computed. If it's the edited files, it's truthful; grammar still off for singular. If the harness lists the pinned file even when the turn edited different files, it's untrue.
+
+D. "{language_instruction}" literal — verify in source; if it's an unfilled placeholder in production when language unknown, the side model sees braces; effect probably minor. If it IS substituted in production and only shown here as template, then not a finding about the prompt text per se — but the review material claims rendered-from-running-code, which would then be inaccurate. Check.
+
+E. Ask-mode language rule asymmetry vs code mode. Possibly deliberate (experiments). Check comments. If deliberate, say fine.
+
+F. Ctrl-C note 2: "Their results above are real as far as they got, and a command that was stopped says so in its own output." — For edit/write interrupted mid-... edit calls don't get partial; bash might. The note says results above are real as far as they got. Fine.
+
+G. "Pinning says what the conversation is about." Slightly grand; fine.
+
+H. Ask mode: "Describe changes rather than making them: say briefly what you would change and where" — fine.
+
+I. Effectiveness: what would I go wrong on? Producing the final summary: code mode says "Finish by saying what you did, without calling a tool — that is what ends the turn". Good. Clarifying questions: code mode says ask questions if ambiguous — but nothing says *how* the turn continues after a question; presumably user answers. Fine.
+
+J. Missing that I'd want: (1) A statement of what "done" looks like — e.g., run the tests/build checks when feasible before committing? The prompt mentions "run the tests, see what failed" only as an example of continuation. Is there guidance on whether to verify changes? "Reach for it [bash] only for work the other tools don't cover" covers it implicitly. Possibly this is deliberate to avoid bash spam. (2) Nothing about handling tool errors (edit rejected) — editing rules cover rejection cause. OK. (3) The commit prompt sent to side model includes "the request that prompted them, the work that followed, and the diff" — fine.
+
+K. Side-model commit prompt: "Write the Git commit message for the changes below." and "Reply with the commit message and nothing else". Good. One issue: "If the change breaks existing behavior, put "!" before the colon." — The 'before the colon' phrase: in "type(scope): description" the colon comes after scope; "!" before colon gives "fix(scope)!: ...". OK. But also "include a paragraph starting "BREAKING CHANGE: "" — consistent with conventional commits (footer). Fine.
+
+L. Compaction: "Include the function, library, and package names under discussion, along with the filenames the assistant references inside fenced code blocks. Leave the fenced code blocks themselves out of the summary." — "filenames the assistant references" — later rule "Do not attribute actions to anyone — no ... 'the assistant'". The instruction uses "the assistant" to refer to the assistant... in the instruction text, not in the summary. Not a contradiction in output, but the bans ("no 'the assistant'") could make the summarizer avoid naming filenames because it must avoid mentioning the assistant? Overthinking. Fine.
+
+M. End-of-session notes: "The record below already lists which files changed" — asserts the record lists files; presumably true. Fine.
+
+N. Header on notes: "(2026-08-21)" then "the project may have changed since" — good.
+
+O. One more: code mode says "Working directory: /home/user/project" while actual working dir here is /home/user/strument — that's the example's rendering for a generic project. Not a finding (it's an illustration). The user said ignore? Actually the material is generic ("project"). Fine.
+
+P. "Keep in mind these details about the user's platform and environment:" — fine.
+
+Q. The tool-cost framing ("They fall into three groups, which differ in what they cost the user") — cost framing is nice.
+
+R. Possible contradiction: "Files the project ignores are not listed or searched." If user pins a reference outside project, "treat what follows as the copy you have" — fine.
+
+S. Ask mode has no environment block (no platform/date) — deliberate? Code mode has it because bash/edit need platform context. Ask mode only reads; date could still matter ("what changed recently?"). Minor: ask-mode date missing could matter for questions like "what changed this week?" but git log has dates. Eh, marginal — maybe mention in "anything else" if cheap. Actually careful about padding. Might skip or one line.
+
+T. In the pinned-variant prompt: "Read a file before changing it or answering questions about it, so you are working from what is in it now rather than from memory." Duplicates the editing-rule "Read a file before editing it unless its contents are already in the conversation" — fine, reinforcement.
+
+U. The nothing-pinned variant ends with a strong sentence: "If the user asks how something here works, read the code that implements it: what you remember about a project is not evidence about this one." Good sentence. Welfare-positive: gives a reason.
+
+Now let me verify in source:
+- The commit paragraph's exact text and comments.
+- /undo interpolation.
+- {language_instruction} substitution.
+- Experiments: which sentences are trial survivors.
+
+Let me run the tools. Plan: read internal/prompts/prompts.go fully (could be long — page if needed), ls doc/experiments, then grep for keywords like "needs no call", "undo", "language_instruction" across repo to find substitution sites and notes.
+
+I'll batch: ls root; glob internal/prompts/**; ls doc/experiments. Then read prompts.go.
+
+Then final prose review. Let me be careful to keep findings to the well-founded ones and explicitly mark sections that are fine.
+
+Structure of final reply:
+
+1. Effectiveness: e.g., the commit "needs no call at all" reading; ask-mode missing date?; what I'd want: none much — note that "Explain your changes briefly" is good. Also "the supplied code".
+
+2. Contradictions/mistakes: supplied code; undo grammar; language_instruction placeholder (pending verification); maybe "needs no call at all" belongs here too (contradicts commit definition) or in effectiveness. Put it in contradictions if source confirms no auto-commit; if source says harness auto-commits, then it's true and I retract... We'll see.
+
+3. Welfare: honestly answer: the reason-giving style is good; nothing needlessly harsh; the passivity rules are fine; the question has a subject, mostly resolved by these prompts being reason-giving. Keep it short and real.
+
+4. Anything else: minor notes (ask-mode date; "Their results above are real" phrasing; "The user has pinned 1 file to this session" — numbering "1 file" rendered with the count inline; if 2 files "The user has pinned 2 files"? presumably). Also the header "Notes from earlier work" is well done. Maybe note "Pinning says what the conversation is about" could mislead when user pins files for cleanup and asks something unrelated — no, it explicitly covers: "It is not itself a request to change anything".
+
+Let me now check source. Read prompts.go.
+‹/›
+
+I'll read the source and experiment notes before writing the review, so I can tell deliberate oddities from accidents.
+Listed the project root (16 entries)
+Listed internal/prompts (2 entries)
+Listed doc/experiments (30 entries)
+Read internal/prompts/prompts.go (393 lines)
+
+‹thinking›
+Interesting — the rendered Ask prompt in the user's material says "Always reply to the user in the same language they are using." while the source says "Always reply to the user in {language}." So the {language} placeholder gets substituted — presumably with "the same language they are using" by default. Let me check where {language} is substituted.
+
+Also {final_reminders} and {platform}. And the harness notes (Ctrl-C, /undo, continue) — those are not in prompts.go, so they're elsewhere, probably in coder package. Let me grep for them.
+
+Also I noticed a real grammar bug in the rendered /undo note: "The edits from that turn are gone and widget.go are back to what they were before it." — "edits ... are gone and widget.go are back" — subject-verb disagreement: "widget.go are back" should be "widget.go is back". That's a grammar error in the rendered text. Let me find the source.
+‹/›
+Searched for "Ctrl-C|chose to continue|ran /undo" as content — 53 matches in 15 files
+Searched for final_reminders|language under internal as content — 100 matches in 24 files
+The harness notes live in the coder package. Let me read them with their context.
+Read internal/coder/send.go (lines 340-389 of 887)
+Read internal/coder/coder.go (lines 595-619 of 841)
+Read internal/coder/session.go (lines 160-189 of 248)
+
+‹thinking›
+The /undo note: `strings.Join(files, ", ") + " are back to what they were before it."` — with one file "widget.go", it reads "widget.go are back to what they were before it" — subject-verb number mismatch. That's the grammar error I spotted in the rendered material. The code confirms: the template pluralizes "edits... are gone" correctly (plural "edits") but then appends the files joined and "are back" regardless of count. When multiple files, "a.go, b.go are back" reads fine; when one, "widget.go are back" is ungrammatical. Minor but it's an actual finding: grammar that is wrong in the (presumably most common) single-file case, and the rendered example shows exactly that case. Does grammar change meaning? Slightly here — "are" with a singular file name is a stumble, could read "files may not be files"? No, it doesn't change meaning materially. But section 2 explicitly requested errors of grammar, so report it with the fix: use %s "is back"/"are back" or restructure as "the files from that turn are back to what they were" — e.g. "The edits from that turn are gone and the affected files are back to what they were before it: widget.go." Or conditional singular/plural. Simplest: "The edits from that turn are gone: widget.go is back to what it was before it." But with multiple files you need plural. Replacement: "The edits from that turn are gone and the files they touched are back to what they were before it (widget.go)." That is number-stable. What it gives up: nothing much.
+
+Also note "don't assume anything you changed there is still in place; read a file before building on it" — "there" refers to the turn. Fine.
+
+Now let me look at the experiments referenced in the prompt comments, at least skim the most relevant ones: prompt-scope (overeager), readonly-honest (readonly prefix), commit-context, compaction-summary-prompt, notes-header, session-notes, synthetic-turns, transcript-depth, containment, add-authority, add-instruct, agents-md, commit-message-tool, landlock-live. I don't need all; the request says read as much as useful. Let me skim a few: 2026-08-prompt-scope.md, 2026-08-readonly-honest.md, 2026-08-containment-data (containment.md missing? there's only -data), add-authority, add-instruct, synthetic-turns, transcript-depth, compaction, notes-header, session-notes, commit-message-tool. Also check assemble.go for how system reminder and pinning messages are composed (the "The user has pinned 1 file to this session" text — where does it come from?).
+‹/›
+
+Now let me find the pinning text and see how messages get assembled.
+Searched for "pinned|pinned to this session|Pinning says" under internal/coder as content — 42 matches in 12 files
+Read internal/coder/assemble.go (lines 330-414 of 554)
+Read internal/coder/zzdump_test.go (100 lines)
+Read doc/experiments/2026-08-synthetic-turns.md (150 lines)
+Read doc/experiments/2026-08-prompt-scope.md (212 lines)
+Read doc/experiments/2026-08-readonly-honest.md (128 lines)
+Read doc/experiments/2026-08-commit-context.md (166 lines)
+Read doc/experiments/2026-08-notes-header.md (121 lines)
+Read doc/experiments/2026-08-compaction-summary-prompt.md (95 lines)
+Read doc/experiments/2026-08-session-notes.md (101 lines)
+
+‹thinking›
+Now I have the full picture. Let me check a few remaining things quickly to be sure about claims:
+
+1. The "three groups" / four tools issue — verify the four groups claim.
+2. The pin/undo grammar.
+3. Whether the "Read a file before" duplicate is real.
+4. The "If a request is ambiguous, ask clarifying questions" — how does the model ask? Is there a question tool? In this harness, the model just replies in prose, ending the turn. So "ask before making changes" = reply without tool calls. That works with the loop semantics. OK.
+
+5. One more thing to verify: the "check" tool. The system prompt says "reading and searching have their own tools" — but there's also a `check` tool (runs configured checks without asking). The prompt doesn't mention it. Same unnamed-conditional-tool pattern as symbol in ask? Let me check the tool definitions to see if check is offered in code mode.
+
+Let me look at the actually-rendered prompt in the user's message again. The tool definitions shown to me at the top of THIS conversation include "check" and "symbol" and "ask_user_question" — but that's THIS harness (the one I'm running in), which may differ. The user's Strument prompt text doesn't mention check or symbol. The Ask comment says symbol is unnamed on purpose and "Its schema description carries it". Presumably same for code mode — the tool schemas carry the descriptions.
+
+But note: this actual conversation's system prompt (the one I received) DOES differ slightly from the dump: mine has "# Editing rules" merged and an "ask_user_question"/"check"/"format" etc. That's the live harness I'm in — a later version than the dump, or the dump omitted tools. Not relevant to the review — the review is of the dump text.
+
+Wait, actually — interesting: my own system prompt (rendered from the same codebase, presumably a newer commit) has the same text plus "# Editing rules" inline. The dump shows "--- role: system ---" containing everything including "# Editing rules" — meaning SystemReminder got merged into the system message in the dump (formatChatChunks().allMessages()). Yes, the system reminder is appended as part of the system message in the dump. OK.
+
+6. Also check: "Files the project ignores are not listed or searched." Is that true? Check the implementation of grep/glob/ls to see if they respect .gitignore. Let me verify quickly.
+
+Actually the user's own message says "Files the project ignores are not listed or searched" and in THIS session, the tool descriptions say "Files the project ignores are not searched." (grep) and "Files the project ignores are not listed" (glob). So presumably yes, the implementation respects ignore files. I can spot-check quickly.
+
+7. Check the claim "You can edit any file in the project" — is there a containment check? apply.go mentioned unsafePath containment, and pinned-reference exemption. So files inside the project: editable. True.
+
+8. The undo note grammar and "read a file" phrasing — confirmed from source.
+
+9. Platform line: "Shell: SHELL=/bin/bash" — check assemble.go for how this is rendered.
+
+Let me look at the platform block quickly.
+‹/›
+
+A few more checks: the platform block rendering, and whether grep/glob/ls really respect ignore files (the prompt claims they do).
+Read internal/coder/assemble.go (lines 170-234 of 554)
+Searched for "Read a file before editing|already in the conversation|toolSystemReminder|SystemReminder" under internal/coder as content — 2 matches in 1 file
+Matched 5 files against doc/*.md
+Searched for ignores under internal/coder as content — 1 match in 1 file
+I have the core material. Let me skim the two remaining experiment files that bear on the pinned-file note and the commit-message prompt, plus check the "{final_reminders}" empty-slot rendering, then I'll write the review.
+Read doc/experiments/2026-08-add-instruct.md (lines 1-80 of 128)
+Read doc/experiments/2026-08-commit-message-tool.md (lines 1-60 of 119)
+Searched for "git repository|InGit" under internal/coder as content — 6 matches in 5 files
+One more check on git status discovery, since the "git repository" line is now conditional information.
+Searched for "InGit =|InGit:" under internal as content — 1 match in 1 file
+Searched for InGit under cmd as content — 1 match in 1 file
+Searched for "PlatformInfo{|detectGit|git rev-parse" under internal as content — 2 matches in 2 files
+Read cmd/strument/main.go (lines 130-174 of 989)
+Searched for "prepareCommit|does not read|reload|Reload|snapshot|restore" under internal/gitrepo as content — 1 match in 1 file
+I'm nearly done with readings. Two small things to verify about the git mechanics behind /undo and commit, since the prompts make claims there.
+Searched for "func .*\(r \*Repo\)|worktree|Add\(|Checkout|Restore" under internal/gitrepo as content — 24 matches in 1 file
+Almost done. Two last skim-reads to make sure I'm not duplicating something already litigated, then the review.
+Read doc/experiments/2026-08-agents-md.md (lines 1-40 of 72)
+Read doc/experimenting.md (lines 1-50 of 279)
+Before writing, let me settle two mechanics questions the findings depend on: whether there is any slash-command to drop a pin, and how the harness detects a question mid-turn.
+This turn has run 25 steps and edited 0 files.
+Cost so far: $0.58.
+Keep going? (Y/n) Stopping here. The work so far is applied; say what to do next.
+
+Tokens: 809.4k sent (734.1k cache hit), 10.4k received. Cost: $0.58 turn, $0.58 session. 26 steps.

@@ -76,8 +76,13 @@ func TestAskPromptShape(t *testing.T) {
 	if len(Ask.ExampleMessages) != 0 {
 		t.Errorf("ask example_messages must be empty, got %d", len(Ask.ExampleMessages))
 	}
-	// system_reminder is not empty — the reminder gate still runs and
-	// overeager rides in through {final_reminders}.
+	// system_reminder is not empty, so the reminder gate still runs. It used to
+	// say "overeager rides in through {final_reminders}", which was never true:
+	// finalReminders holds the language line and nothing else, and Ask's
+	// OvereagerPrompt field was read by no code in the tree. A reviewer grepped
+	// for the splice, found none, and reported that the whole block — "Do not
+	// return fully detailed code or full diffs" — had never reached a model.
+	// The text lives in MainSystem now and the fields are gone.
 	if Ask.SystemReminder != "{final_reminders}" {
 		t.Errorf("ask system_reminder = %q, want {final_reminders}", Ask.SystemReminder)
 	}
@@ -108,6 +113,20 @@ func TestAskPromptShape(t *testing.T) {
 	}
 	if strings.Contains(Ask.MainSystem, "cannot apply edits from it") {
 		t.Error("ask main_system reverted to the phrasing that read as 'you cannot act'")
+	}
+	// The brake on a full rewrite. It sat in the unread OvereagerPrompt field
+	// for the whole life of the tool format, so ask mode's only limit on output
+	// was "say briefly", and two reviewers independently said they would be
+	// tempted to paste a finished file. Pinned in the string that ships.
+	if !strings.Contains(Ask.MainSystem, "full diff") {
+		t.Errorf("ask main_system does not rule out returning a full diff:\n%s", Ask.MainSystem)
+	}
+	// Nothing is pinned for editing here because nothing can be: the flat
+	// denial "No files are pinned to this session" co-occurs with a read-only
+	// reference block whose contents are in the next message, which is
+	// 2026-08-readonly-honest.md's twelve-step file hunt.
+	if strings.Contains(Ask.FilesNoFullFiles, "No files are pinned") {
+		t.Errorf("the ask empty-pin line is a flat denial again:\n%s", Ask.FilesNoFullFiles)
 	}
 	// {language} is the only slot Ask substitutes; a stray brace would survive
 	// into the prompt as a literal.
