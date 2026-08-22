@@ -509,7 +509,13 @@ the human meant by stopping is then a question, put through the same `Asker`
 port `ask_user_question` uses: Continue, Stop, or type a correction, where the
 free-text row *is* the correction and needs no parsing. A nil Asker (script
 mode) stops, which is what an interrupt has always done. Tool execution runs
-inside the send's context too, so Ctrl-C still kills a running `bash` command.
+inside the send's context too, so Ctrl-C still kills a running `bash` command
+— and because the stream has already finished by then, `applyToolCalls` reports
+that cancellation as an interrupt itself. Without that it returned
+`OutcomeContinue`: the command died, the turn carried on as though nothing had
+happened, and a second press inside the chord window quit Strument. The command
+also says in its own output that the user stopped it, since a result that just
+stops is the kind of unexplained failure a model answers by editing code.
 
 The edits made before an interrupt are committed and snapshotted *there*
 (`settleEdits`), because the interruption is a review boundary: `git show` gives

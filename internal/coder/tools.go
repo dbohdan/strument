@@ -555,6 +555,13 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// Shell commands run after the edits, so a test run in the same turn sees
 	// the edited files.
 	for _, cmd := range commands {
+		if ctx.Err() != nil {
+			// Stopped before this one started. Running it anyway would fail
+			// instantly against the cancelled context and read, to the model,
+			// as the command itself failing.
+			results[cmd.callID] = "Not run: the user stopped the turn before this command started."
+			continue
+		}
 		results[cmd.callID] = c.runShellTool(ctx, cmd)
 	}
 
@@ -574,6 +581,25 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// which budget they spend: a failure the model must fix is a reflection, a
 	// result it merely needs to see is a work step.
 	c.resumeInPlace = true
+
+	// A Ctrl-C that landed while a tool was running is an interrupt, and has
+	// to be reported as one.
+	//
+	// sendMessage decides "interrupted" from how the *stream* ended, and tool
+	// calls run after the stream. So a Ctrl-C during a command used to kill
+	// the command and return OutcomeContinue: the turn carried on, the steer
+	// menu never appeared, and a second press inside the chord window quit
+	// Strument outright. None of the three is what the user asked for by
+	// pressing it.
+	//
+	// The tool results are already appended, so the history stays well-formed
+	// — every call has an answer, which is what an interrupt during *streaming*
+	// cannot promise and why that path drops partial calls instead.
+	if ctx.Err() != nil {
+		c.noteToolInterrupt()
+		return OutcomeInterrupted
+	}
+
 	if needsReflection {
 		return OutcomeReflect
 	}

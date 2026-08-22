@@ -284,3 +284,90 @@ func TestSecondCommitNamesOnlyWhatIsNew(t *testing.T) {
 		t.Errorf("TurnEditedFiles() = %d, want both files kept for the record", got)
 	}
 }
+
+// cancellingRunner cancels the turn while the command is running, which is
+// what a Ctrl-C during a test run does.
+type cancellingRunner struct {
+	cancel func()
+	ran    int
+}
+
+func (r *cancellingRunner) Run(ctx context.Context, _ string, _ string) (int, string, error) {
+	r.ran++
+	r.cancel()
+	<-ctx.Done()
+	return -1, "partial output before the interrupt", nil
+}
+
+// A Ctrl-C while a command is running reaches the steer menu.
+//
+// sendMessage decides "interrupted" from how the stream ended, and tool calls
+// run after the stream — so this used to kill the command and return
+// OutcomeContinue. The turn carried on, the menu never appeared, and a second
+// press inside the chord window quit Strument. Every live interrupt tested so
+// far caught prose, which is why none of them found it.
+func TestInterruptDuringAToolReachesTheMenu(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	asker := &stubAsker{answer: "2"} // "Stop"
+	c.Asker = asker
+	c.SuggestShellCommands = true
+	c.Confirm = yesConfirmer{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner := &cancellingRunner{cancel: cancel}
+	c.Runner = runner
+	c.partialToolCalls = []llm.ToolCall{
+		{ID: "call_1", Name: toolBash, Arguments: `{"command":"go test ./...","purpose":"run the tests"}`},
+	}
+
+	outcome := c.applyToolCalls(ctx)
+
+	if runner.ran != 1 {
+		t.Fatalf("the command ran %d times, want 1", runner.ran)
+	}
+	if outcome != OutcomeInterrupted {
+		t.Errorf("outcome = %v, want OutcomeInterrupted so runOne asks what the user meant", outcome)
+	}
+}
+
+// ...and the model is told the command was stopped rather than left to read a
+// truncated result as a failure.
+func TestInterruptDuringAToolTellsTheModel(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.SuggestShellCommands = true
+	c.Confirm = yesConfirmer{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.Runner = &cancellingRunner{cancel: cancel}
+	c.partialToolCalls = []llm.ToolCall{
+		{ID: "call_1", Name: toolBash, Arguments: `{"command":"go test ./...","purpose":"run the tests"}`},
+	}
+
+	c.applyToolCalls(ctx)
+
+	var sawResult, sawNote bool
+	for _, m := range c.curMessages {
+		if m.Role == llm.RoleTool && strings.Contains(m.Text(), "pressed Ctrl-C") {
+			sawResult = true
+		}
+		if m.Role == llm.RoleUser && strings.HasPrefix(m.Text(), llm.HarnessMarker) {
+			sawNote = true
+		}
+	}
+	if !sawResult {
+		t.Error("the command's own output does not say the user stopped it")
+	}
+	if !sawNote {
+		t.Error("no harness note explaining the interruption")
+	}
+	// Every call still has an answer: an interrupt here must not leave the
+	// next request malformed, which is the failure the streaming path avoids
+	// by dropping partial calls instead.
+	for _, m := range c.curMessages {
+		if m.Role == llm.RoleAssistant && len(m.ToolCalls) > 0 {
+			t.Error("tool calls were dropped; here they ran and were answered")
+		}
+	}
+}

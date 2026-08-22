@@ -64,17 +64,31 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	// exited on its own are otherwise indistinguishable to it, and the obvious
 	// next move after an unexplained failure is to change the code.
 	//
-	// Only DeadlineExceeded, never Canceled — a Ctrl-C is the user's decision
-	// and does not need explaining back to them.
 	// A denial arrives as a bare errno, and an unexplained failure is the thing
 	// a coding model responds to by editing code. Naming the sandbox turns
 	// thrashing into a config change.
 	if exitCode != 0 && c.Sandbox.Active && looksDenied(output) {
 		output += c.Sandbox.deniedHint()
 	}
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		note := fmt.Sprintf("\nThe command was stopped after %s. Strument's `shell_timeout` did it, not the command.", deadline)
-		output += note
+	// Who stopped it, said in the output rather than only on screen, because
+	// the output is what reaches the model: a command killed at two minutes, a
+	// command the user stopped, and a command that failed on its own are
+	// otherwise indistinguishable to it, and the obvious next move after an
+	// unexplained failure is to change the code.
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		output += fmt.Sprintf("\nThe command was stopped after %s. Strument's `shell_timeout` did it, not the command.", deadline)
+		if exitCode == 0 {
+			exitCode = -1
+		}
+	case errors.Is(ctx.Err(), context.Canceled):
+		// This used to say nothing, on the reasoning that a Ctrl-C is the
+		// user's own decision and needs no explaining back to them. That held
+		// while a Ctrl-C ended the turn. It no longer does — the turn asks the
+		// user what they meant and can carry on — so the model is left with a
+		// command that died for no stated reason, which is exactly what it
+		// answers by editing code.
+		output += "\nThe user pressed Ctrl-C and stopped this command. Its output above is however far it got. Nothing here failed on its own."
 		if exitCode == 0 {
 			exitCode = -1
 		}

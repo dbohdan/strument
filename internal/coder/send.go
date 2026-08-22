@@ -361,6 +361,21 @@ func (c *Coder) noteInterrupt() {
 			"call you had begun was not run — nothing it would have changed has changed."))
 }
 
+// noteToolInterrupt records a Ctrl-C that landed while a tool was running.
+//
+// Distinct from noteInterrupt, which describes a *stream* cut off mid-word and
+// says any tool call the model had begun was never run. Here the opposite is
+// true: the calls ran, their results are in the history, and one of them was
+// stopped part-way. Telling the model the other story would have it repeat work
+// that already happened, or distrust a result that is real.
+func (c *Coder) noteToolInterrupt() {
+	c.partialToolCalls = nil
+	c.curMessages = append(c.curMessages, llm.HarnessNote(
+		"The user pressed Ctrl-C while your tool calls were running. Their results "+
+			"above are real as far as they got, and a command that was stopped says so "+
+			"in its own output. Nothing after the interruption ran."))
+}
+
 // dropPartialToolCalls strips tool calls from the assistant message an
 // interrupted send just appended.
 //
