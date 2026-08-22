@@ -2,6 +2,9 @@ package repomap
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,6 +31,82 @@ func sites(tags []Tag, want Kind) []string {
 		out = append(out, fmt.Sprintf("%d:%s", t.Line+1, t.Name))
 	}
 	slices.Sort(out)
+	return out
+}
+
+// namedStructFields lists the "line:Name" sites of every field of a struct
+// declared with a name, computed straight from go/ast rather than from the
+// tagger under test.
+//
+// It exists because the Go fast path deliberately diverges from the
+// tree-sitter query in exactly one way: the query has no rule for field names,
+// and symbol needs them — half the identifiers models actually looked up in
+// live sessions and missed were struct fields. Subtracting an independently
+// computed set keeps the parity assertion real: any *other* drift between the
+// two extractors still fails, which is the whole job of these tests.
+func namedStructFields(t *testing.T, abs string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, abs, nil, parser.SkipObjectResolution)
+	if err != nil {
+		return nil // an unparsable file has no tags from either side
+	}
+	var out []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		spec, ok := n.(*ast.TypeSpec)
+		if !ok || spec.Assign.IsValid() {
+			return true
+		}
+		st, ok := spec.Type.(*ast.StructType)
+		if !ok || st.Fields == nil {
+			return true
+		}
+		for _, fld := range st.Fields.List {
+			for _, name := range fld.Names {
+				out = append(out, fmt.Sprintf("%d:%s", fset.Position(name.Pos()).Line, name.Name))
+			}
+		}
+		return true
+	})
+	slices.Sort(out)
+	return out
+}
+
+// withoutFieldTags drops the named-struct field definitions the Go extractor
+// adds on purpose, so a whole-tag-set comparison against tree-sitter still
+// holds everything else to exact parity.
+func withoutFieldTags(t *testing.T, tags []Tag, absByRel map[string]string) []Tag {
+	t.Helper()
+	exempt := map[string]bool{}
+	for rel, abs := range absByRel {
+		for _, site := range namedStructFields(t, abs) {
+			exempt[rel+":"+site] = true
+		}
+	}
+	out := tags[:0:0]
+	for _, tag := range tags {
+		if tag.Kind == Def && exempt[fmt.Sprintf("%s:%d:%s", tag.RelFname, tag.Line+1, tag.Name)] {
+			continue
+		}
+		out = append(out, tag)
+	}
+	return out
+}
+
+// withoutSites removes one occurrence of each exempt site from got.
+func withoutSites(got, exempt []string) []string {
+	drop := map[string]int{}
+	for _, s := range exempt {
+		drop[s]++
+	}
+	out := got[:0:0]
+	for _, s := range got {
+		if drop[s] > 0 {
+			drop[s]--
+			continue
+		}
+		out = append(out, s)
+	}
 	return out
 }
 
@@ -173,6 +252,9 @@ func TestGoTagParityOnConstructs(t *testing.T) {
 	}{{Def, "definition"}, {Ref, "reference"}} {
 		want := sites(ts, kind.k)
 		got := sites(gp, kind.k)
+		if kind.k == Def {
+			got = withoutSites(got, namedStructFields(t, abs))
+		}
 		onlyTS, onlyGo := diffCounts(want, got)
 		if len(onlyTS) > 0 || len(onlyGo) > 0 {
 			t.Errorf("%s tags differ (%d from tree-sitter, %d from go/parser)\n"+
@@ -231,6 +313,7 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 		gp := goTags(rel, abs)
 
 		wantDefs, gotDefs := sites(ts, Def), sites(gp, Def)
+		gotDefs = withoutSites(gotDefs, namedStructFields(t, abs))
 		onlyTS, onlyGo := diffCounts(wantDefs, gotDefs)
 		if len(onlyTS) > 0 || len(onlyGo) > 0 {
 			t.Errorf("%s: definition tags differ\n  only tree-sitter: %v\n  only go/parser:   %v",
@@ -471,7 +554,11 @@ func useAll() {
 	paths := writeFiles(t, dir, files)
 
 	tsTags := tagsWith(t, dir, paths, false)
-	goTagSet := tagsWith(t, dir, paths, true)
+	absByRel := map[string]string{}
+	for rel := range files {
+		absByRel[rel] = filepath.Join(dir, rel)
+	}
+	goTagSet := withoutFieldTags(t, tagsWith(t, dir, paths, true), absByRel)
 	if len(tsTags) == 0 {
 		t.Fatal("the fixture produced no tags, so this compares nothing")
 	}

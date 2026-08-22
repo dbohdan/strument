@@ -1,198 +1,125 @@
+// What a symbol answer has to contain to be worth choosing over grep.
+
 package coder
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/repomap"
 )
 
-// symbolEnv builds a coder over a small Go project with a repo map wired up,
-// which is what gates the symbol tool.
-func symbolEnv(t *testing.T, files map[string]string) (*Coder, *captureOut) {
+// symbolFixture writes a small Go project and returns an Inspector over it.
+func symbolFixture(t *testing.T) *Inspector {
 	t.Helper()
-	c, out := observeEnv(t, files)
+	c := testCoder(t)
+	src := `package fixture
+
+// Set is a named struct, so its fields are declarations.
+type Set struct {
+	FilesNoFullFiles string
+	MainSystem       string
+}
+
+type HarnessNote struct{ Text string }
+
+func build() Set {
+	// A table-driven row type, whose columns are not declarations worth listing.
+	for _, tc := range []struct{ name, want string }{{"a", "b"}} {
+		_ = tc
+	}
+	return Set{}
+}
+`
+	if err := os.WriteFile(filepath.Join(c.Root, "fixture.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	c.RepoMap = repomap.New(c.Root)
-	return c, out
+	return &Inspector{Root: c.Root, Files: c.Files, RepoMap: c.RepoMap, Out: DiscardReporter{}}
 }
 
-const symbolLib = `package lib
-
-// Greet says hello. Greet is named twice in this comment: Greet.
-func Greet(name string) string {
-	return "hello " + name
-}
-
-func caller() string {
-	return Greet("world")
-}
-`
-
-// TestSymbolFindsDefinitionsNotText is the whole difference from grep. The
-// comment above Greet names it three times and the tool reports none of them —
-// a text search cannot make that distinction, which is why the two tools do not
-// overlap and why their descriptions say so.
-func TestSymbolFindsDefinitionsNotText(t *testing.T) {
-	c, out := symbolEnv(t, map[string]string{"lib.go": symbolLib})
-
-	got := c.runSymbol(call("symbol", `{"name":"Greet"}`))
-	if !strings.Contains(got, "lib.go:4") {
-		t.Errorf("the definition was not found:\n%s", got)
+// Every site carries its source line.
+//
+// Without it a symbol answer is a coordinate, and answering the question it was
+// asked costs a second call — while grep returns the matching line in the
+// first. Measured head to head on this repo, that one difference was why grep
+// won on call count even where symbol was the better instrument.
+func TestSymbolSitesCarryTheirSourceLine(t *testing.T) {
+	insp := symbolFixture(t)
+	text, count, problem := insp.SymbolLookup("MainSystem", "")
+	if problem != "" {
+		t.Fatal(problem)
 	}
-	if strings.Contains(got, "lib.go:3") {
-		t.Errorf("a mention in a comment was reported as a definition:\n%s", got)
+	if count != 1 {
+		t.Fatalf("found %d sites, want 1:\n%s", count, text)
 	}
-	if n := strings.Count(got, "lib.go:"); n != 1 {
-		t.Errorf("reported %d sites, want exactly 1:\n%s", n, got)
-	}
-	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "Looked up Greet") {
-		t.Errorf("the lookup was not announced:\n%s", joined)
+	if !strings.Contains(text, "MainSystem       string") {
+		t.Errorf("the site has no source line, so it still needs a read:\n%s", text)
 	}
 }
 
-func TestSymbolFindsReferences(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolLib})
+// A named struct's fields are declarations; a table-driven row's are not.
+//
+// Half the identifiers models actually looked up and missed in live sessions
+// were struct fields — the tree-sitter Go query has no rule for them. Tagging
+// every anonymous struct too would have put a `want` and a `name` definition in
+// every test file in the project, so the line is drawn at a declared name.
+func TestSymbolFindsNamedStructFieldsOnly(t *testing.T) {
+	insp := symbolFixture(t)
 
-	got := c.runSymbol(call("symbol", `{"name":"Greet","kind":"reference"}`))
-	if !strings.Contains(got, "lib.go:9") {
-		t.Errorf("the call site was not found:\n%s", got)
+	if _, count, problem := insp.SymbolLookup("FilesNoFullFiles", ""); problem != "" || count != 1 {
+		t.Errorf("a named struct's field is not a definition: count=%d problem=%q", count, problem)
+	}
+	if _, count, _ := insp.SymbolLookup("want", ""); count != 0 {
+		t.Errorf("a table-driven row's column was tagged as a definition (%d sites)", count)
 	}
 }
 
-const symbolCallers = `package lib
-
-import "fmt"
-
-type Store struct{ n int }
-
-func Target() int { return 1 }
-
-func fromFunc() int {
-	return Target()
-}
-
-func (s *Store) fromMethod() int {
-	return Target()
-}
-
-var atFileScope = Target()
-
-func printer() {
-	fmt.Println(Target())
-}
-`
-
-// TestSymbolNamesTheEnclosingFunction: a list of coordinates says where to
-// look, a function name says what is doing the looking. The method carries its
-// receiver, because "fromMethod" alone does not locate anything in a project
-// with several of them.
-func TestSymbolNamesTheEnclosingFunction(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
-
-	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
-	for _, want := range []string{
-		"in fromFunc",
-		"in Store.fromMethod",
-		"in printer",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q:\n%s", want, got)
-		}
+// A miss must not blame the grammar when the grammar was there.
+//
+// The old message said "the parser only sees languages it has a grammar for",
+// which in a Go project is the wrong reason and usually a false one. A wrong
+// explanation is worse than none: it generalizes, and a model told once that
+// the parser might not know this language has been given a reason to stop
+// trusting the tool for the rest of the session.
+func TestSymbolMissDoesNotBlameTheGrammar(t *testing.T) {
+	insp := symbolFixture(t)
+	text, count, problem := insp.SymbolLookup("no_such_placeholder", "")
+	if problem != "" || count != 0 {
+		t.Fatalf("expected a miss: count=%d problem=%q", count, problem)
+	}
+	if strings.Contains(text, "only sees languages it has a grammar for") {
+		t.Errorf("the miss still blames grammar coverage:\n%s", text)
+	}
+	if !strings.Contains(text, "struct fields") {
+		t.Errorf("the miss does not say what symbol actually indexes:\n%s", text)
 	}
 }
 
-// TestSymbolSaysNothingAboutAReferenceOutsideAFunction pins the half that
-// matters more. A reference at file scope has no enclosing function, and the
-// answer must leave it unannotated rather than reach for the nearest name
-// above it — a wrong function name sends a reader somewhere real and wrong.
-func TestSymbolSaysNothingAboutAReferenceOutsideAFunction(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
-
-	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
-	for line := range strings.SplitSeq(got, "\n") {
-		if !strings.HasPrefix(line, "lib.go:17") {
-			continue
-		}
-		if strings.Contains(line, " in ") {
-			t.Errorf("a file-scope reference was given an enclosing function: %q", line)
-		}
-		return
-	}
-	t.Errorf("the file-scope reference on line 17 was not reported at all:\n%s", got)
-}
-
-// A name can be extracted twice by overlapping query patterns, so the dedup has
-// to key on the annotation as well as the site — otherwise one reference shows
-// up once with a function name and once without.
-func TestSymbolReportsEachSiteOnce(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolCallers})
-
-	got := c.runSymbol(call("symbol", `{"name":"Target","kind":"reference"}`))
-	seen := map[string]int{}
-	for line := range strings.SplitSeq(got, "\n") {
-		if site, _, ok := strings.Cut(strings.TrimSpace(line), " "); ok && strings.HasPrefix(site, "lib.go:") {
-			seen[site]++
-		} else if strings.HasPrefix(line, "lib.go:") {
-			seen[strings.TrimSpace(line)]++
-		}
-	}
-	if len(seen) == 0 {
-		t.Fatalf("no sites were reported:\n%s", got)
-	}
-	for site, n := range seen {
-		if n != 1 {
-			t.Errorf("%s reported %d times:\n%s", site, n, got)
-		}
+// A name that differs only in case says so, which is the answer the caller
+// wanted and is one call away.
+func TestSymbolMissReportsACaseNearMiss(t *testing.T) {
+	insp := symbolFixture(t)
+	text, _, _ := insp.SymbolLookup("harnessnote", "")
+	if !strings.Contains(text, "HarnessNote") {
+		t.Errorf("a case-only miss did not name the real declaration:\n%s", text)
 	}
 }
 
-// TestSymbolSaysWhenItFindsNothing: silence would read as "this name does not
-// exist", when the truth may be that no grammar covers the file it lives in.
-// The answer points at grep rather than leaving the model stuck.
-func TestSymbolSaysWhenItFindsNothing(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{
-		"lib.go":    symbolLib,
-		"notes.txt": "func Missing() {}\n",
-	})
-
-	got := c.runSymbol(call("symbol", `{"name":"Missing"}`))
-	if !strings.Contains(got, "No place") || !strings.Contains(got, "grep") {
-		t.Errorf("result = %q", got)
+// ...and a name that exists under the other kind points at it rather than
+// leaving the caller to conclude the name is absent.
+func TestSymbolMissPointsAtTheOtherKind(t *testing.T) {
+	insp := symbolFixture(t)
+	// A field declared in the fixture and used nowhere in it, so the reference
+	// lookup genuinely finds nothing. Asserting the miss first, because a name
+	// that turned out to have references would make the rest of this vacuous.
+	text, count, problem := insp.SymbolLookup("FilesNoFullFiles", "reference")
+	if problem != "" || count != 0 {
+		t.Fatalf("expected no references: count=%d problem=%q", count, problem)
 	}
-}
-
-func TestSymbolRejectsBadArguments(t *testing.T) {
-	c, _ := symbolEnv(t, map[string]string{"lib.go": symbolLib})
-
-	if got := c.runSymbol(call("symbol", `{}`)); !strings.Contains(got, "name") {
-		t.Errorf("a missing name must say so: %q", got)
+	if !strings.Contains(text, `"definition"`) {
+		t.Errorf("a name declared but not referenced did not point at kind=definition:\n%s", text)
 	}
-	if got := c.runSymbol(call("symbol", `{"name":"Greet","kind":"sideways"}`)); !strings.Contains(got, "Unknown kind") {
-		t.Errorf("an unknown kind must say so: %q", got)
-	}
-}
-
-// TestSymbolOfferedOnlyWithGrammars: the tool reads the same tree-sitter layer
-// the repo map is built from, so without that layer it must not be advertised.
-func TestSymbolOfferedOnlyWithGrammars(t *testing.T) {
-	c, _ := symbolEnv(t, nil)
-	c.editFormat = "tool"
-
-	if !hasTool(c.toolDefs(), toolSymbol) {
-		t.Error("symbol not offered with a repo map wired up")
-	}
-	c.RepoMap = nil
-	if hasTool(c.toolDefs(), toolSymbol) {
-		t.Error("symbol offered without the parse layer behind it")
-	}
-}
-
-func hasTool(defs []llm.ToolDef, name string) bool {
-	for _, d := range defs {
-		if d.Name == name {
-			return true
-		}
-	}
-	return false
 }

@@ -300,7 +300,14 @@ func (g *goTagger) genDecl(d *ast.GenDecl) {
 			// itself.
 			g.emit(Ref, s.Name.Name, s.Name.Pos())
 			g.fieldList(s.TypeParams)
-			g.typeExpr(s.Type)
+			if st, ok := s.Type.(*ast.StructType); ok {
+				// The fields of a named struct are declarations worth looking
+				// up. typeExpr's own StructType case does everything else this
+				// would, so routing here loses nothing.
+				g.structFields(st.Fields)
+			} else {
+				g.typeExpr(s.Type)
+			}
 
 		case *ast.ValueSpec:
 			// var and const at any nesting: the query anchors neither to the
@@ -365,13 +372,42 @@ func (g *goTagger) callExpr(c *ast.CallExpr) {
 	}
 }
 
-// fieldList walks the types in a parameter, result, receiver, or struct field
-// list. Field *names* are not tagged — the Go query has no rule for them.
+// fieldList walks the types in a parameter, result, or receiver list. The names
+// in those lists are not tagged: a parameter called path is not a declaration
+// anyone looks up, and tagging every one of them would bury the definitions that
+// matter under the whole codebase's argument names.
 func (g *goTagger) fieldList(fl *ast.FieldList) {
 	if fl == nil {
 		return
 	}
 	for _, f := range fl.List {
+		g.typeExpr(f.Type)
+	}
+}
+
+// structFields is fieldList for a *named* struct's own fields, where the names
+// *are* declarations and are tagged as such. Anonymous structs do not come here
+// — see typeExpr's StructType case for why.
+//
+// This is a deliberate divergence from the tree-sitter Go query, which has no
+// rule for field names — so before this, symbol could not answer "where is
+// FilesNoFullFiles declared" about a field, and returned nothing while telling
+// the caller the parser might not know the language. Measured against the
+// identifiers models actually looked up in eight live sessions, unfound struct
+// fields were half of every miss. gotags_test.go subtracts an independently
+// computed set of these, so every *other* kind of drift still fails parity.
+//
+// An embedded field has no name of its own: the type is the name, typeExpr
+// already emits the reference, and the declaration being asked about is the
+// type's. Nothing to add here for it.
+func (g *goTagger) structFields(fl *ast.FieldList) {
+	if fl == nil {
+		return
+	}
+	for _, f := range fl.List {
+		for _, name := range f.Names {
+			g.emit(Def, name.Name, name.Pos())
+		}
 		g.typeExpr(f.Type)
 	}
 }
@@ -412,6 +448,11 @@ func (g *goTagger) typeExpr(e ast.Expr) {
 		g.fieldList(t.Params)
 		g.fieldList(t.Results)
 	case *ast.StructType:
+		// Not structFields: an anonymous struct in expression position is
+		// almost always a table-driven test's row type, and tagging its
+		// columns would put a `want` and a `name` definition in every test
+		// file in the project. Only a struct with a declared name gets its
+		// fields tagged, from the TypeSpec case.
 		g.fieldList(t.Fields)
 	case *ast.InterfaceType:
 		g.fieldList(t.Methods)
