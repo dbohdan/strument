@@ -1,0 +1,10 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+Looked up settleEdits — 8 sites referenced
+Non-test callers, all in the `Coder` type:
+
+1. **`Coder.runOne`** (internal/coder/coder.go:431) — passes `""`
+2. **`Coder.afterInterrupt`** (internal/coder/coder.go:579) — passes `""`
+3. **`Coder.runCommitTool`** (internal/coder/toolcommit.go:135) — passes `args.message()`, i.e. the message supplied to the commit tool call
+
+Tokens: 6.7k sent (6.7k cache hit), 122 received. Cost: $0.0023 turn, $0.0023 session. 2 steps.

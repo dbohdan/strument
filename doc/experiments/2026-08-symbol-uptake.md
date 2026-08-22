@@ -96,6 +96,35 @@ the default and the description leads with it. A model that asks the natural
 first question gets an answer to a different one, and half the time abandons the
 tool on the strength of it.
 
+### Acting on it, and what happened
+
+Two changes. The schema now opens by mapping question to kind — *"where is this
+declared?" is `definition`; "what calls this?" is `reference`* — and says the
+thing the measurement says is the differentiator: a reference names the
+enclosing function, which grep cannot. And a `definition` answer for a name that
+is used elsewhere now offers the other kind, because the miss path already did
+and a confident short answer is the one nobody follows up.
+
+Six GLM runs against the fixed binary, `runs-glm-fix/`:
+
+| GLM | used `symbol` | named all 3 | mean tools | cost |
+| --- | --- | --- | --- | --- |
+| base | 0/6 | 2/6 | 7.2 | $0.0644 |
+| new | 2/6 | 1/6 | 4.8 | $0.0425 |
+| **fixed** | **6/6** | **6/6** | **1.0** | **$0.0167** |
+
+All six went straight to `kind=reference` and answered in a single call. The
+hit-path nudge never fired, because nothing asked for a definition — the
+description alone did the work, which makes the nudge insurance rather than the
+mechanism.
+
+**This is a confirmation cell, not an arm.** It was run after the fact against
+the same task, so it is confounded with time in exactly the way
+`2026-08-prompt-scope.md` warns about, and n=6. What it does establish is that
+the lever is real and points the right way: the model that never once chose the
+tool now chooses it every time, at a seventh of the tool calls and a quarter of
+the cost of its own baseline.
+
 ## The mechanism, which is not the arm
 
 Conditioning on whether a run *used* `symbol`, rather than on which arm it was

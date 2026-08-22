@@ -30,13 +30,16 @@ const maxSymbolSites = 100
 func symbolTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolSymbol,
-		Description: "Find where a name is declared, or every place it is used, using the " +
-			"language parser. Give an exact identifier, not a pattern: this matches " +
-			"declarations, not text, so it will not report the name in a comment, in a " +
-			"string, or as part of a longer name. Each site comes back with its source " +
-			"line, so there is nothing to read afterwards. Best where a name is common " +
-			"enough that grep would bury it. Use grep instead when you want text anywhere " +
-			"in the project, or when you do not know the exact name.",
+		Description: "Answer a question about an identifier from the language parser. " +
+			"\"Where is this declared?\" is kind \"definition\"; \"what calls this?\" or " +
+			"\"where is this used?\" is kind \"reference\". A reference names the function " +
+			"each use sits in, which grep cannot tell you: a search hit plus a few lines of " +
+			"context does not say which function you are inside, and guessing it from " +
+			"nearby code is where wrong answers come from. Each site comes back with its " +
+			"source line, so there is nothing to read afterwards. Give an exact identifier, " +
+			"not a pattern: this matches declarations, not text, so it will not report the " +
+			"name in a comment, in a string, or as part of a longer name. Use grep when you " +
+			"want text anywhere in the project, or when you do not know the exact name.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -44,9 +47,10 @@ func symbolTool() llm.ToolDef {
 				"kind": map[string]any{
 					"type": "string",
 					"enum": []any{"definition", "reference"},
-					"description": "\"definition\" (the default) reports where the name is declared; " +
-						"\"reference\" reports every place it is used, each with its file, line, and " +
-						"the function it sits in where the parser can tell.",
+					"description": "\"definition\" (the default) reports the one or few places the " +
+						"name is declared. \"reference\" reports every place it is used, each with " +
+						"its file, line, source, and the function it sits in — that is the one to " +
+						"ask for when the question is who calls something.",
 				},
 			},
 			"required": []any{"name"},
@@ -264,6 +268,23 @@ func (i *Inspector) SymbolLookup(rawName, kind string) (text string, count int, 
 			break
 		}
 		fmt.Fprintf(&b, "%s\n", s)
+	}
+	// A definition answer says where the name lives, which is not what "who
+	// calls this" asked. kind defaults to definition, so a model asking the
+	// natural first question of a callers question gets an answer to a
+	// different one — GLM-5.3 did exactly that in
+	// doc/experiments/2026-08-symbol-uptake.md, and half the time took the
+	// one-site answer as the tool's last word and went back to grep. The miss
+	// path already offers the other kind; the *hit* path is where it was
+	// needed, because a confident short answer is the one nobody follows up.
+	//
+	// Only on the definition side. A reference answer is already what a
+	// callers question wanted, and pointing back at the declaration there
+	// would be a line of noise on the common case.
+	if want == repomap.Def && otherKind > 0 {
+		fmt.Fprintf(&b, "\nIt is used in %s. To see them, with the function each use sits in, "+
+			"call symbol again with \"kind\": \"reference\".\n",
+			plural(otherKind, "place", "places"))
 	}
 	if trunc.Any() {
 		b.WriteString("\n(The file walk hit a limit, so some of the project was not searched.)\n")

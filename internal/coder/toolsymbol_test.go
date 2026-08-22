@@ -77,6 +77,48 @@ func TestSymbolFindsNamedStructFieldsOnly(t *testing.T) {
 	}
 }
 
+// A definition answer for a name that is used elsewhere offers the other kind.
+//
+// kind defaults to definition, so a model asking the natural first question of
+// a "who calls this" question gets an answer to a different one. GLM-5.3 did
+// exactly that in doc/experiments/2026-08-symbol-uptake.md: it called
+// kind=definition on settleEdits, got the single declaration site, and half the
+// time treated that as the tool's last word and went back to grep for the rest.
+// The miss path already pointed at the other kind; a confident short answer is
+// the one nobody follows up, so the hit path is where it was needed.
+func TestSymbolDefinitionOffersTheReferenceKind(t *testing.T) {
+	insp := symbolFixture(t)
+	text, count, problem := insp.SymbolLookup("Set", "")
+	if problem != "" || count == 0 {
+		t.Fatalf("expected a definition: count=%d problem=%q", count, problem)
+	}
+	if !strings.Contains(text, `"reference"`) {
+		t.Errorf("a definition answer for a used name does not offer the other kind:\n%s", text)
+	}
+}
+
+// ...and it stays quiet where the line would be noise.
+//
+// Both directions matter. A reference answer is already what a callers question
+// wanted, and a name declared but never used has nothing to point at. A nudge
+// on every answer is a nudge nobody reads.
+func TestSymbolDoesNotOfferTheOtherKindNeedlessly(t *testing.T) {
+	insp := symbolFixture(t)
+
+	ref, _, _ := insp.SymbolLookup("Set", "reference")
+	if strings.Contains(ref, `call symbol again`) {
+		t.Errorf("a reference answer points back at definitions:\n%s", ref)
+	}
+	// Declared in the fixture, used nowhere in it.
+	unused, count, _ := insp.SymbolLookup("FilesNoFullFiles", "")
+	if count == 0 {
+		t.Fatal("fixture changed: FilesNoFullFiles is no longer a definition")
+	}
+	if strings.Contains(unused, `call symbol again`) {
+		t.Errorf("an unused declaration offers references that do not exist:\n%s", unused)
+	}
+}
+
 // A miss must not blame the grammar when the grammar was there.
 //
 // The old message said "the parser only sees languages it has a grammar for",
