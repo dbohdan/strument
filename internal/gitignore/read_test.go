@@ -135,3 +135,32 @@ func TestWildmatchDoubleStar(t *testing.T) {
 		}
 	}
 }
+
+// A git worktree's .git is a file, and the walk must survive it.
+//
+// .git/info/exclude then resolves through a path component that is not a
+// directory, which returns ENOTDIR rather than ENOENT. That error used to
+// propagate out of ReadRoot into the file walk, so ls, glob, grep, and symbol
+// all failed outright inside a worktree — "Could not list the project's files:
+// … not a directory" — rather than simply finding no exclude patterns.
+//
+// Found while measuring the symbol tool against an old revision checked out
+// with `git worktree add`, which is exactly how someone would use Strument on
+// two branches at once.
+func TestReadRootSurvivesAWorktreeGitFile(t *testing.T) {
+	dir := t.TempDir()
+	// What `git worktree add` writes in place of the .git directory.
+	if err := os.WriteFile(filepath.Join(dir, ".git"),
+		[]byte("gitdir: /somewhere/.git/worktrees/wt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, ".gitignore", "build/\n")
+
+	ps, err := ReadRoot(dir)
+	if err != nil {
+		t.Fatalf("ReadRoot in a worktree: %v", err)
+	}
+	if len(ps) != 1 {
+		t.Errorf("got %d patterns, want the one from .gitignore", len(ps))
+	}
+}

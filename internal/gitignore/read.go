@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -32,7 +33,13 @@ const (
 func ReadIgnoreFile(path string, domain []string) ([]Pattern, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		// ENOTDIR is absence too, and the case that matters is a git worktree:
+		// there .git is a *file* holding "gitdir: …", so .git/info/exclude
+		// resolves a path component that is not a directory. That is a
+		// different errno from ENOENT, so it used to propagate — and since
+		// ReadRoot feeds the file walk, every observation tool (ls, glob, grep,
+		// symbol) failed outright inside a worktree rather than degrading.
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
 			return nil, nil
 		}
 		return nil, err
