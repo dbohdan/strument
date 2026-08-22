@@ -38,9 +38,17 @@ prominently — full recall, total tool calls, and cost.
 | | base | new | p |
 | --- | --- | --- | --- |
 | **used `symbol`** | 7/24 | **14/24** | 0.080 |
-| full recall (3/3) | 9/24 | 15/24 | 0.148 |
+| located all 3 call sites | 24/24 | 24/24 | — |
+| named all 3 enclosing functions | 9/24 | 15/24 | 0.148 |
+| claimed a caller that does not exist | 4/24 | 2/24 | 0.67 |
 | mean tool calls | 5.3 | **3.4** | — |
 | total cost | $0.282 | **$0.108** | — |
+
+**Read that second row first.** Every run in both arms found all three call
+sites. `grep settleEdits` finds them; nothing here was a task failure. What
+varies is whether the model then *names the enclosing function* — which is the
+one thing `symbol` supplies and grep cannot. The metric first written up as
+"full recall" was measuring that, not task success, and the label overstated it.
 
 Usage doubled. At n=24 per arm that is **suggestive, not established** — p=0.08
 is not a result to build on, and the honest statement is "roughly doubled, and
@@ -51,17 +59,42 @@ would reach for a safer-looking tool out of caution, inflating usage while doing
 no less work. The opposite happened: usage rose *and* tool calls fell 36% and
 cost fell 2.6×. Had it been hedging, calls would have held flat or risen.
 
-**Per model, and this is the counter-signal:**
+**Per model, functions named:**
 
 | | base → new |
 | --- | --- |
 | MiMo | 2/12 → **8/12** |
 | Kimi | 5/6 → 6/6 |
-| GLM | 2/6 → **1/6** |
+| GLM | 2/6 → 1/6 |
 
-GLM went the *wrong* way. n=6, so noise is a live explanation, but it is not
-evidence for the change and it is reported here at the same size as the effect.
 Nearly all the aggregate gain is MiMo.
+
+### GLM did not regress
+
+This was first written up as GLM going the wrong way. Reading the two
+zero-scoring runs says otherwise: both answered **correctly**, and named no
+functions at all.
+
+> - `Coder` turn-end logic in `coder.go:431` — passes `""`
+> - Another path in `coder.go:579` — passes `""`
+> - `toolcommit.go:135` (the commit tool handler) — passes `args.message()`
+
+Every value right, every site right, no name claimed. GLM located all three call
+sites in **6/6 runs in both arms**. The 2/6 → 1/6 is a shift in answer *style*
+at n=6, not a loss of capability, and the earlier claim is withdrawn.
+
+What GLM's runs *do* show is a real defect, in the schema rather than the tool.
+GLM reached for `symbol` twice in the new arm. In `glm-new-2` it called
+`kind=definition` (1 site — useless for "who calls this"), then `kind=reference`
+(8 sites), and answered 3/3 in 3 steps for $0.0035, the cheapest correct run of
+its twelve. In `glm-new-4` it made the same first call, got the definition, and
+went back to grep for the remaining four calls.
+
+So the rewritten description got GLM to pick up the tool without conveying that
+`kind=reference` is what answers a "who calls this" question. `definition` is
+the default and the description leads with it. A model that asks the natural
+first question gets an answer to a different one, and half the time abandons the
+tool on the strength of it.
 
 ## The mechanism, which is not the arm
 
@@ -84,6 +117,19 @@ function — and reported the caller as **`Coder.send`**. It also reported
 `runCommitTool` as **`toolCommit`**. Both confidently, both wrong. `symbol
 kind=reference` states the enclosing function as fact, which is the one thing
 grep structurally cannot do.
+
+Counted across all 48 runs, six claimed a caller that does not exist as one:
+`commitEdits`, `commitToolCall`, `Coder.send`, `Run`, and `toolCommit` twice
+(a tool-name constant, not a function). Four were in the base arm, two in the
+new one — p=0.67, so the arms are indistinguishable on it. The conditional is
+where the signal is: **five of those six runs never called `symbol`**, against
+27 non-symbol runs out of 48 overall.
+
+This is the count that could not fire the first time it was asked. A check for
+confabulated names returned 0/21 and 0/27 while `Coder.send` sat in a transcript
+quoted an hour earlier — because it looked for a hardcoded list of names instead
+of extracting what each answer actually claimed. Extraction is the version that
+works.
 
 **And among the runs that used `symbol`, arm matters for cost:** base averaged
 6.4 tool calls, new averaged **1.6**. Same instrument chosen, a quarter of the
@@ -123,6 +169,15 @@ answer that fails to, in each of the two block forms.
   as a tool rather than for this change specifically: **grep plus a narrow read
   produces confabulated function names, and `symbol` does not.** That is worth
   saying in the tool's own description.
-- GLM's regression needs a look before any of this is load-bearing.
+- **The description should lead with what the tool is uniquely for.** Every run
+  in both arms found the call sites; what separated them was naming the
+  functions. That is the sentence the schema does not say, and it is the sentence
+  a model needs in order to choose the tool for the right reason.
+- **`kind=reference` needs to be reachable from the natural first question.**
+  GLM asked `kind=definition` — the default — of a "who calls this" question,
+  and half the time abandoned the tool on the useless answer. The miss path now
+  points at the other kind; the *hit* path does not, and a one-site definition
+  answer to a callers question is the case that needs it.
+- GLM did not regress; that claim is withdrawn above.
 - Untested: whether the schema-description rewrite alone accounts for the
   uptake. That is the cheap decomposition, and it is one binary away.
