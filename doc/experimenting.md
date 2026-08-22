@@ -221,6 +221,46 @@ its own first. Then the trial has one job and the revert has one target.
 - **Fix the random seed and shuffle the job list**, so a rerun is comparable and
   the arm is not confounded with the hour it ran.
 
+## 13. Have another model read the scorer
+
+The cheapest fix for §1, and it went unused for nine bugs.
+
+A scorer is written in the same breath as the belief it is meant to test, by
+whoever holds that belief. So it reaches for the string that was on screen a
+moment ago — which is exactly the string that is present for reasons other than
+the one being measured. The check inherits the expectation instead of testing
+it.
+
+A second model does not hold the belief. Given four checks from this project,
+three of them broken and one sound, and told to name a concrete failing input
+or say it is sound:
+
+| | FINISHED-in-command | substring-for-Latin | unclosed thinking tag | the sound one |
+| --- | --- | --- | --- | --- |
+| MiMo-V2.5 | caught | caught | missed | correctly sound |
+| Gemini 3.7 Flash | caught | caught | caught | correctly sound |
+
+Three of three by union, no false alarm on the sound one, about two-tenths of a
+cent. **They also found a bug the author had already "fixed" and got wrong**:
+`"roma" in reply.lower()` had been patched to normalize `Rōma`, and both
+reviewers pointed out it still passes *"The capital of Italy is Roma, a
+beautiful city"* — an English sentence scoring as obedience to "answer in Latin
+only". The check was measuring *mentions Rome*, and its numbers had already
+been reported as though it measured Latin.
+
+Two things make it work:
+
+- **Ask for a concrete failing input, quoted.** "Review this" gets
+  "consider edge cases". *"Name an input where this returns the wrong answer,
+  or say it is sound"* gets the input.
+- **Say that at least one is sound.** Otherwise flagging everything is a
+  winning strategy, and a reviewer that flags everything has told you nothing.
+
+The ceiling is real: a third of the faults in this file needed context that is
+not in the scorer — what the transcript actually prints, what the test binary
+actually names its cases. Hand over the scorer *and* a sample of its real
+input, or the reviewer is guessing at the half that matters.
+
 ---
 
 ## The short version
@@ -231,3 +271,9 @@ Before believing any result, ask in this order: *did the mechanism fire, did the
 scorer see what I think it saw, do the two arms differ in exactly one thing, and
 have I read three transcripts?* Only then look at the p-value — and remember
 that a broken instrument's favourite output is `p = 1.0`.
+
+And get the verdict out of the hands of whoever wants it to pass: break the code
+on purpose and watch the check go red (§1), or hand the check to a model that
+does not share your expectation (§13). Both work because neither routes through
+your judgment. Resolving to be more careful does not; it was tried, for nine
+consecutive bugs.
