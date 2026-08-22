@@ -26,8 +26,8 @@ The loader reads these module-level variables after running your file:
 | `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). See below. |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
-| `verify` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
-| `verify_auto` | list of strings | Optional. Names of `verify` entries Strument runs itself at the end of a turn that changed files. See below. |
+| `check` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
+| `check_auto` | list of strings | Optional. Names of `check` entries Strument runs itself at the end of a turn that changed files. See below. |
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
@@ -127,13 +127,13 @@ on the first request.
 A `scraper` command is the one exception: it does its own networking, and the
 global `proxy` does not reach it.
 
-### `verify`
+### `check`
 
-`verify` names the commands that check your project — tests, a linter, a build.
+`check` names the commands that check your project — tests, a linter, a build.
 Each value is an argv list, run without a shell.
 
 ```python
-verify = {
+check = {
     "lint": ["golangci-lint", "run"],
     "test": ["go", "test", "./..."],
 }
@@ -150,26 +150,26 @@ Declared order matters. `check()` with no name runs every verification command i
 stops at the first failure, so put the fast ones first. `check("test")` runs
 just that one.
 
-A project's `.strument.star` merges into your `verify` **per key**: it can
+A project's `.strument.star` merges into your `check` **per key**: it can
 replace one verification command or add its own without restating the rest.
 
 ```python
 # .strument.star — override just the test command, keep the user's lint.
-verify = {"test": ["go", "test", "-race", "./..."]}
+check = {"test": ["go", "test", "-race", "./..."]}
 ```
 
 Because the key replaces rather than appends, extend a verification command by
 building the dict explicitly:
 
 ```python
-verify = dict(verify, lint=["golangci-lint", "run", "--fast"])
+check = dict(check, lint=["golangci-lint", "run", "--fast"])
 ```
 
 Unset, no `check` tool is offered and every command goes through `bash` and its
 confirmation prompt.
 
 Naming a verification command buys one more thing, and it is a property of
-`verify` rather than of `bash`: a `bash` command that *is* one of these commands,
+`check` rather than of `bash`: a `bash` command that *is* one of these commands,
 **verbatim**, runs without the confirmation prompt. You wrote that command here,
 so the prompt would be asking you to re-approve your own decision — and a prompt
 that fires on every `go test ./...` is what teaches you to answer the ones that
@@ -238,10 +238,10 @@ path you need and it works from then on.
 ### `project_checks()`
 
 `project_checks()` detects a project's usual checks from its marker files, so
-you don't have to write a `verify` dict for every repository:
+you don't have to write a `check` dict for every repository:
 
 ```python
-verify = project_checks()
+check = project_checks()
 ```
 
 It is opt-in: nothing happens because a file is on disk, only because you wrote
@@ -250,7 +250,7 @@ this. Names are always prefixed with the ecosystem — `go-test`, `node-test`,
 losing to the other. Extend and drop with ordinary dict operations:
 
 ```python
-verify = dict(project_checks(), lint=["golangci-lint", "run"])
+check = dict(project_checks(), lint=["golangci-lint", "run"])
 ```
 
 The root it looks in is the *project's*, not the config file's, so this works in
@@ -275,16 +275,16 @@ project's own committed configuration — which is why this is opt-in, and why i
 is worth glancing at what it detected the first time you use it on an unfamiliar
 repository. Every check's argv is printed when it runs.
 
-### `verify_auto`
+### `check_auto`
 
-`verify_auto` lists the verification commands Strument runs *itself*, without being asked, at
+`check_auto` lists the verification commands Strument runs *itself*, without being asked, at
 the end of a turn that changed files.
 
 ```python
-verify_auto = ["lint", "test"]
+check_auto = ["lint", "test"]
 ```
 
-The names must be keys of `verify`; a name that isn't fails at load, so a typo
+The names must be keys of `check`; a name that isn't fails at load, so a typo
 can't leave you believing the project is checked when nothing runs.
 
 This exists because the model deciding *whether* and *which* to check is the
@@ -462,7 +462,7 @@ displayed, and `/reload` discards session changes — the config is the source
 of truth. To make a `/env add` permanent, add the name to `env_allow`.
 
 A project's `.strument.star` **replaces** the user's `env_allow` whole-value,
-for the same reason it replaces `verify_auto`: a merge of two lists could only
+for the same reason it replaces `check_auto`: a merge of two lists could only
 widen, and the project needs to be able to narrow.
 
 Two things are untouched by the allowlist. `/run` keeps the full environment,

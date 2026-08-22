@@ -392,9 +392,9 @@ Ten tools, in three natures:
   model actually emits), with one platform gap: process substitution is
   unimplemented on Windows, where `<(…)` yields a TODO notice from the
   interpreter instead of running.
-  `check(name)` runs a *configured* argv from the `verify` dict by name, so
+  `check(name)` runs a *configured* argv from the `check` dict by name, so
   it needs no gate — the model supplies a key, never a command, and there is
-  nothing to classify or smuggle. It is offered only when `verify` is
+  nothing to classify or smuggle. It is offered only when `check` is
   configured.
 
   A check runs under the environment allowlist, not the full session
@@ -488,7 +488,7 @@ protocol every post-trained model was fitted to. The loop is bounded by
 `max_steps` (default 25, configurable), which is a checkpoint rather than a
 wall: the turn reports what it has done and asks whether to continue.
 `max_error_reflections` (default 3, configurable) bounds the rounds an *error*
-starts, and `maxAutoVerify` (3) the rounds the harness itself starts, so a
+starts, and `maxAutoCheck` (3) the rounds the harness itself starts, so a
 model in a fix-break cycle hands back to the human instead of eating the work
 budget.
 
@@ -496,7 +496,7 @@ budget.
 `old_string` doesn't match, its call's tool result carries the failure (with
 the did-you-mean) and the turn re-sends on those results — no injected "please
 fix" user message. `runOne` is outcome-driven, so a text-free tool reflection
-still loops. There is one deliberate exception: a failing `verify_auto` speaks
+still loops. There is one deliberate exception: a failing `check_auto` speaks
 as a *user* message, because the harness is talking unprompted and no tool
 call is waiting for an answer.
 

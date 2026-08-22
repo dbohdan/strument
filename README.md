@@ -28,10 +28,10 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
   In a Git repository, a turn is one commit.
   The command `/squash [n]` merges commits.
 - Configured checks.
-  The `verify` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
+  The `check` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
   The model can run them by name.
   `project_checks()` detects standard checks for your project type.
-  `verify_auto` runs a list of `verify` commands at the end of any turn that changed a file.
+  `check_auto` runs a list of `check` commands at the end of any turn that changed a file.
 - URL scraping.
   URLs you mention, or `/web <url>`, are fetched and converted to Markdown.
   This can use either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
@@ -297,16 +297,16 @@ The catalog is fetched on demand with caching.
 
 Some settings live at the top level rather than on a model:
 
-- `verify` names the commands that check your project.
-- `verify_auto` says which of them Strument should run itself at the end of an editing turn.
+- `check` names the commands that check your project.
+- `check_auto` says which of them Strument should run itself at the end of an editing turn.
 - `reasoning_display` says how much of the model's thinking to show:
 
 ```python
-verify = {
+check = {
     "lint": ["golangci-lint", "run"],
     "test": ["go", "test", "./..."],
 }
-verify_auto = ["lint", "test"]
+check_auto = ["lint", "test"]
 
 reasoning_display = 10  # "full" (the default), a line count, or "off".
 ```
@@ -317,7 +317,7 @@ Naming a check also quiets the shell prompt for it.
 A `bash` command that is one of your checks *verbatim* runs without asking, because you already approved it by writing it here.
 Anything that is not an exact match — an added flag, a `&&`, a redirection — asks as usual.
 
-`verify = project_checks()` fills the dictionary in from your project's marker files, for Go, Rust, Python, Node, Deno, `make`/`task`/`just`, Java, .NET, PHP, Ruby, Elixir, Crystal, and Haskell.
+`check = project_checks()` fills the dictionary in from your project's marker files, for Go, Rust, Python, Node, Deno, `make`/`task`/`just`, Java, .NET, PHP, Ruby, Elixir, Crystal, and Haskell.
 It is opt-in and never runs a target your project doesn't define.
 Note that these are your project's own commands, not commands that are inherently safe: `npm test` runs whatever your `package.json` says.
 Hiding reasoning is not the same as disabling it.
