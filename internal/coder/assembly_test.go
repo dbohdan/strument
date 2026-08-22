@@ -281,7 +281,11 @@ func TestPyFormat(t *testing.T) {
 
 // The note is read by a model, so it has to read like a sentence. A wire
 // capture caught "pinned 1 file … These are the files" and "Create them" for a
-// single file; both plural forms are pinned here.
+// single file, so the counted forms are pinned here.
+//
+// The sentence that used to carry most of that risk is gone: the instruction to
+// read is now generic-singular ("Read a file before …"), which agrees with
+// itself whatever the count and leaves nothing to get wrong.
 func TestPinnedFilesNoteAgreesInNumber(t *testing.T) {
 	one := testCoder(t)
 	if err := os.WriteFile(filepath.Join(one.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
@@ -290,8 +294,8 @@ func TestPinnedFilesNoteAgreesInNumber(t *testing.T) {
 	one.AddFile("a.go")
 	one.AddFile("gone.go") // never created
 	got := one.pinnedFilesNote()
-	for _, want := range []string{"pinned 1 file", "This is the file", "Read it before editing",
-		"1 file that does not exist yet", "Create it with write"} {
+	for _, want := range []string{"pinned 1 file", "1 file that does not exist yet",
+		"Create it with write"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("singular form missing %q:\n%s", want, got)
 		}
@@ -305,9 +309,80 @@ func TestPinnedFilesNoteAgreesInNumber(t *testing.T) {
 		many.AddFile(f)
 	}
 	got = many.pinnedFilesNote()
-	for _, want := range []string{"pinned 2 files", "These are the files", "Read them before editing"} {
+	for _, want := range []string{"pinned 2 files"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("plural form missing %q:\n%s", want, got)
 		}
+	}
+}
+
+// Pinning a file is not a request to change it.
+//
+// The note used to say "These are the files they want changed", which asserts
+// an intention the act of pinning does not carry — a user pins files to put
+// them in front of the model, and the message says what to do with them.
+// GLM-5.3 was caught reconciling the two out loud: "the pinned files are for
+// changes... but the user question is analysis/proposal", then talking itself
+// back to answering the question actually asked. The prompt made it argue
+// against the prompt.
+func TestPinnedFilesNoteClaimsNoIntent(t *testing.T) {
+	c := testCoder(t)
+	if err := os.WriteFile(filepath.Join(c.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddFile("a.go")
+
+	got := c.pinnedFilesNote()
+	// The claim, not the words. A first draft of this check also forbade "they
+	// want", and the sentence that *denies* the claim — "the user's message
+	// says what they want" — tripped it. Same fault as the scorers in
+	// doc/experimenting.md, one layer up: a pattern matching text present for
+	// the opposite reason.
+	for _, unwanted := range []string{"want changed", "wants changed"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("the note asserts what the user wants (%q):\n%s", unwanted, got)
+		}
+	}
+	if !strings.Contains(got, "not itself a request") {
+		t.Errorf("the note does not say pinning is not a request:\n%s", got)
+	}
+}
+
+// Ask mode has no editing tools, so the note must not talk about editing or
+// tell the model to create anything.
+//
+// The whole note was mode-blind: a session that could not change a byte was
+// told these were the files the user wanted changed, and that a missing one
+// should be created "with write" — a tool not in its schema. An instruction
+// the model cannot follow is worse than none, because it has to work out that
+// it cannot follow it.
+func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
+	c := testCoder(t)
+	c.editFormat = "ask"
+	if err := os.WriteFile(filepath.Join(c.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddFile("a.go")
+	c.AddFile("gone.go") // never created
+
+	got := c.pinnedFilesNote()
+	for _, unwanted := range []string{"with write", "changing it", "before editing"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("ask mode note mentions editing (%q):\n%s", unwanted, got)
+		}
+	}
+	if !strings.Contains(got, "answering questions about it") {
+		t.Errorf("ask mode note does not say why to read:\n%s", got)
+	}
+
+	// ...and code mode still does say it, or the branch is just deleting text.
+	code := testCoder(t)
+	if err := os.WriteFile(filepath.Join(code.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code.AddFile("a.go")
+	code.AddFile("gone.go")
+	if got := code.pinnedFilesNote(); !strings.Contains(got, "Create it with write") {
+		t.Errorf("code mode lost its create instruction:\n%s", got)
 	}
 }

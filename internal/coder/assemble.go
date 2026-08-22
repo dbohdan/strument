@@ -365,16 +365,29 @@ func (c *Coder) pinnedFilesNote() string {
 	slices.Sort(existing)
 	slices.Sort(missing)
 
+	ask := c.editFormat == "ask"
+
 	var b strings.Builder
 	if len(existing) > 0 {
-		subject, verb, object := "These are the files", "Read them", "their"
-		if len(existing) == 1 {
-			subject, verb, object = "This is the file", "Read it", "its"
-		}
 		fmt.Fprintf(&b, "The user has pinned %s to this session: %s.\n",
 			plural(len(existing), "file", "files"), strings.Join(existing, ", "))
-		fmt.Fprintf(&b, "%s they want changed. %s before editing, so you are working from "+
-			"%s current contents rather than from memory.\n", subject, verb, object)
+		// What pinning is, and what it is not.
+		//
+		// This used to say "These are the files they want changed", which
+		// asserts an intention the act of pinning does not carry. A user pins
+		// files to put them in front of the model; what to do with them is the
+		// message's job. GLM-5.3 was caught reconciling the two out loud —
+		// "the pinned files are for changes... but the user question is
+		// analysis/proposal" — and had to talk itself back to answering the
+		// question actually asked.
+		b.WriteString("Pinning says what the conversation is about. It is not itself a " +
+			"request to change anything: the user's message says what they want.\n")
+		use := "changing it or answering questions about it"
+		if ask {
+			use = "answering questions about it"
+		}
+		fmt.Fprintf(&b, "Read a file before %s, so you are working from what is in it "+
+			"now rather than from memory.\n", use)
 	}
 	if len(missing) > 0 {
 		does, them := "do", "them"
@@ -386,7 +399,13 @@ func (c *Coder) pinnedFilesNote() string {
 		}
 		fmt.Fprintf(&b, "The user has also pinned %s that %s not exist yet: %s.\n",
 			plural(len(missing), "file", "files"), does, strings.Join(missing, ", "))
-		fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
+		if ask {
+			// No write tool here, so telling it to create anything is an
+			// instruction it cannot follow.
+			fmt.Fprintf(&b, "There is nothing to read in %s.\n", them)
+		} else {
+			fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
+		}
 	}
 	// Naming AGENTS.md is what makes it work, and that is measured rather than
 	// assumed. Over 24 live sessions on a rule contrary to habit — every

@@ -211,8 +211,8 @@ var Ask = Set{
 		"have it done.\n",
 	SystemReminder:  "{final_reminders}",
 	ExampleMessages: nil,
-	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to look at the " +
-		"project, and answer from what you find there rather than from memory.",
+	FilesNoFullFiles: "No files are pinned to this session. Use read, grep, glob, and ls to look " +
+		"at the project, and answer from what you find there rather than from memory.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
