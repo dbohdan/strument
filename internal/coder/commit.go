@@ -17,7 +17,7 @@ import (
 // undo substrate and a message to whoever reads the history later — used to be
 // the same object, which worked while a turn was one send. It stopped working
 // when the loop closed: a turn that edits across six steps wrote six commits,
-// each described by a weak model that had seen only its own fragment. The
+// each described by a side model that had seen only its own fragment. The
 // substrate is the snapshot now (snapshot.go), so the commit can be just the
 // communication.
 //
@@ -115,7 +115,7 @@ func renderCommitMessages(msgs []llm.Message) string {
 	return b.String()
 }
 
-// commitMessageTimeout bounds the weak-model commit-message call; on
+// commitMessageTimeout bounds the side-model commit-message call; on
 // timeout the commit proceeds with the fallback message.
 const commitMessageTimeout = 60 * time.Second
 

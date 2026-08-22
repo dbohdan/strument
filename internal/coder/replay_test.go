@@ -114,7 +114,7 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 		EditFormat: "tool",
 		RepoMap:    false,
 	}
-	model.WeakModel = model
+	model.SideModel = model
 
 	c := New(dir, model)
 	stub := fixture.NewStreamStub(sc)

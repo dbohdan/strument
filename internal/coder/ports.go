@@ -191,7 +191,7 @@ type Repo interface {
 	// the automatic path and the only one there used to be. A non-empty one is
 	// used verbatim: the commit tool lets the model write its own, and the
 	// model that made the change knows why it made it, where the generator is
-	// a weak model inferring intent from a diff.
+	// a side model inferring intent from a diff.
 	Commit(fnames []string, context, message string, attributed bool) (hash, message2 string, ok bool, err error)
 }
 

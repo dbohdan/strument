@@ -578,7 +578,7 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   beneath the keys Strument owns (`model`, `messages`, `stream`, … — those are
   rejected). Values must be JSON-serializable.
 
-### `model(provider, slug, *, display_name=None, edit_format="tool", weak_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -592,8 +592,16 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   can no longer drive Strument at all, because finding, reading, and searching
   files are tool calls too. A config still naming one gets an error saying so;
   the fix is to drop the setting.
-- **`weak_model`** — a cheaper model for summaries and commit messages: an alias
-  string or an inline `model()`. Unset means the model is its own weak model.
+- **`side_model`** — the model for Strument's own writing: commit messages,
+  session notes, and compaction summaries. An alias string or an inline
+  `model()`; unset means the main model does its own. These are *side requests*
+  — prose about the session rather than work on your code — which is where the
+  name comes from, and why a cheaper model usually belongs here.
+
+  It was called `weak_model` before, after aider. The name made a claim about
+  capability that stopped being true: the model most often put in this seat now
+  is a near-peer of a frontier one. A config still using `weak_model` gets an
+  error naming the new key.
 - **`reasoning`** — reasoning effort: `"low"`, `"medium"`, or `"high"` (other
   values pass through). `"off"` disables reasoning where the provider allows it;
   `""` or `"default"` leaves it to the model.
@@ -733,7 +741,7 @@ models = {
         cache=True,  # OpenRouter reports prompt caching for this model.
         # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # weak_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+        # side_model="...",  # Uncomment to use a cheaper model for summaries and commits.
     ),
 }
 ```

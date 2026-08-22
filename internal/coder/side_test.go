@@ -12,7 +12,7 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 )
 
-// The weak model fails more often than the main one, and its calls go out at
+// The side model fails more often than the main one, and its calls go out at
 // the moments nobody is watching (after the edits, before the prompt returns).
 // A retryable blip used to cost the commit its message outright; these pin
 // that the side calls ride the same backoff a turn does.
@@ -21,7 +21,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
 	out := &summaryOutput{}
-	msg := CommitMessenger(stub, &config.Model{Slug: "weak"}, "", nil, out, clock)
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock)
 
 	got := msg("", "diff text")
 
@@ -38,7 +38,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 
 func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
 	clock := &fastClock{}
-	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "weak"}, "", nil, &summaryOutput{}, clock)
+	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock)
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so the caller falls back", got)
@@ -51,7 +51,7 @@ func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
 func TestNotesWriterRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
-	write := NotesWriter(stub, &config.Model{Slug: "weak"}, nil, &summaryOutput{}, clock)
+	write := NotesWriter(stub, &config.Model{Slug: "side"}, nil, &summaryOutput{}, clock)
 
 	if got := write("## a turn"); got != "42" {
 		t.Errorf("notes = %q, want 42 after one retry", got)
@@ -64,7 +64,7 @@ func TestNotesWriterRetriesTransientError(t *testing.T) {
 func TestChatSummaryRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
-	s := NewChatSummary(stub, &config.Model{Slug: "weak", Context: 100000}, RuneCounter{}, &summaryOutput{}, clock)
+	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, clock)
 	msgs := []llm.Message{msgTok("user", 80), msgTok("assistant", 80)}
 
 	out, err := s.summarizeAll(msgs)
@@ -88,7 +88,7 @@ func (nonRetryableStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.Str
 	}
 }
 
-// A permanently failing weak model exhausts the backoff and fails rather than
+// A permanently failing side model exhausts the backoff and fails rather than
 // looping: the delay doubles to the cap and the next failure ends the call.
 func TestSendSideStopsAtTheCap(t *testing.T) {
 	clock := &fastClock{}
@@ -188,7 +188,7 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 // takes, since that is where this was found.
 func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
 	stub := &emptyThenStub{blanks: 99}
-	msg := CommitMessenger(stub, &config.Model{Slug: "weak"}, "", nil, &summaryOutput{}, &fastClock{})
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{})
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so gitrepo falls back", got)

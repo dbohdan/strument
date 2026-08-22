@@ -276,7 +276,7 @@ const CommitSystem = "Write the Git commit message for the changes below. " +
 	"breaks.\n\n" +
 	"Reply with the commit message and nothing else — no preamble, no quotes, no code fence.\n"
 
-// Summarize is the system prompt for chat-history compaction: the weak model
+// Summarize is the system prompt for chat-history compaction: the side model
 // condenses older conversation so a long session stays within the context
 // window.
 //
@@ -289,7 +289,7 @@ const CommitSystem = "Write the Git commit message for the changes below. " +
 //
 // It is agentless now, and that is a decision rather than a style. First person
 // is a lie whenever a different model wrote the text, and the summarizer is the
-// weak model, so it usually is. Third person about the assistant ("another model
+// side model, so it usually is. Third person about the assistant ("another model
 // did this") is alienating the other way and invites the reader to discount it.
 // A changelog asserts no authorship and is true regardless of who wrote it or
 // who reads it.
@@ -349,7 +349,7 @@ func SessionNotesPrefix(when string) string {
 	return fmt.Sprintf(sessionNotesPrefix, when)
 }
 
-// SessionNotes asks the weak model for notes a *later* session can start from.
+// SessionNotes asks the side model for notes a *later* session can start from.
 //
 // A different job from Summarize, which serves "continue this thread now". What
 // survives a night is the why and the state, not the mechanics — so this asks

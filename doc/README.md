@@ -130,13 +130,13 @@ inherited from aider.
   a reason to compact mid-turn, this is what it would be spending.
 
   Two things follow from the same principle. The summary is a **system**
-  message: aider's prompt asked the weak model to write *as the user* ("Begin
+  message: aider's prompt asked the side model to write *as the user* ("Begin
   with \"I asked you...\""), the result went in as a user turn, and the coder
   appended an assistant `"Ok."` agreeing to it — a fabricated exchange, the same
   shape `readOnlyFilesPrefix` was written to remove. And the summary is
   **agentless** — no "I", no "you", no "the assistant" — because first person is
   a lie whenever a different model wrote the text, and the summarizer is the
-  weak model, so it usually is. A changelog asserts no authorship and stays true
+  side model, so it usually is. A changelog asserts no authorship and stays true
   regardless of who wrote it or who reads it.
 
   The summarizer also sees the **tool calls and results**, not only the prose.

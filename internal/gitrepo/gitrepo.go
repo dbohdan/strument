@@ -22,7 +22,7 @@ type Repo struct {
 	CommitTrailer string
 
 	// Message generates a commit message from staged diffs and chat
-	// context (the weak-model call); nil or an empty result falls
+	// context (the side-model call); nil or an empty result falls
 	// back to aider's "(no commit message provided)".
 	Message func(diffs, context string) string
 
@@ -159,7 +159,7 @@ func (r *Repo) Commit(fnames []string, context, want string, attributed bool) (h
 
 	// A message the caller supplied wins; generating one is what happens when
 	// nobody wrote it. The commit tool writes its own, and the model that made
-	// the change is better placed to say why than a weak model reading the
+	// the change is better placed to say why than a side model reading the
 	// diff afterwards.
 	message = strings.TrimSpace(want)
 	if message == "" && r.Message != nil {

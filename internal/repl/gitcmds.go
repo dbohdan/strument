@@ -198,7 +198,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Unable to squash: %v", err)
 		return ""
 	}
-	// Commit re-stages the files, diffs them, and asks the weak model for a
+	// Commit re-stages the files, diffs them, and asks the side model for a
 	// message covering the whole range — the same path an ordinary turn takes.
 	// The context is the subjects being replaced, so the new message describes
 	// the same work rather than starting from the diff alone.

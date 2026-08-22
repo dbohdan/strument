@@ -35,7 +35,7 @@ func toolCoder(t *testing.T, dir string) *Coder {
 		Slug:       "test-model",
 		EditFormat: "tool",
 	}
-	model.WeakModel = model
+	model.SideModel = model
 	c := New(dir, model)
 	c.Confirm = yesConfirmer{}
 	c.Out = testOutput{t}

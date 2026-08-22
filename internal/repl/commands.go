@@ -431,7 +431,7 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 
 // cmdNotes shows, generates, or discards the session notes.
 //
-// The notes are written by the weak model and go into a future prompt, so they
+// The notes are written by the side model and go into a future prompt, so they
 // have to be readable: a summary nobody can inspect is a summary nobody should
 // trust.
 //
@@ -541,7 +541,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	r.refreshTrailer(m)
 	if r.opts.MakeClient != nil {
 		r.coder.Client = r.opts.MakeClient(m)
-		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
+		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
 	}
 	r.opts.ModelAlias = args
 	r.saveResume()
@@ -595,7 +595,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		r.refreshTrailer(m)
 		if r.opts.MakeClient != nil {
 			r.coder.Client = r.opts.MakeClient(m)
-			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.WeakModel), m.WeakModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
+			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
 		}
 	} else {
 		r.out.Warningf("Active model %q is no longer in the config; keeping the running model.", r.opts.ModelAlias)

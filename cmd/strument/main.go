@@ -127,7 +127,7 @@ func (c *chatCmd) Run() error {
 		// from the config it already carries.
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
-	cdr.Summarizer = coder.NewChatSummary(client.New(model.WeakModel.Provider), model.WeakModel, cdr.Tokens, cdr.Out, cdr.Clock)
+	cdr.Summarizer = coder.NewChatSummary(client.New(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
 	// URL scraping is a non-provider egress action, so it uses the global proxy
 	// (validated at load, so the error is dead; nil transport => direct). An
@@ -145,9 +145,9 @@ func (c *chatCmd) Run() error {
 		cdr.RepoMap = repomap.New(root)
 	}
 	if repo != nil {
-		weak := model.WeakModel
+		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
-		repo.Message = coder.CommitMessenger(client.New(weak.Provider), weak,
+		repo.Message = coder.CommitMessenger(client.New(side.Provider), side,
 			cdr.Platform.Language, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
@@ -299,7 +299,7 @@ func (c *chatCmd) Run() error {
 	if c.Continue && hist != nil {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
-			write := coder.NotesWriter(client.New(model.WeakModel.Provider), model.WeakModel, nil, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.New(model.SideModel.Provider), model.SideModel, nil, cdr.Out, cdr.Clock)
 			if notes := write(transcript); notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
@@ -705,11 +705,11 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if hist == nil {
 				return errors.New("no transcript available")
 			}
-			weak := cdr.Model.WeakModel
-			if weak == nil {
-				return errors.New("no weak model configured")
+			side := cdr.Model.SideModel
+			if side == nil {
+				return errors.New("no side model configured")
 			}
-			write := coder.NotesWriter(client.New(weak.Provider), weak, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.New(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 			transcript := history.ReadTranscript(hist.Path())
 			if transcript == "" {
 				return errors.New("transcript is empty")

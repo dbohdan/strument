@@ -255,7 +255,7 @@ models = {
         output_cost=10,
         cache=True,  # Cache the prompt prefix (Anthropic honors this).
         reasoning="medium",
-        weak_model="mimo",  # A cheaper model for commit messages and summaries.
+        side_model="mimo",  # A cheaper model for commit messages and summaries.
     ),
     "qwen": model(
         local_llm,
@@ -279,7 +279,7 @@ Those are parts of what was sent, not extra tokens beside it.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
 Instead, `strument model-config anthropic/claude-haiku-4.5` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.
-It leaves the judgment calls (`reasoning`, `reasoning_tag`, `weak_model`) as commented-out placeholders.
+It leaves the judgment calls (`reasoning`, `reasoning_tag`, `side_model`) as commented-out placeholders.
 The catalog is fetched on demand with caching.
 
 Some settings live at the top level rather than on a model:

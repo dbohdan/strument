@@ -167,7 +167,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 // builtinModel implements
 // model(provider, slug, *, display_name=None, edit_format="tool",
 //
-//	weak_model=None, reasoning=None, reasoning_tag=None, temperature=None,
+//	side_model=None, reasoning=None, reasoning_tag=None, temperature=None,
 //	repo_map=True, cache=False, context=None, max_output=None,
 //	input_cost=None, output_cost=None, extra_params={}).
 //
@@ -180,7 +180,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var slug string
 	var displayName string
 	editFormat := "tool"
-	var weakModel starlark.Value
+	var sideModel starlark.Value
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
 	repoMap := true
@@ -188,12 +188,14 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var contextTokens, maxOutput int
 	var inputCost, outputCost starlark.Value
 	var extraParams *starlark.Dict
+	var retiredWeakModel starlark.Value
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"provider", &providerV,
 		"slug", &slug,
 		"display_name?", &displayName,
 		"edit_format?", &editFormat,
-		"weak_model?", &weakModel,
+		"side_model?", &sideModel,
+		"weak_model?", &retiredWeakModel,
 		"reasoning?", &reasoning,
 		"reasoning_tag?", &reasoningTag,
 		"temperature?", &temperature,
@@ -206,6 +208,18 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"extra_params?", &extraParams,
 	); err != nil {
 		return nil, err
+	}
+
+	// weak_model is still unpacked so a config using it gets this sentence
+	// rather than "unexpected keyword argument", which says nothing about what
+	// to do next. Same reason edit_format still recognizes its retired values.
+	if retiredWeakModel != nil && retiredWeakModel != starlark.None {
+		return nil, errors.New(
+			"model: weak_model has been renamed to side_model; rename the argument. " +
+				"The old name described the model's capability, and that stopped being " +
+				"true — the models used here are not weak. The new name describes its " +
+				"role: it writes commit messages, session notes, and compaction " +
+				"summaries, off to the side of the turn")
 	}
 
 	pv, ok := providerV.(*providerValue)
@@ -235,15 +249,15 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		MaxOutput:    maxOutput,
 	}
 
-	switch w := weakModel.(type) {
+	switch w := sideModel.(type) {
 	case nil, starlark.NoneType:
 		// nil ref => self, bound at resolution.
 	case starlark.String:
-		m.weakRef = string(w)
+		m.sideRef = string(w)
 	case *modelValue:
-		m.weakRef = w.m
+		m.sideRef = w.m
 	default:
-		return nil, fmt.Errorf("model: weak_model must be a model value or alias string, got %s", weakModel.Type())
+		return nil, fmt.Errorf("model: side_model must be a model value or alias string, got %s", sideModel.Type())
 	}
 
 	var err error
@@ -273,7 +287,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 // modelWithExtraParams implements model.with_extra_params(**overrides): it
 // returns a copy of the receiver model whose extra_params are the current
 // ones (or an empty dict) overridden by the keyword arguments. The receiver
-// is unchanged; the copy keeps an unresolved weak_model ref.
+// is unchanged; the copy keeps an unresolved side_model ref.
 func modelWithExtraParams(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 {
 		return nil, errors.New("with_extra_params: extra params must be passed by keyword")

@@ -16,7 +16,7 @@ import (
 // `models`, splice the two dicts rather than pasting a second `models =`.
 //
 // Objective fields become real values; the judgment calls (reasoning,
-// reasoning_tag, weak_model) are emitted commented, so a pasted entry reads as a
+// reasoning_tag, side_model) are emitted commented, so a pasted entry reads as a
 // scaffold to finish rather than a finished declaration. edit_format is
 // deliberately omitted — the default "tool" fits the expected model class.
 func EmitStarlark(infos []ModelInfo, providerName string) string {
@@ -68,7 +68,7 @@ func emitEntry(info ModelInfo, providerName, alias string) string {
 		b.WriteString("        # reasoning=\"low\",  # Uncomment and set the effort: \"low\", \"medium\", or \"high\".\n")
 		b.WriteString("        # reasoning_tag=\"think\",  # Uncomment if the model emits reasoning in inline tags.\n")
 	}
-	b.WriteString("        # weak_model=\"...\",  # Uncomment to use a cheaper model for summaries and commits.\n")
+	b.WriteString("        # side_model=\"...\",  # Uncomment to use a cheaper model for summaries and commits.\n")
 	b.WriteString("    ),\n")
 	return b.String()
 }

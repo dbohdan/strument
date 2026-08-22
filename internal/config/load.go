@@ -231,7 +231,7 @@ The full reference is %s.`,
 const DocsURL = "https://github.com/dbohdan/strument"
 
 // Load runs the config pipeline: user config, gated project
-// config, whole-key merge, post-merge weak_model resolution, validation.
+// config, whole-key merge, post-merge side_model resolution, validation.
 func Load(opts Options) (*Config, error) {
 	warn := opts.Warn
 	if warn == nil {
@@ -401,28 +401,28 @@ func Load(opts Options) (*Config, error) {
 		}
 	}
 
-	// 5. Resolve weak_model refs post-merge; nil => self, permanently.
+	// 5. Resolve side_model refs post-merge; nil => self, permanently.
 	for alias, m := range cfg.Models {
-		switch ref := m.weakRef.(type) {
+		switch ref := m.sideRef.(type) {
 		case nil:
-			m.WeakModel = m
+			m.SideModel = m
 		case string:
 			target, ok := cfg.Models[ref]
 			if !ok {
-				return nil, fmt.Errorf("model %q: weak_model alias %q not found in merged models", alias, ref)
+				return nil, fmt.Errorf("model %q: side_model alias %q not found in merged models", alias, ref)
 			}
-			m.WeakModel = target
+			m.SideModel = target
 		case *Model:
-			if ref.WeakModel == nil {
-				ref.WeakModel = ref // inline weak models are their own weak model
+			if ref.SideModel == nil {
+				ref.SideModel = ref // inline side models are their own side model
 			}
-			m.WeakModel = ref
+			m.SideModel = ref
 		}
-		m.weakRef = nil
+		m.sideRef = nil
 	}
 
 	// 5b. Resolve each provider's proxy against the global fallback, once per
-	// distinct *Model — aliases and inline weak models repeat pointers, and the
+	// distinct *Model — aliases and inline side models repeat pointers, and the
 	// "direct"->inherit rewrite is not idempotent. "direct" forces a direct
 	// connection; an unset provider proxy inherits the global one.
 	if cfg.Proxy == "direct" {
@@ -452,7 +452,7 @@ func Load(opts Options) (*Config, error) {
 		if err := resolveProxy(alias, m); err != nil {
 			return nil, err
 		}
-		if err := resolveProxy(alias, m.WeakModel); err != nil {
+		if err := resolveProxy(alias, m.SideModel); err != nil {
 			return nil, err
 		}
 	}

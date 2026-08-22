@@ -31,14 +31,14 @@ import (
 
 const notesTimeout = 60 * time.Second
 
-// maxNotesInput caps the transcript slice fed to the weak model. The transcript
+// maxNotesInput caps the transcript slice fed to the side model. The transcript
 // grows without bound, and the recent end is what a resumed session needs — the
 // older part is either already reflected in the notes being replaced or is
 // history the code itself now carries.
 const maxNotesInput = 24_000
 
 // NotesWriter returns a function that writes session notes from a project's
-// transcript, using the weak model. Same shape as CommitMessenger, and for the
+// transcript, using the side model. Same shape as CommitMessenger, and for the
 // same reasons: a plain function so the caller owns when it runs, and a record
 // hook so the side request reaches the turn's accounting instead of being spent
 // invisibly. It shares the side-call retry (side.go).

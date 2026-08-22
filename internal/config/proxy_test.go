@@ -7,7 +7,7 @@ import (
 
 // TestProxyResolution: the global proxy is the fallback; a provider's own proxy
 // overrides it; "direct" forces a direct connection. Resolution runs once per
-// distinct *Model, so an alias-dup and an inline weak model keep the right
+// distinct *Model, so an alias-dup and an inline side model keep the right
 // value even though the "direct"->inherit rewrite is not idempotent.
 func TestProxyResolution(t *testing.T) {
 	src := `
@@ -18,7 +18,7 @@ own = provider("openrouter", api_key = env("OPENROUTER_API_KEY"), proxy = "socks
 models = {
     "inherit": model(orouter, "openrouter/x"),
     "own": model(own, "openrouter/y"),
-    "d1": model(direct_prov, "local/z", weak_model = model(direct_prov, "local/w")),
+    "d1": model(direct_prov, "local/z", side_model = model(direct_prov, "local/w")),
     "d2": None,
 }
 models["d2"] = models["d1"]
@@ -44,9 +44,9 @@ default = "inherit"
 	if got := cfg.Proxy; got != "socks5://global:1080" {
 		t.Errorf("cfg.Proxy = %q", got)
 	}
-	// The inline weak model of a "direct" provider also resolves to direct.
-	if got := cfg.Models["d1"].WeakModel.Provider.Proxy; got != "" {
-		t.Errorf("d1 weak proxy = %q, want direct (empty)", got)
+	// The inline side model of a "direct" provider also resolves to direct.
+	if got := cfg.Models["d1"].SideModel.Provider.Proxy; got != "" {
+		t.Errorf("d1 side proxy = %q, want direct (empty)", got)
 	}
 }
 

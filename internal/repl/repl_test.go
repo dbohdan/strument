@@ -57,7 +57,7 @@ func testModel() *config.Model {
 		Slug:       "test-model",
 		EditFormat: "tool",
 	}
-	m.WeakModel = m
+	m.SideModel = m
 	return m
 }
 

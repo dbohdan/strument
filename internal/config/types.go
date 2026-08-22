@@ -69,7 +69,7 @@ type Model struct {
 	Slug         string
 	DisplayName  string // human-readable label; "" => derived from Slug
 	EditFormat   string // "tool" | "diff" | "diff-fenced" | "whole"
-	WeakModel    *Model // non-nil after resolution (self if unset)
+	SideModel    *Model // non-nil after resolution (self if unset)
 	Reasoning    string // request-side effort: "low"/"medium"/"high"; "off" disables; "" or "default" => provider default
 	ReasoningTag string // response-side inline tag to strip; "" => none
 	Temperature  *float64
@@ -81,9 +81,9 @@ type Model struct {
 	OutputCost   *llm.Money
 	ExtraParams  map[string]any
 
-	// weakRef holds an unresolved string alias or inline model between
+	// sideRef holds an unresolved string alias or inline model between
 	// construction and resolution.
-	weakRef any
+	sideRef any
 }
 
 // SlugCore reduces a model slug to its core name: everything after the last

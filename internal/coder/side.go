@@ -7,12 +7,12 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
-// sendSide makes one weak-model side request — a commit message, session
+// sendSide makes one side request — a commit message, session
 // notes, a compaction summary — with the same transient-error backoff a turn
 // gets: retryable StreamErrors (network, rate limit, server) double the delay
 // and retry, everything else fails the call.
 //
-// The weak model fails more often than the main one; it is cheap, sometimes
+// The side model fails more often than the main one; it is cheap, sometimes
 // local (a 503 "Loading model" on first use), and its calls are exactly the
 // ones nobody is watching when they go out. Compaction used to be the only
 // side call with any recovery, and only turn-level (skip the next attempt);
@@ -66,7 +66,7 @@ func sendSide(
 // The main path already reads it this way — send.go warns "Empty response
 // received from LLM" and fails the send — so the divergence was between two
 // halves of the same codebase, and the quiet half was the one nobody watches.
-// Live, the weak model returned nothing for 21 of roughly 250 commits, each
+// Live, the side model returned nothing for 21 of roughly 250 commits, each
 // landing as "(no commit message provided)": a phrase that reads as a decision
 // rather than a failure, with no retry attempted and nothing said.
 //

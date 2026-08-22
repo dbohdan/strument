@@ -29,7 +29,7 @@ func askCoder(t *testing.T, dir string) *Coder {
 		EditFormat: "diff",
 		RepoMap:    true,
 	}
-	model.WeakModel = model
+	model.SideModel = model
 	c := New(dir, model)
 	c.Out = testOutput{t}
 	c.Confirm = yesConfirmer{}

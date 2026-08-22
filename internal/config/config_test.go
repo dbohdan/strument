@@ -17,7 +17,7 @@ flash = model(router, "deepseek/deepseek-v4-flash", reasoning = "low", reasoning
 
 models = {
     "flash": flash,
-    "pro": model(router, "deepseek/deepseek-v4-pro", weak_model = "flash", temperature = 0.2),
+    "pro": model(router, "deepseek/deepseek-v4-pro", side_model = "flash", temperature = 0.2),
 }
 default = "flash"
 `
@@ -143,13 +143,13 @@ func TestLoadUserConfig(t *testing.T) {
 	if !flash.RepoMap || flash.EditFormat != "tool" {
 		t.Errorf("defaults wrong: %+v", flash)
 	}
-	// weak_model resolution: string ref and None->self.
+	// side_model resolution: string ref and None->self.
 	pro := cfg.Models["pro"]
-	if pro.WeakModel != flash {
-		t.Error("pro.WeakModel should be flash")
+	if pro.SideModel != flash {
+		t.Error("pro.SideModel should be flash")
 	}
-	if flash.WeakModel != flash {
-		t.Error("flash.WeakModel should be itself (None => self)")
+	if flash.SideModel != flash {
+		t.Error("flash.SideModel should be itself (None => self)")
 	}
 	if pro.Temperature == nil || *pro.Temperature != 0.2 {
 		t.Errorf("pro.Temperature = %v", pro.Temperature)
@@ -373,7 +373,7 @@ func TestTrustedProjectConfigMergesAndWins(t *testing.T) {
 p = provider("openai", base_url = "https://proxy.corp/v1", api_key = "corp")
 models = {
     "flash": model(p, "corp-flash"),
-    "extra": model(p, "corp-extra", weak_model = "pro"),
+    "extra": model(p, "corp-extra", side_model = "pro"),
 }
 default = "extra"
 `
@@ -393,10 +393,10 @@ default = "extra"
 	if cfg.Default != "extra" {
 		t.Errorf("default = %q", cfg.Default)
 	}
-	// Cross-file weak_model: project model references the user's alias
+	// Cross-file side_model: project model references the user's alias
 	// (resolution is post-merge).
-	if cfg.Models["extra"].WeakModel != cfg.Models["pro"] {
-		t.Error("extra.WeakModel should resolve to the user's pro model")
+	if cfg.Models["extra"].SideModel != cfg.Models["pro"] {
+		t.Error("extra.SideModel should resolve to the user's pro model")
 	}
 }
 
@@ -543,11 +543,22 @@ p = provider("anthropic", api_key = "k")
 models = {"m": model(p, "s")}
 default = "m"
 `, "reserved"},
-		{"missing weak alias", `
+		{"missing side alias", `
 p = provider("openai", api_key = "k")
-models = {"m": model(p, "s", weak_model = "ghost")}
+models = {"m": model(p, "s", side_model = "ghost")}
 default = "m"
 `, "ghost"},
+		// weak_model was renamed to side_model, and is still recognized so a
+		// config using it gets a sentence naming the new name rather than
+		// "unexpected keyword argument", which is true and useless. The old
+		// name made a claim about capability, and claims about model
+		// capability go stale: the model that usually sits here now is a
+		// near-peer of a frontier one.
+		{"renamed weak_model", `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s", weak_model = "m")}
+default = "m"
+`, "side_model"},
 	}
 	for _, c := range cases {
 		_, err := Load(harness(t, c.src, "", nil))
@@ -575,11 +586,11 @@ default = "flash"
 	}
 }
 
-func TestWeakModelInlineValue(t *testing.T) {
+func TestSideModelInlineValue(t *testing.T) {
 	src := `
 p = provider("openai", api_key = "k")
 cheap = model(p, "cheap-slug")
-models = {"main": model(p, "main-slug", weak_model = cheap)}
+models = {"main": model(p, "main-slug", side_model = cheap)}
 default = "main"
 `
 	cfg, err := Load(harness(t, src, "", nil))
@@ -587,12 +598,12 @@ default = "main"
 		t.Fatal(err)
 	}
 	main := cfg.Models["main"]
-	if main.WeakModel == nil || main.WeakModel.Slug != "cheap-slug" {
-		t.Fatalf("weak = %+v", main.WeakModel)
+	if main.SideModel == nil || main.SideModel.Slug != "cheap-slug" {
+		t.Fatalf("side = %+v", main.SideModel)
 	}
-	// The inline weak model is its own weak model.
-	if main.WeakModel.WeakModel != main.WeakModel {
-		t.Error("inline weak model should self-resolve")
+	// The inline side model is its own side model.
+	if main.SideModel.SideModel != main.SideModel {
+		t.Error("inline side model should self-resolve")
 	}
 }
 

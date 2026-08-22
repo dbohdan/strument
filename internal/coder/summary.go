@@ -16,32 +16,32 @@ const (
 	summaryTimeout       = 60 * time.Second
 	summaryMinSplit      = 4    // below this many messages, summarize the lot
 	summaryMaxDepth      = 3    // recursion cap before summarizing the lot
-	summaryInputBuffer   = 512  // reserved from the weak model's window per call
-	summaryFallbackInput = 4096 // weak-model window when its Context is unknown
+	summaryInputBuffer   = 512  // reserved from the side model's window per call
+	summaryFallbackInput = 4096 // side-model window when its Context is unknown
 	// summaryToolBytes caps one tool result fed to the summarizer. A read of a
-	// large file would otherwise fill the weak model's window with the very
+	// large file would otherwise fill the side model's window with the very
 	// content the prompt asks it to leave out.
 	summaryToolBytes = 2000
 )
 
-// ChatSummary compacts settled chat history by asking the weak model to
+// ChatSummary compacts settled chat history by asking the side model to
 // summarize the older messages, so a long session stays within the main
 // model's context window. It is a close port of aider's ChatSummary — recursive
 // split: keep a recent tail, summarize the older head, recurse — run
 // synchronously by the coder.
 type ChatSummary struct {
 	client llm.ModelClient
-	weak   *config.Model
+	side   *config.Model
 	tokens TokenCounter
 	out    Output
 	clock  Clock
 }
 
-// NewChatSummary builds a summarizer backed by the weak model. out and clock
+// NewChatSummary builds a summarizer backed by the side model. out and clock
 // are the same ports the coder talks through, so a compaction retry reports
 // and sleeps exactly like a turn's.
-func NewChatSummary(client llm.ModelClient, weak *config.Model, tokens TokenCounter, out Output, clock Clock) *ChatSummary {
-	return &ChatSummary{client: client, weak: weak, tokens: tokens, out: out, clock: clock}
+func NewChatSummary(client llm.ModelClient, side *config.Model, tokens TokenCounter, out Output, clock Clock) *ChatSummary {
+	return &ChatSummary{client: client, side: side, tokens: tokens, out: out, clock: clock}
 }
 
 func (s *ChatSummary) count(m llm.Message) int { return s.tokens.Count(m.Text()) }
@@ -54,10 +54,10 @@ func (s *ChatSummary) total(msgs []llm.Message) int {
 	return n
 }
 
-// weakInputBound is how much head the weak model can be fed in one call.
-func (s *ChatSummary) weakInputBound() int {
-	if s.weak != nil && s.weak.Context > 0 {
-		return s.weak.Context
+// sideInputBound is how much head the side model can be fed in one call.
+func (s *ChatSummary) sideInputBound() int {
+	if s.side != nil && s.side.Context > 0 {
+		return s.side.Context
 	}
 	return summaryFallbackInput
 }
@@ -68,7 +68,7 @@ func (s *ChatSummary) tooBig(msgs []llm.Message, maxTokens int) bool {
 }
 
 // summarize compacts msgs to fit maxTokens (the main model's history budget).
-// On a weak-model failure it returns msgs unchanged and the error, so the
+// On a side-model failure it returns msgs unchanged and the error, so the
 // caller can warn and leave history intact.
 //
 // It used to append an assistant "Ok." here, to keep the slot a clean
@@ -113,8 +113,8 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 
 	tail := msgs[split:]
 
-	// Feed the weak model as much of the head as its window allows.
-	bound := s.weakInputBound() - summaryInputBuffer
+	// Feed the side model as much of the head as its window allows.
+	bound := s.sideInputBound() - summaryInputBuffer
 	var keep []llm.Message
 	acc := 0
 	for _, m := range msgs[:split] {
@@ -139,7 +139,7 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 	return s.summarizeReal(combined, maxTokens, depth+1)
 }
 
-// summarizeAll collapses msgs into a single summary system message via the weak
+// summarizeAll collapses msgs into a single summary system message via the side
 // model, riding the same side-call retry as the commit message (side.go).
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 	content := renderForSummary(msgs)
@@ -148,14 +148,14 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 	defer cancel()
 
 	answer, err := sendSide(ctx, s.client, llm.Request{
-		Model: s.weak.Slug,
+		Model: s.side.Slug,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, prompts.Summarize),
 			llm.TextMessage(llm.RoleUser, content),
 		},
-		ReasoningEffort: s.weak.Reasoning,
-		Temperature:     s.weak.Temperature,
-		ExtraParams:     s.weak.RequestExtraParams(),
+		ReasoningEffort: s.side.Reasoning,
+		Temperature:     s.side.Temperature,
+		ExtraParams:     s.side.RequestExtraParams(),
 	}, s.out, s.clock, nil)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 	return []llm.Message{llm.TextMessage(llm.RoleSystem, summary)}, nil
 }
 
-// renderForSummary lays the messages out for the weak model.
+// renderForSummary lays the messages out for the side model.
 //
 // It used to skip every role that was not USER or ASSISTANT, which in a harness
 // where everything a turn does arrives as tool calls meant the summarizer saw

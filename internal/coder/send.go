@@ -157,7 +157,7 @@ type retryBackoff struct{ delay time.Duration }
 // retry reports whether to retry a failed stream. A retryable error backs off —
 // doubling the delay (capped at retryTimeout) and sleeping — then returns true;
 // a non-retryable error, or one past the cap, reports the failure and returns
-// false. It takes Output and Clock rather than the Coder so the weak-model
+// false. It takes Output and Clock rather than the Coder so the side-model
 // side calls (side.go) share it without owning one; sendMessage, RunAside, and
 // those side calls all retry identically.
 func (rb *retryBackoff) retry(out Output, clock Clock, streamErr error) bool {
@@ -435,7 +435,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 //
 // Restored context is invisible until the first request, and by then the request
 // has failed. aider #2979 is the shape: an 80k-token restored history fails on
-// the wire, and configuring the weak model for summarization does not help,
+// the wire, and configuring the side model for summarization does not help,
 // because compaction runs at the end of a turn and there has not been one yet.
 // Strument restores less — pins, notes, and the read-only block rather than a
 // conversation — but the same trap is available, and a user who pinned a large
@@ -559,7 +559,7 @@ func hasSummaryContent(msgs []llm.Message) bool {
 
 // budget. It runs only when a summarizer is wired and the model's window is
 // known (Context > 0) — mirroring checkTokens, which treats an unknown window
-// as "no limit to enforce". Synchronous: the weak-model call happens here,
+// as "no limit to enforce". Synchronous: the side-model call happens here,
 // before the next prompt is assembled. On failure the history is left intact.
 func (c *Coder) maybeSummarize() {
 	if c.Summarizer == nil || c.Model.Context <= 0 {

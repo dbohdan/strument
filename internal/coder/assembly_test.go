@@ -22,7 +22,7 @@ func testCoder(t *testing.T) *Coder {
 		Slug:       "test-model",
 		EditFormat: "tool",
 	}
-	model.WeakModel = model
+	model.SideModel = model
 	c := New(t.TempDir(), model)
 	c.Out = testOutput{t}
 	c.Confirm = yesConfirmer{}

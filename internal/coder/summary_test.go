@@ -88,8 +88,8 @@ func TestChatSummaryTooBig(t *testing.T) {
 
 func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 	stub := &summaryStub{}
-	weak := &config.Model{Slug: "weak", Context: 100000}
-	s := NewChatSummary(stub, weak, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	side := &config.Model{Slug: "side", Context: 100000}
+	s := NewChatSummary(stub, side, RuneCounter{}, &summaryOutput{}, &fastClock{})
 
 	// Six big older messages + two small recent ones; budget 200 (half 100)
 	// keeps the two small recent messages and collapses the rest.
@@ -118,7 +118,7 @@ func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 		t.Errorf("recent tail not preserved: %+v", out)
 	}
 	if stub.calls != 1 {
-		t.Errorf("weak model called %d times, want 1", stub.calls)
+		t.Errorf("side model called %d times, want 1", stub.calls)
 	}
 }
 
@@ -131,7 +131,7 @@ func TestChatSummarizeErrorLeavesHistoryIntact(t *testing.T) {
 	}
 	out, err := s.summarize(msgs, 100)
 	if err == nil {
-		t.Error("expected an error from the failing weak model")
+		t.Error("expected an error from the failing side model")
 	}
 	if len(out) != len(msgs) {
 		t.Errorf("history changed on error: %d -> %d", len(msgs), len(out))
@@ -153,7 +153,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 	t.Run("unknown context is a no-op", func(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 0
-		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) != 10 {
@@ -174,7 +174,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 	t.Run("under budget is a no-op", func(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 1_000_000 // threshold 125_000; ~2500 tokens fits
-		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) != 10 {
@@ -186,14 +186,14 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 16384 // threshold 2048; ~2500 tokens overflows
 		stub := &summaryStub{}
-		c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) >= 10 {
 			t.Errorf("did not compact over-budget history: %d", len(c.doneMessages))
 		}
 		if stub.calls == 0 {
-			t.Error("weak model was never called")
+			t.Error("side model was never called")
 		}
 	})
 }
@@ -203,7 +203,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	out := &summaryOutput{}
 	c.Out = out
 	c.Model.Context = 16384
-	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 	c.doneMessages = []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -237,7 +237,7 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 	c.Out = out
 	c.Model.Context = 16384
 	stub := &summaryEmptyStub{}
-	c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 	c.doneMessages = []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -253,12 +253,12 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 	c.maybeSummarize()
 	c.maybeSummarize()
 	if stub.calls != perAttempt {
-		t.Errorf("weak model called %d times during backoff, want %d", stub.calls, perAttempt)
+		t.Errorf("side model called %d times during backoff, want %d", stub.calls, perAttempt)
 	}
 
 	c.maybeSummarize()
 	if stub.calls != 2*perAttempt {
-		t.Errorf("weak model called %d times after backoff, want %d", stub.calls, 2*perAttempt)
+		t.Errorf("side model called %d times after backoff, want %d", stub.calls, 2*perAttempt)
 	}
 	// The empty summary is caught at the transport, where it can still be
 	// retried, rather than downstream by validCompaction. Same backoff, named
@@ -292,7 +292,7 @@ func TestMaybeSummarizeRejectsABiggerSummary(t *testing.T) {
 	c.Out = out
 	c.Model.Context = 16384
 	stub := &summaryBloatStub{}
-	c.Summarizer = NewChatSummary(stub, c.Model.WeakModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
 	before := []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -341,7 +341,7 @@ func (c *captureStub) Send(_ context.Context, req llm.Request) iter.Seq2[llm.Str
 // Pinned as a property of the output rather than of the wording, so a future
 // rewrite of the prompt cannot quietly reintroduce the shape.
 func TestSummaryFabricatesNoTurn(t *testing.T) {
-	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "weak", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
 	msgs := []llm.Message{
 		msgTok("user", 80), msgTok("assistant", 80),
 		msgTok("user", 80), msgTok("assistant", 80),
@@ -367,7 +367,7 @@ func TestSummaryFabricatesNoTurn(t *testing.T) {
 }
 
 // The prompt itself must not ask for the impersonation either. Fixing the
-// injection alone would have left the weak model writing "I asked you..." into
+// injection alone would have left the side model writing "I asked you..." into
 // the summary text, where it reads as the user's words wherever it lands.
 func TestSummarizePromptDoesNotAskForImpersonation(t *testing.T) {
 	for _, banned := range []string{"as the user", "first person", "I asked you", "refer to the assistant"} {
@@ -381,7 +381,7 @@ func TestSummarizePromptDoesNotAskForImpersonation(t *testing.T) {
 // thing: twelve tool calls and one closing sentence became that sentence.
 func TestSummarySeesToolWork(t *testing.T) {
 	stub := &captureStub{}
-	s := NewChatSummary(stub, &config.Model{Slug: "weak", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
 
 	big := strings.Repeat("z", summaryToolBytes*2)
 	msgs := []llm.Message{

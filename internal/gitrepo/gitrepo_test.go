@@ -341,7 +341,7 @@ func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Code
 		Slug:       "test-model",
 		EditFormat: "tool",
 	}
-	model.WeakModel = model
+	model.SideModel = model
 
 	c := coder.New(root, model)
 	c.Client = editStub()

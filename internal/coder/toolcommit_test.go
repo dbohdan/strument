@@ -24,7 +24,7 @@ func quoteForTest(s string) string {
 // The model's own message reaches git, subject and body assembled the way git
 // expects: summary, blank line, prose.
 //
-// This is half the reason the tool exists. The automatic path asks the *weak*
+// This is half the reason the tool exists. The automatic path asks the *side*
 // model to infer intent from a diff and a truncated transcript; the model that
 // made the change is the one that knows why.
 func TestCommitToolUsesTheModelsMessage(t *testing.T) {
@@ -53,7 +53,7 @@ func TestCommitToolUsesTheModelsMessage(t *testing.T) {
 
 	// The half that matters: it reached git. Asserting on message() alone
 	// would pass against a wiring that assembled the message perfectly and
-	// then let the weak model overwrite it.
+	// then let the side model overwrite it.
 	if len(repo.msgs) != 1 {
 		t.Fatalf("%d commits, want 1", len(repo.msgs))
 	}
