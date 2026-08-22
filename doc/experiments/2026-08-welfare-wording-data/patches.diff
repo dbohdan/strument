@@ -1,0 +1,34 @@
+diff --git a/internal/coder/assemble.go b/internal/coder/assemble.go
+index bae584e..67e648a 100644
+--- a/internal/coder/assemble.go
++++ b/internal/coder/assemble.go
+@@ -382,12 +382,8 @@ func (c *Coder) pinnedFilesNote() string {
+ 		// question actually asked.
+ 		b.WriteString("Pinning says what the conversation is about. It is not itself a " +
+ 			"request to change anything: the user's message says what they want.\n")
+-		use := "changing it or answering questions about it"
+-		if ask {
+-			use = "answering questions about it"
+-		}
+-		fmt.Fprintf(&b, "Read a file before %s, so you are working from what is in it "+
+-			"now rather than from memory.\n", use)
++		b.WriteString("Pinning puts their names here, not their contents: read a file before " +
++			"you work on it, unless it is already in this conversation.\n")
+ 	}
+ 	if len(missing) > 0 {
+ 		does, them := "do", "them"
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index f62da09..d8445e9 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -79,7 +79,9 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
+ 	"Carry the change through everywhere it reaches: the call sites it breaks, the tests that " +
+ 	"cover it, the docs that describe it. That is the same request, not extra work.\n" +
+ 	"Leave everything else untouched: no drive-by refactoring, reformatting, added comments, " +
+-	"or fixes to things the user didn't ask about.\n"
++	"or fixes to things the user didn't ask about.\n" +
++	"A diff that does more than was asked is harder to review, whoever wrote it; if you notice " +
++	"something worth changing, say so instead.\n"
+ 
+ // Two things here were found by a multi-model review of the rendered prompts
+ // (doc/experiments/2026-08-prompt-review.md), and both were fossils.

@@ -75,11 +75,28 @@ const lazyPrompt = "Implement requested changes completely.\n" +
 // measured string to ship an unmeasured one is not an improvement.
 // doc/experiments/2026-08-prompt-scope.md has the design and the four
 // predictions it falsified.
+//
+// The last sentence is NOT part of that arm and is not measured. It answers a
+// welfare finding from the multi-model review: four named bans in a row, with
+// no positive framing, read to GLM-5.3 as "you are the kind of agent that does
+// these things unless warned". "whoever wrote it" is the load-bearing phrase —
+// it makes the rule a fact about diffs rather than a claim about the reader —
+// and the second clause gives the impulse somewhere to go, which nothing here
+// previously did.
+//
+// It was added above the measured sentence's signature, not inside it, so the
+// arm survives intact. doc/experiments/2026-08-welfare-wording.md has the
+// safety trial: drive-by edits stayed 0/20 against a 0/180 baseline and cost
+// did not move, but that trial is powered for the risk and not the benefit, so
+// whether the reach effect survived is untested. Do not read the added sentence
+// as measured.
 const overeagerPrompt = "Pay careful attention to the scope of the user's request.\n" +
 	"Carry the change through everywhere it reaches: the call sites it breaks, the tests that " +
 	"cover it, the docs that describe it. That is the same request, not extra work.\n" +
 	"Leave everything else untouched: no drive-by refactoring, reformatting, added comments, " +
-	"or fixes to things the user didn't ask about.\n"
+	"or fixes to things the user didn't ask about.\n" +
+	"A diff that does more than was asked is harder to review, whoever wrote it; if you notice " +
+	"something worth changing, say so instead.\n"
 
 // Two things here were found by a multi-model review of the rendered prompts
 // (doc/experiments/2026-08-prompt-review.md), and both were fossils.

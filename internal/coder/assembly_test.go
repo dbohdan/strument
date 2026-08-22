@@ -371,8 +371,14 @@ func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
 			t.Errorf("ask mode note mentions editing (%q):\n%s", unwanted, got)
 		}
 	}
-	if !strings.Contains(got, "answering questions about it") {
-		t.Errorf("ask mode note does not say why to read:\n%s", got)
+	// The note used to be mode-aware here, saying "before changing it" in code
+	// mode and "before answering questions about it" in ask. It no longer needs
+	// to be: "before you work on it" is true in both, and the branch was the
+	// only thing making one wording wrong in the other mode. What must survive
+	// is the instruction itself — 600 samples took blind edits from 383 to zero
+	// on the strength of it (2026-08-add-instruct.md).
+	if !strings.Contains(got, "read a file before you work on it") {
+		t.Errorf("ask mode note no longer tells the model to read:\n%s", got)
 	}
 
 	// ...and code mode still does say it, or the branch is just deleting text.

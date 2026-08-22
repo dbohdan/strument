@@ -382,12 +382,8 @@ func (c *Coder) pinnedFilesNote() string {
 		// question actually asked.
 		b.WriteString("Pinning says what the conversation is about. It is not itself a " +
 			"request to change anything: the user's message says what they want.\n")
-		use := "changing it or answering questions about it"
-		if ask {
-			use = "answering questions about it"
-		}
-		fmt.Fprintf(&b, "Read a file before %s, so you are working from what is in it "+
-			"now rather than from memory.\n", use)
+		b.WriteString("Pinning puts their names here, not their contents: read a file before " +
+			"you work on it, unless it is already in this conversation.\n")
 	}
 	if len(missing) > 0 {
 		does, them := "do", "them"
