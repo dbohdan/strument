@@ -35,6 +35,7 @@ See [`doc/README.md`](doc/README.md) for the developer overview.
 - URL scraping.
   URLs you mention, or `/web <url>`, are fetched and converted to Markdown.
   This can use either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
+- You can [interrupt](#interrupting-and-steering) and steer the model.
 
 The terminal interface has stayed deliberately close to aider's with a similar green/blue palette (with `--dark-mode` and `--light-mode`).
 Strument diverges where its programming loop is different.
@@ -137,9 +138,32 @@ At twenty-five steps Strument prints the number of edits and the cost so far and
 Each tool call reports one line in the log.
 Shell commands ask for permission first, which you can give for the command or all commands in a turn.
 Reading, searching, and editing do not ask for permission.
-When the model cannot proceed without your decision, it asks a structured multiple-choice question (`ask_user_question`) instead of guessing; you pick a numbered option or type your own answer, and `--yes` never answers it for you.
+When the model is streaming or running a tool, press `Ctrl-C` once to stop the current send. Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction. Press `Ctrl-C` twice within two seconds to exit. In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
 
-Slash commands perform actions initiated by you rather than the model:
+### Interrupting and steering
+
+For example, you can stop a long response and redirect the model without starting over:
+
+```none
+> Refactor the authentication package and update all tests.
+
+‹thinking› I’ll inspect the authentication package first...
+Reading internal/auth/auth.go
+^C
+^C again to exit
+
+‹question› You stopped the model. What now?
+1. Continue — Carry on from where it was cut off
+2. Stop — End the turn here
+Answer (1-2, or your own text): use the existing token helper instead
+
+‹thinking› I’ll continue from the interrupted response using the existing token helper.
+...
+```
+
+`Continue` resumes from the partial response and preserves the model’s context. Typing your own answer sends it as a correction; `Stop` ends the turn. Edits made before the interruption remain undoable with `/undo`.
+
+
 
 | | |
 | --- | --- |
