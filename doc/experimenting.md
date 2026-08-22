@@ -290,6 +290,31 @@ has the run. It works, less well, and the reasons generalize.
   default-to-cheap rule in [`README.md`](README.md) survives contact with a task
   that looks like it wants deliberation.
 
+## 15. The renderer has two forms, and your scorer knows one
+
+The eleventh scorer bug, from
+[`experiments/2026-08-symbol-uptake.md`](experiments/2026-08-symbol-uptake.md),
+because it generalizes past reasoning blocks.
+
+Strument prints reasoning two ways: a multi-line block that opens with the
+marker alone on its line and closes with `‹/›`, and a one-line aside that is
+`‹thinking› text` and simply ends at the newline. A scorer that stripped
+`‹thinking›…‹/›` and then treated any unclosed marker as running to the end of
+the output **deleted the final answer of every run whose last aside was
+one-line**. Recall was deflated in both arms, unevenly, and the aggregate still
+looked plausible.
+
+Two things worth carrying:
+
+- **When an aggregate disagrees with a transcript you have read, the transcript
+  wins.** A pilot had scored 3/3; the batch reported means near 0.8/3. That gap
+  was the whole signal, and it was visible before any statistics.
+- **The check that could not fail is the one that found it.** A count of runs
+  naming a nonexistent function returned 0/21 and 0/27 — while `Coder.send` sat
+  in a transcript I had quoted an hour earlier. §1 says break the check on
+  purpose and watch it go red; the corollary is that a check returning a clean
+  zero deserves the same suspicion as one returning a clean p=1.0.
+
 ---
 
 ## The short version

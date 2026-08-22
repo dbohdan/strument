@@ -1,0 +1,20 @@
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
+‹thinking› Let me find where settleEdits is defined and where it's called.
+Looked up settleEdits — 8 sites referenced
+
+‹thinking›
+Three non-test callers:
+
+1. `Coder.runOne` passes `""`
+2. `Coder.afterInterrupt` passes `""`
+3. `Coder.runCommitTool` passes `args.message()`
+‹/›
+
+Three non-test callers:
+
+1. **`Coder.runOne`** (`coder.go:431`) — passes `""`
+2. **`Coder.afterInterrupt`** (`coder.go:579`) — passes `""`
+3. **`Coder.runCommitTool`** (`toolcommit.go:135`) — passes `args.message()`
+
+Tokens: 7.5k sent (3.6k cache hit), 166 received. Cost: $0.00060 turn, $0.00060 session. 2 steps.

@@ -1,0 +1,17 @@
+Searched for settleEdits\( as content — 9 matches in 4 files
+Read internal/coder/coder.go (841 lines)
+
+‹thinking› Let me check toolcommit.go line 135 for context.
+Read internal/coder/toolcommit.go (lines 120-142 of 142)
+
+‹thinking› Non-test callers: runOne's defer (""), afterInterrupt (""), runCommitTool (args.message()).
+
+Three non-test call sites:
+
+- **`runOne`** (coder.go:431) — in the turn-end defer, passes `""`.
+- **`afterInterrupt`** (coder.go:579) — before asking the user what to do, passes `""`.
+- **`runCommitTool`** (toolcommit.go:135) — the commit tool handler, passes `args.message()` (the model-supplied commit message).
+
+Tokens: 32.1k sent (21.5k cache hit), 347 received. Cost: $0.05 turn, $0.05 session. 4 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

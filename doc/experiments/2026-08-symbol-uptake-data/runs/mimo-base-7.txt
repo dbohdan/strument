@@ -1,0 +1,38 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what each passes as the message argument.
+Searched for settleEdits\( as files — 9 matches in 4 files
+
+‹thinking› Let me look at the non-test files.
+Searched for settleEdits\( under internal/coder/coder.go as content — 3 matches in 1 file
+Searched for settleEdits\( under internal/coder/toolcommit.go as content — 1 match in 1 file
+
+‹thinking› Let me see the context of each call to understand which non-test function they're in.
+
+Let me confirm the containing functions for those two in `coder.go`:
+Read internal/coder/coder.go (lines 420-439 of 841)
+Read internal/coder/coder.go (lines 570-589 of 841)
+Read internal/coder/toolcommit.go (lines 125-142 of 142)
+
+‹thinking› Let me find the function names for lines 431 and 579.
+Read internal/coder/coder.go (lines 390-394 of 841)
+Read internal/coder/toolcommit.go (lines 100-104 of 142)
+
+‹thinking› Let me find the containing function for the call at line 431 in coder.go.
+Searched for "^func \(c \*Coder\)" under internal/coder/coder.go as content — 17 matches in 1 file
+Searched for "^func \(c \*Coder\)" under internal/coder/toolcommit.go as content — 1 match in 1 file
+
+‹thinking›
+Now I have the full picture:
+
+1. `runOne` (line 431) passes `""`2. `afterInterrupt` (line 579) passes `""`
+3. `runCommitTool` (line 135) passes `args.message()`
+‹/›
+
+Three non-test callers:
+
+1. **`runOne`** (`coder.go:431`) — passes `""` (in a defer at turn end)
+2. **`afterInterrupt`** (`coder.go:579`) — passes `""` (settles edits accumulated before the interrupt)
+3. **`runCommitTool`** (`toolcommit.go:135`) — passes `args.message()` (the commit message from the model's tool call)
+
+Tokens: 27.4k sent (21.2k cache hit), 713 received. Cost: $0.0013 turn, $0.0013 session. 6 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

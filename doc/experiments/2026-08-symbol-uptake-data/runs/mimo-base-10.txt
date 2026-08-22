@@ -1,0 +1,32 @@
+‹thinking› Let me search for calls to settleEdits in the codebase.
+Searched for settleEdits matching **/*.go as content — 13 matches in 6 files
+
+‹thinking› Now let me read the relevant lines to understand the non-test call sites.
+
+Let me check the `message()` helper on the commit tool to see what it returns.
+Searched for func.*message\(\) matching **/toolcommit.go as files — 1 match in 1 file
+
+‹thinking› I need to see the actual content. Let me read the relevant lines.
+‹thinking› Let me use relative paths.
+Read internal/coder/toolcommit.go (lines 130-142 of 142)
+
+‹thinking› Let me find the message() method definition.
+Searched for "func \(.*commitArgs\) message\(\)" under internal/coder as files — 1 match in 1 file
+
+‹thinking› Let me search for the message() function definition in toolcommit.go.
+Searched for func.*message\(\) under internal/coder/toolcommit.go as files — 1 match in 1 file
+
+‹thinking› Let me read the full toolcommit.go to find the message() method.
+Read internal/coder/toolcommit.go (142 lines)
+
+‹thinking› Now let me look at the two call sites in coder.go to understand what they pass.
+
+Here are the three non-test call sites:
+
+1. **`coder.go:431`** (inside the turn-end defer) — passes `""` (empty string).
+2. **`coder.go:579`** (inside `commitTurn`) — passes `""` (empty string).
+3. **`toolcommit.go:135`** (inside `runCommitTool`) — passes `args.message()`, which is the model-supplied commit subject plus an optional body, assembled as `subject + "\n\n" + body`.
+
+Tokens: 35.9k sent (32.2k cache hit), 552 received. Cost: $0.00092 turn, $0.00092 session. 8 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

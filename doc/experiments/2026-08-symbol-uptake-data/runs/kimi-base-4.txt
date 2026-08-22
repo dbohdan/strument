@@ -1,0 +1,21 @@
+Searched for settleEdits\( as content — 9 matches in 4 files
+Non-test callers of `settleEdits`:
+
+- **`internal/coder/coder.go:431`** — passes `""` (turn-end defer, presumably)
+- **`internal/coder/coder.go:579`** — passes `""`
+- **`internal/coder/toolcommit.go:135`** (in the commit tool) — passes `args.message()`
+
+Let me quickly confirm the enclosing functions:
+Read internal/coder/coder.go (lines 400-589 of 841)
+Read internal/coder/toolcommit.go (lines 100-142 of 142)
+Three non-test callers of `settleEdits`:
+
+- **`runOne`** (coder.go:431), in the turn-end defer — passes `""`
+- **`afterInterrupt`** (coder.go:579) — passes `""`
+- **`runCommitTool`** (toolcommit.go:135) — passes `args.message()`, i.e. the commit subject plus body the model supplied
+
+So only the explicit commit tool supplies a real message; the two automatic settle points pass an empty message.
+
+Tokens: 15.9k sent (6.5k cache hit), 541 received. Cost: $0.04 turn, $0.04 session. 4 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

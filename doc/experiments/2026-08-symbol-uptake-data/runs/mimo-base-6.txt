@@ -1,0 +1,16 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what they pass as the `message` argument. I'll search for this.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking› The user wants non-test functions only. Let me filter out the test files.
+
+Three non-test call sites, all in `internal/coder/`:
+
+| Function | File | Message passed |
+|---|---|---|
+| `(*Coder).applyTurn` (deferred) | `coder.go:431` | `""` |
+| `(*Coder).startNewTurn` | `coder.go:579` | `""` |
+| `toolCommit` | `toolcommit.go:135` | `args.message()` (the user-supplied commit message) |
+
+Tokens: 7.4k sent (7.0k cache hit), 196 received. Cost: $0.00012 turn, $0.00012 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

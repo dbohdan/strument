@@ -1,0 +1,10 @@
+Looked up settleEdits — 8 sites referenced
+Three non-test callers:
+
+- **`Coder.runOne`** (coder.go:431) — passes `""`
+- **`Coder.afterInterrupt`** (coder.go:579) — passes `""`
+- **`Coder.runCommitTool`** (toolcommit.go:135) — passes `args.message()` (the commit tool's message argument)
+
+Tokens: 6.3k sent (2.9k cache hit), 146 received. Cost: $0.01 turn, $0.01 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

@@ -1,0 +1,17 @@
+Looked up settleEdits — 1 site defined
+Searched for settleEdits\( under internal/coder as files — 9 matches in 4 files
+Searched for settleEdits\(" under internal/coder as files — 7 matches in 3 files
+Searched for settleEdits\( under internal/coder as files — 9 matches in 4 files
+Searched for settleEdits\( under internal/coder as content — 9 matches in 4 files
+
+‹thinking› Check context of coder.go:431 and 579 briefly? Brief answer fine.
+
+Non-test callers of `settleEdits` (all methods on `*Coder`):
+
+- `internal/coder/coder.go:431` — passes `""` (empty string)
+- `internal/coder/coder.go:579` — passes `""` (empty string)
+- `internal/coder/toolcommit.go:135` — passes `args.message()`, the message from the tool-call arguments
+
+Tokens: 20.0k sent (19.4k cache hit), 219 received. Cost: $0.0069 turn, $0.0069 session. 6 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

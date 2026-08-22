@@ -1,0 +1,16 @@
+Searched for settleEdits as files — 17 matches in 9 files
+Searched for settleEdits\( under internal/coder matching !*_test.go as content — no matches
+Searched for settleEdits\( under internal/coder as content — 9 matches in 4 files
+Read internal/coder/toolcommit.go (lines 1-30 of 142)
+Read internal/coder/coder.go (lines 420-444 of 841)
+Read internal/coder/coder.go (lines 570-589 of 841)
+Read internal/coder/toolcommit.go (lines 110-139 of 142)
+Three non-test callers:
+
+1. **`(*Coder).run`** — `internal/coder/coder.go:431` (in the turn-end defer): passes `""` — the turn boundary commits with no model-supplied message.
+2. **`(*Coder).afterInterrupt`** — `internal/coder/coder.go:579`: passes `""` — interrupt-triggered settle also has no message.
+3. **`(*Coder).runCommitTool`** — `internal/coder/toolcommit.go:135`: passes `args.message()`, the commit tool's message built from its `subject`/`body` arguments (subject alone, or `subject + "\n\n" + body`).
+
+Tokens: 22.6k sent (20.5k cache hit), 333 received. Cost: $0.0097 turn, $0.0097 session. 6 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

@@ -1,0 +1,13 @@
+Looked up settleEdits — 8 sites referenced
+Read internal/coder/coder.go (lines 426-433 of 841)
+Read internal/coder/coder.go (lines 574-581 of 841)
+Read internal/coder/toolcommit.go (lines 128-137 of 142)
+Three non-test callers:
+
+- `Coder.runOne` (coder.go:431) — `settleEdits("")` (empty message, deferred at turn end)
+- `Coder.afterInterrupt` (coder.go:579) — `settleEdits("")` (empty message)
+- `Coder.runCommitTool` (toolcommit.go:135) — `settleEdits(args.message())` (the commit tool's message argument)
+
+Tokens: 13.5k sent (7.7k cache hit), 492 received. Cost: $0.03 turn, $0.03 session. 4 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

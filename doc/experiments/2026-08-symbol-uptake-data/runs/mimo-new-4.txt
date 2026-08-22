@@ -1,0 +1,55 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what they pass as the `message` argument. Let me search for calls to `settleEdits` in the codebase.
+Searched for settleEdits\( as files — 9 matches in 4 files
+
+‹thinking› Let me look at the non-test files that call `settleEdits` to see what they pass as the message argument.
+Searched for settleEdits\( under internal/coder/coder.go as files — 3 matches in 1 file
+Searched for settleEdits\( under internal/coder/toolcommit.go as files — 1 match in 1 file
+
+‹thinking› The output didn't show the actual lines. Let me try with content mode explicitly.
+Searched for settleEdits\( matching internal/coder/coder.go as content — 3 matches in 1 file
+Searched for settleEdits\( matching internal/coder/toolcommit.go as content — 1 match in 1 file
+
+‹thinking›
+Now I need to identify which are non-test call sites. Let me check the function contexts for these calls.
+
+1. `internal/coder/coder.go:431` — in some method2. `internal/coder/coder.go:541` — that's the definition itself
+3. `internal/coder/coder.go:579` — in some method
+4. `internal/coder/toolcommit.go:135` — in some method
+
+Let me read around those lines to identify the enclosing functions.
+‹/›
+Read internal/coder/coder.go (lines 425-439 of 841)
+Read internal/coder/coder.go (lines 573-587 of 841)
+Read internal/coder/toolcommit.go (lines 128-142 of 142)
+
+‹thinking›
+Let me identify the enclosing functions:
+
+1. `internal/coder/coder.go:431` — inside a `defer` block, need to see which function this is in.
+2. `internal/coder/coder.go:579` — inside `afterInterrupt()`
+3. `internal/coder/toolcommit.go:135` — need to see which function this is in.
+
+Let me check the enclosing function for line 431 and line 135.
+‹/›
+Read internal/coder/coder.go (lines 370-399 of 841)
+Read internal/coder/toolcommit.go (lines 100-119 of 142)
+
+‹thinking› Let me get the enclosing function for the coder.go:431 call.
+Read internal/coder/coder.go (lines 400-429 of 841)
+Read internal/coder/toolcommit.go (lines 119-133 of 142)
+
+‹thinking› Now I have all the information I need.
+
+Three non-test functions call `settleEdits`:
+
+1. **`runOne`** (`internal/coder/coder.go:431`) — passes `""`. Called via a `defer` at turn end to commit any remaining edits with no message.
+
+2. **`afterInterrupt`** (`internal/coder/coder.go:579`) — passes `""`. Commits edits made before the user interrupted the model.
+
+3. **`runCommitTool`** (`internal/coder/toolcommit.go:135`) — passes `args.message()` (the assembled git commit subject + body from the model's tool call).
+
+Two of the three use the empty string; only `runCommitTool` provides a real message.
+
+Tokens: 33.5k sent (30.0k cache hit), 1.0k received. Cost: $0.0010 turn, $0.0010 session. 7 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

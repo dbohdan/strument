@@ -1,0 +1,21 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what they pass as the message argument. Let me search for this.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking› Let me look at the non-test call sites more closely to understand the context.
+
+Let me get the surrounding context for each non-test call site.
+Read internal/coder/coder.go (lines 426-435 of 841)
+Read internal/coder/coder.go (lines 574-583 of 841)
+Read internal/coder/toolcommit.go (lines 130-139 of 142)
+
+‹thinking› Now I have all the information needed.
+
+Three non-test call sites:
+
+1. **`Coder.send` deferred cleanup** (`coder.go:431`) — passes `""`
+2. **`Coder.afterInterrupt`** (`coder.go:579`) — passes `""`
+3. **`toolCommit`** (`toolcommit.go:135`) — passes `args.message()` (the user-supplied commit message)
+
+Tokens: 11.9k sent (10.8k cache hit), 324 received. Cost: $0.00027 turn, $0.00027 session. 3 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

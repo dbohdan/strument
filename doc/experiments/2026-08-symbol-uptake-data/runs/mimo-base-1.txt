@@ -1,0 +1,22 @@
+‹thinking› Let me search for calls to `settleEdits` in the codebase.
+Searched for settleEdits\( matching **/*.go as content — 9 matches in 4 files
+
+‹thinking›
+Three non-test call sites:
+
+1. `internal/coder/coder.go:431` — passes `""`
+2. `internal/coder/coder.go:579` — passes `""`
+3. `internal/coder/toolcommit.go:135` — passes `args.message()`
+
+Let me check what functions those are in.
+‹/›
+
+Three non-test call sites:
+
+1. **`Coder` method in `coder.go:431`** — passes `""` (empty string)
+2. **`Coder` method in `coder.go:579`** — passes `""` (empty string)
+3. **`toolcommit.go:135`** — passes `args.message()` (the user-provided commit message)
+
+Tokens: 7.4k sent (7.0k cache hit), 226 received. Cost: $0.00013 turn, $0.00013 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

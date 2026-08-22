@@ -1,0 +1,14 @@
+‹thinking› Search for settleEdits.
+Looked up settleEdits — 1 site defined
+Searched for settleEdits\( as content — 9 matches in 4 files
+Read internal/coder/coder.go (841 lines)
+Read internal/coder/toolcommit.go (142 lines)
+Three non-test call sites:
+
+1. **`runOne`'s turn-end defer** (coder.go:431) — `c.settleEdits("")`, empty message (turn's own commit message is generated).
+2. **`afterInterrupt`** (coder.go:579) — `c.settleEdits("")`, empty message.
+3. **`runCommitTool`** (toolcommit.go:135) — `c.settleEdits(args.message())`, the model-supplied subject plus optional body from the `commit` tool call.
+
+Tokens: 24.1k sent (11.5k cache hit), 344 received. Cost: $0.05 turn, $0.05 session. 4 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

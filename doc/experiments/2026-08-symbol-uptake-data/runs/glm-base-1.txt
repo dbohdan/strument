@@ -1,0 +1,16 @@
+Searched for settleEdits matching **/*.go as files — 13 matches in 6 files
+Searched for settleEdits under internal/coder/coder.go matching **/*.go as content — 4 matches in 1 file
+Searched for settleEdits under internal/coder/session.go matching **/*.go as content — 1 match in 1 file
+Searched for settleEdits under internal/coder/toolcommit.go matching **/*.go as content — 1 match in 1 file
+Read internal/coder/coder.go (lines 425-434 of 841)
+Read internal/coder/coder.go (lines 573-582 of 841)
+Read internal/coder/toolcommit.go (lines 125-139 of 142)
+Three non-test call sites (all in `internal/coder/`):
+
+1. **`(*Coder).run`** (coder.go:431, in a deferred func at end of turn) — passes `""`
+2. **`(*Coder).afterInterrupt`** (coder.go:579) — passes `""`
+3. **commit tool handler** (toolcommit.go:135) — passes `args.message()`, the commit tool's user-supplied message
+
+Tokens: 17.8k sent (16.6k cache hit), 318 received. Cost: $0.0074 turn, $0.0074 session. 5 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

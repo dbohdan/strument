@@ -1,0 +1,32 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what they pass as the `message` argument. Let me search for this.
+Searched for settleEdits\( matching **/*.go as content — 9 matches in 4 files
+
+‹thinking›
+The user wants non-test functions that call settleEdits. Let me filter out test files:
+
+1. `internal/coder/coder.go:431` - `c.settleEdits("")`
+2. `internal/coder/coder.go:579` - `c.settleEdits("")`
+3. `internal/coder/toolcommit.go:135` - `c.settleEdits(args.message())`
+
+Let me look at the context around lines 431 and 579 in coder.go to identify the enclosing functions.
+‹/›
+Read internal/coder/coder.go (lines 425-439 of 841)
+Read internal/coder/coder.go (lines 573-582 of 841)
+Read internal/coder/toolcommit.go (lines 130-139 of 142)
+
+‹thinking› Let me also check which function contains the defer at line 431.
+Read internal/coder/coder.go (lines 400-409 of 841)
+
+‹thinking› The defer at line 431 is inside `runOne` (which starts around line 410).
+
+Three non-test call sites:
+
+| Caller | Message argument |
+|---|---|
+| `runOne` (defer, line 431) | `""` |
+| `afterInterrupt` (line 579) | `""` |
+| `commitToolCall` (line 135) | `args.message()` — the user-supplied commit message |
+
+Tokens: 17.3k sent (15.7k cache hit), 500 received. Cost: $0.00048 turn, $0.00048 session. 4 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

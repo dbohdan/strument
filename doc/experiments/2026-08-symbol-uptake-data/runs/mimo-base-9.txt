@@ -1,0 +1,34 @@
+‹thinking› The user is asking about non-test functions that call `settleEdits` and what they pass as the `message` argument. I need to search for this function name in the codebase.
+Searched for settleEdits as files — 17 matches in 9 files
+
+‹thinking› Let me look at the content matches to see the actual calls to `settleEdits`.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking› Now let me also check session.go to see if there are calls there too.
+Searched for settleEdits under internal/coder/session.go as files — 1 match in 1 file
+
+‹thinking› The grep for "settleEdits" only found it mentioned in the file name list, but not in the content. Let me search for the actual function call in session.go.
+Searched for settleEdits under internal/coder/session.go as files — 1 match in 1 file
+
+‹thinking› Hmm, that's the file-level "files" mode. Let me use content mode to see where settleEdits appears in session.go.
+Searched for settleEdits under internal/coder/session.go as content — 1 match in 1 file
+
+‹thinking›
+That's just a comment, not a call. So the non-test calls are:
+
+1. `internal/coder/coder.go:431` — `c.settleEdits("")`
+2. `internal/coder/coder.go:579` — `c.settleEdits("")`
+3. `internal/coder/toolcommit.go:135` — `c.settleEdits(args.message())`
+
+Let me check what functions those are in.
+‹/›
+
+Three non-test call sites:
+
+1. **`coder.go:431`** — `c.settleEdits("")` (empty string)
+2. **`coder.go:579`** — `c.settleEdits("")` (empty string)
+3. **`toolcommit.go:135`** — `c.settleEdits(args.message())` (the commit message from the tool args)
+
+Tokens: 23.8k sent (22.9k cache hit), 514 received. Cost: $0.00033 turn, $0.00033 session. 6 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

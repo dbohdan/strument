@@ -1,0 +1,14 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what message argument they pass. Let me search for `settleEdits` references.
+Looked up settleEdits — 8 sites referenced
+
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what they pass as the message argument.
+
+Two non-test callers:
+
+1. **`Coder.runOne`** (`internal/coder/coder.go:431`) — passes `""` (empty string).
+2. **`Coder.afterInterrupt`** (`internal/coder/coder.go:579`) — passes `""` (empty string).
+3. **`Coder.runCommitTool`** (`internal/coder/toolcommit.go:135`) — passes `args.message()` (the user-supplied commit message from the tool call).
+
+Tokens: 7.5k sent (7.2k cache hit), 202 received. Cost: $0.00012 turn, $0.00012 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

@@ -1,0 +1,23 @@
+‹thinking› Let me find where settleEdits is called and defined.
+Searched for settleEdits\( as files — 9 matches in 4 files
+
+‹thinking› Let me get the actual matching lines with content to see what's being passed.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking›
+Non-test callers:
+
+1. `internal/coder/coder.go:431` — `c.settleEdits("")` (empty string)
+2. `internal/coder/coder.go:579` — `c.settleEdits("")` (empty string)
+3. `internal/coder/toolcommit.go:135` — `c.settleEdits(args.message())`
+‹/›
+
+Three non-test call sites:
+
+1. **`internal/coder/coder.go:431`** — `c.settleEdits("")` (empty string)
+2. **`internal/coder/coder.go:579`** — `c.settleEdits("")` (empty string)
+3. **`internal/coder/toolcommit.go:135`** — `c.settleEdits(args.message())` (the commit message from the tool args)
+
+Tokens: 11.2k sent (10.8k cache hit), 277 received. Cost: $0.00016 turn, $0.00016 session. 3 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

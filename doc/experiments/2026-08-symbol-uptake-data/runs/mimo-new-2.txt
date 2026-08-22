@@ -1,0 +1,14 @@
+‹thinking› Let me search for calls to `settleEdits` in the codebase.
+Looked up settleEdits — 8 sites referenced
+
+‹thinking› The user wants non-test functions only.
+
+Two non-test callers:
+
+1. **`Coder.runOne`** (`internal/coder/coder.go:431`) — passes `""`
+2. **`Coder.afterInterrupt`** (`internal/coder/coder.go:579`) — passes `""`
+3. **`Coder.runCommitTool`** (`internal/coder/toolcommit.go:135`) — passes `args.message()`
+
+Tokens: 7.5k sent (7.2k cache hit), 147 received. Cost: $0.00011 turn, $0.00011 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

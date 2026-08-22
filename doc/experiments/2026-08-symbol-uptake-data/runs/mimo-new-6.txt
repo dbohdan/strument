@@ -1,0 +1,44 @@
+‹thinking› The user wants to know which non-test functions call `settleEdits` and what message argument each passes. Let me search for this.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking›
+Let me look at the specific non-test call sites to understand what message is passed:
+
+1. `internal/coder/coder.go:431` - `c.settleEdits("")`2. `internal/coder/coder.go:579` - `c.settleEdits("")`
+3. `internal/coder/toolcommit.go:135` - `c.settleEdits(args.message())`
+
+Let me look at these in context to understand which functions they're in.
+‹/›
+Read internal/coder/coder.go (lines 425-439 of 841)
+Read internal/coder/coder.go (lines 573-587 of 841)
+Read internal/coder/toolcommit.go (lines 128-142 of 142)
+
+‹thinking›
+Now let me find the function names for the first and third call sites.
+
+1. Line 431: inside a `defer func()` - I need to see which function this is in.
+2. Line 579: inside `afterInterrupt()` - passes `""`.
+3. Line 135: inside `toolcommit.go` - need to see the function name.
+‹/›
+
+Let me get the enclosing function names for the two I'm not sure of:
+Read internal/coder/toolcommit.go (lines 108-108 of 142)
+Read internal/coder/coder.go (lines 400-400 of 841)
+
+‹thinking› So the first call site is inside `Run` (line 400). Let me verify the toolcommit function name.
+Read internal/coder/toolcommit.go (lines 103-107 of 142)
+
+‹thinking› I need to find the function that contains the call at toolcommit.go:135. Let me look at the function signature.
+Read internal/coder/toolcommit.go (lines 114-133 of 142)
+
+‹thinking› Now I have the full picture.
+
+Three non-test call sites:
+
+1. **`Run`** (coder.go:431) — passes `""`. This is in a `defer` that settles edits at the end of every turn.
+2. **`afterInterrupt`** (coder.go:579) — passes `""`. Settles edits that accumulated during the interrupted portion of the turn.
+3. **`runCommitTool`** (toolcommit.go:135) — passes `args.message()`, which assembles the full commit message (subject + blank line + body) from the user's provided fields.
+
+Tokens: 28.5k sent (26.2k cache hit), 770 received. Cost: $0.00073 turn, $0.00073 session. 6 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

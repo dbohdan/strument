@@ -1,0 +1,15 @@
+‹thinking› Let me search for usages of `settleEdits` in the codebase.
+Searched for settleEdits\( as content — 9 matches in 4 files
+Looked up settleEdits — 1 site defined
+
+‹thinking› Let me look at the context around the call sites to understand what each one passes.
+
+Three non-test call sites:
+
+1. **`internal/coder/coder.go:431`** — passes `""` (empty string, the turn-end defer).
+2. **`internal/coder/coder.go:579`** — passes `""` (empty string, inside `settleEdits` itself calling it recursively or a sibling path).
+3. **`internal/coder/toolcommit.go:135`** — passes `args.message()`, i.e. the user-provided commit message from the tool arguments.
+
+Tokens: 7.4k sent (7.0k cache hit), 219 received. Cost: $0.00015 turn, $0.00015 session. 2 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

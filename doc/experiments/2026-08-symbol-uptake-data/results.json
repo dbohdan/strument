@@ -1,0 +1,853 @@
+[
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 1,
+  "glob": 0,
+  "tools": 1,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00011,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 8
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.01,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 0
+ },
+ {
+  "symbol": 0,
+  "read": 5,
+  "grep": 5,
+  "glob": 0,
+  "tools": 10,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.0013,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 7
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 3,
+  "glob": 0,
+  "tools": 6,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.01,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 5
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 3,
+  "glob": 0,
+  "tools": 6,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.01,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 7,
+  "glob": 0,
+  "tools": 7,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.0096,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00015,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 3
+ },
+ {
+  "symbol": 0,
+  "read": 4,
+  "grep": 3,
+  "glob": 0,
+  "tools": 7,
+  "named": [
+   "afterInterrupt"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.0084,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 0
+ },
+ {
+  "symbol": 1,
+  "read": 3,
+  "grep": 0,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.03,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 2,
+  "grep": 1,
+  "glob": 0,
+  "tools": 3,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.04,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 3,
+  "grep": 0,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.02,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 10,
+  "glob": 0,
+  "tools": 10,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.02,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 5
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 4,
+  "glob": 0,
+  "tools": 7,
+  "named": [
+   "afterInterrupt"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.0074,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 1
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.0065,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 5
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00013,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 1
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 1,
+  "glob": 0,
+  "tools": 1,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.0006,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 11
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.005,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 5,
+  "grep": 7,
+  "glob": 1,
+  "tools": 14,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.0022,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 5
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 4,
+  "glob": 0,
+  "tools": 5,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.0069,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00013,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 7
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 3,
+  "glob": 0,
+  "tools": 6,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.0077,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 3
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00057,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 11
+ },
+ {
+  "symbol": 0,
+  "read": 4,
+  "grep": 1,
+  "glob": 0,
+  "tools": 5,
+  "named": [
+   "afterInterrupt",
+   "runOne"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.00048,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 0
+ },
+ {
+  "symbol": 1,
+  "read": 3,
+  "grep": 0,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.02,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 5
+ },
+ {
+  "symbol": 0,
+  "read": 7,
+  "grep": 5,
+  "glob": 0,
+  "tools": 12,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.001,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.01,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 3
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 2,
+  "glob": 0,
+  "tools": 2,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00022,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 3
+ },
+ {
+  "symbol": 0,
+  "read": 2,
+  "grep": 4,
+  "glob": 0,
+  "tools": 6,
+  "named": [
+   "runCommitTool"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.00092,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 10
+ },
+ {
+  "symbol": 1,
+  "read": 2,
+  "grep": 1,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.05,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 3
+ },
+ {
+  "symbol": 0,
+  "read": 2,
+  "grep": 1,
+  "glob": 0,
+  "tools": 3,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.05,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 1
+ },
+ {
+  "symbol": 0,
+  "read": 7,
+  "grep": 1,
+  "glob": 0,
+  "tools": 8,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.00073,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 6
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 1,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.0004,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 4,
+  "grep": 3,
+  "glob": 0,
+  "tools": 7,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.0097,
+  "empty": false,
+  "model": "glm",
+  "arm": "base",
+  "run": 0
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 2,
+  "glob": 0,
+  "tools": 2,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00016,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 10
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 1,
+  "glob": 0,
+  "tools": 1,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00013,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 1
+ },
+ {
+  "symbol": 2,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 2,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.0035,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 2,
+  "grep": 3,
+  "glob": 0,
+  "tools": 5,
+  "named": [
+   "runCommitTool"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.0074,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 1
+ },
+ {
+  "symbol": 0,
+  "read": 3,
+  "grep": 1,
+  "glob": 0,
+  "tools": 4,
+  "named": [
+   "afterInterrupt"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.00027,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 4
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00011,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 2
+ },
+ {
+  "symbol": 0,
+  "read": 6,
+  "grep": 2,
+  "glob": 0,
+  "tools": 8,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00075,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 9
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 1,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.00012,
+  "empty": false,
+  "model": "mimo",
+  "arm": "new",
+  "run": 5
+ },
+ {
+  "symbol": 2,
+  "read": 4,
+  "grep": 8,
+  "glob": 0,
+  "tools": 14,
+  "named": [
+   "afterInterrupt"
+  ],
+  "recall": 1,
+  "right_msg": 1,
+  "cost": 0.00069,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 0
+ },
+ {
+  "symbol": 2,
+  "read": 0,
+  "grep": 0,
+  "glob": 0,
+  "tools": 2,
+  "named": [
+   "afterInterrupt",
+   "runCommitTool",
+   "runOne"
+  ],
+  "recall": 3,
+  "right_msg": 3,
+  "cost": 0.01,
+  "empty": false,
+  "model": "kimi",
+  "arm": "new",
+  "run": 1
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 5,
+  "glob": 0,
+  "tools": 5,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00033,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 9
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 2,
+  "glob": 0,
+  "tools": 3,
+  "named": [
+   "afterInterrupt",
+   "runOne"
+  ],
+  "recall": 2,
+  "right_msg": 2,
+  "cost": 0.02,
+  "empty": false,
+  "model": "kimi",
+  "arm": "base",
+  "run": 0
+ },
+ {
+  "symbol": 1,
+  "read": 0,
+  "grep": 1,
+  "glob": 0,
+  "tools": 2,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00015,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 8
+ },
+ {
+  "symbol": 0,
+  "read": 0,
+  "grep": 1,
+  "glob": 0,
+  "tools": 1,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.00012,
+  "empty": false,
+  "model": "mimo",
+  "arm": "base",
+  "run": 6
+ },
+ {
+  "symbol": 0,
+  "read": 1,
+  "grep": 3,
+  "glob": 0,
+  "tools": 4,
+  "named": [],
+  "recall": 0,
+  "right_msg": 0,
+  "cost": 0.0063,
+  "empty": false,
+  "model": "glm",
+  "arm": "new",
+  "run": 3
+ }
+]

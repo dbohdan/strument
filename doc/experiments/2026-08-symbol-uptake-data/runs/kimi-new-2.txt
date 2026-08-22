@@ -1,0 +1,14 @@
+‹thinking› The user wants to know which non-test functions call settleEdits and what each passes as the message argument. Let me use the symbol tool to find references.
+Looked up settleEdits — 8 sites referenced
+Read internal/coder/coder.go (lines 425-439 of 841)
+Read internal/coder/coder.go (lines 573-584 of 841)
+Read internal/coder/toolcommit.go (lines 128-142 of 142)
+Three non-test functions call `settleEdits`:
+
+1. **`Coder.runOne`** (coder.go:431) — passes `""` (in the turn-end defer; auto-message commit).
+2. **`Coder.afterInterrupt`** (coder.go:579) — passes `""` (commits edits made before an interrupt).
+3. **`Coder.runCommitTool`** (toolcommit.go:135) — passes `args.message()`, the model-supplied commit message.
+
+Tokens: 10.4k sent (6.1k cache hit), 416 received. Cost: $0.02 turn, $0.02 session. 3 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.

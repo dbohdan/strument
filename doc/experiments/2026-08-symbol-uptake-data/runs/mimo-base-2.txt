@@ -1,0 +1,29 @@
+‹thinking› Let me find all non-test functions that call `settleEdits`.
+Searched for settleEdits\( as content — 9 matches in 4 files
+
+‹thinking› Let me look at the context around the non-test call sites to understand what they pass as the message argument.
+
+Let me see the context around each non-test call site:
+Read internal/coder/coder.go (lines 425-439 of 841)
+Read internal/coder/coder.go (lines 573-587 of 841)
+Read internal/coder/toolcommit.go (lines 125-142 of 142)
+
+‹thinking›
+Now let me understand what each caller passes:
+
+1. `coder.go:431` — inside a `defer` at the end of the turn, passes `""` (empty string)
+2. `coder.go:579` — inside `afterInterrupt()`, passes `""` (empty string)
+3. `toolcommit.go:135` — inside the commit tool's `execute`, passes `args.message()`
+
+Let me also quickly check what `args.message()` returns in toolcommit.go.
+‹/›
+
+Three non-test call sites:
+
+1. **`coder.go:431`** — the **defer in the main turn loop**: passes `""` (empty string).
+2. **`coder.go:579`** — **`afterInterrupt()`**: passes `""` (empty string).
+3. **`toolcommit.go:135`** — the **commit tool's execute method**: passes `args.message()`, which returns the user-supplied commit message from the tool call arguments.
+
+Tokens: 12.1k sent (10.8k cache hit), 435 received. Cost: $0.00040 turn, $0.00040 session. 3 steps.
+strument: a sandbox is required but unavailable (no Landlock on this kernel: function not implemented).
+strument: the model cannot run commands. /run still works, or set `sandbox = ""` in your config.
