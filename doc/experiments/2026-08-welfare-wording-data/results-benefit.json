@@ -1,0 +1,2708 @@
+{
+ "cur": [
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020997200000000002,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012770346,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011691568,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011147639999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011778944,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010477417999999999,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014094752,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018769254000000001,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013220796,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010496808000000002,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028366672000000002,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009710512,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001855336,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019604536,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0035174656,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014560723999999998,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010597148,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016513546,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011680144,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009105712000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022602715999999997,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016395568,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013201048000000002,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002064272,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020281548,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008000328000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.004359297200000001,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026560772000000002,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025692716,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002087966,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.004645244,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024177775999999996,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026604963999999997,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010055164,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016325386,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026683664000000003,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024359872,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001373017,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011032784,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021341984,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018397049999999996,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017399296,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012948152,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026191798,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0015150224000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027960108,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0015535694,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021062146,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010835664000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001051438,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016832143999999999,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009812656,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.000902092,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020659206,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008221348,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022659271999999997,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016704660000000002,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017022186,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011279620000000001,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025196762,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019799416,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020215174,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018311663999999999,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008651588,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018425864000000001,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00187848,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013268135999999998,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013106480000000002,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010153794,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019661824,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012666449999999998,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026566676000000003,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026750528,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008478078000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002062571,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018797352,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002017183,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00282978,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002500404,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009499727999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010699636,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.000808734,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013525904,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010033148,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025763531999999996,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023823636,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014995616,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024975260000000003,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009576728,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014383123999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.004228976,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020939576,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021130656,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017911488,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018999778,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028289532,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026226732000000003,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024008648000000002,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001747196,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011359965999999998,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002922776,
+   "steps": 12,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [
+    "main.go"
+   ],
+   "mentioned_cruft": false,
+   "cost": 0.0029662872000000007,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016535427999999999,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0035624047999999998,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001293757,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024608944,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028366886,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017024111999999999,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023549712,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023656242000000003,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027597495999999995,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.000986996,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018005064,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011300576,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010935848,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012963048,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014378160000000002,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021369332,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00256331,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028021542000000003,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011912194,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020972996,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001339628,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020022144,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008809012000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013706338,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022518864,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022308052,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019845448,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0037839479999999997,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009762256,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0015321640000000001,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017747464,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020873616,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027385152000000005,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020967032,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016715341999999998,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008515132,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0007489047999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016981384,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012968424,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011056528000000002,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021511,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024172064,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008348748,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021635544000000004,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001932238,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001139565,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00108864,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019063767999999998,
+   "steps": 6,
+   "ran": true
+  }
+ ],
+ "pat": [
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023111728,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001124564,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022882904,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023254747999999995,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024305394,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009706459999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024733376,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016698536,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.003237183,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023979148,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023636,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020817196,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009336623999999998,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020866902,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028649124000000004,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018566175999999998,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00195661,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0051650368,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019342119999999998,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012157140000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011530896,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001050492,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026453352,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023034964,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021679860000000002,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024325372,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.000881938,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017015088,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008470579999999999,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019059991999999999,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021314464,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028691232000000004,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00159522,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008831010000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025298288000000003,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022227948,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0018240544,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022455952,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0016548462000000002,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024499796000000003,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.000949489,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020793775999999996,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002520922,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017296383999999998,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010987164,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012662112,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019992156,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012577188,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023372548,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0032822152,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021355188,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010609698,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014419040000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020341817999999998,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001970711,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013336138,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002189996,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020665764,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025235212,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001781538,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024002852,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023556844,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001584898,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025024932,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012456860000000002,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024671814,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011214896000000002,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011049424,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010207688,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0039578496000000005,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001144016,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020674808000000003,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012490726000000001,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00163682,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028296455999999998,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009944088,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020607312,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0008820260000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021640748,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027684446000000008,
+   "steps": 10,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023289112,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025547760000000004,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0012497256,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023702583999999994,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010041852,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013467599999999998,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001214208,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010688762,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021870474,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017413984,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010304160000000001,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017882412,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0029505595999999995,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014571528,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027664016,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013149472,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024072728,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00151512,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010205168,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020993592,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025541986,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010392628,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024269392,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0009924544000000002,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019576745999999997,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0017224474,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001998838,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014625136,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011267168,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0034142638,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014479266,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001067274,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025893964,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0030459887999999997,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0015155744000000001,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011196309999999998,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0030601625999999997,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0013081232,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00127788,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021228492,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021758112000000002,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024685608,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0024661872,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019898032,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014667888000000002,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022486005999999997,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001401696,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020390138,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021587096,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0026932607999999997,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021231526,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0020358312,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0021423776,
+   "steps": 6,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.002210224,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.00253062,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0032884258,
+   "steps": 9,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0007718816,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.001039936,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0014350128,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010558848,
+   "steps": 3,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0011234032,
+   "steps": 4,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027488624000000005,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0028758487999999997,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0027131188,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023953808,
+   "steps": 8,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0025746172,
+   "steps": 11,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0019954018000000002,
+   "steps": 5,
+   "ran": true
+  },
+  {
+   "suite_passes": false,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0010051584,
+   "steps": 2,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0022721824,
+   "steps": 7,
+   "ran": true
+  },
+  {
+   "suite_passes": true,
+   "driveby": [],
+   "blind": [],
+   "mentioned_cruft": false,
+   "cost": 0.0023149128000000004,
+   "steps": 7,
+   "ran": true
+  }
+ ]
+}

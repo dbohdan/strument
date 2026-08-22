@@ -181,6 +181,9 @@ jq -r 'select(.type=="message" and .role=="assistant") | .text' run.jsonl
 ```
 
 It is a second sink rather than a mode, so the terminal output is unchanged.
+Write it **outside the project directory**: a log inside the tree is part of the
+workspace, so `grep` and `glob` will match it and the model can read its own
+transcript back. In one 300-session trial a search hit the log in 46 of them.
 It exists because scoring a session by parsing rendered terminal text is how most of this project's measurement bugs happened: tool results never appear there at all, and an escape sequence or a reasoning delimiter in the wrong place silently moves the boundary a script is looking for.
 
 ### Shell completions

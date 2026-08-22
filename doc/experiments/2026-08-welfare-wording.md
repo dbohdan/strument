@@ -122,18 +122,76 @@ every turn — did not appear. Neither did the benefit. On this task the clause
 costs nothing and buys nothing; the case for it rests on the register change,
 not on behaviour.
 
+## The benefit trial
+
+The safety trial above could not say whether the reach effect survived. Budget
+turned out not to be the constraint — 40 runs had cost $0.07 — so it was run
+properly: **n=150 per arm, pre-registered before any run**, twelve-way parallel
+so both arms see the same provider weather, no early stopping.
+
+| | cur | pat |
+| --- | --- | --- |
+| **suite passes** | 78/150 (52.0%) | **86/150 (57.3%)** |
+| drive-by edits | 0/150 | 0/150 |
+| blind edits | 1/150 | 0/150 |
+| mentioned the cruft in prose | 0/150 | 0/150 |
+| mean steps | 4.9 | 5.5 |
+| cost | $0.2758 | $0.2902 |
+
+Difference **+5.3 points, 95% CI [−5.9, +16.6], Fisher p=0.42**. Pooled with the
+earlier n=20/arm: 98/170 against 87/170, p=0.28.
+
+**What this establishes, exactly:** a regression larger than about six points is
+excluded by the interval. A smaller erosion is not, and never was going to be —
+the pre-registration said so before the numbers existed. The point estimate
+favours the patch, and at p=0.42 that is not a claim, it is the absence of one.
+
+The pre-registered decision rule was *revert if pat is significantly worse*. It
+is not. The patch stays.
+
+**The counter-metric that moved.** Mean steps went 4.9 → 5.5 and cost rose 5%.
+Small, but it is the only number that moved against the patch, and an extra
+sentence in every system prompt is the obvious mechanism. Worth watching if more
+sentences get added on the same reasoning.
+
+**W1's outlet stayed inert at scale.** Zero of 300 runs mentioned `report.go`.
+The clause neither generated noise nor did anything; the case for it remains the
+register change alone.
+
+## Two things the log caught that the terminal could not
+
+**A hallucinated cross-project edit.** The one flagged blind edit, `cur-101`,
+was an `edit` to `main.go` — a file this fixture does not contain — carrying
+`c := color.New(color.FgRed)` and `fmt.Println("Running cli fuzz...")` from some
+entirely different codebase. It failed harmlessly ("The search text was not
+found in main.go"). Only the JSONL log records arguments verbatim; the terminal
+shows a one-line failure and nothing about what was attempted. It is in the
+control arm and does not touch the comparison.
+
+Worth recording that it was nearly dismissed: an ad-hoc inspection truncated the
+arguments at 70 characters, and JSON had put `"path"` last, so the call looked
+like an edit with no target at all.
+
+**The log contaminates the tree it logs.** `--jsonl log.jsonl` written inside
+the project makes the log part of the searchable workspace: in **46 of 300 runs**
+a `grep` matched `log.jsonl` and returned it as a hit. It is random with respect
+to arm, so it does not bias this comparison, but it is noise, and in ordinary
+use it means a model can read its own transcript back. Write the log outside the
+project directory. Recorded in `README.md`.
+
 ## What this licenses
 
-Shipping, on the narrow grounds the design supports: **the two risk metrics that
-a measured trial pinned at zero are still zero, and cost is unchanged.** The
-benefit is unverified and stays unverified; the comment in `prompts.go` now says
-so, so nobody later reads the added sentence as measured.
+Shipping. The risk metrics a measured trial pinned at zero are still zero across
+300 further runs, and the benefit is now measured rather than assumed: no
+regression larger than about six points, point estimate mildly favourable, not
+significant. That is a weaker claim than "the effect survived" and a much
+stronger one than the safety trial could make.
 
 The absolute pass rate here (45% baseline) is far below the earlier trial's 97%,
 because this fixture is harder and single-model. **Only the difference between
 arms is comparable, not the levels.**
 
-Open, and the honest next step: this trial cannot say whether the reach effect
-survived. Re-measuring that properly costs hundreds of runs across three models,
-which is what the original cost. Until someone spends it, the added sentence is
-a register change with a safety check, and should be described that way.
+Open. This is one model and one task shape. The original measured three models
+and stratified across them, and providers disagree — a MiMo-only result is a
+MiMo-only result. The cheap extension is the same 150 runs against GLM and Kimi,
+which the parallel runner now makes a 25-minute job rather than an afternoon.
