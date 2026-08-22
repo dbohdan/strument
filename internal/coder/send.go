@@ -494,6 +494,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 func (c *Coder) moveBackCurMessages() {
 	c.doneMessages = append(c.doneMessages, c.curMessages...)
 	c.curMessages = nil
+	c.recordedMessages = 0
 	c.maybeSummarize()
 }
 
@@ -786,6 +787,16 @@ func (c *Coder) flushTurnUsage() {
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)
+
+	c.record(Record{
+		Type:      "turn",
+		Outcome:   c.lastSendOutcome.String(),
+		Steps:     c.numSteps,
+		Sent:      c.messageTokensSent,
+		Received:  c.messageTokensReceived,
+		Cost:      c.messageCost,
+		CostKnown: c.costKnown,
+	})
 
 	if c.RecordUsage != nil {
 		u := TurnUsage{

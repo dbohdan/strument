@@ -173,6 +173,16 @@ That is the point of it, and it is meant for a terminal you are watching rather 
 `--no-git` turns off the git integration inside a repository.
 Outside one it is already off, and `/undo` works either way.
 
+`--jsonl FILE` records the session as JSONL alongside the normal output, one JSON object per line: a `session` header, then a `message` per conversation turn — with roles, tool calls, their arguments verbatim, and their results — a `reasoning` record wherever the model thought, and a `turn` record with the outcome and the token and cost accounting.
+
+```sh
+strument --jsonl run.jsonl -m 'Which functions call settleEdits?'
+jq -r 'select(.type=="message" and .role=="assistant") | .text' run.jsonl
+```
+
+It is a second sink rather than a mode, so the terminal output is unchanged.
+It exists because scoring a session by parsing rendered terminal text is how most of this project's measurement bugs happened: tool results never appear there at all, and an escape sequence or a reasoning delimiter in the wrong place silently moves the boundary a script is looking for.
+
 ### Shell completions
 
 The `shell` subcommand prints a completion script for Bash, fish, or Zsh.

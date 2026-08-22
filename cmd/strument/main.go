@@ -26,6 +26,7 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/httpx"
+	"dbohdan.com/strument/internal/jsonlog"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/modelconfig"
 	"dbohdan.com/strument/internal/render"
@@ -37,19 +38,20 @@ import (
 var version = "0.0.0-dev"
 
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."    short:"m"`
-	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup." name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."    short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."             name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                               name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."              name:"dark-mode"                                              xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."             name:"light-mode"                                             xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."            name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not write the session to the chat-history file."            name:"no-history"`
-	DryRun        bool     `help:"Report edits without writing files or committing."             name:"dry-run"`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."          short:"m"`
+	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."       name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias from config; defaults to the config's default."          short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                   name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                     name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                    name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                   name:"light-mode"                                             xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                  name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."                  name:"no-history"`
+	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line." name:"jsonl"                                                  placeholder:"FILE"`
+	DryRun        bool     `help:"Report edits without writing files or committing."                   name:"dry-run"`
 	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
-	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                 name:"yes-shell"`
-	Files         []string `arg:""                                                               help:"Files for the model to edit (they need not exist yet)." optional:""`
+	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                       name:"yes-shell"`
+	Files         []string `arg:""                                                                     help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -105,6 +107,18 @@ func (c *chatCmd) Run() error {
 
 	cdr := coder.New(root, model)
 	cdr.DryRun = c.DryRun
+	// A second sink beside the terminal, not a mode: the rendered stream stays
+	// exactly what it was, so an experiment can still check what the user saw.
+	// See internal/coder/record.go for why that matters.
+	if c.JSONL != "" {
+		jl, jerr := jsonlog.Create(c.JSONL)
+		if jerr != nil {
+			return fmt.Errorf("cannot write the JSONL log: %w", jerr)
+		}
+		defer func() { _ = jl.Close() }()
+		cdr.Recorder = jl
+		cdr.RecordSession(alias)
+	}
 	cdr.Client = client.New(model.Provider)
 	if cfg.MaxSteps > 0 {
 		cdr.MaxSteps = cfg.MaxSteps

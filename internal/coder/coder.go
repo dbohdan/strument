@@ -108,6 +108,12 @@ type Coder struct {
 	// leaves no trace passes nil.
 	SaveUndo func(stack [][]TurnEdit, commits []string, last string)
 
+	// Recorder receives the JSONL log's records when one is wired; nil is the
+	// default and costs nothing. recordedMessages is its watermark into
+	// curMessages — see record.go for why the flush is per-send.
+	Recorder         Recorder
+	recordedMessages int
+
 	// editFormat is the active mode, "tool" or "ask". It starts as the model's
 	// EditFormat but /ask and /code switch it at runtime without changing the
 	// model, so the tool set and prompt set read this, not Model.EditFormat.
@@ -443,6 +449,9 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 	// — keeps the loop going.
 	for {
 		outcome, reflection := c.sendSteerable(ctx, message)
+		// After the send, not during it: sendMessage does its interrupt
+		// handling before returning, and that handling can retract messages.
+		c.recordNewMessages()
 		c.lastSendOutcome = outcome
 
 		switch outcome {
