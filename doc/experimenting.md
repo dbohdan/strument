@@ -315,6 +315,34 @@ Two things worth carrying:
   purpose and watch it go red; the corollary is that a check returning a clean
   zero deserves the same suspicion as one returning a clean p=1.0.
 
+## 16. Look for the measurement the confound cannot reach
+
+Two changes shipped together — a tool's schema description and its output — and
+separating them looked like two more binaries and another 48 runs.
+
+It needed neither, because **a model chooses its first tool from the schema
+alone**. It has not seen any output yet. The first tool call is therefore a
+measurement of the description with the other factor held out *by construction*,
+and it was already sitting in transcripts that had been paid for:
+
+| | base | new | p |
+| --- | --- | --- | --- |
+| first tool call is the tool under test | 4/24 | 14/24 | **0.006** |
+| any call to it | 7/24 | 14/24 | 0.080 |
+
+The isolated effect was larger and better supported than the bundled one.
+
+Before designing arms to separate two factors, ask whether some **event in the
+run happens before one of them can act**. Ordering is a free instrument: a
+choice made at step one cannot depend on information that arrives at step two.
+The same trick applies to anything with a first-move — which model was picked,
+which file was opened, whether a question was asked before any tool ran.
+
+And verify the set relation rather than inferring it from totals. "14 used it
+and 14 used it first, so they must be the same 14" is true here, and was checked
+by listing both sets, because the alternative reading — some other 14 — is the
+kind of thing that is obvious right up until it is wrong.
+
 ---
 
 ## The short version

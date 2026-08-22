@@ -208,5 +208,44 @@ answer that fails to, in each of the two block forms.
   points at the other kind; the *hit* path does not, and a one-site definition
   answer to a callers question is the case that needs it.
 - GLM did not regress; that claim is withdrawn above.
-- Untested: whether the schema-description rewrite alone accounts for the
-  uptake. That is the cheap decomposition, and it is one binary away.
+## Decomposition: it was the description, and the data already said so
+
+Arm B bundled two things — the rewritten schema description and the output
+changes (source lines, struct fields, honest miss). Separating them looked like
+it needed two more binaries and another 48 runs. It needed neither.
+
+**A model chooses its first tool from the schema alone.** It has not seen any
+output yet, so the output changes cannot influence that choice. The first tool
+call is therefore a measurement of the description with the other factor held
+out by construction:
+
+| | base | new | p |
+| --- | --- | --- | --- |
+| **first tool call is `symbol`** | 4/24 | **14/24** | **0.006** |
+| any `symbol` call | 7/24 | 14/24 | 0.080 |
+
+The description-only effect is *larger and better supported* than the bundled
+one. And the second row decomposes the rest:
+
+- In the new arm, **14 runs called `symbol` and 14 called it first** — verified
+  by listing them, not inferred from the totals. Not one run started elsewhere
+  and adopted `symbol` after seeing what it returned. The output changes
+  produced **zero** additional adoptions.
+- In the base arm three runs *did* adopt it late (`mimo-base-0`, `-5`, `-8`),
+  which is why the bundled measure looks weaker: those late adoptions narrow the
+  gap the first-call measure shows cleanly.
+
+The GLM confirmation cell says the same thing from the other side: 0/6 → 6/6 on
+a change that was description plus a nudge which never fired.
+
+**What the output changes buy is not uptake but cost.** Among runs that used
+`symbol`, base averaged 6.4 tool calls and new 1.6 — the source line is why the
+answer needs no follow-up read. Both halves are worth keeping; they do different
+jobs, and only one of them recruits.
+
+No money was spent on this. The 2×2 would have re-derived arithmetic.
+
+**The residual question this cannot answer** is retention over a long session:
+whether a model that gets a coordinate-only answer *stops* reaching for the tool
+later on. Every run here was a single turn, and by construction a one-turn task
+cannot show it. That is a different experiment, not another arm of this one.
