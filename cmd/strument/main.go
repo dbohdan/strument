@@ -856,6 +856,52 @@ func (c *trustCmd) Run() error {
 	return nil
 }
 
+// configCmd inspects the resolved configuration for the current project:
+// the merge of the user config and a trusted project config, with the same
+// root resolution a chat session gets.
+type configCmd struct {
+	Models  configModelsCmd  `cmd:"" help:"Print the config's model aliases, one per line."`
+	Default configDefaultCmd `cmd:"" help:"Print the config's default model alias."`
+}
+
+type configModelsCmd struct{}
+
+func (*configModelsCmd) Run() error { return runConfigSets("models") }
+
+type configDefaultCmd struct{}
+
+func (*configDefaultCmd) Run() error { return runConfigSets("default") }
+
+// loadProjectConfig loads the effective config for the current project. It
+// mirrors historyRoot so the answer is the one the chat session would act on,
+// not the one from a different directory that happens to hold a config file.
+func loadProjectConfig() (*config.Config, error) {
+	root, err := historyRoot()
+	if err != nil {
+		return nil, err
+	}
+	return config.Load(config.Options{ProjectRoot: root})
+}
+
+// runConfigSets prints one of the config's top-level sets: the keys of
+// `models`, or the value of `default`. The value goes straight to stdout so
+// the command composes with pipelines.
+func runConfigSets(kind string) error {
+	cfg, err := loadProjectConfig()
+	if err != nil {
+		return err
+	}
+	switch kind {
+	case "models":
+		for _, alias := range slices.Sorted(maps.Keys(cfg.Models)) {
+			fmt.Println(alias)
+		}
+	case "default":
+		fmt.Println(cfg.Default)
+	}
+	return nil
+}
+
 // historyCmd prints the chat-history file for the current project (the one
 // XDG makes hard to discover). It resolves the same path chat mode writes.
 type historyCmd struct{}
@@ -960,10 +1006,11 @@ func (c *modelConfigCmd) Run() error {
 }
 
 type cli struct {
-	Chat        chatCmd          `cmd:""                         default:"withargs"                                                 help:"Chat with a model about the given files (default command)."`
+	Chat        chatCmd          `cmd:""                         default:"withargs"                                                       help:"Chat with a model about the given files (default command)."`
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
-	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider." name:"model-config"`
+	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider."       name:"model-config"`
 	Tool        toolCmd          `cmd:""                         help:"Run one observation tool and print what a model would see."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Version     kong.VersionFlag `help:"Print version and exit."`

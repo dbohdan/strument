@@ -718,6 +718,21 @@ An alias is just a `models` key, so the same model can appear under several:
 models["ds"] = models["deepseek-pro"]  # one model, two aliases
 ```
 
+## `strument config`
+
+Two subcommands read the *effective* config — the merge of your user config and
+a trusted project `.strument.star`, resolved for the current project exactly as
+a chat session resolves it:
+
+```sh
+strument config models    # the keys of `models`, one per line, sorted
+strument config default   # the value of `default`
+```
+
+The output is plain text on stdout, one line per model alias, so it composes
+with scripts and pipelines. `models` is sorted alphabetically, not in config
+declaration order, so a script can rely on the order across edits.
+
 ## `strument model-config`
 
 Writing `context`, `max_output`, and the costs by hand for every model is

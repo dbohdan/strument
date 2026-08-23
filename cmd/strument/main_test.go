@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +41,71 @@ func TestShellCompletionsRejectUnknownShell(t *testing.T) {
 	var out strings.Builder
 	if err := writeCompletions(&out, nil, "powershell"); err == nil {
 		t.Fatal("unknown shell was accepted")
+	}
+}
+
+// captureRun captures what runConfigSets writes to os.Stdout, which is the
+// seam shared by the two config subcommands.
+func captureRun(kind string) (string, error) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	saved := os.Stdout
+	defer func() { _ = r.Close(); _ = w.Close() }()
+	os.Stdout = w
+	err = runConfigSets(kind)
+	_ = w.Close()
+	os.Stdout = saved
+	var out bytes.Buffer
+	_, copyErr := io.Copy(&out, r)
+	if err != nil {
+		return out.String(), err
+	}
+	return out.String(), copyErr
+}
+
+// writeTempUserConfig drops a user config into a fresh XDG_CONFIG_HOME and
+// chdirs into a scratch directory, so config.Load and historyRoot see a
+// project without a .strument.star.
+func writeTempUserConfig(t *testing.T, body string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
+	cfgDir := filepath.Join(dir, "strument")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.star"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+}
+
+func TestConfigModelsListsSortedAliases(t *testing.T) {
+	writeTempUserConfig(t, `
+router = provider("openrouter", api_key = env("OPENROUTER_API_KEY"))
+models = {"pro": model(router, "p"), "flash": model(router, "f")}
+default = "pro"
+`)
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+
+	got, err := captureRun("models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "flash\npro\n"
+	if got != want {
+		t.Errorf("models output = %q, want %q", got, want)
+	}
+
+	got, err = captureRun("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "pro\n" {
+		t.Errorf("default output = %q, want %q", got, "pro\n")
 	}
 }
 

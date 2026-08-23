@@ -193,6 +193,11 @@ strument --dry-run -m 'Fix the race in internal/poll.'  # Report the edits, writ
 strument --yes -m 'Update the changelog for v0.3.0.'  # Answer confirmations; still never runs a shell command.
 ```
 
+Two inspection commands answer "what does my effective config say?" without editing the file.
+`strument config models` prints the keys of `models`, one per line (sorted, so scripts can rely on the order),
+and `strument config default` prints the value of `default`.
+Both read the merged user + trusted project config for the current project, so the answer matches what a chat session would use.
+
 `--yes-shell` is the flag that lets the model run shell commands unattended.
 Combined with `-m`, it gives a model up to 25 (or `max_steps`) unattended steps of arbitrary shell in your project.
 This feature is meant for a terminal you are watching rather than for CI or cron, where a prompt-injected message can become remote code execution.
