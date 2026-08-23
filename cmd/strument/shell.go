@@ -1,39 +1,40 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
-
-	"github.com/alecthomas/kong"
-	"github.com/miekg/king"
 )
 
+//go:embed completions/strument.bash
+var bashCompletion string
+
+//go:embed completions/strument.fish
+var fishCompletion string
+
 type shellCmd struct {
-	Shell string `arg:"" enum:"bash,fish,zsh" help:"Shell to generate completions for (bash, fish, or zsh)."`
+	Shell string `arg:"" enum:"bash,fish" help:"Shell to generate completions for (bash or fish)."`
 }
 
-func (c *shellCmd) Run(ctx *kong.Context) error {
-	return writeCompletions(io.Writer(outputWriter{}), ctx.Model.Node, c.Shell)
+func (c *shellCmd) Run() error {
+	return writeCompletions(io.Writer(outputWriter{}), c.Shell)
 }
 
 type outputWriter struct{}
 
 func (outputWriter) Write(p []byte) (int, error) { return fmt.Print(string(p)) }
 
-func writeCompletions(w io.Writer, node *kong.Node, shell string) error {
-	var completion king.Completer
+func writeCompletions(w io.Writer, shell string) error {
+	var completion string
 	switch shell {
 	case "bash":
-		completion = &king.Bash{}
+		completion = bashCompletion
 	case "fish":
-		completion = &king.Fish{}
-	case "zsh":
-		completion = &king.Zsh{}
+		completion = fishCompletion
 	default:
-		return errors.New("unknown shell " + shell + " (choose bash, fish, or zsh)")
+		return errors.New("unknown shell " + shell + " (choose bash or fish)")
 	}
-	completion.Completion(node, "")
-	_, err := w.Write(completion.Out())
+	_, err := io.WriteString(w, completion)
 	return err
 }

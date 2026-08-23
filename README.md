@@ -221,7 +221,7 @@ The JSONL output exists because parsing rendered terminal text was the main sour
 
 ### Shell completions
 
-The `shell` subcommand prints a completion script for Bash, fish, or Zsh.
+The `shell` subcommand prints a completion script for Bash or fish.
 Load the generated script in your current shell:
 
 ```sh
@@ -230,11 +230,9 @@ source <(strument shell bash)
 
 # fish
 strument shell fish | source
-
-# Zsh
-source <(strument shell zsh)
 ```
 
+The `-M`/`--model` option completes model aliases from the effective config by running `strument config models`.
 To load completions automatically, add the command to your shell configuration.
 
 
