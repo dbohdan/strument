@@ -19,7 +19,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   Project-local `.strument.star` files are supported.
   They stay inert until authorized with `strument trust` in the directory.
   (This is the [direnv](https://direnv.net/) model of trust based on recorded content hashes.)
-- [Tool calls](https://towardsdatascience.com/tool-calling-explained-how-ai-agents-decide-what-to-do-next/).
+- [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
   `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
 - Every turn is undoable, with or without Git.
   Strument records each file before the first time it writes to it.
