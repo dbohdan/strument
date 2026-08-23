@@ -402,6 +402,132 @@ func TestRunEmptySuccessSkipsConfirm(t *testing.T) {
 	}
 }
 
+func TestCheckCommandAddsExchange(t *testing.T) {
+	// The check output is auto-confirmed, then the next turn verifies that
+	// the exchange was added to the conversation.
+	input := strings.NewReader("/check echo-check\ny\nshow me the check output\n/exit\n")
+	stub := answerStub("ok\n")
+	var reqText string
+	stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		var b strings.Builder
+		for _, m := range req.Messages {
+			b.WriteString(m.Text())
+		}
+		reqText = b.String()
+		return nil
+	}
+	r, cdr, out := newTestREPL(t, stub, input)
+	defer r.Close()
+	cdr.Check = []config.Check{
+		{Name: "echo-check", Argv: []string{"echo", "hi from check"}},
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "hi from check") {
+		t.Errorf("check output not shown:\n%s", got)
+	}
+	if !strings.Contains(got, "Added the check output to the chat.") {
+		t.Errorf("confirm flow failed:\n%s", got)
+	}
+	if !strings.Contains(reqText, "echo-check") || !strings.Contains(reqText, "hi from check") {
+		t.Errorf("check output was not added to the next request:\n%s", reqText)
+	}
+}
+
+func TestCheckAllRunsInOrder(t *testing.T) {
+	// With no argument, /check runs all configured checks in order.
+	input := strings.NewReader("/check\ny\n/exit\n")
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	cdr.Check = []config.Check{
+		{Name: "first", Argv: []string{"echo", "one"}},
+		{Name: "second", Argv: []string{"echo", "two"}},
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "one") || !strings.Contains(got, "two") {
+		t.Errorf("both checks should run:\n%s", got)
+	}
+}
+
+func TestCheckStopsAtFirstFailure(t *testing.T) {
+	// A failing check stops the run; later checks are not attempted.
+	input := strings.NewReader("/check\n/exit\n")
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	cdr.Check = []config.Check{
+		{Name: "fail", Argv: []string{"false"}},
+		{Name: "never", Argv: []string{"echo", "should not run"}},
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if strings.Contains(got, "should not run") {
+		t.Errorf("later check should not run after a failure:\n%s", got)
+	}
+	if !strings.Contains(got, "Stopped here") {
+		t.Errorf("should say it stopped:\n%s", got)
+	}
+}
+
+func TestCheckInvalidName(t *testing.T) {
+	input := strings.NewReader("/check nope\n/exit\n")
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	cdr.Check = []config.Check{
+		{Name: "real", Argv: []string{"true"}},
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `There is no check named "nope"`) {
+		t.Errorf("should report unknown check name:\n%s", got)
+	}
+	if !strings.Contains(got, "real") {
+		t.Errorf("should list configured checks:\n%s", got)
+	}
+}
+
+func TestCheckNoneConfigured(t *testing.T) {
+	input := strings.NewReader("/check\n/exit\n")
+	r, _, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(out.String(), "No checks are configured") {
+		t.Errorf("should report no checks:\n%s", out.String())
+	}
+}
+
+func TestCheckEmptySuccessSkipsConfirm(t *testing.T) {
+	// A check that succeeds with no output should not prompt.
+	input := strings.NewReader("/check silent\n/exit\n")
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	cdr.Check = []config.Check{
+		{Name: "silent", Argv: []string{"true"}},
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if strings.Contains(out.String(), "Add check output to the chat?") {
+		t.Errorf("empty successful /check should not prompt:\n%s", out.String())
+	}
+}
+
 // TestShellConfirmationShowsThePurpose renders what the user actually reads
 // before answering: the model's claim about the command, above the command
 // itself. An absent purpose is shown rather than passed over — the model was

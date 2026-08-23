@@ -171,6 +171,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | --- | --- |
 | `/add <file>`, `/drop`, `/ls` | Pin the files you already know need to be read or changed. Strument names them for the model, which reads them itself; it finds everything else on its own. |
 | `/ask <question>` | Ask about the project without giving the model editing tools. `/ask` on its own activates ask mode, and `/code` switches back. |
+| `/check [name]` | Run a project check by name, or all checks if no name is given. Checks run in the order they are listed in the config and stop at the first failure. On failure or non-empty output, offers to add the transcript to the chat. A successful check with no output is silent. |
 | `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the transcript, or discard them. Notes are generated on demand (`--continue` at startup, or `/notes generate` mid-session) and live in memory for the session. They are never persisted to disk. See [`doc/sessions.md`](doc/sessions.md). |
 | `/read-only <file>` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |

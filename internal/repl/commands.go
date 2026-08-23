@@ -2,9 +2,11 @@ package repl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -13,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/readline"
 )
 
@@ -38,6 +41,7 @@ func init() {
 		{"add", "<file> [file ...]", "Pin files for the model to edit (globs allowed)", cmdAdd},
 		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
+		{"check", "[name]", "Run a project check; optionally add its output to the chat", cmdCheck},
 		{"clear", "", "Clear the conversation history", cmdClear},
 		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
 		{"context", "[n]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
@@ -113,6 +117,8 @@ func (r *REPL) completer() readline.AutoCompleter {
 		switch c.name {
 		case "add", "read-only", "submit":
 			sub = append(sub, recursiveDynamic(r.completeAddable))
+		case "check":
+			sub = append(sub, readline.PcItemDynamic(r.completeChecks))
 		case "drop":
 			sub = append(sub, recursiveDynamic(pinnedFiles))
 		case "env":
@@ -186,6 +192,14 @@ func (r *REPL) completeAliases(string) []string {
 		return nil
 	}
 	return slices.Sorted(maps.Keys(r.opts.Config.Models))
+}
+
+func (r *REPL) completeChecks(string) []string {
+	names := make([]string, 0, len(r.coder.Check))
+	for _, ch := range r.coder.Check {
+		names = append(names, ch.Name)
+	}
+	return names
 }
 
 func cmdHelp(_ context.Context, r *REPL, _ string) string {
@@ -648,6 +662,106 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 	}
 	return ""
 }
+
+// cmdCheck runs one or all of the project's configured checks and offers to
+// add the output to the chat, like /run does for shell commands. It inherits
+// the full environment (the user typed it), unlike model-caused checks which
+// run under the allowlist.
+func cmdCheck(ctx context.Context, r *REPL, args string) string {
+	if len(r.coder.Check) == 0 {
+		r.out.Errorf("No checks are configured for this project.")
+		return ""
+	}
+
+	// Determine which checks to run.
+	var checks []config.Check
+	if name := strings.TrimSpace(args); name != "" {
+		for _, ch := range r.coder.Check {
+			if ch.Name == name {
+				checks = append(checks, ch)
+				break
+			}
+		}
+		if len(checks) == 0 {
+			names := make([]string, 0, len(r.coder.Check))
+			for _, ch := range r.coder.Check {
+				names = append(names, ch.Name)
+			}
+			r.out.Errorf("There is no check named %q. Configured checks: %s.", name, strings.Join(names, ", "))
+			return ""
+		}
+	} else {
+		checks = r.coder.Check
+	}
+
+	// Run each check in order, stopping at the first failure.
+	var transcript strings.Builder
+	for _, ch := range checks {
+		r.out.Toolf("‹check› %s\n$ %s", ch.Name, strings.Join(ch.Argv, " "))
+		exitCode, output := runUserCheck(ctx, r, ch)
+
+		if exitCode == 0 {
+			r.out.Toolf("passed")
+		} else {
+			r.out.Toolf("failed (exit status %d)", exitCode)
+			if trimmed := strings.TrimRight(output, "\n"); trimmed != "" {
+				r.printf("%s", trimmed)
+			}
+		}
+
+		fmt.Fprintf(&transcript, "%s: %s\nExit status: %d\n", ch.Name, strings.Join(ch.Argv, " "), exitCode)
+		if strings.TrimSpace(output) != "" {
+			fmt.Fprintf(&transcript, "Output:\n%s\n", output)
+		}
+
+		if exitCode != 0 {
+			if len(checks) > 1 {
+				r.out.Warningf("Stopped here; later checks were not run.")
+				transcript.WriteString("\nStopped here; later checks were not run.\n")
+			}
+			break
+		}
+		transcript.WriteString("\n")
+	}
+
+	// A successful run that produced no output has nothing to add.
+	transcriptStr := transcript.String()
+	if strings.TrimSpace(transcriptStr) == "" {
+		return ""
+	}
+
+	res := r.Confirmer().Confirm(coder.ConfirmRequest{
+		Prompt: "Add check output to the chat?",
+		Group:  "add-output",
+	})
+	if res.Yes {
+		r.coder.AppendContext(transcriptStr)
+		r.printf("Added the check output to the chat.")
+	}
+	return ""
+}
+
+// runUserCheck executes one check's argv directly (no shell), inheriting the
+// full environment — the user typed /check, like /run. Returns the exit code
+// and merged stdout+stderr.
+func runUserCheck(ctx context.Context, r *REPL, ch config.Check) (int, string) {
+	cmd := execCommandContext(ctx, ch.Argv[0], ch.Argv[1:]...)
+	cmd.Dir = r.coder.Root
+	out, err := cmd.CombinedOutput()
+	exitCode := 0
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			exitCode = ee.ExitCode()
+		} else {
+			return -1, fmt.Sprintf("could not run %s: %v", strings.Join(ch.Argv, " "), err)
+		}
+	}
+	return exitCode, string(out)
+}
+
+// execCommandContext is exec.CommandContext, seamable for testing.
+var execCommandContext = exec.CommandContext
 
 // cmdWeb scrapes a URL and adds its content to the chat as a completed exchange
 // (the same path /run uses for command output), so it's context for your next
