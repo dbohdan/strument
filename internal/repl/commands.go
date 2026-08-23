@@ -104,7 +104,9 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 // addable file paths; a bare (non-command) line completes file paths in the
 // message itself, aider-style. See promptCompleter in completion.go.
 func (r *REPL) completer() readline.AutoCompleter {
-	chatFiles := func(string) []string { return r.coder.ChatFiles() }
+	pinnedFiles := func(string) []string {
+		return append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...)
+	}
 	items := make([]*readline.PrefixCompleter, 0, len(commands))
 	for _, c := range commands {
 		var sub []*readline.PrefixCompleter
@@ -112,7 +114,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 		case "add", "read-only", "submit":
 			sub = append(sub, recursiveDynamic(r.completeAddable))
 		case "drop":
-			sub = append(sub, recursiveDynamic(chatFiles))
+			sub = append(sub, recursiveDynamic(pinnedFiles))
 		case "env":
 			// /env takes a subcommand first, then any number of names: add
 			// offers set variables the allowlist does not yet pass, drop offers

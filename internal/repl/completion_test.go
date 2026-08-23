@@ -2,7 +2,10 @@ package repl
 
 import (
 	"slices"
+	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/fixture"
 )
 
 func runeStrings(rs [][]rune) []string {
@@ -87,5 +90,16 @@ func TestPromptCompleterRouting(t *testing.T) {
 	}
 	if len(got) != 1 || string(got[0]) != "DME.md" || n != 3 {
 		t.Errorf("file completion = %v len=%d, want [DME.md] len=3", runeStrings(got), n)
+	}
+}
+
+func TestDropCompletionIncludesReadOnlyFiles(t *testing.T) {
+	r, cdr, _ := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader("/exit\n"))
+	defer r.Close()
+	cdr.AddReadOnlyFile("hello.txt")
+
+	got := completionsFor(r.completer(), "/drop hel")
+	if len(got) != 1 || got[0] != "lo.txt" {
+		t.Errorf("/drop completion = %v, want [lo.txt] for the read-only pin", got)
 	}
 }
