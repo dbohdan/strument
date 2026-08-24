@@ -86,6 +86,20 @@ func TestChatSummaryTooBig(t *testing.T) {
 	}
 }
 
+// An assistant turn that is all tool call has no text, so counting m.Text()
+// alone made the history most worth compacting look small. The budget that
+// decides when to compact must see the arguments.
+func TestChatSummaryCountSeesToolCalls(t *testing.T) {
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	msgs := []llm.Message{{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{
+		{ID: "c1", Name: "edit", Arguments: `{"path":"a.go","old_string":"` +
+			strings.Repeat("x", 4000) + `","new_string":"y"}`},
+	}}}
+	if got := s.total(msgs); got < 900 {
+		t.Errorf("a 4KB tool call counted as %d tokens; the arguments are invisible", got)
+	}
+}
+
 func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 	stub := &summaryStub{}
 	side := &config.Model{Slug: "side", Context: 100000}

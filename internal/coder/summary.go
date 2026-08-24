@@ -44,7 +44,19 @@ func NewChatSummary(client llm.ModelClient, side *config.Model, tokens TokenCoun
 	return &ChatSummary{client: client, side: side, tokens: tokens, out: out, clock: clock}
 }
 
-func (s *ChatSummary) count(m llm.Message) int { return s.tokens.Count(m.Text()) }
+// count estimates one message's tokens, including its tool calls. m.Text()
+// reads Content only, so an assistant turn that is all tool calls would
+// otherwise count as zero — the same undercount countMessages fixed on the
+// send side, where the arguments are often the largest thing in the request.
+// In a tool-driven harness that history is exactly the history most worth
+// compacting, so the budget that decides when to compact must see it.
+func (s *ChatSummary) count(m llm.Message) int {
+	n := s.tokens.Count(m.Text())
+	for _, tc := range m.ToolCalls {
+		n += s.tokens.Count(tc.Name) + s.tokens.Count(tc.Arguments)
+	}
+	return n
+}
 
 func (s *ChatSummary) total(msgs []llm.Message) int {
 	n := 0
