@@ -714,6 +714,55 @@ func (c *Coder) flushSendUsage() {
 	c.lastUsageReport = ""
 }
 
+// messageUsageReport builds the accounting line from the message-scoped totals
+// — the token breakdown, the cost, and the estimated marker — for either a
+// whole turn or a side request; flushTurnUsage and FlushSideUsage differ only
+// in the cost label and in what they append. prefix is inserted at the start,
+// so a caller can label the charge without disturbing the token and cost
+// figures.
+func (c *Coder) messageUsageReport(label, prefix string) string {
+	report := prefix + formatTokenLine(c.messageTokensSent, c.messageCacheWrite,
+		c.messageCacheRead, c.messageTokensReceived)
+	if c.costKnown {
+		report += fmt.Sprintf(" Cost: $%s %s, $%s session.", formatCost(c.messageCost), label, formatCost(c.totalCost))
+	}
+	if c.messageEstimated {
+		report += " (estimated)"
+	}
+	return report
+}
+
+// FlushSideUsage prints the token/cost line for a side request — the session
+// notes — that reported its usage through RecordSideUsage. It is the same line
+// flushTurnUsage prints at the end of a turn, minus the step/file summary a
+// side request has none of. The caller names the charge with
+// ReportSideUsageDone; FlushSideUsage prints only the token/cost line.
+//
+// The startup --continue notes call is otherwise an invisible charge: the side
+// model is paid and the session cost advances, but nothing on screen told the
+// user. It is called once, right after the side call returns; the first turn's
+// initBeforeMessage then clears the message-scoped totals it read, so they
+// never fold into a turn line.
+func (c *Coder) FlushSideUsage() {
+	if c.messageTokensSent == 0 && c.messageTokensReceived == 0 {
+		return
+	}
+	report := c.messageUsageReport("message", "")
+	c.Out.Printf("%s", report)
+}
+
+// sideUsageDoneMessage is the message printed after a side usage line that
+// named the charge — the session notes — so the user knows what the charge was
+// for. Both the startup --continue notes call and /notes generate print it.
+const sideUsageDoneMessage = "Session notes generated from the transcript."
+
+// ReportSideUsageDone prints sideUsageDoneMessage through the coder's output
+// writer. Call it after FlushSideUsage so the charge — the session notes — is
+// named on screen rather than left to the token/cost line alone.
+func (c *Coder) ReportSideUsageDone() {
+	c.Out.Printf("%s", sideUsageDoneMessage)
+}
+
 // RecordSideUsage folds in a request the turn made outside the tool loop.
 //
 // Today that is only the commit message, which goes out through the client
@@ -775,15 +824,7 @@ func (c *Coder) flushTurnUsage() {
 	}
 	c.messageSends = 0 // idempotent: never report the same turn twice
 
-	report := formatTokenLine(c.messageTokensSent, c.messageCacheWrite,
-		c.messageCacheRead, c.messageTokensReceived)
-	if c.costKnown {
-		report += fmt.Sprintf(" Cost: $%s turn, $%s session.", formatCost(c.messageCost), formatCost(c.totalCost))
-	}
-	if c.messageEstimated {
-		report += " (estimated)"
-	}
-	report += c.turnSummary()
+	report := c.messageUsageReport("turn", "") + c.turnSummary()
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)

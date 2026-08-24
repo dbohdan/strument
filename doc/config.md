@@ -312,7 +312,8 @@ cost. The notes live in memory for the session and are never persisted; the next
 `--continue` regenerates from a transcript that now includes the full prior
 session. `/notes generate` achieves the same thing mid-session at the user's
 request. The option does nothing when history is disabled, unavailable, or
-empty.
+empty. Either path prints the same token/cost line a turn ends with, so the
+notes call is never an invisible charge.
 
 
 How much of the model's thinking to show, in both the interactive REPL and

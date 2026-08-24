@@ -313,10 +313,14 @@ func (c *chatCmd) Run() error {
 	if c.Continue && hist != nil {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
-			write := coder.NotesWriter(client.New(model.SideModel.Provider), model.SideModel, nil, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.New(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 			if notes := write(transcript); notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
+				// The notes call is paid for; say so with the same token/cost line
+				// a turn ends with, rather than leaving the charge invisible.
+				cdr.FlushSideUsage()
+				cdr.ReportSideUsageDone()
 			}
 		}
 	}
@@ -734,6 +738,8 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			}
 			cdr.SessionNotes = notes
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
+			cdr.FlushSideUsage()
+			cdr.ReportSideUsageDone()
 			return nil
 		},
 		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",

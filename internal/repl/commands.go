@@ -467,7 +467,6 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 			r.out.Errorf("Could not generate notes: %v", err)
 			return ""
 		}
-		r.printf("Session notes regenerated from the transcript.")
 	case "drop":
 		if r.opts.DropNotes == nil {
 			r.printf("Session notes are off for this session.")

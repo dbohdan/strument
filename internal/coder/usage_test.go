@@ -222,3 +222,44 @@ func TestTokenLineParenthesizesTheBreakdown(t *testing.T) {
 		}
 	}
 }
+
+// The startup --continue notes call is a side request that reports its usage
+// through RecordSideUsage. FlushSideUsage prints the same token/cost line a turn
+// ends with, so the charge is not invisible — but only when something was
+// actually spent.
+func TestFlushSideUsageReportsTheSideCall(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	out := &summaryOutput{}
+	c.Out = out
+
+	cost := 0.0003
+	c.RecordSideUsage(llm.Usage{
+		PromptTokens:     794,
+		CompletionTokens: 13,
+		Cost:             &cost,
+	})
+
+	c.FlushSideUsage()
+
+	lines := strings.Join(out.lines, "\n")
+	if !strings.Contains(lines, "Tokens: 794 sent, 13 received.") {
+		t.Errorf("side usage line missing token counts:\n%s", lines)
+	}
+	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 session.") {
+		t.Errorf("side usage line missing the cost:\n%s", lines)
+	}
+}
+
+// A side request that recorded nothing must print nothing — a --continue with
+// no transcript, or a model that returned empty, is not a charge to surface.
+func TestFlushSideUsageIsSilentWhenNothingSpent(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	out := &summaryOutput{}
+	c.Out = out
+
+	c.FlushSideUsage()
+
+	if len(out.lines) != 0 {
+		t.Errorf("expected no lines when nothing was spent, got:\n%s", strings.Join(out.lines, "\n"))
+	}
+}
