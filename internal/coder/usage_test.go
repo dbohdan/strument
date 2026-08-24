@@ -188,7 +188,7 @@ func TestSideUsageReachesTheTurnTotals(t *testing.T) {
 	c.finalizeUsage(&sendUsage{prompt: 2000, completion: 100})
 
 	cost := 0.0001
-	c.RecordSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &cost})
+	c.RecordTurnSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &cost})
 
 	if sent, recv := c.SessionTokens(); sent != 2794 || recv != 113 {
 		t.Errorf("session tokens = (%d, %d), want (2794, 113)", sent, recv)
@@ -247,6 +247,63 @@ func TestFlushSideUsageReportsTheSideCall(t *testing.T) {
 	}
 	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 session.") {
 		t.Errorf("side usage line missing the cost:\n%s", lines)
+	}
+}
+
+func TestFlushSideUsageConsumesOnlySideUsage(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	out := &summaryOutput{}
+	c.Out = out
+
+	c.finalizeUsage(&sendUsage{prompt: 2000, completion: 100})
+	c.flushTurnUsage()
+
+	firstCost := 0.0003
+	c.RecordSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &firstCost})
+	c.FlushSideUsage()
+
+	secondCost := 0.0004
+	c.RecordSideUsage(llm.Usage{PromptTokens: 500, CompletionTokens: 7, Cost: &secondCost})
+	c.FlushSideUsage()
+	c.FlushSideUsage()
+
+	lines := strings.Join(out.lines, "\n")
+	if strings.Count(lines, "Tokens:") != 3 {
+		t.Errorf("unexpected number of usage lines:\n%s", lines)
+	}
+	for _, want := range []string{
+		"Tokens: 794 sent, 13 received.",
+		"Cost: $0.00030 message, $0.00030 session.",
+		"Tokens: 500 sent, 7 received.",
+		"Cost: $0.00040 message, $0.00070 session.",
+	} {
+		if !strings.Contains(lines, want) {
+			t.Errorf("side usage line missing %q:\n%s", want, lines)
+		}
+	}
+	if strings.Contains(lines, "Tokens: 2.3k sent") {
+		t.Errorf("side usage was compounded:\n%s", lines)
+	}
+	if sent, received := c.SessionTokens(); sent != 3294 || received != 120 {
+		t.Errorf("session tokens = (%d, %d), want (3294, 120)", sent, received)
+	}
+}
+
+func TestFlushSideUsageReportsCostOnly(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	out := &summaryOutput{}
+	c.Out = out
+
+	cost := 0.0003
+	c.RecordSideUsage(llm.Usage{Cost: &cost})
+	c.FlushSideUsage()
+
+	lines := strings.Join(out.lines, "\n")
+	if !strings.Contains(lines, "Tokens: 0 sent, 0 received.") {
+		t.Errorf("cost-only usage line missing token counts:\n%s", lines)
+	}
+	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 session.") {
+		t.Errorf("cost-only usage line missing the cost:\n%s", lines)
 	}
 }
 

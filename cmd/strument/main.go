@@ -162,7 +162,7 @@ func (c *chatCmd) Run() error {
 		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.New(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits
@@ -314,12 +314,13 @@ func (c *chatCmd) Run() error {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
 			write := coder.NotesWriter(client.New(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
-			if notes := write(transcript); notes != "" {
+			notes := write(transcript)
+			cdr.FlushSideUsage()
+			if notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
 				// The notes call is paid for; say so with the same token/cost line
 				// a turn ends with, rather than leaving the charge invisible.
-				cdr.FlushSideUsage()
 				cdr.ReportSideUsageDone()
 			}
 		}
@@ -733,12 +734,12 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 				return errors.New("transcript is empty")
 			}
 			notes := write(transcript)
+			cdr.FlushSideUsage()
 			if notes == "" {
 				return errors.New("the model returned no notes")
 			}
 			cdr.SessionNotes = notes
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
-			cdr.FlushSideUsage()
 			cdr.ReportSideUsageDone()
 			return nil
 		},

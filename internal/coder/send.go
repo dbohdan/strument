@@ -715,39 +715,43 @@ func (c *Coder) flushSendUsage() {
 }
 
 // messageUsageReport builds the accounting line from the message-scoped totals
-// — the token breakdown, the cost, and the estimated marker — for either a
-// whole turn or a side request; flushTurnUsage and FlushSideUsage differ only
-// in the cost label and in what they append. prefix is inserted at the start,
-// so a caller can label the charge without disturbing the token and cost
-// figures.
+// — the token breakdown, the cost, and the estimated marker — for a whole turn.
 func (c *Coder) messageUsageReport(label, prefix string) string {
-	report := prefix + formatTokenLine(c.messageTokensSent, c.messageCacheWrite,
-		c.messageCacheRead, c.messageTokensReceived)
-	if c.costKnown {
-		report += fmt.Sprintf(" Cost: $%s %s, $%s session.", formatCost(c.messageCost), label, formatCost(c.totalCost))
+	return usageReport(label, prefix, c.messageTokensSent, c.messageCacheWrite,
+		c.messageCacheRead, c.messageTokensReceived, c.messageCost, c.costKnown,
+		c.totalCost, c.messageEstimated)
+}
+
+func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int,
+	cost float64, costKnown bool, totalCost float64, estimated bool,
+) string {
+	report := prefix + formatTokenLine(sent, cacheWrite, cacheRead, received)
+	if costKnown {
+		report += fmt.Sprintf(" Cost: $%s %s, $%s session.", formatCost(cost), label, formatCost(totalCost))
 	}
-	if c.messageEstimated {
+	if estimated {
 		report += " (estimated)"
 	}
 	return report
 }
 
-// FlushSideUsage prints the token/cost line for a side request — the session
-// notes — that reported its usage through RecordSideUsage. It is the same line
-// flushTurnUsage prints at the end of a turn, minus the step/file summary a
-// side request has none of. The caller names the charge with
-// ReportSideUsageDone; FlushSideUsage prints only the token/cost line.
-//
-// The startup --continue notes call is otherwise an invisible charge: the side
-// model is paid and the session cost advances, but nothing on screen told the
-// user. It is called once, right after the side call returns; the first turn's
-// initBeforeMessage then clears the message-scoped totals it read, so they
-// never fold into a turn line.
+// FlushSideUsage prints and consumes the token/cost line for the current
+// session-notes request. Notes can be generated between turns, so their usage
+// has its own accumulator rather than sharing the current turn's totals.
 func (c *Coder) FlushSideUsage() {
-	if c.messageTokensSent == 0 && c.messageTokensReceived == 0 {
+	if !c.sideUsageRecorded {
 		return
 	}
-	report := c.messageUsageReport("message", "")
+	report := usageReport("message", "", c.sideTokensSent, c.sideCacheWrite,
+		c.sideCacheRead, c.sideTokensReceived, c.sideCost, c.sideCostKnown,
+		c.totalCost, false)
+	c.sideCost = 0
+	c.sideCostKnown = false
+	c.sideTokensSent = 0
+	c.sideTokensReceived = 0
+	c.sideCacheRead = 0
+	c.sideCacheWrite = 0
+	c.sideUsageRecorded = false
 	c.Out.Printf("%s", report)
 }
 
@@ -763,17 +767,10 @@ func (c *Coder) ReportSideUsageDone() {
 	c.Out.Printf("%s", sideUsageDoneMessage)
 }
 
-// RecordSideUsage folds in a request the turn made outside the tool loop.
-//
-// Today that is only the commit message, which goes out through the client
-// directly and so never reached finalizeUsage. A measured five-request turn
-// reported the four it knew about — $0.00084 — having paid $0.00093. Nine
-// percent of a small turn, and the share grows with the diff, since that call
-// re-sends it uncached.
-//
-// It runs before flushTurnUsage (see Run), so the number the user reads is the
-// number they paid.
-func (c *Coder) RecordSideUsage(u llm.Usage) {
+// RecordTurnSideUsage folds in a request the turn made outside the tool loop.
+// It is used for commit-message requests, which belong in the enclosing turn's
+// totals.
+func (c *Coder) RecordTurnSideUsage(u llm.Usage) {
 	c.messageTokensSent += u.PromptTokens
 	c.messageTokensReceived += u.CompletionTokens
 	c.messageCacheRead += u.CacheReadTokens
@@ -785,6 +782,29 @@ func (c *Coder) RecordSideUsage(u llm.Usage) {
 		c.messageCost += *u.Cost
 		c.totalCost += *u.Cost
 		c.costKnown, c.sessionKnown = true, true
+	}
+}
+
+// RecordSideUsage records one session-notes request in its independent
+// accumulator and folds it into the session totals. FlushSideUsage consumes the
+// accumulator after the request is complete.
+func (c *Coder) RecordSideUsage(u llm.Usage) {
+	c.sideTokensSent += u.PromptTokens
+	c.sideTokensReceived += u.CompletionTokens
+	c.sideCacheRead += u.CacheReadTokens
+	c.sideCacheWrite += u.CacheWriteTokens
+	c.totalTokensSent += u.PromptTokens
+	c.totalTokensReceived += u.CompletionTokens
+	c.peakTokensSent = max(c.peakTokensSent, u.PromptTokens)
+	if u.Cost != nil {
+		c.sideCost += *u.Cost
+		c.totalCost += *u.Cost
+		c.sideCostKnown = true
+		c.sessionKnown = true
+	}
+	if u.PromptTokens != 0 || u.CompletionTokens != 0 || u.CacheReadTokens != 0 ||
+		u.CacheWriteTokens != 0 || u.Cost != nil {
+		c.sideUsageRecorded = true
 	}
 }
 

@@ -192,6 +192,15 @@ type Coder struct {
 	messageSends          int
 	totalTokensSent       int
 	totalTokensReceived   int
+	// side* is the current session-notes request. It is separate from the
+	// turn totals because notes can be generated between turns.
+	sideCost           float64
+	sideCostKnown      bool
+	sideTokensSent     int
+	sideTokensReceived int
+	sideCacheRead      int
+	sideCacheWrite     int
+	sideUsageRecorded  bool
 	// peakTokensSent is the largest single request this session. The session
 	// and turn totals are sums over sends, which is what you are billed but not
 	// what fills the window: a five-step turn re-sends its whole conversation
