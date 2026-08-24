@@ -179,7 +179,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [n]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
 | `/symbol <name> [reference]` | Find where a name is defined or used from the language parser rather than from text. |
-| `/submit <file>` | Send a file's contents as your message, as if you had typed them. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
+| `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting. |

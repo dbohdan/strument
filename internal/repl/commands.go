@@ -795,7 +795,9 @@ const submitLimit = 100 * 1024
 // turn: the same path /ask's one-shot arguments take, so a submitted file goes
 // through runTurn like typed input — transcript, token accounting, Ctrl-C, the
 // undo hint — without touching readline (the typed /submit line is what input
-// history keeps; the file's contents never enter it). Unlike /add, nothing is
+// history keeps; the file's contents never enter it). The contents are printed
+// first, in their trimmed form, so the echo is the very text the model
+// receives. Unlike /add, nothing is
 // pinned: the text is sent once and only exists in the conversation.
 //
 // Paths resolve against the coder root but outside paths are allowed, like
@@ -847,6 +849,9 @@ func cmdSubmit(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("%s is empty.", paths[0])
 		return ""
 	}
+	// Print the trimmed text, not the raw file: what is echoed is what is
+	// sent, with no framing whitespace to make the two disagree.
+	r.printf("%s", msg)
 	return msg
 }
 

@@ -904,7 +904,7 @@ func TestSubmitCommandSendsFileContents(t *testing.T) {
 	}
 
 	input := strings.NewReader(`/submit "hello.txt"` + "\n/exit\n")
-	r, cdr, _ := newTestREPL(t, stub, input)
+	r, cdr, out := newTestREPL(t, stub, input)
 	defer r.Close()
 
 	if err := r.Run(context.Background()); err != nil {
@@ -912,6 +912,9 @@ func TestSubmitCommandSendsFileContents(t *testing.T) {
 	}
 	if !strings.Contains(reqText, "hello") {
 		t.Errorf("file contents did not reach the model request:\n%s", reqText)
+	}
+	if !strings.Contains(out.String(), "hello") {
+		t.Errorf("/submit did not print the file contents:\n%s", out.String())
 	}
 	if len(cdr.ChatFiles()) != 0 {
 		t.Errorf("files pinned after /submit: %v", cdr.ChatFiles())
@@ -986,6 +989,20 @@ func TestSubmitCommandRefusals(t *testing.T) {
 		if got := out.String(); !strings.Contains(got, tc.want) {
 			t.Errorf("/submit %q output missing %q:\n%s", tc.args, tc.want, got)
 		}
+	}
+
+	// The happy path prints exactly the trimmed contents: the echo must be
+	// what gets sent, with the framing whitespace gone.
+	trimmed := "  \ntrims fine\n\t"
+	if err := os.WriteFile(filepath.Join(r.coder.Root, "trimmed.txt"), []byte(trimmed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if msg := cmdSubmit(context.Background(), r, "trimmed.txt"); msg != "trims fine" {
+		t.Errorf("/submit trimmed.txt returned %q, want %q", msg, "trims fine")
+	}
+	if got := out.String(); got != "trims fine\n" {
+		t.Errorf("/submit trimmed.txt printed %q, want the trimmed contents", got)
 	}
 }
 
