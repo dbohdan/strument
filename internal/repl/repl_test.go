@@ -131,7 +131,7 @@ func TestScriptedSession(t *testing.T) {
 
 	got := out.String()
 	for _, want := range []string{
-		"/read-only <file> [file ...]", // /help output
+		"/read-only <file> ...", // /help output
 		"Pinned hello.txt for editing.",
 		"Pinned for editing:",
 		"hello.txt",
@@ -172,7 +172,7 @@ func TestContextCommandSendsNothingAndMutatesNothing(t *testing.T) {
 	if n := strings.Count(got, "Context as the model sees it:"); n != 2 {
 		t.Errorf("bare and [n] should each render, got %d render(s):\n%s", n, got)
 	}
-	if !strings.Contains(got, "Usage: /context [n]") {
+	if !strings.Contains(got, usage("context")) {
 		t.Errorf("bad [n] should give usage:\n%s", got)
 	}
 	if stub.Remaining() != 0 {

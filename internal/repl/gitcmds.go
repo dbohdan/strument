@@ -144,7 +144,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	if arg := strings.TrimSpace(args); arg != "" {
 		parsed, err := strconv.Atoi(arg)
 		if err != nil || parsed < 2 {
-			r.out.Errorf("Usage: /squash [n], where n is 2 or more.")
+			r.out.Errorf("%s, where n is 2 or more.", usage("squash"))
 			return ""
 		}
 		n = parsed

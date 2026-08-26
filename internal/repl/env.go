@@ -127,7 +127,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 
 	case "add":
 		if len(names) == 0 {
-			r.out.Errorf("Usage: /env add <NAME> [NAME ...]")
+			r.out.Errorf("Usage: /env add <name> ...")
 			return ""
 		}
 		for _, name := range names {
@@ -149,7 +149,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 
 	case "drop":
 		if len(names) == 0 {
-			r.out.Errorf("Usage: /env drop <NAME> [NAME ...]")
+			r.out.Errorf("Usage: /env drop <name> ...")
 			return ""
 		}
 		for _, name := range names {
@@ -172,7 +172,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 		r.printf("Environment allowlist reset to the config.")
 
 	default:
-		r.out.Errorf("Usage: /env [add NAME... | drop NAME... | reset]")
+		r.out.Errorf("%s", usage("env"))
 	}
 	return ""
 }

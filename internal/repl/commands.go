@@ -24,10 +24,32 @@ import (
 // mutate state.
 type command struct {
 	name string
-	args string // help placeholder, e.g. "<file> [file ...]"
+	args string // argument syntax, e.g. "<file> ..."; see the notation below
 	help string
 	run  func(ctx context.Context, r *REPL, args string) string
 }
+
+// The notation in args, which TestCommandArgsNotation enforces:
+//
+//	<x>        a required argument
+//	[x]        an optional one
+//	...        the argument before it may repeat
+//	a | b      alternatives; bare words are literal keywords
+//
+// Positional and rest-of-the-line arguments are told apart by what the
+// metavariable names rather than by a fourth mark, because three marks are
+// already as much notation as a help screen can carry.
+//
+// A metavariable naming a *word* — <file>, <name>, <alias>, <url>, <n> — is one
+// argument among several: the line is split on whitespace, so a value
+// containing a space has to be quoted, and `...` can repeat it.
+//
+// A metavariable naming *text* — <question>, <request>, <command> — takes the
+// rest of the line exactly as typed. It follows that such an argument is always
+// last and never carries `...`, since nothing can come after "everything else";
+// the test checks that, which is what keeps the distinction honest rather than
+// merely stated.
+var restOfLine = []string{"command", "question", "request"}
 
 // quitSentinel distinguishes /exit from "no message to send".
 const quitSentinel = "\x00quit"
@@ -38,30 +60,30 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> [file ...]", "Pin files for the model to edit (globs allowed)", cmdAdd},
-		{"ask", "[question]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
+		{"add", "<file> ...", "Pin files for the model to edit (globs allowed)", cmdAdd},
+		{"ask", "[<question>]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
-		{"check", "[name]", "Run a project check; optionally add its output to the chat", cmdCheck},
+		{"check", "[<name>]", "Run a project check; optionally add its output to the chat", cmdCheck},
 		{"clear", "", "Clear the conversation history", cmdClear},
-		{"code", "[request]", "Return to editing (bare: stay in code mode)", cmdCode},
-		{"context", "[n]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
+		{"code", "[<request>]", "Return to editing (bare: stay in code mode)", cmdCode},
+		{"context", "[<n>]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
-		{"drop", "[file ...]", "Unpin files (all if none given)", cmdDrop},
-		{"env", "[add NAME... | drop NAME... | reset]", "Show or change (this session) what environment variables model-run commands see", cmdEnv},
+		{"drop", "[<file> ...]", "Unpin files (all if none given)", cmdDrop},
+		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change (this session) what environment variables model-run commands see", cmdEnv},
 		{"exit", "", "Exit Strument", cmdExit},
 		{"help", "", "Show this help", cmdHelp},
 		{"ls", "", "List the pinned files", cmdLs},
-		{"model", "[alias]", "Show or switch the active model", cmdModel},
-		{"notes", "[generate|drop]", "Show, regenerate, or discard the session notes", cmdNotes},
+		{"model", "[<alias>]", "Show or switch the active model", cmdModel},
+		{"notes", "[generate | drop]", "Show, regenerate, or discard the session notes", cmdNotes},
 		{"quit", "", "Exit Strument", cmdExit},
-		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
-		{"read-only", "<file> [file ...]", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
+		{"read-only", "<file> ...", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
 		{"reset", "", "Unpin everything and clear the history", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
-		{"squash", "[n]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
+		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
+		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message", cmdSubmit},
-		{"symbol", "<name> [reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
+		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
 		{"web", "<url>", "Scrape a web page and stage it for your next message", cmdWeb},
@@ -75,6 +97,20 @@ func (r *REPL) saveResume() {
 	if r.opts.SaveResume != nil {
 		r.opts.SaveResume(r.opts.ModelAlias)
 	}
+}
+
+// usage renders one command's line from the same table /help prints, so the
+// syntax a command quotes back at a bad invocation cannot drift from the syntax
+// the help screen documents. It used to be spelled out twice per command, and
+// the two spellings had already parted ways.
+func usage(name string) string {
+	c := findCommand(name)
+	if c == nil || c.args == "" {
+		// Unreachable: every caller names its own command, and a command with
+		// no arguments has nothing to be wrong about.
+		return "Usage: /" + name
+	}
+	return "Usage: /" + c.name + " " + c.args
 }
 
 func findCommand(name string) *command {
@@ -216,6 +252,8 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 		}
 		r.printf("  %-*s  %s", width+1, left, c.help)
 	}
+	r.printf("Arguments: <required>, [optional], \"...\" repeats (split on whitespace).")
+	r.printf("<command>, <question>, and <request> take the rest of the line as typed.")
 	r.printf("Anything else is sent to the model.")
 	return ""
 }
@@ -356,7 +394,7 @@ func (r *REPL) expandDir(abs string) []string {
 
 func cmdAdd(_ context.Context, r *REPL, args string) string {
 	if args == "" {
-		r.out.Errorf("Usage: /add <file> [file ...]")
+		r.out.Errorf("%s", usage("add"))
 		return ""
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), false) {
@@ -369,7 +407,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 
 func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 	if args == "" {
-		r.out.Errorf("Usage: /read-only <file> [file ...]")
+		r.out.Errorf("%s", usage("read-only"))
 		return ""
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), true) {
@@ -486,7 +524,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 		}
 		r.printf("%s", strings.TrimRight(notes(), "\n"))
 	default:
-		r.out.Errorf("Usage: /notes [generate|drop]")
+		r.out.Errorf("%s", usage("notes"))
 	}
 	return ""
 }
@@ -506,7 +544,7 @@ func cmdContext(_ context.Context, r *REPL, args string) string {
 	if arg := strings.TrimSpace(args); arg != "" {
 		parsed, err := strconv.Atoi(arg)
 		if err != nil || parsed <= 0 {
-			r.out.Errorf("Usage: /context [n], where n is the number of summaries to show.")
+			r.out.Errorf("%s, where n is the number of summaries to show.", usage("context"))
 			return ""
 		}
 		n = parsed
@@ -523,7 +561,7 @@ func cmdContext(_ context.Context, r *REPL, args string) string {
 func cmdSymbol(_ context.Context, r *REPL, args string) string {
 	name, kind, _ := strings.Cut(args, " ")
 	if strings.TrimSpace(name) == "" {
-		r.out.Errorf("Usage: /symbol <name> [reference]")
+		r.out.Errorf("%s", usage("symbol"))
 		return ""
 	}
 	text, _, problem := r.coder.SymbolLookup(name, strings.TrimSpace(kind))
@@ -566,7 +604,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 
 func cmdBtw(ctx context.Context, r *REPL, args string) string {
 	if args == "" {
-		r.out.Errorf("Usage: /btw <question>")
+		r.out.Errorf("%s", usage("btw"))
 		return ""
 	}
 	// A one-off, general-assistant question: the coder answers it outside the
@@ -621,7 +659,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 
 func cmdRun(ctx context.Context, r *REPL, args string) string {
 	if args == "" {
-		r.out.Errorf("Usage: /run <command>")
+		r.out.Errorf("%s", usage("run"))
 		return ""
 	}
 
@@ -768,7 +806,7 @@ var execCommandContext = exec.CommandContext
 func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	url := strings.TrimSpace(args)
 	if url == "" {
-		r.out.Errorf("Usage: /web <url>")
+		r.out.Errorf("%s", usage("web"))
 		return ""
 	}
 	if r.coder.Scrape == nil {
@@ -811,7 +849,7 @@ const submitLimit = 100 * 1024
 func cmdSubmit(_ context.Context, r *REPL, args string) string {
 	paths := splitArgs(args)
 	if len(paths) != 1 || paths[0] == "" {
-		r.out.Errorf("Usage: /submit <file>")
+		r.out.Errorf("%s", usage("submit"))
 		return ""
 	}
 	path := paths[0]

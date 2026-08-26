@@ -130,7 +130,7 @@ func TestEnvValidatesNames(t *testing.T) {
 	if !strings.Contains(out, `"FOO=bar" is not an environment variable name`) {
 		t.Errorf("NAME=VALUE rejection missing:\n%s", out)
 	}
-	if !strings.Contains(out, "Usage: /env [add NAME... | drop NAME... | reset]") {
+	if !strings.Contains(out, usage("env")) {
 		t.Errorf("unknown subcommand message missing:\n%s", out)
 	}
 	if len(cdr.EnvAllow) != 0 {

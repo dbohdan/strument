@@ -169,16 +169,16 @@ Edits made before the interruption remain undoable with `/undo`.
 
 | | |
 | --- | --- |
-| `/add <file>`, `/drop`, `/ls` | Pin the files you already know need to be read or changed. Strument names them for the model, which reads them itself; it finds everything else on its own. |
+| `/add <file> ...`, `/drop`, `/ls` | Pin the files you already know need to be read or changed. Strument names them for the model, which reads them itself; it finds everything else on its own. |
 | `/ask <question>` | Ask about the project without giving the model editing tools. `/ask` on its own activates ask mode, and `/code` switches back. |
 | `/check [name]` | Run a project check by name, or all checks if no name is given. Checks run in the order they are listed in the config and stop at the first failure. On failure or non-empty output, offers to add the transcript to the chat. A successful check with no output is silent. |
 | `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the transcript, or discard them. Notes are generated on demand (`--continue` at startup, or `/notes generate` mid-session) and live in memory for the session. They are never persisted to disk. See [`doc/sessions.md`](doc/sessions.md). |
-| `/read-only <file>` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
+| `/read-only <file> ...` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/undo` | Put the last turn back. Restores the files and removes the commit if there was one. |
 | `/squash [n]` | Fold the last `n` turns' commits into one. |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [n]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
-| `/symbol <name> [reference]` | Find where a name is defined or used from the language parser rather than from text. |
+| `/symbol <name> [definition \| reference]` | Find where a name is defined or used from the language parser rather than from text. |
 | `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
