@@ -56,6 +56,8 @@ complete -c strument -n "__fish_seen_subcommand_from tool" -s r -l root -d "Proj
 complete -c strument -n "__fish_seen_subcommand_from tool" -l json -d "Print tool arguments and result as JSON"
 complete -c strument -n "__fish_seen_subcommand_from tool" -a "read grep glob ls symbol"
 complete -c strument -n "__fish_seen_subcommand_from tool read" -a ""
+complete -c strument -n "__fish_seen_subcommand_from tool read" -l offset -d "First line to return (1-based)" -r
+complete -c strument -n "__fish_seen_subcommand_from tool read" -l limit -d "How many lines to return" -r
 complete -c strument -n "__fish_seen_subcommand_from tool grep" -l glob -d "Only search paths matching this glob" -r
 complete -c strument -n "__fish_seen_subcommand_from tool grep" -l path -d "Only search under this directory" -r
 complete -c strument -n "__fish_seen_subcommand_from tool grep" -l mode -d "What to return" -a "files content count"

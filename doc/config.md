@@ -433,7 +433,7 @@ them through the turn's snapshot.
 
 ### `env_allow`
 
-Commands the model causes to run — the `bash` tool, named `check`s, the
+Commands the model causes to run — the `bash` tool, the `check` tool, the
 `scraper` command — do not inherit your whole environment. They get an
 allowlist: the variables that make builds and tests work (`PATH`, `HOME`,
 `LANG` and the `LC_*` family, `TMPDIR`, the XDG locations, the standard proxy
@@ -443,6 +443,11 @@ a handful of others). Everything else is withheld, so a
 model-run `env`, or a failing test that prints its environment, cannot carry
 `OPENROUTER_API_KEY` — or any other credential — into a tool result, the
 transcript, and the model's context.
+
+What decides the filtering is who caused the command, not which command it is.
+Commands *you* type inherit your whole environment — `/run`, and `/check`,
+which runs the same named checks the model's `check` tool does but under your
+own environment because you asked for it.
 
 `env_allow` adds names on top of the default list:
 

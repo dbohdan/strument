@@ -6,9 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/alecthomas/kong"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
@@ -394,5 +397,73 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	}
 	if got := c.ChatFiles(); len(got) != 0 {
 		t.Errorf("pinned files = %v, want none", got)
+	}
+}
+
+// Every flag the CLI accepts appears in the completion scripts.
+//
+// The generated completions this replaced could not drift; hand-written ones
+// can, and the failure is silent — a flag simply stops completing, which
+// nobody reports as a bug. So the scripts are checked against the CLI itself
+// rather than against a list someone remembers to update.
+//
+// Kong is the source of truth here: walking the parsed model reaches every
+// subcommand's flags, so a new subcommand is covered the day it is added.
+func TestCompletionsCoverEveryFlag(t *testing.T) {
+	// Each shell spells a long option its own way, and this matcher was wrong
+	// twice before it was right: first looking for "--name" in both, which
+	// fish fails on every flag it does support, then accepting only fish's
+	// "-l name" and not its equally valid "--long name". Both times the report
+	// was drift that did not exist. A check that fires for the wrong reason is
+	// not a check, and one that cries wolf gets switched off.
+	needle := map[string]func(string) *regexp.Regexp{
+		"bash": func(n string) *regexp.Regexp { return regexp.MustCompile(`--` + regexp.QuoteMeta(n) + `\b`) },
+		// fish spells the same thing two ways, "-l name" and "--long name",
+		// and this script uses both. Requiring whitespace on each side rather
+		// than \b is deliberate: \b would let "-l yes" match "-l yes-shell".
+		"fish": func(n string) *regexp.Regexp {
+			return regexp.MustCompile(`(^|\s)(-l|--long) ` + regexp.QuoteMeta(n) + `(\s|$)`)
+		},
+	}
+	scripts := map[string]string{"bash": bashCompletion, "fish": fishCompletion}
+
+	var root cli
+	parser, err := kong.New(&root, kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var walk func(n *kong.Node)
+	var flags []string
+	seen := map[string]bool{}
+	walk = func(n *kong.Node) {
+		for _, f := range n.Flags {
+			// --help and --version are shell builtins of a sort: every
+			// completion offers them or the user types them blind, and
+			// neither is worth failing over.
+			if f.Hidden || f.Name == "help" || f.Name == "version" {
+				continue
+			}
+			if !seen[f.Name] {
+				seen[f.Name] = true
+				flags = append(flags, f.Name)
+			}
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(parser.Model.Node)
+
+	if len(flags) < 10 {
+		t.Fatalf("only %d flags found; the walk is not reaching the subcommands", len(flags))
+	}
+	for shell, script := range scripts {
+		for _, name := range flags {
+			if !needle[shell](name).MatchString(script) {
+				t.Errorf("%s completion is missing --%s (add it to "+
+					"cmd/strument/completions/strument.%s)", shell, name, shell)
+			}
+		}
 	}
 }

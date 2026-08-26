@@ -175,10 +175,13 @@ because that is what makes a result safe to act on.
   green. For anything with a runtime surface, exercise it, don't just test it.
 - **Never commit secrets** — API keys go in the environment
   (`OPENROUTER_API_KEY`), never in files, docs, or commits.
-- **Model-run commands get a filtered environment.** Commands the model
-  caused — the `bash` tool, `check`, the `scraper` command — run under the
-  allowlist in `internal/coder/envallow.go` (see `doc/config.md`, `env_allow`);
-  only `/run` inherits everything, because the user typed it. When adding a
+- **Model-run commands get a filtered environment.** The rule is about *who
+  caused the command*, not which command it is: anything the model caused —
+  the `bash` tool, the `check` tool, the `scraper` command — runs under the
+  allowlist in `internal/coder/envallow.go` (see `doc/config.md`, `env_allow`),
+  and anything the user typed inherits everything, because they typed it.
+  Today that second set is `/run` and `/check`; state the rule rather than the
+  list when you add to it. When adding a
   subprocess path the model can cause, pass `FilterEnv(nil, c.EnvAllow)`
   output. Watch the mvdan.cc/sh trap: `interp.Env(ListEnviron(nil...))` means
   an *empty* environment, not inherit — omit the option to inherit.

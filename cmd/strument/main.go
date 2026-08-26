@@ -882,12 +882,37 @@ func (*configDefaultCmd) Run() error { return runConfigSets("default") }
 // loadProjectConfig loads the effective config for the current project. It
 // mirrors historyRoot so the answer is the one the chat session would act on,
 // not the one from a different directory that happens to hold a config file.
+// A missing env() variable yields "" here instead of failing the load. These
+// subcommands read the config's *shape* — which aliases exist, which is the
+// default — and never make a request, so a key they cannot see costs them
+// nothing. Failing instead has a cost that is easy to miss: the bash
+// completion calls `config models` on every Tab and discards stderr, so a
+// config whose key lives in a per-project direnv made alias completion do
+// nothing at all, silently, outside that project. The substitution is
+// announced on stderr, where the human who typed the command sees it and the
+// completion script does not.
 func loadProjectConfig() (*config.Config, error) {
 	root, err := historyRoot()
 	if err != nil {
 		return nil, err
 	}
-	return config.Load(config.Options{ProjectRoot: root})
+	var missing []string
+	cfg, err := config.Load(config.Options{
+		ProjectRoot: root,
+		LookupEnv: func(name string) (string, bool) {
+			if v, ok := os.LookupEnv(name); ok {
+				return v, true
+			}
+			if !slices.Contains(missing, name) {
+				missing = append(missing, name)
+			}
+			return "", true
+		},
+	})
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "strument: not set, read as empty: %s\n", strings.Join(missing, ", "))
+	}
+	return cfg, err
 }
 
 // runConfigSets prints one of the config's top-level sets: the keys of
