@@ -90,7 +90,27 @@ var detectors = []detector{
 		if !declared {
 			return nil
 		}
-		return []Check{{Name: "py-test", Argv: []string{"pytest"}}}
+		// The lockfiles say which runner the project actually uses, the same
+		// way the node detector reads them to pick its package manager: bare
+		// pytest is always offered, and uv and poetry get a variant only when
+		// their lockfile is on disk, so no check points at a tool the project
+		// does not use.
+		base := []string{"pytest"}
+		out := []Check{{Name: "py-test", Argv: base}}
+		for _, v := range []struct {
+			lock   string
+			name   string
+			prefix []string
+		}{
+			{"uv.lock", "py-test-uv", []string{"uv", "run"}},
+			{"poetry.lock", "py-test-poetry", []string{"poetry", "run"}},
+		} {
+			if !exists(root, v.lock) {
+				continue
+			}
+			out = append(out, Check{Name: v.name, Argv: append(append([]string{}, v.prefix...), base...)})
+		}
+		return out
 	}},
 
 	{"node", func(root string) []Check {

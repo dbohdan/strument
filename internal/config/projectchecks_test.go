@@ -69,6 +69,30 @@ func TestProjectChecksDetection(t *testing.T) {
 			map[string]string{"pyproject.toml": "[project]\nname = \"x\"\n"},
 			nil,
 		},
+		// The runner variants are gated on the project's own lockfile: a
+		// uv.lock means the project uses uv, a poetry.lock means poetry.
+		"python with uv.lock": {
+			map[string]string{
+				"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"-q\"\n",
+				"uv.lock":        "",
+			},
+			[]string{"py-test", "py-test-uv"},
+		},
+		"python with poetry.lock": {
+			map[string]string{
+				"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"-q\"\n",
+				"poetry.lock":    "",
+			},
+			[]string{"py-test", "py-test-poetry"},
+		},
+		"python with both lockfiles": {
+			map[string]string{
+				"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"-q\"\n",
+				"uv.lock":        "",
+				"poetry.lock":    "",
+			},
+			[]string{"py-test", "py-test-uv", "py-test-poetry"},
+		},
 
 		"node npm": {
 			map[string]string{"package.json": `{"scripts":{"test":"vitest"}}`},
@@ -230,6 +254,30 @@ func TestProjectChecksLockfileSelectsThePackageManager(t *testing.T) {
 func TestProjectChecksWithoutARootDetectsNothing(t *testing.T) {
 	if got := ProjectChecks(""); got != nil {
 		t.Errorf("detected %v with no root", checkNamesOf(got))
+	}
+}
+
+// TestPythonRunnerVariantsPrependTheRunner: the variants wrap the same argv the
+// base check runs, so "uv run" lands before pytest rather than somewhere that
+// would change what pytest is told to do.
+func TestPythonRunnerVariantsPrependTheRunner(t *testing.T) {
+	root := projectWith(t, map[string]string{
+		"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"-q\"\n",
+		"uv.lock":        "",
+		"poetry.lock":    "",
+	})
+	got := map[string][]string{}
+	for _, c := range ProjectChecks(root) {
+		got[c.Name] = c.Argv
+	}
+	for name, want := range map[string][]string{
+		"py-test":        {"pytest"},
+		"py-test-uv":     {"uv", "run", "pytest"},
+		"py-test-poetry": {"poetry", "run", "pytest"},
+	} {
+		if !slices.Equal(got[name], want) {
+			t.Errorf("%s argv = %v, want %v", name, got[name], want)
+		}
 	}
 }
 

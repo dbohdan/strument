@@ -62,6 +62,7 @@ var defaultEnvAllowNames = []string{
 	"CARGO_HOME", "RUSTUP_HOME", "RUST_BACKTRACE", "RUSTFLAGS",
 	// Python packaging.
 	"VIRTUAL_ENV", "PIP_CACHE_DIR", "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR",
+	"POETRY_CACHE_DIR",
 	// JVM ecosystems.
 	"JAVA_HOME", "GRADLE_USER_HOME",
 }

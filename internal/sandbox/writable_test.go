@@ -225,6 +225,7 @@ func TestFlatEcosystemOverridesAreHonoured(t *testing.T) {
 		{"Rust rustup", "RUSTUP_HOME"},
 		{"Python pip", "PIP_CACHE_DIR"},
 		{"Python uv", "UV_CACHE_DIR"},
+		{"Python poetry", "POETRY_CACHE_DIR"},
 		{"npm", "npm_config_cache"},
 		{"Yarn cache", "YARN_CACHE_FOLDER"},
 		{"Deno cache", "DENO_DIR"},

@@ -277,6 +277,9 @@ func cacheDirs() []string {
 		// Python.
 		pick("PIP_CACHE_DIR", ""),
 		pick("UV_CACHE_DIR", ""),
+		// Poetry's virtualenvs live under its cache dir (~/.cache/pypoetry/virtualenvs
+		// by default), so a relocated cache is granted like the others.
+		pick("POETRY_CACHE_DIR", ""),
 
 		// Node and the other JavaScript runtimes.
 		pick("npm_config_cache", under(".npm")),

@@ -200,7 +200,7 @@ months later, with nothing to connect it back to a decision anyone made.
 | --- | --- | --- | --- |
 | Go | `go.mod` | `go-vet`, `go-test` | `GOCACHE`, `GOMODCACHE`, subdirectories of `GOPATH` |
 | Rust | `Cargo.toml` | `cargo-check`, `cargo-test` | subdirectories of `CARGO_HOME`, `RUSTUP_HOME` |
-| Python | `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` declaring pytest | `py-test` | `PIP_CACHE_DIR`, `UV_CACHE_DIR` |
+| Python | `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` declaring pytest | `py-test`, plus `py-test-uv` / `py-test-poetry` when `uv.lock` / `poetry.lock` is present | `PIP_CACHE_DIR`, `UV_CACHE_DIR`, `POETRY_CACHE_DIR` |
 | Node | `package.json` with a `test` script | `node-test` (`npm`/`pnpm`/`yarn`/`bun` per the lockfile) | `npm_config_cache`, `YARN_CACHE_FOLDER`, subdirectories of `PNPM_HOME`, `BUN_INSTALL`, `~/.yarn` |
 | Deno | `deno.json`/`deno.jsonc` | `deno-check`, `deno-test` | `DENO_DIR`, subdirectories of `DENO_INSTALL_ROOT` |
 | Java (Maven) | `pom.xml` | `mvn-test` | `~/.m2` |
@@ -266,6 +266,12 @@ does not come with Python, so it appears only where your config declares it. And
 where the command runs a target you defined — `make`, `task`, `just`, `npm`,
 `composer` — the target has to actually exist, or a detected check would just be
 a command that fails for reasons unrelated to your code.
+
+The Python check gets one more gate, in the same spirit: `py-test-uv` and
+`py-test-poetry` appear only when `uv.lock` or `poetry.lock` is on disk, the way
+the node check reads the lockfile to pick its package manager. `uv run pytest`
+on a project that never installed uv would fail for a reason having nothing to
+do with your code.
 
 **These are not commands that cannot do harm.** Every one of them runs your
 project's own code: `npm test` runs whatever `package.json` says, `make test`
