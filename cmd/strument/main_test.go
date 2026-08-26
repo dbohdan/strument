@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -54,19 +55,33 @@ func captureRun(kind string) (string, error) {
 	return out.String(), copyErr
 }
 
-// writeTempUserConfig drops a user config into a fresh XDG_CONFIG_HOME and
-// chdirs into a scratch directory, so config.Load and historyRoot see a
-// project without a .strument.star.
+// writeTempUserConfig drops a user config into a fresh user config directory
+// and chdirs into a scratch directory, so config.Load and historyRoot see a
+// project without a .strument.star. The directory is redirected through the
+// environment variable os.UserConfigDir honors on this OS — XDG_CONFIG_HOME
+// on Linux, $HOME on macOS, %APPDATA% on Windows — and the file lands at the
+// path DefaultUserConfigPath resolves, so the test cannot drift from the
+// loader's own convention on any platform.
 func writeTempUserConfig(t *testing.T, body string) {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	switch runtime.GOOS {
+	case "darwin":
+		t.Setenv("HOME", dir)
+	case "windows":
+		t.Setenv("APPDATA", dir)
+	default:
+		t.Setenv("XDG_CONFIG_HOME", dir)
+	}
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
-	cfgDir := filepath.Join(dir, "strument")
-	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+	cfgPath, err := config.DefaultUserConfigPath()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.star"), []byte(body), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
