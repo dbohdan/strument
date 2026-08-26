@@ -156,6 +156,48 @@ Enough tools have `/tmp` compiled in that denying it breaks builds for nothing.
 and the integrity this policy protects is your own files.
 
 
+## What Landlock does not confine: the display server
+
+Landlock governs *filesystem* access rights. Connecting to a Unix domain socket
+is not one of them — a path grant is irrelevant either way — so **a
+model-caused command can reach your display server, sandbox or no sandbox.**
+
+Checked, not reasoned: `socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/wayland-0` from
+inside the sandbox on a Wayland laptop exits 0. The connection is made. That is
+the whole of what the probe shows — a real client still has to speak the
+protocol, and writing `test` into the socket accomplishes nothing — but "the
+sandbox does not close this channel" is the part a threat model has to say out
+loud.
+
+Two accidents of configuration are what actually decide this today, and neither
+was designed for it:
+
+- **X11 is closed, by the environment allowlist.** `DISPLAY` and `XAUTHORITY`
+  are not in it, so a model-caused command has no display to find. That matters
+  more than the Wayland case: X11's XTEST extension lets any client synthesize
+  input into any window, which is a general-purpose escape from every
+  restriction in this document. It is closed by a list that exists for
+  credential hygiene, not for this.
+- **Wayland is open, by the same allowlist.** `XDG_RUNTIME_DIR` *is* on it,
+  because tools resolve runtime and cache paths from the XDG variables — and it
+  is also the compositor's address. One directory, two unrelated uses, and the
+  legitimate one carries the other in with it.
+
+Wayland is a smaller prize than X11: its clients cannot snoop other clients'
+input or contents by design, so the reachable surface is closer to "can open a
+window" than "can drive your session". Not nothing, and not XTEST.
+
+Removing `XDG_RUNTIME_DIR` from the allowlist would close it, at the cost of
+breaking any check that needs a session bus. That trade has not been made — it
+is recorded here so that whoever wants it knows it is one line, and so that
+nobody reads the sections above as claiming a confinement they do not provide.
+
+This was found because a model on someone else's machine, asked to do something
+that needed a GUI confirmation, went and found `xdotool`. Nothing about it was
+adversarial. It is worth knowing that the shortest path to a goal sometimes
+leaves the box the box was drawn around.
+
+
 ## When there is no sandbox
 
 `sandbox = "landlock"` on a kernel without Landlock does not proceed
@@ -184,9 +226,13 @@ into a tool result and from there into the model's context and the transcript.
 
 This is not part of the sandbox and does not depend on it. It answers a
 different question: the sandbox is about what a command can *change*, and the
-allowlist is about what it *carries*. `/run` is exempt from the allowlist for
-the same reason it is not exempt from the sandbox — the allowlist is a policy
-Strument chooses to apply, and Landlock is a property of the process.
+allowlist is about what it *carries*. It is also, by accident, the only thing
+keeping a model-caused command away from an X11 display — see [what Landlock
+does not confine](#what-landlock-does-not-confine-the-display-server).
+
+`/run` is exempt from the allowlist for the same reason it is not exempt from
+the sandbox — the allowlist is a policy Strument chooses to apply, and Landlock
+is a property of the process.
 
 
 ## How this was verified
