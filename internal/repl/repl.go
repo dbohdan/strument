@@ -332,8 +332,19 @@ func (r *REPL) announce() {
 	case !sb.Required:
 		r.printf("Sandbox: off")
 	}
+	// Bare for an /add pin and marked for a /read-only one, matching
+	// renderPromptHeader and the messages the commands themselves print. Only
+	// the exception is named, because only the exception is a property: any file
+	// in the project is editable whether or not it is pinned, so "for editing"
+	// described a permission /add does not grant.
 	for _, f := range r.coder.ChatFiles() {
-		r.printf("Pinned %s for editing.", f)
+		r.printf("Pinned %s.", f)
+	}
+	// Restored read-only pins were silent here, which left the one kind of pin
+	// whose contents actually ride in every request as the one kind the user was
+	// not told about.
+	for _, f := range r.coder.ReadOnlyFiles() {
+		r.printf("Pinned %s read-only.", f)
 	}
 	// After the file list, so a warning about the size of what was restored
 	// lands next to the list of what was restored.

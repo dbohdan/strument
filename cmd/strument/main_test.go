@@ -467,3 +467,59 @@ func TestCompletionsCoverEveryFlag(t *testing.T) {
 		}
 	}
 }
+
+// TestRestoreSessionNote covers the line a resumed session opens with. It had
+// no test at all, which is how three of its four branches came to say "for
+// editing" — a permission /add does not grant, since any file in the project is
+// editable whether or not it is pinned. Only the read-only half names anything,
+// matching /ls and the startup banner.
+func TestRestoreSessionNote(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.go", "b.go", "spec.md"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		name  string
+		res   history.Resume
+		want  string
+		empty bool
+	}{
+		{name: "nothing", res: history.Resume{}, empty: true},
+		{
+			name: "plain only",
+			res:  history.Resume{Files: []string{"a.go", "b.go"}},
+			want: "Restored 2 pins from your last session.",
+		},
+		{
+			name: "read-only only",
+			res:  history.Resume{ReadOnly: []string{"spec.md"}},
+			want: "Restored 1 pin from your last session, read-only.",
+		},
+		{
+			name: "both",
+			res:  history.Resume{Files: []string{"a.go"}, ReadOnly: []string{"spec.md"}},
+			want: "Restored 2 pins from your last session, 1 of them read-only.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cdr := coder.New(root, &config.Model{Slug: "test"})
+			note, _, _ := restoreSession(cdr, root, tt.res)
+			if tt.empty {
+				if note != "" {
+					t.Errorf("note = %q, want empty", note)
+				}
+				return
+			}
+			if note != tt.want {
+				t.Errorf("note = %q, want %q", note, tt.want)
+			}
+			if strings.Contains(note, "for editing") {
+				t.Errorf("note = %q: pinning grants no editing right to report", note)
+			}
+		})
+	}
+}

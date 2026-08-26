@@ -558,26 +558,30 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 		}
 	}
 	// One count, then the split, so the number the user checks against /ls is the
-	// first thing on the line. "2 pins: 1 for editing, 1 read-only" also stays on
-	// one line where "1 file and 1 read-only file" was already the longer half of
-	// a sentence that grows with every category.
+	// first thing on the line. "2 pins: 1 read-only" also stays on one line where
+	// "1 file and 1 read-only file" was already the longer half of a sentence
+	// that grows with every category.
+	//
+	// Only the read-only half is named, matching /ls and the banner: an ordinary
+	// pin has no property to report, since any file in the project is editable
+	// whether pinned or not.
 	//
 	// An auto-pinned AGENTS.md is deliberately not counted here. This line says
 	// what a *previous session* left, and the first time AGENTS.md is noticed it
 	// came from the project rather than from a session. It needs no announcement
 	// of its own either: the banner lists every pinned file directly below, so
-	// "Pinned AGENTS.md for editing." is already on screen, in the same words
-	// /add would have used.
+	// "Pinned AGENTS.md." is already on screen, in the same words /add would have
+	// used.
 	switch {
 	case files == 0 && readOnly == 0:
 		return "", offered, notesRestored
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session, for editing.", plural(files, "pin", "pins")), offered, notesRestored
+		return fmt.Sprintf("Restored %s from your last session.", plural(files, "pin", "pins")), offered, notesRestored
 	case files == 0:
 		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins")), offered, notesRestored
 	}
-	return fmt.Sprintf("Restored %s from your last session: %d for editing, %d read-only.",
-		plural(files+readOnly, "pin", "pins"), files, readOnly), offered, notesRestored
+	return fmt.Sprintf("Restored %s from your last session, %d of them read-only.",
+		plural(files+readOnly, "pin", "pins"), readOnly), offered, notesRestored
 }
 
 func plural(n int, one, many string) string {

@@ -60,7 +60,7 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> ...", "Pin files for the model to edit (globs allowed)", cmdAdd},
+		{"add", "<file> ...", "Pin the files this session is about (globs allowed)", cmdAdd},
 		{"ask", "[<question>]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
 		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
 		{"check", "[<name>]", "Run a project check; optionally add its output to the chat", cmdCheck},
@@ -399,7 +399,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), false) {
 		r.coder.AddFile(rel)
-		r.printf("Pinned %s for editing.", rel)
+		r.printf("Pinned %s.", rel)
 	}
 	r.saveResume()
 	return ""
@@ -455,13 +455,13 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 		return ""
 	}
 	if len(chat) > 0 {
-		r.printf("Pinned for editing:")
+		r.printf("Pinned:")
 		for _, f := range chat {
 			r.printf("  %s", f)
 		}
 	}
 	if len(ro) > 0 {
-		r.printf("Pinned read-only (the model reads these here; it cannot reach them with tools):")
+		r.printf("Pinned read-only (their contents are in the request; the model cannot edit them):")
 		for _, f := range ro {
 			r.printf("  %s", f)
 		}

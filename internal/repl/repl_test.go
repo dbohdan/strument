@@ -132,8 +132,8 @@ func TestScriptedSession(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"/read-only <file> ...", // /help output
-		"Pinned hello.txt for editing.",
-		"Pinned for editing:",
+		"Pinned hello.txt.",
+		"Pinned:",
 		"hello.txt",
 		"read-only files", // /tokens section (chat files no
 		//                                    longer have one: pinned files are
@@ -193,6 +193,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 		cdr := coder.New(root, model)
 		cdr.Client = answerStub("ok\n")
 		cdr.AddFile("hello.txt")
+		cdr.AddReadOnlyFile("spec.md")
 
 		out := &syncBuffer{}
 		r, err := New(Options{
@@ -223,9 +224,11 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Model: openrouter/test-model",
 			"Git repo: none",
 			"Language parser: off",
-			"Pinned hello.txt for editing.", // banner
-			strings.Repeat("─", 24),         // solid rule (aider's console.rule), honors GetSize width
-			"hello.txt",                     // file listing
+			"Pinned hello.txt.",         // banner: an /add pin, unmarked
+			"Pinned spec.md read-only.", // banner: only the exception is named
+			"spec.md (read-only)",       // prompt header, same convention
+			strings.Repeat("─", 24),     // solid rule (aider's console.rule), honors GetSize width
+			"hello.txt",                 // file listing
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("color=%v: output missing %q:\n%q", color, want, got)
@@ -375,8 +378,8 @@ func TestAddDropDirectory(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"Pinned sub/a.txt for editing.",
-		"Pinned sub/b.txt for editing.",
+		"Pinned sub/a.txt.",
+		"Pinned sub/b.txt.",
 		"Unpinned sub/a.txt.",
 		"Unpinned sub/b.txt.",
 	} {
