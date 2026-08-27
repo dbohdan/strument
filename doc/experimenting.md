@@ -376,9 +376,9 @@ them to differ. They still did with the feature broken, because the *header* is
 worded from the argument while the *results* come from what the argument was
 translated into — so a lookup that ignored the argument entirely still printed
 "referenced" above the definition's line. It passes now by asserting line
-numbers: `definition` finds line 3, `reference` finds line 5 and not line 3. *Tell:* the
-assertion is on prose the code assembles near the input, rather than on the part
-of the output the code path under test actually decides.
+numbers: `definition` finds line 3, `reference` finds line 5 and not line 3.
+*Tell:* the assertion is on prose the code assembles near the input, rather than
+on the part of the output the code path under test actually decides.
 
 **Do:** for every check you would be upset to lose, break the thing it guards
 and watch it go red. Not the whole feature — the specific line. Two of the three
