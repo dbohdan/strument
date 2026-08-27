@@ -327,6 +327,26 @@ func (c *Coder) absRootPath(path string) string {
 	return resolvePath(filepath.Clean(abs))
 }
 
+// DisplayPath is how the UI names one file, from a path given either
+// root-relative or absolute: the same root-relative, forward-slashed form
+// ChatFiles and ReadOnlyFiles return.
+//
+// It exists because /add and /read-only used to print whatever the caller
+// happened to hold — an absolute path for anything outside the project — while
+// /ls, the banner, and the per-prompt header printed this form. One pin, two
+// names, and the user was left to work out they were the same file.
+//
+// Relative is the form to harmonize on, and not merely because more places
+// already used it: the model is given this form too (readOnlyFilesContent), and
+// it is the only form that works. Workspace.contain refuses an absolute path
+// outright, before it ever reaches the pinned-file exemption, so a model handed
+// an absolute name for a pinned reference cannot read it. A far-away file
+// showing as ../../../etc/hosts is the honest cost, and it is the string that
+// would actually work.
+func (c *Coder) DisplayPath(path string) string {
+	return c.relFname(c.absRootPath(path))
+}
+
 func (c *Coder) relFname(abs string) string {
 	rel, err := filepath.Rel(resolvePath(c.Root), abs)
 	if err != nil {

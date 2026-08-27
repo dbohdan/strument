@@ -324,7 +324,7 @@ func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
 			rel, err := filepath.Rel(r.coder.Root, m)
 			if err != nil || strings.HasPrefix(rel, "..") {
 				if !outside {
-					r.out.Warningf("Skipping %s: outside the project root. Pin it with /read-only instead.", m)
+					r.out.Warningf("Skipping %s: outside the project root. Pin it with /read-only instead.", r.coder.DisplayPath(m))
 					continue
 				}
 				abs, err := filepath.Abs(m)
@@ -399,7 +399,7 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), false) {
 		r.coder.AddFile(rel)
-		r.printf("Pinned %s.", rel)
+		r.printf("Pinned %s.", r.coder.DisplayPath(rel))
 	}
 	r.saveResume()
 	return ""
@@ -412,7 +412,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 	}
 	for _, rel := range r.expandPatterns(splitArgs(args), true) {
 		r.coder.AddReadOnlyFile(rel)
-		r.printf("Pinned %s read-only.", rel)
+		r.printf("Pinned %s read-only.", r.coder.DisplayPath(rel))
 	}
 	r.saveResume()
 	return ""

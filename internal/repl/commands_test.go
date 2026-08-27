@@ -1,9 +1,14 @@
 package repl
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/coder"
 )
 
 // TestCommandArgsNotation holds the help table to one notation. The convention
@@ -130,5 +135,60 @@ func TestUsageMatchesHelp(t *testing.T) {
 	// must not produce a line ending in a stray space.
 	if got := usage("help"); got != "Usage: /help" {
 		t.Errorf("usage(\"help\") = %q", got)
+	}
+}
+
+// TestPinMessagesMatchLs is the harmonization: the name /add and /read-only
+// print for a file is the name /ls, the banner, and the per-prompt header use
+// for it. They disagreed for anything outside the project — /read-only echoed
+// an absolute path, everything else the root-relative one — so a sibling
+// repository's header appeared under two names in the same session.
+func TestPinMessagesMatchLs(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(root, "outside")
+	proj := filepath.Join(root, "proj")
+	for _, d := range []string{outside, proj} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{filepath.Join(proj, "a.go"), filepath.Join(outside, "spec.md")} {
+		if err := os.WriteFile(f, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	input := strings.NewReader("/add a.go\n/read-only ../outside/spec.md\n/ls\n/exit\n")
+	cdr := coder.New(proj, testModel())
+	cdr.Client = answerStub("ok\n")
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder: cdr, Config: testConfig(cdr.Model), ModelAlias: "test",
+		Stdin: input, Stdout: out, Stderr: out,
+		IsTerminal: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got := out.String()
+	// Every name the session printed for the out-of-tree pin must be the one
+	// /ls lists, which is also the only one a tool call can use: contain
+	// refuses an absolute path before the pinned-file exemption.
+	want := "../outside/spec.md"
+	if n := strings.Count(got, "Pinned "+want+" read-only."); n != 1 {
+		t.Errorf("confirmation should name the file as %q:\n%s", want, got)
+	}
+	if strings.Contains(got, "Pinned "+outside) {
+		t.Errorf("confirmation used an absolute path:\n%s", got)
+	}
+	for _, ro := range cdr.ReadOnlyFiles() {
+		if ro != want {
+			t.Errorf("/ls form = %q, want %q", ro, want)
+		}
 	}
 }
