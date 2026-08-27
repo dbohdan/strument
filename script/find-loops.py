@@ -66,6 +66,7 @@ class Block:
     index: int  # nth block in the file
     kind: str  # "answer" or "reasoning"
     text: str
+    line: int = 1  # 1-based line in the file where the block starts
 
 
 CODE_FENCE = re.compile(r"^\s*(```|~~~)")
@@ -78,15 +79,23 @@ def strip_code_blocks(text: str) -> str:
     repeat, and Gemini CLI resets its detector on exactly these for the same
     reason. Leaving them in makes the detector loudest on the output most likely
     to be correct.
+
+    Dropped lines are blanked rather than removed. Line numbers are the whole
+    point of the report — the corpus that shaped this tool had to be assembled by
+    hand because nothing said where to look — and deleting a line would shift
+    every offset after it out of correspondence with the file.
     """
     out, in_fence = [], False
     for line in text.split("\n"):
         if CODE_FENCE.match(line):
             in_fence = not in_fence
+            out.append("")
             continue
         if in_fence:
+            out.append("")
             continue
         if line.lstrip().startswith("|"):
+            out.append("")
             continue
         # Scaffolding around a fence, not prose: aider heads every
         # SEARCH/REPLACE block with the bare filename, so an answer containing
@@ -99,6 +108,7 @@ def strip_code_blocks(text: str) -> str:
         # the corpus after fixing the false positive, not by the self-test.
         stripped = line.strip()
         if stripped and " " not in stripped and len(stripped) < 40 and re.search(r"[./\\]", stripped):
+            out.append("")
             continue
         out.append(line)
     return "\n".join(out)
@@ -124,19 +134,24 @@ def read_aider(path: str) -> list[Block]:
     session = "(before any session header)"
     current: list[str] = []
     kind = "answer"
+    start = 1
+    lineno = 0
 
     def flush() -> None:
         nonlocal kind
         if current:
-            body = "\n".join(current).strip()
-            if body:
-                blocks.append(Block(path, session, len(blocks), kind, body))
+            body = "\n".join(current)
+            lead = len(body) - len(body.lstrip("\n"))
+            if body.strip():
+                blocks.append(Block(path, session, len(blocks), kind, body.strip(), start + lead))
             current.clear()
         kind = "answer"
 
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             line = line.rstrip("\n")
+            if not current:
+                start = lineno
             if line.startswith("# aider chat started at"):
                 flush()
                 session = line[2:].strip()
@@ -166,19 +181,23 @@ def read_strument_md(path: str) -> list[Block]:
     session = "(no turn header)"
     in_response = False
     current: list[str] = []
+    start = 1
 
     def flush() -> None:
         nonlocal in_response
         if current:
-            body = "\n".join(current).strip()
-            if body:
-                blocks.append(Block(path, session, len(blocks), "answer", body))
+            body = "\n".join(current)
+            lead = len(body) - len(body.lstrip("\n"))
+            if body.strip():
+                blocks.append(Block(path, session, len(blocks), "answer", body.strip(), start + lead))
             current.clear()
         in_response = False
 
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             line = line.rstrip("\n")
+            if not current:
+                start = lineno
             m = STRUMENT_TURN.match(line)
             if m:
                 flush()
@@ -223,7 +242,7 @@ def read_jsonl(path: str) -> list[Block]:
                 continue
             text = (rec.get("text") or "").strip()
             if text:
-                blocks.append(Block(path, session, len(blocks), kind, text))
+                blocks.append(Block(path, session, len(blocks), kind, text, lineno))
     return blocks
 
 
@@ -300,12 +319,24 @@ def walk(paths: list[str]) -> list[tuple[str, str]]:
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
-def sentences(text: str) -> list[str]:
-    out = []
-    for piece in SENTENCE_SPLIT.split(text):
-        piece = " ".join(piece.split())
-        if piece:
-            out.append(piece)
+def sentences(text: str) -> list[tuple[int, str]]:
+    """Split into (offset, normalized text) pairs.
+
+    The offset rides along so a finding can name the line it starts on. re.split
+    discards the separators, so positions are walked with finditer instead.
+    """
+    out: list[tuple[int, str]] = []
+    pos = 0
+    for m in SENTENCE_SPLIT.finditer(text):
+        piece = text[pos : m.start()]
+        norm = " ".join(piece.split())
+        if norm:
+            out.append((pos + (len(piece) - len(piece.lstrip())), norm))
+        pos = m.end()
+    tail = text[pos:]
+    norm = " ".join(tail.split())
+    if norm:
+        out.append((pos + (len(tail) - len(tail.lstrip())), norm))
     return out
 
 
@@ -338,6 +369,7 @@ class Finding:
     severity: float  # repeats, or occurrence count; comparable within a detector
     detail: str
     sample: str = ""
+    offset: int = 0  # character offset into the stripped block, for the line
 
 
 def detect_period(units: list[str], min_repeats: int, max_tail: int, min_unit: int) -> Finding | None:
@@ -358,7 +390,8 @@ def detect_period(units: list[str], min_repeats: int, max_tail: int, min_unit: i
         units_ = units[: len(units) - drop] if drop else units
         n = len(units_)
         for length in range(2, min(n, max_tail) + 1):
-            tail = units_[n - length :]
+            window = units_[n - length :]
+            tail = [u for _, u in window]
             p = minimal_period(tail)
             # Divisibility is deliberately not required either. n - border is
             # the minimal period in the general sense — seq[i] == seq[i+p]
@@ -376,6 +409,7 @@ def detect_period(units: list[str], min_repeats: int, max_tail: int, min_unit: i
                     f"the last {length} sentences repeat a {p}-sentence block {repeats}x"
                     + (f", cut {drop} unit(s) short" if drop else ""),
                     unit[:300],
+                    window[0][0],
                 )
     return best
 
@@ -390,18 +424,18 @@ def detect_run(units: list[str], min_run: int, min_unit: int) -> Finding | None:
     is what a loop does. Word-level stutter is not lost by this — detect_word_run
     covers it and answers to its own threshold.
     """
-    best_len, best_unit = 0, ""
-    run_len, prev = 0, None
-    for u in units:
+    best_len, best_unit, best_off = 0, "", 0
+    run_len, prev, start = 0, None, 0
+    for off, u in units:
         if u == prev:
             run_len += 1
         else:
-            run_len, prev = 1, u
+            run_len, prev, start = 1, u, off
         if run_len > best_len and len(u) >= min_unit:
-            best_len, best_unit = run_len, u
+            best_len, best_unit, best_off = run_len, u, start
     if best_len < min_run:
         return None
-    return Finding("run", best_len, f"one sentence repeated {best_len}x in a row", best_unit[:300])
+    return Finding("run", best_len, f"one sentence repeated {best_len}x in a row", best_unit[:300], best_off)
 
 
 def detect_word_run(text: str, min_run: int) -> Finding | None:
@@ -411,18 +445,24 @@ def detect_word_run(text: str, min_run: int) -> Finding | None:
     sentence detectors cannot see it, because the whole stutter is one sentence
     with no terminator. Found by the self-test, which is what the self-test is
     for.
+
+    finditer rather than findall, so the run's position is known. The offset is
+    what the report turns into a line number, and a detector that finds the
+    right thing at the wrong place sends the reader to the wrong screen.
     """
-    words = re.findall(r"\w+", text.lower())
-    best_len, best_word = 0, ""
-    run_len, prev = 0, None
-    for w in words:
-        run_len = run_len + 1 if w == prev else 1
-        prev = w
+    best_len, best_word, best_off = 0, "", 0
+    run_len, prev, start = 0, None, 0
+    for m in re.finditer(r"\w+", text):
+        w = m.group(0).lower()
+        if w == prev:
+            run_len += 1
+        else:
+            run_len, prev, start = 1, w, m.start()
         if run_len > best_len:
-            best_len, best_word = run_len, w
+            best_len, best_word, best_off = run_len, w, start
     if best_len < min_run:
         return None
-    return Finding("word", best_len, f'the word "{best_word}" repeats {best_len}x in a row', best_word)
+    return Finding("word", best_len, f'the word "{best_word}" repeats {best_len}x in a row', best_word, best_off)
 
 
 def detect_chunk(text: str, size: int, min_count: int, max_avg_gap: float) -> Finding | None:
@@ -444,6 +484,15 @@ def detect_chunk(text: str, size: int, min_count: int, max_avg_gap: float) -> Fi
         if len(positions) < min_count:
             continue
         first = text[positions[0] : positions[0] + size]
+        # A window has to carry text. Blanking stripped lines keeps the line
+        # numbering exact (see strip_code_blocks) at the cost of long runs of
+        # newlines where a fenced block used to be, and a window of nothing but
+        # whitespace recurs at one-character spacing forever. That regression
+        # arrived with the line numbers and was caught by re-running the corpus,
+        # not by the self-test — an answer made of forty edit blocks became two
+        # new "loops" reported at 871x and 385x.
+        if len(first.strip()) < size // 4:
+            continue
         # Verify rather than trust the hash, and drop any colliding positions.
         positions = [i for i in positions if text[i : i + size] == first]
         if len(positions) < min_count:
@@ -458,6 +507,7 @@ def detect_chunk(text: str, size: int, min_count: int, max_avg_gap: float) -> Fi
                 len(positions),
                 f"a {size}-char window recurs {len(positions)}x, {avg:.0f} chars apart on average",
                 first,
+                positions[0],
             )
     return best
 
@@ -473,13 +523,27 @@ class Scan:
     findings: list[dict] = field(default_factory=list)
 
 
+def line_of(text: str, offset: int, base: int) -> int:
+    """The file line an offset in the stripped block text falls on.
+
+    Exact only because strip_code_blocks blanks lines instead of deleting them.
+
+    Leading whitespace is skipped first. A chunk window is character-aligned, so
+    it can begin on the newline that ends the previous line; reporting that line
+    sends the reader one line above the text they are looking for.
+    """
+    offset = max(0, min(offset, len(text)))
+    while offset < len(text) and text[offset].isspace():
+        offset += 1
+    return base + text.count("\n", 0, offset)
+
+
 def analyze(block: Block, args) -> list[Finding]:
     text = block.text if args.keep_code else strip_code_blocks(block.text)
-    text = text.strip()
     # A word stutter is a finding at any length; the others need enough text to
     # tell repetition from ordinary structure.
     word = detect_word_run(text, args.min_word_run)
-    if len(text) < args.min_chars:
+    if len(text.strip()) < args.min_chars:
         return [word] if word else []
     units = sentences(text)
     out = []
@@ -528,8 +592,16 @@ def main(argv: list[str]) -> int:
         for b in blocks:
             scan.blocks += 1
             scan.chars += len(b.text)
+            stripped = b.text if args.keep_code else strip_code_blocks(b.text)
             for f in analyze(b, args):
-                rec = {"file": b.path, "session": b.session, "block": b.index, "kind": b.kind, **asdict(f)}
+                rec = {
+                    "file": b.path,
+                    "line": line_of(stripped, f.offset, b.line),
+                    "session": b.session,
+                    "block": b.index,
+                    "kind": b.kind,
+                    **asdict(f),
+                }
                 scan.findings.append(rec)
 
     if args.json:
@@ -548,9 +620,10 @@ def main(argv: list[str]) -> int:
         by_block[(r["file"], r["block"], r["kind"], r["session"])].append(r)
     ordered = sorted(by_block.items(), key=lambda kv: -max(x["severity"] for x in kv[1]))
     for (path, index, kind, session), rows in ordered:
-        print(f"{path}  block {index} ({kind})  [{session}]")
+        # path:line first, so the line is clickable and greppable.
+        print(f"{path}:{min(r['line'] for r in rows)}  ({kind})  [{session}]")
         for r in sorted(rows, key=lambda x: -x["severity"]):
-            print(f"  {r['detector']}: {r['detail']}")
+            print(f"  line {r['line']}  {r['detector']}: {r['detail']}")
         if args.show:
             sample = next((r["sample"] for r in rows if r["sample"]), "")
             if sample:
