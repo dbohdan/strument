@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/repomap"
 )
 
 // TestCommandArgsNotation holds the help table to one notation. The convention
@@ -212,5 +214,135 @@ func TestPinMessagesMatchLs(t *testing.T) {
 				t.Errorf("in-tree confirmation should be root-relative:\n%s", got)
 			}
 		})
+	}
+}
+
+// TestQuotingAppliesToFileArgumentsOnly pins the line the notation comment used
+// to draw in the wrong place. It claimed every word-shaped argument is split on
+// whitespace and so quotable; only the four file commands tokenize, and the
+// rest take the trimmed remainder — quotes included.
+//
+// Both directions are asserted. Which commands quote is a real boundary, and a
+// test that only checked the working half would let someone move it by accident
+// in either direction.
+func TestQuotingAppliesToFileArgumentsOnly(t *testing.T) {
+	spaced := "my file.txt"
+
+	t.Run("a file argument is tokenized", func(t *testing.T) {
+		r, cdr, out := newTestREPL(t, answerStub("ok\n"), strings.NewReader(
+			`/add "`+spaced+`"`+"\n/ls\n/exit\n"))
+		defer r.Close()
+		if err := os.WriteFile(filepath.Join(cdr.Root, spaced), []byte("hi\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := cdr.ChatFiles(); len(got) != 1 || got[0] != spaced {
+			t.Errorf("ChatFiles() = %v, want [%q]; the quotes should not survive", got, spaced)
+		}
+		if !strings.Contains(out.String(), "Pinned "+spaced+".") {
+			t.Errorf("confirmation should name the file without quotes:\n%s", out.String())
+		}
+	})
+
+	// The counter-half. /model is the representative: it uses the argument as a
+	// map key, so a stray quote shows up verbatim in the error and there is no
+	// ambiguity about what it received.
+	t.Run("a non-file argument is not", func(t *testing.T) {
+		r, _, out := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader("/model \"test\"\n/exit\n"))
+		defer r.Close()
+		if err := r.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		got := out.String()
+		if strings.Contains(got, "Switched to model") {
+			t.Errorf("/model tokenized its argument; the notation comment says it does not:\n%s", got)
+		}
+		if !strings.Contains(got, `Unknown model alias`) {
+			t.Errorf("expected the quotes to reach the lookup verbatim:\n%s", got)
+		}
+	})
+}
+
+// TestDropTakesAnAbsolutePath closes a gap the Windows work opened: splitArgs
+// used to eat the separators out of C:\proj\a.go, so no path command could take
+// an absolute path there at all. /add and /read-only are covered by
+// TestPinMessagesMatchLs; /drop was not covered anywhere.
+func TestDropTakesAnAbsolutePath(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
+	defer r.Close()
+	abs := filepath.Join(cdr.Root, "hello.txt")
+	cdr.AddFile(abs)
+	if len(cdr.ChatFiles()) != 1 {
+		t.Fatalf("fixture did not pin: %v", cdr.ChatFiles())
+	}
+
+	cmdDrop(context.Background(), r, abs)
+	if got := cdr.ChatFiles(); len(got) != 0 {
+		t.Errorf("an absolute path did not drop the pin: still %v\n%s", got, out.String())
+	}
+	if !strings.Contains(out.String(), "Unpinned hello.txt.") {
+		t.Errorf("the message should name the file the way /ls does:\n%s", out.String())
+	}
+}
+
+// TestSymbolAcceptsBothKinds covers a value /help advertises. "definition" was
+// added to the help line when it turned out the tool had always accepted it and
+// only "reference" was shown — a value advertised and never exercised.
+//
+// The parser has to be wired up for this to mean anything. SymbolLookup checks
+// for it before it validates the kind, so a coder without a RepoMap answers
+// "the language parser is not available" for every kind, valid or not: the
+// first version of this test asserted the absence of "Unknown kind" and passed
+// with "definition" deleted from the accepted set.
+//
+// So it asserts the answer rather than the absence of a complaint. definition
+// and the bare form must find the definition; reference must find the use, and
+// the two must not return the same thing — otherwise the kind is being ignored.
+func TestSymbolAcceptsBothKinds(t *testing.T) {
+	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, nil)
+	defer r.Close()
+	if err := os.WriteFile(filepath.Join(cdr.Root, "lib.go"), []byte(
+		"package lib\n\nfunc VerySpecificName() int { return 1 }\n\nfunc caller() int { return VerySpecificName() }\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cdr.RepoMap = repomap.New(cdr.Root)
+
+	ask := func(args string) string {
+		out.Reset()
+		cmdSymbol(context.Background(), r, args)
+		got := out.String()
+		if strings.Contains(got, "language parser is not available") {
+			t.Fatalf("no parser, so this test cannot see a rejected kind: %s", got)
+		}
+		return got
+	}
+
+	bare := ask("VerySpecificName")
+	definition := ask("VerySpecificName definition")
+	reference := ask("VerySpecificName reference")
+
+	for name, got := range map[string]string{"bare": bare, "definition": definition} {
+		if !strings.Contains(got, "is defined in") {
+			t.Errorf("%s should report the definition:\n%s", name, got)
+		}
+	}
+	if bare != definition {
+		t.Errorf("an omitted kind and \"definition\" should agree:\n%s\n---\n%s", bare, definition)
+	}
+	// Line numbers, not prose. The header is worded from the kind while the
+	// sites come from what the kind was translated into, so a lookup that
+	// ignored the kind entirely would still say "referenced" over the
+	// definition's line — checked by breaking it exactly that way.
+	if !strings.Contains(definition, "lib.go:3") {
+		t.Errorf("definition should point at line 3, where it is defined:\n%s", definition)
+	}
+	if !strings.Contains(reference, "is referenced in") || !strings.Contains(reference, "lib.go:5") {
+		t.Errorf("reference should point at line 5, where it is called:\n%s", reference)
+	}
+	if strings.Contains(reference, "lib.go:3") {
+		t.Errorf("reference returned the definition's site; the kind is being ignored:\n%s", reference)
 	}
 }

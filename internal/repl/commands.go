@@ -41,8 +41,16 @@ type command struct {
 // already as much notation as a help screen can carry.
 //
 // A metavariable naming a *word* — <file>, <name>, <alias>, <url>, <n> — is one
-// argument among several: the line is split on whitespace, so a value
-// containing a space has to be quoted, and `...` can repeat it.
+// argument among several, and `...` can repeat it.
+//
+// Only <file> is tokenized, and this comment used to claim otherwise: it said
+// the line is split on whitespace so a value with a space has to be quoted,
+// which is true of /add, /read-only, /drop, and /submit and of nothing else.
+// The rest take the trimmed remainder, so `/model "test"` looks up an alias
+// spelled with the quotes in it and answers `Unknown model alias "\"test\""`.
+// Measured, not read. TestQuotingAppliesToFileArgumentsOnly holds the line
+// where it actually is, in both directions, so the next person to widen it has
+// to mean to.
 //
 // A metavariable naming *text* — <question>, <request>, <command> — takes the
 // rest of the line exactly as typed. It follows that such an argument is always
@@ -252,8 +260,9 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 		}
 		r.printf("  %-*s  %s", width+1, left, c.help)
 	}
-	r.printf("Arguments: <required>, [optional], \"...\" repeats (split on whitespace).")
-	r.printf("<command>, <question>, and <request> take the rest of the line as typed.")
+	r.printf("Arguments: <required>, [optional], \"...\" repeats.")
+	r.printf("Quote a <file> whose name has a space in it; every other argument is taken as written.")
+	r.printf("<command>, <question>, and <request> take the rest of the line.")
 	r.printf("Anything else is sent to the model.")
 	return ""
 }
