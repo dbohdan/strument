@@ -33,10 +33,55 @@ type Repo struct {
 	Sign string
 }
 
+// pinnedGit is the git executable to run, or "" to look the name up on PATH at
+// each call — which is the default, and what every caller but main gets.
+//
+// Pinning exists because `env_set` can change PATH, and Strument's own git
+// invocations are the one subprocess that still inherits the whole environment,
+// OPENROUTER_API_KEY included, since the commands here pass a nil Env. Every
+// subprocess the *model* causes goes through FilterEnv and never sees the key,
+// so this is the one path where redirecting the binary would be worth someone's
+// while. A trusted project config can already run arbitrary code through its
+// checks; what it should not also get is the process holding the credential.
+//
+// Pinning before any config is applied closes that without touching git's
+// environment — which is the alternative, and it risks breaking commit signing
+// and credential helpers for a narrower gain.
+//
+// Opt-in rather than automatic, because pinning defeats PATH interposition on
+// purpose, and that is a thing tests legitimately do: TestCommitSignFlag shims
+// git to capture argv without running gpg. main pins; nothing else does, so
+// nothing else changes behavior.
+var pinnedGit string
+
+// gitBinary is what to pass to exec.Command.
+func gitBinary() string {
+	if pinnedGit != "" {
+		return pinnedGit
+	}
+	return "git"
+}
+
+// ResolveBinary pins the git executable to whatever PATH names right now.
+//
+// Called from main before the config is read, so a later PATH change cannot
+// move it. A git that cannot be found leaves the name unpinned, so the failure
+// stays the one it always was — exec reports "executable file not found in
+// $PATH" at the call site, and a PATH that gains git later still works.
+//
+// Not safe to call concurrently with git commands; it runs once, during
+// startup, before there is anything to race with.
+func ResolveBinary() {
+	if p, err := exec.LookPath("git"); err == nil {
+		pinnedGit = p
+	}
+}
+
 // Discover finds the repository containing dir, or returns an error when
 // dir is not inside a git worktree (or git is not installed).
 func Discover(dir string) (*Repo, error) {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	//nolint:gosec // gitBinary is the literal "git" or PATH's answer for it, never input.
+	out, err := exec.Command(gitBinary(), "-C", dir, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return nil, fmt.Errorf("not a git repository: %w", err)
 	}
@@ -66,7 +111,7 @@ func Trailer(modelName string) string {
 // git runs one git command in the repo and returns its stdout; errors
 // carry stderr for diagnostics.
 func (r *Repo) git(args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", r.root}, args...)...) //nolint:gosec // Argv-only git invocation, never a shell string.
+	cmd := exec.Command(gitBinary(), append([]string{"-C", r.root}, args...)...) //nolint:gosec // Argv-only git invocation, never a shell string.
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

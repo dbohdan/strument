@@ -234,6 +234,15 @@ does not confine](#what-landlock-does-not-confine-the-display-server).
 the sandbox — the allowlist is a policy Strument chooses to apply, and Landlock
 is a property of the process.
 
+One consequence runs the other way, and is worth naming because it is the
+exception. Strument's *own* `git` invocations are not filtered — they inherit
+the whole environment, `OPENROUTER_API_KEY` included — since git needs your
+identity, your credential helpers, and your signing setup to work at all. That
+makes them the one subprocess where redirecting the binary would be worth
+someone's while, so the `git` on `PATH` is resolved once at startup, before any
+config is read. `env_set` can point `PATH` wherever it likes afterwards and
+model-run commands will follow it; Strument's git will not.
+
 
 ## How this was verified
 

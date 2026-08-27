@@ -63,6 +63,12 @@ func (c *chatCmd) Run() error {
 
 	// Git is on by default inside a repository; the worktree root becomes
 	// the project root, like aider (--no-git opts out).
+	// Before the config is read, and so before env_set can touch PATH: see
+	// gitrepo.gitBinary. Strument's own git is the one subprocess that still
+	// inherits the API key, so which binary that name resolves to is settled
+	// here rather than at each call.
+	gitrepo.ResolveBinary()
+
 	var repo *gitrepo.Repo
 	if !c.NoGit {
 		if g, err := gitrepo.Discover(root); err == nil {
