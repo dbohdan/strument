@@ -482,6 +482,50 @@ because you typed that command yourself. And the API keys Strument itself uses
 (`api_key=env(...)` in this file) are read at load time and never re-exposed
 through it.
 
+
+### `env_set`
+
+Sets environment variables for the session:
+
+```starlark
+env_set = {"TZ": "Europe/Kyiv"}
+```
+
+The classic case is a time zone. Commit in your own zone on a UTC server, or in
+UTC on a laptop that is not. `TZ` is the example, but anything works — `GOFLAGS`,
+`RUST_BACKTRACE`, a tool's cache directory.
+
+The variables are set on Strument's own process at startup, so everything it
+starts inherits them: `git`, `/run`, and the model's commands. **`env_set` does
+not widen what the model sees.** A name set here still has to pass
+[`env_allow`](#env_allow) to reach a model-run command, so a value written in a
+config file is not handed to the model by accident.
+
+Values are strings, and they do not have to be literals. To pass something you
+would rather not write down, read it from the environment:
+
+```starlark
+env_set = {"GH_TOKEN": env("GITHUB_TOKEN")}
+```
+
+That renames a variable without the secret ever appearing in the file. Prefer it
+to typing a credential into a config: files get committed, backed up, and read
+over shoulders in a way an environment variable does not.
+
+A project's `.strument.star` may set variables too, and unlike `env_allow` the
+two configs merge per entry — a project naming `TZ` does not drop your
+`GOFLAGS`. A project config only takes effect once you have run `strument
+trust`, which is the same gate its `check` commands sit behind.
+
+#### The one wrinkle, which is about `TZ`
+
+Go reads `TZ` once, the first time anything formats a time, and caches it for
+the life of the process. Strument sets `env_set` before that happens, so `TZ`
+reaches its own clock — the date in the prompt, the timestamps on commits it
+makes — as well as its subprocesses. If that ever stops being true, or if the
+zone is one this machine does not know, Strument says so at startup rather than
+quietly using the wrong zone. `env_set` changes need a restart; `/reload` does
+not re-apply them.
 ### `sandbox`
 
 Which confinement mechanism to apply to the session. `"landlock"` or `""`:

@@ -76,6 +76,9 @@ type fileGlobals struct {
 
 	hasEnvAllow bool
 	envAllowVal []string
+
+	hasEnvSet bool
+	envSetVal map[string]string
 }
 
 // defaultSandbox is what `sandbox` means when a config does not say.
@@ -346,6 +349,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
+	if user.hasEnvSet {
+		cfg.EnvSet = user.envSetVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -398,6 +404,16 @@ func Load(opts Options) (*Config, error) {
 		// could only ever widen.
 		if project.hasEnvAllow {
 			cfg.EnvAllow = project.envAllowVal
+		}
+		// Per-entry, unlike env_allow, and for the opposite reason: env_allow is
+		// one decision about what the model may see, which a project must be
+		// able to narrow wholesale. env_set is a bag of independent settings, so
+		// a project naming TZ should not silently drop the user's GOFLAGS.
+		if project.hasEnvSet {
+			if cfg.EnvSet == nil {
+				cfg.EnvSet = map[string]string{}
+			}
+			maps.Copy(cfg.EnvSet, project.envSetVal)
 		}
 	}
 
@@ -735,6 +751,33 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasEnvAllow = true
 		out.envAllowVal = names
+	}
+
+	if es, ok := globals["env_set"]; ok {
+		dict, ok := es.(*starlark.Dict)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `env_set` must be a dict of environment variable names to values, got %s", path, es.Type())
+		}
+		vals := make(map[string]string, dict.Len())
+		for _, item := range dict.Items() {
+			name, ok := starlark.AsString(item[0])
+			if !ok {
+				return nil, fmt.Errorf("%s: `env_set` keys must be strings, got %s", path, item[0].Type())
+			}
+			if !ValidEnvAllowName(name) {
+				return nil, fmt.Errorf("%s: `env_set` key %q is not an environment variable name", path, name)
+			}
+			val, ok := starlark.AsString(item[1])
+			if !ok {
+				return nil, fmt.Errorf(
+					"%s: `env_set[%q]` must be a string, got %s — read one from the environment with env(%q) "+
+						"rather than writing a value here", path, name, item[1].Type(), name)
+			}
+			vals[name] = val
+		}
+		out.hasEnvSet = true
+		out.envSetVal = vals
 	}
 
 	return out, nil

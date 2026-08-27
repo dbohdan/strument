@@ -205,6 +205,15 @@ type Config struct {
 	// default allowlist. See coder/envallow.go. Empty means defaults only.
 	// Matching is exact; prefixes are not expanded.
 	EnvAllow []string
+	// EnvSet overrides environment variables for the whole session, from the
+	// `env_set` setting. Applied to Strument's own process at startup, so every
+	// subprocess inherits it: git, /run, and — for names env_allow also passes —
+	// the model's commands. See ApplyEnvSet.
+	//
+	// It does not widen what the model sees. A name set here still has to be on
+	// the allowlist to reach a model-run command, which is what keeps a value
+	// written in a config file from being handed to the model by accident.
+	EnvSet map[string]string
 }
 
 // ReasoningMode is what ReasoningDisplay does with a thinking block.
