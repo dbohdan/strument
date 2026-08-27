@@ -88,22 +88,51 @@ def strip_code_blocks(text: str) -> str:
             continue
         if line.lstrip().startswith("|"):
             continue
+        # Scaffolding around a fence, not prose: aider heads every
+        # SEARCH/REPLACE block with the bare filename, so an answer containing
+        # forty edits repeats "main.go" forty times once the fences are gone.
+        #
+        # It has to look like a *path*, not merely be short and spaceless. The
+        # first version dropped every short line without a space and thereby
+        # deleted a real finding — a token-level stutter renders one word per
+        # line, and "Dynamical" repeated 84 times vanished. Caught by re-running
+        # the corpus after fixing the false positive, not by the self-test.
+        stripped = line.strip()
+        if stripped and " " not in stripped and len(stripped) < 40 and re.search(r"[./\\]", stripped):
+            continue
         out.append(line)
     return "\n".join(out)
 
 
+AIDER_THINK_OPEN = re.compile(r"^<thinking-content-[0-9a-f]+>$")
+AIDER_THINK_CLOSE = re.compile(r"^</thinking-content-[0-9a-f]+>$")
+
+
 def read_aider(path: str) -> list[Block]:
-    """aider's chat history: '#### ' is the user, '> ' is aider, rest is model."""
+    """aider's chat history: '#### ' is the user, '> ' is aider, rest is model.
+
+    Reasoning is kept apart, which turned out to be the whole story. aider wraps
+    it in <thinking-content-HASH>, and in a corpus of ten real loops every single
+    one was inside such a block and none was in an answer. Reporting them all as
+    "answer" would have hidden the finding that decides where a detector belongs.
+
+    The closing tag is usually absent — nine of those ten had none, because the
+    user pressed Ctrl-C while the model was still going, which is itself the
+    evidence. So a user turn or a new session ends the block too.
+    """
     blocks: list[Block] = []
     session = "(before any session header)"
     current: list[str] = []
+    kind = "answer"
 
     def flush() -> None:
+        nonlocal kind
         if current:
             body = "\n".join(current).strip()
             if body:
-                blocks.append(Block(path, session, len(blocks), "answer", body))
+                blocks.append(Block(path, session, len(blocks), kind, body))
             current.clear()
+        kind = "answer"
 
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -111,6 +140,13 @@ def read_aider(path: str) -> list[Block]:
             if line.startswith("# aider chat started at"):
                 flush()
                 session = line[2:].strip()
+                continue
+            if AIDER_THINK_OPEN.match(line.strip()):
+                flush()
+                kind = "reasoning"
+                continue
+            if AIDER_THINK_CLOSE.match(line.strip()):
+                flush()
                 continue
             # A user turn or aider's own console echo ends the model's block.
             if line.startswith("#### ") or line == "####" or line.startswith("> "):
@@ -304,34 +340,56 @@ class Finding:
     sample: str = ""
 
 
-def detect_period(units: list[str], min_repeats: int, max_tail: int) -> Finding | None:
+def detect_period(units: list[str], min_repeats: int, max_tail: int, min_unit: int) -> Finding | None:
     """The longest suffix that is one unit sequence repeated min_repeats+ times.
 
     Suffixes, not the whole block, because the failure mode is a response that
     starts fine and never stops. Requiring the *whole* block to be periodic
     would find almost nothing.
     """
-    n = len(units)
     best: Finding | None = None
-    for length in range(2, min(n, max_tail) + 1):
-        tail = units[n - length :]
-        p = minimal_period(tail)
-        if p == 0 or length % p or length // p < min_repeats:
-            continue
-        repeats = length // p
-        if best is None or repeats > best.severity:
+    # Discard up to two trailing units before testing. A loop in the wild ends in
+    # a fragment — the stream was cut by Ctrl-C or by the context filling — and
+    # that fragment appears nowhere else in the tail, so it drives the longest
+    # border to zero and the minimal period to the whole tail. Measured: on a
+    # corpus of eight real loops this detector fired zero times, and the single
+    # unit "We'll also protect the" was the entire reason.
+    for drop in range(0, 3):
+        units_ = units[: len(units) - drop] if drop else units
+        n = len(units_)
+        for length in range(2, min(n, max_tail) + 1):
+            tail = units_[n - length :]
+            p = minimal_period(tail)
+            # Divisibility is deliberately not required either. n - border is
+            # the minimal period in the general sense — seq[i] == seq[i+p]
+            # wherever both exist — so a final repetition cut short still counts.
+            if p == 0 or length // p < min_repeats:
+                continue
+            repeats = length // p
             unit = " ".join(tail[:p])
-            best = Finding(
-                "period",
-                repeats,
-                f"the last {length} sentences are one block of {p} repeated {repeats}x",
-                unit[:300],
-            )
+            if len(unit) < min_unit:  # scaffolding, not prose — see detect_run
+                continue
+            if best is None or repeats > best.severity:
+                best = Finding(
+                    "period",
+                    repeats,
+                    f"the last {length} sentences repeat a {p}-sentence block {repeats}x"
+                    + (f", cut {drop} unit(s) short" if drop else ""),
+                    unit[:300],
+                )
     return best
 
 
-def detect_run(units: list[str], min_run: int) -> Finding | None:
-    """Longest run of consecutive identical sentences."""
+def detect_run(units: list[str], min_run: int, min_unit: int) -> Finding | None:
+    """Longest run of consecutive identical sentences.
+
+    The repeated unit has to be substantial. A real answer full of aider
+    SEARCH/REPLACE blocks repeats the bare filename above every one of them, and
+    "main.go" 43 times was the only false positive this tool produced on a real
+    corpus. A repeated short token is what scaffolding does; a repeated sentence
+    is what a loop does. Word-level stutter is not lost by this — detect_word_run
+    covers it and answers to its own threshold.
+    """
     best_len, best_unit = 0, ""
     run_len, prev = 0, None
     for u in units:
@@ -339,7 +397,7 @@ def detect_run(units: list[str], min_run: int) -> Finding | None:
             run_len += 1
         else:
             run_len, prev = 1, u
-        if run_len > best_len:
+        if run_len > best_len and len(u) >= min_unit:
             best_len, best_unit = run_len, u
     if best_len < min_run:
         return None
@@ -427,8 +485,8 @@ def analyze(block: Block, args) -> list[Finding]:
     out = []
     for f in (
         word,
-        detect_run(units, args.min_run),
-        detect_period(units, args.min_repeats, args.max_tail),
+        detect_run(units, args.min_run, args.min_unit_chars),
+        detect_period(units, args.min_repeats, args.max_tail, args.min_unit_chars),
         detect_chunk(text, args.chunk_size, args.min_chunk_count, args.max_avg_gap),
     ):
         if f:
@@ -448,6 +506,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--min-word-run", type=int, default=6, help="word: identical words in a row")
     ap.add_argument("--min-repeats", type=int, default=3, help="period: repetitions of the tail unit")
     ap.add_argument("--max-tail", type=int, default=200, help="period: longest suffix considered")
+    ap.add_argument("--min-unit-chars", type=int, default=24, help="run/period: shortest repeating unit worth reporting")
     ap.add_argument("--chunk-size", type=int, default=50, help="chunk: window width in characters")
     ap.add_argument("--min-chunk-count", type=int, default=10, help="chunk: occurrences to report")
     ap.add_argument("--max-avg-gap", type=float, default=250, help="chunk: mean spacing allowed")
@@ -544,8 +603,24 @@ def self_test(args) -> int:
         )
     )
 
+    # Every loop in the real corpus ended in a fragment, and none of the
+    # fixtures did — so the period detector passed this self-test and found
+    # nothing at all in the wild. Two of these now stop mid-unit on purpose.
+    truncated = "Actually, the age package uses Recipient. " * 14 + "Actually, the age package uses"
+    cycle = ("We protect the rows. We protect the flags. We protect the query. " * 9) + "We protect the"
+
+    # A real answer made of aider SEARCH/REPLACE blocks: the filename heads every
+    # one of them. This was the tool's only false positive on a real corpus.
+    editblocks = "Here are the changes:\n\n" + "\n\n".join(
+        f"main.go\n```go\n<<<<<<< SEARCH\nold{i}\n=======\nnew{i}\n>>>>>>> REPLACE\n```"
+        for i in range(1, 20)
+    )
+
     cases = [
+        ("aider edit blocks in an answer", editblocks, False),
         ("sentence loop", loop, True),
+        ("loop cut off mid-sentence", truncated, True),
+        ("multi-sentence cycle, cut off", cycle, True),
         ("word stutter", stutter, True),
         ("loop in the tail only", tail_loop, True),
         ("ordinary prose", prose, False),
