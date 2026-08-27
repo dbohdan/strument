@@ -144,67 +144,73 @@ func TestUsageMatchesHelp(t *testing.T) {
 // an absolute path, everything else counted back to the file with ../.. — so
 // one pin appeared under two names in the same session.
 //
-// The assertion is congruence, not a particular spelling: whatever DisplayPath
-// decides, every surface says the same thing. It also pins the decision itself,
-// since an out-of-tree pin naming a system file is the case /read-only is
-// mostly used for.
+// The assertion is congruence, and it is made on both sides of the display
+// threshold, since a rule with a branch in it can be congruent on one side and
+// not the other.
 func TestPinMessagesMatchLs(t *testing.T) {
-	root := t.TempDir()
-	outside := filepath.Join(root, "outside")
-	proj := filepath.Join(root, "proj")
-	for _, d := range []string{outside, proj} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	tests := []struct {
+		name    string
+		depth   []string // project root, under the temp dir
+		wantAbs bool
+	}{
+		{name: "sibling stays relative", depth: []string{"proj"}},
+		{name: "distant is absolute", depth: []string{"a", "b", "proj"}, wantAbs: true},
 	}
-	for _, f := range []string{filepath.Join(proj, "a.go"), filepath.Join(outside, "spec.md")} {
-		if err := os.WriteFile(f, []byte("x\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			outside := filepath.Join(root, "outside")
+			proj := filepath.Join(append([]string{root}, tt.depth...)...)
+			for _, d := range []string{outside, proj} {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, f := range []string{filepath.Join(proj, "a.go"), filepath.Join(outside, "spec.md")} {
+				if err := os.WriteFile(f, []byte("x\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	input := strings.NewReader("/add a.go\n/read-only ../outside/spec.md\n/ls\n/exit\n")
-	cdr := coder.New(proj, testModel())
-	cdr.Client = answerStub("ok\n")
-	out := &syncBuffer{}
-	r, err := New(Options{
-		Coder: cdr, Config: testConfig(cdr.Model), ModelAlias: "test",
-		Stdin: input, Stdout: out, Stderr: out,
-		IsTerminal: func() bool { return false },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-	if err := r.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+			cdr := coder.New(proj, testModel())
+			cdr.Client = answerStub("ok\n")
+			out := &syncBuffer{}
+			input := strings.NewReader("/add a.go\n/read-only " + filepath.Join(outside, "spec.md") + "\n/ls\n/exit\n")
+			r, err := New(Options{
+				Coder: cdr, Config: testConfig(cdr.Model), ModelAlias: "test",
+				Stdin: input, Stdout: out, Stderr: out,
+				IsTerminal: func() bool { return false },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if err := r.Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
 
-	// /ls is the reference: whatever it lists is the file's name.
-	ro := cdr.ReadOnlyFiles()
-	if len(ro) != 1 {
-		t.Fatalf("ReadOnlyFiles() = %v, want one entry", ro)
-	}
-	name := ro[0]
+			// /ls is the reference: whatever it lists is the file's name.
+			ro := cdr.ReadOnlyFiles()
+			if len(ro) != 1 {
+				t.Fatalf("ReadOnlyFiles() = %v, want one entry", ro)
+			}
+			name := ro[0]
+			if got := filepath.IsAbs(name); got != tt.wantAbs {
+				t.Errorf("pin listed as %q, absolute = %v, want %v", name, got, tt.wantAbs)
+			}
 
-	// The decision: outside the project, name it absolutely.
-	if !filepath.IsAbs(name) {
-		t.Errorf("out-of-tree pin listed as %q, want an absolute path", name)
-	}
-	if strings.Contains(name, "..") {
-		t.Errorf("out-of-tree pin listed as %q, want no ..-counting", name)
-	}
-
-	got := out.String()
-	if n := strings.Count(got, "Pinned "+name+" read-only."); n != 1 {
-		t.Errorf("confirmation should name the file %q:\n%s", name, got)
-	}
-	// The in-tree pin stays root-relative: the project's own files are named
-	// the way every other tool result names them.
-	if chat := cdr.ChatFiles(); len(chat) != 1 || chat[0] != "a.go" {
-		t.Errorf("ChatFiles() = %v, want [a.go]", chat)
-	}
-	if !strings.Contains(got, "Pinned a.go.") {
-		t.Errorf("in-tree confirmation should be root-relative:\n%s", got)
+			got := out.String()
+			if n := strings.Count(got, "Pinned "+name+" read-only."); n != 1 {
+				t.Errorf("confirmation should name the file %q:\n%s", name, got)
+			}
+			// The in-tree pin stays root-relative on both sides: the project's
+			// own files are named the way every tool result names them.
+			if chat := cdr.ChatFiles(); len(chat) != 1 || chat[0] != "a.go" {
+				t.Errorf("ChatFiles() = %v, want [a.go]", chat)
+			}
+			if !strings.Contains(got, "Pinned a.go.") {
+				t.Errorf("in-tree confirmation should be root-relative:\n%s", got)
+			}
+		})
 	}
 }

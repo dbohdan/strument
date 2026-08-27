@@ -118,57 +118,72 @@ func TestOutsideReferenceIsRefusedForBeingReadOnly(t *testing.T) {
 	}
 }
 
-// TestReadOnlyNameIsUsable closes the loop the display change opens. Naming an
-// out-of-tree pin absolutely is only an improvement if the name works: the
-// prompt hands the model this string, so a tool call has to be able to act on
-// it. That failed until contain was given the same pinned-first order
-// unsafePath has always had.
+// TestReadOnlyNameIsUsable closes the loop the display rule opens. Whatever
+// DisplayPath decides to call an out-of-tree pin, the prompt hands the model
+// that string, so a tool call has to be able to act on it. The absolute form
+// failed until contain was given the same pinned-first order unsafePath has
+// always had.
 //
-// Both halves are asserted, because either alone is a trap. The prompt could
-// name the file correctly and the read still refuse; the read could work and
-// the prompt still name it some other way.
+// Both sides of the threshold are exercised, because they take different paths
+// through contain: a sibling arrives as ../spec.md and hits the relative
+// branch, a distant file arrives absolute and hits the branch this change
+// added. And both halves are asserted for each, because either alone is a trap
+// — the prompt could name the file correctly and the read still refuse, or the
+// read could work and the prompt name it some other way.
 func TestReadOnlyNameIsUsable(t *testing.T) {
-	root := t.TempDir()
-	proj := filepath.Join(root, "proj")
-	if err := os.MkdirAll(proj, 0o755); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name    string
+		depth   []string // project root, under the temp dir
+		wantAbs bool
+	}{
+		{name: "sibling stays relative", depth: []string{"proj"}},
+		{name: "distant is absolute", depth: []string{"a", "b", "proj"}, wantAbs: true},
 	}
-	spec := filepath.Join(root, "spec.md")
-	if err := os.WriteFile(spec, []byte("NEEDLE\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			proj := filepath.Join(append([]string{root}, tt.depth...)...)
+			if err := os.MkdirAll(proj, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			spec := filepath.Join(root, "spec.md")
+			if err := os.WriteFile(spec, []byte("NEEDLE\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
 
-	m := &config.Model{Slug: "test"}
-	m.SideModel = m
-	c := New(proj, m)
-	c.AddReadOnlyFile(spec)
+			m := &config.Model{Slug: "test"}
+			m.SideModel = m
+			c := New(proj, m)
+			c.AddReadOnlyFile(spec)
 
-	name := c.ReadOnlyFiles()[0]
-	if !filepath.IsAbs(name) {
-		t.Fatalf("out-of-tree pin named %q, want absolute", name)
-	}
+			name := c.ReadOnlyFiles()[0]
+			if got := filepath.IsAbs(name); got != tt.wantAbs {
+				t.Fatalf("pin named %q, absolute = %v, want %v", name, got, tt.wantAbs)
+			}
 
-	// The prompt block names it the same way the UI does.
-	block := c.readOnlyFilesContent()
-	if !strings.Contains(block, name) {
-		t.Errorf("read-only prompt block does not name the file %q:\n%s", name, block)
-	}
+			// The prompt block names it the same way the UI does.
+			if block := c.readOnlyFilesContent(); !strings.Contains(block, name) {
+				t.Errorf("read-only prompt block does not name the file %q:\n%s", name, block)
+			}
 
-	// And that name reads back through the tool layer.
-	got, err := c.Files.Read(name, 0, 0)
-	if err != nil {
-		t.Fatalf("read %q: %v", name, err)
-	}
-	if len(got.Lines) == 0 || got.Lines[0] != "NEEDLE" {
-		t.Errorf("read %q returned %v", name, got.Lines)
-	}
+			// And that name reads back through the tool layer.
+			got, err := c.Files.Read(name, 0, 0)
+			if err != nil {
+				t.Fatalf("read %q: %v", name, err)
+			}
+			if len(got.Lines) == 0 || got.Lines[0] != "NEEDLE" {
+				t.Errorf("read %q returned %v", name, got.Lines)
+			}
 
-	// The exemption is exactly the pinned set, not "absolute paths now work".
-	other := filepath.Join(root, "other.md")
-	if err := os.WriteFile(other, []byte("x\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.Files.Read(other, 0, 0); err == nil {
-		t.Errorf("an unpinned absolute path was accepted: %s", other)
+			// The exemption is exactly the pinned set, not "absolute paths now
+			// work".
+			other := filepath.Join(root, "other.md")
+			if err := os.WriteFile(other, []byte("x\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.Files.Read(other, 0, 0); err == nil {
+				t.Errorf("an unpinned absolute path was accepted: %s", other)
+			}
+		})
 	}
 }

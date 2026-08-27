@@ -330,19 +330,25 @@ func (c *Coder) absRootPath(path string) string {
 }
 
 // DisplayPath is how the UI and the prompt name one file, from a path given
-// either root-relative or absolute: root-relative inside the project, absolute
-// outside it.
+// either root-relative or absolute.
 //
-// This is not a new rule. toProjectPaths already writes the resume file exactly
-// this way — "project-relative where possible and absolute where not" — on the
-// grounds that a reference reached outside the project has no project-relative
-// form worth keeping. The screen was the layer that disagreed with the disk.
+// Root-relative inside the project. Root-relative one level up too — a file
+// beside the project directory, or one inside a sibling of it — because
+// ../spec.md and ../sibling-repo/include/api.h say something an absolute path
+// does not: that the file sits next to the work. Absolute beyond that.
 //
-// It replaces a form that named an out-of-tree pin by counting back to it:
-// /usr/include/foo.h reached from a project three levels down showed as
-// ../../../usr/include/foo.h. Same file, and correct, but it reads as though the
-// file were part of the project when the whole point of /read-only is that it
-// is not. Naming it absolutely says where it actually is.
+// The relative-inside, absolute-outside half is not a new rule; toProjectPaths
+// has written the resume file that way all along, on the grounds that a
+// reference reached outside the project has no project-relative form worth
+// keeping. The one-level exception is display's own, and storage deliberately
+// does not take it: a stored ../sibling breaks the moment the project moves,
+// while a name on screen only has to be right now. Two jobs, two rules, and the
+// divergence is in a file nobody reads.
+//
+// What it replaces named an out-of-tree pin by counting back to it, so
+// /usr/include/foo.h from a project three levels down read as
+// ../../../usr/include/foo.h — correct, and reading as though the file were
+// part of the project when the whole point of /read-only is that it is not.
 //
 // The prompt gets this form too (readOnlyFilesContent), so the user and the
 // model call the file the same thing. That works because Workspace.contain
@@ -357,10 +363,26 @@ func (c *Coder) DisplayPath(path string) string {
 // goes through one of the two.
 func (c *Coder) displayName(abs string) string {
 	rel := c.relFname(abs)
-	if rel == ".." || strings.HasPrefix(rel, "../") {
-		return filepath.ToSlash(abs)
+	up, rest := 0, rel
+	for {
+		if rest == ".." {
+			up++
+			rest = ""
+			break
+		}
+		if !strings.HasPrefix(rest, "../") {
+			break
+		}
+		up++
+		rest = rest[len("../"):]
 	}
-	return rel
+	// rest == "" is the project's parent directory itself, which is not a file
+	// anyone pins; it falls through to the absolute form rather than being
+	// named "..".
+	if up == 0 || (up == 1 && rest != "") {
+		return rel
+	}
+	return filepath.ToSlash(abs)
 }
 
 func (c *Coder) relFname(abs string) string {
