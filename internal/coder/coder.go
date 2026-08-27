@@ -382,7 +382,13 @@ func (c *Coder) displayName(abs string) string {
 	if up == 0 || (up == 1 && rest != "") {
 		return rel
 	}
-	return filepath.ToSlash(abs)
+	// Native separators, not ToSlash. A root-relative name is the tool-facing
+	// form — read, grep, and ls all report forward slashes, and it has to match
+	// them. An absolute name is not in that world: it is a path outside the
+	// project, which the user will read, copy, and paste somewhere else, so it
+	// should look the way their OS spells one. CI caught the difference as
+	// C:/Users/... where Windows means C:\Users\...
+	return filepath.Clean(abs)
 }
 
 func (c *Coder) relFname(abs string) string {
