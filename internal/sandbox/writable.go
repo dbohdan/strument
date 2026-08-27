@@ -153,7 +153,16 @@ func executableDirs() map[string]bool {
 }
 
 // conventionalExecutableNames are withheld regardless of PATH.
-var conventionalExecutableNames = map[string]bool{"bin": true, "sbin": true}
+//
+// shims is here for the same reason bin and sbin are, and it is the one that
+// actually bites. pyenv and mise both put their PATH entry in a directory of
+// that name, and the PATH check below only withholds a directory that is on
+// PATH *at Strument's startup* — so someone with pyenv installed but not
+// initialized in the current shell would have ~/.pyenv/shims granted as
+// writable, and a model-run command could rewrite the interpreter every later
+// shell resolves. It costs nothing to withhold: nothing writes to a shims
+// directory except the version manager itself, which the user runs.
+var conventionalExecutableNames = map[string]bool{"bin": true, "sbin": true, "shims": true}
 
 // writableSubdirs grants a toolchain root's contents without granting the root.
 //

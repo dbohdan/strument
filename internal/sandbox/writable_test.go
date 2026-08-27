@@ -296,18 +296,22 @@ func TestScannedEcosystemOverridesAreHonoured(t *testing.T) {
 // policy reads PATH rather than guessing from the layout.
 func TestScannedRootExcludesWhateverIsOnPath(t *testing.T) {
 	root := t.TempDir()
-	shims := filepath.Join(root, "shims") // not called "bin"
+	// Deliberately not a name conventionalExecutableNames already withholds.
+	// This used to be called "shims", which stopped testing anything the day
+	// shims joined that list: the assertion would have held on the name alone,
+	// and the PATH mechanism it is here for could have been deleted silently.
+	onPath := filepath.Join(root, "toolbox")
 	cache := filepath.Join(root, "cache")
-	for _, d := range []string{shims, cache} {
+	for _, d := range []string{onPath, cache} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("GOPATH", root)
-	t.Setenv("PATH", shims+string(os.PathListSeparator)+"/usr/bin")
+	t.Setenv("PATH", onPath+string(os.PathListSeparator)+"/usr/bin")
 
 	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
-	if has(t, got, shims) {
+	if has(t, got, onPath) {
 		t.Errorf("a directory on PATH was granted; anything written there runs as the user later:\n%v", got)
 	}
 	if !has(t, got, cache) {
@@ -350,5 +354,36 @@ func TestScannedRootWithNothingToGrantIsEmpty(t *testing.T) {
 		if has(t, got, p) {
 			t.Errorf("%s was granted for a toolchain that has never run", p)
 		}
+	}
+}
+
+// TestScannedRootWithholdsShimsOffPath is the pyenv and mise case. Both put
+// their PATH entry in a directory called "shims", and the PATH check reads PATH
+// once, at startup — so a user who has pyenv installed but has not initialized
+// it in the shell that launched Strument would have had ~/.pyenv/shims granted.
+// A model-run command could then rewrite the python every later shell resolves.
+//
+// The empty PATH is the whole point: it makes the exclusion attributable to the
+// name rather than to a lucky environment.
+func TestScannedRootWithholdsShimsOffPath(t *testing.T) {
+	root := t.TempDir()
+	shims := filepath.Join(root, "shims")
+	versions := filepath.Join(root, "versions")
+	for _, d := range []string{shims, versions} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOPATH", root)
+	t.Setenv("PATH", "")
+
+	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	if has(t, got, shims) {
+		t.Errorf("shims was granted with an empty PATH; a version manager's shims must never be writable:\n%v", got)
+	}
+	// The rest of the root still has to work, or withholding shims would just
+	// be breaking the toolchain.
+	if !has(t, got, versions) {
+		t.Errorf("versions was withheld; only the executable directories should be:\n%v", got)
 	}
 }
