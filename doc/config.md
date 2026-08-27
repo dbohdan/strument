@@ -517,15 +517,24 @@ two configs merge per entry — a project naming `TZ` does not drop your
 `GOFLAGS`. A project config only takes effect once you have run `strument
 trust`, which is the same gate its `check` commands sit behind.
 
-#### The one wrinkle, which is about `TZ`
+#### `TZ`, and what it does reach
 
-Go reads `TZ` once, the first time anything formats a time, and caches it for
-the life of the process. Strument sets `env_set` before that happens, so `TZ`
-reaches its own clock — the date in the prompt, the timestamps on commits it
-makes — as well as its subprocesses. If that ever stops being true, or if the
-zone is one this machine does not know, Strument says so at startup rather than
-quietly using the wrong zone. `env_set` changes need a restart; `/reload` does
-not re-apply them.
+Setting `TZ` is not by itself enough to move Strument's own clock, and for
+different reasons on different systems: Go reads `TZ` once on Unix, the first
+time anything formats a time, and never reads it at all on Windows. Strument
+therefore sets its zone directly rather than signalling it, so a `TZ` in
+`env_set` governs the date in the prompt and the timestamps on transcript turns
+on every platform. Files it writes for itself — the resume, undo, and cost
+records — stay in UTC, which is what they were always written in.
+
+Give a zone database name, like `Europe/Kyiv` or `UTC`. A POSIX string carrying
+its own rules (`EST5EDT4,M3.2.0/2`) is not one, and neither is a typo; either
+way Strument says so at startup instead of quietly using the wrong zone. The
+database is compiled into the binary, so a name means the same thing on a
+machine that has no zone files of its own.
+
+`env_set` changes need a restart; `/reload` does not re-apply them.
+
 ### `sandbox`
 
 Which confinement mechanism to apply to the session. `"landlock"` or `""`:

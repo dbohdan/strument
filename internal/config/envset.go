@@ -7,6 +7,14 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	// The zone database, compiled in. LoadLocation otherwise reads the host's
+	// copy, which Windows does not have one of at all and a scratch container
+	// may not either — so `env_set = {"TZ": "Europe/Kyiv"}` would work on the
+	// developer's laptop and fail on exactly the machines this setting exists
+	// for. About 410 KB of binary, paid once, for a setting that either works
+	// everywhere or is not worth having.
+	_ "time/tzdata"
 )
 
 // ApplyEnvSet puts the config's `env_set` into Strument's own environment.
@@ -30,44 +38,46 @@ func ApplyEnvSet(env map[string]string) error {
 	return nil
 }
 
-// TimeZoneProblem reports that a TZ in env_set did not reach Strument's own
-// clock, and returns "" when it did or when none was asked for.
+// ApplyTimeZone makes a TZ in env_set govern Strument's own clock, and returns
+// a message to show the user when it cannot. Setting the variable is not
+// enough, for two different reasons on two different platforms.
 //
-// TZ needs a check the other variables do not, because the runtime reads it
-// once and caches the answer. Measured: time.Now() and time.Since do not
-// trigger that, Format does — so setting TZ works only ahead of the first
-// rendered timestamp, which is true today and which one future log line above
-// config.Load would silently undo. Rather than leave that to a test that cannot
-// see the ordering it depends on, the program checks itself.
+// On Unix the runtime reads TZ once, lazily, the first time anything renders a
+// local time, and caches it — so an os.Setenv only lands if it happens before
+// the first formatted timestamp, an ordering no test can see and one future log
+// line would undo. On Windows the runtime never reads TZ at all: initLocal
+// calls GetTimeZoneInformation and names the result "Local" regardless, so the
+// same setenv reached commands and git and left Strument's own dates in the
+// machine's zone. CI found the second; the first was waiting.
 //
-// time.Local.String() is the predicate, and it is exact rather than
-// conservative because it was measured to be exact. It comes back equal to TZ
-// for every form the runtime actually honors, plain names and zoneinfo-backed
-// POSIX ones alike, and differs whenever the zone did not take — whether
-// because the name is unknown, because it is a POSIX string with DST rules
-// (which Go does not implement and silently answers with UTC), or because the
-// zone was latched before this ran. One symptom, several causes, so the message
-// names the causes and reports the zone Strument actually ended up in, which is
-// the part that says which one it was.
+// Assigning time.Local answers both. It is a package-level variable, and
+// measured: the assignment takes effect even after the zone has been latched,
+// on any platform, and every local rendering follows it — the date in the
+// prompt, the timestamps on transcript turns. Explicit .UTC() calls are
+// untouched, which is what keeps the persisted files (resume, undo, cost) in
+// UTC where they belong.
 //
-// Reading Local is itself what initializes it, so this has to be called after
-// ApplyEnvSet. That is not a caveat; it is the mechanism.
-func TimeZoneProblem(env map[string]string) string {
+// Called once at startup, before there is a second goroutine to race with.
+//
+// The only remaining failure is a zone name the database does not have, which
+// includes a POSIX TZ string carrying its own DST rules ("EST5EDT4,M3.2.0/2").
+// Under the old mechanism those silently became UTC. Now they are named.
+func ApplyTimeZone(env map[string]string) string {
 	// A leading colon is POSIX-legal and not part of the zone's name.
 	tz := strings.TrimPrefix(env["TZ"], ":")
 	if tz == "" {
 		return ""
 	}
-	// gosmopolitan flags time.Local because assuming the local zone is usually
-	// a bug. Here the local zone is the subject: the question is which one this
-	// process ended up in, and nothing else can answer it.
-	got := time.Local.String() //nolint:gosmopolitan // Reading the process zone is the check.
-	if got == tz {
-		return ""
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return fmt.Sprintf(
+			"strument: env_set TZ %q is not a zone name (%v). Commands and git still get TZ, but "+
+				"Strument's own dates stay in this machine's zone. Use a database name like "+
+				"\"Europe/Kyiv\" or \"UTC\".", tz, err)
 	}
-	return fmt.Sprintf(
-		"strument: env_set TZ %q did not take; Strument's own clock is %q. Commands and git still get "+
-			"TZ — only Strument's timestamps, the date in the prompt and the commits it makes, are in the "+
-			"other zone. Either the name is not a zone this machine knows, or something rendered a time "+
-			"before the config was read.", tz, got)
+	// gosmopolitan flags time.Local because depending on the local zone is
+	// usually a bug. Setting it is the opposite: it is how the user's stated zone
+	// becomes the one this process renders in.
+	time.Local = loc //nolint:gosmopolitan // Assigning the process zone is the point.
+	return ""
 }

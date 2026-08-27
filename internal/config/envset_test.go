@@ -3,87 +3,106 @@ package config
 import (
 	"maps"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 )
 
-// The TZ behavior these tests pin is a property of a *process*: Go caches the
-// local zone on first use and never re-reads it. Both cases therefore run in
-// fresh subprocesses of the test binary — asserting them in-process would let
-// the first one decide the second, and would leak a frozen zone into every
-// other test in the package.
-const envSetHelperVar = "STRUMENT_ENVSET_HELPER"
+// TestApplyTimeZone covers the zone half of env_set. It runs in-process and on
+// any platform, which the first version of these tests could not: they drove
+// subprocesses to prove that an os.Setenv of TZ landed before the runtime
+// latched the zone, and Windows then showed that no ordering saves it there —
+// the runtime never reads TZ at all. Assigning time.Local removed the hazard
+// the subprocesses existed to guard, so they went with it.
+func TestApplyTimeZone(t *testing.T) {
+	// time.Local is process-wide state; leaving it moved would put every later
+	// test in the wrong zone.
+	saved := time.Local                      //nolint:gosmopolitan // Saving the process zone to restore it.
+	t.Cleanup(func() { time.Local = saved }) //nolint:gosmopolitan // Restoring it.
 
-func TestEnvSetHelper(t *testing.T) {
-	mode := os.Getenv(envSetHelperVar)
-	if mode == "" {
-		t.Skip("helper process; driven by TestTimeZoneFromEnvSet")
+	tests := []struct {
+		name     string
+		env      map[string]string
+		wantZone string // "" means time.Local must not move
+		wantMsg  string // substring; "" means no message
+	}{
+		{name: "no TZ", env: map[string]string{"GOFLAGS": "-mod=mod"}},
+		{name: "empty TZ", env: map[string]string{"TZ": ""}},
+		{name: "nil map", env: nil},
+		{name: "a database name", env: map[string]string{"TZ": "Asia/Tokyo"}, wantZone: "Asia/Tokyo"},
+		{
+			// A leading colon is POSIX-legal and not part of the name.
+			name: "a colon-prefixed name", env: map[string]string{"TZ": ":Europe/Kyiv"},
+			wantZone: "Europe/Kyiv",
+		},
+		{name: "UTC", env: map[string]string{"TZ": "UTC"}, wantZone: "UTC"},
+		{
+			name: "a typo", env: map[string]string{"TZ": "Europe/Kyev"},
+			wantMsg: "is not a zone name",
+		},
+		{
+			// Go does not implement POSIX rule strings. Under the old mechanism
+			// this silently became UTC; now it is named.
+			name: "a POSIX string with DST rules", env: map[string]string{"TZ": "EST5EDT4,M3.2.0/2"},
+			wantMsg: "is not a zone name",
+		},
 	}
-	if mode == "frozen" {
-		// Render a time first, which is what latches the zone. This is the
-		// future regression being simulated: a log line above config.Load.
-		_ = time.Now().Format(time.RFC3339)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			time.Local = saved //nolint:gosmopolitan // Resetting between subtests.
+			msg := ApplyTimeZone(tt.env)
+
+			switch {
+			case tt.wantMsg == "" && msg != "":
+				t.Errorf("ApplyTimeZone(%v) = %q, want silence", tt.env, msg)
+			case tt.wantMsg != "" && !strings.Contains(msg, tt.wantMsg):
+				t.Errorf("ApplyTimeZone(%v) = %q, want it to mention %q", tt.env, msg, tt.wantMsg)
+			}
+
+			//nolint:gosmopolitan // The process zone is what this asserts about.
+			got := time.Local
+			if tt.wantZone == "" {
+				if got != saved {
+					t.Errorf("time.Local moved to %q; nothing valid asked it to", got.String())
+				}
+				return
+			}
+			if got.String() != tt.wantZone {
+				t.Errorf("time.Local = %q, want %q", got.String(), tt.wantZone)
+			}
+			// The point of moving it: what renders local now renders there.
+			if zone := time.Now().Format("MST"); zone == "" {
+				t.Errorf("time.Now() renders no zone after the move")
+			}
+			if loc := time.Now().Location().String(); loc != tt.wantZone {
+				t.Errorf("time.Now().Location() = %q, want %q", loc, tt.wantZone)
+			}
+		})
 	}
-	env := map[string]string{"TZ": "Asia/Tokyo"}
-	if err := ApplyEnvSet(env); err != nil {
-		t.Fatalf("ApplyEnvSet: %v", err)
-	}
-	// Printed rather than asserted here: the parent owns the expectations, so a
-	// helper that silently did nothing cannot pass by not failing.
-	//nolint:gosmopolitan // Reporting the process zone is what the helper is for.
-	os.Stdout.WriteString("zone=" + time.Local.String() +
-		" problem=" + map[bool]string{true: "yes", false: "no"}[TimeZoneProblem(env) != ""] + "\n")
 }
 
-func runEnvSetHelper(t *testing.T, mode string) string {
-	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=TestEnvSetHelper", "-test.v")
-	cmd.Env = append(os.Environ(), envSetHelperVar+"="+mode, "TZ=UTC")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("helper (%s): %v\n%s", mode, err, out)
-	}
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if strings.HasPrefix(line, "zone=") {
-			return line
-		}
-	}
-	t.Fatalf("helper (%s) printed no result:\n%s", mode, out)
-	return ""
-}
+// TestApplyTimeZoneWorksAfterTheZoneIsLatched is the property that made
+// assigning time.Local the answer rather than a bigger hammer. The runtime
+// caches the local zone on first render and never re-reads TZ; on Windows it
+// never reads TZ at all. Neither matters if the zone is assigned rather than
+// signalled.
+func TestApplyTimeZoneWorksAfterTheZoneIsLatched(t *testing.T) {
+	saved := time.Local                      //nolint:gosmopolitan // Saving the process zone to restore it.
+	t.Cleanup(func() { time.Local = saved }) //nolint:gosmopolitan // Restoring it.
 
-// TestTimeZoneFromEnvSet checks both halves of the ordering hazard: that a TZ
-// set early does reach Strument's own clock, and that one set late is reported
-// rather than silently ignored. The second is the one that matters — the code
-// is correct today, and the check exists so it says something the day it is
-// not.
-func TestTimeZoneFromEnvSet(t *testing.T) {
-	if _, err := time.LoadLocation("Asia/Tokyo"); err != nil {
-		t.Skip("no zoneinfo database on this machine")
-	}
+	// Latch it, the way any earlier formatted timestamp would.
+	_ = time.Now().Format(time.RFC3339)
 
-	if got, want := runEnvSetHelper(t, "early"), "zone=Asia/Tokyo problem=no"; got != want {
-		t.Errorf("TZ set before any time is rendered: got %q, want %q", got, want)
+	if msg := ApplyTimeZone(map[string]string{"TZ": "Asia/Tokyo"}); msg != "" {
+		t.Fatalf("ApplyTimeZone: %s", msg)
 	}
-	// The helper runs with TZ=UTC, so a zone latched too early names itself
-	// "UTC" rather than "Local" — which is why the predicate compares against
-	// the zone that was asked for instead of looking for a sentinel. The first
-	// version of this check looked for "Local" and passed nothing.
-	if got, want := runEnvSetHelper(t, "frozen"), "zone=UTC problem=yes"; got != want {
-		t.Errorf("TZ set after the zone is latched: got %q, want %q", got, want)
+	if got := time.Now().Location().String(); got != "Asia/Tokyo" {
+		t.Errorf("after a latch, time.Now().Location() = %q, want %q", got, "Asia/Tokyo")
 	}
-}
-
-// TestTimeZoneProblemIsQuietWhenItShouldBe guards the other direction. A
-// warning that fires when nothing is wrong trains the user to ignore it, so no
-// TZ in env_set means no claim either way.
-func TestTimeZoneProblemIsQuietWhenItShouldBe(t *testing.T) {
-	for _, env := range []map[string]string{nil, {}, {"GOFLAGS": "-mod=mod"}, {"TZ": ""}} {
-		if msg := TimeZoneProblem(env); msg != "" {
-			t.Errorf("TimeZoneProblem(%v) = %q, want silence: nothing asked for a zone", env, msg)
-		}
+	// Persisted timestamps are written with an explicit .UTC() and must not
+	// follow the session's zone into the files on disk.
+	if got := time.Now().UTC().Location().String(); got != "UTC" {
+		t.Errorf("explicit UTC became %q", got)
 	}
 }
 

@@ -81,14 +81,13 @@ func (c *chatCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	// Before anything else the session does, and that ordering is load-bearing:
-	// Go caches the local zone the first time a time is rendered, so a TZ in
-	// env_set only reaches Strument's own clock if it is set before then.
-	// TimeZoneMissed says so rather than leaving it to be noticed in a commit.
+	// The environment for everything Strument starts, then the zone for its own
+	// clock. Two steps because setting TZ does not move Go's clock on its own —
+	// ApplyTimeZone explains why, differently on each platform.
 	if err := config.ApplyEnvSet(cfg.EnvSet); err != nil {
 		return err
 	}
-	if msg := config.TimeZoneProblem(cfg.EnvSet); msg != "" {
+	if msg := config.ApplyTimeZone(cfg.EnvSet); msg != "" {
 		fmt.Fprintln(os.Stderr, msg)
 	}
 	// The project's state directory, and whatever the last session left in it.

@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+// TestSplitArgs covers what both platforms agree on. The two cases that used to
+// live here — an unquoted backslash escaping the next rune — moved to
+// TestSplitArgsBackslashPerPlatform when that stopped being universal: they were
+// written as facts about splitArgs and were really facts about Unix, so Windows
+// CI failed on the assertions rather than on the behavior.
 func TestSplitArgs(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -17,13 +22,11 @@ func TestSplitArgs(t *testing.T) {
 		{"  a   b  ", []string{"a", "b"}},
 		{`"my file.txt"`, []string{"my file.txt"}},
 		{`'my file.txt'`, []string{"my file.txt"}},
-		{`a\ b`, []string{"a b"}},
 		{`one "two words" three`, []string{"one", "two words", "three"}},
 		{`dir/"a b".go`, []string{"dir/a b.go"}},
 		{`"esc \" quote"`, []string{`esc " quote`}},
 		{`'no \ escape'`, []string{`no \ escape`}}, // backslash literal in single quotes
 		{`"unterminated`, []string{"unterminated"}},
-		{`path\with\backslash`, []string{"pathwithbackslash"}}, // bare backslashes escape the next rune
 	}
 	for _, tc := range cases {
 		got := splitArgs(tc.in)
@@ -77,6 +80,14 @@ func TestSplitArgsBackslashPerPlatform(t *testing.T) {
 			in:      `C:\a\b.txt D:\c\d.txt`,
 			escapes: false,
 			want:    []string{`C:\a\b.txt`, `D:\c\d.txt`},
+		},
+		{
+			// Moved from TestSplitArgs, where it read as a fact about splitArgs
+			// and was a fact about Unix.
+			name:    "unix: bare backslashes escape the next rune",
+			in:      `path\with\backslash`,
+			escapes: true,
+			want:    []string{"pathwithbackslash"},
 		},
 	}
 	for _, tt := range tests {
