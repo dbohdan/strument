@@ -230,6 +230,11 @@ func TestFlatEcosystemOverridesAreHonoured(t *testing.T) {
 		{"Yarn cache", "YARN_CACHE_FOLDER"},
 		{"Deno cache", "DENO_DIR"},
 		{"Gradle", "GRADLE_USER_HOME"},
+		{"OCaml opam", "OPAMROOT"},
+		{"D dub", "DUB_HOME"},
+		{"Dart pub", "PUB_CACHE"},
+		{"R user library", "R_LIBS_USER"},
+		{"mise cache", "MISE_CACHE_DIR"},
 		{".NET packages", "NUGET_PACKAGES"},
 		{"PHP composer", "COMPOSER_HOME"},
 		{"PHP composer cache", "COMPOSER_CACHE_DIR"},
@@ -264,6 +269,9 @@ func TestScannedEcosystemOverridesAreHonoured(t *testing.T) {
 		{"Ruby gems", "GEM_HOME", "gems"},
 		{"Haskell cabal", "CABAL_DIR", "packages"},
 		{".NET CLI", "DOTNET_CLI_HOME", "sdk"},
+		{"Foundry", "FOUNDRY_DIR", "cache"},
+		{"pyenv", "PYENV_ROOT", "versions"},
+		{"mise data", "MISE_DATA_DIR", "installs"},
 	} {
 		t.Run(tc.ecosystem, func(t *testing.T) {
 			root := t.TempDir()

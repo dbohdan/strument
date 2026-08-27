@@ -191,6 +191,163 @@ func TestProjectChecksDetection(t *testing.T) {
 			[]string{"stack-test"},
 		},
 
+		"swift": {
+			map[string]string{"Package.swift": "// swift-tools-version:5.9\n"},
+			[]string{"swift-build", "swift-test"},
+		},
+		"gleam": {
+			map[string]string{"gleam.toml": "name = \"x\"\n"},
+			[]string{"gleam-check", "gleam-test"},
+		},
+		"ocaml dune": {
+			map[string]string{"dune-project": "(lang dune 3.0)\n"},
+			[]string{"dune-build", "dune-test"},
+		},
+		"d dub.json": {
+			map[string]string{"dub.json": "{\"name\":\"x\"}\n"},
+			[]string{"dub-test"},
+		},
+		"d dub.sdl": {
+			map[string]string{"dub.sdl": "name \"x\"\n"},
+			[]string{"dub-test"},
+		},
+		"dart": {
+			map[string]string{"pubspec.yaml": "name: x\ndev_dependencies:\n  test: ^1.0.0\n", "test/": ""},
+			[]string{"dart-test"},
+		},
+		// A Flutter package needs flutter test; dart test cannot load the
+		// bindings.
+		"dart flutter": {
+			map[string]string{
+				"pubspec.yaml": "name: x\ndependencies:\n  flutter:\n    sdk: flutter\n",
+				"test/":        "",
+			},
+			[]string{"flutter-test"},
+		},
+		// flutter_lints is a lint package, not the SDK. The colon lands after
+		// the underscore, so the marker must not match it.
+		"dart with flutter_lints only": {
+			map[string]string{
+				"pubspec.yaml": "name: x\ndev_dependencies:\n  flutter_lints: ^3.0.0\n",
+				"test/":        "",
+			},
+			[]string{"dart-test"},
+		},
+		// dart test on a package with no tests is an error, not a pass.
+		"dart without a test directory": {
+			map[string]string{"pubspec.yaml": "name: x\n"},
+			nil,
+		},
+		"racket": {
+			map[string]string{"info.rkt": "#lang info\n"},
+			[]string{"raco-test"},
+		},
+		// A pile of .rkt files is not a package, and raco test . over it would
+		// run whatever each file does at load time.
+		"racket without info.rkt": {
+			map[string]string{"main.rkt": "#lang racket\n"},
+			nil,
+		},
+		"clojure leiningen": {
+			map[string]string{"project.clj": "(defproject x \"0.1\")\n"},
+			[]string{"lein-test"},
+		},
+		// deps.edn has no conventional test alias; see the detector.
+		"clojure deps.edn only": {
+			map[string]string{"deps.edn": "{:paths [\"src\"]}\n"},
+			nil,
+		},
+		"solidity foundry": {
+			map[string]string{"foundry.toml": "[profile.default]\n"},
+			[]string{"forge-build", "forge-test"},
+		},
+		"lua busted": {
+			map[string]string{".busted": "return {}\n"},
+			[]string{"busted"},
+		},
+		"lua rockspec with a test section": {
+			map[string]string{"x-1.0-1.rockspec": "package = \"x\"\ntest = {\n  type = \"busted\"\n}\n"},
+			[]string{"luarocks-test"},
+		},
+		// test_dependencies is not a test section. A substring match would
+		// offer luarocks test to a project that has nothing for it to read.
+		"lua rockspec without one": {
+			map[string]string{"x-1.0-1.rockspec": "package = \"x\"\ntest_dependencies = { \"busted\" }\n"},
+			nil,
+		},
+		// LuaRocks reads .busted itself, so offering both would run one suite
+		// twice under two names.
+		"lua busted beside a rockspec": {
+			map[string]string{
+				".busted":          "return {}\n",
+				"x-1.0-1.rockspec": "package = \"x\"\ntest = { type = \"busted\" }\n",
+			},
+			[]string{"busted"},
+		},
+		"lua linters": {
+			map[string]string{".luacheckrc": "std = \"lua54\"\n", "selene.toml": "std = \"lua51\"\n"},
+			[]string{"luacheck", "selene"},
+		},
+		"bats in test": {
+			map[string]string{"test/cli.bats": "@test \"x\" { true; }\n"},
+			[]string{"bats"},
+		},
+		"bats in tests": {
+			map[string]string{"tests/cli.bats": "@test \"x\" { true; }\n"},
+			[]string{"bats"},
+		},
+		"elisp eldev": {
+			map[string]string{"Eldev": "(eldev-use-package-archive 'melpa)\n"},
+			[]string{"eldev-test"},
+		},
+		// A Cask file names no runnable target without evaluating Lisp.
+		"elisp cask only": {
+			map[string]string{"Cask": "(source melpa)\n"},
+			nil,
+		},
+		"r testthat": {
+			map[string]string{"DESCRIPTION": "Package: x\n", "tests/testthat/": ""},
+			[]string{"r-test"},
+		},
+		// DESCRIPTION alone says this is a package, not that it has tests.
+		"r without testthat": {
+			map[string]string{"DESCRIPTION": "Package: x\n"},
+			nil,
+		},
+
+		"mise section tasks": {
+			map[string]string{"mise.toml": "[tasks.lint]\nrun = \"x\"\n\n[tasks.test]\nrun = \"y\"\n"},
+			[]string{"mise-lint", "mise-test"},
+		},
+		"mise inline tasks": {
+			map[string]string{"mise.toml": "[tasks]\nlint = \"x\"\ntest = \"y\"\n"},
+			[]string{"mise-lint", "mise-test"},
+		},
+		"mise in .config": {
+			map[string]string{".config/mise/config.toml": "[tasks.test]\nrun = \"y\"\n"},
+			[]string{"mise-test"},
+		},
+		// A tool version or an environment variable is not a task. Running one
+		// would fail for a reason having nothing to do with the code.
+		"mise tools and env are not tasks": {
+			map[string]string{"mise.toml": "[tools]\ntest = \"1.0\"\n\n[env]\nlint = \"x\"\n"},
+			nil,
+		},
+		// A task below an array value. The first version of the matcher was a
+		// bracket-bounded regexp, which ended at the [ of ["build"] and made
+		// every task after it invisible; RE2 has no lookahead to say "up to the
+		// next section header", so the matcher is a scan.
+		"mise task after an array value": {
+			map[string]string{"mise.toml": "[tasks]\nbuild = \"x\"\ndepends = [\"build\"]\ntest = \"y\"\n"},
+			[]string{"mise-test"},
+		},
+		// [tasks.foo] closes the plain [tasks] table, so a key under it is that
+		// task's field, not a task of its own.
+		"mise key under a task section is not a task": {
+			map[string]string{"mise.toml": "[tasks.build]\nrun = \"x\"\ntest = \"not a task\"\n"},
+			nil,
+		},
+
 		"nothing at all": {map[string]string{"README.md": "hi\n"}, nil},
 	} {
 		t.Run(name, func(t *testing.T) {

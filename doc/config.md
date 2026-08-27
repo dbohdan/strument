@@ -211,7 +211,20 @@ months later, with nothing to connect it back to a decision anyone made.
 | Elixir | `mix.exs` | `mix-compile`, `mix-test` | `MIX_HOME`, `HEX_HOME` |
 | Crystal | `shard.yml` plus `spec/` | `crystal-spec` | `SHARDS_CACHE_PATH` |
 | Haskell | `*.cabal`/`cabal.project`, or `stack.yaml` | `cabal-build`/`cabal-test`, or `stack-test` | `STACK_ROOT`, subdirectories of `CABAL_DIR` |
-| Task runners | `Makefile`, `Taskfile.yml`, or `justfile` with a `lint`/`check`/`test` target | `make-*`, `task-*`, `just-*` | — |
+| Swift | `Package.swift` | `swift-build`, `swift-test` | `~/.swiftpm`, and `~/Library/Caches/org.swift.swiftpm` on macOS |
+| Gleam | `gleam.toml` | `gleam-check`, `gleam-test` | — (uses `XDG_CACHE_HOME`) |
+| OCaml | `dune-project` | `dune-build`, `dune-test` | `OPAMROOT` |
+| D | `dub.json`/`dub.sdl` | `dub-test` | `DUB_HOME` |
+| Dart | `pubspec.yaml` plus `test/` | `dart-test`, or `flutter-test` for a Flutter package | `PUB_CACHE` |
+| Racket | `info.rkt` | `raco-test` | `~/.local/share/racket` |
+| Clojure | `project.clj` | `lein-test` | `~/.lein`, `~/.m2` |
+| Solidity | `foundry.toml` | `forge-build`, `forge-test` | subdirectories of `FOUNDRY_DIR` |
+| Lua | `.busted`, a `*.rockspec` with a test section, `.luacheckrc`, `selene.toml` | `busted` or `luarocks-test`; `luacheck`; `selene` | `~/.luarocks` |
+| Bats | `*.bats` under `test/` or `tests/` | `bats` | — |
+| Emacs Lisp | `Eldev` | `eldev-test` | `~/.eldev` |
+| R | `DESCRIPTION` plus `tests/testthat/` | `r-test` | `R_LIBS_USER` |
+| Task runners | `Makefile`, `Taskfile.yml`, `justfile`, or a mise config with a `lint`/`check`/`test` target | `make-*`, `task-*`, `just-*`, `mise-*` | — |
+| Version managers | — | — | subdirectories of `PYENV_ROOT`, `MISE_DATA_DIR`; `MISE_CACHE_DIR` |
 
 Every path is read from that ecosystem's own environment variable, falling back
 to the conventional location, so relocating a cache moves what the sandbox
@@ -222,7 +235,17 @@ matter only when someone has moved them.
 
 Task runners have no last column because they have no cache of their own. They
 run whatever your project told them to, and that command's ecosystem supplies
-the paths.
+the paths. mise is in that row for its tasks — `[tasks.test]` or a `test` key
+under `[tasks]`, in any of the config files mise reads — and in the row below
+for the toolchains it installs.
+
+Version managers are the mirror image: nothing to run, but their toolchains have
+to be writable or the first build after an install fails. **A `shims` directory
+is never granted**, whether or not it is on `PATH` when Strument starts. Both
+pyenv and mise resolve every command through one, so a writable `shims` would
+let a model-run command replace the interpreter that every later shell finds.
+What is granted is where the toolchains themselves live — `versions/`,
+`installs/`, `downloads/`.
 
 **"Subdirectories of"** is not a shorthand. Several toolchains keep a cache and
 an executable directory side by side — `~/.cargo` holds `bin/` next to

@@ -266,6 +266,14 @@ func cacheDirs() []string {
 		pick("GEM_HOME", under(".gem")),           // gems/ beside bin/
 		pick("CABAL_DIR", under(".cabal")),        // packages/ beside bin/
 		pick("DOTNET_CLI_HOME", under(".dotnet")), // tools/ is on PATH when used
+		pick("FOUNDRY_DIR", under(".foundry")),    // forge and cast live in bin/
+		// The version managers. Both keep their PATH entry in shims/, which is
+		// withheld by name now rather than by PATH — see
+		// conventionalExecutableNames. What is granted is where the toolchains
+		// themselves live, because that is what a first `mise install` or a
+		// freshly built Python needs to write.
+		pick("PYENV_ROOT", under(".pyenv")),                     // versions/, plugins/ beside shims/
+		pick("MISE_DATA_DIR", under(".local", "share", "mise")), // installs/, downloads/ beside shims/
 	} {
 		out = append(out, writableSubdirs(root)...)
 	}
@@ -321,7 +329,57 @@ func cacheDirs() []string {
 
 		// Haskell: stack, then cabal.
 		pick("STACK_ROOT", under(".stack")),
+
+		// Swift. SwiftPM keeps its clone and manifest caches under ~/.swiftpm,
+		// and on darwin a second copy under ~/Library/Caches, which is where
+		// that platform puts what XDG_CACHE_HOME covers elsewhere.
+		under(".swiftpm"),
+		darwinOnly(under("Library", "Caches", "org.swift.swiftpm")),
+
+		// OCaml: opam holds the switch, and dune builds into the project's own
+		// _build.
+		pick("OPAMROOT", under(".opam")),
+
+		// D.
+		pick("DUB_HOME", under(".dub")),
+
+		// Dart and Flutter.
+		pick("PUB_CACHE", under(".pub-cache")),
+
+		// Racket: raco writes compiled bytecode into the user's package tree.
+		under(".local", "share", "racket"),
+
+		// Clojure: Leiningen keeps its own directory beside the ~/.m2 that
+		// Maven already grants above.
+		under(".lein"),
+
+		// Lua: LuaRocks installs into a tree rather than a cache.
+		under(".luarocks"),
+
+		// Emacs Lisp: eldev builds into the project, but bootstraps its own
+		// packages here.
+		under(".eldev"),
+
+		// R: the user library, which testthat's dependencies land in. No
+		// fallback — the default is version- and platform-stamped
+		// (~/R/x86_64-pc-linux-gnu-library/4.4), and guessing it wrong grants a
+		// directory that does not exist while missing the one that does.
+		pick("R_LIBS_USER", ""),
+
+		// mise's cache. Its default falls under XDG_CACHE_HOME above; this is
+		// the relocated case, like the other pick("", "") rows.
+		pick("MISE_CACHE_DIR", ""),
 	}...)
+}
+
+// darwinOnly blanks a path off macOS. Empty entries are dropped downstream, so
+// a path that only exists on one platform can sit in the list rather than
+// forcing the whole of cacheDirs into per-platform files.
+func darwinOnly(path string) string {
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+	return path
 }
 
 func dedupe(paths []string) []string {
