@@ -141,8 +141,13 @@ func TestUsageMatchesHelp(t *testing.T) {
 // TestPinMessagesMatchLs is the harmonization: the name /add and /read-only
 // print for a file is the name /ls, the banner, and the per-prompt header use
 // for it. They disagreed for anything outside the project — /read-only echoed
-// an absolute path, everything else the root-relative one — so a sibling
-// repository's header appeared under two names in the same session.
+// an absolute path, everything else counted back to the file with ../.. — so
+// one pin appeared under two names in the same session.
+//
+// The assertion is congruence, not a particular spelling: whatever DisplayPath
+// decides, every surface says the same thing. It also pins the decision itself,
+// since an out-of-tree pin naming a system file is the case /read-only is
+// mostly used for.
 func TestPinMessagesMatchLs(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(root, "outside")
@@ -175,20 +180,31 @@ func TestPinMessagesMatchLs(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
+	// /ls is the reference: whatever it lists is the file's name.
+	ro := cdr.ReadOnlyFiles()
+	if len(ro) != 1 {
+		t.Fatalf("ReadOnlyFiles() = %v, want one entry", ro)
+	}
+	name := ro[0]
+
+	// The decision: outside the project, name it absolutely.
+	if !filepath.IsAbs(name) {
+		t.Errorf("out-of-tree pin listed as %q, want an absolute path", name)
+	}
+	if strings.Contains(name, "..") {
+		t.Errorf("out-of-tree pin listed as %q, want no ..-counting", name)
+	}
+
 	got := out.String()
-	// Every name the session printed for the out-of-tree pin must be the one
-	// /ls lists, which is also the only one a tool call can use: contain
-	// refuses an absolute path before the pinned-file exemption.
-	want := "../outside/spec.md"
-	if n := strings.Count(got, "Pinned "+want+" read-only."); n != 1 {
-		t.Errorf("confirmation should name the file as %q:\n%s", want, got)
+	if n := strings.Count(got, "Pinned "+name+" read-only."); n != 1 {
+		t.Errorf("confirmation should name the file %q:\n%s", name, got)
 	}
-	if strings.Contains(got, "Pinned "+outside) {
-		t.Errorf("confirmation used an absolute path:\n%s", got)
+	// The in-tree pin stays root-relative: the project's own files are named
+	// the way every other tool result names them.
+	if chat := cdr.ChatFiles(); len(chat) != 1 || chat[0] != "a.go" {
+		t.Errorf("ChatFiles() = %v, want [a.go]", chat)
 	}
-	for _, ro := range cdr.ReadOnlyFiles() {
-		if ro != want {
-			t.Errorf("/ls form = %q, want %q", ro, want)
-		}
+	if !strings.Contains(got, "Pinned a.go.") {
+		t.Errorf("in-tree confirmation should be root-relative:\n%s", got)
 	}
 }

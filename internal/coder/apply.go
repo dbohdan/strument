@@ -52,8 +52,7 @@ func (c *Coder) unsafePath(rel string) string {
 	// models retried with an absolute path, then through the shell, then went
 	// looking for a writable copy of the file inside the project, one of them for
 	// twelve steps. Told it is read-only, they say so and move on.
-	abs := c.absRootPath(rel)
-	if slices.Contains(c.absFnames, abs) || slices.Contains(c.absReadOnlyFnames, abs) {
+	if c.isPinned(rel) {
 		return ""
 	}
 	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") {

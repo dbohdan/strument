@@ -46,6 +46,24 @@ import (
 // tool layer uses, because these become sentences a model reads.
 func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`) {
+		// A pinned file may be named absolutely, which is the carve-out
+		// unsafePath has always made and this side did not. The two are
+		// documented as mirrors, and they had drifted on exactly this case: the
+		// same absolute path for a pinned file was accepted for editing and
+		// refused for reading. The order is what differed — unsafePath asks
+		// "pinned?" before "absolute?", and this asked the other way round, so
+		// the exemption below was unreachable for an absolute path.
+		//
+		// It matters beyond consistency now that DisplayPath names an
+		// out-of-tree pin absolutely: that is the string the prompt hands the
+		// model, so it has to be a string the model can read back.
+		//
+		// Nothing widens here. The exemption is exactly the set of files the
+		// user pinned, and Pinned cannot answer true for anything else.
+		full = filepath.Clean(raw)
+		if w.Pinned != nil && w.Pinned(full) {
+			return full, filepath.ToSlash(full), ""
+		}
 		return "", "", "absolute paths are not allowed; give a path relative to the project root"
 	}
 	rel = path(raw)

@@ -148,7 +148,7 @@ func (c *Coder) absFnamesContent() []string {
 			kept = append(kept, fname)
 			contents = append(contents, "")
 		default:
-			c.Out.Warningf("Dropping %s from the chat.", c.relFname(fname))
+			c.Out.Warningf("Dropping %s from the chat.", c.displayName(fname))
 		}
 	}
 	c.absFnames = kept
@@ -163,7 +163,7 @@ func (c *Coder) readOnlyFilesContent() string {
 		if err != nil {
 			continue
 		}
-		entries = append(entries, entry{c.relFname(fname), string(data)})
+		entries = append(entries, entry{c.displayName(fname), string(data)})
 	}
 	for i := 1; i < len(entries); i++ {
 		for j := i; j > 0 && entries[j].rel < entries[j-1].rel; j-- {
@@ -355,7 +355,7 @@ func (c *Coder) pinnedFilesNote() string {
 
 	var existing, missing []string
 	for _, fname := range c.absFnames {
-		rel := c.relFname(fname)
+		rel := c.displayName(fname)
 		if _, err := os.Stat(fname); err == nil {
 			existing = append(existing, rel)
 		} else {

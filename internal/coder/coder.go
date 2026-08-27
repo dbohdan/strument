@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -283,7 +284,8 @@ func New(root string, model *config.Model) *Coder {
 // /read-only. Out-of-tree references are the case it exists for: /read-only is
 // the only channel for a file outside the project, and a model that has its
 // contents in context will sometimes read it to check.
-func (c *Coder) isPinned(abs string) bool {
+func (c *Coder) isPinned(path string) bool {
+	abs := c.absRootPath(path)
 	return slices.Contains(c.absFnames, abs) || slices.Contains(c.absReadOnlyFnames, abs)
 }
 
@@ -327,24 +329,38 @@ func (c *Coder) absRootPath(path string) string {
 	return resolvePath(filepath.Clean(abs))
 }
 
-// DisplayPath is how the UI names one file, from a path given either
-// root-relative or absolute: the same root-relative, forward-slashed form
-// ChatFiles and ReadOnlyFiles return.
+// DisplayPath is how the UI and the prompt name one file, from a path given
+// either root-relative or absolute: root-relative inside the project, absolute
+// outside it.
 //
-// It exists because /add and /read-only used to print whatever the caller
-// happened to hold — an absolute path for anything outside the project — while
-// /ls, the banner, and the per-prompt header printed this form. One pin, two
-// names, and the user was left to work out they were the same file.
+// This is not a new rule. toProjectPaths already writes the resume file exactly
+// this way — "project-relative where possible and absolute where not" — on the
+// grounds that a reference reached outside the project has no project-relative
+// form worth keeping. The screen was the layer that disagreed with the disk.
 //
-// Relative is the form to harmonize on, and not merely because more places
-// already used it: the model is given this form too (readOnlyFilesContent), and
-// it is the only form that works. Workspace.contain refuses an absolute path
-// outright, before it ever reaches the pinned-file exemption, so a model handed
-// an absolute name for a pinned reference cannot read it. A far-away file
-// showing as ../../../etc/hosts is the honest cost, and it is the string that
-// would actually work.
+// It replaces a form that named an out-of-tree pin by counting back to it:
+// /usr/include/foo.h reached from a project three levels down showed as
+// ../../../usr/include/foo.h. Same file, and correct, but it reads as though the
+// file were part of the project when the whole point of /read-only is that it
+// is not. Naming it absolutely says where it actually is.
+//
+// The prompt gets this form too (readOnlyFilesContent), so the user and the
+// model call the file the same thing. That works because Workspace.contain
+// admits an absolute path for a pinned file, the same exemption unsafePath
+// makes — which it did not until this rule needed it.
 func (c *Coder) DisplayPath(path string) string {
-	return c.relFname(c.absRootPath(path))
+	return c.displayName(c.absRootPath(path))
+}
+
+// displayName is DisplayPath for a caller that already holds a resolved
+// absolute path, skipping the re-resolve. Everything that names a pinned file
+// goes through one of the two.
+func (c *Coder) displayName(abs string) string {
+	rel := c.relFname(abs)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return filepath.ToSlash(abs)
+	}
+	return rel
 }
 
 func (c *Coder) relFname(abs string) string {
@@ -383,7 +399,7 @@ func resolvePath(abs string) string {
 func (c *Coder) inchatRelativeFiles() []string {
 	set := map[string]bool{}
 	for _, f := range c.absFnames {
-		set[c.relFname(f)] = true
+		set[c.displayName(f)] = true
 	}
 	out := make([]string, 0, len(set))
 	for f := range set {

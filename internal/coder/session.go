@@ -38,7 +38,7 @@ func (c *Coder) LastOutcome() SendOutcome { return c.lastSendOutcome }
 func (c *Coder) ReadOnlyFiles() []string {
 	out := make([]string, 0, len(c.absReadOnlyFnames))
 	for _, f := range c.absReadOnlyFnames {
-		out = append(out, c.relFname(f))
+		out = append(out, c.displayName(f))
 	}
 	sort.Strings(out)
 	return out
@@ -76,7 +76,7 @@ func (c *Coder) DropUnder(path string) []string {
 		kept := make([]string, 0, len(list))
 		for _, abs := range list {
 			if abs == dir || strings.HasPrefix(abs, prefix) {
-				dropped = append(dropped, c.relFname(abs))
+				dropped = append(dropped, c.displayName(abs))
 			} else {
 				kept = append(kept, abs)
 			}
