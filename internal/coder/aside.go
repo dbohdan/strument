@@ -46,7 +46,10 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 		c.partialToolCalls = nil
 		c.toolCallIndex = map[int]int{}
 
-		res, streamErr := c.streamOnce(ctx, req, usage)
+		// No loop detection on a side call: these are short, structured, and
+		// bounded by their own prompts, and a false stop here would silently
+		// cost a summary rather than visibly stop a reply.
+		res, streamErr := c.streamOnce(ctx, req, usage, nil)
 		if res == resFailed {
 			if backoff.retry(c.Out, c.Clock, streamErr) {
 				continue // transient error: retry with the same backoff as a turn

@@ -537,6 +537,24 @@ Both were observed. The note added on Continue names the decision and rules out
 both readings, and seven interrupts across three models then resumed, two of
 them mid-word.
 
+**A reply that repeats itself is stopped like an interrupt nobody pressed.**
+Small models get stuck emitting one sentence forever, and unlike a repeated
+tool call it does not resolve on its own — the context fills instead.
+`internal/coder/loopdetect.go` watches the streamed text for a fifty-character
+window recurring ten times at close spacing (Gemini CLI's shape and thresholds,
+widened on gap) and for one word repeating thirty times running, which is the
+stutter no window can see. Answer and reasoning are watched separately, because
+they interleave on the wire and a window spanning the seam is a repetition of
+nothing; in a corpus of ten real loops across ten models every one was in the
+reasoning. Returning early from the stream is what stops it, so it costs one
+abandoned request. The outcome is `OutcomeLooping`, deliberately *not*
+`OutcomeInterrupted`: the steer menu cannot say "you stopped the model" when the
+user did not, and "carry on from where you stopped" — the right thing to say
+after a Ctrl-C — is the one instruction that would resume the loop. Off with
+`detect_loops = False`. The detector is naive on purpose (a substring per
+offset, a map that grows with a bounded tail); the upgrade, if a profile ever
+asks for one, is a rolling hash over a ring buffer, which needs no dependency.
+
 **The harness never speaks as the assistant, and mid-conversation it speaks as a
 marked user.** `llm.HarnessNote` is the one way to say something into an ongoing
 conversation — an interruption, an `/undo`, a decision the user made. The

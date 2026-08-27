@@ -26,6 +26,12 @@ const (
 	// re-sends rather than handing control back to the human.
 	OutcomeContinue
 	OutcomeInterrupted
+	// OutcomeLooping: the reply degenerated into repeating itself and the
+	// harness stopped it. Distinct from OutcomeInterrupted because the human
+	// did not do it, and because "carry on from where you stopped" — the right
+	// thing to say after a Ctrl-C — is the one instruction that would resume
+	// the loop.
+	OutcomeLooping
 	OutcomeContextExhausted
 	OutcomeOutputExhausted
 	OutcomeFailed
@@ -41,6 +47,8 @@ func (o SendOutcome) String() string {
 		return "Continue"
 	case OutcomeInterrupted:
 		return "Interrupted"
+	case OutcomeLooping:
+		return "Looping"
 	case OutcomeContextExhausted:
 		return "ContextExhausted"
 	case OutcomeOutputExhausted:
@@ -97,6 +105,7 @@ const (
 	resContextExhausted
 	resOutputExhausted
 	resInterrupted
+	resLooping
 	resFailed
 )
 
@@ -104,7 +113,11 @@ const (
 // the output and accumulating into the partial* fields and usage. It returns a
 // coarse classification of how the stream ended. The caller resets the partial*
 // fields before each call and decides whether to retry or continue.
-func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage) (streamResult, error) {
+//
+// loops may be nil, which detects nothing; returning early from the range over
+// Send is what stops the reply, so a detected loop costs the provider nothing
+// more than one abandoned stream.
+func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage, loops *loopDetector) (streamResult, error) {
 	finishReason := ""
 	usage.rejected = false
 	for ev, err := range c.Client.Send(ctx, req) {
@@ -129,9 +142,15 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 		case llm.EventAnswer:
 			c.partialResponseContent += ev.Text
 			c.Out.StreamText(ev.Text)
+			if loops.feed(loopAnswer, ev.Text) != nil {
+				return resLooping, nil
+			}
 		case llm.EventReasoning:
 			c.partialReasoningContent += ev.Text
 			c.Out.StreamReasoning(ev.Text)
+			if loops.feed(loopReasoning, ev.Text) != nil {
+				return resLooping, nil
+			}
 		case llm.EventToolCall:
 			c.accumulateToolCall(ev.ToolCall)
 			if ev.ToolCall != nil {
@@ -210,6 +229,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	backoff := retryBackoff{delay: initialRetryDelay}
 	continuations := 0
 
+	// One detector per send, not per streamOnce: a continuation is the same
+	// reply resumed, and a loop that spans the stitch is still a loop.
+	loops := newLoopDetector(c.DetectLoops)
+
 	// term is how the whole stream phase ended, as opposed to how one
 	// streamOnce ended: retries and continuations loop without setting it.
 	// streamOnce already classifies precisely, so the phase carries that
@@ -223,7 +246,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.partialToolCalls = nil
 		c.toolCallIndex = map[int]int{}
 
-		res, streamErr := c.streamOnce(ctx, c.buildRequest(messages), usage)
+		res, streamErr := c.streamOnce(ctx, c.buildRequest(messages), usage, loops)
 
 		if res == resFailed {
 			// A retryable error backs off and retries (the partial is discarded
@@ -256,7 +279,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			continue
 		}
 
-		term = res // resDone, resInterrupted, resContextExhausted
+		term = res // resDone, resInterrupted, resLooping, resContextExhausted
 		break
 	}
 	interrupted := term == resInterrupted
@@ -314,6 +337,13 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			dropUserTurn()
 		}
 		return OutcomeFailed, ""
+	case resLooping:
+		// The user turn stays. Unlike an empty reply, this one produced
+		// something — it produced too much of one thing — and the note below
+		// only makes sense following the message it answers.
+		c.warnLoop(loops.Found)
+		c.noteLoop(loops.Found)
+		return OutcomeLooping, ""
 	}
 
 	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
@@ -358,6 +388,43 @@ func (c *Coder) noteInterrupt() {
 		"The user pressed Ctrl-C, so your reply above was cut off where it stops. "+
 			"Anything you were part-way through saying was not finished, and any tool "+
 			"call you had begun was not run — nothing it would have changed has changed."))
+}
+
+// warnLoop tells the user what the model was doing when it was stopped, in
+// every mode: script runs have no steer menu, and a run that stopped early is
+// the one thing a log must not be silent about.
+func (c *Coder) warnLoop(f *loopFinding) {
+	if f == nil {
+		c.Out.Warningf("The model's reply was repeating itself, so it was stopped.")
+		return
+	}
+	c.Out.Warningf("The model's %s was repeating itself (%q %d times), so it was stopped.",
+		f.Kind, f.Sample, f.Count)
+}
+
+// noteLoop records that the harness stopped a reply that was repeating itself.
+//
+// In the harness's own voice, for the same reason as noteInterrupt: nobody
+// pressed Ctrl-C, and saying the user did would be a fabrication about the one
+// participant whose actions the model cannot check.
+//
+// It quotes the repeating text back. A model given "you were repeating
+// yourself" and nothing else has to guess which part, and the guess is often
+// the whole reply; the sample makes the instruction actionable.
+func (c *Coder) noteLoop(f *loopFinding) {
+	c.dropPartialToolCalls()
+	where := "reply"
+	if f != nil && f.Kind == loopReasoning {
+		where = "reasoning"
+	}
+	note := "Strument stopped your " + where + " because it had begun repeating itself"
+	if f != nil {
+		note += fmt.Sprintf(" — %q appeared %d times", f.Sample, f.Count)
+	}
+	note += ". Nothing you were part-way through was finished, and any tool call " +
+		"you had begun was not run. Do not continue that text or write it again: " +
+		"take a different approach, and if you are stuck, say so plainly and stop."
+	c.curMessages = append(c.curMessages, llm.HarnessNote(note))
 }
 
 // noteToolInterrupt records a Ctrl-C that landed while a tool was running.

@@ -133,3 +133,55 @@ func TestMaxErrorReflectionsProjectOverrides(t *testing.T) {
 		t.Errorf("max_error_reflections = %d, want project override of 10", cfg.MaxErrorReflections)
 	}
 }
+
+// TestDetectLoopsDefaultsOn: unset means on, which is the whole reason this one
+// is a boolean rather than a budget — there is no "0 means use the default"
+// value to hide behind.
+func TestDetectLoopsDefaultsOn(t *testing.T) {
+	cfg, err := loadBudget(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.DetectLoops {
+		t.Error("unset detect_loops should leave detection on")
+	}
+}
+
+func TestDetectLoopsOff(t *testing.T) {
+	cfg, err := loadBudget(t, "detect_loops = False")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DetectLoops {
+		t.Error("detect_loops = False should turn detection off")
+	}
+}
+
+func TestDetectLoopsRejectsNonBooleans(t *testing.T) {
+	for _, setting := range []string{`detect_loops = "yes"`, "detect_loops = 1"} {
+		_, err := loadBudget(t, setting)
+		if err == nil {
+			t.Errorf("%s should not load", setting)
+			continue
+		}
+		if !strings.Contains(err.Error(), "must be a boolean") {
+			t.Errorf("%s: error %q should say it must be a boolean", setting, err)
+		}
+	}
+}
+
+// A project can turn it off — a repo whose model output legitimately repeats
+// (generated tables, fixtures) is exactly who needs to.
+func TestDetectLoopsProjectOverrides(t *testing.T) {
+	opts := harness(t, budgetBase, "detect_loops = False\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DetectLoops {
+		t.Error("the project's detect_loops = False did not take effect")
+	}
+}

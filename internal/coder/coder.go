@@ -54,6 +54,9 @@ type Coder struct {
 	// reflection is the model recovering from its own mistake and should
 	// stay rare. Configurable; the default (3) is set by New.
 	MaxErrorReflections int
+	// DetectLoops stops a reply that has degenerated into repeating one phrase
+	// over and over. On by default; see loopdetect.go for what counts.
+	DetectLoops bool
 
 	// Ports.
 	Client     llm.ModelClient
@@ -261,6 +264,7 @@ func New(root string, model *config.Model) *Coder {
 		PrefillSupported:     true,
 		MaxSteps:             25,
 		MaxErrorReflections:  3,
+		DetectLoops:          true,
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
@@ -559,6 +563,13 @@ func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
 			}
 			message = next
 
+		case OutcomeLooping:
+			next, keepGoing := c.afterLoop()
+			if !keepGoing {
+				return
+			}
+			message = next
+
 		default:
 			return
 		}
@@ -700,6 +711,48 @@ func (c *Coder) afterInterrupt() (message string, keepGoing bool) {
 	default:
 		// Anything else the user typed is the steer, and it goes in as their
 		// own words in their own voice. They really did type it.
+		return answer[0], true
+	}
+}
+
+// afterLoop asks what to do about a reply the harness stopped for repeating
+// itself, and reports whether the turn should continue.
+//
+// Its own function rather than a branch of afterInterrupt, because both halves
+// differ. The question cannot say "you stopped the model" — the user did not —
+// and "Continue" cannot mean "pick up exactly where your reply stops", which
+// here is an instruction to resume the loop. What is offered instead is a
+// retry: the loop's note (send.go) tells the model to take a different
+// approach, and the most useful thing the user can do is type what that should
+// be, which the free-text steer already carries.
+func (c *Coder) afterLoop() (message string, keepGoing bool) {
+	if c.Asker == nil {
+		return "", false
+	}
+	// The edits so far belong to the stopped reply, whichever way this goes.
+	c.settleEdits("")
+
+	answer := c.Asker.Ask(AskRequest{
+		Question: "The model was repeating itself and was stopped. What now?",
+		Options: []AskOption{
+			{Label: "Stop", Description: "End the turn here"},
+			{Label: "Try again", Description: "Let it answer again, told not to repeat itself"},
+		},
+	})
+	if len(answer) == 0 {
+		return "", false
+	}
+	switch answer[0] {
+	case "Stop":
+		return "", false
+	case "Try again":
+		// The note noteLoop already appended is the whole message: it says what
+		// was stopped and what to do instead, so the next send re-enters on it
+		// rather than appending an empty user turn to carry nothing.
+		c.resumeInPlace = true
+		return "", true
+	default:
+		// Anything else the user typed is the steer, in their own voice.
 		return answer[0], true
 	}
 }

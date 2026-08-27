@@ -62,6 +62,8 @@ type fileGlobals struct {
 	maxStepsVal            int
 	hasMaxErrorReflections bool
 	maxErrorReflectionsVal int
+	hasDetectLoops         bool
+	detectLoopsVal         bool
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -305,7 +307,7 @@ func Load(opts Options) (*Config, error) {
 	// The sandbox is on by default where it can be, and the default is set
 	// here rather than at the point of use so `strument model-config` and any
 	// other reader sees the same answer the session will act on.
-	cfg := &Config{Models: map[string]*Model{}, Sandbox: defaultSandbox()}
+	cfg := &Config{Models: map[string]*Model{}, Sandbox: defaultSandbox(), DetectLoops: true}
 	maps.Copy(cfg.Models, user.models)
 	if user.hasDefault {
 		cfg.Default = user.defaultVal
@@ -333,6 +335,9 @@ func Load(opts Options) (*Config, error) {
 	}
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
+	}
+	if user.hasDetectLoops {
+		cfg.DetectLoops = user.detectLoopsVal
 	}
 	if user.hasSandbox {
 		cfg.Sandbox = user.sandboxVal
@@ -385,6 +390,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
+		}
+		if project.hasDetectLoops {
+			cfg.DetectLoops = project.detectLoopsVal
 		}
 		if project.hasSandbox {
 			cfg.Sandbox = project.sandboxVal
@@ -662,6 +670,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasMaxErrorReflections = true
 		out.maxErrorReflectionsVal = n
+	}
+
+	if dl, ok := globals["detect_loops"]; ok {
+		b, ok := dl.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `detect_loops` must be a boolean, got %s", path, dl.Type())
+		}
+		out.hasDetectLoops = true
+		out.detectLoopsVal = bool(b)
 	}
 
 	if sv, ok := globals["sandbox"]; ok {

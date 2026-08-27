@@ -31,6 +31,7 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
+| `detect_loops` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
@@ -414,6 +415,30 @@ that didn't match, a bad shell command — and trying again. It is distinct from
 a work step: the model is recovering, not progressing. Keeping the budget small
 means a model that is stuck in a fix-break cycle hands back to the human rather
 than burning the work-step budget on retries nobody asked for.
+
+### `detect_loops`
+
+Whether to stop a reply that has degenerated into repeating itself.
+
+```python
+detect_loops = True     # the default
+detect_loops = False    # off
+```
+
+Some models — small ones especially — get stuck emitting one sentence over and
+over until the context fills. It does not resolve on its own the way a repeated
+*tool call* usually does, so Strument watches the streamed text and stops the
+reply when a fifty-character window has recurred ten times at close spacing, or
+when one word has repeated thirty times running. The answer and the reasoning
+are watched separately; in practice it is nearly always the reasoning.
+
+Stopping looks like an interrupt without the Ctrl-C: the partial reply stays in
+the chat, Strument tells the model what repeated and to take another approach,
+and you are asked whether to stop, let it try again, or steer it with a message
+of your own.
+
+Turn it off if your model's ordinary output trips it — generated tables and
+fixture data are the plausible cases. Nothing else changes.
 
 ### `shell_timeout`
 
