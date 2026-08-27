@@ -343,6 +343,55 @@ and 14 used it first, so they must be the same 14" is true here, and was checked
 by listing both sets, because the alternative reading — some other 14 — is the
 kind of thing that is obvious right up until it is wrong.
 
+## 17. Three shapes of a check that cannot fail
+
+§1 is about a scorer that reported the wrong answer. This one is about checks
+that report *no* answer — assertions that pass whether or not the code works,
+so the only thing they measure is that they ran. Three turned up in a single
+day's work on the harness itself, and they were caught the same way each time:
+by breaking the code on purpose and watching the check stay green.
+
+They are worth listing by shape, because none of them looks wrong while you are
+writing it.
+
+**A tautology on the host that runs it.** A test asserted that a path uses the
+platform's separators as `got != filepath.FromSlash(got)`. On Unix `FromSlash`
+is the identity, so that compares a string to itself. It could only ever fail on
+Windows, and it was written and reviewed on Linux. *Tell:* the assertion is
+built from a function of the value being asserted about, rather than from an
+expectation written down independently.
+
+**An assertion behind an early return.** A test checked that a lookup accepts
+the argument value `definition` by asserting the output does not contain
+`Unknown kind`. But the lookup checks for a language parser before it validates
+the argument, and the fixture had no parser — so every kind, valid or not,
+answered "the language parser is not available", and the test passed with
+`definition` deleted from the accepted set. *Tell:* asserting the *absence* of
+an error rather than the presence of the right answer. An absence is satisfied
+by every path that never gets far enough to produce it.
+
+**A comparison the defect does not change.** The same test, second attempt:
+with a parser wired up, it compared the two kinds' whole output and required
+them to differ. They still did with the feature broken, because the *header* is
+worded from the argument while the *results* come from what the argument was
+translated into — so a lookup that ignored the argument entirely still printed
+"referenced" above the definition's line. It passes now by asserting line
+numbers: `definition` finds line 3, `reference` finds line 5 and not line 3. *Tell:* the
+assertion is on prose the code assembles near the input, rather than on the part
+of the output the code path under test actually decides.
+
+**Do:** for every check you would be upset to lose, break the thing it guards
+and watch it go red. Not the whole feature — the specific line. Two of the three
+above survived a plausible-looking break and failed only on the second, more
+precise one — which is itself the finding: *how* you break it is part of the
+check.
+
+Two practical notes from doing that. Make sure the broken version still
+**compiles** — a build failure is not a test failure, and `go test` will hand
+you a stale cached `ok` from the last good build if you read past the error.
+And prefer breaking the code to deleting the assertion: deleting tells you the
+assertion runs, while breaking tells you it discriminates.
+
 ---
 
 ## The short version
@@ -355,7 +404,7 @@ have I read three transcripts?* Only then look at the p-value — and remember
 that a broken instrument's favourite output is `p = 1.0`.
 
 And get the verdict out of the hands of whoever wants it to pass: break the code
-on purpose and watch the check go red (§1), or hand the check to a model that
-does not share your expectation (§13). Both work because neither routes through
-your judgment. Resolving to be more careful does not; it was tried, for nine
-consecutive bugs.
+on purpose and watch the check go red (§1, §17), or hand the check to a model
+that does not share your expectation (§13). Both work because neither routes
+through your judgment. Resolving to be more careful does not; it was tried, for
+nine consecutive bugs.
