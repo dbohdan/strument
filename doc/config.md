@@ -436,7 +436,7 @@ them through the turn's snapshot.
 Commands the model causes to run — the `bash` tool, the `check` tool, the
 `scraper` command — do not inherit your whole environment. They get an
 allowlist: the variables that make builds and tests work (`PATH`, `HOME`,
-`LANG` and the `LC_*` family, `TMPDIR`, the XDG locations, the standard proxy
+`LANG` and the `LC_*` family, `TZ`, `TMPDIR`, the XDG locations, the standard proxy
 variables and `SOCKS5_SERVER`, and the non-secret knobs of the common
 toolchains — the `GO*` family, `CARGO_HOME`, `JAVA_HOME`, `VIRTUAL_ENV`, and
 a handful of others). Everything else is withheld, so a

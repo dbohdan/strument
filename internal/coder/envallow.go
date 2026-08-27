@@ -31,8 +31,11 @@ var defaultEnvAllowNames = []string{
 	"COLUMNS", "LINES", "TMPDIR",
 	// Windows basics, where HOME/TERM do not exist.
 	"COMSPEC", "PATHEXT", "SystemRoot", "USERPROFILE", "TEMP", "TMP",
-	// Locale.
-	"LANG", "LANGUAGE",
+	// Locale, and the zone. TZ is not locale — LC_TIME decides how a timestamp
+	// is spelled, TZ decides which moment it names — so a check that formats
+	// times got the format from the session and the zone from wherever the
+	// server happened to be. Omitting it was an oversight, not a policy.
+	"LANG", "LANGUAGE", "TZ",
 	// The LC_* family, enumerated rather than prefix-matched: an exact list is
 	// the same one rule everywhere — no prefix mechanism to widen by accident.
 	"LC_ALL", "LC_CTYPE", "LC_MESSAGES", "LC_NUMERIC", "LC_TIME",
