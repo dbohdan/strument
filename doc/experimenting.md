@@ -463,6 +463,25 @@ metric's definition next to the claim it supports and check that the words
 match; then check the metric can still fire, on a fixture where the phenomenon
 genuinely occurs, or you have traded a wrong number for a silent one.
 
+#### The counter-arm is what finds this
+
+The fault recurred the day after this section was written, which is the best
+argument for a sharper tell than "read the definition carefully". A live check
+for webfetch asserted that a fetch nobody was asked about is still shown on
+screen: the marker and the URL appear in the turn. It passed in the arm built
+to break it — a binary whose grant expires with the turn, where turn two *was*
+prompted. The prompt draws the same marker and the same URL, so the assertion
+was reading the question and calling it the announcement. Adding one clause —
+and the question is *not* on screen — made it fail there, correctly.
+
+*Tell:* **an assertion that passes in the arm where the phenomenon cannot have
+occurred is mis-defined, whatever its name says.** This is stronger than
+inspecting the definition, because it is mechanical: you already built the
+counter-arm to prove the rig can fail, so read *every* line of its output, not
+just the ones you expected to flip. The passes in a failing arm are the
+free finding. A check that survives the arm designed to kill it is measuring
+something other than what it is named after.
+
 ---
 
 ## The short version
@@ -472,7 +491,8 @@ Most of what goes wrong is not statistics. It is the equipment.
 Before believing any result, ask in this order: *did the mechanism fire, did the
 model actually use the thing I am testing, could the fixture have caught the
 failure I am claiming it rules out, did the scorer see what I think it saw, do
-the two arms differ in exactly one thing, and have I read three transcripts?*
+the two arms differ in exactly one thing, did anything pass in the arm built to
+break it, and have I read three transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
 
