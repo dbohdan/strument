@@ -55,8 +55,16 @@ func TestSearchWithNoResultsSaysTheEnginesFailed(t *testing.T) {
 		}
 	}
 	// And it has to say what that means, or the list is trivia.
-	if !strings.Contains(out, "failed search") {
-		t.Errorf("did not distinguish a failed search from an empty subject:\n%s", out)
+	if !strings.Contains(out, "broken search") {
+		t.Errorf("did not distinguish a broken search from an empty subject:\n%s", out)
+	}
+	// The failure comes *before* "No results", because that is the order a
+	// model summarising tersely reads in. Asked the same question twice with
+	// the same tool result, one answer carried the blocked engines and the
+	// other said only "the search worked, zero results" — the note was last
+	// and parenthesised then.
+	if strings.Index(out, "degraded") > strings.Index(out, "No results") {
+		t.Errorf("the engine failures trail the empty result:\n%s", out)
 	}
 }
 
@@ -71,7 +79,7 @@ func TestSearchWithResultsCallsFailuresThinRatherThanFailed(t *testing.T) {
 	})
 	out := runSearch(t, c, searchCall("q"))
 
-	if !strings.Contains(out, "thinner") || strings.Contains(out, "failed search") {
+	if !strings.Contains(out, "thinner") || strings.Contains(out, "degraded") {
 		t.Errorf("a query with hits was framed as a failure:\n%s", out)
 	}
 	if !strings.Contains(out, "https://pkg.go.dev/net/http") || !strings.Contains(out, "Package http.") {

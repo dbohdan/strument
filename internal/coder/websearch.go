@@ -112,6 +112,17 @@ func formatSearchResults(query string, res SearchResults) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Results for %q:\n", query)
 
+	// With nothing to show, the engine failures lead. They used to trail the
+	// results as a parenthetical, which is where a model summarising tersely
+	// stops reading: asked the same question twice with the same tool result,
+	// one answer gave the full account of the blocked engines and the other
+	// said only "the search worked, zero results". Where there *are* results
+	// the note stays at the end, because "thinner than usual" genuinely is an
+	// aside; where there are none it is the finding.
+	if len(res.Results) == 0 && len(res.Unresponsive) > 0 {
+		fmt.Fprintf(&b, "\n%s\n", degradedNote(res.Unresponsive, 0))
+	}
+
 	for _, a := range res.Answers {
 		fmt.Fprintf(&b, "\nAnswer: %s\n", a)
 	}
@@ -137,21 +148,33 @@ func formatSearchResults(query string, res SearchResults) string {
 		b.WriteString("\nNo results.\n")
 	}
 
-	if len(res.Unresponsive) > 0 {
-		var parts []string
-		for _, u := range res.Unresponsive {
-			if u.Reason == "" {
-				parts = append(parts, u.Engine)
-				continue
-			}
-			parts = append(parts, u.Engine+" ("+u.Reason+")")
-		}
-		what := "so these results are thinner than the instance would normally return"
-		if len(res.Results) == 0 {
-			what = "so this may be a failed search rather than a subject with nothing written about it"
-		}
-		fmt.Fprintf(&b, "\n(%d of the instance's engines did not answer — %s — %s.)\n",
-			len(res.Unresponsive), strings.Join(parts, ", "), what)
+	if len(res.Results) > 0 && len(res.Unresponsive) > 0 {
+		fmt.Fprintf(&b, "\n%s\n", degradedNote(res.Unresponsive, len(res.Results)))
 	}
 	return b.String()
+}
+
+// degradedNote says which engines did not answer and what that means for the
+// results beside it. Three engines down is the normal state on a real instance,
+// not an alarm, so with results in hand it is phrased as a caveat; with none it
+// is phrased as the likely explanation, because that is the case where a reader
+// would otherwise conclude the subject has nothing written about it.
+func degradedNote(unresponsive []UnresponsiveEngine, results int) string {
+	parts := make([]string, 0, len(unresponsive))
+	for _, u := range unresponsive {
+		if u.Reason == "" {
+			parts = append(parts, u.Engine)
+			continue
+		}
+		parts = append(parts, u.Engine+" ("+u.Reason+")")
+	}
+	if results == 0 {
+		return fmt.Sprintf("This search was degraded: %d of the instance's engines did not "+
+			"answer — %s. Report that alongside any conclusion; an empty result here is at "+
+			"least as likely to be a broken search as a subject nobody has written about.",
+			len(unresponsive), strings.Join(parts, ", "))
+	}
+	return fmt.Sprintf("(%d of the instance's engines did not answer — %s — so these results "+
+		"are thinner than the instance would normally return.)",
+		len(unresponsive), strings.Join(parts, ", "))
 }
