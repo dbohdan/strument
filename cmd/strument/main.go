@@ -148,6 +148,7 @@ func (c *chatCmd) Run() error {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	cdr.LoopDetection = !cfg.NoLoopDetection
+	cdr.WebfetchAllow = cfg.WebfetchAllow
 	// The project's named checks, which the check tool runs without asking:
 	// the model supplies only a name, so nothing it says can change what runs.
 	cdr.Check = cfg.Check
@@ -168,6 +169,9 @@ func (c *chatCmd) Run() error {
 		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
 			return coder.FilterEnv(nil, cdr.EnvAllow)
 		})
+		// A subprocess the model can cause, so webfetch is gated by the sandbox
+		// like bash and check. The built-in fetcher below spawns nothing.
+		cdr.ScrapeRunsCommand = true
 	} else {
 		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
 		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
@@ -808,6 +812,18 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 			fmt.Println("‹shell› (no purpose given)")
 		}
 		fmt.Printf("$ %s\n", req.Command)
+	case req.URL != "":
+		// The second confirmer, and it has to show what the first one shows.
+		// It did not, and the prompt read "Fetch this page? (Y/n)" with no page
+		// named — a question nobody could answer, which a pty run surfaced and
+		// no unit test would have. No hyperlink here: this surface has no
+		// color gate to hang one on.
+		if req.Purpose != "" {
+			fmt.Println("‹webfetch›", req.Purpose)
+		} else {
+			fmt.Println("‹webfetch› (no purpose given)")
+		}
+		fmt.Println(render.Sanitize(req.URL))
 	case req.Subject != "":
 		fmt.Println(req.Subject)
 	}

@@ -189,6 +189,35 @@ func (o *termOutput) sgr(codes string) string {
 	return "\x1b[" + codes + "m"
 }
 
+// Link prints a URL as itself, made clickable where the terminal supports it.
+// Stolen from Kimi Code, which hyperlinks the URL in its approval panel.
+//
+// The escape is the one place output is assembled rather than sanitized, so
+// both halves are checked here rather than trusted from the caller. The text is
+// sanitized like any other output. The *target* is refused the escape entirely
+// if it carries a control byte, which would let it close the OSC and start
+// something of its own — the URL comes from the model, and this is the only
+// path that puts model-supplied bytes near an escape Strument writes. In
+// practice url.Parse has already rejected every ASCII control character before
+// a URL can reach here (verified, not assumed); this is the belt to that
+// bracing, so the method stays safe for a caller that has not parsed anything.
+//
+// Off when color is off, which is also when output is being captured — see
+// doc/experimenting.md on what Strument's own escape sequences did to a scorer.
+func (o *termOutput) Link(target string) {
+	o.guard()
+	o.clearWaiting()
+	text := render.Sanitize(target)
+	if !o.color || strings.ContainsFunc(target, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		fmt.Fprint(o.w, text+"\n")
+		o.sep.Clear()
+		return
+	}
+	const st = "\x1b\\"
+	fmt.Fprint(o.w, "\x1b]8;;"+target+st+text+"\x1b]8;;"+st+"\n")
+	o.sep.Clear()
+}
+
 // Printf is the REPL's own voice — the banner, the usage line, the /add
 // acknowledgements — and everything it says falls outside a step. So it settles
 // the group separator rather than owing one: the next turn's first thinking

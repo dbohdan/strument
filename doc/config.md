@@ -31,6 +31,7 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
+| `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
@@ -415,6 +416,45 @@ that didn't match, a bad shell command — and trying again. It is distinct from
 a work step: the model is recovering, not progressing. Keeping the budget small
 means a model that is stuck in a fix-break cycle hands back to the human rather
 than burning the work-step budget on retries nobody asked for.
+
+### `webfetch_allow`
+
+Origins the `webfetch` tool may fetch without asking you first.
+
+```python
+webfetch_allow = [
+    "docs.python.org",   # https://docs.python.org/... and http://, nothing else
+    "pkg.go.dev",
+    "localhost:3000",    # the dev server, and not whatever is on :8080
+]
+```
+
+**An entry is an origin, not a URL** — no scheme, no path. A URL written here is
+refused at load rather than left to silently never match.
+
+Matching is exact, and it includes the **port**. An entry without one covers
+only the defaults, 80 and 443; `localhost:3000` covers only that port. This is
+the setting's most useful property on localhost, where a dev server and
+whatever else happens to be listening have nothing to do with each other, and
+it is why `webfetch_allow = ["localhost"]` will not silently admit
+`localhost:8080`. Write `example.com:443` to insist on https, since a bare
+entry admits the plaintext port too.
+
+Subdomains are not covered. `example.com` does not admit `docs.example.com`,
+and there is no wildcard. On `*.github.io`, `*.pages.dev`, and
+`*.s3.amazonaws.com` the subdomain is whoever signed up, so a rule that
+admitted them would hand an attacker the host you vouched for.
+
+**It says which fetches skip the prompt, not which are reachable.** Strument
+will not pretend this is a network boundary: `bash` can `curl` anywhere, and
+the sandbox confines the filesystem rather than the network. What the list
+buys is fewer questions about the hosts you read from every day. (If Strument
+ever gains network confinement, a restricting form of this setting becomes
+honest and can be added then.)
+
+A trusted project config replaces the user's list rather than adding to it,
+like `env_allow` and for the same reason: this is one decision about which
+hosts stop being asked about, and merging two lists could only ever widen it.
 
 ### `loop_detection`
 

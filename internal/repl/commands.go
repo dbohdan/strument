@@ -651,6 +651,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		r.coder.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	r.coder.LoopDetection = !cfg.NoLoopDetection
+	r.coder.WebfetchAllow = cfg.WebfetchAllow
 
 	// Re-resolve the active alias so edits to that model take effect; if it was
 	// removed, keep the running model rather than stranding the session.

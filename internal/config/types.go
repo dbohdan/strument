@@ -181,6 +181,16 @@ type Config struct {
 	// recovering from its own mistake — a failed edit match, a bad shell
 	// command — and should stay rare.
 	MaxErrorReflections int
+	// WebfetchAllow are origins — host, or host:port — the webfetch tool may
+	// fetch without asking. Empty means every fetch is confirmed.
+	//
+	// It says which fetches skip the prompt, not which are reachable. The
+	// difference is deliberate: `bash` can curl anywhere and Landlock does not
+	// touch the network, so a restriction here would be a boundary the tool
+	// beside it steps over. Matching is exact, and an entry without a port
+	// covers only 80 and 443.
+	WebfetchAllow []string
+
 	// NoLoopDetection turns off stopping a reply that has degenerated into
 	// repeating itself. Named for what it overrides, not for what it does, so
 	// that the zero value means the built-in default (on) — the same shape as

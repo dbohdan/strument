@@ -243,6 +243,26 @@ and the confirmation prompt is the only thing between a mistake and your home
 directory.
 
 
+## Fetching a page
+
+`webfetch` asks before it fetches an origin you have not listed, and the prompt
+shows the whole URL. Two things about it are worth stating plainly.
+
+**`webfetch_allow` is not a network boundary.** It says which fetches skip the
+prompt. It cannot say which hosts are reachable, because `bash` can `curl`
+anywhere and Landlock confines the filesystem rather than the network — a
+restriction here would be a line the tool beside it steps over. Codex's
+`allowed_domains` genuinely restricts because its search is a hosted service
+the model cannot route around; Strument is not in that position and does not
+imply it is.
+
+**A fetched page is untrusted input.** Whatever comes back enters the model's
+context and can carry instructions, which is the reason the "all this turn"
+answer is scoped to a single origin rather than the turn: approving a turn's
+worth of unseen pages is approving unseen content into your context. It is also
+why the prompt never shortens a URL. A long query string is exactly what a
+reader skims and exactly where a URL stops being the one they assumed.
+
 ## The environment, which is a separate control
 
 Commands the model causes to run do not inherit your environment. They get an

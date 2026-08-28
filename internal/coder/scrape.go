@@ -71,6 +71,17 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 		if strings.Contains(resp.Header.Get("Content-Type"), "html") {
 			text = htmlToMarkdown(text)
 		}
+		// Where the content actually came from, which is not always where it
+		// was asked for. The model picks the URL now, so a shortener or an
+		// open redirect landing somewhere else is a thing the transcript should
+		// record rather than something only the network saw.
+		final := url
+		if resp.Request != nil && resp.Request.URL != nil {
+			final = resp.Request.URL.String()
+		}
+		if final != url {
+			return wrapContent(url, text) + "\n\n(Redirected to " + final + ".)\n", nil
+		}
 		return wrapContent(url, text), nil
 	}
 }

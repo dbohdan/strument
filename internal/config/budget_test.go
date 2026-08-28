@@ -197,3 +197,48 @@ func TestLoopDetectionProjectOverrides(t *testing.T) {
 		t.Error("the project's loop_detection = False did not take effect")
 	}
 }
+
+func TestWebfetchAllowParsed(t *testing.T) {
+	cfg, err := loadBudget(t, `webfetch_allow = ["docs.python.org", "localhost:3000"]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.WebfetchAllow) != 2 || cfg.WebfetchAllow[0] != "docs.python.org" {
+		t.Errorf("webfetch_allow = %q", cfg.WebfetchAllow)
+	}
+}
+
+// A URL written where an origin belongs is a typo with a plausible shape. It is
+// refused at load, because the alternative is an entry that silently never
+// matches and a user who concludes the setting does not work.
+func TestWebfetchAllowRejectsURLs(t *testing.T) {
+	for _, setting := range []string{
+		`webfetch_allow = ["https://docs.python.org"]`,
+		`webfetch_allow = ["docs.python.org/3/"]`,
+		`webfetch_allow = ["::1"]`,
+		`webfetch_allow = [""]`,
+		`webfetch_allow = [3000]`,
+		`webfetch_allow = "docs.python.org"`,
+	} {
+		if _, err := loadBudget(t, setting); err == nil {
+			t.Errorf("%s should not load", setting)
+		}
+	}
+}
+
+func TestWebfetchAllowProjectOverrides(t *testing.T) {
+	opts := harness(t, budgetBase+`webfetch_allow = ["docs.python.org"]`+"\n",
+		`webfetch_allow = ["localhost:3000"]`+"\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Whole-value, like env_allow: a project must be able to narrow what the
+	// user's config widened, and merging could only ever widen.
+	if len(cfg.WebfetchAllow) != 1 || cfg.WebfetchAllow[0] != "localhost:3000" {
+		t.Errorf("webfetch_allow = %q, want the project's list alone", cfg.WebfetchAllow)
+	}
+}

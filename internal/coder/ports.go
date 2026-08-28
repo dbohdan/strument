@@ -66,6 +66,12 @@ type ConfirmRequest struct {
 	Prompt  string
 	Subject string
 	Command string
+	// URL and Origin are webfetch's pair: the whole URL, which is what has to
+	// be read, and the host:port it reduces to, which is what an "all this
+	// origin" answer covers. Both are shown, because a prompt that scopes an
+	// answer to something it never printed is asking blind.
+	URL     string
+	Origin  string
 	Purpose string
 	// RequiresYesShell marks a prompt that plain --yes must not answer; only
 	// --yes-shell does. It used to also make the prompt default to no, which is

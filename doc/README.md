@@ -537,6 +537,32 @@ Both were observed. The note added on Continue names the decision and rules out
 both readings, and seven interrupts across three models then resumed, two of
 them mid-word.
 
+**Fetching a page is a tool, not a guess about what a URL in your message
+meant.** `webfetch(url, purpose)` (`internal/coder/webfetch.go`) is the model's
+way to read a documentation page, and the name is the field's rather than this
+project's — Claude Code has `WebFetch`, OpenCode and MiMo Code `webfetch`,
+DeepSeek Harness `web_fetch` — for the reason `tools.go` already gives about
+`edit` and `grep`. Bare `fetch` was the tempting short one and is the one to
+avoid: in a coding agent that word means git.
+
+The confirmation is the shell gate's shape — purpose above, the thing to read
+below — with the URL never shortened, since a query string is where a URL stops
+being the one you assumed. What differs is the scope of "a". `bash` ties its
+"all this turn" to the sandbox, because a sandbox bounds what an unseen command
+can do; nothing bounds an unseen *URL*, so the bound comes from the answer
+instead: **a is scoped to one origin**, host and port, and the prompt says which
+(`Y/n/a=all on go.dev:443 this turn`). Approving five pages of one docs site is
+the workflow people actually want; pivoting to a host you never saw is not.
+`webfetch_allow` skips the prompt for origins you name — which is also why it
+needs no `--yes` flag, since the flag question only arises for an origin you did
+not. The sandbox gates a fetch only when a `scraper` command is configured: the
+built-in fetcher spawns nothing, and refusing it for want of a kernel feature
+would apply a rule about subprocesses to something that has none.
+
+`internal/origin` owns what an origin is, because two packages need the
+identical answer and neither can import the other — the config loader validates
+an entry at load, the coder matches a fetch at run time.
+
 **A reply that repeats itself is stopped like an interrupt nobody pressed.**
 Small models get stuck emitting one sentence forever, and unlike a repeated
 tool call it does not resolve on its own — the context fills instead.

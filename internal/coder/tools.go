@@ -26,6 +26,8 @@ const (
 	toolSymbol = "symbol"
 	toolCheck  = "check"
 	toolCommit = "commit"
+	// toolWebfetch is the field's name, not a chosen one — see webfetch.go.
+	toolWebfetch = "webfetch"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -58,6 +60,11 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// symbol reads the same tree-sitter layer the repo map is built from,
 		// so it is offered exactly when that layer is available.
 		defs = append(defs, symbolTool())
+	}
+	// Offered in ask mode too: fetching mutates nothing, and reading a
+	// specification is exactly what a discussion turn is for.
+	if c.Scrape != nil {
+		defs = append(defs, webfetchTool())
 	}
 	if c.editFormat == "ask" {
 		return defs
@@ -531,6 +538,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runSymbol(tc)
 		case toolCheck:
 			results[tc.ID] = c.runCheckTool(ctx, tc)
+		case toolWebfetch:
+			f, msg := parseFetchArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			results[tc.ID] = c.runWebfetch(ctx, f)
 		case toolAskUser:
 			// Not routed through confirmTurn: a question is not a permission
 			// prompt, and --yes/--yes-shell must not answer it.

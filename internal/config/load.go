@@ -15,6 +15,7 @@ import (
 	"go.starlark.net/syntax"
 
 	"dbohdan.com/strument/internal/httpx"
+	"dbohdan.com/strument/internal/origin"
 )
 
 // ProjectConfigName is the project-root dotfile, untrusted by default.
@@ -64,6 +65,8 @@ type fileGlobals struct {
 	maxErrorReflectionsVal int
 	hasLoopDetection       bool
 	loopDetectionVal       bool
+	hasWebfetchAllow       bool
+	webfetchAllowVal       []string
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -336,6 +339,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
 	}
+	if user.hasWebfetchAllow {
+		cfg.WebfetchAllow = user.webfetchAllowVal
+	}
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
@@ -390,6 +396,13 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
+		}
+		// Whole-value like env_allow and for the same reason: this is one
+		// decision about which hosts stop being asked about, and a project must
+		// be able to narrow what the user's config widened. The trust gate is
+		// what makes a project's entry the user's own decision.
+		if project.hasWebfetchAllow {
+			cfg.WebfetchAllow = project.webfetchAllowVal
 		}
 		if project.hasLoopDetection {
 			cfg.NoLoopDetection = !project.loopDetectionVal
@@ -670,6 +683,32 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasMaxErrorReflections = true
 		out.maxErrorReflectionsVal = n
+	}
+
+	if wa, ok := globals["webfetch_allow"]; ok {
+		list, ok := wa.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `webfetch_allow` must be a list of hosts, got %s", path, wa.Type())
+		}
+		origins := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			str, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `webfetch_allow`[%d] must be a string, got %s", path, i, list.Index(i).Type())
+			}
+			// Refused at load rather than left to silently never match. An
+			// entry is an origin, so a URL written here is a typo with a
+			// plausible-looking shape — the worst kind.
+			if !origin.ValidEntry(str) {
+				return nil, fmt.Errorf(
+					"%s: `webfetch_allow`[%d] is %q, which is not a host or host:port — "+
+						"write \"docs.python.org\" or \"localhost:3000\", with no scheme and no path", path, i, str)
+			}
+			origins = append(origins, str)
+		}
+		out.hasWebfetchAllow = true
+		out.webfetchAllowVal = origins
 	}
 
 	if ld, ok := globals["loop_detection"]; ok {

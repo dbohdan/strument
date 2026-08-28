@@ -54,6 +54,15 @@ type Coder struct {
 	// reflection is the model recovering from its own mistake and should
 	// stay rare. Configurable; the default (3) is set by New.
 	MaxErrorReflections int
+	// WebfetchAllow are origins (host:port) the webfetch tool may fetch without
+	// asking. From `webfetch_allow`; see fetchAllowed for what it does and does
+	// not promise.
+	WebfetchAllow []string
+	// ScrapeRunsCommand records that Scrape spawns the configured `scraper`
+	// command rather than fetching in process, which is what decides whether a
+	// fetch is gated by the sandbox.
+	ScrapeRunsCommand bool
+
 	// LoopDetection stops a reply that has degenerated into repeating one
 	// phrase over and over. On by default; see loopdetect.go for what counts.
 	LoopDetection bool

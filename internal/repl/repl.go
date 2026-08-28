@@ -593,6 +593,12 @@ func (r *REPL) showUndoHint() {
 // cannot see: readline writes it straight to the terminal, so in the scripted
 // sessions it never reaches the captured output.
 func confirmSuffix(req coder.ConfirmRequest) string {
+	// webfetch scopes its "a" to one origin rather than the turn, so the hint
+	// has to say which — an answer whose scope is not on screen is an answer
+	// given blind. See runWebfetch for why the scope is the origin.
+	if req.Origin != "" {
+		return " (Y/n/a=all on " + req.Origin + " this turn) "
+	}
 	if req.Group != "" {
 		return " (Y/n/a=all turn) "
 	}
@@ -621,6 +627,17 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// surfaces read alike. The color deliberately is not: there the check is
 		// routine, here it is the decision.
 		r.out.Printf("$ %s", req.Command)
+	case req.URL != "":
+		// Same shape as the shell gate: the model's claim above, recessive, and
+		// the thing that has to be read below it. What has to be read here is
+		// the *whole* URL — never shortened, never elided in the middle, since
+		// a query string is where a URL stops being the one you assumed.
+		if req.Purpose != "" {
+			r.out.Toolf("‹webfetch› %s", req.Purpose)
+		} else {
+			r.out.Warningf("‹webfetch› (no purpose given)")
+		}
+		r.out.Link(req.URL)
 	case req.Subject != "":
 		r.out.Printf("%s", req.Subject)
 	}
