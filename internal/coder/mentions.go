@@ -37,7 +37,7 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 		}
 	}
 	sort.Strings(urls)
-	var inpSb161 strings.Builder
+	var scraped strings.Builder
 	for _, url := range urls {
 		if c.rejectedUrls[url] {
 			continue
@@ -54,11 +54,11 @@ func (c *Coder) checkForUrls(ctx context.Context, inp string) string {
 				c.Out.Errorf("Unable to fetch %s: %v", trimmed, err)
 				continue
 			}
-			inpSb161.WriteString("\n\n" + content)
+			scraped.WriteString("\n\n" + content)
 		} else {
 			c.rejectedUrls[url] = true
 		}
 	}
-	inp += inpSb161.String()
+	inp += scraped.String()
 	return inp
 }

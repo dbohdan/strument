@@ -237,11 +237,11 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		if len(c.Prompts.ExampleMessages) > 0 {
 			mainSys += "\n# Example conversations:\n\n"
 		}
-		var mainSysSb317 strings.Builder
+		var examples strings.Builder
 		for _, msg := range c.Prompts.ExampleMessages {
-			mainSysSb317.WriteString("## " + strings.ToUpper(msg.Role) + ": " + c.fmtSystemPrompt(msg.Content) + "\n\n")
+			examples.WriteString("## " + strings.ToUpper(msg.Role) + ": " + c.fmtSystemPrompt(msg.Content) + "\n\n")
 		}
-		mainSys += mainSysSb317.String()
+		mainSys += examples.String()
 		mainSys = strings.TrimSpace(mainSys)
 	} else {
 		for _, msg := range c.Prompts.ExampleMessages {

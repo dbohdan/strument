@@ -135,31 +135,11 @@ linters = [
     "staticcheck",
 ]
 
-[linters.settings.exhaustive]
-default-signifies-exhaustive = true
-
-[linters.settings.lll]
-tab-width = 4
-line-length = 120
-
-[linters.settings.nestif]
-min-complexity = 6
-
 [linters.settings.tagliatelle.case.rules]
 json = "snake"
 toml = "snake"
 xml = "kebab"
 yaml = "snake"
-
-[linters.settings.wsl_v5]
-disable = [
-    "decl",
-]
-
-[linters.settings.wrapcheck]
-ignore-package-globs = [
-    "go.starlark.net/*"
-]
 
 [linters.exclusions]
 generated = "lax"
