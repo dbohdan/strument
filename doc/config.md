@@ -727,6 +727,26 @@ machine that has no zone files of its own.
 
 `env_set` changes need a restart; `/reload` does not re-apply them.
 
+### What `/reload` applies
+
+`/reload` re-reads `config.star` into the running session. It applies the
+models and the active alias, `max_steps`, `max_error_reflections`,
+`shell_timeout`, `loop_detection`, `env_allow`, `check` and `check_auto`,
+`webfetch_allow`, and — rebuilding them, not just copying a value — the
+`scraper` and `websearch` backends along with the proxies they use.
+
+Two things a reload cannot change, and it says so rather than leaving you to
+find out: **`sandbox`**, because Landlock applies to the process at startup and
+its rules only ever add, so a session cannot widen or drop its own confinement;
+and **`env_set`**, above.
+
+Rebuilding the egress backends is the part that used to be missing, and the
+failure was silent: a search going out through a global `proxy` that could not
+reach a localhost instance stayed broken through `proxy="direct"` plus a
+reload, because the port had been built once at startup and the reload only
+copied plain values. If a setting is worth reloading, the reload has to
+actually re-read it.
+
 ### `sandbox`
 
 Which confinement mechanism to apply to the session. `"landlock"` or `""`:

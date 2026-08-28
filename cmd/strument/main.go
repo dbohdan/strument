@@ -161,32 +161,7 @@ func (c *chatCmd) Run() error {
 	}
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
 	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
-	// URL scraping is a non-provider egress action, so it uses the global proxy
-	// (validated at load, so the error is dead; nil transport => direct). An
-	// explicit `scraper` command overrides the built-in fetcher — the opt-in path
-	// for JavaScript-rendered pages — and does its own networking (no proxy).
-	if len(cfg.Scraper) > 0 {
-		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
-			return coder.FilterEnv(nil, cdr.EnvAllow)
-		})
-		// A subprocess the model can cause, so webfetch is gated by the sandbox
-		// like bash and check. The built-in fetcher below spawns nothing.
-		cdr.ScrapeRunsCommand = true
-	} else {
-		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
-		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
-	}
-	// Search is another non-provider egress path, so it honors the global proxy
-	// like scraping — except that a self-hosted instance is usually on localhost
-	// or the LAN, where a proxy meant for external traffic has no business
-	// carrying the request. proxy="direct" on search() is that opt-out, the same
-	// escape hatch provider() has for a LAN-local model server.
-	if ws := cfg.WebSearch; ws != nil {
-		// Resolved and validated at load, so the error is dead here — the same
-		// shape the scraper's proxy uses above.
-		searchTransport, _ := httpx.ProxyTransport(ws.Proxy)
-		cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
-	}
+	applyEgressConfig(cdr, cfg)
 	if model.RepoMap {
 		cdr.RepoMap = repomap.New(root)
 	}
@@ -716,14 +691,15 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		inputHistory, _ = history.InputHistoryPath(projectRoot)
 	}
 	r, err := repl.New(repl.Options{
-		Coder:      cdr,
-		Config:     cfg,
-		Git:        repo,
-		History:    hist,
-		ModelAlias: alias,
-		ResumeNote: resumeNote,
-		SaveResume: saveResumeFunc(cdr, cfg, projectRoot, keepState),
-		MakeClient: func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		Coder:       cdr,
+		Config:      cfg,
+		Git:         repo,
+		History:     hist,
+		ModelAlias:  alias,
+		ResumeNote:  resumeNote,
+		SaveResume:  saveResumeFunc(cdr, cfg, projectRoot, keepState),
+		ApplyEgress: applyEgressConfig,
+		MakeClient:  func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
@@ -1086,6 +1062,48 @@ func missingPaths(want, granted []string) []string {
 		}
 	}
 	return missing
+}
+
+// applyEgressConfig builds the fetch and search ports from a config. Called at
+// startup and again on /reload, from one place rather than two, because the two
+// drifting is not hypothetical: /reload used to leave both ports as they were
+// built at startup, so a user who added proxy="direct" to fix a search going
+// through a proxy reloaded, saw no change, and concluded the network was at
+// fault. A setting that can be changed and reloaded has to actually be re-read.
+func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
+	// URL scraping is a non-provider egress action, so it uses the global proxy
+	// (validated at load, so the error is dead; nil transport => direct). An
+	// explicit `scraper` command overrides the built-in fetcher — the opt-in
+	// path for JavaScript-rendered pages — and does its own networking (no
+	// proxy).
+	if len(cfg.Scraper) > 0 {
+		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
+			return coder.FilterEnv(nil, cdr.EnvAllow)
+		})
+		// A subprocess the model can cause, so webfetch is gated by the sandbox
+		// like bash and check. The built-in fetcher below spawns nothing.
+		cdr.ScrapeRunsCommand = true
+	} else {
+		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
+		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
+		cdr.ScrapeRunsCommand = false
+	}
+	// Search is another non-provider egress path, so it honors the global proxy
+	// like scraping — except that a self-hosted instance is usually on localhost
+	// or the LAN, where a proxy meant for external traffic has no business
+	// carrying the request. proxy="direct" on search() is that opt-out, the same
+	// escape hatch provider() has for a LAN-local model server.
+	//
+	// Set to nil when no backend is configured, so removing search() and
+	// reloading withdraws the tool rather than leaving the old instance wired
+	// up under a config that no longer names it.
+	cdr.Search = nil
+	if ws := cfg.WebSearch; ws != nil {
+		// Resolved and validated at load, so the error is dead here — the same
+		// shape the scraper's proxy uses above.
+		searchTransport, _ := httpx.ProxyTransport(ws.Proxy)
+		cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
+	}
 }
 
 func main() {

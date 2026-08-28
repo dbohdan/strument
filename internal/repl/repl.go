@@ -67,6 +67,14 @@ type Options struct {
 	// the initial load. nil disables /reload.
 	ReloadConfig func() (*config.Config, error)
 
+	// ApplyEgress rebuilds the fetch and search ports from a reloaded config.
+	// A closure because building them needs the proxy transport and the version
+	// string, which are the binary's business rather than the REPL's — the same
+	// reason MakeClient is one. Without it, /reload leaves both ports as they
+	// were at startup, which is how a proxy fix could be applied, reloaded, and
+	// silently ignored.
+	ApplyEgress func(*coder.Coder, *config.Config)
+
 	Color       bool
 	HistoryFile string
 

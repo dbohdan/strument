@@ -7,8 +7,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/repomap"
 )
@@ -441,5 +443,74 @@ func TestResetForgetsOriginsAndClearDoesNot(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Forgot 1 origin approved") {
 		t.Errorf("/reset did not report what it forgot:\n%s", out.String())
+	}
+}
+
+// /reload has to re-read everything a reload can change, and the ports are the
+// part that is rebuilt rather than copied — a proxy lives inside a transport
+// inside a closure, so leaving the port alone leaves the old proxy in place.
+//
+// This cost a real session. A search was going through a global proxy that
+// could not reach a localhost instance; the fix (proxy="direct" on search(),
+// then removing the global proxy) was applied and reloaded twice, changed
+// nothing, and the conclusion drawn was "I have a network problem". Only a
+// restart helped, because only startup built the port.
+func TestReloadRebuildsPortsAndRereadsChecks(t *testing.T) {
+	r, cdr, _ := newTestREPL(t, answerStub("ok\n"), nil)
+	defer r.Close()
+
+	cdr.Check = []config.Check{{Name: "old", Argv: []string{"true"}}}
+	cdr.ShellTimeout = 0
+	cdr.Search = nil
+
+	applied := 0
+	r.opts.ApplyEgress = func(c *coder.Coder, _ *config.Config) {
+		applied++
+		c.Search = func(context.Context, string) (coder.SearchResults, error) {
+			return coder.SearchResults{}, nil
+		}
+	}
+	r.opts.ReloadConfig = func() (*config.Config, error) {
+		return &config.Config{
+			Models:       map[string]*config.Model{},
+			Check:        []config.Check{{Name: "new", Argv: []string{"true"}}},
+			CheckAuto:    []string{"new"},
+			ShellTimeout: 42,
+		}, nil
+	}
+
+	cmdReload(context.Background(), r, "")
+
+	if applied != 1 {
+		t.Errorf("the egress ports were rebuilt %d times, want 1", applied)
+	}
+	if cdr.Search == nil {
+		t.Error("a search backend added to the config did not reach the running session")
+	}
+	if len(cdr.Check) != 1 || cdr.Check[0].Name != "new" {
+		t.Errorf("checks were not re-read: %v", cdr.Check)
+	}
+	if !slices.Equal(cdr.CheckAuto, []string{"new"}) {
+		t.Errorf("check_auto = %v", cdr.CheckAuto)
+	}
+	if cdr.ShellTimeout != 42*time.Second {
+		t.Errorf("shell_timeout = %v, want 42s", cdr.ShellTimeout)
+	}
+}
+
+// A reload cannot change the sandbox — Landlock applies to the process at
+// startup and its rules only add — so it says so rather than leaving the user
+// to find out the way the proxy was found out.
+func TestReloadSaysTheSandboxCannotChange(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
+	defer r.Close()
+	cdr.Sandbox = coder.SandboxState{Required: true, Active: true}
+	r.opts.ReloadConfig = func() (*config.Config, error) {
+		return &config.Config{Models: map[string]*config.Model{}, Sandbox: ""}, nil
+	}
+
+	cmdReload(context.Background(), r, "")
+	if !strings.Contains(out.String(), "only a restart can apply") {
+		t.Errorf("a changed sandbox setting was applied silently:\n%s", out.String())
 	}
 }

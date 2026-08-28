@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
@@ -682,6 +683,24 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	}
 	r.coder.LoopDetection = !cfg.NoLoopDetection
 	r.coder.WebfetchAllow = cfg.WebfetchAllow
+	r.coder.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
+	// The named checks and what runs after an edit: both are plain values, and
+	// both were missing here, so editing a check and reloading did nothing.
+	r.coder.Check = cfg.Check
+	r.coder.CheckAuto = cfg.CheckAuto
+	// The ports have to be rebuilt rather than copied, because a proxy lives
+	// inside a transport inside a closure. Leaving them alone is what made a
+	// reload look like it had worked when it had not.
+	if r.opts.ApplyEgress != nil {
+		r.opts.ApplyEgress(r.coder, cfg)
+	}
+	// The one thing a reload genuinely cannot change, said rather than left to
+	// be discovered: Landlock is applied to the process at startup and its
+	// rules only ever add, so a session cannot widen or drop its own sandbox.
+	if wasActive := r.coder.Sandbox.Active; wasActive != (cfg.Sandbox != "") {
+		r.out.Warningf("The `sandbox` setting changed, which only a restart can apply. " +
+			"This session keeps the sandbox it started with.")
+	}
 
 	// Re-resolve the active alias so edits to that model take effect; if it was
 	// removed, keep the running model rather than stranding the session.
