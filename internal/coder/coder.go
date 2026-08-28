@@ -232,6 +232,14 @@ type Coder struct {
 	lastCommitHash      string
 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
+	// sessionAutoApprove is the same thing outliving the turn, and
+	// initBeforeMessage deliberately does not clear it. Only webfetch writes
+	// here; see ConfirmRequest.GroupSession for why the shell gate does not.
+	// Kept a separate map rather than a scope field on one, so that clearing
+	// the turn's grants cannot reach the session's by accident — that
+	// regression would be silent, and would be exactly the session-wide
+	// silence on shell commands the ConfirmResult comment warns against.
+	sessionAutoApprove map[string]bool
 }
 
 type fence struct{ open, close string }
@@ -281,6 +289,7 @@ func New(root string, model *config.Model) *Coder {
 		Files:                workspace.New(root),
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
+		sessionAutoApprove:   map[string]bool{},
 	}
 	c.Platform = defaultPlatformInfo(c)
 	// The observation tools are contained to the project root, with the same
@@ -428,6 +437,8 @@ func (c *Coder) initBeforeMessage() {
 	c.recordToolLines()
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
+	// sessionAutoApprove is not reset here. That is the whole of the session
+	// scope; /reset and "/web reset" are what end it.
 	c.numReflections = 0
 	c.numSteps = 0
 	c.autoChecks = 0
@@ -446,20 +457,29 @@ func (c *Coder) initBeforeMessage() {
 	}
 }
 
-// confirmTurn wraps c.Confirm with turn-scoped auto-approve. If the user
-// answered "a" (always this turn) to a previous Confirm with the same Group,
-// this one is approved without prompting. The first "a" answer records the
-// group and returns true. Callers that don't need turn-scoping —
-// confirmMoreSteps, checkTokens — call c.Confirm.Confirm directly.
-func (c *Coder) confirmTurn(req ConfirmRequest) bool {
-	if req.Group != "" && c.turnAutoApprove[req.Group] {
+// confirmGrouped wraps c.Confirm with group-scoped auto-approve. If the user
+// answered "a" to a previous Confirm with the same Group, this one is approved
+// without prompting. The first "a" answer records the group and returns true.
+// req.GroupSession picks how long the record lasts — the session, or the turn.
+// Callers that don't need grouping — confirmMoreSteps, checkTokens — call
+// c.Confirm.Confirm directly.
+//
+// Both maps are read on every call regardless of scope. A group is only ever
+// written to one of them, so this cannot widen a grant; what it does is keep a
+// session grant honored by a request that forgot to set GroupSession.
+func (c *Coder) confirmGrouped(req ConfirmRequest) bool {
+	if req.Group != "" && (c.turnAutoApprove[req.Group] || c.sessionAutoApprove[req.Group]) {
 		return true
 	}
 	res := c.Confirm.Confirm(req)
-	if res.AlwaysThisTurn && req.Group != "" {
-		c.turnAutoApprove[req.Group] = true
+	if res.Always && req.Group != "" {
+		if req.GroupSession {
+			c.sessionAutoApprove[req.Group] = true
+		} else {
+			c.turnAutoApprove[req.Group] = true
+		}
 	}
-	return res.Yes || res.AlwaysThisTurn
+	return res.Yes || res.Always
 }
 
 // Run executes one scripted message (script mode) and returns the

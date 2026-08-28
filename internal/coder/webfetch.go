@@ -1,9 +1,13 @@
 package coder
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"slices"
+	"strconv"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
@@ -121,21 +125,33 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	// needs no --yes flag. The flag question only ever arises for an origin the
 	// user never named.
 	if !origin.Allowed(org, c.WebfetchAllow) {
-		if !c.confirmTurn(ConfirmRequest{
-			Prompt:  "Fetch this page?",
-			URL:     f.url,
-			Origin:  org,
-			Purpose: f.purpose,
-			// Scoped to the origin rather than the turn. bash ties its "all this
-			// turn" to the sandbox, because a sandbox bounds what an unseen
-			// command can do; nothing bounds an unseen *URL*, so the bound has to
-			// come from the answer itself. "Everything on go.dev this turn" is
-			// the workflow people actually want, and it still stops the model
-			// pivoting to a host the user never saw.
-			Group:            "webfetch:" + org,
+		// Scoped to the origin rather than to the turn. bash ties its "all this
+		// turn" to the sandbox, because a sandbox bounds what an unseen command
+		// can do; nothing bounds an unseen *URL*, so the bound has to come from
+		// the answer itself. "Everything on go.dev" is the workflow people
+		// actually want, and it still stops the model pivoting to a host the
+		// user never saw.
+		group := "webfetch:" + org
+		granted := c.sessionAutoApprove[group]
+		if !c.confirmGrouped(ConfirmRequest{
+			Prompt:           "Fetch this page?",
+			URL:              f.url,
+			Origin:           org,
+			Purpose:          f.purpose,
+			Group:            group,
+			GroupSession:     true,
 			RequiresYesShell: true,
 		}) {
 			return "The user chose not to fetch that page."
+		}
+		// Said once, when the grant is made. A turn boundary used to give this
+		// visibility for free: a grant that expired on its own never needed
+		// announcing. One that outlives the topic it was made for does, and the
+		// line is also where the way out gets named — a permission with no
+		// visible escape is one whose only recourse is restarting.
+		if !granted && c.sessionAutoApprove[group] {
+			c.Out.Printf("Fetching %s without asking for the rest of this session. "+
+				`"/web" lists that, "/web reset" ends it.`, org)
 		}
 	}
 
@@ -229,4 +245,80 @@ func truncateFetch(content, pageURL string) string {
 	room := max(maxToolOutputBytes-len(head)-len(note)-len(outline), 0)
 	room = min(room, len(content))
 	return head + content[:room] + note + outline
+}
+
+// SessionOrigins lists the origins approved by an "a" answer this session,
+// sorted. The config allowlist is not folded in: they have different
+// lifetimes and different ways of being undone, and a list that blurs the two
+// would be answering "what may be fetched" when the question a caller has is
+// "what did I grant, and how do I take it back".
+func (c *Coder) SessionOrigins() []string {
+	out := make([]string, 0, len(c.sessionAutoApprove))
+	for group := range c.sessionAutoApprove {
+		if org, ok := strings.CutPrefix(group, "webfetch:"); ok {
+			out = append(out, org)
+		}
+	}
+	// Host first, then port *numerically*. A plain string sort puts go.dev:443
+	// above go.dev:80, which reads as a bug in a list whose whole job is to be
+	// checked at a glance.
+	slices.SortFunc(out, func(a, b string) int {
+		ha, pa, _ := net.SplitHostPort(a)
+		hb, pb, _ := net.SplitHostPort(b)
+		if ha != hb {
+			return cmp.Compare(ha, hb)
+		}
+		na, _ := strconv.Atoi(pa)
+		nb, _ := strconv.Atoi(pb)
+		return cmp.Compare(na, nb)
+	})
+	return out
+}
+
+// AllowOrigin approves an allowlist entry for the session without waiting to be
+// asked, reporting the origins it granted that were not granted already. An
+// entry is validated and expanded by the same rules the config file uses, so a
+// bare host grants both default ports there and here alike.
+func (c *Coder) AllowOrigin(entry string) ([]string, bool) {
+	if !origin.ValidEntry(entry) {
+		return nil, false
+	}
+	var added []string
+	for _, org := range origin.Origins(entry) {
+		group := "webfetch:" + org
+		if !c.sessionAutoApprove[group] {
+			c.sessionAutoApprove[group] = true
+			added = append(added, org)
+		}
+	}
+	return added, true
+}
+
+// DropOrigin withdraws one session grant, returning the origins it withdrew.
+// ok is false for an entry that is not an origin at all; an empty result for a
+// well-formed entry means it was not granted — which the caller distinguishes,
+// because "never approved" and "approved in the config" are different answers
+// and only one of them means the user still has something to do.
+func (c *Coder) DropOrigin(entry string) ([]string, bool) {
+	if !origin.ValidEntry(entry) {
+		return nil, false
+	}
+	var dropped []string
+	for _, org := range origin.Origins(entry) {
+		group := "webfetch:" + org
+		if c.sessionAutoApprove[group] {
+			delete(c.sessionAutoApprove, group)
+			dropped = append(dropped, org)
+		}
+	}
+	return dropped, true
+}
+
+// ForgetOrigins drops every session grant, returning how many there were. The
+// config allowlist is untouched: it is a file the user wrote, and a command
+// that silently disagreed with the file would be the worse surprise.
+func (c *Coder) ForgetOrigins() int {
+	n := len(c.sessionAutoApprove)
+	c.sessionAutoApprove = map[string]bool{}
+	return n
 }

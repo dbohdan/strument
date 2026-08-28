@@ -5,6 +5,7 @@ package coder
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -223,4 +224,118 @@ func hasTool(defs []llm.ToolDef, name string) bool {
 		}
 	}
 	return false
+}
+
+// alwaysConfirmer answers "a" — always, at whatever scope the request declared.
+type alwaysConfirmer struct{ got []ConfirmRequest }
+
+func (ac *alwaysConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
+	ac.got = append(ac.got, req)
+	return ConfirmResult{Always: true}
+}
+
+// The whole of the session scope: an "a" answered on one turn still covers the
+// same origin on the next. Turn scope never paid here — a turn holds one or two
+// fetches, so "a" saved a single prompt and then asked again about the host the
+// user had just approved.
+func TestWebfetchAlwaysOutlivesTheTurn(t *testing.T) {
+	c, _, _ := fetchCoder(t, true)
+	ac := &alwaysConfirmer{}
+	c.Confirm = ac
+
+	runFetch(t, c, fetchCall("https://go.dev/doc/go1.26", "read it"))
+	c.initBeforeMessage()
+	runFetch(t, c, fetchCall("https://go.dev/ref/spec", "read the spec"))
+
+	if len(ac.got) != 1 {
+		t.Errorf("asked %d times across two turns, want 1 — the grant did not survive the turn", len(ac.got))
+	}
+	// A different origin is still a different question. The grant is scoped to
+	// one origin precisely so it cannot follow the model to a host the user
+	// never saw.
+	runFetch(t, c, fetchCall("https://example.com/x", "read it"))
+	if len(ac.got) != 2 {
+		t.Errorf("asked %d times, want 2 — an unrelated origin was covered by the grant", len(ac.got))
+	}
+	if got := c.SessionOrigins(); !slices.Equal(got, []string{"example.com:443", "go.dev:443"}) {
+		t.Errorf("SessionOrigins() = %q", got)
+	}
+	// Ports sort numerically, not as strings. A pty run put go.dev:443 above
+	// go.dev:80, which reads as a bug in a list whose job is to be checked at a
+	// glance — and no unit test noticed, because none had two ports of one host.
+	c.AllowOrigin("go.dev:80")
+	c.AllowOrigin("go.dev:8080")
+	want := []string{"example.com:443", "go.dev:80", "go.dev:443", "go.dev:8080"}
+	if got := c.SessionOrigins(); !slices.Equal(got, want) {
+		t.Errorf("SessionOrigins() = %q, want %q", got, want)
+	}
+}
+
+// The counter-metric, and the regression the two maps exist to prevent: the
+// shell gate's "a" must still die at the turn boundary. A sandbox bounds what
+// an unseen command can do, which is what lets that answer be broad in *what*;
+// nothing bounds an unseen URL, so only webfetch buys the longer life. If this
+// ever passes with one map, session-wide silence on shell commands has arrived
+// by accident — and it would arrive silently.
+func TestShellAlwaysStillDiesWithTheTurn(t *testing.T) {
+	c := testCoder(t)
+	ac := &alwaysConfirmer{}
+	c.Confirm = ac
+	c.Sandbox = SandboxState{Required: true, Active: true}
+
+	req := ConfirmRequest{Prompt: "Run shell command?", Command: "go test ./...", Group: "shell"}
+	if !c.confirmGrouped(req) {
+		t.Fatal(`"a" did not approve the command it was answered for`)
+	}
+	if c.confirmGrouped(req); len(ac.got) != 1 {
+		t.Fatalf("asked %d times in one turn, want 1 — the turn grant did not hold", len(ac.got))
+	}
+
+	c.initBeforeMessage()
+	c.confirmGrouped(req)
+	if len(ac.got) != 2 {
+		t.Errorf("asked %d times, want 2 — a shell grant outlived its turn", len(ac.got))
+	}
+	if got := c.SessionOrigins(); len(got) != 0 {
+		t.Errorf("SessionOrigins() = %q, want none — shell wrote to the session map", got)
+	}
+}
+
+// "/web allow" and a webfetch_allow entry have to agree about what an entry
+// covers, or a bare host would mean one thing in the config and another at the
+// prompt — a disagreement nobody could see, since both spellings look right.
+func TestAllowOriginExpandsLikeTheConfig(t *testing.T) {
+	c, _, _ := fetchCoder(t, true)
+	c.Confirm = &recordingConfirmer{answer: false}
+
+	added, ok := c.AllowOrigin("go.dev")
+	if !ok || !slices.Equal(added, []string{"go.dev:80", "go.dev:443"}) {
+		t.Fatalf("AllowOrigin(%q) = %q, %v; want both default ports", "go.dev", added, ok)
+	}
+	// Granted, so a fetch goes through despite the confirmer answering no.
+	if out := runFetch(t, c, fetchCall("https://go.dev/doc", "read it")); !strings.Contains(out, "the page") {
+		t.Errorf("an allowed origin was still refused: %q", out)
+	}
+	if again, _ := c.AllowOrigin("go.dev"); len(again) != 0 {
+		t.Errorf("re-allowing reported %q as new", again)
+	}
+	if _, ok := c.AllowOrigin("https://go.dev/doc"); ok {
+		t.Error("a URL was accepted as an origin")
+	}
+
+	dropped, ok := c.DropOrigin("go.dev:443")
+	if !ok || !slices.Equal(dropped, []string{"go.dev:443"}) {
+		t.Fatalf("DropOrigin = %q, %v", dropped, ok)
+	}
+	if out := runFetch(t, c, fetchCall("https://go.dev/doc", "read it")); !strings.Contains(out, "chose not to") {
+		t.Errorf("a dropped origin was still fetched without asking: %q", out)
+	}
+	// Port 80 was granted by the same entry and is a separate origin, so
+	// dropping one leaves the other standing.
+	if got := c.SessionOrigins(); !slices.Equal(got, []string{"go.dev:80"}) {
+		t.Errorf("SessionOrigins() = %q, want the untouched port to remain", got)
+	}
+	if n := c.ForgetOrigins(); n != 1 {
+		t.Errorf("ForgetOrigins() = %d, want 1", n)
+	}
 }

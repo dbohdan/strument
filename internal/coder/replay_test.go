@@ -31,7 +31,7 @@ func (s scriptConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 	case "y", "yes":
 		return ConfirmResult{Yes: true}
 	case "a", "all":
-		return ConfirmResult{AlwaysThisTurn: true}
+		return ConfirmResult{Always: true}
 	default:
 		return ConfirmResult{}
 	}

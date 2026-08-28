@@ -463,6 +463,34 @@ A trusted project config replaces the user's list rather than adding to it,
 like `env_allow` and for the same reason: this is one decision about which
 hosts stop being asked about, and merging two lists could only ever widen it.
 
+#### Approving an origin without editing the config
+
+Answering `a` at a fetch prompt approves that origin **for the rest of the
+session** — not just the turn, which was too short a scope to be worth
+offering: a turn holds a fetch or two, so `a` saved one question and then asked
+again about the host you had just approved.
+
+That grant is deliberately less durable and less visible than a
+`webfetch_allow` line, which is a decision you made in a file you can read,
+diff, and commit. Because a session grant outlives the topic it was made for,
+`/web` is where you see and undo it:
+
+| Command | What it does |
+| --- | --- |
+| `/web` | List what may be fetched unasked: the config's entries and this session's grants, kept apart |
+| `/web allow <origin>` | Approve an origin for the session without waiting to be asked |
+| `/web drop <origin>` | Withdraw one session grant |
+| `/web reset` | Withdraw all of them |
+| `/reset` | Withdraws them too, along with the pins and the history |
+
+`/web allow` expands an entry exactly as the config does, so a bare host grants
+both default ports in both places. Nothing here writes to `config.star`: for an
+origin you reach for every day, the `webfetch_allow` line is still the thing to
+write, and `/web drop` will tell you so rather than pretend to remove one.
+
+`/clear` leaves session grants alone. It leaves your pins alone too — it forgets
+what was *said*, and handing back a permission there would be the surprise.
+
 ### `loop_detection`
 
 Whether to stop a reply that has degenerated into repeating itself.

@@ -553,7 +553,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			}
 			results[tc.ID] = c.runWebfetch(ctx, f)
 		case toolAskUser:
-			// Not routed through confirmTurn: a question is not a permission
+			// Not routed through confirmGrouped: a question is not a permission
 			// prompt, and --yes/--yes-shell must not answer it.
 			results[tc.ID] = c.runAskUser(tc, &needsReflection)
 		default:
@@ -707,7 +707,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
-	if !c.confirmTurn(ConfirmRequest{
+	if !c.confirmGrouped(ConfirmRequest{
 		Prompt:           "Run shell command?",
 		Command:          command,
 		Purpose:          cmd.purpose,

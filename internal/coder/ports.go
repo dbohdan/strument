@@ -43,14 +43,18 @@ type Confirmer interface {
 // the prompt whenever AllowNever was set — and honored by nothing. Each caller
 // treated it as a plain decline: the URL check rejects the URL either way, the
 // command-output check reads only Yes, and the shell gate goes through
-// confirmTurn, which never looked at it. The one caller that might have meant
+// confirmGrouped, which never looked at it. The one caller that might have meant
 // it left with the file-mention flow. A prompt advertising an option that does
 // nothing is worse than one without it, so the option is gone rather than
 // implemented — session-scoped silence on shell commands is the last thing this
 // gate should grow.
 type ConfirmResult struct {
-	Yes            bool // the user approved this one action
-	AlwaysThisTurn bool // "a" — turn-scoped auto-approve for this Group
+	Yes bool // the user approved this one action
+	// Always is "a": auto-approve this Group for as long as its scope lasts.
+	// The answer does not carry the scope — the request does, in GroupSession —
+	// because the user is answering the question they were shown, and it is the
+	// asker that decided how long that answer is good for.
+	Always bool
 }
 
 // ConfirmRequest mirrors aider's confirm_ask surface.
@@ -79,6 +83,16 @@ type ConfirmRequest struct {
 	// not about what Enter means at one.
 	RequiresYesShell bool
 	Group            string // ConfirmGroup key ("all"/"skip" scope)
+	// GroupSession makes an "a" answer last for the session rather than the
+	// turn. Only webfetch sets it, and the asymmetry with the shell gate is the
+	// point: an "a" on shell is licensed by the sandbox, which bounds what an
+	// unseen command can do, so it can afford to be broad in *what* and must
+	// stay narrow in *when*. Nothing bounds an unseen URL, so the shell gate
+	// keeps the turn boundary and webfetch buys its longer life by scoping to
+	// one origin and saying so at the prompt. Turn scope never paid for
+	// webfetch: a turn holds one or two fetches, so "a" saved a single prompt
+	// and asked again about the same host on the next turn.
+	GroupSession bool
 }
 
 // AskRequest is one question put to the user on the attached terminal. The

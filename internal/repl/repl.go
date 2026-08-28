@@ -593,11 +593,12 @@ func (r *REPL) showUndoHint() {
 // cannot see: readline writes it straight to the terminal, so in the scripted
 // sessions it never reaches the captured output.
 func confirmSuffix(req coder.ConfirmRequest) string {
-	// webfetch scopes its "a" to one origin rather than the turn, so the hint
-	// has to say which — an answer whose scope is not on screen is an answer
-	// given blind. See runWebfetch for why the scope is the origin.
-	if req.Origin != "" {
-		return " (Y/n/a=all on " + req.Origin + " this turn) "
+	// webfetch scopes its "a" to one origin and to the session rather than the
+	// turn, so the hint has to say both — an answer whose scope is not on
+	// screen is an answer given blind, and "session" is the half a user cannot
+	// see arrive the way they can watch a turn end. See runWebfetch.
+	if req.GroupSession && req.Origin != "" {
+		return " (Y/n/a=all on " + req.Origin + " this session) "
 	}
 	if req.Group != "" {
 		return " (Y/n/a=all turn) "
@@ -666,7 +667,7 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	case "y", "yes":
 		return coder.ConfirmResult{Yes: true}
 	case "a", "always":
-		return coder.ConfirmResult{AlwaysThisTurn: true}
+		return coder.ConfirmResult{Always: true}
 	default:
 		return coder.ConfirmResult{}
 	}

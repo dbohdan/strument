@@ -620,7 +620,7 @@ func TestShellPromptDefaultsToYes(t *testing.T) {
 		t.Error("a bare Enter did not approve")
 	}
 	r2, _, _ := newTestREPL(t, answerStub("ok"), strings.NewReader("a\n"))
-	if !r2.Confirmer().Confirm(grouped).AlwaysThisTurn {
+	if !r2.Confirmer().Confirm(grouped).Always {
 		t.Error(`"a" did not mean all this turn`)
 	}
 }
@@ -1050,7 +1050,7 @@ func TestConfirmDeclinesWithoutATerminal(t *testing.T) {
 		Prompt:           "Run it?",
 		RequiresYesShell: true,
 	})
-	if res.Yes || res.AlwaysThisTurn {
+	if res.Yes || res.Always {
 		t.Fatal("a prompt with nobody at the keyboard was answered yes")
 	}
 
@@ -1111,21 +1111,32 @@ func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
 	}
 }
 
-// The "a" a webfetch prompt offers is scoped to one origin, and the hint says
-// which. An answer whose scope is not on screen is an answer given blind — and
-// the scope is the point: nothing bounds an unseen URL the way a sandbox bounds
-// an unseen command, so the bound has to come from the answer itself.
-func TestWebfetchPromptSuffixNamesTheOrigin(t *testing.T) {
+// The "a" a webfetch prompt offers is scoped to one origin and to the session,
+// and the hint says both. An answer whose scope is not on screen is an answer
+// given blind — and the scope is the point: nothing bounds an unseen URL the
+// way a sandbox bounds an unseen command, so the bound has to come from the
+// answer itself. "Session" is the half a user cannot watch expire, which is
+// exactly why the prompt has to name it.
+func TestWebfetchPromptSuffixNamesTheOriginAndTheSession(t *testing.T) {
 	req := coder.ConfirmRequest{
 		Prompt:           "Fetch this page?",
 		URL:              "https://go.dev/doc/go1.26",
 		Origin:           "go.dev:443",
 		Purpose:          "check the loop change",
 		Group:            "webfetch:go.dev:443",
+		GroupSession:     true,
 		RequiresYesShell: true,
 	}
-	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this turn) " {
-		t.Errorf("suffix = %q, want it to name the origin the answer covers", got)
+	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this session) " {
+		t.Errorf("suffix = %q, want it to name the origin and the session", got)
+	}
+
+	// The shell gate keeps the turn, and says so. If this ever reads "session"
+	// the two scopes have been merged, which is the regression the separate
+	// maps exist to prevent.
+	shell := coder.ConfirmRequest{Prompt: "Run shell command?", Command: "go test ./...", Group: "shell"}
+	if got := confirmSuffix(shell); got != " (Y/n/a=all turn) " {
+		t.Errorf("shell suffix = %q, want the turn-scoped hint", got)
 	}
 
 	// And the prompt shows the whole URL, query string included.

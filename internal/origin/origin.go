@@ -77,16 +77,19 @@ func Of(raw string) (string, error) {
 // position and should not imply it is.
 func Allowed(origin string, allow []string) bool {
 	for _, entry := range allow {
-		if slices.Contains(allowOrigins(entry), origin) {
+		if slices.Contains(Origins(entry), origin) {
 			return true
 		}
 	}
 	return false
 }
 
-// allowOrigins expands one config entry into the origins it covers: just
-// itself when it names a port, and both default ports when it does not.
-func allowOrigins(entry string) []string {
+// Origins expands one allowlist entry into the origins it covers: just itself
+// when it names a port, and both default ports when it does not. Exported
+// because "/web allow" grants by the same rule the config file does — two ways
+// of naming an origin that disagreed about what one covers would be a bug
+// nobody could see.
+func Origins(entry string) []string {
 	e := strings.ToLower(strings.TrimSpace(entry))
 	if e == "" {
 		return nil

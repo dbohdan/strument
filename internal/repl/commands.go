@@ -16,6 +16,7 @@ import (
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/workspace"
 )
@@ -87,7 +88,7 @@ func init() {
 		{"quit", "", "Exit Strument", cmdExit},
 		{"read-only", "<file> ...", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
 		{"reload", "", "Reload config.star (new models become available)", cmdReload},
-		{"reset", "", "Unpin everything and clear the history", cmdReset},
+		{"reset", "", "Unpin everything, clear the history, and forget approved origins", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
 		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
@@ -95,7 +96,7 @@ func init() {
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
-		{"web", "<url>", "Fetch a web page (or one #section of it) for your next message", cmdWeb},
+		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page (or one #section of it); bare, show which origins webfetch may reach unasked", cmdWeb},
 	}
 }
 
@@ -203,6 +204,17 @@ func (r *REPL) completer() readline.AutoCompleter {
 			)
 		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
+		case "web":
+			// A URL is not completable. "allow" gets no argument completion
+			// either — offering the approved origins there would complete the
+			// one argument with no work left to do — but "drop" gets exactly
+			// that list, which is the same split /env makes between add and
+			// drop.
+			sub = append(sub,
+				readline.PcItem("allow"),
+				readline.PcItem("drop", readline.PcItemDynamic(r.completeSessionOrigins)),
+				readline.PcItem("reset"),
+			)
 		}
 		items = append(items, readline.PcItem("/"+c.name, sub...))
 	}
@@ -237,6 +249,12 @@ func (r *REPL) completeAliases(string) []string {
 		return nil
 	}
 	return slices.Sorted(maps.Keys(r.opts.Config.Models))
+}
+
+// completeSessionOrigins offers what "/web drop" can actually withdraw: this
+// session's grants, not the config allowlist, which the command cannot change.
+func (r *REPL) completeSessionOrigins(string) []string {
+	return r.coder.SessionOrigins()
 }
 
 func (r *REPL) completeChecks(string) []string {
@@ -485,10 +503,22 @@ func cmdClear(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
+// cmdReset is the one command that ends everything the session accumulated,
+// which is why the webfetch origins go here and not in /clear. /clear leaves
+// the pins alone, so a user reaching for it is asking to forget what was
+// *said*, not to give anything back — dropping a permission there would be the
+// surprise. There is no "/reset pins": that is /drop with no arguments
+// already, and a second spelling would only make the first harder to find.
 func cmdReset(_ context.Context, r *REPL, _ string) string {
 	r.coder.DropAll()
 	r.coder.ClearHistory()
-	r.printf("Unpinned everything and cleared the chat history.")
+	forgotten := r.coder.ForgetOrigins()
+	msg := "Unpinned everything and cleared the chat history."
+	if forgotten > 0 {
+		msg += fmt.Sprintf(" Forgot %d %s approved for fetching.",
+			forgotten, pluralize(forgotten, "origin", "origins"))
+	}
+	r.printf("%s", msg)
 	r.saveResume()
 	return ""
 }
@@ -812,6 +842,15 @@ func runUserCheck(ctx context.Context, r *REPL, ch config.Check) (int, string) {
 // execCommandContext is exec.CommandContext, seamable for testing.
 var execCommandContext = exec.CommandContext
 
+// pluralize picks the word for a count. The count is printed by the caller,
+// which keeps the two apart at the one place a sentence might want them apart.
+func pluralize(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
 // cmdWeb fetches a URL and adds its content to the chat as a completed exchange
 // — the user-typed twin of the webfetch tool, and unconfirmed for the reason
 // /run is: the user typed it. It is also what a URL in a message used to
@@ -819,11 +858,37 @@ var execCommandContext = exec.CommandContext
 //
 // (the same path /run uses for command output), so it's context for your next
 // message without re-scanning the page's own links or firing a turn.
+//
+// The subcommands are the webfetch tool's permission surface, put here rather
+// than under /reset because the model is /env's: a session-scoped thing
+// model-run actions may reach, shown and changed by the one command that names
+// it. Showing is the half that earns the command. A session-scoped "a" is
+// invisible in a way a turn-scoped one never was — the turn boundary used to
+// revoke it in plain sight — so a way to forget the grants without a way to
+// see them would replace a permission you cannot revoke with one you can only
+// revoke blind. Neither word can collide with a URL: both lack a scheme and a
+// dot, so unlike /notes there is no plausible real argument to shadow.
 func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	url := strings.TrimSpace(args)
-	if url == "" {
-		r.out.Errorf("%s", usage("web"))
+	switch verb, rest, _ := strings.Cut(url, " "); verb {
+	case "":
+		return webOrigins(r)
+	case "reset":
+		if strings.TrimSpace(rest) != "" {
+			r.out.Errorf("%s", usage("web"))
+			return ""
+		}
+		if n := r.coder.ForgetOrigins(); n > 0 {
+			r.printf("Forgot %d %s. webfetch will ask again.",
+				n, pluralize(n, "origin", "origins"))
+		} else {
+			r.printf("No origins were approved this session.")
+		}
 		return ""
+	case "allow":
+		return webAllow(r, strings.TrimSpace(rest))
+	case "drop":
+		return webDrop(r, strings.TrimSpace(rest))
 	}
 	if r.coder.Scrape == nil {
 		r.out.Errorf("Scraping is not available.")
@@ -840,6 +905,86 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	}
 	r.coder.AppendContext(content)
 	r.printf("Added %s to the chat.", url)
+	return ""
+}
+
+// webOrigins shows what webfetch may reach without asking. The two sources are
+// listed apart because they differ in the two ways that matter to someone
+// reading the list: how long they last, and how they are taken back. Folding
+// them into one list would answer "what may be fetched" when the question is
+// "what did I grant, and how do I undo it".
+func webOrigins(r *REPL) string {
+	allow, session := r.coder.WebfetchAllow, r.coder.SessionOrigins()
+	if len(allow) == 0 && len(session) == 0 {
+		r.printf("webfetch asks before every origin. " +
+			`Answer "a" at a prompt, or "/web allow <origin>", to stop being asked for one.`)
+		return ""
+	}
+	if len(allow) > 0 {
+		r.printf("Allowed by webfetch_allow in the config (a bare host covers ports 80 and 443):")
+		for _, entry := range allow {
+			r.printf("  %s", entry)
+		}
+	}
+	if len(session) > 0 {
+		r.printf(`Approved for this session ("/web reset" forgets them):`)
+		for _, org := range session {
+			r.printf("  %s", org)
+		}
+	}
+	return ""
+}
+
+// webAllow grants an origin ahead of being asked. It writes nothing to the
+// config: this is the session-scoped half, and a command that edited
+// config.star would be a Starlark writer answering to a permission prompt —
+// more machinery, and a worse surprise, than the user asked for. The durable
+// half stays a line the user writes themselves.
+func webAllow(r *REPL, entry string) string {
+	if entry == "" || strings.ContainsAny(entry, " \t") {
+		r.out.Errorf("%s", usage("web"))
+		return ""
+	}
+	added, ok := r.coder.AllowOrigin(entry)
+	if !ok {
+		r.out.Errorf("%q is not an origin. Give a host or host:port, with no scheme and no path.", entry)
+		return ""
+	}
+	if len(added) == 0 {
+		r.printf("%s was already approved.", entry)
+		return ""
+	}
+	r.printf("Fetching %s without asking for the rest of this session.", strings.Join(added, " and "))
+	return ""
+}
+
+// webDrop withdraws one grant, the granular half of "/web reset". It reaches
+// only what this session approved: the config allowlist is a file the user
+// wrote, and a command that made Strument disagree with it until restart would
+// be a worse surprise than being told to edit the line. So an origin that is
+// allowed by config is reported as such rather than silently doing nothing.
+func webDrop(r *REPL, entry string) string {
+	if entry == "" || strings.ContainsAny(entry, " \t") {
+		r.out.Errorf("%s", usage("web"))
+		return ""
+	}
+	dropped, ok := r.coder.DropOrigin(entry)
+	if !ok {
+		r.out.Errorf("%q is not an origin. Give a host or host:port, with no scheme and no path.", entry)
+		return ""
+	}
+	if len(dropped) == 0 {
+		for _, org := range origin.Origins(entry) {
+			if origin.Allowed(org, r.coder.WebfetchAllow) {
+				r.out.Warningf("%s is allowed by webfetch_allow in the config, "+
+					"which this cannot change. Remove the entry there.", entry)
+				return ""
+			}
+		}
+		r.printf("%s was not approved this session.", entry)
+		return ""
+	}
+	r.printf("webfetch will ask again before %s.", strings.Join(dropped, " and "))
 	return ""
 }
 

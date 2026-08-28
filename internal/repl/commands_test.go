@@ -346,3 +346,100 @@ func TestSymbolAcceptsBothKinds(t *testing.T) {
 		t.Errorf("reference returned the definition's site; the kind is being ignored:\n%s", reference)
 	}
 }
+
+// The /web permission surface: show, grant, withdraw one, withdraw all. The
+// bare form is what earns the command a home here rather than under /reset — a
+// session grant is invisible in a way a turn-scoped one never was, since the
+// turn boundary used to revoke it in plain sight, so a way to forget grants
+// without a way to see them would swap a permission you cannot revoke for one
+// you can only revoke blind.
+func TestWebOriginCommands(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
+	defer r.Close()
+	cdr.WebfetchAllow = []string{"docs.python.org"}
+	ctx := context.Background()
+
+	cmdWeb(ctx, r, "")
+	if s := out.String(); !strings.Contains(s, "docs.python.org") || !strings.Contains(s, "webfetch_allow") {
+		t.Errorf("bare /web did not show the config allowlist:\n%s", s)
+	}
+	out.Reset()
+
+	cmdWeb(ctx, r, "allow go.dev:443")
+	if !strings.Contains(out.String(), "rest of this session") {
+		t.Errorf("/web allow said nothing useful:\n%s", out.String())
+	}
+	if got := cdr.SessionOrigins(); !slices.Equal(got, []string{"go.dev:443"}) {
+		t.Fatalf("SessionOrigins() = %q", got)
+	}
+	out.Reset()
+
+	// The two sources stay apart in the listing: they differ in how long they
+	// last and in how they are taken back, which is what a reader needs.
+	cmdWeb(ctx, r, "")
+	s := out.String()
+	if !strings.Contains(s, "this session") || !strings.Contains(s, "webfetch_allow") {
+		t.Errorf("the listing folded the two sources together:\n%s", s)
+	}
+	out.Reset()
+
+	// A config-allowed origin cannot be dropped here, and says so rather than
+	// reporting a no-op — the user has something left to do, in a file.
+	cmdWeb(ctx, r, "drop docs.python.org")
+	if !strings.Contains(out.String(), "webfetch_allow") {
+		t.Errorf("dropping a config origin did not point at the config:\n%s", out.String())
+	}
+	out.Reset()
+
+	cmdWeb(ctx, r, "drop go.dev:443")
+	if !strings.Contains(out.String(), "will ask again") {
+		t.Errorf("/web drop said nothing useful:\n%s", out.String())
+	}
+	if got := cdr.SessionOrigins(); len(got) != 0 {
+		t.Errorf("SessionOrigins() = %q after a drop", got)
+	}
+	out.Reset()
+
+	cmdWeb(ctx, r, "allow example.com")
+	out.Reset()
+	cmdWeb(ctx, r, "reset")
+	if !strings.Contains(out.String(), "Forgot 2 origins") {
+		t.Errorf("/web reset did not report both ports of a bare host:\n%s", out.String())
+	}
+	if got := cdr.SessionOrigins(); len(got) != 0 {
+		t.Errorf("SessionOrigins() = %q after a reset", got)
+	}
+	out.Reset()
+
+	cmdWeb(ctx, r, "allow https://go.dev/doc")
+	if !strings.Contains(out.String(), "not an origin") {
+		t.Errorf("a URL was accepted as an origin:\n%s", out.String())
+	}
+}
+
+// /reset ends everything the session accumulated, grants included. /clear must
+// not: it leaves the pins alone, so someone reaching for it is asking to forget
+// what was said, not to hand anything back — giving up a permission there is
+// the surprise, which is why the two commands are tested together.
+func TestResetForgetsOriginsAndClearDoesNot(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
+	defer r.Close()
+	ctx := context.Background()
+
+	if _, ok := cdr.AllowOrigin("go.dev:443"); !ok {
+		t.Fatal("fixture did not grant")
+	}
+	cmdClear(ctx, r, "")
+	if got := cdr.SessionOrigins(); len(got) != 1 {
+		t.Errorf("/clear dropped a grant it should have left alone: %q", got)
+	}
+	out.Reset()
+
+	cmdReset(ctx, r, "")
+	if got := cdr.SessionOrigins(); len(got) != 0 {
+		t.Errorf("/reset left %q approved", got)
+	}
+	if !strings.Contains(out.String(), "Forgot 1 origin approved") {
+		t.Errorf("/reset did not report what it forgot:\n%s", out.String())
+	}
+}
