@@ -96,23 +96,44 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	if escapes(rootAbs, full) {
 		return "", "", "that path is outside the project root"
 	}
-	if escapes(resolvePath(rootAbs), resolvePath(full)) {
+	if escapes(ResolveSymlinks(rootAbs), ResolveSymlinks(full)) {
 		return "", "", "that path resolves outside the project root through a symlink"
 	}
 	return full, rel, ""
 }
 
+// EscapesRoot reports whether a path leaves the root it was made relative to.
+//
+// It takes what filepath.Rel returned, not the pair, because every caller has
+// already computed that for its own use. The exact test matters: a bare
+// HasPrefix(rel, "..") also catches a file honestly named "..notes", and three
+// places in the REPL used to do exactly that.
+//
+// Exported because containment is decided in three packages — the observation
+// tools here, the edit path in coder, and the CLI's own argument handling — and
+// a rule stated three times is a rule that drifts. It already did once, between
+// contain and unsafePath, on the order of the absolute-path test.
+func EscapesRoot(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // escapes reports whether full lies outside root.
 func escapes(root, full string) bool {
 	rel, err := filepath.Rel(root, full)
-	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return err != nil || EscapesRoot(rel)
 }
 
-// resolvePath follows symlinks as far as the path exists, so a path naming a
-// file that is not there yet still resolves through the directories that are.
-// Copied from coder rather than imported: workspace is the lower layer and must
-// not depend on the one above it.
-func resolvePath(abs string) string {
+// ResolveSymlinks follows symlinks as far as the path exists, so a path naming
+// a file that is not there yet still resolves through the directories that are.
+// On failure it returns abs unchanged.
+//
+// The lowest of the three layers that need it owns it. It lived here, in coder,
+// and in cmd/strument as three byte-identical copies, each with a comment
+// explaining that the copy was necessary to avoid depending downward — but
+// coder already imports this package, and the CLI already imports thirteen
+// internals. Three copies of the primitive both containment rules are built on
+// is three chances to fix one and miss two.
+func ResolveSymlinks(abs string) string {
 	rest := ""
 	dir := abs
 	for {

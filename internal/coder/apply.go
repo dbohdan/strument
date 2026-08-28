@@ -76,13 +76,13 @@ func (c *Coder) unsafePath(rel string) string {
 		return "cannot resolve root"
 	}
 	relBack, err := filepath.Rel(rootAbs, full)
-	if err != nil || relBack == ".." || strings.HasPrefix(relBack, ".."+string(filepath.Separator)) {
+	if err != nil || workspace.EscapesRoot(relBack) {
 		return "path escapes the project root"
 	}
 	// Symlink escape: compare the fully resolved file and root (resolvePath
 	// handles not-yet-created files by resolving the deepest existing ancestor).
-	rel2, err := filepath.Rel(resolvePath(rootAbs), resolvePath(full))
-	if err != nil || rel2 == ".." || strings.HasPrefix(rel2, ".."+string(filepath.Separator)) {
+	rel2, err := filepath.Rel(workspace.ResolveSymlinks(rootAbs), workspace.ResolveSymlinks(full))
+	if err != nil || workspace.EscapesRoot(rel2) {
 		return "path resolves outside the project root (symlink escape)"
 	}
 	return ""
@@ -205,7 +205,7 @@ const newFileMode = 0o644
 // the project root (or to be a file the user added deliberately), so following
 // the link here agrees with the check that already ran.
 func (c *Coder) fullPath(rel string) string {
-	return resolvePath(filepath.Join(c.Root, filepath.FromSlash(rel)))
+	return workspace.ResolveSymlinks(filepath.Join(c.Root, filepath.FromSlash(rel)))
 }
 
 // writeAtomically writes the plan's files via temp+rename, rolling the

@@ -33,6 +33,7 @@ import (
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/sandbox"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 var version = "0.0.0-dev"
@@ -462,38 +463,13 @@ func acquireProjectLock(projectRoot string) (*flock.Flock, bool, error) {
 // A not-yet-created file resolves through its deepest existing ancestor, so
 // `strument newdir/file.go` is accepted when newdir/ is inside the project.
 func fileInProject(root, file string) bool {
-	resolved := resolvePath(filepath.Clean(file))
-	rootResolved := resolvePath(root)
+	resolved := workspace.ResolveSymlinks(filepath.Clean(file))
+	rootResolved := workspace.ResolveSymlinks(root)
 	rel, err := filepath.Rel(rootResolved, resolved)
 	if err != nil {
 		return false
 	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// resolvePath follows symlinks as far as the path exists, then re-appends the
-// not-yet-created tail, so a path naming a file that is not there yet still
-// resolves through the directories that are. Copies the logic already in
-// internal/coder and internal/workspace rather than importing it, because the
-// CLI is the top layer and must not reach down into those internals for a
-// containment check.
-func resolvePath(abs string) string {
-	rest := ""
-	dir := abs
-	for {
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			if rest == "" {
-				return resolved
-			}
-			return filepath.Join(resolved, rest)
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return abs // reached the root without resolving anything
-		}
-		rest = filepath.Join(filepath.Base(dir), rest)
-		dir = parent
-	}
+	return !workspace.EscapesRoot(rel)
 }
 
 // restoreSession re-pins what the last session had pinned, returning a line for

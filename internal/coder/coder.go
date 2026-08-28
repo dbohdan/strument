@@ -330,7 +330,7 @@ func (c *Coder) absRootPath(path string) string {
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(c.Root, path)
 	}
-	return resolvePath(filepath.Clean(abs))
+	return workspace.ResolveSymlinks(filepath.Clean(abs))
 }
 
 // DisplayPath is how the UI and the prompt name one file, from a path given
@@ -396,36 +396,11 @@ func (c *Coder) displayName(abs string) string {
 }
 
 func (c *Coder) relFname(abs string) string {
-	rel, err := filepath.Rel(resolvePath(c.Root), abs)
+	rel, err := filepath.Rel(workspace.ResolveSymlinks(c.Root), abs)
 	if err != nil {
 		return abs
 	}
 	return filepath.ToSlash(rel)
-}
-
-// resolvePath returns abs with symlinks resolved, so a path that reaches the
-// repo through a symlinked directory — a symlinked checkout, or an arg the CLI
-// made absolute in the symlink namespace — shares the git-resolved root's
-// namespace and stays repo-relative. It resolves the deepest existing ancestor
-// and re-appends the not-yet-created tail, so create_file targets resolve too.
-// On failure it returns abs unchanged.
-func resolvePath(abs string) string {
-	rest := ""
-	dir := abs
-	for {
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			if rest == "" {
-				return resolved
-			}
-			return filepath.Join(resolved, rest)
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return abs // reached the root without resolving anything
-		}
-		rest = filepath.Join(filepath.Base(dir), rest)
-		dir = parent
-	}
 }
 
 func (c *Coder) inchatRelativeFiles() []string {

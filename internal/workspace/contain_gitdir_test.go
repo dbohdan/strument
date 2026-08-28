@@ -2,7 +2,11 @@
 
 package workspace
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // The spellings that matter, and the ones that must keep working.
 //
@@ -59,5 +63,53 @@ func TestContainRefusesGitDir(t *testing.T) {
 	// And the guard did not swallow the ordinary dot-files beside it.
 	if _, _, reason := w.contain(".github/workflows/ci.yml"); reason != "" {
 		t.Errorf("contain refused an ordinary dot-file: %s", reason)
+	}
+}
+
+// EscapesRoot is exact, which is the whole reason it exists as a function.
+//
+// The idiom it replaces — HasPrefix(rel, "..") — also fires on a file honestly
+// named "..notes", and three places in the REPL were doing that. All three
+// erred toward refusing, so nothing was ever unsafe; a user with such a file
+// was just told it was outside their own project.
+func TestEscapesRoot(t *testing.T) {
+	for _, tc := range []struct {
+		rel  string
+		want bool
+	}{
+		{"..", true},
+		{"../outside", true},
+		{"../../etc/passwd", true},
+
+		{"", false},
+		{".", false},
+		{"a/b.go", false},
+		{"..notes", false},    // a real file, not an escape
+		{"..hidden/x", false}, // and a real directory
+		{"a/../b.go", false},  // Rel never returns this, but it does not escape
+	} {
+		if got := EscapesRoot(filepath.FromSlash(tc.rel)); got != tc.want {
+			t.Errorf("EscapesRoot(%q) = %v, want %v", tc.rel, got, tc.want)
+		}
+	}
+}
+
+// ResolveSymlinks resolves through the part of a path that exists and keeps the
+// rest, which is what makes it usable on a file that is about to be created.
+func TestResolveSymlinksKeepsTheMissingTail(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "real")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	got := ResolveSymlinks(filepath.Join(link, "newdir", "new.go"))
+	want := filepath.Join(ResolveSymlinks(target), "newdir", "new.go")
+	if got != want {
+		t.Errorf("ResolveSymlinks through a symlink to a missing file:\n got %s\nwant %s", got, want)
 	}
 }

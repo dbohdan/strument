@@ -17,6 +17,7 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/readline"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // command is one slash command. run returns a message to send to the model
@@ -331,7 +332,7 @@ func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
 				continue
 			}
 			rel, err := filepath.Rel(r.coder.Root, m)
-			if err != nil || strings.HasPrefix(rel, "..") {
+			if err != nil || workspace.EscapesRoot(rel) {
 				if !outside {
 					r.out.Warningf("Skipping %s: outside the project root. Pin it with /read-only instead.", r.coder.DisplayPath(m))
 					continue
@@ -355,7 +356,7 @@ func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
 // it walks regular, non-hidden files and warns that the set is unfiltered.
 func (r *REPL) expandDir(abs string) []string {
 	relDir, err := filepath.Rel(r.coder.Root, abs)
-	if err != nil || strings.HasPrefix(relDir, "..") {
+	if err != nil || workspace.EscapesRoot(relDir) {
 		r.out.Warningf("Skipping %s: outside the project root.", abs)
 		return nil
 	}
@@ -391,7 +392,7 @@ func (r *REPL) expandDir(abs string) []string {
 		case strings.HasPrefix(de.Name(), "."):
 			// Skip hidden files.
 		default:
-			if rel, relErr := filepath.Rel(r.coder.Root, p); relErr == nil && !strings.HasPrefix(rel, "..") {
+			if rel, relErr := filepath.Rel(r.coder.Root, p); relErr == nil && !workspace.EscapesRoot(rel) {
 				out = append(out, filepath.ToSlash(rel))
 			}
 		}
