@@ -75,13 +75,16 @@ type Coder struct {
 	// Asker answers ask_user_question calls. nil (script mode, tests) means
 	// no interactive terminal: the call is answered with an error result
 	// rather than hanging, the same convention as a nil Repo.
-	Asker    Asker
-	Runner   CommandRunner
-	Repo     Repo
-	Clock    Clock
-	Out      Output
-	RepoMap  *repomap.RepoMap
-	Scrape   Scraper
+	Asker   Asker
+	Runner  CommandRunner
+	Repo    Repo
+	Clock   Clock
+	Out     Output
+	RepoMap *repomap.RepoMap
+	Scrape  Scraper
+	// Search is nil unless the user configured a backend, and that nil is what
+	// decides whether the tool is offered at all.
+	Search   Searcher
 	Platform PlatformInfo
 	// Files is the workspace behind read/ls/glob/grep. It never consults git,
 	// so the tools behave the same in a plain directory.

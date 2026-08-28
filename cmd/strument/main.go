@@ -176,6 +176,17 @@ func (c *chatCmd) Run() error {
 		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
 		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
 	}
+	// Search is another non-provider egress path, so it honors the global proxy
+	// like scraping — except that a self-hosted instance is usually on localhost
+	// or the LAN, where a proxy meant for external traffic has no business
+	// carrying the request. proxy="direct" on search() is that opt-out, the same
+	// escape hatch provider() has for a LAN-local model server.
+	if ws := cfg.WebSearch; ws != nil {
+		// Resolved and validated at load, so the error is dead here — the same
+		// shape the scraper's proxy uses above.
+		searchTransport, _ := httpx.ProxyTransport(ws.Proxy)
+		cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
+	}
 	if model.RepoMap {
 		cdr.RepoMap = repomap.New(root)
 	}

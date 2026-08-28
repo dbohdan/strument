@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
+	"strings"
 
 	"dbohdan.com/strument/internal/llm"
 	"go.starlark.net/starlark"
@@ -372,4 +374,65 @@ func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
 		}
 		return def, nil
 	})
+}
+
+// searchValue is the opaque Starlark value returned by search().
+type searchValue struct{ s WebSearch }
+
+func (v *searchValue) String() string {
+	return fmt.Sprintf("search(%q)", v.s.Backend)
+}
+func (v *searchValue) Type() string          { return "search" }
+func (v *searchValue) Freeze()               {}
+func (v *searchValue) Truth() starlark.Bool  { return starlark.True }
+func (v *searchValue) Hash() (uint32, error) { return 0, errors.New("unhashable type: search") }
+
+// builtinSearch implements search(backend, *, url=None, proxy=None).
+//
+// The backend is a string rather than one builtin per backend — search("searxng")
+// rather than searxng() — for the reason provider() takes one: the backends share
+// a shape, so a discriminator says so, adding one stays a table entry rather than
+// a new name in the DSL, and a typo can be answered with the list of what would
+// have worked. "undefined: searxngg" cannot say that.
+//
+// url is keyword-only even though searxng always needs it, because the next
+// backend will want an api_key and no url, and a positional second argument that
+// means a different thing per backend is a trap.
+func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 1 {
+		return nil, errors.New("search: only 'backend' may be positional")
+	}
+	var backend, rawURL, proxy string
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
+		"backend", &backend,
+		"url?", &rawURL,
+		"proxy?", &proxy,
+	); err != nil {
+		return nil, err
+	}
+	if backend != SearchSearxNG {
+		return nil, fmt.Errorf("search: unknown backend %q (want %q)", backend, SearchSearxNG)
+	}
+	// Checked here rather than at the first search, because a config error that
+	// waits for the model to reach for a tool is a config error nobody sees.
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	switch {
+	case strings.TrimSpace(rawURL) == "":
+		return nil, fmt.Errorf("search: %q needs url=, the base URL of your instance", backend)
+	case err != nil:
+		return nil, fmt.Errorf("search: url %q: %w", rawURL, err)
+	case u.Scheme != "http" && u.Scheme != "https":
+		return nil, fmt.Errorf("search: url %q needs an http:// or https:// scheme", rawURL)
+	case u.Host == "":
+		return nil, fmt.Errorf("search: url %q has no host", rawURL)
+	case u.RawQuery != "" || u.Fragment != "":
+		return nil, fmt.Errorf("search: url %q should be the instance's base URL, with no query or fragment", rawURL)
+	}
+	return &searchValue{s: WebSearch{
+		Backend: backend,
+		// Trailing slash trimmed so joining "/search" cannot produce "//search",
+		// which some reverse proxies in front of an instance will not route.
+		URL:   strings.TrimRight(u.String(), "/"),
+		Proxy: proxy,
+	}}, nil
 }

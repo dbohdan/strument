@@ -67,6 +67,8 @@ type fileGlobals struct {
 	loopDetectionVal       bool
 	hasWebfetchAllow       bool
 	webfetchAllowVal       []string
+	hasWebSearch           bool
+	webSearchVal           *WebSearch
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -342,6 +344,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasWebfetchAllow {
 		cfg.WebfetchAllow = user.webfetchAllowVal
 	}
+	if user.hasWebSearch {
+		cfg.WebSearch = user.webSearchVal
+	}
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
@@ -403,6 +408,10 @@ func Load(opts Options) (*Config, error) {
 		// what makes a project's entry the user's own decision.
 		if project.hasWebfetchAllow {
 			cfg.WebfetchAllow = project.webfetchAllowVal
+		}
+		// A trusted project may point search at its own instance, or unset it.
+		if project.hasWebSearch {
+			cfg.WebSearch = project.webSearchVal
 		}
 		if project.hasLoopDetection {
 			cfg.NoLoopDetection = !project.loopDetectionVal
@@ -485,6 +494,22 @@ func Load(opts Options) (*Config, error) {
 		}
 		return nil
 	}
+	// The search backend resolves the same way, because it is the same kind of
+	// egress: non-provider, and inheriting the global proxy unless it says
+	// otherwise. "direct" matters more here than anywhere else — a self-hosted
+	// instance is usually on localhost or the LAN, and a proxy configured for
+	// external traffic has no business carrying that request.
+	if ws := cfg.WebSearch; ws != nil {
+		switch ws.Proxy {
+		case "direct":
+			ws.Proxy = ""
+		case "":
+			ws.Proxy = cfg.Proxy
+		}
+		if _, err := httpx.ProxyTransport(ws.Proxy); err != nil {
+			return nil, fmt.Errorf("websearch %w", err)
+		}
+	}
 	for alias, m := range cfg.Models {
 		if err := resolveProxy(alias, m); err != nil {
 			return nil, err
@@ -530,6 +555,7 @@ func predeclaredGlobals(lookup func(string) (string, bool), root string) starlar
 	return starlark.StringDict{
 		"provider": starlark.NewBuiltin("provider", builtinProvider),
 		"model":    starlark.NewBuiltin("model", builtinModel),
+		"search":   starlark.NewBuiltin("search", builtinSearch),
 		"env":      builtinEnv(lookup),
 		// The project's root, not the config file's directory, in both configs:
 		// a user-level `check = project_checks()` should adapt to whatever
@@ -709,6 +735,25 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasWebfetchAllow = true
 		out.webfetchAllowVal = origins
+	}
+
+	if ws, ok := globals["websearch"]; ok {
+		// None is how a project config turns search off again, which it can
+		// only do because it had to be trusted to be read at all.
+		if ws == starlark.None {
+			out.hasWebSearch = true
+			out.webSearchVal = nil
+		} else {
+			sv, ok := ws.(*searchValue)
+			if !ok {
+				return nil, fmt.Errorf(
+					"%s: `websearch` must be a search() value, got %s — write "+
+						"websearch = search(\"searxng\", url=\"http://localhost:8888\")", path, ws.Type())
+			}
+			cp := sv.s
+			out.hasWebSearch = true
+			out.webSearchVal = &cp
+		}
 	}
 
 	if ld, ok := globals["loop_detection"]; ok {

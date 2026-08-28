@@ -191,6 +191,12 @@ type Config struct {
 	// covers only 80 and 443.
 	WebfetchAllow []string
 
+	// WebSearch configures the websearch tool. Nil means no search backend is
+	// configured, and the tool is not offered at all — unlike webfetch, which
+	// always has the built-in fetcher behind it, there is nothing to fall back
+	// to here.
+	WebSearch *WebSearch
+
 	// NoLoopDetection turns off stopping a reply that has degenerated into
 	// repeating itself. Named for what it overrides, not for what it does, so
 	// that the zero value means the built-in default (on) — the same shape as
@@ -303,4 +309,21 @@ func validateExtraParams(where string, params map[string]any) error {
 		return fmt.Errorf("%s: extra_params must be JSON-serializable: %w", where, err)
 	}
 	return nil
+}
+
+// SearchSearxNG is the only websearch backend. Scoped deliberately: SearXNG is
+// self-hosted, so the instance is the user's own and the tool inherits whatever
+// engines and policy they already chose, with no API key and no third party for
+// Strument to speak for.
+const SearchSearxNG = "searxng"
+
+// WebSearch is a configured search backend, from search().
+type WebSearch struct {
+	Backend string // always SearchSearxNG today
+	URL     string // the instance base URL, no trailing slash
+	// Proxy is a socks5 URL, "direct" to opt out of a global proxy, or "" to
+	// inherit it. "direct" is the case that matters: a self-hosted instance is
+	// usually on localhost or the LAN, and a proxy configured for external
+	// traffic has no business carrying that.
+	Proxy string
 }

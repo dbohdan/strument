@@ -639,6 +639,12 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 			r.out.Warningf("‹webfetch› (no purpose given)")
 		}
 		r.out.Link(req.URL)
+	case req.Query != "":
+		// The query alone. There is no destination to weigh — the user pinned
+		// their instance in the config — so what is worth reading is the text
+		// about to leave for it, and nothing else competes for the line.
+		r.out.Toolf("\u2039websearch\u203a")
+		r.out.Printf("%s", req.Query)
 	}
 
 	// Shown after the request, not instead of it: what was proposed is worth

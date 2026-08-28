@@ -73,8 +73,13 @@ type ConfirmRequest struct {
 	// be read, and the host:port it reduces to, which is what an "all this
 	// origin" answer covers. Both are shown, because a prompt that scopes an
 	// answer to something it never printed is asking blind.
-	URL     string
-	Origin  string
+	URL    string
+	Origin string
+	// Query is websearch's: the text the model is about to send to the user's
+	// search instance. Separate from Command and URL because it is neither —
+	// there is no destination to weigh here, the user already pinned that in
+	// their config, so the query is the whole of what there is to read.
+	Query   string
 	Purpose string
 	// RequiresYesShell marks a prompt that plain --yes must not answer; only
 	// --yes-shell does. It used to also make the prompt default to no, which is

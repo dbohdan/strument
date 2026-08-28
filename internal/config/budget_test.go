@@ -242,3 +242,72 @@ func TestWebfetchAllowProjectOverrides(t *testing.T) {
 		t.Errorf("webfetch_allow = %q, want the project's list alone", cfg.WebfetchAllow)
 	}
 }
+
+// search() takes the backend as a string, like provider(), so a typo can be
+// answered with what would have worked. That is the whole argument for the
+// discriminator over one builtin per backend: Starlark's "undefined: searxngg"
+// cannot name the alternative.
+func TestSearchBackendTypoNamesTheAlternative(t *testing.T) {
+	_, err := loadBudget(t, `websearch = search("searxngg", url="http://localhost:8888")`)
+	if err == nil {
+		t.Fatal("an unknown backend loaded")
+	}
+	if !strings.Contains(err.Error(), "searxng") {
+		t.Errorf("the error did not name the backend that would have worked: %v", err)
+	}
+}
+
+// A URL wrong in a way that looks right is refused at load, not at the first
+// search — a config error that waits for the model to reach for a tool is a
+// config error nobody sees.
+func TestSearchRejectsBadURLsAtLoad(t *testing.T) {
+	for _, src := range []string{
+		`websearch = search("searxng")`,
+		`websearch = search("searxng", url="")`,
+		`websearch = search("searxng", url="localhost:8888")`,
+		`websearch = search("searxng", url="ftp://localhost:8888")`,
+		`websearch = search("searxng", url="http://localhost:8888/search?q=x")`,
+		`websearch = search("searxng", url="http:///nohost")`,
+		`websearch = "http://localhost:8888"`,
+	} {
+		if _, err := loadBudget(t, src); err == nil {
+			t.Errorf("%s loaded without complaint", src)
+		}
+	}
+}
+
+func TestSearchParsedAndNormalized(t *testing.T) {
+	cfg, err := loadBudget(t, `websearch = search("searxng", url="http://localhost:8888/", proxy="direct")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WebSearch == nil {
+		t.Fatal("websearch was not parsed")
+	}
+	// The trailing slash goes, so joining "/search" cannot make "//search" —
+	// which some reverse proxies in front of an instance will not route.
+	if cfg.WebSearch.URL != "http://localhost:8888" {
+		t.Errorf("URL = %q", cfg.WebSearch.URL)
+	}
+	// "direct" resolves to no proxy at load, the same as a provider's. This is
+	// the case that matters: an instance on localhost has no business going
+	// through a proxy meant for external traffic.
+	if cfg.WebSearch.Proxy != "" {
+		t.Errorf("proxy = %q, want it resolved to none", cfg.WebSearch.Proxy)
+	}
+	if cfg.WebSearch.Backend != SearchSearxNG {
+		t.Errorf("backend = %q", cfg.WebSearch.Backend)
+	}
+}
+
+// Unset is how a session has no search at all, and the tool is then not
+// offered — there is nothing to fall back to, unlike webfetch.
+func TestNoSearchByDefault(t *testing.T) {
+	cfg, err := loadBudget(t, ``)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WebSearch != nil {
+		t.Errorf("a search backend appeared from nowhere: %+v", cfg.WebSearch)
+	}
+}

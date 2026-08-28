@@ -32,6 +32,7 @@ The loader reads these module-level variables after running your file:
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
 | `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
+| `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
@@ -495,6 +496,62 @@ A fetch that skips the prompt — by either route — still prints the purpose a
 the whole URL, the same two lines the prompt would have shown minus the
 question. Approving an origin buys you fewer questions, not less to read.
 
+### `websearch`
+
+A search backend for the `websearch` tool. Unset by default, and the tool is not
+offered at all without it.
+
+```python
+websearch = search("searxng", url="http://localhost:8888")
+```
+
+**SearXNG only, and self-hosted in practice.** The scope is deliberate: your
+instance is yours, it already has the engines and policy you chose, it needs no
+API key, and it puts no third party in a position Strument would have to speak
+for.
+
+**Your instance must have JSON turned on.** SearXNG ships `formats: [html]`, so
+a fresh instance answers `403` until an admin opts in:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+```
+
+Eleven public instances were tried while building this and none served JSON.
+Three failures are worth knowing because each looks like something else, and
+`websearch` translates all three rather than passing them through: a **403** is
+the format not being enabled; a **429** is the limiter plugin, which many
+instances point at non-browser clients; and a **200 carrying HTML** is a bot
+check or login page in front of the instance, which a client that reads only the
+status will take for success.
+
+`script/searxng-probe.py` checks an instance against everything the tool
+assumes, and prints what it observed:
+
+```sh
+python3 script/searxng-probe.py http://localhost:8888
+```
+
+**`proxy`** works as it does on `provider()`: a `socks5://` URL, or `"direct"`
+to opt out of a global `proxy`. `"direct"` is the case that matters here — an
+instance on localhost or the LAN has no business being reached through a proxy
+you configured for external traffic.
+
+The model is asked before the first search of a turn, and an `a` answer covers
+the rest of that turn. That is the opposite of `webfetch`'s scope, for the
+opposite reason: there the model picks the destination, so the question is per
+origin and has to outlast a turn to be worth asking; here you pinned the
+destination, so only the query varies, and a turn holds many searches. Plain
+`--yes` covers it, since a search only ever reaches the instance you named.
+Every query is printed whether or not it was asked about.
+
+**Search results are not fetchable without asking.** A URL from a result still
+goes through `webfetch`'s own per-origin prompt. What ranks for a query is
+something a stranger can influence, so the two permissions stay separate.
+
 ### `loop_detection`
 
 Whether to stop a reply that has degenerated into repeating itself.
@@ -746,6 +803,18 @@ widen, and a project needs to be able to narrow.
 
 Three functions are predeclared. Keyword-only parameters follow the `*`, as in
 Python.
+
+### `search(backend, *, url=None, proxy=None)`
+
+A search backend for `websearch`. `backend` is `"searxng"`, the only one; an
+unknown value is refused at load and names what would have worked.
+
+- **`url`** — the instance's base URL, with no path, query, or fragment. Keyword
+  rather than positional because the next backend will want an `api_key` and no
+  URL, and a positional second argument that means something different per
+  backend is a trap.
+- **`proxy`** — as on `provider()`: a `socks5://` URL, or `"direct"` to opt out
+  of a global `proxy`.
 
 ### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
 

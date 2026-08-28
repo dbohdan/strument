@@ -28,6 +28,9 @@ const (
 	toolCommit = "commit"
 	// toolWebfetch is the field's name, not a chosen one — see webfetch.go.
 	toolWebfetch = "webfetch"
+	// toolWebsearch pairs with it, and the pairing is the point: the two names
+	// sit beside each other in every harness a model has seen.
+	toolWebsearch = "websearch"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -67,6 +70,12 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// Coder, not a setting a user can be on the wrong side of.
 	if c.Scrape != nil {
 		defs = append(defs, webfetchTool())
+	}
+	// Offered in ask mode too, and for the same reason: finding out what exists
+	// is what a discussion turn is for. Genuinely conditional, unlike webfetch —
+	// with no configured instance there is no search to offer.
+	if c.Search != nil {
+		defs = append(defs, websearchTool())
 	}
 	if c.editFormat == "ask" {
 		return defs
@@ -552,6 +561,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			results[tc.ID] = c.runWebfetch(ctx, f)
+		case toolWebsearch:
+			q, msg := parseSearchArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			results[tc.ID] = c.runWebsearch(ctx, q)
 		case toolAskUser:
 			// Not routed through confirmGrouped: a question is not a permission
 			// prompt, and --yes/--yes-shell must not answer it.
