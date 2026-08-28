@@ -587,9 +587,9 @@ func TestShellConfirmationShowsThePurpose(t *testing.T) {
 }
 
 // TestShellPromptDefaultsToYes pins the answer line, which nothing did before:
-// Enter approves, and the shell gate offers no blanket "all this turn". A
-// grouped prompt still does — a message naming five URLs asks five identical
-// questions, which is the repetition "a" was for.
+// Enter approves, and an ungrouped shell gate offers no blanket "all this
+// turn". A grouped one does — under a sandbox, where the consequences of an
+// unseen command are bounded, which is what licenses the affordance.
 func TestShellPromptDefaultsToYes(t *testing.T) {
 	shell := coder.ConfirmRequest{
 		Prompt:           "Run shell command?",
@@ -597,10 +597,15 @@ func TestShellPromptDefaultsToYes(t *testing.T) {
 		Purpose:          "re-run the suite",
 		RequiresYesShell: true,
 	}
+	// The live grouped prompt is bash under a sandbox, which is the only one
+	// that still offers a blanket turn-wide "a"; webfetch scopes its own to an
+	// origin and is covered in TestWebfetchPromptSuffixNamesTheOrigin.
 	grouped := coder.ConfirmRequest{
-		Prompt:  "Add URL to the chat?",
-		Subject: "https://example.com",
-		Group:   "add-url",
+		Prompt:           "Run shell command?",
+		Command:          "go test ./...",
+		Purpose:          "re-run the suite",
+		Group:            "shell",
+		RequiresYesShell: true,
 	}
 	if got := confirmSuffix(shell); got != " (Y/n) " {
 		t.Errorf("shell suffix = %q, want the default-yes form with no blanket option", got)
@@ -620,20 +625,17 @@ func TestShellPromptDefaultsToYes(t *testing.T) {
 	}
 }
 
-// TestNonShellConfirmationShowsOnlyItsSubject: a URL has no purpose slot, so
-// the absence marker must not leak onto prompts that never asked for one.
-func TestNonShellConfirmationShowsOnlyItsSubject(t *testing.T) {
+// A prompt with nothing to show shows nothing: the purpose markers belong to
+// the two gates that ask for a purpose, and must not leak onto the questions
+// that have no slot for one — the step budget, the token check.
+func TestBarePromptShowsNoToolMarker(t *testing.T) {
 	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
-	r.Confirmer().Confirm(coder.ConfirmRequest{
-		Prompt:  "Add URL to the chat?",
-		Subject: "https://example.com/page",
-	})
+	r.Confirmer().Confirm(coder.ConfirmRequest{Prompt: "Keep going?"})
 	got := out.String()
-	if !strings.Contains(got, "https://example.com/page") {
-		t.Errorf("subject not shown:\n%s", got)
-	}
-	if strings.Contains(got, "no purpose given") || strings.Contains(got, "$ ") {
-		t.Errorf("shell chrome leaked onto a non-shell prompt:\n%s", got)
+	for _, marker := range []string{"\u2039shell\u203a", "\u2039webfetch\u203a", "no purpose given"} {
+		if strings.Contains(got, marker) {
+			t.Errorf("a bare prompt printed %q:\n%s", marker, got)
+		}
 	}
 }
 
@@ -1083,7 +1085,7 @@ func TestConfirmStillAsksWhenOnlyOutputIsRedirected(t *testing.T) {
 	r.opts.IsTerminal = func() bool { return false } // output is a file
 	r.opts.StdinIsTerminal = func() bool { return true }
 
-	if !r.Confirmer().Confirm(coder.ConfirmRequest{Subject: "Do it?", Prompt: "Ok?"}).Yes {
+	if !r.Confirmer().Confirm(coder.ConfirmRequest{Prompt: "Ok?"}).Yes {
 		t.Error("a redirected stdout stopped the harness asking a human who was there")
 	}
 }
@@ -1106,5 +1108,37 @@ func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
 	line, err := r.rl.ReadLine()
 	if err != nil || !strings.Contains(line, "Ping") {
 		t.Errorf("the question consumed the user's next message: %q %v", line, err)
+	}
+}
+
+// The "a" a webfetch prompt offers is scoped to one origin, and the hint says
+// which. An answer whose scope is not on screen is an answer given blind — and
+// the scope is the point: nothing bounds an unseen URL the way a sandbox bounds
+// an unseen command, so the bound has to come from the answer itself.
+func TestWebfetchPromptSuffixNamesTheOrigin(t *testing.T) {
+	req := coder.ConfirmRequest{
+		Prompt:           "Fetch this page?",
+		URL:              "https://go.dev/doc/go1.26",
+		Origin:           "go.dev:443",
+		Purpose:          "check the loop change",
+		Group:            "webfetch:go.dev:443",
+		RequiresYesShell: true,
+	}
+	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this turn) " {
+		t.Errorf("suffix = %q, want it to name the origin the answer covers", got)
+	}
+
+	// And the prompt shows the whole URL, query string included.
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+	r.Confirmer().Confirm(coder.ConfirmRequest{
+		Prompt: "Fetch this page?", URL: "https://go.dev/a?b=c&d=e", Origin: "go.dev:443",
+		Purpose: "read it",
+	})
+	got := out.String()
+	if !strings.Contains(got, "https://go.dev/a?b=c&d=e") {
+		t.Errorf("the URL was not shown whole:\n%s", got)
+	}
+	if !strings.Contains(got, "read it") {
+		t.Errorf("the purpose was not shown:\n%s", got)
 	}
 }

@@ -231,7 +231,6 @@ type Coder struct {
 	commitBeforeMessage []string
 	lastCommitHash      string
 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
-	rejectedUrls        map[string]bool
 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
 }
 
@@ -280,7 +279,6 @@ func New(root string, model *config.Model) *Coder {
 		Prompts:              promptsForFormat(model.EditFormat),
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
-		rejectedUrls:         map[string]bool{},
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
 	}
@@ -467,7 +465,7 @@ func (c *Coder) confirmTurn(req ConfirmRequest) bool {
 // Run executes one scripted message (script mode) and returns the
 // last send's content regardless of outcome.
 func (c *Coder) Run(ctx context.Context, withMessage string) string {
-	c.runOne(ctx, withMessage, true)
+	c.runOne(ctx, withMessage)
 	return c.multiResponseContent + c.partialResponseContent
 }
 
@@ -476,16 +474,13 @@ func (c *Coder) Run(ctx context.Context, withMessage string) string {
 // (OutcomeReflect) — and stops when the model has nothing left to say, the
 // human interrupts, or a budget is spent. The turn boundary is still the
 // human's: nothing here starts new work of its own.
-func (c *Coder) runOne(ctx context.Context, userMessage string, preproc bool) {
+func (c *Coder) runOne(ctx context.Context, userMessage string) {
 	c.initBeforeMessage()
 
-	message := userMessage
-	if preproc {
-		message = c.preprocUserInput(ctx, userMessage)
-	}
-	if message == "" {
+	if userMessage == "" {
 		return
 	}
+	message := userMessage
 
 	// Committing and rotating settled history are both turn-end concerns.
 	// Mid-loop the tool results must stay in cur, and summarizing them away
@@ -813,15 +808,6 @@ func (c *Coder) confirmMoreSteps() bool {
 	c.autoChecks = 0
 	c.editedSinceCheck = false
 	return true
-}
-
-// preprocUserInput handles URLs.
-// Slash commands are dispatched by the REPL layer before this.
-func (c *Coder) preprocUserInput(ctx context.Context, inp string) string {
-	if inp == "" {
-		return ""
-	}
-	return c.checkForUrls(ctx, inp)
 }
 
 // StdOutput writes to stdout/stderr.

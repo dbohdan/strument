@@ -638,8 +638,6 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 			r.out.Warningf("‹webfetch› (no purpose given)")
 		}
 		r.out.Link(req.URL)
-	case req.Subject != "":
-		r.out.Printf("%s", req.Subject)
 	}
 
 	// Shown after the request, not instead of it: what was proposed is worth

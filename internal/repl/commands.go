@@ -95,7 +95,7 @@ func init() {
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
-		{"web", "<url>", "Scrape a web page and stage it for your next message", cmdWeb},
+		{"web", "<url>", "Fetch a web page and stage it for your next message", cmdWeb},
 	}
 }
 
@@ -812,7 +812,11 @@ func runUserCheck(ctx context.Context, r *REPL, ch config.Check) (int, string) {
 // execCommandContext is exec.CommandContext, seamable for testing.
 var execCommandContext = exec.CommandContext
 
-// cmdWeb scrapes a URL and adds its content to the chat as a completed exchange
+// cmdWeb fetches a URL and adds its content to the chat as a completed exchange
+// — the user-typed twin of the webfetch tool, and unconfirmed for the reason
+// /run is: the user typed it. It is also what a URL in a message used to
+// trigger a prompt about, back when the harness guessed.
+//
 // (the same path /run uses for command output), so it's context for your next
 // message without re-scanning the page's own links or firing a turn.
 func cmdWeb(ctx context.Context, r *REPL, args string) string {

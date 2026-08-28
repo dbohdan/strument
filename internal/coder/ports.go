@@ -64,7 +64,6 @@ type ConfirmResult struct {
 // stays ignorant of how any of the three is drawn.
 type ConfirmRequest struct {
 	Prompt  string
-	Subject string
 	Command string
 	// URL and Origin are webfetch's pair: the whole URL, which is what has to
 	// be read, and the host:port it reduces to, which is what an "all this

@@ -70,7 +70,7 @@ func steerCoder(t *testing.T, answer string) (*Coder, *cancelOnceClient, *stubAs
 func TestSteerContinueResumesTheTurn(t *testing.T) {
 	c, client, asker := steerCoder(t, "1") // "Continue"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if len(asker.asked) != 1 {
 		t.Fatalf("asked %d questions, want 1", len(asker.asked))
@@ -93,7 +93,7 @@ func TestSteerContinueResumesTheTurn(t *testing.T) {
 func TestSteerContinueSendsNoEmptyTurn(t *testing.T) {
 	c, client, _ := steerCoder(t, "1") // "Continue"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 2 {
 		t.Fatalf("sends = %d, want 2", client.sends)
@@ -120,7 +120,7 @@ func TestSteerCorrectionReachesTheModel(t *testing.T) {
 	correction := "use the standard library, not a regexp"
 	c, client, _ := steerCoder(t, correction)
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 2 {
 		t.Fatalf("sends = %d, want 2", client.sends)
@@ -146,7 +146,7 @@ func TestSteerCorrectionReachesTheModel(t *testing.T) {
 func TestSteerStopEndsTheTurn(t *testing.T) {
 	c, client, _ := steerCoder(t, "2") // "Stop"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 1 {
 		t.Errorf("sends = %d, want 1 — Stop should not resume", client.sends)
@@ -166,7 +166,7 @@ func TestSteerWithoutAnAskerStops(t *testing.T) {
 	c.Client = client
 	c.Asker = nil
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 1 {
 		t.Errorf("sends = %d, want 1 — a nil Asker must not resume", client.sends)
@@ -212,7 +212,7 @@ func TestSettleEditsIsIdempotent(t *testing.T) {
 func TestSteerContinueSaysToContinue(t *testing.T) {
 	c, client, _ := steerCoder(t, "1") // "Continue"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 2 {
 		t.Fatalf("sends = %d, want 2", client.sends)

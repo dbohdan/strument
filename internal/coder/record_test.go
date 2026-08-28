@@ -66,7 +66,7 @@ func TestRecordIsATimeline(t *testing.T) {
 	c.Recorder = rec
 	c.Client = &toolThenAnswer{}
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	got := strings.Join(rec.types(), " ")
 	want := "message:user reasoning message:assistant message:tool reasoning message:assistant turn"
@@ -88,7 +88,7 @@ func TestRecordCarriesToolArgumentsAndResults(t *testing.T) {
 	c.Recorder = rec
 	c.Client = &toolThenAnswer{}
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	var call *RecordToolCall
 	var result *Record
@@ -129,7 +129,7 @@ func TestRecordKeepsReasoningOutOfTheAnswer(t *testing.T) {
 	c.Recorder = rec
 	c.Client = &toolThenAnswer{}
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	for _, r := range rec.recs {
 		if r.Type == "message" && strings.Contains(r.Text, "thinking") {
@@ -148,5 +148,5 @@ func TestRecordIsOffByDefault(t *testing.T) {
 	if c.Recorder != nil {
 		t.Fatal("a Coder starts with no Recorder")
 	}
-	c.runOne(context.Background(), "do the thing", false) // must not panic
+	c.runOne(context.Background(), "do the thing") // must not panic
 }

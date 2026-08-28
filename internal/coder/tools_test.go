@@ -657,9 +657,6 @@ func TestBashConfirmationCarriesThePurpose(t *testing.T) {
 			if req.Command != "go test ./..." {
 				t.Errorf("Command = %q, want the command", req.Command)
 			}
-			if req.Subject != "" {
-				t.Errorf("Subject = %q, want the command in Command instead", req.Subject)
-			}
 			if req.Purpose != tc.wantPurpose {
 				t.Errorf("Purpose = %q, want %q", req.Purpose, tc.wantPurpose)
 			}

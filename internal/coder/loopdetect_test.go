@@ -220,7 +220,7 @@ func loopCoder(t *testing.T, kind llm.EventKind, answer string) (*Coder, *loopin
 func TestLoopingReplyStopsTheSend(t *testing.T) {
 	c, client, asker := loopCoder(t, llm.EventReasoning, "1") // "Stop"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 1 {
 		t.Errorf("sends = %d, want 1 — Stop should not resume", client.sends)
@@ -243,7 +243,7 @@ func TestLoopingReplyStopsTheSend(t *testing.T) {
 func TestLoopNoteIsMarkedAndQuotesTheRepeat(t *testing.T) {
 	c, client, _ := loopCoder(t, llm.EventReasoning, "2") // "Try again"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 2 {
 		t.Fatalf("sends = %d, want 2 — Try again should re-send", client.sends)
@@ -277,7 +277,7 @@ func TestLoopNoteIsMarkedAndQuotesTheRepeat(t *testing.T) {
 func TestLoopingAnswerKeepsThePartial(t *testing.T) {
 	c, client, _ := loopCoder(t, llm.EventAnswer, "2") // "Try again"
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if client.sends != 2 {
 		t.Fatalf("sends = %d, want 2", client.sends)
@@ -303,7 +303,7 @@ func TestLoopDetectionOffLetsTheLoopRun(t *testing.T) {
 	client.repeats = 200
 	c.LoopDetection = false
 
-	c.runOne(context.Background(), "do the thing", false)
+	c.runOne(context.Background(), "do the thing")
 
 	if c.lastSendOutcome == OutcomeLooping {
 		t.Error("a disabled detector still stopped the reply")
@@ -315,7 +315,7 @@ func TestLoopDetectionOffLetsTheLoopRun(t *testing.T) {
 	// either half mean anything.
 	on, onClient, _ := loopCoder(t, llm.EventReasoning, "1")
 	onClient.repeats = 200
-	on.runOne(context.Background(), "do the thing", false)
+	on.runOne(context.Background(), "do the thing")
 	if on.lastSendOutcome != OutcomeLooping {
 		t.Errorf("last outcome = %v with detection on, want OutcomeLooping", on.lastSendOutcome)
 	}

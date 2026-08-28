@@ -824,8 +824,6 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 			fmt.Println("‹webfetch› (no purpose given)")
 		}
 		fmt.Println(render.Sanitize(req.URL))
-	case req.Subject != "":
-		fmt.Println(req.Subject)
 	}
 
 	// The REPL's rlConfirmer declines rather than reading when nobody is at
