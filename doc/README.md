@@ -379,7 +379,12 @@ Ten tools, in three natures:
 - **Edits are direct**, exactly as a SEARCH/REPLACE block was.
   `edit(path, old_string, new_string)` replaces an exact span, through the
   same fuzzy matcher aider's format used, and returns a did-you-mean when it
-  misses. `write(path, content)` puts down a whole file — creating it or
+  misses. The span has to be unique: `old_string` appearing twice is a refusal,
+  not a coin flip. It used to take the first occurrence and report success,
+  which is the failure edit-tool-bench criticises in *fuzzy* edit tools — a
+  harness reporting success on an underconstrained transformation, so the model
+  reasons on from a change that may have landed in the wrong place. Exact
+  matching does not prevent that on its own; exact is not unique. `write(path, content)` puts down a whole file — creating it or
   completely overwriting it, and the outcome line says which, so neither the
   user nor the model assumes the old contents survived. Both land the moment
   the call arrives. The safety net is the snapshot and the diff, not a
