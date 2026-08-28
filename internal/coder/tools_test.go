@@ -846,3 +846,69 @@ func TestRunAndShowDisplaysOutput(t *testing.T) {
 		t.Errorf("command output not shown to the user:\n%s", joined)
 	}
 }
+
+// An old_string that appears more than once fails rather than editing the
+// first of them.
+//
+// DoReplace takes the first occurrence and returns success, so this used to
+// report "Applied the edit to x" after changing whichever span came first —
+// the model reasoning from a false success, which is the exact criticism
+// edit-tool-bench levels at fuzzy editing. Exact matching does not prevent it;
+// exact is not unique. Found by building a fixture meant to produce an
+// ambiguity failure and watching it succeed.
+func TestAmbiguousEditFailsRatherThanTakingTheFirstSite(t *testing.T) {
+	for _, tc := range []struct{ name, body, search string }{
+		{"same text on two lines", "twice\nand twice\n", "twice"},
+		{"two identical lines", "dup\ndup\n", "dup"},
+		{"two identical blocks", "a\nb\nx\na\nb\n", "a\nb"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			c := toolCoder(t, dir)
+			results := map[string]string{}
+			var failed bool
+			c.applyToolEdits([]plannedEdit{{
+				callID: "1", path: "f.txt", search: tc.search, replace: "REPLACED",
+			}}, results, &failed)
+
+			if !failed {
+				t.Error("an ambiguous edit was not reported as a match failure")
+			}
+			if !strings.Contains(results["1"], "ambiguous") {
+				t.Errorf("result does not say why: %q", results["1"])
+			}
+			after, err := os.ReadFile(filepath.Join(dir, "f.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != tc.body {
+				t.Errorf("the file was changed anyway:\n%q", after)
+			}
+		})
+	}
+}
+
+// The counter-half: a search that is genuinely unique still applies, including
+// one whose text appears once as a whole block but whose first line repeats.
+func TestUniqueEditStillApplies(t *testing.T) {
+	dir := t.TempDir()
+	body := "a\nb\nx\na\nc\n"
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	results := map[string]string{}
+	var failed bool
+	c.applyToolEdits([]plannedEdit{{callID: "1", path: "f.txt", search: "a\nb", replace: "Q"}}, results, &failed)
+
+	if failed {
+		t.Errorf("a unique edit was refused: %q", results["1"])
+	}
+	after, _ := os.ReadFile(filepath.Join(dir, "f.txt"))
+	if string(after) != "Q\nx\na\nc\n" {
+		t.Errorf("got %q", after)
+	}
+}

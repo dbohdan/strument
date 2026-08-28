@@ -173,8 +173,9 @@ func editTools() []llm.ToolDef {
 				"properties": map[string]any{
 					"path": strProp("The file's path, relative to the project root."),
 					"old_string": strProp("The exact existing text to replace, character for character, " +
-						"including all whitespace, comments, and docstrings. Include enough surrounding " +
-						"lines to match the intended location uniquely."),
+						"including all whitespace, comments, and docstrings. It must match exactly once: " +
+						"include enough surrounding lines to pick out the one place you mean, and make " +
+						"a separate call for each place if you mean several."),
 					"new_string": strProp("The text to put in its place."),
 				},
 				"required": []any{"path", "old_string", "new_string"},
@@ -789,9 +790,27 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 				}
 			}
 		} else {
+			// Ambiguity is a failure, not a coin flip.
+			//
+			// DoReplace takes the first occurrence and reports success, so an
+			// old_string appearing twice edited whichever came first and told
+			// the model "Applied the edit to x". That is precisely the failure
+			// mode edit-tool-bench criticises in *fuzzy* editing — a harness
+			// returning success on an underconstrained transformation, leaving
+			// the model reasoning from a false local success — and exact
+			// matching alone does not prevent it. Exact is not unique.
+			//
+			// The tool's own description already asks for "enough surrounding
+			// lines to match the intended location uniquely", so this enforces
+			// the contract it states rather than inventing one. The ambiguity
+			// message below was written for this case and was, until now,
+			// reachable only by accident.
 			var ok bool
-			newContent, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
-			if !ok || newContent == "" {
+			ambiguous := editblock.CountOccurrences(content, e.search) > 1
+			if !ambiguous {
+				newContent, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
+			}
+			if ambiguous || !ok || newContent == "" {
 				results[e.callID] = toolMatchFailure(e, content, fen)
 				*matchFailure = true
 				// The model is told through the tool result, and will usually
