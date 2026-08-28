@@ -198,6 +198,21 @@ func TestFragmentShapesFromRealGenerators(t *testing.T) {
 			frag: "getFirst()", want: "Returns the first element", notWant: "Returns the last",
 		},
 		{
+			// Sphinx renders an explicit `.. _label:` target as an empty span
+			// inside the section and just before its heading, so the label and
+			// the section id are two names for one section — and the page's own
+			// cross-references link by the label. Found in a real session:
+			// docs.python.org/3/library/string.html#formatstrings came back
+			// empty, and the model reported the docs' anchor as stale. It is
+			// not; the anchor is live and the fetcher was resolving it to a
+			// span that converts to no text at all.
+			name: "an empty label span before the heading",
+			html: `<section id="format-string-syntax"><span id="formatstrings"></span>
+<h2>Format string syntax</h2><p>The str.format method.</p></section>
+<section id="later"><h2>Later</h2><p>other</p></section>`,
+			frag: "formatstrings", want: "The str.format method", notWant: "other",
+		},
+		{
 			// ExDoc's ids carry a slash; javadoc's carry parentheses and
 			// commas. An allowlist that rewrote them produced anchors that
 			// looked right and matched nothing.
@@ -218,6 +233,41 @@ func TestFragmentShapesFromRealGenerators(t *testing.T) {
 				t.Errorf("section ran past its end and included %q:\n%s", tc.notWant, md)
 			}
 		})
+	}
+}
+
+// An anchor that exists and names nothing must never come back as an empty
+// string. That is the one result a model can neither act on nor report
+// accurately — in the session that prompted this, it produced a confident and
+// wrong claim that the documentation's anchor was stale, plus two extra round
+// trips to recover. The outline is the actionable answer, the same as for an
+// anchor that does not exist at all; the two say different things because the
+// model's next move differs.
+//
+// This is the net under the shape table above rather than a replacement for it:
+// resolving a known shape gives the section, and this keeps every shape nobody
+// has met yet from returning nothing.
+func TestAnchorThatNamesNothingReturnsTheOutline(t *testing.T) {
+	// A marker span whose next sibling is not a heading: nothing to resolve to,
+	// and no text of its own.
+	page := `<html><body><h2 id="one">One</h2><p>First section.</p>
+<p><span id="marker"></span></p><h2 id="two">Two</h2><p>Second section.</p></body></html>`
+	md := htmlToMarkdown(page, "https://example.com/p#marker", ScrapeOptions{})
+
+	if strings.TrimSpace(md) == "" {
+		t.Fatal("an anchor that names nothing returned an empty string")
+	}
+	if !strings.Contains(md, "names no content of its own") {
+		t.Errorf("the result did not say what happened:\n%s", md)
+	}
+	// The outline is what makes it actionable, so the anchors have to be in it.
+	if !strings.Contains(md, "#one") || !strings.Contains(md, "#two") {
+		t.Errorf("no usable anchors offered:\n%s", md)
+	}
+	// And it is distinguishable from an anchor that is not on the page at all.
+	missing := htmlToMarkdown(page, "https://example.com/p#nope", ScrapeOptions{})
+	if !strings.Contains(missing, "has no") {
+		t.Errorf("a missing anchor got the wrong message:\n%s", missing)
 	}
 }
 

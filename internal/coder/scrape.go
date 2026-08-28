@@ -431,7 +431,7 @@ func collectSection(heading, anchor *goquery.Selection, lvl int) (string, int) {
 // MediaWiki needs the fallback in the middle: it wraps the heading in a div,
 // so the content that follows are siblings of the *wrapper* rather than of the
 // heading that carries the id.
-func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
+func fragmentHTML(doc *goquery.Document, frag string) (html string, text int, ok bool) {
 	var node *goquery.Selection
 	doc.Find("[id]").EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		if id, _ := s.Attr("id"); id == frag {
@@ -450,7 +450,7 @@ func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
 		})
 	}
 	if node == nil || node.Length() == 0 {
-		return "", false
+		return "", 0, false
 	}
 	// An id on something inside a heading means the heading. Node's API docs
 	// hang it on an <a class="mark"> in the heading and the Lua manual on an
@@ -458,6 +458,19 @@ func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
 	// anchor, which is a section in neither case.
 	if h := node.Closest("h1, h2, h3, h4, h5, h6"); h.Length() > 0 {
 		node = h
+	}
+	// An anchor marker with no text of its own, sitting immediately before a
+	// heading, means that heading. Sphinx renders an explicit `.. _label:` as
+	// <span id="label"></span> inside the section and just before its <h2>, so
+	// docs.python.org/3/library/string.html#formatstrings resolves to an empty
+	// span — and the page's own cross-references link by exactly those labels,
+	// so a model following an in-page link lands here rather than on the
+	// section id. Taking the element literally returned a span that converts to
+	// no text at all.
+	if strings.TrimSpace(node.Text()) == "" {
+		if next := node.Next(); headingLevel(next) > 0 {
+			node = next
+		}
 	}
 
 	var b strings.Builder
@@ -484,20 +497,22 @@ func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
 		if text <= len(strings.TrimSpace(node.Text()))+120 {
 			if p := node.Parent(); p.Length() > 0 && !slices.Contains([]string{"body", "html", ""}, goquery.NodeName(p)) {
 				if wider, widerText := collectSection(node, p, lvl); widerText > text {
-					html = wider
+					html, text = wider, widerText
 				}
 			}
 		}
-		return html, true
+		return html, text, true
 	}
 
 	add(node)
+	text = len(strings.TrimSpace(node.Text()))
 	if goquery.NodeName(node) == "dt" {
 		if dd := node.Next(); goquery.NodeName(dd) == "dd" {
 			add(dd)
+			text += len(strings.TrimSpace(dd.Text()))
 		}
 	}
-	return b.String(), true
+	return b.String(), text, true
 }
 
 // outlineOf reduces converted markdown to its headings, indented by depth and
@@ -605,6 +620,7 @@ func outlineOf(md, pageURL string) string {
 // (possibly slimmed) HTML.
 func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 	fragMissing := ""
+	fragEmpty := ""
 	if doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr)); err == nil {
 		doc.Find("img, svg, script, style, noscript, nav, footer").Remove()
 		// The same landmarks again, by ARIA role. Sphinx — the generator behind
@@ -621,15 +637,25 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 		// The fragment names a part of the page, so honor it before anything
 		// downstream has to apologize for the size of the whole.
 		if frag := fragmentOf(pageURL); frag != "" {
-			if part, ok := fragmentHTML(doc, frag); ok {
+			switch part, text, ok := fragmentHTML(doc, frag); {
+			case ok && text > 0:
 				htmlStr = part
-			} else {
+			case ok:
+				// The anchor exists and names nothing that survives conversion.
+				// Different from a missing anchor and worth saying so, because
+				// the model's next move differs: the section is real, so the
+				// name it has is not the one to fetch by. Whatever new shape a
+				// generator invents, this is the branch that keeps the answer
+				// from being an empty string — which is the one result a model
+				// cannot act on or even report accurately.
+				fragEmpty = frag
+			default:
 				// Said rather than silently ignored: a model that asked for a
 				// section and got a page needs to know which it is holding.
 				fragMissing = frag
 			}
 		}
-		if fragMissing != "" || fragmentOf(pageURL) == "" {
+		if fragMissing != "" || fragEmpty != "" || fragmentOf(pageURL) == "" {
 			if slimmed, err := doc.Html(); err == nil {
 				htmlStr = slimmed
 			}
@@ -651,6 +677,11 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 	md = strings.TrimSpace(blankRunRe.ReplaceAllString(md, "\n\n"))
 	if opts.Outline {
 		return outlineOf(md, pageURL)
+	}
+	if fragEmpty != "" {
+		return fmt.Sprintf("(%q is on this page but names no content of its own. Its "+
+			"outline follows; fetch the section by the anchor listed there.)\n\n",
+			"#"+fragEmpty) + outlineOf(md, pageURL)
 	}
 	if fragMissing != "" {
 		// The outline, not the page. Handing back the whole thing meant a
