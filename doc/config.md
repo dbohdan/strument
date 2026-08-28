@@ -31,7 +31,7 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
-| `detect_loops` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
+| `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
@@ -416,13 +416,13 @@ a work step: the model is recovering, not progressing. Keeping the budget small
 means a model that is stuck in a fix-break cycle hands back to the human rather
 than burning the work-step budget on retries nobody asked for.
 
-### `detect_loops`
+### `loop_detection`
 
 Whether to stop a reply that has degenerated into repeating itself.
 
 ```python
-detect_loops = True     # the default
-detect_loops = False    # off
+loop_detection = True     # the default
+loop_detection = False    # off
 ```
 
 Some models — small ones especially — get stuck emitting one sentence over and

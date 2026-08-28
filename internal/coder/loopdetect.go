@@ -91,7 +91,7 @@ type loopDetector struct {
 }
 
 // newLoopDetector returns a detector with the tuned thresholds, or one that
-// never fires. `detect_loops = False` in the config is what turns it off; a
+// never fires. `loop_detection = False` in the config is what turns it off; a
 // model whose ordinary output trips this should not have to wait for a fix.
 func newLoopDetector(on bool) *loopDetector {
 	if !on {

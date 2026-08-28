@@ -146,7 +146,7 @@ func (c *chatCmd) Run() error {
 	if cfg.MaxErrorReflections > 0 {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
-	cdr.DetectLoops = cfg.DetectLoops
+	cdr.LoopDetection = !cfg.NoLoopDetection
 	// The project's named checks, which the check tool runs without asking:
 	// the model supplies only a name, so nothing it says can change what runs.
 	cdr.Check = cfg.Check

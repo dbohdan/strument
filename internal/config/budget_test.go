@@ -134,31 +134,43 @@ func TestMaxErrorReflectionsProjectOverrides(t *testing.T) {
 	}
 }
 
-// TestDetectLoopsDefaultsOn: unset means on, which is the whole reason this one
-// is a boolean rather than a budget — there is no "0 means use the default"
-// value to hide behind.
-func TestDetectLoopsDefaultsOn(t *testing.T) {
+// TestLoopDetectionDefaultsOn: unset leaves Config.NoLoopDetection false, which
+// is what "use the built-in default" looks like for every other setting here.
+// The field is negated for exactly this reason — see the note on it.
+func TestLoopDetectionDefaultsOn(t *testing.T) {
 	cfg, err := loadBudget(t, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.DetectLoops {
-		t.Error("unset detect_loops should leave detection on")
+	if cfg.NoLoopDetection {
+		t.Error("unset loop_detection should leave detection on")
 	}
 }
 
-func TestDetectLoopsOff(t *testing.T) {
-	cfg, err := loadBudget(t, "detect_loops = False")
+func TestLoopDetectionOff(t *testing.T) {
+	cfg, err := loadBudget(t, "loop_detection = False")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DetectLoops {
-		t.Error("detect_loops = False should turn detection off")
+	if !cfg.NoLoopDetection {
+		t.Error("loop_detection = False should turn detection off")
 	}
 }
 
-func TestDetectLoopsRejectsNonBooleans(t *testing.T) {
-	for _, setting := range []string{`detect_loops = "yes"`, "detect_loops = 1"} {
+// And True is not the same as unset saying nothing: it must survive a project
+// config that would otherwise be free to differ.
+func TestLoopDetectionOnIsExplicit(t *testing.T) {
+	cfg, err := loadBudget(t, "loop_detection = True")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NoLoopDetection {
+		t.Error("loop_detection = True should leave detection on")
+	}
+}
+
+func TestLoopDetectionRejectsNonBooleans(t *testing.T) {
+	for _, setting := range []string{`loop_detection = "yes"`, "loop_detection = 1"} {
 		_, err := loadBudget(t, setting)
 		if err == nil {
 			t.Errorf("%s should not load", setting)
@@ -172,8 +184,8 @@ func TestDetectLoopsRejectsNonBooleans(t *testing.T) {
 
 // A project can turn it off — a repo whose model output legitimately repeats
 // (generated tables, fixtures) is exactly who needs to.
-func TestDetectLoopsProjectOverrides(t *testing.T) {
-	opts := harness(t, budgetBase, "detect_loops = False\n", testEnv)
+func TestLoopDetectionProjectOverrides(t *testing.T) {
+	opts := harness(t, budgetBase, "loop_detection = False\n", testEnv)
 	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +193,7 @@ func TestDetectLoopsProjectOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DetectLoops {
-		t.Error("the project's detect_loops = False did not take effect")
+	if !cfg.NoLoopDetection {
+		t.Error("the project's loop_detection = False did not take effect")
 	}
 }

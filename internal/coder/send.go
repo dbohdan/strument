@@ -231,7 +231,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	// One detector per send, not per streamOnce: a continuation is the same
 	// reply resumed, and a loop that spans the stitch is still a loop.
-	loops := newLoopDetector(c.DetectLoops)
+	loops := newLoopDetector(c.LoopDetection)
 
 	// term is how the whole stream phase ended, as opposed to how one
 	// streamOnce ended: retries and continuations loop without setting it.

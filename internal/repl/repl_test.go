@@ -305,6 +305,29 @@ func TestRunCommandAddsExchange(t *testing.T) {
 	}
 }
 
+// A hand-built config must not silently turn a default off.
+//
+// Config's convention is that the zero value means "unset, use the built-in
+// default" — MaxSteps 0 is 25, and so on. A field named for what it enables
+// breaks that: `Config{}` would read as an explicit opt-out and a reload would
+// apply it. Loop detection is named for what it overrides so this cannot
+// happen, and this is what says so.
+func TestReloadKeepsDefaultsThatWereNeverSet(t *testing.T) {
+	input := strings.NewReader("/reload\n/exit\n")
+	r, cdr, _ := newTestREPL(t, &fixture.StreamStub{}, input)
+	defer r.Close()
+	r.opts.ReloadConfig = func() (*config.Config, error) {
+		return testConfig(testModel()), nil // says nothing about loop detection
+	}
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !cdr.LoopDetection {
+		t.Error("a reload of a config that never mentions it turned loop detection off")
+	}
+}
+
 func TestReloadConfig(t *testing.T) {
 	// A reload that adds a model makes it selectable without a restart.
 	input := strings.NewReader("/reload\n/model newmodel\n/exit\n")

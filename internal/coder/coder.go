@@ -54,9 +54,9 @@ type Coder struct {
 	// reflection is the model recovering from its own mistake and should
 	// stay rare. Configurable; the default (3) is set by New.
 	MaxErrorReflections int
-	// DetectLoops stops a reply that has degenerated into repeating one phrase
-	// over and over. On by default; see loopdetect.go for what counts.
-	DetectLoops bool
+	// LoopDetection stops a reply that has degenerated into repeating one
+	// phrase over and over. On by default; see loopdetect.go for what counts.
+	LoopDetection bool
 
 	// Ports.
 	Client     llm.ModelClient
@@ -264,7 +264,7 @@ func New(root string, model *config.Model) *Coder {
 		PrefillSupported:     true,
 		MaxSteps:             25,
 		MaxErrorReflections:  3,
-		DetectLoops:          true,
+		LoopDetection:        true,
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},

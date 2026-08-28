@@ -136,7 +136,7 @@ func TestLoopDetectorFiresOnFragments(t *testing.T) {
 	}
 }
 
-// `detect_loops = False` means exactly that.
+// `loop_detection = False` means exactly that.
 func TestLoopDetectorOffNeverFires(t *testing.T) {
 	d := newLoopDetector(false)
 	for range 40 {
@@ -298,10 +298,10 @@ func TestLoopingAnswerKeepsThePartial(t *testing.T) {
 //
 // The client is bounded here, because with the detector off nothing else would
 // ever end the reply — which is the whole point of the setting being a choice.
-func TestDetectLoopsOffLetsTheLoopRun(t *testing.T) {
+func TestLoopDetectionOffLetsTheLoopRun(t *testing.T) {
 	c, client, asker := loopCoder(t, llm.EventReasoning, "1")
 	client.repeats = 200
-	c.DetectLoops = false
+	c.LoopDetection = false
 
 	c.runOne(context.Background(), "do the thing", false)
 

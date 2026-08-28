@@ -181,10 +181,12 @@ type Config struct {
 	// recovering from its own mistake — a failed edit match, a bad shell
 	// command — and should stay rare.
 	MaxErrorReflections int
-	// DetectLoops stops a reply that has degenerated into repeating itself.
-	// True by default; a model whose ordinary output trips it can turn it off
-	// with `detect_loops = False`.
-	DetectLoops bool
+	// NoLoopDetection turns off stopping a reply that has degenerated into
+	// repeating itself. Named for what it overrides, not for what it does, so
+	// that the zero value means the built-in default (on) — the same shape as
+	// MaxSteps and the rest. `loop_detection = False` is the only thing that
+	// sets it.
+	NoLoopDetection bool
 
 	// Sandbox names the confinement mechanism: SandboxLandlock or "" for
 	// none. It defaults to Landlock on Linux and "" elsewhere, and when it is

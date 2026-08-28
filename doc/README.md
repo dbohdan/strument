@@ -551,7 +551,7 @@ abandoned request. The outcome is `OutcomeLooping`, deliberately *not*
 `OutcomeInterrupted`: the steer menu cannot say "you stopped the model" when the
 user did not, and "carry on from where you stopped" — the right thing to say
 after a Ctrl-C — is the one instruction that would resume the loop. Off with
-`detect_loops = False`. The detector is naive on purpose (a substring per
+`loop_detection = False`. The detector is naive on purpose (a substring per
 offset, a map that grows with a bounded tail); the upgrade, if a profile ever
 asks for one, is a rolling hash over a ring buffer, which needs no dependency.
 
