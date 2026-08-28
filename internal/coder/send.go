@@ -544,7 +544,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	c.Out.Printf("- Use /clear to clear the chat history")
 	c.Out.Printf("- Break your code into smaller files")
 	c.Out.Printf("It's probably safe to try and send the request, most providers won't charge if the context limit is exceeded.")
-	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Try to proceed anyway?"})
+	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Try to proceed anyway?", Grant: GrantContext})
 	return res.Yes
 }
 

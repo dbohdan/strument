@@ -592,20 +592,20 @@ func TestShellConfirmationShowsThePurpose(t *testing.T) {
 // unseen command are bounded, which is what licenses the affordance.
 func TestShellPromptDefaultsToYes(t *testing.T) {
 	shell := coder.ConfirmRequest{
-		Prompt:           "Run shell command?",
-		Command:          "go test ./...",
-		Purpose:          "re-run the suite",
-		RequiresYesShell: true,
+		Prompt:  "Run shell command?",
+		Command: "go test ./...",
+		Purpose: "re-run the suite",
+		Grant:   coder.GrantWebfetch,
 	}
 	// The live grouped prompt is bash under a sandbox, which is the only one
 	// that still offers a blanket turn-wide "a"; webfetch scopes its own to an
 	// origin and is covered in TestWebfetchPromptSuffixNamesTheOrigin.
 	grouped := coder.ConfirmRequest{
-		Prompt:           "Run shell command?",
-		Command:          "go test ./...",
-		Purpose:          "re-run the suite",
-		Group:            "shell",
-		RequiresYesShell: true,
+		Prompt:  "Run shell command?",
+		Command: "go test ./...",
+		Purpose: "re-run the suite",
+		Group:   "shell",
+		Grant:   coder.GrantWebfetch,
 	}
 	if got := confirmSuffix(shell); got != " (Y/n) " {
 		t.Errorf("shell suffix = %q, want the default-yes form with no blanket option", got)
@@ -1045,10 +1045,10 @@ func TestConfirmDeclinesWithoutATerminal(t *testing.T) {
 	r.opts.StdinIsTerminal = func() bool { return false }
 
 	res := r.Confirmer().Confirm(coder.ConfirmRequest{
-		Command:          "go build ./poll/",
-		Purpose:          "Verify the poll package compiles.",
-		Prompt:           "Run it?",
-		RequiresYesShell: true,
+		Command: "go build ./poll/",
+		Purpose: "Verify the poll package compiles.",
+		Prompt:  "Run it?",
+		Grant:   coder.GrantWebfetch,
 	})
 	if res.Yes || res.Always {
 		t.Fatal("a prompt with nobody at the keyboard was answered yes")
@@ -1062,7 +1062,7 @@ func TestConfirmDeclinesWithoutATerminal(t *testing.T) {
 	}
 	// And the decline says which flag would have answered it, naming the shell
 	// one — --yes deliberately does not cover a shell command.
-	if !strings.Contains(got, "--yes-shell") {
+	if !strings.Contains(got, "--yes webfetch") {
 		t.Errorf("the decline does not name the flag that answers it:\n%s", got)
 	}
 
@@ -1119,13 +1119,13 @@ func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
 // exactly why the prompt has to name it.
 func TestWebfetchPromptSuffixNamesTheOriginAndTheSession(t *testing.T) {
 	req := coder.ConfirmRequest{
-		Prompt:           "Fetch this page?",
-		URL:              "https://go.dev/doc/go1.26",
-		Origin:           "go.dev:443",
-		Purpose:          "check the loop change",
-		Group:            "webfetch:go.dev:443",
-		GroupSession:     true,
-		RequiresYesShell: true,
+		Prompt:       "Fetch this page?",
+		URL:          "https://go.dev/doc/go1.26",
+		Origin:       "go.dev:443",
+		Purpose:      "check the loop change",
+		Group:        "webfetch:go.dev:443",
+		GroupSession: true,
+		Grant:        coder.GrantWebfetch,
 	}
 	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this session) " {
 		t.Errorf("suffix = %q, want it to name the origin and the session", got)

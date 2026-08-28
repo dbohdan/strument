@@ -195,7 +195,8 @@ For scripts and one-offs, `-m` runs a single turn and exits:
 ```sh
 strument -m 'Add a --version flag to cmd/pollctl.'
 strument --dry-run -m 'Fix the race in internal/poll.'  # Report the edits, write nothing.
-strument --yes -m 'Update the changelog for v0.3.0.'  # Answer confirmations; still never runs a shell command.
+strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop to ask at the step budget; grants no tool.
+strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
 Two inspection commands answer "what does my effective config say?" without editing the file.
@@ -203,8 +204,12 @@ Two inspection commands answer "what does my effective config say?" without edit
 and `strument config default` prints the value of `default`.
 Both read the merged user + trusted project config for the current project, so the answer matches what a chat session would use.
 
-`--yes-shell` is the flag that lets the model run shell commands unattended.
-Combined with `-m`, it gives a model up to 25 (or `max_steps`) unattended steps of arbitrary shell in your project.
+`--yes NAME` answers one named prompt without asking, and takes `bash`, `webfetch`, `websearch`, `steps`, `context`, or `all`.
+It repeats and accepts lists, so `--yes bash --yes webfetch,websearch` and `--yes bash,webfetch,websearch` are the same thing.
+An unknown name is an error at startup rather than a permission that silently was not granted.
+
+`--yes bash` is the one that lets the model run shell commands unattended.
+Combined with `-m`, it gives a model up to 25 (or `max_steps`) unattended steps of arbitrary shell in your project — and `--yes steps` removes even that bound, since the budget resets each time the prompt is answered.
 This feature is meant for a terminal you are watching rather than for CI or cron, where a prompt-injected message can become remote code execution.
 You want a different harness from Strument for long-term autonomy.
 `--no-git` turns off the git integration inside a repository.

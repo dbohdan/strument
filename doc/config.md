@@ -554,9 +554,10 @@ The model is asked before the first search of a turn, and an `a` answer covers
 the rest of that turn. That is the opposite of `webfetch`'s scope, for the
 opposite reason: there the model picks the destination, so the question is per
 origin and has to outlast a turn to be worth asking; here you pinned the
-destination, so only the query varies, and a turn holds many searches. Plain
-`--yes` covers it, since a search only ever reaches the instance you named.
-Every query is printed whether or not it was asked about.
+destination, so only the query varies, and a turn holds many searches.
+`--yes websearch` covers it without covering anything else, which is the point
+of naming permissions one at a time: an unattended search need not come with an
+unattended shell. Every query is printed whether or not it was asked about.
 
 **A degraded search says so.** SearXNG reports which of its engines failed, and
 on a real instance three of them being rate-limited, CAPTCHA'd, or timed out is
@@ -736,6 +737,42 @@ database is compiled into the binary, so a name means the same thing on a
 machine that has no zone files of its own.
 
 `env_set` changes need a restart; `/reload` does not re-apply them.
+
+### Naming what may happen unattended
+
+`--yes NAME` answers one named prompt without asking. The names are the
+permissions themselves:
+
+| Name | What it answers |
+| --- | --- |
+| `bash` | Run a shell command the model wrote |
+| `webfetch` | Fetch a URL the model chose |
+| `websearch` | Send the model's query to the configured backend |
+| `steps` | "Keep going?" at the step budget |
+| `context` | "Try to proceed anyway?" over the model's input limit |
+| `all` | All of the above |
+
+It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
+`--yes bash,webfetch,websearch` are the same thing. An unknown name is refused
+at startup, naming the ones that would have worked — a permission that silently
+was not granted is one you find out about at the prompt it was meant to answer.
+
+The first three grant the model a capability. The last two do not: they answer a
+question the harness asks about its own pacing, and nothing new becomes possible
+when you say yes. They are in the same flag because both need an answer in a
+session with no terminal, and a name that says which prompt it covers beats a
+flag meaning "everything except the scary one" — which is what the `--yes` and
+`--yes-shell` pair this replaced actually meant, and why a third thing worth
+withholding had nowhere to go.
+
+**`--yes steps` removes the step limit rather than raising it.** The budget
+resets each time the prompt is answered, so granting it makes `max_steps` an
+interval between checkpoints that no longer stop.
+
+A prompt with no name — "Add command output to the chat?", after `/run` or
+`/check` — is never answered by a flag. There is no name you could have typed
+for it, and both commands are ones you typed yourself, so a terminal is always
+there to ask on.
 
 ### What `/reload` applies
 

@@ -72,7 +72,7 @@ func TestWebfetchPromptShowsURLAndOrigin(t *testing.T) {
 	if req.Purpose != "check the loop change" {
 		t.Errorf("Purpose = %q", req.Purpose)
 	}
-	if !req.RequiresYesShell {
+	if req.Grant != GrantWebfetch {
 		t.Error("a fetch of an unlisted origin must not be answerable by plain --yes")
 	}
 	if req.Group != "webfetch:go.dev:443" {

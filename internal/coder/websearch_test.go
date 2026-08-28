@@ -104,9 +104,10 @@ func TestSearchAlwaysCoversTheTurnAndDiesWithIt(t *testing.T) {
 	if ac.got[0].Query != "first" {
 		t.Errorf("the prompt did not carry the query: %+v", ac.got[0])
 	}
-	// Plain --yes covers it: the model never picks where a search goes.
-	if ac.got[0].RequiresYesShell {
-		t.Error("search withheld itself from --yes; only the model's own choice of destination earns that")
+	// It carries its own name, so "--yes websearch" answers it and nothing
+	// else does — no flag means "everything but the scary one" any more.
+	if ac.got[0].Grant != GrantWebsearch {
+		t.Errorf("Grant = %q, want %q", ac.got[0].Grant, GrantWebsearch)
 	}
 
 	c.initBeforeMessage()

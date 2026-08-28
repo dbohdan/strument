@@ -77,6 +77,7 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 		Prompt: "Search the web?",
 		Query:  s.query,
 		Group:  "websearch",
+		Grant:  GrantWebsearch,
 	}) {
 		return "The user chose not to run that search."
 	}

@@ -822,7 +822,7 @@ func (c *Coder) confirmMoreSteps() bool {
 		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
 	}
 
-	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?"})
+	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?", Grant: GrantSteps})
 	if !res.Yes {
 		c.Out.Printf("Stopping here. The work so far is applied; say what to do next.")
 		return false

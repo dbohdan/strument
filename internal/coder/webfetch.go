@@ -138,13 +138,13 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		granted := c.sessionAutoApprove[group]
 		asked = !granted
 		if !c.confirmGrouped(ConfirmRequest{
-			Prompt:           "Fetch this page?",
-			URL:              f.url,
-			Origin:           org,
-			Purpose:          f.purpose,
-			Group:            group,
-			GroupSession:     true,
-			RequiresYesShell: true,
+			Prompt:       "Fetch this page?",
+			URL:          f.url,
+			Origin:       org,
+			Purpose:      f.purpose,
+			Group:        group,
+			GroupSession: true,
+			Grant:        GrantWebfetch,
 		}) {
 			return "The user chose not to fetch that page."
 		}

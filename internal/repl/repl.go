@@ -293,7 +293,7 @@ func (r *REPL) interactive() bool {
 // 56 to it.
 //
 // So a prompt with nobody at the keyboard declines without reading. --yes and
-// --yes-shell are how a scripted session says yes; they are answered before
+// --yes NAME is how a scripted session says yes; such prompts are answered before
 // the fallback is ever reached.
 func (r *REPL) canAsk() bool {
 	return r.opts.StdinIsTerminal == nil || r.opts.StdinIsTerminal()
@@ -593,9 +593,9 @@ func (r *REPL) showUndoHint() {
 // on a human reaching for a key, where Enter is easier than Y even for a touch
 // typist, and friction in the common case is precisely what erodes a prompt
 // into reflex. What buys the yes is the purpose line above it: a prompt worth
-// reading can afford a cheap answer, one that is not cannot. RequiresYesShell
-// still keeps plain --yes from covering the shell gate, which is a question
-// about flags rather than about what Enter means.
+// reading can afford a cheap answer, one that is not cannot. Which flag covers
+// a prompt is a separate question from what Enter means at one, and it is
+// answered by the prompt's Grant name rather than by this default.
 //
 // Pulled out of Confirm because that is the one part of the prompt a test
 // cannot see: readline writes it straight to the terminal, so in the scripted
@@ -658,11 +658,14 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	// Shown after the request, not instead of it: what was proposed is worth
 	// reading even when the answer is a foregone no.
 	if !r.canAsk() {
-		flag := "--yes"
-		if req.RequiresYesShell {
-			flag = "--yes-shell"
+		// Name the exact flag that would have answered *this* prompt. The old
+		// message could only pick between two, so it named the right flag by
+		// luck; now the prompt carries its own name and the advice is precise.
+		if req.Grant == "" {
+			r.out.Warningf("Declined: there is no terminal to ask on, and no --yes name covers this prompt.")
+			return coder.ConfirmResult{}
 		}
-		r.out.Warningf("Declined: there is no terminal to ask on. Pass %s to answer this without one.", flag)
+		r.out.Warningf("Declined: there is no terminal to ask on. Pass --yes %s to answer this without one.", req.Grant)
 		return coder.ConfirmResult{}
 	}
 
@@ -689,7 +692,7 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 
 // Asker returns a coder.Asker that asks questions on this REPL's terminal.
 // Unlike Confirmer there is no AutoConfirmer to wrap it in: --yes and
-// --yes-shell answer permission prompts, and a question is not one.
+// --yes answers permission prompts, and a question is not one.
 func (r *REPL) Asker() coder.Asker { return rlAsker{r} }
 
 // rlAsker asks multiple-choice questions through the REPL's readline so

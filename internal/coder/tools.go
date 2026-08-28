@@ -571,7 +571,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results[tc.ID] = c.runWebsearch(ctx, q)
 		case toolAskUser:
 			// Not routed through confirmGrouped: a question is not a permission
-			// prompt, and --yes/--yes-shell must not answer it.
+			// prompt, and --yes must not answer it.
 			results[tc.ID] = c.runAskUser(tc, &needsReflection)
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
@@ -725,11 +725,11 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		group = "shell"
 	}
 	if !c.confirmGrouped(ConfirmRequest{
-		Prompt:           "Run shell command?",
-		Command:          command,
-		Purpose:          cmd.purpose,
-		Group:            group,
-		RequiresYesShell: true,
+		Prompt:  "Run shell command?",
+		Command: command,
+		Purpose: cmd.purpose,
+		Group:   group,
+		Grant:   GrantBash,
 	}) {
 		return "The user chose not to run the command."
 	}

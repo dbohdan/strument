@@ -466,8 +466,8 @@ Ten tools, in three natures:
   text always available to the user as an implicit last row), print as
   ordinary scroll with a numbered list, and are read through the `Asker` port
   — a separate port from `Confirmer`, because a yes/no shape cannot carry a
-  choice and because `--yes`/`--yes-shell` must structurally not answer one:
-  those flags skip permission prompts, and a question is the model asking for
+  choice and because `--yes` must structurally not answer one: that flag skips
+  named permission prompts, and a question is the model asking for
   information, not permission. Without a terminal (script mode, a nil Asker)
   the call answers the model with "proceed using your best judgment and state
   the assumption you made" rather than hanging or silently picking option 1 —

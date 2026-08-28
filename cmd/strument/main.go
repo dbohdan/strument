@@ -39,23 +39,30 @@ import (
 var version = "0.0.0-dev"
 
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."          short:"m"`
-	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."       name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."          short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."                   name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                                     name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                    name:"dark-mode"                                              xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."                   name:"light-mode"                                             xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                  name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not write the session to the chat-history file."                  name:"no-history"`
-	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line." name:"jsonl"                                                  placeholder:"FILE"`
-	DryRun        bool     `help:"Report edits without writing files or committing."                   name:"dry-run"`
-	Yes           bool     `help:"Answer yes to confirmations (never auto-runs shell commands)."`
-	YesShell      bool     `help:"Also auto-run model-suggested shell commands."                       name:"yes-shell"`
-	Files         []string `arg:""                                                                     help:"Files for the model to edit (they need not exist yet)." optional:""`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                       short:"m"`
+	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."                                                    name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias from config; defaults to the config's default."                                                       short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                  name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                 name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                name:"light-mode"                                             xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                               name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                               name:"no-history"`
+	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                              name:"jsonl"                                                  placeholder:"FILE"`
+	DryRun        bool     `help:"Report edits without writing files or committing."                                                                name:"dry-run"`
+	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, all. Repeatable; lists allowed." placeholder:"NAME[,NAME]"`
+	Files         []string `arg:""                                                                                                                  help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {
+	// First, because it validates nothing but what the user typed. A mistyped
+	// permission name reported after a config or alias error is a mistyped
+	// permission name the user fixes second.
+	grants, err := coder.ParseGrants(c.Yes)
+	if err != nil {
+		return err
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -160,7 +167,7 @@ func (c *chatCmd) Run() error {
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
-	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: terminalConfirmer{}}
+	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	if model.RepoMap {
 		cdr.RepoMap = repomap.New(root)
@@ -743,10 +750,14 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		return err
 	}
 	defer r.Close()
-	// Route confirms through readline; --yes/--yes-shell answer first. The
-	// asker has no auto variant: --yes answers permission prompts, and a
-	// question is the model asking for information it cannot proceed without.
-	cdr.Confirm = coder.AutoConfirmer{Yes: c.Yes, YesShell: c.YesShell, Fallback: r.Confirmer()}
+	// Route confirms through readline; a --yes name answers first. The asker
+	// has no auto variant: --yes answers permission prompts, and a question is
+	// the model asking for information it cannot proceed without.
+	grants, err := coder.ParseGrants(c.Yes)
+	if err != nil {
+		return err
+	}
+	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: r.Confirmer()}
 	cdr.Asker = r.Asker()
 	return r.Run(context.Background())
 }
@@ -817,11 +828,14 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	// the keyboard; this surface follows, so the two mean the same thing. Only
 	// stdin is consulted: redirecting output does not take the human away.
 	if !isCharDevice(os.Stdin) {
-		flag := "--yes"
-		if req.RequiresYesShell {
-			flag = "--yes-shell"
+		// The same advice the REPL gives, and for the same reason: name the
+		// flag that would have answered *this* prompt rather than the nearest
+		// of two.
+		if req.Grant == "" {
+			fmt.Println("Declined: there is no terminal to ask on, and no --yes name covers this prompt.")
+			return coder.ConfirmResult{}
 		}
-		fmt.Printf("Declined: there is no terminal to ask on. Pass %s to answer this without one.\n", flag)
+		fmt.Printf("Declined: there is no terminal to ask on. Pass --yes %s to answer this without one.\n", req.Grant)
 		return coder.ConfirmResult{}
 	}
 

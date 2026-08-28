@@ -216,8 +216,10 @@ its own first. Then the trial has one job and the revert has one target.
   rate-limiting produces hangs that look exactly like a deadlock in the harness.
   That cost three runs and a concurrency investigation before five instances
   against a local stub came back clean and proved the harness innocent.
-- **`--yes` in trials**, or a confirmation prompt will silently stall a session
-  that was supposed to be unattended.
+- **`--yes NAME` in trials**, naming every prompt the run can raise, or one
+  will silently stall a session that was supposed to be unattended. Include
+  `steps` for anything long enough to reach the budget; `--yes all` is the
+  blunt version when the run is disposable.
 - **Fix the random seed and shuffle the job list**, so a rerun is comparable and
   the arm is not confounded with the hour it ran.
 

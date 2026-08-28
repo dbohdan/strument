@@ -4,6 +4,8 @@ package coder
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +59,62 @@ type ConfirmResult struct {
 	Always bool
 }
 
+// The permission names --yes takes. Two kinds, deliberately in one flag: the
+// first three grant the model a capability, the last two answer a question the
+// harness asks about its own pacing. Both need a name for a session with no
+// terminal to answer on, and a name that says which prompt it covers beats a
+// flag that means "everything except the scary one".
+const (
+	GrantBash      = "bash"      // run a shell command the model wrote
+	GrantWebfetch  = "webfetch"  // fetch a URL the model chose
+	GrantWebsearch = "websearch" // send the model's query to the configured backend
+	// GrantSteps answers "Keep going?" at the step budget. Not a capability:
+	// the model gains nothing it did not have, the turn simply continues. Worth
+	// knowing before typing it that the budget resets each time it is answered,
+	// so granting this is granting an unbounded number of steps — max_steps
+	// stops being a limit and becomes an interval.
+	GrantSteps = "steps"
+	// GrantContext answers "Try to proceed anyway?" when the estimated request
+	// exceeds the model's input limit. Also not a capability: the request is
+	// sent and the provider decides, which is what the prompt's own text says
+	// is probably fine.
+	GrantContext = "context"
+	// GrantAll is every name above. A word someone types, never a default.
+	GrantAll = "all"
+)
+
+// GrantNames are the individual permissions, in the order help text lists them.
+var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantSteps, GrantContext}
+
+// ParseGrants turns --yes values into the set AutoConfirmer reads. Each value
+// may be a comma-separated list, and the flag may repeat, so
+// "--yes bash --yes webfetch,websearch" and "--yes bash,webfetch,websearch"
+// are the same thing. An unknown name is an error naming what would have
+// worked, rather than a silent no-op that looks like a permission was granted.
+func ParseGrants(values []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	for _, v := range values {
+		for name := range strings.SplitSeq(v, ",") {
+			name = strings.ToLower(strings.TrimSpace(name))
+			if name == "" {
+				continue
+			}
+			if name == GrantAll {
+				for _, g := range GrantNames {
+					out[g] = true
+				}
+				continue
+			}
+			if !slices.Contains(GrantNames, name) {
+				return nil, fmt.Errorf("--yes %s: unknown name (want %s, or %q for all of them)",
+					name, strings.Join(GrantNames, ", "), GrantAll)
+			}
+			out[name] = true
+		}
+	}
+	return out, nil
+}
+
 // ConfirmRequest mirrors aider's confirm_ask surface.
 //
 // Command is a shell command awaiting approval, and Purpose is the model's own
@@ -81,13 +139,15 @@ type ConfirmRequest struct {
 	// their config, so the query is the whole of what there is to read.
 	Query   string
 	Purpose string
-	// RequiresYesShell marks a prompt that plain --yes must not answer; only
-	// --yes-shell does. It used to also make the prompt default to no, which is
-	// why it was called ExplicitYesRequired. It no longer does: every prompt now
-	// defaults to yes, and this is a question about which flag covers a prompt,
-	// not about what Enter means at one.
-	RequiresYesShell bool
-	Group            string // ConfirmGroup key ("all"/"skip" scope)
+	// Grant names which permission this prompt asks for, and so which
+	// --yes NAME answers it. One of the Grant* constants; empty means no flag
+	// can answer it and the terminal always decides.
+	//
+	// It replaced a RequiresYesShell bool, which was one tool's name encoded as
+	// a boolean: it could say "this is the shell one" and nothing else, so a
+	// third gated tool had no way to be named without a third flag.
+	Grant string
+	Group string // ConfirmGroup key ("all"/"skip" scope)
 	// GroupSession makes an "a" answer last for the session rather than the
 	// turn. Only webfetch sets it, and the asymmetry with the shell gate is the
 	// point: an "a" on shell is licensed by the sandbox, which bounds what an
@@ -117,7 +177,7 @@ type AskRequest struct {
 //
 // A port of its own rather than a widening of Confirmer, whose yes/no/always
 // shape cannot carry a multiple-choice question. The split is also the reason
-// --yes/--yes-shell cannot answer one: those flags skip permission prompts,
+// --yes cannot answer one: that flag skips named permission prompts,
 // and a question is not a permission prompt — it is the model asking for
 // information it cannot proceed without.
 type Asker interface {
@@ -164,26 +224,25 @@ func ParseAskAnswer(req AskRequest, input string) []string {
 	return labels
 }
 
-// AutoConfirmer implements --yes / --yes-shell (--yes never auto-runs
-// model shell; that needs YesShell).
+// AutoConfirmer implements --yes NAME: it answers a prompt whose Grant the
+// user named, and defers everything else. There is no blanket form, which is
+// the whole change — the flag pair it replaced meant "yes to everything except
+// the shell", a shape that could not name a third thing worth withholding.
 type AutoConfirmer struct {
-	Yes      bool
-	YesShell bool
+	// Granted holds the names from --yes. A prompt is answered only when its
+	// own Grant is in here — there is no blanket yes, because a blanket yes is
+	// what "--yes, except the dangerous one" was, and that shape cannot say
+	// which one without naming it in the flag itself.
+	Granted map[string]bool
 	// Fallback handles prompts the flags don't answer; nil declines.
 	Fallback Confirmer
 }
 
 func (a AutoConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
-	if req.RequiresYesShell {
-		if a.YesShell {
-			return ConfirmResult{Yes: true}
-		}
-		if a.Fallback != nil {
-			return a.Fallback.Confirm(req)
-		}
-		return ConfirmResult{}
-	}
-	if a.Yes {
+	// An unnamed prompt is never answered by a flag. That is deliberate rather
+	// than an oversight: a prompt with no Grant has no name a user could have
+	// typed, so answering it would be answering something they never asked for.
+	if req.Grant != "" && a.Granted[req.Grant] {
 		return ConfirmResult{Yes: true}
 	}
 	if a.Fallback != nil {
