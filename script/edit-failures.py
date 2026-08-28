@@ -26,9 +26,16 @@ actually change:
 
   spread         edits in one assistant message touching several files. This
                  is the coordinated mutation, and `edit` already expresses it.
-  revisit        a turn that comes back to a file it edited in an earlier
-                 message. This is the shape a patch tool collapses, so a high
+  interleave     a turn that edits file X, then some other file, then X
+                 again. This is the shape a patch tool collapses, so a high
                  rate here is the real evidence for adding one.
+
+                 Counting every return to an already-edited file was the first
+                 version and it was wrong: three sequential edits to one file
+                 scored two "revisits" and looked like coordination pressure,
+                 when it is just a model making three changes in a row. A patch
+                 would not collapse that. Only a return *across* another file
+                 counts now.
 
 Exercised against real recorded output, not just written: a fixture provider
 drives the edit tool through one failure of each kind and the log it produces
@@ -89,9 +96,9 @@ def scan(path):
     calls = {}       # tool_call_id -> {"path": ..., "tool": ...}
     rows = []        # (class, tool, path, result, call_id)
     spread = []      # files touched per assistant message that edited
-    edited_in_turn = collections.Counter()
-    revisits = 0
+    interleaved = 0  # returns to a file after editing a different one
     seen_files = set()
+    last_file = None
 
     for rec in read_log(path):
         if rec.get("type") == "message" and rec.get("role") == "assistant":
@@ -108,11 +115,11 @@ def scan(path):
                 batch.append(p)
             if batch:
                 spread.append(len(set(batch)))
-                for p in set(batch):
-                    if p in seen_files:
-                        revisits += 1
+                for p in batch:
+                    if p in seen_files and last_file is not None and p != last_file:
+                        interleaved += 1
                     seen_files.add(p)
-                    edited_in_turn[p] += 1
+                    last_file = p
         elif rec.get("type") == "message" and rec.get("role") == "tool":
             info = calls.get(rec.get("tool_call_id"))
             if not info:
@@ -120,7 +127,7 @@ def scan(path):
             text = rec.get("text", "")
             rows.append((classify(text), info["tool"], info["path"], text, rec.get("tool_call_id")))
 
-    return rows, spread, revisits
+    return rows, spread, interleaved
 
 
 def main():
@@ -133,7 +140,7 @@ def main():
     counts = collections.Counter()
     by_tool = collections.Counter()
     spread_all = []
-    revisits_all = 0
+    interleaved_all = 0
     shown = []
     files_seen = 0
 
@@ -142,9 +149,9 @@ def main():
             print(f"{path}: no such file", file=sys.stderr)
             continue
         files_seen += 1
-        rows, spread, revisits = scan(path)
+        rows, spread, interleaved = scan(path)
         spread_all.extend(spread)
-        revisits_all += revisits
+        interleaved_all += interleaved
         for cls, tool, p, text, _ in rows:
             counts[cls] += 1
             by_tool[(tool, cls)] += 1
@@ -162,7 +169,7 @@ def main():
             "messages_with_edits": len(spread_all),
             "messages_touching_several_files": multi,
             "max_files_in_one_message": max(spread_all) if spread_all else 0,
-            "revisits": revisits_all,
+            "interleaved_returns": interleaved_all,
         }, indent=2))
         return
 
@@ -188,10 +195,10 @@ def main():
     print(f"  ... touching more than one file     {multi:5}"
           f"  ({100 * multi / len(spread_all):.0f}%)" if spread_all else "")
     print(f"  most files in one message           {max(spread_all) if spread_all else 0:5}")
-    print(f"  files revisited in a later message  {revisits_all:5}")
+    print(f"  returns to a file across another    {interleaved_all:5}")
     print()
     print("Read this as: a high not-found rate argues for a read-version guard;")
-    print("a high ambiguous rate argues for replace_all; a high revisit count is")
+    print("a high ambiguous rate argues for replace_all; a high interleave count is")
     print("the case for a patch tool. Anything else argues for leaving edit alone.")
 
 
