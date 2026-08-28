@@ -267,12 +267,22 @@ func headingLevel(sel *goquery.Selection) int {
 	return 0
 }
 
-// safeAnchor keeps a fragment to the characters an id is made of, so one
-// written into the markdown cannot close a construct around it.
+// headingAnchorRe matches the {#anchor} a heading carries, escapes and all.
+var headingAnchorRe = regexp.MustCompile(`\{#[^}\n]*\}`)
+
 // mdLinkRe matches a markdown inline link, capturing its text.
 var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 
-var safeAnchor = regexp.MustCompile(`[^A-Za-z0-9_.:-]`)
+// safeAnchor removes only what would break the {#...} written around a
+// fragment: the closing brace, a backslash, and whitespace, which HTML forbids
+// in an id anyway.
+//
+// It was a conservative allowlist to begin with, and the allowlist was the bug.
+// Javadoc's ids are "getFirst()" and "add(int,java.lang.Object)", ExDoc's are
+// "min_by/4-examples"; rewriting that punctuation produced "getFirst--" and
+// "min_by-4-examples" — anchors that look right and match nothing. Every
+// character it dropped is legal in a URL fragment.
+var safeAnchor = regexp.MustCompile(`[}\\\s\x00-\x1f]`)
 
 // anchorOf finds the fragment a heading can be reached by.
 //
@@ -292,7 +302,48 @@ func anchorOf(h *goquery.Selection) string {
 		id, _ = s.Attr("id")
 		return id == ""
 	})
+	if id != "" {
+		return id
+	}
+	// <a name> is how hand-written HTML marks a target, and the Lua manual —
+	// 428 headings, every one of them anchored this way — is the reason this
+	// is not a historical curiosity.
+	h.Find("a[name]").EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		id, _ = s.Attr("name")
+		return id == ""
+	})
 	return id
+}
+
+// unwrapHeadingLists lifts document sections out of the lists they are laid
+// out in.
+//
+// A heading inside an <li> does not convert to a markdown heading — it cannot,
+// since "#" inside a list item means something else — so it comes out as plain
+// text and the page loses its structure. Javadoc puts every method's <section>
+// inside an <li>: the ArrayList page has 100 members and converted to exactly
+// one heading, its title, with all the content present and none of it findable.
+//
+// The rule is general rather than javadoc-shaped: a list whose items carry
+// headings is a document being laid out as a list, so the list markup goes and
+// the sections stay.
+func unwrapHeadingLists(doc *goquery.Document) {
+	for range 4 { // nested member lists; bounded so a cycle cannot hang this
+		lists := doc.Find("ul, ol").FilterFunction(func(_ int, l *goquery.Selection) bool {
+			return l.ChildrenFiltered("li").FilterFunction(func(_ int, li *goquery.Selection) bool {
+				return li.Find("h1, h2, h3, h4, h5, h6").Length() > 0
+			}).Length() > 0
+		})
+		if lists.Length() == 0 {
+			return
+		}
+		lists.Each(func(_ int, l *goquery.Selection) {
+			l.ChildrenFiltered("li").Each(func(_ int, li *goquery.Selection) {
+				li.Contents().Unwrap()
+			})
+			l.Contents().Unwrap()
+		})
+	}
 }
 
 // markHeadings writes each heading's own fragment into its text, as Pandoc's
@@ -377,6 +428,13 @@ func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
 	}
 	if node == nil || node.Length() == 0 {
 		return "", false
+	}
+	// An id on something inside a heading means the heading. Node's API docs
+	// hang it on an <a class="mark"> in the heading and the Lua manual on an
+	// <a name>; taking the element literally returned 87 and 107 bytes of bare
+	// anchor, which is a section in neither case.
+	if h := node.Closest("h1, h2, h3, h4, h5, h6"); h.Length() > 0 {
+		node = h
 	}
 
 	var b strings.Builder
@@ -490,6 +548,7 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 		// marks up honestly, which is the same bet the element list makes.
 		doc.Find(`[role="navigation"], [role="banner"], [role="contentinfo"], [role="search"], [role="complementary"]`).Remove()
 		resolveLinks(doc, pageURL)
+		unwrapHeadingLists(doc)
 		markHeadings(doc)
 		// The fragment names a part of the page, so honor it before anything
 		// downstream has to apologize for the size of the whole.
@@ -513,6 +572,14 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 		return htmlStr
 	}
 	md = emptyLinkRe.ReplaceAllString(md, "")
+	// The converter escapes markdown punctuation in heading text, my anchor
+	// included, so "{#Operator_precedence}" came out "{#Operator\_precedence}"
+	// — a fragment that matches nothing. Four of fourteen documentation sites
+	// were advertising anchors that could not work, which is worse than
+	// advertising none.
+	md = headingAnchorRe.ReplaceAllStringFunc(md, func(m string) string {
+		return strings.ReplaceAll(m, `\`, "")
+	})
 	md = strings.TrimSpace(blankRunRe.ReplaceAllString(md, "\n\n"))
 	if opts.Outline {
 		return outlineOf(md)

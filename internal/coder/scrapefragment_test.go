@@ -140,3 +140,108 @@ func TestHeadingsCarryTheirAnchors(t *testing.T) {
 		t.Errorf("headings lost their anchors:\n%s", md)
 	}
 }
+
+// The shapes a sweep across fourteen real documentation sites turned up. Each
+// of these is one generator's way of marking an anchor, and each was a bug
+// found by fetching the real page — none by reasoning about the code.
+func TestFragmentShapesFromRealGenerators(t *testing.T) {
+	for _, tc := range []struct {
+		name, html, frag, want, notWant string
+	}{
+		{
+			// Node's API docs and the Lua manual both hang the id on an <a>
+			// inside the heading. Taking that element literally returns the
+			// anchor and nothing else.
+			name: "id on an anchor inside the heading",
+			html: `<h2>fs.opendirSync(path)<a class="mark" id="fs_opendirsync"></a></h2>
+<p>Synchronously open a directory.</p><h2>next</h2><p>other</p>`,
+			frag: "fs_opendirsync", want: "Synchronously open a directory", notWant: "other",
+		},
+		{
+			name: "a name= instead of id, as hand-written HTML marks a target",
+			html: `<h2><a name="pdf-print">lua_print</a></h2><p>Prints a value.</p><h2>x</h2><p>other</p>`,
+			frag: "pdf-print", want: "Prints a value", notWant: "other",
+		},
+		{
+			// Javadoc lays every member out as a list item, so the headings
+			// convert to plain text and the page loses its structure.
+			name: "heading inside a list item",
+			html: `<ul class="member-list"><li><section class="detail">
+<h3 id="getFirst()">getFirst()</h3><p>Returns the first element.</p></section></li>
+<li><section class="detail"><h3 id="getLast()">getLast()</h3><p>Returns the last.</p></section></li></ul>`,
+			frag: "getFirst()", want: "Returns the first element", notWant: "Returns the last",
+		},
+		{
+			// ExDoc's ids carry a slash; javadoc's carry parentheses and
+			// commas. An allowlist that rewrote them produced anchors that
+			// looked right and matched nothing.
+			name: "punctuation in the id",
+			// The prose keeps its own markdown escaping — "min\_by" is correct
+			// there — so the assertion is on text without punctuation to
+			// escape. Only the anchor had to come through clean.
+			html: `<h3 id="min_by/4-examples">Examples</h3><p>Returns the minimum element.</p><h3 id="z">z</h3><p>other</p>`,
+			frag: "min_by/4-examples", want: "Returns the minimum element", notWant: "other",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := htmlToMarkdown("<html><body>"+tc.html+"</body></html>", "https://example.com/p#"+tc.frag, ScrapeOptions{})
+			if !strings.Contains(md, tc.want) {
+				t.Errorf("section did not contain %q:\n%s", tc.want, md)
+			}
+			if strings.Contains(md, tc.notWant) {
+				t.Errorf("section ran past its end and included %q:\n%s", tc.notWant, md)
+			}
+		})
+	}
+}
+
+// The Lua manual anchors all 428 of its headings with <a name>, and listed
+// none of them until the outline learned to look there — which is a different
+// code path from resolving a fragment, and was the one a mutation walked
+// through untouched.
+func TestOutlineFindsAnchorsWrittenAsNames(t *testing.T) {
+	page := `<html><body><h2><a name="2.1">2.1</a> – Values and Types</h2><p>x</p>
+<h3><a name="pdf-print">print</a></h3><p>y</p></body></html>`
+
+	outline := htmlToMarkdown(page, "https://www.lua.org/manual/5.4/manual.html", ScrapeOptions{Outline: true})
+
+	for _, want := range []string{"#2.1", "#pdf-print"} {
+		if !strings.Contains(outline, want) {
+			t.Errorf("outline missing %q:\n%s", want, outline)
+		}
+	}
+	if strings.Contains(outline, "no section of this page can be fetched") {
+		t.Errorf("the outline gave up on a page whose headings are all anchored:\n%s", outline)
+	}
+}
+
+// The anchors an outline advertises have to be the anchors the page has. The
+// converter escapes markdown punctuation in heading text, the {#anchor} along
+// with it, so "#Operator_precedence" was published as "#Operator\_precedence" —
+// four of fourteen sites advertising fragments that could not match, which is
+// worse than advertising none.
+func TestOutlineAnchorsAreNotEscaped(t *testing.T) {
+	page := `<html><body><h2 id="Operator_precedence">Operator precedence</h2><p>x</p>
+<ul class="member-list"><li><section><h3 id="add(int,E)">add</h3><p>y</p></section></li></ul></body></html>`
+
+	outline := htmlToMarkdown(page, "https://go.dev/ref/spec", ScrapeOptions{Outline: true})
+	body := htmlToMarkdown(page, "https://go.dev/ref/spec", ScrapeOptions{})
+
+	for _, s := range []string{outline, body} {
+		if strings.Contains(s, `\_`) || strings.Contains(s, `\(`) {
+			t.Errorf("an anchor was published with escapes in it:\n%s", s)
+		}
+	}
+	for _, want := range []string{"#Operator_precedence", "#add(int,E)"} {
+		if !strings.Contains(outline, want) {
+			t.Errorf("outline missing %q:\n%s", want, outline)
+		}
+	}
+	// And the anchors it advertises actually resolve.
+	for _, frag := range []string{"Operator_precedence", "add(int,E)"} {
+		sec := htmlToMarkdown(page, "https://go.dev/ref/spec#"+frag, ScrapeOptions{})
+		if strings.Contains(sec, "so the whole page follows") {
+			t.Errorf("the outline advertised #%s, which does not resolve", frag)
+		}
+	}
+}
