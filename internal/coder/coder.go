@@ -855,6 +855,14 @@ func (o *StdOutput) Toolf(format string, args ...any) {
 	fmt.Print(render.Sanitize(fmt.Sprintf(format, args...)) + "\n") // no color outside the REPL
 	o.sep.Drew()
 }
+
+// Link outside the REPL is a plain sanitized line: script mode's output is
+// captured as often as it is read, and an OSC 8 escape there is the hazard
+// doc/experimenting.md records breaking a scorer.
+func (o *StdOutput) Link(target string) {
+	fmt.Print(render.Sanitize(target) + "\n")
+	o.sep.Clear()
+}
 func (o *StdOutput) Warningf(format string, args ...any) {
 	fmt.Fprint(os.Stderr, render.Sanitize(fmt.Sprintf(format, args...))+"\n")
 }

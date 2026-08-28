@@ -491,6 +491,10 @@ write, and `/web drop` will tell you so rather than pretend to remove one.
 `/clear` leaves session grants alone. It leaves your pins alone too — it forgets
 what was *said*, and handing back a permission there would be the surprise.
 
+A fetch that skips the prompt — by either route — still prints the purpose and
+the whole URL, the same two lines the prompt would have shown minus the
+question. Approving an origin buys you fewer questions, not less to read.
+
 ### `loop_detection`
 
 Whether to stop a reply that has degenerated into repeating itself.

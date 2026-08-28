@@ -5,6 +5,7 @@ package coder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -337,5 +338,50 @@ func TestAllowOriginExpandsLikeTheConfig(t *testing.T) {
 	}
 	if n := c.ForgetOrigins(); n != 1 {
 		t.Errorf("ForgetOrigins() = %d, want 1", n)
+	}
+}
+
+// captureOutput keeps what the user would have seen, so a test can assert on
+// an absence as well as on a line.
+type captureOutput struct{ b strings.Builder }
+
+func (o *captureOutput) Printf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) Toolf(format string, args ...any)    { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) Warningf(format string, args ...any) { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) Errorf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) Link(target string)                  { o.Printf("%s", target) }
+func (o *captureOutput) StreamText(string)                   {}
+func (o *captureOutput) StreamReasoning(string)              {}
+func (o *captureOutput) StreamToolCall(int, string, string)  {}
+func (o *captureOutput) FlushStream()                        {}
+func (o *captureOutput) String() string                      { return o.b.String() }
+func (o *captureOutput) reset()                              { o.b.Reset() }
+
+// A fetch nobody was asked about still has to be seen. webfetch was the one
+// observation tool with no line of its own — read, grep, glob, ls and check all
+// announce themselves, and webfetch borrowed its visibility from the permission
+// prompt. That was survivable while silence took a config edit; a session grant
+// buys it with one keystroke, and a grant announced once cannot cover for uses
+// nobody can see. Found by reading a live transcript: turn two showed the answer
+// with no trace that a page had been fetched to get it.
+func TestWebfetchAnnouncesAnUnpromptedFetch(t *testing.T) {
+	c, _, _ := fetchCoder(t, true)
+	out := &captureOutput{}
+	c.Out = out
+	c.WebfetchAllow = []string{"go.dev"}
+
+	runFetch(t, c, fetchCall("https://go.dev/doc/go1.26", "read the release notes"))
+	s := out.String()
+	if !strings.Contains(s, "read the release notes") || !strings.Contains(s, "https://go.dev/doc/go1.26") {
+		t.Errorf("an allowlisted fetch left no trace:\n%s", s)
+	}
+
+	// A prompted fetch must not say it twice: the prompt already drew the
+	// purpose and the URL, and asked about them.
+	out.reset()
+	c.WebfetchAllow = nil
+	runFetch(t, c, fetchCall("https://example.com/x", "read it"))
+	if strings.Count(out.String(), "read it") > 0 {
+		t.Errorf("a prompted fetch was announced twice:\n%s", out.String())
 	}
 }

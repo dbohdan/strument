@@ -33,6 +33,7 @@ func (o *summaryOutput) Printf(format string, args ...any) {
 func (o *summaryOutput) Warningf(format string, args ...any) { o.Printf(format, args...) }
 func (o *summaryOutput) Errorf(format string, args ...any)   { o.Printf(format, args...) }
 func (o *summaryOutput) Toolf(format string, args ...any)    { o.Printf(format, args...) }
+func (*summaryOutput) Link(string)                           {}
 func (*summaryOutput) StreamText(string)                     {}
 func (*summaryOutput) StreamReasoning(string)                {}
 func (*summaryOutput) StreamToolCall(int, string, string)    {}

@@ -238,6 +238,14 @@ type Output interface {
 	// so it gets a recessive color of its own: the harness narrating its own
 	// work should sit behind the diffs and the answer, not compete with them.
 	Toolf(format string, args ...any)
+	// Link prints one URL on its own line, hyperlinked where the terminal can
+	// and plain where it cannot. Separate from Printf because a URL reaching
+	// the screen is model-supplied text next to escapes Strument writes: this
+	// is the one renderer that sanitizes it and drops the hyperlink for
+	// anything suspect. Every URL the user is shown goes through it, so the
+	// page named at a prompt and the page named by a fetch nobody was asked
+	// about are drawn the same way.
+	Link(target string)
 	StreamText(delta string)
 	StreamReasoning(delta string)
 	// StreamToolCall receives a streamed tool-call argument fragment for the

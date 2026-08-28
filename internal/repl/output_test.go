@@ -603,3 +603,38 @@ func TestBothOutputsAgreeOnShape(t *testing.T) {
 		})
 	}
 }
+
+// Link is the only renderer that puts a model-supplied string next to escapes
+// Strument writes, and it is now on the coder's Output port, so both the fetch
+// prompt and the line announcing an unprompted fetch go through it. Three
+// branches, and the third is the one that matters: a URL carrying a control
+// character is printed plain, hyperlink and all suppressed, even with color on.
+// url.Parse rejects those before a URL can reach here — this is the belt to
+// that bracing, and it was untested until Link became a port.
+func TestLinkHyperlinksOnlyWhatIsSafe(t *testing.T) {
+	var b bytes.Buffer
+	o := &termOutput{w: &b, color: true}
+
+	o.Link("https://go.dev/doc?a=1&b=2")
+	const esc = "\x1b\\"
+	want := "\x1b]8;;https://go.dev/doc?a=1&b=2" + esc + "https://go.dev/doc?a=1&b=2\x1b]8;;" + esc + "\n"
+	if got := b.String(); got != want {
+		t.Errorf("hyperlink\n got %q\nwant %q", got, want)
+	}
+
+	// Captured output is read by scorers as often as by people, and an OSC 8
+	// escape in a transcript is the hazard doc/experimenting.md records.
+	b.Reset()
+	o.color = false
+	o.Link("https://go.dev/doc")
+	if got := b.String(); got != "https://go.dev/doc\n" {
+		t.Errorf("with color off, got %q", got)
+	}
+
+	b.Reset()
+	o.color = true
+	o.Link("https://go.dev/\x07evil")
+	if got := b.String(); strings.Contains(got, "\x1b]8") {
+		t.Errorf("a control character was hyperlinked anyway: %q", got)
+	}
+}

@@ -329,6 +329,7 @@ func (o quietOutput) Printf(format string, args ...any)   { o.Logf(format, args.
 func (o quietOutput) Toolf(format string, args ...any)    { o.Logf(format, args...) }
 func (o quietOutput) Warningf(format string, args ...any) { o.Logf(format, args...) }
 func (o quietOutput) Errorf(format string, args ...any)   { o.Logf(format, args...) }
+func (o quietOutput) Link(string)                         {}
 func (o quietOutput) StreamText(string)                   {}
 func (o quietOutput) StreamReasoning(string)              {}
 func (o quietOutput) StreamToolCall(int, string, string)  {}
