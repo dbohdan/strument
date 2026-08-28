@@ -25,20 +25,22 @@ import (
 // below was seen for real, and each looks like something else, which is why
 // they are translated rather than passed through.
 
+// Shared by every backend, because they are limits on what a tool result can
+// usefully carry rather than facts about any one service.
 const (
 	searxTimeout = 30 * time.Second
-	// Twenty per page is what an instance returns; ten is what a model can read
-	// without the tail crowding out the answer. A query that needs the eleventh
-	// result needs a better query.
-	searxMaxResults = 10
-	searxMaxBytes   = 4 * 1024 * 1024
+	// Twenty per page is what a SearXNG instance returns and ten is AnySearch's
+	// own cap; ten is also what a model can read without the tail crowding out
+	// the answer. A query that needs the eleventh result needs a better query.
+	searchMaxResults = 10
+	searchMaxBytes   = 4 * 1024 * 1024
 	// A snippet is text from whatever page ranked, so its length is not the
 	// instance's decision and not ours — a live instance returned about ninety
 	// characters, and nothing stops a page returning a megabyte. Unbounded, one
 	// result could push the other nine and the note about unresponsive engines
 	// past the tool-result cap, which trims from the tail. Bounding each
 	// snippet keeps the whole result small enough that nothing is ever cut.
-	searxMaxSnippet = 400
+	searchMaxSnippet = 400
 )
 
 // SearchResults is one answered query, already reduced to the fields worth
@@ -113,7 +115,7 @@ func NewSearxNG(baseURL string, transport http.RoundTripper, userAgent string) S
 			return SearchResults{}, err
 		}
 		defer resp.Body.Close()
-		body, err := io.ReadAll(io.LimitReader(resp.Body, searxMaxBytes))
+		body, err := io.ReadAll(io.LimitReader(resp.Body, searchMaxBytes))
 		if err != nil {
 			return SearchResults{}, err
 		}
@@ -176,13 +178,13 @@ func searxToResults(raw searxResponse) SearchResults {
 		if strings.TrimSpace(r.URL) == "" {
 			continue
 		}
-		if len(out.Results) == searxMaxResults {
+		if len(out.Results) == searchMaxResults {
 			break
 		}
 		out.Results = append(out.Results, SearchResult{
-			Title:     clipRunes(strings.TrimSpace(r.Title), searxMaxSnippet),
+			Title:     clipRunes(strings.TrimSpace(r.Title), searchMaxSnippet),
 			URL:       strings.TrimSpace(r.URL),
-			Content:   clipRunes(strings.TrimSpace(r.Content), searxMaxSnippet),
+			Content:   clipRunes(strings.TrimSpace(r.Content), searchMaxSnippet),
 			Published: clipRunes(strings.TrimSpace(r.PublishedDate), 64),
 		})
 	}

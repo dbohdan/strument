@@ -402,23 +402,40 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 	if len(args) > 1 {
 		return nil, errors.New("search: only 'backend' may be positional")
 	}
-	var backend, rawURL, proxy string
+	var backend, rawURL, apiKey, proxy string
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"backend", &backend,
 		"url?", &rawURL,
+		"api_key?", &apiKey,
 		"proxy?", &proxy,
 	); err != nil {
 		return nil, err
 	}
-	if backend != SearchSearxNG {
-		return nil, fmt.Errorf("search: unknown backend %q (want %q)", backend, SearchSearxNG)
+	rawURL = strings.TrimSpace(rawURL)
+	switch backend {
+	case SearchSearxNG:
+		// Self-hosted, so there is no default to fall back on: the instance is
+		// wherever the user put it.
+		if rawURL == "" {
+			return nil, fmt.Errorf("search: %q needs url=, the base URL of your instance", backend)
+		}
+		if apiKey != "" {
+			return nil, fmt.Errorf("search: %q takes no api_key — a SearXNG instance is your own", backend)
+		}
+	case SearchAnySearch:
+		// Hosted at a known address, and usable without a key at a lower rate
+		// limit, so both are optional. url= stays available for a mirror.
+		if rawURL == "" {
+			rawURL = AnySearchDefaultURL
+		}
+	default:
+		return nil, fmt.Errorf("search: unknown backend %q (want %q or %q)",
+			backend, SearchSearxNG, SearchAnySearch)
 	}
 	// Checked here rather than at the first search, because a config error that
 	// waits for the model to reach for a tool is a config error nobody sees.
-	u, err := url.Parse(strings.TrimSpace(rawURL))
+	u, err := url.Parse(rawURL)
 	switch {
-	case strings.TrimSpace(rawURL) == "":
-		return nil, fmt.Errorf("search: %q needs url=, the base URL of your instance", backend)
 	case err != nil:
 		return nil, fmt.Errorf("search: url %q: %w", rawURL, err)
 	case u.Scheme != "http" && u.Scheme != "https":
@@ -426,13 +443,14 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 	case u.Host == "":
 		return nil, fmt.Errorf("search: url %q has no host", rawURL)
 	case u.RawQuery != "" || u.Fragment != "":
-		return nil, fmt.Errorf("search: url %q should be the instance's base URL, with no query or fragment", rawURL)
+		return nil, fmt.Errorf("search: url %q should be a base URL, with no query or fragment", rawURL)
 	}
 	return &searchValue{s: WebSearch{
 		Backend: backend,
-		// Trailing slash trimmed so joining "/search" cannot produce "//search",
+		// Trailing slash trimmed so joining a path cannot produce "//search",
 		// which some reverse proxies in front of an instance will not route.
-		URL:   strings.TrimRight(u.String(), "/"),
-		Proxy: proxy,
+		URL:    strings.TrimRight(u.String(), "/"),
+		APIKey: apiKey,
+		Proxy:  proxy,
 	}}, nil
 }

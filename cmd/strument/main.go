@@ -1102,7 +1102,12 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 		// Resolved and validated at load, so the error is dead here — the same
 		// shape the scraper's proxy uses above.
 		searchTransport, _ := httpx.ProxyTransport(ws.Proxy)
-		cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
+		switch ws.Backend {
+		case config.SearchAnySearch:
+			cdr.Search = coder.NewAnySearch(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
+		default:
+			cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
+		}
 	}
 }
 

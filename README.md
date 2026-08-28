@@ -37,8 +37,8 @@ See [`doc/`](doc/README.md) for the developer overview.
   This can use either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
   The model fetches with the `webfetch` tool, which asks you before an unfamiliar host; a URL fragment fetches just that section, and an oversized page returns its outline instead.
 - Web search, if you want it.
-  Point [`websearch`](doc/config.md#websearch) at your own [SearXNG](https://docs.searxng.org/) instance and the model gets a `websearch` tool.
-  Self-hosted only, deliberately: your instance, your engines, no API key, and no third party for Strument to speak for.
+  Configure [`websearch`](doc/config.md#websearch) and the model gets a `websearch` tool.
+  Either your own [SearXNG](https://docs.searxng.org/) instance — your engines, no API key, nobody else in the loop — or the hosted [AnySearch](https://anysearch.com/), which needs nothing set up and works with or without a key.
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
 The terminal interface has stayed deliberately close to aider's with a similar green/blue palette (with `--dark-mode` and `--light-mode`).

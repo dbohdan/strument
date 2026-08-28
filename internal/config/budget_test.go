@@ -311,3 +311,63 @@ func TestNoSearchByDefault(t *testing.T) {
 		t.Errorf("a search backend appeared from nowhere: %+v", cfg.WebSearch)
 	}
 }
+
+// The two backends need different things, and each rejects what the other
+// requires — a self-hosted instance has no API key, and a hosted service needs
+// no address. Both refusals are at load, where the user is looking.
+func TestSearchBackendsValidateDifferently(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, wantErr string
+	}{
+		{"searxng without a url", `websearch = search("searxng")`, "needs url"},
+		{"searxng with an api_key", `websearch = search("searxng", url="http://x:8888", api_key="k")`, "takes no api_key"},
+		{"unknown backend names both", `websearch = search("bing")`, "anysearch"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := loadBudget(t, tc.src)
+			if err == nil {
+				t.Fatal("loaded without complaint")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error %q, want it to mention %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// AnySearch needs nothing at all: it is hosted at a known address and answers
+// anonymously, so a bare search("anysearch") is a complete configuration. That
+// is the point of having it beside SearXNG.
+func TestAnySearchNeedsNothing(t *testing.T) {
+	cfg, err := loadBudget(t, `websearch = search("anysearch")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WebSearch == nil || cfg.WebSearch.Backend != SearchAnySearch {
+		t.Fatalf("WebSearch = %+v", cfg.WebSearch)
+	}
+	if cfg.WebSearch.URL != AnySearchDefaultURL {
+		t.Errorf("URL = %q, want the service's default", cfg.WebSearch.URL)
+	}
+	if cfg.WebSearch.APIKey != "" {
+		t.Errorf("an api_key appeared from nowhere")
+	}
+
+	// A key and a mirror are both accepted when given.
+	cfg, err = loadBudget(t, `websearch = search("anysearch", url="https://mirror.example/", api_key="as_sk_x")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WebSearch.URL != "https://mirror.example" || cfg.WebSearch.APIKey != "as_sk_x" {
+		t.Errorf("WebSearch = %+v", cfg.WebSearch)
+	}
+}
+
+// A key is a secret, so nothing that renders a search() value may print it —
+// the Starlark repr shows up in error messages and in a printed config.
+func TestSearchValueDoesNotPrintTheKey(t *testing.T) {
+	v := &searchValue{s: WebSearch{Backend: SearchAnySearch, APIKey: "as_sk_supersecret"}}
+	if strings.Contains(v.String(), "supersecret") {
+		t.Errorf("the API key is in the value's repr: %s", v.String())
+	}
+}

@@ -311,16 +311,31 @@ func validateExtraParams(where string, params map[string]any) error {
 	return nil
 }
 
-// SearchSearxNG is the only websearch backend. Scoped deliberately: SearXNG is
-// self-hosted, so the instance is the user's own and the tool inherits whatever
-// engines and policy they already chose, with no API key and no third party for
-// Strument to speak for.
-const SearchSearxNG = "searxng"
+// The websearch backends.
+//
+// SearXNG is self-hosted, so the instance is the user's own and the tool
+// inherits whatever engines and policy they already chose, with no API key and
+// no third party for Strument to speak for. AnySearch is the opposite trade and
+// the reason it is worth having beside it: a hosted service, nothing to run,
+// working anonymously and better with a key.
+const (
+	SearchSearxNG   = "searxng"
+	SearchAnySearch = "anysearch"
+)
+
+// AnySearchDefaultURL is the service's base URL. Overridable through url= so a
+// mirror, or a test server, can stand in.
+const AnySearchDefaultURL = "https://api.anysearch.com"
 
 // WebSearch is a configured search backend, from search().
 type WebSearch struct {
-	Backend string // always SearchSearxNG today
-	URL     string // the instance base URL, no trailing slash
+	Backend string // SearchSearxNG or SearchAnySearch
+	URL     string // the base URL, no trailing slash
+	// APIKey authenticates a hosted backend. Empty is valid — AnySearch serves
+	// anonymous requests at a lower rate limit — and SearXNG has no notion of
+	// one. Keep it out of the config file with api_key=env("..."), the way
+	// provider() does; nothing prints it, including searchValue's String.
+	APIKey string
 	// Proxy is a socks5 URL, "direct" to opt out of a global proxy, or "" to
 	// inherit it. "direct" is the case that matters: a self-hosted instance is
 	// usually on localhost or the LAN, and a proxy configured for external

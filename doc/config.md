@@ -499,16 +499,26 @@ question. Approving an origin buys you fewer questions, not less to read.
 ### `websearch`
 
 A search backend for the `websearch` tool. Unset by default, and the tool is not
-offered at all without it.
+offered at all without it. Two backends, which are opposite trades:
 
 ```python
-websearch = search("searxng", url="http://localhost:8888")
+websearch = search("searxng", url="http://localhost:8888")   # yours to run
+websearch = search("anysearch")                              # nothing to run
+websearch = search("anysearch", api_key=env("ANYSEARCH_API_KEY"))
 ```
 
-**SearXNG only, and self-hosted in practice.** The scope is deliberate: your
-instance is yours, it already has the engines and policy you chose, it needs no
-API key, and it puts no third party in a position Strument would have to speak
-for.
+**SearXNG** is self-hosted: your instance, the engines and policy you already
+chose, no API key, and no third party in a position Strument would have to speak
+for. The cost is that you run it, and that it has to be set up to answer JSON at
+all (below).
+
+**AnySearch** is a hosted service: nothing to run, and `search("anysearch")` on
+its own is a complete configuration — it answers without a key at a lower rate
+limit, and better with one. The cost is the other side of the same coin: a third
+party sees every query your model makes.
+
+Neither is the right answer for everyone, which is why the config names which.
+The rest of this section is SearXNG's, since AnySearch needs no setup.
 
 **Your instance must have JSON turned on.** SearXNG ships `formats: [html]`, so
 a fresh instance answers `403` until an admin opts in:
@@ -832,17 +842,26 @@ widen, and a project needs to be able to narrow.
 Three functions are predeclared. Keyword-only parameters follow the `*`, as in
 Python.
 
-### `search(backend, *, url=None, proxy=None)`
+### `search(backend, *, url=None, api_key=None, proxy=None)`
 
-A search backend for `websearch`. `backend` is `"searxng"`, the only one; an
+A search backend for `websearch`. `backend` is `"searxng"` or `"anysearch"`; an
 unknown value is refused at load and names what would have worked.
 
-- **`url`** — the instance's base URL, with no path, query, or fragment. Keyword
-  rather than positional because the next backend will want an `api_key` and no
-  URL, and a positional second argument that means something different per
-  backend is a trap.
+- **`url`** — a base URL, with no path, query, or fragment. Required for
+  `searxng`, since a self-hosted instance is wherever you put it; optional for
+  `anysearch`, which defaults to `https://api.anysearch.com` and takes a URL
+  only to point at a mirror.
+- **`api_key`** — `anysearch` only, and optional there: without one the service
+  answers at a lower rate limit. Keep it out of the file with
+  `api_key=env("ANYSEARCH_API_KEY")`, exactly as with `provider()`. `searxng`
+  refuses an `api_key` rather than ignoring it — your own instance has none, so
+  passing one means you meant something else.
 - **`proxy`** — as on `provider()`: a `socks5://` URL, or `"direct"` to opt out
-  of a global `proxy`.
+  of a global `proxy`. `"direct"` matters most for a SearXNG instance on
+  localhost; a hosted backend usually wants the global proxy.
+
+Both are keyword-only because they mean different things per backend, and a
+positional second argument that changes meaning with the first is a trap.
 
 ### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
 

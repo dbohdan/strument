@@ -143,8 +143,8 @@ func TestSearxNGCapsAndSkipsUnusableResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Results) != searxMaxResults {
-		t.Errorf("got %d results, want the cap of %d", len(res.Results), searxMaxResults)
+	if len(res.Results) != searchMaxResults {
+		t.Errorf("got %d results, want the cap of %d", len(res.Results), searchMaxResults)
 	}
 	for _, r := range res.Results {
 		if r.URL == "" {
@@ -168,8 +168,8 @@ func TestSearxNGBoundsHostileSnippets(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, got := range []string{res.Results[0].Title, res.Results[0].Content} {
-		if n := len([]rune(got)); n > searxMaxSnippet+1 {
-			t.Errorf("field kept %d runes, want at most %d", n, searxMaxSnippet+1)
+		if n := len([]rune(got)); n > searchMaxSnippet+1 {
+			t.Errorf("field kept %d runes, want at most %d", n, searchMaxSnippet+1)
 		}
 	}
 	// And the whole rendered result stays well inside what one tool result
