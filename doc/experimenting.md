@@ -394,14 +394,87 @@ assertion runs, while breaking tells you it discriminates.
 
 ---
 
+## 18. A clean null has more than one cause, and they look alike
+
+§17 is about a check that cannot fail. This one is about a whole *experiment*
+that cannot fail — a design where the arms come back identical and the reason
+is that nothing interesting ever happened in any of them. All three shapes
+below turned up in one afternoon, in a trial of whether `edit` should grow a
+`replace_all` argument.
+
+The design was ordinary: three arms (first-match, unique-or-fail, unique +
+`replace_all`), six models, three rename fixtures, 54 runs, scoring by diff
+against an expected tree. Every arm came back 18/18 correct with zero
+unintended changes. That looks like a strong result. It is mostly an absence.
+
+**The treatment was never applied.** `replace_all` existed in the third arm and
+the models used it *once in eighteen runs*. Five of six never touched it. So for
+seventeen runs the treatment arm was the control arm with a longer schema, and
+whatever the numbers said about it was a statement about `edit`, not about
+`replace_all`. *Tell:* the treatment is something the model may decline. A
+feature it can ignore is not a manipulation you have applied; it is one you have
+offered. Check that it is *reached* before spending — this is a different
+question from whether the arms differ, and the pilot answers it for the price of
+one run per arm.
+
+**The hazard was never triggered.** The fixtures were built with decoys — a
+`maxRetriesExceeded` beside the `maxRetries` being renamed, four occurrences
+inside user-facing strings, a same-named variable in an out-of-scope file — so
+that a careless replacement would be visible. Zero unintended changes came back
+in every arm, *including the unsafe one that silently edits the first match*.
+That is not the decoys clearing the design; it is the decoys never firing.
+Running the failure classifier over all 172 edit calls said why: zero failures
+of any kind, because the models supplied unique context exactly as the tool
+description asks. *Tell:* the counter-metric reads zero everywhere, the unsafe
+arm included. A hazard that does not fire for the arm built to trip on it has
+told you about your fixture, not about your design.
+
+**The arms were the same program.** Two of the three binaries had identical
+sizes, because a `cd` in one shell invocation persisted into the next and the
+control arm was built from the treatment's source tree. Caught by the standing
+rule from §7 — compare the built arms and refuse to spend if they are the
+same — which here meant running one probe edit through each binary and
+watching them answer differently. Without it the trial would have reported no
+difference between unique-or-fail and `replace_all` for the excellent reason
+that they were the same executable. *Tell:* two artifacts that should differ
+have the same checksum. Compare them; do not infer from the build having
+succeeded.
+
+What survives all three is a real finding, but a narrower one than the table
+suggests: models rarely reach for `replace_all` (1/18), which is an argument
+against adding it that does not depend on the risk ever being measured. The
+trial cannot say whether `replace_all` is dangerous, because it never got used
+enough to be. Say that, rather than letting 18/18 stand as a safety result.
+
+### The mirror image: a metric that counts the wrong thing
+
+The same trial produced the opposite fault, and it is worth putting beside the
+others because it is the one that would have shipped. A "revisit" counter, meant
+to find the coordinated multi-file edits that would justify a patch tool,
+counted every return to an already-edited file — so three sequential edits to
+one file scored two revisits. Across the arms it read 7, 16 and 24, which looks
+like coordination pressure and is nothing of the kind: a patch would not
+collapse "make three changes to this file in a row". Counting only a return
+*across* another file gives 0 in every arm.
+
+*Tell:* a metric whose definition is one clause shorter than the phenomenon.
+"Returned to a file" is not "returned to a file after leaving it". Write the
+metric's definition next to the claim it supports and check that the words
+match; then check the metric can still fire, on a fixture where the phenomenon
+genuinely occurs, or you have traded a wrong number for a silent one.
+
+---
+
 ## The short version
 
 Most of what goes wrong is not statistics. It is the equipment.
 
 Before believing any result, ask in this order: *did the mechanism fire, did the
-scorer see what I think it saw, do the two arms differ in exactly one thing, and
-have I read three transcripts?* Only then look at the p-value — and remember
-that a broken instrument's favourite output is `p = 1.0`.
+model actually use the thing I am testing, could the fixture have caught the
+failure I am claiming it rules out, did the scorer see what I think it saw, do
+the two arms differ in exactly one thing, and have I read three transcripts?*
+Only then look at the p-value — and remember that a broken instrument's
+favourite output is `p = 1.0`.
 
 And get the verdict out of the hands of whoever wants it to pass: break the code
 on purpose and watch the check go red (§1, §17), or hand the check to a model
