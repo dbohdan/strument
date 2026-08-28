@@ -160,9 +160,37 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 //
 // The outline is reserved out of the budget rather than added to it, or the
 // result would exceed the cap it exists to respect.
+// outlineSwitchRatio is how many times over the cap a page has to be before it
+// answers with its outline instead of a prefix of itself.
+//
+// The ratio, not the excess, is what matters. A page 20% over the cap returns
+// 83% of itself and the answer is probably in hand; trading that for a map
+// would buy a guaranteed extra round trip. A page six times over returns 14%,
+// and on the page this was measured against that 14% was the navigation
+// sidebar and the table of contents — nothing anyone asked for.
+//
+// Four is a judgment call. The evidence covers 6x, where the outline wins
+// clearly, and reasoning covers 1.2x, where the prefix obviously wins; nobody
+// has measured where they cross. The note below names the multiple, so a badly
+// chosen threshold announces itself — "the first 83% of it" would read absurdly
+// and be the signal to raise this number.
+const outlineSwitchRatio = 4
+
 func truncateFetch(content, pageURL string) string {
 	if len(content) <= maxToolOutputBytes {
 		return content
+	}
+	if len(content) > outlineSwitchRatio*maxToolOutputBytes {
+		// Far more page than one result can carry, so send the map. Four of
+		// six models with an order-independent preference chose this over a
+		// prefix, in a blind pairwise test; the other two answered by position
+		// rather than content and were counted as saying nothing.
+		return fmt.Sprintf(
+			"(This page is %d KB, about %d times what one tool result carries, so its outline "+
+				"follows instead of the first %d%% of it. Fetch any section by adding its "+
+				"anchor to the URL.)\n\n",
+			len(content)/1024, len(content)/maxToolOutputBytes,
+			100*maxToolOutputBytes/len(content)) + outlineOf(content, pageURL)
 	}
 	outline := outlineOf(content, pageURL)
 	// The map gets a budget of its own. Without one a page of four thousand

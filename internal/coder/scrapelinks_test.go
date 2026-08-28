@@ -131,6 +131,56 @@ func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	}
 }
 
+// Far more page than one result can carry: send the map, not a prefix of it.
+//
+// Four of six models with an order-independent preference chose this over a
+// prefix in a blind pairwise test, and the reason they gave was the same one
+// each time — on a page this size the prefix is the navigation sidebar and the
+// table of contents, and the outline of the same headings is appended below it
+// anyway, so the result carries the same list twice and the useful copy costs
+// 38 KB to reach.
+func TestVeryLargePageAnswersWithItsOutline(t *testing.T) {
+	var b strings.Builder
+	for i := range 60 {
+		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
+	}
+	got := truncateFetch(b.String(), "https://example.com/p")
+
+	if !strings.Contains(got, "times what one tool result carries") {
+		t.Errorf("a page far over the cap did not answer with its outline:\n%s", got[:200])
+	}
+	if !strings.Contains(got, "#sec-59") {
+		t.Error("the map does not cover the whole page")
+	}
+	if strings.Contains(got, strings.Repeat("x", 200)) {
+		t.Error("the prefix came along with the map")
+	}
+	if len(got) > maxToolOutputBytes {
+		t.Errorf("result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
+	}
+}
+
+// Just over the cap keeps the prefix: it is most of the page, and trading it
+// for a map would buy a guaranteed extra round trip for content already in
+// hand. The ratio is what decides, not the excess.
+func TestBarelyOversizedPageKeepsItsContent(t *testing.T) {
+	var b strings.Builder
+	for i := range 12 {
+		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
+	}
+	got := truncateFetch(b.String(), "https://example.com/p")
+
+	if !strings.Contains(got, "Partial page") {
+		t.Errorf("a page just over the cap did not return a partial page:\n%s", got[:200])
+	}
+	if !strings.Contains(got, strings.Repeat("x", 200)) {
+		t.Error("the content was dropped from a page that is mostly deliverable")
+	}
+	if !strings.Contains(got, "#sec-11") {
+		t.Error("the partial page did not carry its map")
+	}
+}
+
 // A page whose map would crowd out its content keeps the map: it is the more
 // useful half, and the content is what the anchors are for.
 func TestFetchTruncationKeepsTheMapOnAHeadingHeavyPage(t *testing.T) {

@@ -81,10 +81,14 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 		if resp.Request != nil && resp.Request.URL != nil {
 			final = resp.Request.URL.String()
 		}
-		if final != url {
-			return wrapContent(url, text) + "\n\n(Redirected to " + final + ".)\n", nil
+		wrap := wrapContent
+		if opts.Outline {
+			wrap = wrapOutline
 		}
-		return wrapContent(url, text), nil
+		if final != url {
+			return wrap(url, text) + "\n\n(Redirected to " + final + ".)\n", nil
+		}
+		return wrap(url, text), nil
 	}
 }
 
@@ -92,6 +96,13 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 // model, so the phrasing stays identical across the HTTP and command paths.
 func wrapContent(url, text string) string {
 	return fmt.Sprintf("Here is the content of %s:\n\n%s", url, text)
+}
+
+// wrapOutline frames a map rather than a page. Two adjacent lines saying "the
+// outline follows" and "here is the content of" contradict each other, and a
+// reader calibrates on the framing line.
+func wrapOutline(url, text string) string {
+	return fmt.Sprintf("Here is the outline of %s:\n\n%s", url, text)
 }
 
 // buildScrapeArgs fills the URL into an argv template: every %s in an element is
@@ -181,7 +192,11 @@ func NewCommandScraper(argv []string, timeout time.Duration, env func() []string
 		if strings.TrimSpace(stdout.buf.String()) == "" {
 			return "", errors.New("scraper command produced no output")
 		}
-		return wrapContent(url, htmlToMarkdown(stdout.buf.String(), url, opts)), nil
+		wrap := wrapContent
+		if opts.Outline {
+			wrap = wrapOutline
+		}
+		return wrap(url, htmlToMarkdown(stdout.buf.String(), url, opts)), nil
 	}
 }
 
