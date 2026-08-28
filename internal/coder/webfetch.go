@@ -143,7 +143,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	if f.outline {
 		return truncateResult(content) // an outline that overruns has no map of its own
 	}
-	return truncateFetch(content)
+	return truncateFetch(content, f.url)
 }
 
 // truncateFetch cuts an oversized page and hands back its map.
@@ -160,11 +160,11 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 //
 // The outline is reserved out of the budget rather than added to it, or the
 // result would exceed the cap it exists to respect.
-func truncateFetch(content string) string {
+func truncateFetch(content, pageURL string) string {
 	if len(content) <= maxToolOutputBytes {
 		return content
 	}
-	outline := outlineOf(content)
+	outline := outlineOf(content, pageURL)
 	// The map gets a budget of its own. Without one a page of four thousand
 	// headings produced an outline twice the cap, and the result overran the
 	// limit it exists to respect — found by a test written for the opposite
@@ -174,14 +174,26 @@ func truncateFetch(content string) string {
 		outline = outline[:cut] +
 			"\n(Outline cut short: this page has more sections than one result can list.)\n"
 	}
-	note := fmt.Sprintf(
-		"\n\n(Cut off here: the page is %d KB and one tool result carries %d KB, so this is "+
-			"the first %d%% of it. Its outline follows. Fetch a section on its own by adding "+
-			"its anchor to the URL rather than fetching this page again — the same fetch "+
-			"returns the same prefix.)\n\n",
-		len(content)/1024, maxToolOutputBytes/1024, 100*maxToolOutputBytes/len(content))
+	pct := 100 * maxToolOutputBytes / len(content)
+	// At the top, not only at the bottom.
+	//
+	// The note used to sit after the content, which is after 60 KB of reading —
+	// by which point a conclusion has been drawn. A model asked to find a
+	// string, handed something that says "Here is the content of <url>" and is
+	// in fact a tenth of it, searches, fails, and reports the string is not on
+	// the page. That is a wrong answer rather than a slow one, and it is the
+	// worst thing this tool can produce. The header says what this is before
+	// any of it is read.
+	head := fmt.Sprintf(
+		"(Partial page: what follows is the first %d%% of it. The page is %d KB and one tool "+
+			"result carries %d KB. If what you need is not in the text below, it may still be "+
+			"on the page — the outline of the whole page is at the end of this result.)\n\n",
+		pct, len(content)/1024, maxToolOutputBytes/1024)
+	note := "\n\n(End of the partial page. Outline of the whole of it follows; fetch a section " +
+		"by adding its anchor to the URL rather than fetching this page again, which returns " +
+		"this same prefix.)\n\n"
 
-	room := max(maxToolOutputBytes-len(note)-len(outline), 0)
+	room := max(maxToolOutputBytes-len(head)-len(note)-len(outline), 0)
 	room = min(room, len(content))
-	return content[:room] + note + outline
+	return head + content[:room] + note + outline
 }

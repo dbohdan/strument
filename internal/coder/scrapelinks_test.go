@@ -97,7 +97,7 @@ func TestConversionSurvivesABadPageURL(t *testing.T) {
 // is to abandon the tool for curl.
 func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	short := "a short page"
-	if got := truncateFetch(short); got != short {
+	if got := truncateFetch(short, "https://example.com/p"); got != short {
 		t.Errorf("a page under the cap was altered: %q", got)
 	}
 
@@ -105,14 +105,21 @@ func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	for i := range 40 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 4000))
 	}
-	got := truncateFetch(b.String())
+	got := truncateFetch(b.String(), "https://example.com/p")
 
 	// The result respects the cap it exists to enforce. An earlier version
 	// appended the note past it, which is the bug this pins.
 	if len(got) > maxToolOutputBytes {
 		t.Errorf("the truncated result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
 	}
-	for _, want := range []string{"Cut off here", "KB", "adding its anchor", "#sec-0", "#sec-39"} {
+	// The warning is at the top, where it is read before the content rather
+	// than after 60 KB of it — a model that searches a partial page believing
+	// it whole reports the string absent, which is a wrong answer, not a slow
+	// one.
+	if head, _, _ := strings.Cut(got, "\n"); !strings.Contains(head, "Partial page") {
+		t.Errorf("the result does not announce itself as partial on its first line: %q", head)
+	}
+	for _, want := range []string{"Partial page", "KB", "adding its anchor", "#sec-0", "#sec-39"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the cut page does not carry %q", want)
 		}
@@ -131,12 +138,12 @@ func TestFetchTruncationKeepsTheMapOnAHeadingHeavyPage(t *testing.T) {
 	for i := range 4000 {
 		fmt.Fprintf(&b, "### Item %d {#item-%d}\n\ntext\n\n", i, i)
 	}
-	got := truncateFetch(b.String())
+	got := truncateFetch(b.String(), "https://example.com/p")
 
 	if len(got) > maxToolOutputBytes {
 		t.Errorf("result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
 	}
-	if !strings.Contains(got, "Cut off here") {
+	if !strings.Contains(got, "Partial page") {
 		t.Error("no note on a page that was cut")
 	}
 }

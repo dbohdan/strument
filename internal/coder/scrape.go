@@ -497,7 +497,7 @@ type outlineEntry struct {
 	text, anchor string
 }
 
-func outlineOf(md string) string {
+func outlineOf(md, pageURL string) string {
 	var b strings.Builder
 	var entries []outlineEntry
 	anchored := 0
@@ -551,8 +551,31 @@ func outlineOf(md string) string {
 		return out + "\nNone of these headings has an anchor, so no section of this page can be " +
 			"fetched on its own.\n"
 	}
+	// The real URL, not a placeholder. A model reading "as in
+	// https://example.com/page#section-id" with two hundred real anchors above
+	// it has to translate, and translation is where a doubt about *which* URL
+	// the anchor belongs to comes from.
+	example := "https://example.com/page"
+	if pageURL != "" {
+		if u, err := url.Parse(pageURL); err == nil {
+			u.Fragment = ""
+			example = u.String()
+		}
+	}
+	// The first *anchored* entry, not the first entry: a page's opening
+	// heading is often its title, which carries no anchor, and falling back to
+	// a placeholder beside two hundred real ones is the translation this is
+	// meant to remove.
+	frag := "#section-id"
+	for _, e := range entries {
+		if e.anchor != "" {
+			frag = "#" + e.anchor
+			break
+		}
+	}
+	example += frag
 	return out + "\nFetch any of these sections on its own by adding its anchor to the URL, " +
-		"as in https://example.com/page#section-id.\n"
+		"as in " + example + "\n"
 }
 
 // htmlToMarkdown slims the page and converts it to markdown. It drops media
@@ -612,7 +635,7 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 	})
 	md = strings.TrimSpace(blankRunRe.ReplaceAllString(md, "\n\n"))
 	if opts.Outline {
-		return outlineOf(md)
+		return outlineOf(md, pageURL)
 	}
 	if fragMissing != "" {
 		// The outline, not the page. Handing back the whole thing meant a
@@ -622,7 +645,7 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 		// thing possible"; they were right. The anchors that do exist are both
 		// smaller and the only actionable answer.
 		return fmt.Sprintf("(This page has no %q section. Its outline follows, so you can "+
-			"pick an anchor that exists.)\n\n", "#"+fragMissing) + outlineOf(md)
+			"pick an anchor that exists.)\n\n", "#"+fragMissing) + outlineOf(md, pageURL)
 	}
 	return md
 }

@@ -194,7 +194,7 @@ func TestWebfetchLongPageCarriesTheFetchNote(t *testing.T) {
 
 	out := runFetch(t, c, fetchCall("https://go.dev/doc", "read it"))
 
-	if !strings.Contains(out, "adding its anchor") || !strings.Contains(out, "#sec-39") {
+	if !strings.Contains(out, "Partial page") || !strings.Contains(out, "#sec-39") {
 		t.Error("a truncated fetch did not carry the note and the outline")
 	}
 }
