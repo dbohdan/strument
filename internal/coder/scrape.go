@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -69,7 +70,7 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 
 		text := string(body)
 		if strings.Contains(resp.Header.Get("Content-Type"), "html") {
-			text = htmlToMarkdown(text)
+			text = htmlToMarkdown(text, url)
 		}
 		// Where the content actually came from, which is not always where it
 		// was asked for. The model picks the URL now, so a shortener or an
@@ -179,8 +180,60 @@ func NewCommandScraper(argv []string, timeout time.Duration, env func() []string
 		if strings.TrimSpace(stdout.buf.String()) == "" {
 			return "", errors.New("scraper command produced no output")
 		}
-		return wrapContent(url, htmlToMarkdown(stdout.buf.String())), nil
+		return wrapContent(url, htmlToMarkdown(stdout.buf.String(), url)), nil
 	}
+}
+
+// resolveLinks rewrites a page's links so the model can act on them, and drops
+// the ones it cannot.
+//
+// This became worth doing the day webfetch landed. While a URL could only come
+// from the user, a relative href was just cosmetic noise in the text; now the
+// model can fetch, and `exceptions.html` is a link it will try and fail on —
+// against Strument's own "the URL needs a scheme" refusal, which is a confusing
+// thing to hit on a link the harness itself handed over.
+//
+// Same-page anchors are unwrapped to their text instead. There is nothing to
+// fetch at "#id12", and on one Python library page there were 724 of them —
+// more than the relative links and the permalinks combined.
+//
+// Permalink anchors go entirely: the ¶ beside every heading is chrome that
+// Sphinx, MkDocs, and Docusaurus all emit, and it says nothing a reader or a
+// model wants.
+func resolveLinks(doc *goquery.Document, pageURL string) {
+	base, err := url.Parse(pageURL)
+	if err != nil {
+		return
+	}
+	doc.Find("a.headerlink, a.anchor, a.hash-link").Remove()
+	doc.Find("a").Each(func(_ int, a *goquery.Selection) {
+		if t := strings.TrimSpace(a.Text()); t == "¶" || t == "§" || t == "#" {
+			a.Remove()
+			return
+		}
+		href, ok := a.Attr("href")
+		if !ok {
+			return
+		}
+		ref, err := url.Parse(strings.TrimSpace(href))
+		if err != nil {
+			a.RemoveAttr("href")
+			return
+		}
+		abs := base.ResolveReference(ref)
+		// A link to this very page, fragment or not: keep the words, drop the
+		// destination, since fetching it again is the one thing it cannot be
+		// for.
+		if abs.Scheme == base.Scheme && abs.Host == base.Host && abs.Path == base.Path && abs.RawQuery == base.RawQuery {
+			a.RemoveAttr("href")
+			return
+		}
+		if abs.Scheme != "http" && abs.Scheme != "https" {
+			a.RemoveAttr("href") // mailto:, javascript:, data: — not fetchable
+			return
+		}
+		a.SetAttr("href", abs.String())
+	})
 }
 
 // htmlToMarkdown slims the page and converts it to markdown. It drops media
@@ -193,9 +246,18 @@ func NewCommandScraper(argv []string, timeout time.Duration, env func() []string
 // <aside>, but Sphinx puts footnotes in <aside class="footnote">, so dropping it
 // would lose real content. On a parse or conversion error it falls back to the
 // (possibly slimmed) HTML.
-func htmlToMarkdown(htmlStr string) string {
+func htmlToMarkdown(htmlStr, pageURL string) string {
 	if doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr)); err == nil {
 		doc.Find("img, svg, script, style, noscript, nav, footer").Remove()
+		// The same landmarks again, by ARIA role. Sphinx — the generator behind
+		// the Python docs and much of the Go and Rust ecosystem's prose — marks
+		// its navigation bars as <div class="related" role="navigation"> and
+		// never emits a <nav>, so the element list alone leaves a breadcrumb
+		// block at the top of every page and a second copy at the bottom.
+		// Matching the role rather than the class catches every generator that
+		// marks up honestly, which is the same bet the element list makes.
+		doc.Find(`[role="navigation"], [role="banner"], [role="contentinfo"], [role="search"], [role="complementary"]`).Remove()
+		resolveLinks(doc, pageURL)
 		if slimmed, err := doc.Html(); err == nil {
 			htmlStr = slimmed
 		}

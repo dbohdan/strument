@@ -176,6 +176,23 @@ func TestWebfetchSandboxGateFollowsTheScraper(t *testing.T) {
 	}
 }
 
+// The note has to reach the model through the tool, not just exist. Swapping
+// truncateFetch back for the generic truncateResult broke nothing until this
+// test existed — the wiring was the untested part, which is the usual place for
+// a one-line revert to hide.
+func TestWebfetchLongPageCarriesTheFetchNote(t *testing.T) {
+	c, _, _ := fetchCoder(t, true)
+	c.Scrape = func(context.Context, string) (string, error) {
+		return strings.Repeat("x", maxToolOutputBytes*3), nil
+	}
+
+	out := runFetch(t, c, fetchCall("https://go.dev/doc", "read it"))
+
+	if !strings.Contains(out, "more specific page") {
+		t.Errorf("a truncated fetch did not carry the fetch-specific note: %q", out[min(len(out), maxToolOutputBytes):])
+	}
+}
+
 // The tool is offered only when there is something to fetch with, and it is
 // offered in ask mode, where reading a specification is the point.
 func TestWebfetchToolOffering(t *testing.T) {

@@ -129,5 +129,25 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		// conclude the page said nothing.
 		return fmt.Sprintf("Could not fetch %s: %v", f.url, err)
 	}
-	return truncateResult(content)
+	return truncateFetch(content)
+}
+
+// truncateFetch is truncateResult with a note a model can act on.
+//
+// The generic one says only that the result was cut short, which on a fetch
+// leaves the model to guess whether the page ended or the harness stopped it.
+// A live pass against docs.python.org/3/library/stdtypes.html made the case:
+// 228 KB of real content against a 60 KB cap, and the model reported the page
+// as read while having seen a quarter of it. Saying how much there was, and
+// that a narrower page is the way to the rest, turns a silent gap into a next
+// step.
+func truncateFetch(content string) string {
+	if len(content) <= maxToolOutputBytes {
+		return content
+	}
+	return content[:maxToolOutputBytes] + fmt.Sprintf(
+		"\n\n(Cut off here: the page is %d KB and one tool result carries %d KB, so this is "+
+			"the first %d%% of it. If what you need is further down, fetch a more specific page "+
+			"rather than this one again — the same fetch returns the same prefix.)\n",
+		len(content)/1024, maxToolOutputBytes/1024, 100*maxToolOutputBytes/len(content))
 }
