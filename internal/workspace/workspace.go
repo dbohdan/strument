@@ -123,6 +123,49 @@ type Workspace struct {
 // says that far better than a leading dot does.
 const skipAlways = ".git"
 
+// UnderGitDir reports whether a relative path names anything inside a
+// repository's own .git directory.
+//
+// Exported because the *edit* path needs the identical answer and used not to
+// ask the question at all: contain refused .git from the day it was written,
+// coder's unsafePath never did, and the two are documented as mirrors. What
+// that gap allowed was not a read but a write — `.git/config` sets
+// core.fsmonitor, core.pager, core.sshCommand, or an alias, and the next
+// ordinary git command runs it. Strument's own git is deliberately *not*
+// env-filtered (see doc/security.md), so that command would have seen
+// OPENROUTER_API_KEY, with no confirmation prompt and nothing in `git show`,
+// since .git is not tracked. One rule, one function, both callers.
+//
+// It matches at any depth, so a nested repository's internals are out too.
+//
+// Three details that are not fussiness:
+//
+// Case-insensitive, because .GIT/config opens the real file on APFS and NTFS —
+// a live hole on two of the three platforms Strument supports, and the reason
+// git carries its own CVEs about spelling this name.
+//
+// Trailing dots and spaces are trimmed, because Win32 strips them before the
+// filesystem sees the name, so ".git." is .git there. (NTFS 8.3 shortnames —
+// GIT~1 — are the same family and are not handled here; they need the
+// filesystem to answer, not a string.)
+//
+// Both separators split, on every platform. A backslash is a legal filename
+// byte on Unix, so `a\.git` is refused there for a name that is not really
+// .git at all. That is the safe direction to be wrong in, and git refuses the
+// same shape.
+func UnderGitDir(rel string) bool {
+	for _, seg := range strings.FieldsFunc(rel, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if strings.EqualFold(strings.TrimRight(seg, ". "), skipAlways) {
+			return true
+		}
+	}
+	return false
+}
+
+// gitDirRefusal is what both paths say about it, in one voice: these become
+// sentences a model reads, and two wordings for one rule read as two rules.
+const gitDirRefusal = "the repository's own .git directory is not project content"
+
 // New builds a Workspace over root with the default limits.
 func New(root string) *Workspace { return &Workspace{Root: root} }
 

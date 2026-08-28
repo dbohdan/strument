@@ -45,6 +45,15 @@ import (
 // caller-facing reason that is "" when the path is fine — the same shape the
 // tool layer uses, because these become sentences a model reads.
 func (w *Workspace) contain(raw string) (full, rel, reason string) {
+	// First, and ahead of the pinned exemption below rather than after it.
+	// .git is machine state at any depth and however the caller spells it, and
+	// the exemption is not the pure record of user intent it reads as: the edit
+	// path appends to absFnames as it goes (apply.go), so a list the model can
+	// grow must not be able to unlock this. The user has /run for the rare
+	// legitimate look at their own repository's internals.
+	if UnderGitDir(raw) {
+		return "", "", gitDirRefusal
+	}
 	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`) {
 		// A pinned file may be named absolutely, which is the carve-out
 		// unsafePath has always made and this side did not. The two are
@@ -89,11 +98,6 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	}
 	if escapes(resolvePath(rootAbs), resolvePath(full)) {
 		return "", "", "that path resolves outside the project root through a symlink"
-	}
-	// .git is machine state rather than project content, and the walk skips it
-	// unconditionally; a direct path should not be the way around that.
-	if slices.Contains(strings.Split(rel, "/"), skipAlways) {
-		return "", "", "the repository's own .git directory is not project content"
 	}
 	return full, rel, ""
 }

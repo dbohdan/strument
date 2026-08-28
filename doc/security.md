@@ -106,25 +106,51 @@ them accepted rather than hidden:
 ## Deliberate holes
 
 Three places where the policy is looser than it could be. Each is a choice with
-a reason, and a reason is something you can disagree with.
+a reason, and a reason is something you can disagree with. The first of them
+was also hiding a bug, which is the usual way: a documented hole is a place
+nobody looks twice.
 
-### `.git` is writable
+### `.git` is writable to the sandbox, and refused by the tools
 
 Codex CLI grants its writable root and then makes `.git/` read-only inside it.
 Strument cannot: it commits your work at the end of a turn, and `/undo` reaches
 through git.
 
-The follow-on is that `.git/hooks` is writable, and a `post-commit` hook is code
-execution on the next commit. Landlock's rules are purely additive — a nested
-read-only rule inside a writable root grants reading and revokes nothing, which
-we verified on a real kernel rather than assumed — so there is no way to carve
-the hooks directory back out. It would need a per-command sandbox, which is the
-one place this design is weaker than that one.
+So `.git/` stays writable *to the sandbox*. Landlock's rules are purely
+additive — a nested read-only rule inside a writable root grants reading and
+revokes nothing, which we verified on a real kernel rather than assumed — so
+there is no way to carve the hooks directory back out. It would need a
+per-command sandbox, which is the one place this design is weaker than that
+one.
 
-The reason to accept it is the user's, and it is sharper than the alternatives:
-a model that wants to attack you can already hide an exploit in the code it is
-writing. The hooks directory adds a path, not a capability, and every path into
-this threat model runs through a diff you are reading.
+What is refused, at the layer above, is every *tool* path into it. The `read`
+side always did; the edit side did not, and that was a bug rather than a
+choice — `git check-ignore` reports `.git/config` as not ignored, so nothing
+stopped a `write` call to it. Both paths now share one rule
+(`workspace.UnderGitDir`), matched at any depth, case-insensitively, and with
+trailing dots and spaces trimmed, because `.GIT/config` opens the real file on
+APFS and NTFS. Pinning a file does not unlock it: the edit path appends to the
+pinned list as it goes, so a list the model can grow must not be able to open
+the door.
+
+This section used to say the hooks directory "adds a path, not a capability",
+on the grounds that a model can already hide an exploit in the code it writes.
+That was wrong in a way worth recording. Code the model writes into the project
+runs the way model-caused commands run: sandboxed and under the [environment
+allowlist](#the-environment-which-is-a-separate-control), so it never sees
+`OPENROUTER_API_KEY`. Code reached through `.git/config` — `core.fsmonitor`,
+`core.pager`, `core.sshCommand`, an alias — runs inside *Strument's own* git,
+which is the one subprocess that deliberately keeps your whole environment.
+That is an escalation, not a shortcut, and it is invisible: `.git` is untracked,
+so the write never appears in `git show`, and the turn reports "nothing to
+commit" while it happens.
+
+The residual, stated plainly: closing the edit path removes the unprompted,
+unreviewed route, not the class. A `bash` command can still write `.git/config`
+— behind a confirmation prompt — and so can a test that `check_auto` runs
+without one, if the model wrote the test. Closing that needs either a
+per-command sandbox or an env-filtered git, and git needs your identity,
+credential helpers, and signing setup to work at all.
 
 ### Toolchain caches are writable
 

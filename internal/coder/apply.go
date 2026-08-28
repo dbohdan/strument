@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // writePlan is a batch of file writes to apply as one unit: the final content
@@ -37,6 +39,16 @@ func (d diskReader) ReadFile(rel string) (string, bool) {
 func (c *Coder) unsafePath(rel string) string {
 	if rel == "" {
 		return "empty path"
+	}
+	// The repository's own internals, refused before the pinned exemption for
+	// the reason workspace.UnderGitDir gives: a write there is code execution
+	// in Strument's own unfiltered git, with no prompt and nothing in the diff.
+	// This is the check the read path has always had and this one had not, and
+	// it is the same function now rather than a second statement of the rule —
+	// the last time these two were kept in step by hand they drifted on the
+	// order of the absolute-path test.
+	if workspace.UnderGitDir(rel) {
+		return "the repository's own .git directory is not project content"
 	}
 	// A file the user pinned was chosen by the user, so it may live outside the
 	// project root (a sibling project reached through a symlinked directory, an
