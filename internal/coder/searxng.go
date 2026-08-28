@@ -32,6 +32,13 @@ const (
 	// result needs a better query.
 	searxMaxResults = 10
 	searxMaxBytes   = 4 * 1024 * 1024
+	// A snippet is text from whatever page ranked, so its length is not the
+	// instance's decision and not ours — a live instance returned about ninety
+	// characters, and nothing stops a page returning a megabyte. Unbounded, one
+	// result could push the other nine and the note about unresponsive engines
+	// past the tool-result cap, which trims from the tail. Bounding each
+	// snippet keeps the whole result small enough that nothing is ever cut.
+	searxMaxSnippet = 400
 )
 
 // SearchResults is one answered query, already reduced to the fields worth
@@ -173,10 +180,10 @@ func searxToResults(raw searxResponse) SearchResults {
 			break
 		}
 		out.Results = append(out.Results, SearchResult{
-			Title:     strings.TrimSpace(r.Title),
+			Title:     clipRunes(strings.TrimSpace(r.Title), searxMaxSnippet),
 			URL:       strings.TrimSpace(r.URL),
-			Content:   strings.TrimSpace(r.Content),
-			Published: strings.TrimSpace(r.PublishedDate),
+			Content:   clipRunes(strings.TrimSpace(r.Content), searxMaxSnippet),
+			Published: clipRunes(strings.TrimSpace(r.PublishedDate), 64),
 		})
 	}
 	// An answer is a string in some versions and an object with an "answer"
@@ -212,4 +219,13 @@ func answerText(raw json.RawMessage) string {
 		return strings.TrimSpace(obj.Answer)
 	}
 	return ""
+}
+
+// clipRunes shortens to at most n runes, cutting on a rune boundary so a
+// snippet in any script survives as text rather than as a broken tail byte.
+func clipRunes(s string, n int) string {
+	if len([]rune(s)) <= n {
+		return s
+	}
+	return string([]rune(s)[:n]) + "…"
 }

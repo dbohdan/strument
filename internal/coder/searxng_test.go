@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // searxServer answers like an instance, so a test exercises the real HTTP path
@@ -149,5 +150,45 @@ func TestSearxNGCapsAndSkipsUnusableResults(t *testing.T) {
 		if r.URL == "" {
 			t.Error("a result with no URL survived")
 		}
+	}
+}
+
+// A snippet is text from whatever page ranked, so nothing about its length is
+// the instance's decision. Unbounded, one result could push the other nine —
+// and the note about unresponsive engines — past the tool-result cap, which
+// trims from the tail. The bound is per field so the total stays small enough
+// that nothing is ever cut.
+func TestSearxNGBoundsHostileSnippets(t *testing.T) {
+	huge := strings.Repeat("A", 200_000)
+	body := `{"query":"q","results":[{"url":"https://x.example/1","title":"` + huge +
+		`","content":"` + huge + `"}],"unresponsive_engines":[["brave","timeout"]]}`
+	srv := searxServer(t, 200, "application/json", body)
+	res, err := NewSearxNG(srv.URL, nil, "")(context.Background(), "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range []string{res.Results[0].Title, res.Results[0].Content} {
+		if n := len([]rune(got)); n > searxMaxSnippet+1 {
+			t.Errorf("field kept %d runes, want at most %d", n, searxMaxSnippet+1)
+		}
+	}
+	// And the whole rendered result stays well inside what one tool result
+	// carries, so the trailing note cannot be trimmed away.
+	if out := formatSearchResults("q", res); len(out) > maxToolOutputBytes {
+		t.Errorf("rendered result is %d bytes, past the %d cap", len(out), maxToolOutputBytes)
+	} else if !strings.Contains(out, "brave") {
+		t.Errorf("the engine note did not survive:\n%s", out[max(0, len(out)-200):])
+	}
+
+	// A multi-byte snippet is cut on a rune boundary, not mid-character.
+	body = `{"query":"q","results":[{"url":"https://x.example/2","title":"t","content":"` +
+		strings.Repeat("日", 5000) + `"}]}`
+	srv2 := searxServer(t, 200, "application/json", body)
+	res2, err := NewSearxNG(srv2.URL, nil, "")(context.Background(), "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !utf8.ValidString(res2.Results[0].Content) {
+		t.Error("clipping broke a multi-byte character")
 	}
 }
