@@ -76,17 +76,43 @@ func TestFragmentOnADefinitionTermTakesItsDefinition(t *testing.T) {
 	}
 }
 
-// A fragment that is not there returns the page and says so. Silently returning
-// the whole page would leave a model that asked for a section unable to tell
-// which of the two it is holding.
-func TestMissingFragmentSaysSo(t *testing.T) {
+// A fragment that is not there returns the outline, not the page.
+//
+// Returning the page meant a truncated prefix — on Node's fs docs, 58 KB of
+// mostly table-of-contents — handed to a model that had just said which section
+// it wanted. Three of six models in a live pass raised this without being
+// asked, one calling it "the least helpful thing possible". The anchors that do
+// exist are smaller and are the only answer the model can act on.
+func TestMissingFragmentReturnsTheOutline(t *testing.T) {
 	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#nope", ScrapeOptions{})
 
 	if !strings.Contains(md, "no \"#nope\" section") {
 		t.Errorf("a missing fragment was not reported:\n%s", md)
 	}
-	if !strings.Contains(md, "Top prose") {
-		t.Errorf("the fallback did not include the page:\n%s", md)
+	if !strings.Contains(md, "#string-methods") {
+		t.Errorf("the anchors that do exist were not offered:\n%s", md)
+	}
+	if strings.Contains(md, "common sequence operations") {
+		t.Errorf("the page's content came back instead of its map:\n%s", md)
+	}
+}
+
+// Each section says how big it is, so a model can tell before fetching whether
+// one result will hold it. Asked for by a model in the live pass, in as many
+// words.
+func TestOutlineReportsSectionSizes(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<html><body><h1 id=\"top\">Top</h1><p>x</p>")
+	b.WriteString("<h2 id=\"big\">Big</h2><p>" + strings.Repeat("word ", 2000) + "</p>")
+	b.WriteString("<h2 id=\"small\">Small</h2><p>tiny</p></body></html>")
+
+	outline := htmlToMarkdown(b.String(), "https://example.com/p", ScrapeOptions{Outline: true})
+
+	if !strings.Contains(outline, "#small  (<1 KB)") {
+		t.Errorf("a small section was not marked as small:\n%s", outline)
+	}
+	if !strings.Contains(outline, "#big  (10 KB)") {
+		t.Errorf("a large section's size is wrong or missing:\n%s", outline)
 	}
 }
 

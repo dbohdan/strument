@@ -270,6 +270,14 @@ func headingLevel(sel *goquery.Selection) int {
 // headingAnchorRe matches the {#anchor} a heading carries, escapes and all.
 var headingAnchorRe = regexp.MustCompile(`\{#[^}\n]*\}`)
 
+// sizeHint is a section's size, rounded to something a reader can act on.
+func sizeHint(n int) string {
+	if n < 1024 {
+		return "(<1 KB)"
+	}
+	return fmt.Sprintf("(%d KB)", (n+512)/1024)
+}
+
 // mdLinkRe matches a markdown inline link, capturing its text.
 var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 
@@ -484,11 +492,21 @@ func fragmentHTML(doc *goquery.Document, frag string) (string, bool) {
 // markHeadings has already put the fragments where a line-scan can see them —
 // which is what lets a truncated page carry its own map without the document
 // still being in hand.
+type outlineEntry struct {
+	depth, start int
+	text, anchor string
+}
+
 func outlineOf(md string) string {
 	var b strings.Builder
+	var entries []outlineEntry
 	anchored := 0
 	total := 0
+	offset := 0
 	for line := range strings.SplitSeq(md, "\n") {
+		lineStart := offset
+		offset += len(line) + 1
+		_ = lineStart
 		hashes := len(line) - len(strings.TrimLeft(line, "#"))
 		if hashes < 1 || hashes > 6 || !strings.HasPrefix(line[hashes:], " ") {
 			continue
@@ -507,14 +525,26 @@ func outlineOf(md string) string {
 		if text == "" {
 			continue
 		}
-		b.WriteString(strings.Repeat("  ", hashes-1) + "- " + text)
-		if anchor != "" {
-			b.WriteString("  #" + anchor)
-		}
-		b.WriteString("\n")
+		entries = append(entries, outlineEntry{depth: hashes, text: text, anchor: anchor, start: lineStart})
 	}
 	if total == 0 {
 		return "This page has no headings, so it has no outline.\n"
+	}
+	// A section's size, so a model can tell before fetching whether one result
+	// will hold it. Asked for by a model in the live pass, in those words.
+	for i, e := range entries {
+		end := len(md)
+		for _, next := range entries[i+1:] {
+			if next.depth <= e.depth {
+				end = next.start
+				break
+			}
+		}
+		b.WriteString(strings.Repeat("  ", e.depth-1) + "- " + e.text)
+		if e.anchor != "" {
+			b.WriteString("  #" + e.anchor)
+		}
+		b.WriteString("  " + sizeHint(end-e.start) + "\n")
 	}
 	out := b.String()
 	if anchored == 0 {
@@ -585,7 +615,14 @@ func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
 		return outlineOf(md)
 	}
 	if fragMissing != "" {
-		md = fmt.Sprintf("(This page has no %q section, so the whole page follows.)\n\n", "#"+fragMissing) + md
+		// The outline, not the page. Handing back the whole thing meant a
+		// truncated 58 KB prefix — mostly the table of contents — for a model
+		// that had just said which section it wanted. Three of six models in a
+		// live pass raised this unprompted, one calling it "the least helpful
+		// thing possible"; they were right. The anchors that do exist are both
+		// smaller and the only actionable answer.
+		return fmt.Sprintf("(This page has no %q section. Its outline follows, so you can "+
+			"pick an anchor that exists.)\n\n", "#"+fragMissing) + outlineOf(md)
 	}
 	return md
 }
