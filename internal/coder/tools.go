@@ -62,7 +62,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		defs = append(defs, symbolTool())
 	}
 	// Offered in ask mode too: fetching mutates nothing, and reading a
-	// specification is exactly what a discussion turn is for.
+	// specification is exactly what a discussion turn is for. The port is
+	// always set in the binary, so this is a guard for a directly built
+	// Coder, not a setting a user can be on the wrong side of.
 	if c.Scrape != nil {
 		defs = append(defs, webfetchTool())
 	}

@@ -28,7 +28,12 @@ import (
 // tempting short one and is the one to avoid: in a coding agent that word
 // means git.
 
-// webfetchTool is offered only when a scraper is configured.
+// webfetchTool is offered whenever the Scrape port is set, which the binary
+// always does: a `scraper` command if one is configured, the built-in fetcher
+// otherwise. The nil case is for a Coder built directly, in a test or as a
+// library; runWebfetch answers it too. What the `scraper` setting changes is
+// not whether the tool exists but whether it runs a subprocess, and so
+// whether the sandbox gates it — see runWebfetch.
 //
 // purpose is required for the reason bashTool requires it: the prompt is worth
 // only what the user reads off it. It matters more here than there. A shell
