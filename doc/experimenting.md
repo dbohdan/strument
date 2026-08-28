@@ -474,6 +474,34 @@ prompted. The prompt draws the same marker and the same URL, so the assertion
 was reading the question and calling it the announcement. Adding one clause —
 and the question is *not* on screen — made it fail there, correctly.
 
+#### A fixture that cannot contain the phenomenon
+
+The other half of "the treatment was never applied", and cheaper to hit than the
+model-declines-it version, because no model has to decline anything — the
+fixture simply never creates the situation.
+
+A live check for a *turn-scoped* permission drove one action per turn: search in
+turn one, search in turn two. Every assertion was about a grant covering a turn,
+and no turn ever contained a second action for the grant to cover. Worse, the
+assertions themselves had been copied from the check for a *session*-scoped
+permission next door, so they demanded that turn two not ask — which for a
+turn-scoped grant is the wrong answer, and the correct behaviour was reported as
+three failures. Then the driver, having never answered the prompt it did not
+expect, fed the following message to it as the answer, and the last turn never
+ran at all.
+
+Every one of those is the same root: the fixture's shape was inherited from a
+neighbouring feature rather than derived from this one. The fix was to put two
+searches in one turn and *count the prompts* — one, not two — the only
+arrangement in which a turn-scoped grant is a thing that happens at all.
+
+*Tell:* write down the sentence the check is meant to prove, and find the line
+in the fixture that creates its subject. "An `a` covers the rest of the turn"
+has a subject — a second action in the same turn — and a fixture with one
+action per turn does not contain it. Copying a fixture from the feature next door is
+how the subject goes missing, because the neighbouring feature's shape encodes
+*its* scope, not yours.
+
 *Tell:* **an assertion that passes in the arm where the phenomenon cannot have
 occurred is mis-defined, whatever its name says.** This is stronger than
 inspecting the definition, because it is mechanical: you already built the
@@ -492,7 +520,8 @@ Before believing any result, ask in this order: *did the mechanism fire, did the
 model actually use the thing I am testing, could the fixture have caught the
 failure I am claiming it rules out, did the scorer see what I think it saw, do
 the two arms differ in exactly one thing, did anything pass in the arm built to
-break it, and have I read three transcripts?*
+break it, does the fixture even contain the situation I am claiming to measure,
+and have I read three transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
 
