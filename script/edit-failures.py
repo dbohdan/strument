@@ -30,6 +30,13 @@ actually change:
                  message. This is the shape a patch tool collapses, so a high
                  rate here is the real evidence for adding one.
 
+Exercised against real recorded output, not just written: a fixture provider
+drives the edit tool through one failure of each kind and the log it produces
+is fed back through this. That is how the ambiguity bug in coder/tools.go was
+found — the fixture aimed at that class and the harness reported success. Two
+branches, already-done and rolled-back, are not covered by that fixture and are
+matched on their message text alone.
+
 Usage:
     script/edit-failures.py LOG.jsonl [LOG.jsonl ...]
     script/edit-failures.py --json ~/.local/state/strument/**/*.jsonl
