@@ -58,11 +58,11 @@ func TestSearchWithNoResultsSaysTheEnginesFailed(t *testing.T) {
 	if !strings.Contains(out, "broken search") {
 		t.Errorf("did not distinguish a broken search from an empty subject:\n%s", out)
 	}
-	// The failure comes *before* "No results", because that is the order a
-	// model summarising tersely reads in. Asked the same question twice with
-	// the same tool result, one answer carried the blocked engines and the
-	// other said only "the search worked, zero results" — the note was last
-	// and parenthesised then.
+	// The failure comes *before* "No results". A live A/B could not show that
+	// this changes what a model says — both orderings scored 8/8 — so the
+	// ordering is a judgement, not a measured effect, and the test pins the
+	// judgement: the likeliest cause of an empty result should be stated
+	// before the emptiness, not after it and in parentheses.
 	if strings.Index(out, "degraded") > strings.Index(out, "No results") {
 		t.Errorf("the engine failures trail the empty result:\n%s", out)
 	}

@@ -112,13 +112,19 @@ func formatSearchResults(query string, res SearchResults) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Results for %q:\n", query)
 
-	// With nothing to show, the engine failures lead. They used to trail the
-	// results as a parenthetical, which is where a model summarising tersely
-	// stops reading: asked the same question twice with the same tool result,
-	// one answer gave the full account of the blocked engines and the other
-	// said only "the search worked, zero results". Where there *are* results
-	// the note stays at the end, because "thinner than usual" genuinely is an
-	// aside; where there are none it is the finding.
+	// With nothing to show, the engine failures lead, and this is a judgement
+	// about placement rather than a measured effect — the distinction matters,
+	// because it was nearly recorded as the latter. Two live runs dropped the
+	// caveat when the note trailed as a hedged parenthetical, and one carried
+	// it when the note led, which looked like a result and was not: a
+	// randomized sixteen-run A/B put both shapes at 8/8. What those two runs
+	// most likely turned on was the *question* — "did the search itself work"
+	// invites "the tool ran without erroring" — not where the note sat.
+	//
+	// It stays because an empty result whose likeliest cause is a broken search
+	// should say so before it says "nothing found", not after and in
+	// parentheses. Where there *are* results the note trails, because "thinner
+	// than usual" genuinely is an aside.
 	if len(res.Results) == 0 && len(res.Unresponsive) > 0 {
 		fmt.Fprintf(&b, "\n%s\n", degradedNote(res.Unresponsive, 0))
 	}

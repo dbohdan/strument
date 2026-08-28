@@ -551,9 +551,10 @@ Every query is printed whether or not it was asked about.
 **A degraded search says so.** SearXNG reports which of its engines failed, and
 on a real instance three of them being rate-limited, CAPTCHA'd, or timed out is
 an ordinary Tuesday. `websearch` passes that on, because otherwise a search that
-returns nothing is indistinguishable from a subject nobody has written about —
-and with no results the report comes *first*, ahead of the empty result, rather
-than as a footnote after it.
+returns nothing is indistinguishable from a subject nobody has written about.
+With no results the report comes first, ahead of the emptiness, rather than as a
+footnote after it — a judgement about what matters most in that case, not a
+measured effect on what models say.
 
 **Search results are not fetchable without asking.** A URL from a result still
 goes through `webfetch`'s own per-origin prompt. What ranks for a query is
