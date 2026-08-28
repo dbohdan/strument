@@ -466,3 +466,36 @@ func TestAutoCheckRunsInTheListedOrder(t *testing.T) {
 		t.Errorf("the list's order was not honored; slow ran before fast:\n%s", msg)
 	}
 }
+
+// Asking for context means wanting to see lines, so it implies content mode.
+// Returning a file list to a call that asked for three lines either side would
+// answer a question nobody posed, and a silently dropped argument is the shape
+// models read as their request being ignored.
+func TestGrepContextImpliesContentMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("one\nTARGET\nthree\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	i := &Inspector{Files: workspace.New(dir), Out: testOutput{t}}
+
+	out := i.runGrep(llm.ToolCall{
+		ID: "1", Name: "grep",
+		Arguments: `{"pattern":"TARGET","context_lines":1}`, // mode omitted, so "files"
+	})
+	if !strings.Contains(out, ":2: TARGET") || !strings.Contains(out, "-1- one") {
+		t.Errorf("context did not imply content mode:\n%s", out)
+	}
+}
+
+func TestGrepContextRejectsUnusableValues(t *testing.T) {
+	i := &Inspector{Files: workspace.New(t.TempDir()), Out: testOutput{t}}
+	for args, want := range map[string]string{
+		`{"pattern":"x","context_lines":-1}`:  "cannot be negative",
+		`{"pattern":"x","context_lines":500}`: "capped at",
+	} {
+		out := i.runGrep(llm.ToolCall{ID: "1", Name: "grep", Arguments: args})
+		if !strings.Contains(out, want) {
+			t.Errorf("%s: got %q, want it to mention %q", args, out, want)
+		}
+	}
+}

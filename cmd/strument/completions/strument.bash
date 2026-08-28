@@ -82,7 +82,7 @@ _strument_complete() {
         elif [[ -n $tool_command ]]; then
             case "$tool_command" in
             grep)
-                COMPREPLY=($(compgen -W "--glob --path --mode --ignore-case" -- "$cur"))
+                COMPREPLY=($(compgen -W "--glob --path --mode --ignore-case --context-lines" -- "$cur"))
                 ;;
             symbol)
                 COMPREPLY=($(compgen -W "--kind" -- "$cur"))

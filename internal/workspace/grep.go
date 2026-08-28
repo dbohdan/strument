@@ -35,6 +35,11 @@ type GrepQuery struct {
 	// IgnoreCase folds case.
 	IgnoreCase bool
 	Mode       GrepMode
+	// ContextLines is how many lines to return either side of a match, like
+	// grep's -C. It applies to GrepContent only; the caller implies that mode
+	// when it asks for context, since context around a file *list* is not a
+	// thing anyone wants.
+	ContextLines int
 }
 
 // GrepFileResult is one file's matches.
@@ -45,10 +50,19 @@ type GrepFileResult struct {
 	Lines []GrepLine
 }
 
-// GrepLine is one matching line.
+// GrepLine is one line of a content result: a match, or a line of context
+// around one.
 type GrepLine struct {
 	Number int // 1-based
 	Text   string
+	// Match distinguishes a line the pattern hit from one that came along for
+	// context. Without it a caller cannot render the difference, and a model
+	// reading twenty lines cannot tell which one it searched for — grep's own
+	// output solves this with ":" against "-", and so does the renderer.
+	Match bool
+	// GapBefore marks a line that does not follow the previous one in this
+	// file, so a reader is not left to infer a jump from the numbers.
+	GapBefore bool
 }
 
 // GrepResult is a whole search.
@@ -107,6 +121,8 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 	glob := path(q.Glob)
 
 	var res GrepResult
+	emitted := 0
+	capped := false
 	trunc, err := w.walk(func(rel string, d fs.DirEntry) bool {
 		if d.IsDir() {
 			return true
@@ -129,22 +145,55 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 		res.Scanned++
 
 		fileRes := GrepFileResult{Path: rel}
-		for i, line := range splitLines(string(data)) {
-			if !re.MatchString(line) {
-				continue
+		lines := splitLines(string(data))
+
+		// Which lines matched, before any are emitted. Marking them during the
+		// walk gets it wrong whenever one match falls inside the window of an
+		// earlier one: the line is already on screen as context and never
+		// re-marked, so a hit disappears from a listing that counted it. Found
+		// by running the thing, not by reading it.
+		isMatch := make([]bool, len(lines))
+		var matched []int
+		for i, line := range lines {
+			if re.MatchString(line) {
+				isMatch[i] = true
+				matched = append(matched, i)
 			}
-			fileRes.Count++
-			res.Total++
-			if q.Mode == GrepContent {
-				text, clipped := clipRunes(line, w.Limits.matchBytes())
-				if clipped {
-					res.Shortened++
+		}
+		fileRes.Count = len(matched)
+		res.Total += len(matched)
+
+		if q.Mode == GrepContent {
+			lastEmitted := -1
+			for _, i := range matched {
+				// The window this match wants, clamped to the file and to
+				// whatever an earlier match already emitted, so overlapping
+				// context merges into one block instead of repeating.
+				lo := max(i-q.ContextLines, 0)
+				hi := min(i+q.ContextLines, len(lines)-1)
+				if lo <= lastEmitted {
+					lo = lastEmitted + 1
 				}
-				fileRes.Lines = append(fileRes.Lines, GrepLine{Number: i + 1, Text: text})
-				// The cap is checked here and not only between files: one
-				// generated file can hold every match in the project, and a
-				// per-file check would let it through whole.
-				if res.Total >= w.Limits.matches() {
+				if lo > hi {
+					continue // wholly inside a block already emitted
+				}
+				gap := lastEmitted >= 0 && lo > lastEmitted+1
+				for n := lo; n <= hi; n++ {
+					text, clipped := clipRunes(lines[n], w.Limits.matchBytes())
+					if clipped {
+						res.Shortened++
+					}
+					fileRes.Lines = append(fileRes.Lines, GrepLine{
+						Number: n + 1, Text: text, Match: isMatch[n], GapBefore: gap && n == lo,
+					})
+					emitted++
+				}
+				lastEmitted = hi
+				// The cap counts emitted lines rather than matches, because
+				// that is what reaches the context: at five lines of context a
+				// hundred matches would otherwise return eleven hundred lines.
+				if emitted >= w.Limits.matches() {
+					capped = true
 					break
 				}
 			}
@@ -153,10 +202,10 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 			res.Files = append(res.Files, fileRes)
 		}
 
-		// In content mode the cap counts lines, since that is what reaches the
-		// context; otherwise it counts paths.
+		// In content mode the cap counts emitted lines, since that is what
+		// reaches the context; otherwise it counts paths.
 		if q.Mode == GrepContent {
-			return res.Total < w.Limits.matches()
+			return !capped
 		}
 		return len(res.Files) < w.Limits.results()
 	})
@@ -165,7 +214,7 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 	}
 
 	res.Truncated = trunc
-	if q.Mode == GrepContent && res.Total >= w.Limits.matches() {
+	if q.Mode == GrepContent && capped {
 		res.Truncated.Results = true
 	}
 	if q.Mode != GrepContent && len(res.Files) >= w.Limits.results() {

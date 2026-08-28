@@ -62,6 +62,7 @@ complete -c strument -n "__fish_seen_subcommand_from tool grep" -l glob -d "Only
 complete -c strument -n "__fish_seen_subcommand_from tool grep" -l path -d "Only search under this directory" -r
 complete -c strument -n "__fish_seen_subcommand_from tool grep" -l mode -d "What to return" -a "files content count"
 complete -c strument -n "__fish_seen_subcommand_from tool grep" --long ignore-case -d "Match case-insensitively"
+complete -c strument -n "__fish_seen_subcommand_from tool grep" --long context-lines -r -d "Lines either side of each match"
 complete -c strument -n "__fish_seen_subcommand_from tool symbol" -l kind -d "Definition or references" -a "definition reference"
 
 # shell.

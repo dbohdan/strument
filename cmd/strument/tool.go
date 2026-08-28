@@ -141,12 +141,13 @@ type toolGrepCmd struct {
 	Path       string `help:"Only search under this directory."`
 	Mode       string `default:"files"                                                                                  enum:"files,content,count"      help:"What to return: the files that match, the matching lines, or a per-file count."`
 	IgnoreCase bool   `help:"Match case-insensitively."                                                                 name:"ignore-case"`
+	Context    int    `help:"Lines to return either side of each match, like grep's -C."                                name:"context-lines"`
 }
 
 func (t *toolGrepCmd) Run(c *toolCmd) error {
 	return c.run("grep", map[string]any{
 		"pattern": t.Pattern, "glob": t.Glob, "path": t.Path,
-		"mode": t.Mode, "ignore_case": t.IgnoreCase,
+		"mode": t.Mode, "ignore_case": t.IgnoreCase, "context_lines": t.Context,
 	})
 }
 

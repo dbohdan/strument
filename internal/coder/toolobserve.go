@@ -42,6 +42,11 @@ func quoteToolArg(s string) string {
 
 // maxToolOutputBytes caps a single tool result. Beyond this the result is cut
 // with a note, because one runaway command must not eat the context window.
+// maxGrepContext bounds one call's appetite for surrounding lines. Ten either
+// side is already a screenful per match; past that the file itself is what is
+// wanted, and read exists for that.
+const maxGrepContext = 20
+
 const maxToolOutputBytes = 60_000
 
 // decodeArgs unmarshals a call's arguments into dst, returning a model-facing
@@ -120,6 +125,7 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 		Path       string `json:"path"`
 		Mode       string `json:"mode"`
 		IgnoreCase bool   `json:"ignore_case"`
+		Context    int    `json:"context_lines"`
 	}
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg
@@ -139,9 +145,23 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	default:
 		return fmt.Sprintf("Unknown mode %q. Use \"files\", \"content\", or \"count\".", a.Mode)
 	}
+	if a.Context < 0 {
+		return "context_lines cannot be negative."
+	}
+	if a.Context > maxGrepContext {
+		return fmt.Sprintf("context_lines is capped at %d; ask for fewer, or read the file.", maxGrepContext)
+	}
+	// Asking for context implies wanting to see lines. Returning a file list to
+	// a call that asked for three lines either side would be answering a
+	// question nobody posed, and silently dropping an argument is the shape a
+	// model reads as its request being ignored.
+	if a.Context > 0 && mode != workspace.GrepContent {
+		mode, modeName = workspace.GrepContent, "content"
+	}
 
 	res, err := i.Files.Grep(workspace.GrepQuery{
-		Pattern: a.Pattern, Glob: a.Glob, Dir: a.Path, Mode: mode, IgnoreCase: a.IgnoreCase,
+		Pattern: a.Pattern, Glob: a.Glob, Dir: a.Path, Mode: mode,
+		IgnoreCase: a.IgnoreCase, ContextLines: a.Context,
 	})
 	if err != nil {
 		return fmt.Sprintf("The search pattern was not valid: %v", err)
@@ -163,7 +183,18 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 		switch mode {
 		case workspace.GrepContent:
 			for _, l := range f.Lines {
-				fmt.Fprintf(&b, "%s:%d: %s\n", f.Path, l.Number, l.Text)
+				// grep's own convention: ":" for a line the pattern hit, "-"
+				// for one that came along for context, and "--" where the
+				// listing jumps. A model reading twenty lines has to be able to
+				// tell which one it searched for.
+				if l.GapBefore {
+					b.WriteString("--\n")
+				}
+				sep := ":"
+				if !l.Match {
+					sep = "-"
+				}
+				fmt.Fprintf(&b, "%s%s%d%s %s\n", f.Path, sep, l.Number, sep, l.Text)
 			}
 		case workspace.GrepCount:
 			fmt.Fprintf(&b, "%s: %d\n", f.Path, f.Count)
