@@ -180,9 +180,12 @@ func TestSearxNGBoundsHostileSnippets(t *testing.T) {
 		t.Errorf("the engine note did not survive:\n%s", out[max(0, len(out)-200):])
 	}
 
-	// A multi-byte snippet is cut on a rune boundary, not mid-character.
+	// A multi-byte snippet is cut on a rune boundary, not mid-character. The
+	// rune is built from its code point rather than written literally, because
+	// the linter refuses a Han literal in source and the point here is the byte
+	// width, not the script.
 	body = `{"query":"q","results":[{"url":"https://x.example/2","title":"t","content":"` +
-		strings.Repeat("日", 5000) + `"}]}`
+		strings.Repeat(string(rune(0x65E5)), 5000) + `"}]}`
 	srv2 := searxServer(t, 200, "application/json", body)
 	res2, err := NewSearxNG(srv2.URL, nil, "")(context.Background(), "q")
 	if err != nil {
