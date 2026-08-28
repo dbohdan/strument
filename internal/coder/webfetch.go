@@ -40,7 +40,11 @@ func webfetchTool() llm.ToolDef {
 		Description: "Fetch a web page and return its content as text. Use it to read " +
 			"documentation, a specification, or an issue the work depends on. " +
 			"The user is asked before an unfamiliar host is fetched, so give a " +
-			"purpose they can judge.",
+			"purpose they can judge.\n\n" +
+			"A URL fragment fetches just that section, so " +
+			"https://docs.python.org/3/library/stdtypes.html#string-methods returns the " +
+			"string methods rather than the whole page. On a page too large to return " +
+			"whole, ask for its outline first and fetch a section by the anchor it lists.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -48,6 +52,11 @@ func webfetchTool() llm.ToolDef {
 				"purpose": strProp("Why this page is needed, in a few words — a claim the user can " +
 					"weigh, not a label. \"Check the Go 1.26 release notes for the loop change\" " +
 					"tells them something; \"read documentation\" does not."),
+				"outline": map[string]any{
+					"type": "boolean",
+					"description": "Return the page's headings and their anchors instead of its content. " +
+						"Use it on a page too large to read whole, then fetch the section you want.",
+				},
 			},
 			"required": []any{"url", "purpose"},
 		},
@@ -59,12 +68,14 @@ type toolFetch struct {
 	callID  string
 	url     string
 	purpose string
+	outline bool
 }
 
 func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
 	var a struct {
 		URL     string `json:"url"`
 		Purpose string `json:"purpose"`
+		Outline bool   `json:"outline"`
 	}
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
 		return toolFetch{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
@@ -80,7 +91,7 @@ func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
 	if _, err := origin.Of(raw); err != nil {
 		return toolFetch{}, "That URL cannot be fetched: " + err.Error() + "."
 	}
-	return toolFetch{callID: tc.ID, url: raw, purpose: strings.TrimSpace(a.Purpose)}, ""
+	return toolFetch{callID: tc.ID, url: raw, purpose: strings.TrimSpace(a.Purpose), outline: a.Outline}, ""
 }
 
 // runWebfetch confirms and fetches, returning the page as the tool result.
@@ -123,31 +134,54 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		}
 	}
 
-	content, err := c.Scrape(ctx, f.url)
+	content, err := c.Scrape(ctx, f.url, ScrapeOptions{Outline: f.outline})
 	if err != nil {
 		// The model gets the reason, so it can try a different URL rather than
 		// conclude the page said nothing.
 		return fmt.Sprintf("Could not fetch %s: %v", f.url, err)
 	}
+	if f.outline {
+		return truncateResult(content) // an outline that overruns has no map of its own
+	}
 	return truncateFetch(content)
 }
 
-// truncateFetch is truncateResult with a note a model can act on.
+// truncateFetch cuts an oversized page and hands back its map.
 //
-// The generic one says only that the result was cut short, which on a fetch
-// leaves the model to guess whether the page ended or the harness stopped it.
-// A live pass against docs.python.org/3/library/stdtypes.html made the case:
-// 228 KB of real content against a 60 KB cap, and the model reported the page
-// as read while having seen a quarter of it. Saying how much there was, and
-// that a narrower page is the way to the rest, turns a silent gap into a next
-// step.
+// The note this replaces said to "fetch a more specific page", which assumes a
+// page that may not exist and asks a model to find it while holding a quarter
+// of the one it has. The predictable next move is to give up on the tool and
+// reach for curl.
+//
+// So the page arrives with its own outline instead. Every heading and its
+// anchor, computed from the markdown that is about to be cut rather than from
+// a second request, and the anchors are fetchable — which turns "this is too
+// big" into a two-step navigation the model can finish on its own.
+//
+// The outline is reserved out of the budget rather than added to it, or the
+// result would exceed the cap it exists to respect.
 func truncateFetch(content string) string {
 	if len(content) <= maxToolOutputBytes {
 		return content
 	}
-	return content[:maxToolOutputBytes] + fmt.Sprintf(
+	outline := outlineOf(content)
+	// The map gets a budget of its own. Without one a page of four thousand
+	// headings produced an outline twice the cap, and the result overran the
+	// limit it exists to respect — found by a test written for the opposite
+	// case, which is the usual way.
+	if maxOutline := maxToolOutputBytes / 2; len(outline) > maxOutline {
+		cut := strings.LastIndexByte(outline[:maxOutline], '\n') + 1
+		outline = outline[:cut] +
+			"\n(Outline cut short: this page has more sections than one result can list.)\n"
+	}
+	note := fmt.Sprintf(
 		"\n\n(Cut off here: the page is %d KB and one tool result carries %d KB, so this is "+
-			"the first %d%% of it. If what you need is further down, fetch a more specific page "+
-			"rather than this one again — the same fetch returns the same prefix.)\n",
+			"the first %d%% of it. Its outline follows. Fetch a section on its own by adding "+
+			"its anchor to the URL rather than fetching this page again — the same fetch "+
+			"returns the same prefix.)\n\n",
 		len(content)/1024, maxToolOutputBytes/1024, 100*maxToolOutputBytes/len(content))
+
+	room := max(maxToolOutputBytes-len(note)-len(outline), 0)
+	room = min(room, len(content))
+	return content[:room] + note + outline
 }

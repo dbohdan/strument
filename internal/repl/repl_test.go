@@ -858,7 +858,7 @@ func TestWebCommandScrapesAndStages(t *testing.T) {
 	r, cdr, out := newTestREPL(t, stub, input)
 	defer r.Close()
 	var scraped []string
-	cdr.Scrape = func(_ context.Context, url string) (string, error) {
+	cdr.Scrape = func(_ context.Context, url string, _ coder.ScrapeOptions) (string, error) {
 		scraped = append(scraped, url)
 		return "SCRAPED PAGE BODY", nil
 	}

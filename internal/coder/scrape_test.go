@@ -41,7 +41,7 @@ func TestScraperHTMLToMarkdown(t *testing.T) {
 			`<footer>Copyright NavCorp</footer></body></html>`), nil
 	})
 
-	out, err := NewSimpleScraper(rt, "Strument/9.9.9")(context.Background(), "https://example.com/page")
+	out, err := NewSimpleScraper(rt, "Strument/9.9.9")(context.Background(), "https://example.com/page", ScrapeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestScraperNonHTMLVerbatim(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("plain <b>not-html</b> text")),
 		}, nil
 	})
-	out, err := NewSimpleScraper(rt, "")(context.Background(), "https://example.com/raw.txt")
+	out, err := NewSimpleScraper(rt, "")(context.Background(), "https://example.com/raw.txt", ScrapeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestCommandScraper(t *testing.T) {
 		// take effect on the next fetch.
 		return append(FilterEnv(nil, []string{"GO_WANT_HELPER_PROCESS"}), "GO_WANT_HELPER_PROCESS=1")
 	}
-	out, err := NewCommandScraper(helper("ok"), 10*time.Second, scrapeEnv)(context.Background(), "https://example.com/page")
+	out, err := NewCommandScraper(helper("ok"), 10*time.Second, scrapeEnv)(context.Background(), "https://example.com/page", ScrapeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestCommandScraper(t *testing.T) {
 	}
 
 	// A non-zero exit surfaces as an error carrying the stderr tail.
-	_, err = NewCommandScraper(helper("fail"), 10*time.Second, scrapeEnv)(context.Background(), "https://x")
+	_, err = NewCommandScraper(helper("fail"), 10*time.Second, scrapeEnv)(context.Background(), "https://x", ScrapeOptions{})
 	if err == nil {
 		t.Fatal("expected error from failing command")
 	}

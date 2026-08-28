@@ -95,7 +95,7 @@ func init() {
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage", cmdTokens},
 		{"undo", "", "Undo the last turn's edits", cmdUndo},
-		{"web", "<url>", "Fetch a web page and stage it for your next message", cmdWeb},
+		{"web", "<url>", "Fetch a web page (or one #section of it) for your next message", cmdWeb},
 	}
 }
 
@@ -830,7 +830,10 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 		return ""
 	}
 	r.printf("Scraping %s...", url)
-	content, err := r.coder.Scrape(ctx, url)
+	// No outline from /web: the user typed a URL and wants the page. A fragment
+	// in what they typed still narrows it, which is what a fragment means
+	// everywhere else they paste one.
+	content, err := r.coder.Scrape(ctx, url, coder.ScrapeOptions{})
 	if err != nil {
 		r.out.Errorf("Unable to fetch %s: %v", url, err)
 		return ""

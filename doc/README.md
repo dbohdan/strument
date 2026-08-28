@@ -559,6 +559,31 @@ not. The sandbox gates a fetch only when a `scraper` command is configured: the
 built-in fetcher spawns nothing, and refusing it for want of a kernel feature
 would apply a rule about subprocesses to something that has none.
 
+**A big page is navigated, not truncated.** The Python docs' `stdtypes.html`
+is 228 KB of real content against a 60 KB result cap, and the first version of
+this told the model to "fetch a more specific page" — advice that assumes a page
+which may not exist, given to a model holding a quarter of the one it has. The
+predictable next move is to abandon the tool for `curl`.
+
+Two mechanisms replace it, both borrowed from link-preview bots. A **URL
+fragment fetches that section alone**: `…/stdtypes.html#string-methods` returns
+32 KB instead of 228 KB, and `…#str.join` returns the method. And **`outline:
+true` returns the page's headings with their anchors** — 3.5 KB for that same
+page, a 61× reduction, and every line names a fragment that can be fetched.
+A page that still has to be cut carries its own outline appended, so the map
+costs no extra round trip.
+
+The three generators put the fragment's target in three different places, so
+`fragmentHTML` handles the shapes rather than one: a heading takes the siblings
+that follow it, a container is already the section, and a `<dt>` brings its
+`<dd>`. MediaWiki needed the case that decided the approach — it wraps the
+heading with an edit link, so the prose is a sibling of the *wrapper*, while
+Sphinx nests the other way and would break under a rule that always climbed.
+The choice is made by measuring what came back rather than by predicting the
+markup, which is the version that works on both. `markHeadings` writes each
+anchor into the markdown as a Pandoc heading attribute, which is what makes the
+outline a string operation and lets a truncated page map itself.
+
 `internal/origin` owns what an origin is, because two packages need the
 identical answer and neither can import the other — the config loader validates
 an entry at load, the coder matches a fetch at run time.

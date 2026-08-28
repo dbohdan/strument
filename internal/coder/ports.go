@@ -234,5 +234,16 @@ type Output interface {
 	FlushStream()
 }
 
-// Scraper fetches URL content for check_for_urls; injectable for tests.
-type Scraper func(ctx context.Context, url string) (string, error)
+// ScrapeOptions are the ways a caller can ask for less than a whole page.
+//
+// The fragment is not here: it rides in the URL, where the model writes it and
+// where every link on the page already carries one. Only the outline needs
+// saying separately.
+type ScrapeOptions struct {
+	// Outline returns the page's headings and their anchors instead of its
+	// content — the map you read before deciding which section to fetch.
+	Outline bool
+}
+
+// Scraper fetches URL content; injectable for tests.
+type Scraper func(ctx context.Context, url string, opts ScrapeOptions) (string, error)

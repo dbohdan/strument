@@ -5,6 +5,7 @@ package coder
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func fetchCoder(t *testing.T, yes bool) (*Coder, *recordingConfirmer, *int) {
 	cf := &recordingConfirmer{answer: yes}
 	c.Confirm = cf
 	fetches := 0
-	c.Scrape = func(_ context.Context, url string) (string, error) {
+	c.Scrape = func(_ context.Context, url string, _ ScrapeOptions) (string, error) {
 		fetches++
 		return "Here is the content of " + url + ":\n\nthe page", nil
 	}
@@ -97,7 +98,7 @@ func TestWebfetchDeclinedSaysSo(t *testing.T) {
 
 func TestWebfetchFailureSaysWhy(t *testing.T) {
 	c, _, _ := fetchCoder(t, true)
-	c.Scrape = func(context.Context, string) (string, error) {
+	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) {
 		return "", errors.New("HTTP 404")
 	}
 
@@ -182,14 +183,19 @@ func TestWebfetchSandboxGateFollowsTheScraper(t *testing.T) {
 // a one-line revert to hide.
 func TestWebfetchLongPageCarriesTheFetchNote(t *testing.T) {
 	c, _, _ := fetchCoder(t, true)
-	c.Scrape = func(context.Context, string) (string, error) {
-		return strings.Repeat("x", maxToolOutputBytes*3), nil
+	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) {
+		var b strings.Builder
+		for i := range 40 {
+			b.WriteString("## Section " + strconv.Itoa(i) + " {#sec-" + strconv.Itoa(i) + "}\n\n" +
+				strings.Repeat("x", 4000) + "\n\n")
+		}
+		return b.String(), nil
 	}
 
 	out := runFetch(t, c, fetchCall("https://go.dev/doc", "read it"))
 
-	if !strings.Contains(out, "more specific page") {
-		t.Errorf("a truncated fetch did not carry the fetch-specific note: %q", out[min(len(out), maxToolOutputBytes):])
+	if !strings.Contains(out, "adding its anchor") || !strings.Contains(out, "#sec-39") {
+		t.Error("a truncated fetch did not carry the note and the outline")
 	}
 }
 
@@ -200,7 +206,7 @@ func TestWebfetchToolOffering(t *testing.T) {
 	if hasTool(c.toolDefs(), toolWebfetch) {
 		t.Error("webfetch offered with no scraper configured")
 	}
-	c.Scrape = func(context.Context, string) (string, error) { return "", nil }
+	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) { return "", nil }
 	if !hasTool(c.toolDefs(), toolWebfetch) {
 		t.Error("webfetch not offered with a scraper configured")
 	}

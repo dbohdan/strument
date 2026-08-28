@@ -4,6 +4,7 @@
 package coder
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ const linkPage = `<html><body>
 const pageURL = "https://docs.python.org/3/library/stdtypes.html"
 
 func TestFetchedLinksBecomeAbsolute(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL)
+	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
 
 	// A relative href is a link the model will try and fail on — against
 	// Strument's own "the URL needs a scheme" refusal, which is a confusing
@@ -45,7 +46,7 @@ func TestFetchedLinksBecomeAbsolute(t *testing.T) {
 // nothing to fetch at "#id12", and re-fetching the page you are reading is the
 // one thing the link cannot be for.
 func TestSamePageAnchorsKeepTheirText(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL)
+	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
 
 	if !strings.Contains(md, "note 1") || !strings.Contains(md, "str") {
 		t.Errorf("anchor text was dropped along with the anchor:\n%s", md)
@@ -56,7 +57,7 @@ func TestSamePageAnchorsKeepTheirText(t *testing.T) {
 }
 
 func TestUnfetchableSchemesLoseTheirHref(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL)
+	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
 	for _, bad := range []string{"mailto:", "javascript:"} {
 		if strings.Contains(md, bad) {
 			t.Errorf("%s survived as a link:\n%s", bad, md)
@@ -67,7 +68,7 @@ func TestUnfetchableSchemesLoseTheirHref(t *testing.T) {
 // The ¶ beside every heading is chrome three generators emit, and the
 // navigation bars are chrome Sphinx marks with a role rather than a <nav>.
 func TestPermalinksAndAriaChromeAreDropped(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL)
+	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
 
 	if strings.Contains(md, "¶") {
 		t.Errorf("a permalink anchor survived:\n%s", md)
@@ -85,27 +86,57 @@ func TestPermalinksAndAriaChromeAreDropped(t *testing.T) {
 
 // A page with no usable base URL must still convert rather than fail.
 func TestConversionSurvivesABadPageURL(t *testing.T) {
-	if md := htmlToMarkdown(linkPage, "::not a url::"); !strings.Contains(md, "Built-in Types") {
+	if md := htmlToMarkdown(linkPage, "::not a url::", ScrapeOptions{}); !strings.Contains(md, "Built-in Types") {
 		t.Errorf("a bad page URL lost the content:\n%s", md)
 	}
 }
 
-// The truncation note says how much there was and what to do instead, because
-// the generic one leaves the model unable to tell a short page from a cut one.
-func TestFetchTruncationSaysWhatToDo(t *testing.T) {
+// A cut page carries its own map. The note it replaces said to "fetch a more
+// specific page", which assumes a page that may not exist and asks the model to
+// find it while holding a quarter of the one it has; the predictable next move
+// is to abandon the tool for curl.
+func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	short := "a short page"
 	if got := truncateFetch(short); got != short {
 		t.Errorf("a page under the cap was altered: %q", got)
 	}
 
-	long := strings.Repeat("x", maxToolOutputBytes*4)
-	got := truncateFetch(long)
-	if len(got) <= maxToolOutputBytes {
-		t.Fatal("nothing was returned above the cap")
+	var b strings.Builder
+	for i := range 40 {
+		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 4000))
 	}
-	for _, want := range []string{"Cut off here", "KB", "more specific page", "same prefix"} {
+	got := truncateFetch(b.String())
+
+	// The result respects the cap it exists to enforce. An earlier version
+	// appended the note past it, which is the bug this pins.
+	if len(got) > maxToolOutputBytes {
+		t.Errorf("the truncated result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
+	}
+	for _, want := range []string{"Cut off here", "KB", "adding its anchor", "#sec-0", "#sec-39"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("the note does not mention %q: %q", want, got[maxToolOutputBytes:])
+			t.Errorf("the cut page does not carry %q", want)
 		}
+	}
+	// The map covers the whole page, not just the part that survived the cut —
+	// which is the point of computing it before truncating.
+	if !strings.Contains(got, "Section 39") {
+		t.Error("the outline stops where the content was cut, so it maps nothing new")
+	}
+}
+
+// A page whose map would crowd out its content keeps the map: it is the more
+// useful half, and the content is what the anchors are for.
+func TestFetchTruncationKeepsTheMapOnAHeadingHeavyPage(t *testing.T) {
+	var b strings.Builder
+	for i := range 4000 {
+		fmt.Fprintf(&b, "### Item %d {#item-%d}\n\ntext\n\n", i, i)
+	}
+	got := truncateFetch(b.String())
+
+	if len(got) > maxToolOutputBytes {
+		t.Errorf("result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
+	}
+	if !strings.Contains(got, "Cut off here") {
+		t.Error("no note on a page that was cut")
 	}
 }

@@ -57,7 +57,8 @@ scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
 Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 **not** apply to a `scraper` command; the command handles its own networking.
 
-Both fetchers serve `/web` and the `webfetch` tool. A `scraper` command is a
+Both fetchers serve `/web` and the `webfetch` tool, and both honor a URL
+fragment: `…/page#section` returns that section rather than the whole page. A `scraper` command is a
 subprocess the model can cause, so it runs under the [environment
 allowlist](#env_allow) and, when the model is what asked for it, is refused
 where a required sandbox is not enforcing. The built-in fetcher spawns nothing
