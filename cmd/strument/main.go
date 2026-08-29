@@ -33,6 +33,7 @@ import (
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/sandbox"
+	"dbohdan.com/strument/internal/skill"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -169,6 +170,7 @@ func (c *chatCmd) Run() error {
 	cdr.Summarizer = coder.NewChatSummary(client.New(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
 	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
+	cdr.Skills = discoverSkills(root)
 	if model.RepoMap {
 		cdr.RepoMap = repomap.New(root)
 	}
@@ -710,7 +712,8 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
-		Notes: func() string { return cdr.SessionNotes },
+		Rediscover: func() []skill.Skill { return discoverSkills(cdr.Root) },
+		Notes:      func() string { return cdr.SessionNotes },
 		DropNotes: func() {
 			cdr.SessionNotes, cdr.SessionNotesDate = "", ""
 		},
@@ -855,7 +858,7 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 }
 
 type trustCmd struct {
-	Path string `arg:"" help:"Project directory containing .strument.star (default: cwd)." optional:""`
+	Path string `arg:"" help:"Project directory containing .strument.star or skills (default: cwd)." optional:""`
 }
 
 func (c *trustCmd) Run() error {
@@ -870,7 +873,37 @@ func (c *trustCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Trusted %s. Re-run `strument trust` after every edit to it.\n", absPath)
+	var trusted []string
+	if absPath != "" {
+		trusted = append(trusted, absPath)
+	}
+
+	// The project's skills, whether or not they are currently trusted:
+	// re-running after an edit is what re-trusts an edited one, so this is not
+	// conditional on the current state.
+	paths, diags := skill.TrustablePaths(root)
+	// Said before anything is trusted. A skill that cannot be read is one the
+	// user thinks they just trusted, and finding out later from its absence is
+	// the failure worth avoiding.
+	for _, d := range diags {
+		fmt.Fprintf(os.Stderr, "strument: skipping %s: %s\n", d.Path, d.Message)
+	}
+	if err := config.TrustFiles(paths, ""); err != nil {
+		return err
+	}
+	trusted = append(trusted, paths...)
+
+	if len(trusted) == 0 {
+		return fmt.Errorf("nothing to trust in %s: no %s and no skills under .strument/skills or .agents/skills",
+			root, config.ProjectConfigName)
+	}
+	// Named one per line rather than counted. The whole risk here is a cloned
+	// repository carrying skills nobody noticed, so what was just granted has
+	// to be legible rather than summarised.
+	for _, p := range trusted {
+		fmt.Printf("Trusted %s\n", p)
+	}
+	fmt.Println("Re-run `strument trust` after every edit to any of them.")
 	return nil
 }
 
@@ -1050,7 +1083,7 @@ func (c *modelConfigCmd) Run() error {
 
 type cli struct {
 	Chat        chatCmd          `cmd:""                         default:"withargs"                                                       help:"Chat with a model about the given files (default command)."`
-	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file."`
+	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file and its skills."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider."       name:"model-config"`
@@ -1137,4 +1170,48 @@ func main() {
 		fmt.Fprintln(os.Stderr, "strument:", err)
 		os.Exit(1)
 	}
+}
+
+// discoverSkills finds the session's skills and reports on stderr what it
+// could not use.
+//
+// On stderr from main, in every mode, for the reason the sandbox notice above
+// gives: this changes what the session can do, and (*REPL).announce returns
+// early when the run is not interactive, so a scripted run would otherwise
+// meet a model that never mentions a skill and have nothing on screen to say
+// why. The wording mirrors what config.Load says about an untrusted project
+// config, because it is the same decision about the same repository.
+func discoverSkills(root string) []skill.Skill {
+	tsPath, err := config.DefaultTrustStorePath()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "strument: cannot find the trust store, so no project skill is usable:", err)
+	}
+	var trust skill.Truster
+	if tsPath != "" {
+		ts, tsErr := config.OpenTrustStore(tsPath)
+		if tsErr != nil {
+			fmt.Fprintln(os.Stderr, "strument: cannot read the trust store, so no project skill is usable:", tsErr)
+		} else {
+			// Typed nil is not nil through an interface, so the store is
+			// assigned only when there is one — Discover reads a nil Truster
+			// as "trust nothing", which is the safe reading of both failures
+			// above.
+			trust = ts
+		}
+	}
+
+	skills, diags := skill.Discover(skill.Options{ProjectRoot: root, Trust: trust})
+	for _, d := range diags {
+		fmt.Fprintf(os.Stderr, "strument: skipping %s: %s\n", d.Path, d.Message)
+	}
+	if untrusted := skill.Untrusted(skills); len(untrusted) > 0 {
+		names := make([]string, 0, len(untrusted))
+		for _, s := range untrusted {
+			names = append(names, s.Name)
+		}
+		fmt.Fprintf(os.Stderr, "strument: ignoring %d untrusted project skill(s): %s\n",
+			len(names), strings.Join(names, ", "))
+		fmt.Fprintln(os.Stderr, "strument: run `strument trust` in this directory to allow them.")
+	}
+	return skills
 }

@@ -16,6 +16,7 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
+	"dbohdan.com/strument/internal/skill"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -84,7 +85,12 @@ type Coder struct {
 	Scrape  Scraper
 	// Search is nil unless the user configured a backend, and that nil is what
 	// decides whether the tool is offered at all.
-	Search   Searcher
+	Search Searcher
+	// Skills are what discovery found, trusted and not. Only the trusted ones
+	// are ever offered to the model — skill.Usable is the filter, and every
+	// path putting skill text in front of a model goes through it. The
+	// untrusted ones are kept so the session can tell the *user* they exist.
+	Skills   []skill.Skill
 	Platform PlatformInfo
 	// Files is the workspace behind read/ls/glob/grep. It never consults git,
 	// so the tools behave the same in a plain directory.

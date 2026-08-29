@@ -941,27 +941,55 @@ func mergeChecks(user, project []Check) []Check {
 
 // TrustProject computes the project config's multihash and records it in
 // the trust store; the `strument trust` command calls this.
+//
+// A project with no config returns ("", nil) rather than an error. That used to
+// be a failure, and stopped being one when a project could carry skills and no
+// config.star: `strument trust` is a command about a project, not about one
+// file, so having nothing of one kind to trust is not a reason to refuse.
 func TrustProject(projectRoot, trustStorePath string) (string, error) {
 	projPath := filepath.Join(projectRoot, ProjectConfigName)
-	src, err := os.ReadFile(projPath)
-	if err != nil {
+	if _, err := os.Stat(projPath); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err := TrustFiles([]string{projPath}, trustStorePath); err != nil {
 		return "", err
 	}
-	absPath, err := filepath.Abs(projPath)
-	if err != nil {
-		return "", err
+	return filepath.Abs(projPath)
+}
+
+// TrustFiles records each path's current content in the trust store, so a
+// later read of that exact content is trusted and an edited one is not.
+//
+// The store is keyed by absolute path and knows nothing about what a file is
+// for, which is why config and skills share it rather than needing a second
+// store or a second command: a repository's config and its skills come from
+// the same author, so they are one trust decision.
+func TrustFiles(paths []string, trustStorePath string) error {
+	if len(paths) == 0 {
+		return nil
 	}
 	if trustStorePath == "" {
+		var err error
 		if trustStorePath, err = DefaultTrustStorePath(); err != nil {
-			return "", err
+			return err
 		}
 	}
 	ts, err := OpenTrustStore(trustStorePath)
 	if err != nil {
-		return "", err
+		return err
 	}
-	if err := ts.Trust(absPath, src); err != nil {
-		return "", err
+	for _, p := range paths {
+		src, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return err
+		}
+		if err := ts.Trust(abs, src); err != nil {
+			return err
+		}
 	}
-	return absPath, nil
+	return nil
 }

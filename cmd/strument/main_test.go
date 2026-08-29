@@ -523,3 +523,93 @@ func TestRestoreSessionNote(t *testing.T) {
 		})
 	}
 }
+
+// writeSkill puts a minimal valid skill at root/.strument/skills/name/SKILL.md.
+func writeSkill(t *testing.T, root, name string) string {
+	t.Helper()
+	dir := filepath.Join(root, ".strument", "skills", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "SKILL.md")
+	src := "---\nname: " + name + "\ndescription: Does a thing.\n---\n\nThe instructions.\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestTrustWithoutAConfig. `strument trust` used to read .strument.star
+// directly and hand back its os.ReadFile error, so a project with skills and
+// no config failed with a bare "no such file" — for the one thing it was being
+// asked to do and could have done.
+func TestTrustWithoutAConfig(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	root := t.TempDir()
+	path := writeSkill(t, root, "release-notes")
+
+	if err := (&trustCmd{Path: root}).Run(); err != nil {
+		t.Fatalf("trust with skills and no config: %v", err)
+	}
+
+	tsPath, err := config.DefaultTrustStorePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, err := config.OpenTrustStore(tsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ts.IsTrusted(abs, src) {
+		t.Errorf("the skill was not trusted")
+	}
+	// Trust is over content, so editing a skill revokes it. That is the whole
+	// reason the command says to re-run after every edit.
+	if ts.IsTrusted(abs, append(src, '\n')) {
+		t.Errorf("an edited skill stayed trusted")
+	}
+}
+
+// TestTrustWithNothingToTrust keeps the error case: a directory with neither a
+// config nor a skill is a user who ran the command in the wrong place, and
+// silently succeeding would tell them a grant happened that did not.
+func TestTrustWithNothingToTrust(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if err := (&trustCmd{Path: t.TempDir()}).Run(); err == nil {
+		t.Errorf("trust succeeded with nothing to trust")
+	}
+}
+
+// TestDiscoverSkillsGatesOnTrust is the wiring check: what main hands the coder
+// is trusted only after `strument trust` has run. Discovery has its own tests;
+// this one is about the two being connected, which they were not for two
+// commits.
+func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	// So the counts below are about this project and not about whatever the
+	// machine running the suite happens to have installed globally.
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	root := t.TempDir()
+	writeSkill(t, root, "release-notes")
+
+	before := discoverSkills(root)
+	if len(before) != 1 || before[0].Trusted {
+		t.Fatalf("before trusting: %d skills, trusted=%v", len(before), len(before) > 0 && before[0].Trusted)
+	}
+	if err := (&trustCmd{Path: root}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	after := discoverSkills(root)
+	if len(after) != 1 || !after[0].Trusted {
+		t.Fatalf("after trusting: %d skills, trusted=%v", len(after), len(after) > 0 && after[0].Trusted)
+	}
+}

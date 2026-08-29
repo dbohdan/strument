@@ -10,6 +10,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/skill"
 )
 
 // This file is the REPL-facing session surface:
@@ -210,6 +211,16 @@ func (c *Coder) CommitsBeforeMessage() []string { return c.commitBeforeMessage }
 // It replaced RepoMapTokens, which reported a token budget that stopped meaning
 // anything when the map left the prompt: nothing spends those tokens.
 func (c *Coder) HasParser() bool { return c.RepoMap != nil }
+
+// SkillCounts reports how many skills this session can use and how many it
+// found but may not.
+//
+// It exists for the same reason HasParser does: the banner must read the
+// condition the tools read, or it can announce a capability the model does not
+// have. usable is exactly what skillTool is built from.
+func (c *Coder) SkillCounts() (usable, untrusted int) {
+	return len(skill.Usable(c.Skills)), len(skill.Untrusted(c.Skills))
+}
 
 // SessionCost returns the running session cost and whether any cost was
 // priced this session; the history writer diffs it across a turn.
