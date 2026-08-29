@@ -117,6 +117,62 @@ func TestLoopDetectorSeparatesLoopsFromQuotedMaterial(t *testing.T) {
 	}
 }
 
+// quotedMessage is the fixture for the second live false positive, the one
+// loop-false-positive.log captured: a model doing a message-shortening pass
+// quotes the same user-facing string each time it weighs it, with a different
+// length of deliberation between quotes. Every line is ordinary prose -- the
+// strip passes all of it -- and ten quotes put a 50-byte window over
+// loopMinCount, which is why the average-gap rule fired. What saves it is the
+// spacing: the gaps swing by more than loopGapJitter between one line of
+// "let me reconsider" and three. An actual loop repeats at its period, so the
+// metronomic control below must still fire.
+func quotedMessage(n int, filler func(int) string) string {
+	msg := "The file %s has uncommitted changes. Please stash them before undoing."
+	var b strings.Builder
+	for i := range n {
+		b.WriteString(filler(i))
+		fmt.Fprintf(&b, msg+"\n", "gitcmds.go")
+	}
+	return b.String()
+}
+
+func deliberation() func(int) string {
+	return func(i int) string {
+		switch i % 3 {
+		case 0:
+			return "Hmm, which is the long one here? Let me reconsider.\n"
+		case 1:
+			return "Wait.\n"
+		case 2:
+			return "Right. That one has a \"Please\" that can go, and the test pins only the prefix. Line 55. " +
+				"The uncommitted-changes message at line 192 has the same shape. Let me check.\n"
+		}
+		return ""
+	}
+}
+
+func metronome() func(int) string { return func(int) string { return "" } }
+
+func TestLoopDetectorSeparatesQuotedMessagesFromLoops(t *testing.T) {
+	if f := feedAll(t, loopReasoning, quotedMessage(loopMinCount+3, deliberation())); f != nil {
+		t.Errorf("fired on a message quoted between rounds of deliberation: %q ×%d", f.Sample, f.Count)
+	}
+	// The fixture must be one the old rule fired on, or it is decorative: with
+	// loopMinCount+ quotes at mean spacing well under the old loopMaxAvgGap,
+	// the average-gap check this spacing rule replaced reported a loop here.
+	msg := "The file gitcmds.go has uncommitted changes. Please stash them before undoing."
+	text := quotedMessage(loopMinCount+3, deliberation())
+	if got := strings.Count(text, msg); got < loopMinCount {
+		t.Errorf("fixture quotes the message %d times, below loopMinCount; it proves nothing", got)
+	}
+	// The same message, metronomic: a real loop over the very same words. In
+	// the answer stream, where the detector expected to earn less of its keep
+	// and where the fixture's words are at home.
+	if f := feedAll(t, loopAnswer, quotedMessage(loopMinCount+3, metronome())); f == nil {
+		t.Error("no loop for a message repeated at its period")
+	}
+}
+
 // The strip must not eat a stutter rendered one word per line. An earlier
 // version of this transform in script/find-loops.py did exactly that, and it
 // was caught by re-running the corpus rather than by a unit test -- so here is

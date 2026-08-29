@@ -37,13 +37,21 @@ const (
 	// loopMinCount is how many times a window must recur before the reply is
 	// stopped.
 	loopMinCount = 10
-	// loopMaxAvgGap bounds the average distance between occurrences, which is
-	// what separates a loop from a word that happens to be common. Gemini CLI
-	// uses 250. Widened here because the corpus tolerated it: from 250 to 2000
-	// the counts did not move — 7 loops found, 0 false positives — and the
-	// headroom covers a long-period cycle, which is the one shape a window
-	// detector can otherwise miss.
-	loopMaxAvgGap = 1000
+	// loopMaxGap bounds the distance between consecutive occurrences of a
+	// window. This used to be an *average* gap (Gemini CLI's 250, widened to
+	// 1000 because the corpus tolerated it), and the average was the false
+	// positive: a model quoting the same user-facing message once per round of
+	// deliberation pools ten hits whose mean spacing is fine while every other
+	// gap is three times it. Max gap keeps the long-period coverage the 1000
+	// was widened for and drops the pooling.
+	loopMaxGap = 1000
+	// loopGapJitter is how uneven the spacing may be and still be a loop: the
+	// largest gap may exceed the smallest by this factor. A loop repeats
+	// metronomically, at its period; scattered quotes do not, and irregularity
+	// is the second thing that separates them. Two is loose enough that a loop
+	// interrupted by a stray short line survives, tight enough that the
+	// deliberation interleaving in the quoted-message false positive fails it.
+	loopGapJitter = 2
 	// loopTailBytes caps what is kept. A loop is visible in its own recent
 	// output; holding a whole reply to find one would be the expensive way to
 	// answer a local question.
@@ -302,8 +310,24 @@ func findLoop(text string, minCount int) *loopFinding {
 		if len(strings.TrimSpace(w)) < loopWindow/4 {
 			continue
 		}
-		gaps := p[len(p)-1] - p[0]
-		if float64(gaps)/float64(len(p)-1) > loopMaxAvgGap {
+		// Max gap, then regularity of spacing. A loop repeats metronomically at
+		// its period: every gap is near loopMaxGap's world and near every other
+		// gap. The same text *quoted* repeatedly — the message-shortening pass
+		// that named this file's fixture log — pools occurrences whose mean
+		// spacing is fine while the gaps swing wildly between one line of
+		// deliberation and three, which is why the average gap this replaced
+		// let the false positive through and neither of these does.
+		smallest, largest := 1<<30, 0
+		for i := 1; i < len(p); i++ {
+			g := p[i] - p[i-1]
+			if g < smallest {
+				smallest = g
+			}
+			if g > largest {
+				largest = g
+			}
+		}
+		if largest > loopMaxGap || largest > loopGapJitter*smallest {
 			continue
 		}
 		return &loopFinding{Sample: sampleOf(w), Count: len(p)}
