@@ -210,8 +210,15 @@ its own first. Then the trial has one job and the revert has one target.
   defence.
 - **Long runs need detaching.** The Bash tool's default timeout is two minutes
   (`shell_timeout`; `/run` is exempt, since the user typed that command).
-  `setsid nohup … &` with output to a log, then wait on the results file:
-  `until [ "$(wc -l < results.jsonl)" -ge N ]; do sleep 20; done`.
+  `setsid nohup … &` with output to a log, then **wait on the process, not on
+  its output**: `until ! kill -0 "$PID" 2>/dev/null; do sleep 20; done`, and
+  check the log afterwards to learn whether it finished or died. Waiting for a
+  results file to reach N lines — which is what this bullet used to advise —
+  cannot tell a crash from a slow run, and §19 is the hour that cost. Capture
+  the pid; a `pgrep -f` pattern will match the next run of the same script.
+- **Type-check the runner before launching it** (§19). The error paths are the
+  ones a one-off script never exercises until they decide whether the run
+  survives.
 - **Four-way parallelism is about the ceiling.** Beyond that OpenRouter
   rate-limiting produces hangs that look exactly like a deadlock in the harness.
   That cost three runs and a concurrency investigation before five instances
@@ -563,6 +570,44 @@ Three fixes, in order of how much they buy:
 None of this is about statistics, and all of it is recoverable: because the raw
 output was on disk (§4), the fix was to repair the runner and re-run it, which
 reused 233 saved runs and re-executed one. Nothing was re-bought.
+
+### The bug was catchable without running anything
+
+`ty` (Astral's type checker — `pip install ty`, no dependencies, 0.3s over every
+Python file in this repository) reports it from the unannotated source:
+
+```
+error[unsupported-operator]: Unsupported `+` operation
+    return (e.stdout or "") + (e.stderr or "") + "\n[TIMEOUT]\n"
+           ^--------------^^^^^--------------^
+    Both operands have type `(bytes & ~AlwaysFalsy) | Literal[""]`
+```
+
+It reads `bytes | None` off typeshed, narrows through the `or ""` to
+`bytes | Literal[""]`, and refuses the `str`. No annotations were added to get
+that.
+
+So: **before a long run, type-check the runner.** The habit is narrow and the
+reason is specific — the bug was in an *exception handler*. In a script like
+this the happy path runs two hundred times and the error path runs once, in
+production, fifteen minutes in. No test you would actually write for a one-off
+reaches it, and a checker does not need it to execute. Test the happy path,
+type-check the error paths.
+
+Do not chase zero. Over this repository's 32 Python files ty reports 30
+diagnostics and one of them is a bug; the rest are things it cannot prove and
+you can — narrowing through `if None in (x1, y1): continue`, a variable
+assigned on every iteration of a loop it cannot show runs, a heterogeneous
+config dict that would rather be a `TypedDict`. Read the list, take the real
+one, move on. Making it a gate would mean silencing twenty-nine things to catch
+the thirtieth.
+
+`ruff` is not the tool for this half of the job, which is worth saying because
+it is the one already on `PATH`. Over the same files its correctness rules
+(`E9,F,B`) find twenty-two issues and none would ever have bitten: unused
+imports, empty f-strings, `zip` without `strict=`, and four false `B023`s where
+the closure is called inside the iteration that binds it. Keep it for
+`ruff format`.
 
 ---
 
