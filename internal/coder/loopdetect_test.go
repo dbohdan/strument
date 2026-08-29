@@ -158,7 +158,7 @@ func TestLoopDetectorBoundsWhatItKeeps(t *testing.T) {
 	for range 20 {
 		d.feed(loopAnswer, prose(30))
 	}
-	if got := d.answer.Len(); got > loopTailBytes {
+	if got := d.answer.kept.Len(); got > loopTailBytes {
 		t.Errorf("kept %d bytes, want at most %d", got, loopTailBytes)
 	}
 	var found bool

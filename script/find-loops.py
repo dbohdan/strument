@@ -107,11 +107,61 @@ def strip_code_blocks(text: str) -> str:
         # line, and "Dynamical" repeated 84 times vanished. Caught by re-running
         # the corpus after fixing the false positive, not by the self-test.
         stripped = line.strip()
-        if stripped and " " not in stripped and len(stripped) < 40 and re.search(r"[./\\]", stripped):
+        # Unfenced markup and data. Nothing obliges a model to fence the file it
+        # is reading back to itself, and two runs in the skills trial were
+        # stopped mid-turn for quoting an SVG with no fence around it. Kept in
+        # step with internal/coder/loopdetect.go on purpose: the runtime
+        # detector not having this function at all was the original bug.
+        if len(stripped) > 1 and stripped[0] == "<" and stripped[-1] == ">":
+            out.append("")
+            continue
+        if is_data_field(stripped):
+            out.append("")
+            continue
+        if is_bare_path(stripped):
             out.append("")
             continue
         out.append(line)
     return "\n".join(out)
+
+
+def is_bare_path(t: str) -> str:
+    """The filename heading an edit block.
+
+    The separator must sit *between* characters. Requiring only that one be
+    present anywhere deletes "Yes." -- short, spaceless, ending in a dot -- and
+    with it any one-word-per-line stutter whose word carries punctuation, which
+    is the shape this transform must never eat. That is not hypothetical: it is
+    how "Dynamical" x84 went missing.
+    """
+    if not t or len(t) >= 40 or " " in t or "\t" in t:
+        return False
+    if "/" in t or "\\" in t:
+        return True
+    i = t.find(".")
+    return 0 < i < len(t) - 1
+
+
+def is_data_field(t: str) -> bool:
+    """A JSON or YAML field line: `"key": value,` or `key: value`.
+
+    The bare form needs a single-token value as well as an identifier key.
+    Without that it swallows "Note: the following is wrong", which is a
+    sentence.
+    """
+    t = t.lstrip("{[-").strip()
+    if t.startswith('"'):
+        i = t.find('":')
+        return i > 0 and " " not in t[1:i] and "\t" not in t[1:i]
+    i = t.find(":")
+    if i <= 0 or i == len(t) - 1:
+        return False
+    key, value = t[:i], t[i + 1:].strip()
+    if not any(c.isalpha() for c in key):
+        return False
+    if not all(c.isalnum() or c in "_-." for c in key):
+        return False
+    return len(value.split()) == 1
 
 
 AIDER_THINK_OPEN = re.compile(r"^<thinking-content-[0-9a-f]+>$")
@@ -689,6 +739,18 @@ def self_test(args) -> int:
         for i in range(1, 20)
     )
 
+    # A model reading a chart back to itself, with no fence around it. This is
+    # the shape that stopped two runs of the skills trial mid-turn.
+    svgish = "Current contents:\n\n" + "".join(
+        f'  <line class="grid" x1="60" y1="{y}" x2="690" y2="{y}" '
+        f'stroke="#999999" stroke-width="1"/>\n'
+        for y in (40, 100, 160, 220, 280, 340)
+    ) + "".join(
+        f'  <line class="grid" x1="{x}" y1="40" x2="{x}" y2="340" '
+        f'stroke="#999999" stroke-width="1"/>\n'
+        for x in (60, 165, 270, 375, 480, 585, 690)
+    ) + "\nI will remove the vertical ones.\n"
+
     cases = [
         ("aider edit blocks in an answer", editblocks, False),
         ("sentence loop", loop, True),
@@ -699,6 +761,7 @@ def self_test(args) -> int:
         ("ordinary prose", prose, False),
         ("numbered list of similar items", listy, False),
         ("diff-like alternation", diffish, False),
+        ("unfenced svg quoted back", svgish, False),
     ]
 
     failures = 0

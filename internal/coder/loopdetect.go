@@ -87,7 +87,17 @@ type loopDetector struct {
 	// stream has been abandoned.
 	Found *loopFinding
 
-	answer, reasoning strings.Builder
+	answer, reasoning loopStream
+}
+
+// loopStream is one side's buffer plus the state needed to strip quoted
+// material as it arrives. Line-oriented, because that is the unit everything
+// below classifies on, and a stream event is not a line: it is a token or a
+// few, so a partial line has to be held back until its newline turns up.
+type loopStream struct {
+	kept    strings.Builder // already stripped
+	pending string          // the incomplete last line
+	inFence bool
 }
 
 // newLoopDetector returns a detector with the tuned thresholds, or one that
@@ -98,6 +108,140 @@ func newLoopDetector(on bool) *loopDetector {
 		return &loopDetector{}
 	}
 	return &loopDetector{MinCount: loopMinCount, MinRun: loopMinWordRun}
+}
+
+// add appends streamed text, keeping only what is the model's own prose.
+//
+// Quoted material is blanked rather than removed, which matters: dropping the
+// lines outright would pull distant repeats together and put them inside
+// loopMaxAvgGap, inventing the loop the strip is meant to prevent. A run of
+// newlines is harmless because findLoop already refuses a window that is mostly
+// whitespace.
+func (s *loopStream) add(text string) {
+	s.pending += text
+	for {
+		i := strings.IndexByte(s.pending, '\n')
+		if i < 0 {
+			return
+		}
+		line := s.pending[:i]
+		s.pending = s.pending[i+1:]
+		if s.keepLine(line) {
+			s.kept.WriteString(line)
+		}
+		s.kept.WriteByte('\n')
+	}
+}
+
+// tail is what the detectors see: the kept lines, plus the line still being
+// written when it is not inside a fence. The pending line has to be included or
+// a stutter with no newline in it -- "Dynamical" 84 times on one line was a real
+// one -- would sit in the buffer forever and never be looked at.
+func (s *loopStream) tail() string {
+	if s.inFence || s.pending == "" {
+		return s.kept.String()
+	}
+	return s.kept.String() + s.pending
+}
+
+// keepLine reports whether a line is the model's own prose.
+//
+// This is script/find-loops.py's strip_code_blocks, which is the same transform
+// the offline tool has always applied before running these same detectors --
+// and the divergence was the bug. The tool that TUNED these thresholds strips
+// quoted code; the in-process detector did not, so it fired on a model reading
+// a file back to itself. Gemini CLI, whose shape this is, resets on the same
+// constructs for the same reason.
+//
+// Live evidence, not a theory: two of thirty runs in the skills trial were
+// stopped mid-turn for quoting the very file they had been asked to edit. The
+// fixture's thirteen near-identical <line> elements put a 50-byte window over
+// the threshold exactly, and both models had already worked out the right
+// answer when the harness cut them off.
+func (s *loopStream) keepLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+		s.inFence = !s.inFence
+		return false
+	}
+	if s.inFence {
+		return false
+	}
+	// A table row repeats its own punctuation by construction.
+	if strings.HasPrefix(t, "|") {
+		return false
+	}
+	// Unfenced markup and data. A fence is the common case and the one both
+	// observed failures took, but nothing obliges a model to use one, and a
+	// line that is a whole element or a whole object field is not prose under
+	// any reading.
+	if len(t) > 1 && t[0] == '<' && t[len(t)-1] == '>' {
+		return false
+	}
+	if isDataField(t) {
+		return false
+	}
+	// Scaffolding around a fence: aider heads every SEARCH/REPLACE block with a
+	// bare filename, so an answer carrying forty edits repeats "main.go" forty
+	// times once the fences are gone.
+	//
+	// It has to look like a *path*, not merely be short and spaceless. The
+	// first version of this in find-loops.py dropped every short spaceless line
+	// and deleted a real finding with it -- a token-level stutter renders one
+	// word per line, and "Dynamical" repeated 84 times vanished. That is why
+	// the rune check below is here and why TestStripKeepsAOneWordPerLineStutter
+	// exists.
+	if isBarePath(t) {
+		return false
+	}
+	return true
+}
+
+// isBarePath matches the filename that heads an edit block.
+//
+// The separator has to sit *between* characters. Requiring only that one be
+// present anywhere deleted "Yes." -- short, spaceless, ends in a dot -- and
+// with it any one-word-per-line stutter whose word carries punctuation, which
+// is the very shape this transform must never eat.
+func isBarePath(t string) bool {
+	if t == "" || len(t) >= 40 || strings.ContainsAny(t, " \t") {
+		return false
+	}
+	if strings.ContainsAny(t, "/\\") {
+		return true
+	}
+	i := strings.IndexByte(t, '.')
+	return i > 0 && i < len(t)-1
+}
+
+// isDataField matches a JSON or YAML field line: `"key": value,` or
+// `key: value`.
+//
+// Narrow on purpose, because the failure mode of this whole function is
+// deleting prose and thereby hiding a real loop. The quoted form needs its
+// quotes. The bare form needs an identifier key AND a single-token value:
+// without that second condition it swallowed "Note: the following is wrong"
+// and "Then: I will read it again", which are sentences, not fields.
+func isDataField(t string) bool {
+	t = strings.TrimSpace(strings.TrimLeft(t, "{[-"))
+	if strings.HasPrefix(t, `"`) {
+		i := strings.Index(t, `":`)
+		return i > 0 && !strings.ContainsAny(t[1:i], " \t")
+	}
+	i := strings.IndexByte(t, ':')
+	if i <= 0 || i == len(t)-1 {
+		return false
+	}
+	key, value := t[:i], strings.TrimSpace(t[i+1:])
+	if !strings.ContainsFunc(key, unicode.IsLetter) {
+		return false
+	}
+	for _, r := range key {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return len(strings.Fields(value)) == 1
 }
 
 // feed adds streamed text and reports a loop when one is visible.
@@ -113,16 +257,16 @@ func (d *loopDetector) feed(kind, text string) *loopFinding {
 	if kind == loopReasoning {
 		b = &d.reasoning
 	}
-	b.WriteString(text)
-	if b.Len() > loopTailBytes {
+	b.add(text)
+	if b.kept.Len() > loopTailBytes {
 		// Keep the tail. Trimming loses a loop that started earlier and would
 		// still be running, but a running loop re-establishes itself inside the
 		// window within loopMinCount repetitions.
-		s := b.String()
-		b.Reset()
-		b.WriteString(s[len(s)-loopTailBytes:])
+		s := b.kept.String()
+		b.kept.Reset()
+		b.kept.WriteString(s[len(s)-loopTailBytes:])
 	}
-	tail := b.String()
+	tail := b.tail()
 	f := findLoop(tail, d.MinCount)
 	if f == nil {
 		f = findWordRun(tail, d.MinRun)
