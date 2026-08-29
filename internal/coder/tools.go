@@ -9,6 +9,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/skill"
 )
 
 // Tool names. These are the conventional names across coding harnesses, on
@@ -31,6 +32,9 @@ const (
 	// toolWebsearch pairs with it, and the pairing is the point: the two names
 	// sit beside each other in every harness a model has seen.
 	toolWebsearch = "websearch"
+	// toolSkill loads one of the user's skills. Its catalog lives in the tool
+	// description rather than the prompt — see skills.go.
+	toolSkill = "skill"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -76,6 +80,13 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// with no configured instance there is no search to offer.
 	if c.Search != nil {
 		defs = append(defs, websearchTool())
+	}
+	// Also before the ask-mode return: loading instructions mutates nothing,
+	// and a discussion turn is where a skill about how to discuss something
+	// belongs. Offered only when there is something to name, because the enum
+	// would otherwise be empty and the description would list nothing.
+	if len(skill.Usable(c.Skills)) > 0 {
+		defs = append(defs, skillTool(c.Skills))
 	}
 	if c.editFormat == "ask" {
 		return defs
@@ -569,6 +580,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			results[tc.ID] = c.runWebsearch(ctx, q)
+		case toolSkill:
+			s, msg := parseSkillArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			results[tc.ID] = c.runSkill(ctx, s)
 		case toolAskUser:
 			// Not routed through confirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
