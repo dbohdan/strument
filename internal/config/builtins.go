@@ -370,7 +370,7 @@ func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
 		if def == nil {
 			return nil, fmt.Errorf(
 				"env: environment variable %q is not set; pass a default to make it optional, "+
-					"e.g. env(%q, default = \"\")", name, name)
+					"e.g. env(%q, default=\"\")", name, name)
 		}
 		return def, nil
 	})

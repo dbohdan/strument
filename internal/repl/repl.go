@@ -320,9 +320,6 @@ func (r *REPL) announce() {
 	} else {
 		r.printf("Git repo: none")
 	}
-	if r.opts.ResumeNote != "" {
-		r.printf("%s", r.opts.ResumeNote)
-	}
 	// The parse layer is what symbol and the after-an-edit check are built on.
 	// The banner used to report the repo map's token budget here, which stopped
 	// meaning anything when the map left the prompt: nothing spends those
@@ -357,6 +354,12 @@ func (r *REPL) announce() {
 		} else {
 			r.printf("Skills: %d available (/skill to list them)", usable)
 		}
+	}
+
+	// This point marks the switch to messages that are sentences
+	// and end in a full stop.
+	if r.opts.ResumeNote != "" {
+		r.printf("%s", r.opts.ResumeNote)
 	}
 	// Bare for an /add pin and marked for a /read-only one, matching
 	// renderPromptHeader and the messages the commands themselves print. Only

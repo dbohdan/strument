@@ -283,10 +283,9 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 		}
 		r.printf("  %-*s  %s", width+1, left, c.help)
 	}
-	r.printf("Arguments: <required>, [optional], \"...\" repeats.")
-	r.printf("Quote a <file> whose name has a space in it; every other argument is taken as written.")
+	r.printf("\nArguments: <required>, [optional], \"...\" repeats.")
+	r.printf("Quote a <file> argument that has spaces.")
 	r.printf("<command>, <question>, and <request> take the rest of the line.")
-	r.printf("Anything else is sent to the model.")
 	return ""
 }
 
