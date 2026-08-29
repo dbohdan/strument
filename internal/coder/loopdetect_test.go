@@ -68,6 +68,21 @@ func TestFindLoopIgnoresWidelySpacedRepeats(t *testing.T) {
 	}
 }
 
+func TestFindLoopIgnoresOutliersAroundLoop(t *testing.T) {
+	unit := "I need to check the file again to be sure of the contents. "
+	loop := strings.Repeat(unit, loopMinCount)
+	separator := strings.Repeat("x", loopMaxGap)
+
+	for _, text := range []string{
+		unit + separator + loop,
+		loop + separator + unit,
+	} {
+		if f := findLoop(text, loopMinCount); f == nil {
+			t.Errorf("missed loop next to an isolated occurrence")
+		}
+	}
+}
+
 // Whitespace recurs forever and means nothing. A blank-line run is what a model
 // emits while formatting, not while looping.
 func TestFindLoopIgnoresWhitespace(t *testing.T) {

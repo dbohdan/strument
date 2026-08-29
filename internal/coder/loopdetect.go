@@ -316,21 +316,24 @@ func findLoop(text string, minCount int) *loopFinding {
 		// that named this file's fixture log — pools occurrences whose mean
 		// spacing is fine while the gaps swing wildly between one line of
 		// deliberation and three, which is why the average gap this replaced
-		// let the false positive through and neither of these does.
-		smallest, largest := 1<<30, 0
-		for i := 1; i < len(p); i++ {
-			g := p[i] - p[i-1]
-			if g < smallest {
-				smallest = g
+		// let the false positive through and neither of these does. Check each
+		// qualifying group separately so an old or later occurrence cannot poison
+		// a genuine loop.
+		for start := 0; start+minCount <= len(p); start++ {
+			smallest, largest := 1<<30, 0
+			for i := start + 1; i < start+minCount; i++ {
+				g := p[i] - p[i-1]
+				if g < smallest {
+					smallest = g
+				}
+				if g > largest {
+					largest = g
+				}
 			}
-			if g > largest {
-				largest = g
+			if largest <= loopMaxGap && largest <= loopGapJitter*smallest {
+				return &loopFinding{Sample: sampleOf(w), Count: minCount}
 			}
 		}
-		if largest > loopMaxGap || largest > loopGapJitter*smallest {
-			continue
-		}
-		return &loopFinding{Sample: sampleOf(w), Count: len(p)}
 	}
 	return nil
 }
