@@ -92,6 +92,7 @@ func init() {
 		{"reset", "", "Unpin everything, clear the history, and forget approved origins", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
 		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
+		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat", cmdSkill},
 		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message", cmdSubmit},
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
@@ -205,6 +206,8 @@ func (r *REPL) completer() readline.AutoCompleter {
 			)
 		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
+		case "skill":
+			sub = append(sub, readline.PcItemDynamic(r.completeSkills))
 		case "web":
 			// A URL is not completable. "allow" gets no argument completion
 			// either — offering the approved origins there would complete the
@@ -693,6 +696,13 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// reload look like it had worked when it had not.
 	if r.opts.ApplyEgress != nil {
 		r.opts.ApplyEgress(r.coder, cfg)
+	}
+	// Skills are not in the config, but they are read from disk at startup and
+	// a reload is what a user reaches for after trusting one in another
+	// window. 177bd2b made it the rule that a reload re-reads what it claims
+	// to.
+	if r.opts.Rediscover != nil {
+		r.coder.Skills = r.opts.Rediscover()
 	}
 	// The one thing a reload genuinely cannot change, said rather than left to
 	// be discovered: Landlock is applied to the process at startup and its

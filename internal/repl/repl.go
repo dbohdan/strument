@@ -19,6 +19,7 @@ import (
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
+	"dbohdan.com/strument/internal/skill"
 )
 
 // ctrlCWindow is the double-Ctrl-C chord window.
@@ -74,6 +75,12 @@ type Options struct {
 	// were at startup, which is how a proxy fix could be applied, reloaded, and
 	// silently ignored.
 	ApplyEgress func(*coder.Coder, *config.Config)
+
+	// Rediscover re-runs skill discovery for /reload, reopening the trust
+	// store so a `strument trust` run in another window takes effect. A
+	// closure for the same reason ApplyEgress is one: where the trust store
+	// lives is the binary's business. nil leaves the session's skills alone.
+	Rediscover func() []skill.Skill
 
 	Color       bool
 	HistoryFile string
@@ -339,6 +346,17 @@ func (r *REPL) announce() {
 		r.printf("Sandbox: on, writes confined to %d paths (/sandbox to list them)", len(sb.Writable))
 	case !sb.Required:
 		r.printf("Sandbox: off")
+	}
+	// Read through SkillCounts, which reads what toolDefs reads, so the banner
+	// cannot claim a skill the tool set denies — the reason HasParser exists
+	// above. Omitted when nothing was found at all: an absent feature needs no
+	// line, and the untrusted-only case is already a warning from main.
+	if usable, untrusted := r.coder.SkillCounts(); usable+untrusted > 0 {
+		if untrusted > 0 {
+			r.printf("Skills: %d available, %d untrusted (/skill to list them)", usable, untrusted)
+		} else {
+			r.printf("Skills: %d available (/skill to list them)", usable)
+		}
 	}
 	// Bare for an /add pin and marked for a /read-only one, matching
 	// renderPromptHeader and the messages the commands themselves print. Only
