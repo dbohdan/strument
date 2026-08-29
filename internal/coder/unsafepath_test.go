@@ -9,7 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // TestAddFileThroughSymlinkedRootStaysRelative reproduces a symlinked checkout:
@@ -132,5 +135,113 @@ func TestApplyEditsAddedOutOfRootFile(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(target); string(got) != "new content\n" {
 		t.Errorf("out-of-root file not edited: %q", got)
+	}
+}
+
+// TestPinnedAbsolutePathWritesToTheRealFile is the third instance of the drift
+// contain() and unsafePath keep being warned about, and the first where the two
+// agreed on the *decision* and disagreed on the *destination*.
+//
+// unsafePath exempts a pinned file before it tests for an absolute path, so an
+// absolute path to a pinned file validates as safe. fullPath then joined it onto
+// the root anyway, and filepath.Join(root, "/tmp/p/window.go") is
+// "root/tmp/p/window.go" -- so the write landed in a shadow tree that mirrored
+// the whole absolute path inside the project, the real file kept its old
+// contents, and nothing reported an error. The model said it had fixed the bug;
+// it had not.
+//
+// Found live: a model in the skills trial echoed back the absolute path
+// Strument itself had just printed at it.
+func TestPinnedAbsolutePathWritesToTheRealFile(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "window.go")
+	if err := os.WriteFile(target, []byte("package w\n\nconst N = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, root)
+	c.AddFile(target)
+
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reason := c.unsafePath(abs); reason != "" {
+		t.Fatalf("a pinned file named absolutely was refused: %s", reason)
+	}
+	got := c.fullPath(abs)
+	want := workspace.ResolveSymlinks(abs)
+	if got != want {
+		t.Errorf("fullPath(%q)\n =  %q\nwant %q", abs, got, want)
+	}
+	// The shape of the failure, stated separately: the resolved path must not
+	// be the absolute path grafted onto the root.
+	if strings.HasPrefix(got, workspace.ResolveSymlinks(root)+string(filepath.Separator)+"tmp") ||
+		strings.Count(got, root) > 1 {
+		t.Errorf("the path was joined onto the root, creating a shadow tree: %q", got)
+	}
+}
+
+// The relative case must keep working exactly as it did.
+func TestRelativePathStillResolvesUnderTheRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "internal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, root)
+	got := c.fullPath("internal/foo.go")
+	want := workspace.ResolveSymlinks(filepath.Join(root, "internal", "foo.go"))
+	if got != want {
+		t.Errorf("fullPath(relative) = %q, want %q", got, want)
+	}
+}
+
+// The same defect one layer up, through the code a write tool call actually
+// runs. fullPath is where it lived, but a unit test on fullPath alone would go
+// green for a fix that applyToolEdits then undoes on its own.
+func TestWriteToAPinnedAbsolutePathHitsTheRealFile(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "window.go")
+	const before = "package w\n\nconst N = 1\n"
+	if err := os.WriteFile(target, []byte(before), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, root)
+	c.AddFile(target)
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := map[string]string{}
+	var matchFailure bool
+	edited := c.applyToolEdits([]plannedEdit{{
+		callID: "call_1", path: abs, create: true,
+		replace: "package w\n\nconst N = 2\n",
+	}}, results, &matchFailure)
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) == before {
+		t.Errorf("the real file was not written; result was %q, edited=%v",
+			results["call_1"], edited)
+	}
+	// And no shadow tree: the only .go files under root are the one that was
+	// already there.
+	var found []string
+	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".go") {
+			rel, _ := filepath.Rel(root, p)
+			found = append(found, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(found, []string{"window.go"}) {
+		t.Errorf("files under the root = %v, want just [window.go] "+
+			"(a shadow tree means the absolute path was joined onto the root)", found)
 	}
 }

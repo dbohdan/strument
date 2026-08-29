@@ -205,6 +205,21 @@ const newFileMode = 0o644
 // the project root (or to be a file the user added deliberately), so following
 // the link here agrees with the check that already ran.
 func (c *Coder) fullPath(rel string) string {
+	// Absolute already: leave it alone. unsafePath refuses every absolute path
+	// except one naming a file the user pinned, so the only way to get here
+	// with one is that carve-out -- and joining it onto the root turned
+	// "/tmp/p/window.go" into "<root>/tmp/p/window.go". The write then landed
+	// in a shadow tree mirroring the whole absolute path inside the project,
+	// the real file kept its old contents, and nothing said so.
+	//
+	// The same guard absRootPath has always had. contain() spells it
+	// filepath.Clean(raw) on its side. This is the third time these three have
+	// been found disagreeing about absolute paths, and the first time they
+	// agreed on the decision and differed on the destination, which is why it
+	// was silent rather than a refusal.
+	if filepath.IsAbs(rel) {
+		return workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(rel)))
+	}
 	return workspace.ResolveSymlinks(filepath.Join(c.Root, filepath.FromSlash(rel)))
 }
 
