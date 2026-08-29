@@ -782,6 +782,12 @@ models and the active alias, `max_steps`, `max_error_reflections`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 
+It also re-runs [skill](#skills) discovery, reopening the trust store, which is
+what makes `strument trust` in another window take effect without a restart.
+Skills are not part of `config.star`, but they are read from disk at startup
+for the same reason the rest of this list is, and a reload has to re-read what
+it claims to. `/skill` shows the result.
+
 Two things a reload cannot change, and it says so rather than leaving you to
 find out: **`sandbox`**, because Landlock applies to the process at startup and
 its rules only ever add, so a session cannot widen or drop its own confinement;
@@ -1134,4 +1140,70 @@ frozen into your own config, which is why nothing goes stale behind your back.
 A `.strument.star` in the project root can add or override `models`, `default`,
 `history_file`, and `proxy`, with the project file winning. It is **inert until
 trusted**: run `strument trust` in the directory (a direnv-style content-hash
-gate), and re-run it after every edit.
+gate), and re-run it after every edit. The same command also trusts the
+project's [skills](#skills).
+
+## Skills
+
+A **skill** is a set of instructions for a particular kind of task, written in
+Markdown with a small YAML header. The model asks for one by name and gets it
+back; a skill about writing release notes is nothing until you ask for release
+notes, at which point it is the whole difference between a generic draft and
+yours.
+
+Strument reads the [Agent Skills][agent-skills] format:
+
+```markdown
+---
+name: release-notes
+description: Draft release notes from the commits since the last tag.
+---
+
+Group the commits by kind, drop the mechanical ones, and lead with what a user
+would notice. Keep it to one screen.
+```
+
+`name` and `description` are required, and the `name` must equal the directory
+holding the file. `license`, `compatibility` and `allowed-tools` are read and
+kept; **`allowed-tools` grants nothing** — every tool call a skill leads to goes
+through the same permission gates as any other. Any other key is refused, with
+a message naming the fields Strument does know: a skill written for another
+harness fails loudly rather than half-working.
+
+### Where skills live
+
+| Path | Scope |
+| --- | --- |
+| `$XDG_DATA_HOME/strument/skills/<name>/SKILL.md` | every project |
+| `<project>/.strument/skills/<name>/SKILL.md` | this project |
+| `<project>/.agents/skills/<name>/SKILL.md` | this project |
+
+`$XDG_DATA_HOME` defaults to `~/.local/share`, on every platform including
+macOS — a skills tree is *data* the user installed (instructions with scripts,
+references and assets beside them), not configuration, and the two live in
+different places. A project root shadows the global one when both define a
+skill with the same name.
+
+### Trust
+
+A global skill is usable as it stands: putting a file under your own data
+directory is a deliberate act. A **project skill is inert until trusted**, the
+same content-hash gate `.strument.star` uses and for the same reason — an
+untrusted `SKILL.md` is text from whoever wrote the repository, and it would
+otherwise be instructions a clone hands your model without asking.
+
+```sh
+strument trust    # in the project directory
+```
+
+One command covers the config and every skill in the project: they come from
+the same author, so they are one decision. It names each file it trusted. Trust
+is over content, so **re-run it after every edit** — an edited skill is not the
+skill you approved.
+
+`/skill` lists what the session found, marking anything untrusted and saying
+how to allow it; `/skill <name>` puts one in the chat yourself. `/reload`
+re-runs discovery, so trusting a skill in another window takes effect without
+restarting.
+
+[agent-skills]: https://code.claude.com/docs/en/skills

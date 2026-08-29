@@ -186,6 +186,11 @@ inherited from aider.
     after-an-edit check — which routes `.go` to `go/parser` instead, because
     for Go that is exact and about a thousand times faster on the pathological
     cases. `queries/` and `queries-legacy/` hold the aider `.scm` files.
+  - `skill/` — Agent Skills: a restricted parser for the `SKILL.md`
+    frontmatter (a hand-written subset rather than a YAML library, which is
+    the point — see `frontmatter.go`), discovery across the project and the
+    user's data directory, and the trust filter `Usable`, which every path
+    putting skill text in front of a model goes through.
   - `prompts/` — the built-in prompt sets.
   - `render/` — streaming markdown renderer (a Go port of
     thetarnav/streaming-markdown) plus the ANSI terminal renderer and the

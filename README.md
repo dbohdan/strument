@@ -19,6 +19,9 @@ See [`doc/`](doc/README.md) for the developer overview.
   Project-local `.strument.star` files are supported.
   They stay inert until authorized with `strument trust` in the directory.
   (This is the [direnv](https://direnv.net/) model of trust based on recorded content hashes.)
+- [Agent Skills](https://code.claude.com/docs/en/skills).
+  Drop a `SKILL.md` under `~/.local/share/strument/skills/` or the project's `.strument/skills/`, and the model can ask for it by name.
+  Project skills need `strument trust` too, and `allowed-tools` grants nothing: a skill is instructions, not permissions.
 - [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
   `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
 - Every turn is undoable, with or without Git.
@@ -182,6 +185,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/squash [<n>]` | Fold the last `n` turns' commits into one. |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [<n>]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
+| `/skill [<name>]` | Show the skills this session found, or add one's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
 | `/symbol <name> [definition \| reference]` | Find where a name is defined or used from the language parser rather than from text. |
 | `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). Bare `/web` shows which origins `webfetch` may reach unasked, and `/web drop`/`/web reset` take those back. |
@@ -370,6 +374,7 @@ On a network that can't reach a provider directly, a `proxy` on the `provider()`
 A top-level `proxy` is applied to all providers and every outbound HTTPS action Strument takes.
 
 A project-local `.strument.star` can extend or override any of this, once you have run `strument trust` in the directory.
+The same command trusts the project's skills, which are inert without it for the same reason.
 See [`doc/config.md`](doc/config.md) for details.
 
 
