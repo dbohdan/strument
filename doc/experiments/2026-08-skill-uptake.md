@@ -135,6 +135,44 @@ not about this one.
 The other two imperfect runs: `hy3-skill-revenue-1` wrote "Revenue" with no
 unit; `v4flash-inline-latency-1` left six vertical gridlines.
 
+### Incidental: a quarter of the reasoning is arithmetic
+
+Not part of the design, measured afterwards because reading the transcripts
+made it conspicuous. Counting lines in the reasoning stream that join two
+numerals with an operator, or assign a number to a coordinate:
+
+| arm | reasoning lines | arithmetic lines | share | arithmetic chars ≈ tokens |
+| --- | --- | --- | --- | --- |
+| none | 242 | 49 | 20% | 9,100 ≈ **2,300** |
+| skill | 152 | 38 | 25% | 9,400 ≈ **2,350** |
+| inline | 176 | 45 | 26% | 10,200 ≈ **2,550** |
+
+Per run. The heaviest single run spent ~12,700 tokens of reasoning on
+arithmetic; five more exceeded 7,700. The models are recomputing bar heights,
+axis scales and label coordinates by hand, digit by digit — `300.0 * 412 / 672`
+and its four hundred siblings.
+
+**The interesting part is that the skill does not reduce it.** It cuts
+reasoning lines by 37% (242 → 152) while arithmetic characters stay flat
+(9,100 → 9,400). What the skill removes is *deliberation about what
+"professional" means*; the geometry is untouched, because the geometry was
+never the part the model was unsure about. That is also why the skill arm
+spends fewer steps: it is not thinking faster, it is thinking about one fewer
+thing.
+
+So the two costs are separable, and a skill only addresses one of them. The
+other wants a calculator — but not, as tested, a Starlark one: Starlark rejects
+`round()`, `sum()`, `**`, f-strings, `%` formatting, `.format()` specs, `while`
+and `try`, while accepting enough Python to look like Python. A model's
+instincts would walk it into a syntax error per attempt. A tool for this should
+have a grammar with no Python resemblance to mislead.
+
+*Metric caveat:* a regex proxy over the rendered reasoning stream, and
+characters÷4 for tokens. It counts a line once however much arithmetic is on
+it, so it under-reports; it cannot tell recomputation from first computation.
+Directionally sound, not precise. `arith.py` reproduces the table — it needs
+the raw transcripts, which are not committed, so it takes `--runs <dir>`.
+
 Two runs were dropped, both provider failures (`Empty response received`, an
 `INTERNAL_ERROR` stream reset), one in `none` and one in `inline` — neither in
 `skill`, so the exclusions do not favour the treatment.
@@ -220,3 +258,9 @@ partial compliance, which is the failure mode most worth knowing. And "the
 model declined a chart skill on a Go bug" is a weaker claim than it sounds:
 these decoys are unambiguous, and a near-miss task (a chart in a project the
 task is not about) is untested.
+
+**Worth a trial next:** whether a calculator tool cuts the arithmetic above.
+The observation is solid — the token counts are real and uniform across arms —
+but this trial did not manipulate it, so it says nothing about whether a
+calculator would be *reached for*, which §18 says is the question to settle
+first and cheaply.
