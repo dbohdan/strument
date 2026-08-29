@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quarterly revenue</title>
+<style>
+  body { margin: 0; background: #FFFFFF; }
+  svg { display: block; }
+  .bar { transition: opacity 0.15s ease; cursor: pointer; }
+  .bar:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="Segoe UI, -apple-system, Roboto, Helvetica, Arial, sans-serif" font-size="11">
+  <defs>
+    <linearGradient id="grad2025" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5D90BF"/>
+      <stop offset="100%" stop-color="#4E79A7"/>
+    </linearGradient>
+    <linearGradient id="grad2026" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F8A93C"/>
+      <stop offset="100%" stop-color="#F28E2B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="720" height="400" fill="#FFFFFF"/>
+
+  <!-- horizontal grid lines -->
+  <line class="grid" x1="60" y1="82.9" x2="690" y2="82.9" stroke="#E6E8EB" stroke-width="1"/>
+  <line class="grid" x1="60" y1="125.7" x2="690" y2="125.7" stroke="#E6E8EB" stroke-width="1"/>
+  <line class="grid" x1="60" y1="168.6" x2="690" y2="168.6" stroke="#E6E8EB" stroke-width="1"/>
+  <line class="grid" x1="60" y1="211.4" x2="690" y2="211.4" stroke="#E6E8EB" stroke-width="1"/>
+  <line class="grid" x1="60" y1="254.3" x2="690" y2="254.3" stroke="#E6E8EB" stroke-width="1"/>
+  <line class="grid" x1="60" y1="297.1" x2="690" y2="297.1" stroke="#E6E8EB" stroke-width="1"/>
+
+  <!-- axes -->
+  <line x1="60" y1="340" x2="690" y2="340" stroke="#9AA0A6" stroke-width="1.5"/>
+  <line x1="60" y1="40" x2="60" y2="340" stroke="#D0D4D8" stroke-width="1"/>
+
+  <!-- y-axis tick marks -->
+  <line x1="57" y1="40.0" x2="60" y2="40.0" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="82.9" x2="60" y2="82.9" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="125.7" x2="60" y2="125.7" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="168.6" x2="60" y2="168.6" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="211.4" x2="60" y2="211.4" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="254.3" x2="60" y2="254.3" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="297.1" x2="60" y2="297.1" stroke="#9AA0A6" stroke-width="1"/>
+  <line x1="57" y1="340.0" x2="60" y2="340.0" stroke="#9AA0A6" stroke-width="1"/>
+
+  <!-- bars -->
+  <rect class="bar" data-cat="Q1" data-series="2025" data-value="412" x="77.5" y="163.4" width="35.0" height="176.6" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q1 2025: 412</title></rect>
+  <rect class="bar" data-cat="Q1" data-series="2026" data-value="455" x="112.5" y="145.0" width="35.0" height="195.0" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q1 2026: 455</title></rect>
+  <rect class="bar" data-cat="Q2" data-series="2025" data-value="388" x="182.5" y="173.7" width="35.0" height="166.3" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q2 2025: 388</title></rect>
+  <rect class="bar" data-cat="Q2" data-series="2026" data-value="470" x="217.5" y="138.6" width="35.0" height="201.4" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q2 2026: 470</title></rect>
+  <rect class="bar" data-cat="Q3" data-series="2025" data-value="455" x="287.5" y="145.0" width="35.0" height="195.0" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q3 2025: 455</title></rect>
+  <rect class="bar" data-cat="Q3" data-series="2026" data-value="498" x="322.5" y="126.6" width="35.0" height="213.4" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q3 2026: 498</title></rect>
+  <rect class="bar" data-cat="Q4" data-series="2025" data-value="501" x="392.5" y="125.3" width="35.0" height="214.7" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q4 2025: 501</title></rect>
+  <rect class="bar" data-cat="Q4" data-series="2026" data-value="560" x="427.5" y="100.0" width="35.0" height="240.0" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q4 2026: 560</title></rect>
+  <rect class="bar" data-cat="Q5" data-series="2025" data-value="470" x="497.5" y="138.6" width="35.0" height="201.4" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q5 2025: 470</title></rect>
+  <rect class="bar" data-cat="Q5" data-series="2026" data-value="544" x="532.5" y="106.9" width="35.0" height="233.1" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q5 2026: 544</title></rect>
+  <rect class="bar" data-cat="Q6" data-series="2025" data-value="523" x="602.5" y="115.9" width="35.0" height="224.1" rx="3" fill="url(#grad2025)" stroke="#FFFFFF" stroke-width="1"><title>Q6 2025: 523</title></rect>
+  <rect class="bar" data-cat="Q6" data-series="2026" data-value="611" x="637.5" y="78.1" width="35.0" height="261.9" rx="3" fill="url(#grad2026)" stroke="#FFFFFF" stroke-width="1"><title>Q6 2026: 611</title></rect>
+
+  <!-- value labels -->
+  <text x="95" y="157.4" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">412</text>
+  <text x="130" y="139.0" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">455</text>
+  <text x="200" y="167.7" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">388</text>
+  <text x="235" y="132.6" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">470</text>
+  <text x="305" y="139.0" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">455</text>
+  <text x="340" y="120.6" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">498</text>
+  <text x="410" y="119.3" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">501</text>
+  <text x="445" y="94.0" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">560</text>
+  <text x="515" y="132.6" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">470</text>
+  <text x="550" y="100.9" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">544</text>
+  <text x="620" y="109.9" text-anchor="middle" font-size="10" font-weight="600" fill="#4E79A7">523</text>
+  <text x="655" y="72.1" text-anchor="middle" font-size="10" font-weight="600" fill="#F28E2B">611</text>
+
+  <!-- y-axis labels -->
+  <text x="52" y="44.0" text-anchor="end" fill="#6B7280">700</text>
+  <text x="52" y="86.9" text-anchor="end" fill="#6B7280">600</text>
+  <text x="52" y="129.7" text-anchor="end" fill="#6B7280">500</text>
+  <text x="52" y="172.6" text-anchor="end" fill="#6B7280">400</text>
+  <text x="52" y="215.4" text-anchor="end" fill="#6B7280">300</text>
+  <text x="52" y="258.3" text-anchor="end" fill="#6B7280">200</text>
+  <text x="52" y="301.1" text-anchor="end" fill="#6B7280">100</text>
+  <text x="52" y="344.0" text-anchor="end" fill="#6B7280">0</text>
+
+  <!-- category labels -->
+  <text x="112.5" y="358" text-anchor="middle" fill="#444444">Q1</text>
+  <text x="217.5" y="358" text-anchor="middle" fill="#444444">Q2</text>
+  <text x="322.5" y="358" text-anchor="middle" fill="#444444">Q3</text>
+  <text x="427.5" y="358" text-anchor="middle" fill="#444444">Q4</text>
+  <text x="532.5" y="358" text-anchor="middle" fill="#444444">Q5</text>
+  <text x="637.5" y="358" text-anchor="middle" fill="#444444">Q6</text>
+
+  <!-- axis titles -->
+  <text x="16" y="190.0" text-anchor="middle" font-size="12" font-weight="600" fill="#6B7280" transform="rotate(-90 16 190.0)">Value</text>
+  <text x="375" y="380" text-anchor="middle" font-size="12" font-weight="600" fill="#6B7280">Quarter</text>
+
+  <!-- title -->
+  <text x="360.0" y="26" text-anchor="middle" font-size="16" font-weight="700" fill="#1F2937">Quarterly revenue</text>
+
+  <!-- legend -->
+  <g class="legend">
+    <rect x="74" y="50" width="88" height="44" rx="4" fill="#FFFFFF" opacity="0.95" stroke="#E2E6EA"/>
+    <rect x="84" y="60" width="11" height="11" rx="2" fill="#4E79A7"/>
+    <text x="102" y="69" fill="#444444">2025</text>
+    <rect x="84" y="78" width="11" height="11" rx="2" fill="#F28E2B"/>
+    <text x="102" y="87" fill="#444444">2026</text>
+  </g>
+</svg>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quarterly revenue</title>
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f5f6f8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .chart-container {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 2px 12px rgba(0,0,0,0.04);
+    padding: 8px;
+  }
+  text {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .bar-group rect {
+    transition: opacity 0.15s ease;
+    cursor: pointer;
+  }
+  .bar-group:hover rect {
+    opacity: 0.8;
+  }
+</style>
+</head>
+<body>
+<div class="chart-container">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-size="11">
+  <!-- Background -->
+  <rect x="0" y="0" width="720" height="400" fill="#FFFFFF" rx="0"/>
+  <rect x="60" y="40" width="630" height="300" fill="#FAFBFC"/>
+
+  <!-- Grid lines - subtle dashed -->
+  <line x1="60" y1="40.0" x2="690" y2="40.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+  <line x1="60" y1="100.0" x2="690" y2="100.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+  <line x1="60" y1="160.0" x2="690" y2="160.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+  <line x1="60" y1="220.0" x2="690" y2="220.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+  <line x1="60" y1="280.0" x2="690" y2="280.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+  <line x1="60" y1="340.0" x2="690" y2="340.0" stroke="#E8ECF0" stroke-width="0.75" stroke-dasharray="4,3"/>
+
+  <!-- Axes -->
+  <line x1="60" y1="340" x2="690" y2="340" stroke="#CBD2DA" stroke-width="1"/>
+  <line x1="60" y1="40" x2="60" y2="340" stroke="#CBD2DA" stroke-width="1"/>
+
+  <!-- Bars - Group 1: Q1 -->
+  <g class="bar-group">
+    <rect data-cat="Q1" data-series="2025" data-value="412" x="77.5" y="156.1" width="35.0" height="183.9" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q1" data-series="2026" data-value="455" x="112.5" y="136.9" width="35.0" height="203.1" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Bars - Group 2: Q2 -->
+  <g class="bar-group">
+    <rect data-cat="Q2" data-series="2025" data-value="388" x="182.5" y="166.8" width="35.0" height="173.2" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q2" data-series="2026" data-value="470" x="217.5" y="130.2" width="35.0" height="209.8" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Bars - Group 3: Q3 -->
+  <g class="bar-group">
+    <rect data-cat="Q3" data-series="2025" data-value="455" x="287.5" y="136.9" width="35.0" height="203.1" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q3" data-series="2026" data-value="498" x="322.5" y="117.7" width="35.0" height="222.3" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Bars - Group 4: Q4 -->
+  <g class="bar-group">
+    <rect data-cat="Q4" data-series="2025" data-value="501" x="392.5" y="116.4" width="35.0" height="223.6" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q4" data-series="2026" data-value="560" x="427.5" y="90.0" width="35.0" height="250.0" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Bars - Group 5: Q5 -->
+  <g class="bar-group">
+    <rect data-cat="Q5" data-series="2025" data-value="470" x="497.5" y="130.2" width="35.0" height="209.8" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q5" data-series="2026" data-value="544" x="532.5" y="97.2" width="35.0" height="242.8" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Bars - Group 6: Q6 -->
+  <g class="bar-group">
+    <rect data-cat="Q6" data-series="2025" data-value="523" x="602.5" y="106.6" width="35.0" height="233.4" fill="#4472C4" rx="2" ry="2"/>
+    <rect data-cat="Q6" data-series="2026" data-value="611" x="637.5" y="67.3" width="35.0" height="272.7" fill="#ED7D31" rx="2" ry="2"/>
+  </g>
+
+  <!-- Y-axis labels -->
+  <text x="52" y="44.0" text-anchor="end" fill="#6B7685" font-size="10">672</text>
+  <text x="52" y="104.0" text-anchor="end" fill="#6B7685" font-size="10">538</text>
+  <text x="52" y="164.0" text-anchor="end" fill="#6B7685" font-size="10">403</text>
+  <text x="52" y="224.0" text-anchor="end" fill="#6B7685" font-size="10">269</text>
+  <text x="52" y="284.0" text-anchor="end" fill="#6B7685" font-size="10">134</text>
+  <text x="52" y="344.0" text-anchor="end" fill="#6B7685" font-size="10">0</text>
+
+  <!-- X-axis labels -->
+  <text x="112.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q1</text>
+  <text x="217.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q2</text>
+  <text x="322.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q3</text>
+  <text x="427.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q4</text>
+  <text x="532.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q5</text>
+  <text x="637.5" y="358" text-anchor="middle" fill="#3E4A5A" font-size="11" font-weight="500">Q6</text>
+
+  <!-- Y-axis title -->
+  <text x="16" y="190.0" text-anchor="middle" fill="#6B7685" font-size="11" font-weight="500" transform="rotate(-90 16 190.0)">Value</text>
+
+  <!-- Chart title -->
+  <text x="60" y="24" fill="#1A2332" font-size="17" font-weight="600">Quarterly revenue</text>
+
+  <!-- Legend - refined -->
+  <rect x="588" y="46" width="95" height="50" rx="4" ry="4" fill="#FFFFFF" stroke="#E8ECF0" stroke-width="1"/>
+  <rect x="598" y="56" width="12" height="12" rx="2" ry="2" fill="#4472C4"/>
+  <text x="616" y="66" fill="#3E4A5A" font-size="11">2025</text>
+  <rect x="598" y="74" width="12" height="12" rx="2" ry="2" fill="#ED7D31"/>
+  <text x="616" y="84" fill="#3E4A5A" font-size="11">2026</text>
+</svg>
+</div>
+</body>
+</html>

@@ -514,6 +514,58 @@ something other than what it is named after.
 
 ---
 
+## 19. A runner that dies quietly looks exactly like one that is slow
+
+§18 is about an experiment that cannot fail. This one is about the harness
+around it, and it cost an hour of a 234-run trial being reported as healthy
+while its bookkeeping was dead.
+
+One run hit the timeout. The handler was:
+
+```python
+except subprocess.TimeoutExpired as e:
+    text = (e.stdout or "") + (e.stderr or "") + "\n[TIMEOUT]\n"
+```
+
+`TimeoutExpired` carries **raw bytes even when `subprocess.run` was given
+`text=True`** — decoding happens after `communicate()` returns, which on this
+path it never does. So the concatenation raised `TypeError` inside a worker
+thread, the exception came back out of `f.result()`, and the `as_completed`
+loop died.
+
+The work did not. `ThreadPoolExecutor.__exit__` calls `shutdown(wait=True)`, and
+every job had been submitted up front, so all 234 kept running to completion
+with nobody reading their results. 233 of 234 output files were written. The
+progress counter froze at 163.
+
+That is the worst available shape for this to fail in: the counter stops while
+the machine keeps working, so it looks like a stall, and an estimate read off
+that counter — "about thirteen minutes left" — is not merely wrong, it is
+confidently wrong an hour later.
+
+**And the watcher could not tell.** It was `until grep -q "^wrote " log`, which
+matches only the success marker. A crash produces silence, and silence is
+indistinguishable from still-running. *Tell:* ask of any completion check, *if
+this process died right now, would anything fire?* If not, it is not a
+completion check.
+
+Three fixes, in order of how much they buy:
+
+- **Wait on the pid, not on a log marker.** `until ! kill -0 $PID` fires on
+  every exit including a crash. Capture the *specific* pid: a `pgrep -f`
+  pattern matches any later run of the same script, which in this session made
+  one watcher fire for a job that had finished four hours earlier.
+- **Never let one job kill the collection loop.** Wrap `f.result()` and record
+  the failure as a row.
+- **Match every terminal state** when you must watch a log:
+  `grep -Eq "^wrote |Traceback|Error"`.
+
+None of this is about statistics, and all of it is recoverable: because the raw
+output was on disk (§4), the fix was to repair the runner and re-run it, which
+reused 233 saved runs and re-executed one. Nothing was re-bought.
+
+---
+
 ## The short version
 
 Most of what goes wrong is not statistics. It is the equipment.
@@ -523,7 +575,8 @@ model actually use the thing I am testing, could the fixture have caught the
 failure I am claiming it rules out, did the scorer see what I think it saw, do
 the two arms differ in exactly one thing, did anything pass in the arm built to
 break it, does the fixture even contain the situation I am claiming to measure,
-and have I read three transcripts?*
+did the runner actually finish or only stop reporting, and have I read three
+transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
 

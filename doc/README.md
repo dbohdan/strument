@@ -190,7 +190,11 @@ inherited from aider.
     frontmatter (a hand-written subset rather than a YAML library, which is
     the point — see `frontmatter.go`), discovery across the project and the
     user's data directory, and the trust filter `Usable`, which every path
-    putting skill text in front of a model goes through.
+    putting skill text in front of a model goes through. Measured in
+    [`doc/experiments/2026-08-skill-uptake.md`](experiments/2026-08-skill-uptake.md):
+    six models loaded a relevant skill 54/54 times, never loaded it on a task
+    it did not fit (0/36), and on-demand loading scored the same as having the
+    text in context.
   - `prompts/` — the built-in prompt sets.
   - `render/` — streaming markdown renderer (a Go port of
     thetarnav/streaming-markdown) plus the ANSI terminal renderer and the

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Request latency by week</title>
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f5f6f8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="460" viewBox="0 0 780 460">
+  <defs>
+    <filter id="card-shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="bg-gradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafbfc"/>
+      <stop offset="100%" stop-color="#f0f2f5"/>
+    </linearGradient>
+    <!-- Subtle area fills -->
+    <linearGradient id="p99-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="p95-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="p50-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Card background -->
+  <rect x="24" y="24" width="732" height="412" rx="8" fill="url(#bg-gradient)" stroke="#e2e5e9" stroke-width="1" filter="url(#card-shadow)"/>
+
+  <!-- Title block -->
+  <text x="60" y="62" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1e293b">Request Latency by Week</text>
+  <text x="60" y="80" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">Weekly percentile latency measurements (ms)</text>
+
+  <!-- Chart area: x=70..700 y=100..370 -->
+  <rect x="70" y="100" width="630" height="270" rx="0" fill="#ffffff" stroke="#e2e5e9" stroke-width="1"/>
+
+  <!-- Horizontal grid lines (dashed, light) -->
+  <line x1="70" y1="100" x2="700" y2="100" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="70" y1="154" x2="700" y2="154" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="70" y1="208" x2="700" y2="208" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="70" y1="262" x2="700" y2="262" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="70" y1="316" x2="700" y2="316" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="70" y1="370" x2="700" y2="370" stroke="#d1d5db" stroke-width="1"/>
+
+  <!-- Vertical grid lines -->
+  <line x1="70" y1="100" x2="70" y2="370" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="160" y1="100" x2="160" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="250" y1="100" x2="250" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="340" y1="100" x2="340" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="430" y1="100" x2="430" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="520" y1="100" x2="520" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="610" y1="100" x2="610" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="700" y1="100" x2="700" y2="370" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Y-axis labels (font-family and font-size set inline) -->
+  <text x="62" y="104" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">564</text>
+  <text x="62" y="158" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">451</text>
+  <text x="62" y="212" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">338</text>
+  <text x="62" y="266" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">225</text>
+  <text x="62" y="320" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">113</text>
+  <text x="62" y="374" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">0</text>
+
+  <!-- Y-axis title -->
+  <text x="18" y="235" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#94a3b8" font-weight="500" transform="rotate(-90 18 235)">Latency (ms)</text>
+
+  <!-- X-axis labels -->
+  <text x="70" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W1</text>
+  <text x="160" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W2</text>
+  <text x="250" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W3</text>
+  <text x="340" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W4</text>
+  <text x="430" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W5</text>
+  <text x="520" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W6</text>
+  <text x="610" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W7</text>
+  <text x="700" y="390" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">W8</text>
+
+  <!-- Data area fills (below each line) -->
+  <polygon fill="url(#p99-fill)" points="70,370 70,116.4 160,97.8 250,126.5 340,79.1 430,107.3 520,85.5 610,119.1 700,94.0 700,370"/>
+  <polygon fill="url(#p95-fill)" points="70,370 70,244.2 160,236.2 250,248.4 340,228.2 430,239.9 520,230.9 610,244.7 700,234.6 700,370"/>
+  <polygon fill="url(#p50-fill)" points="70,370 70,317.6 160,316.0 250,318.2 340,314.4 430,316.6 520,315.0 610,317.1 700,315.5 700,370"/>
+
+  <!-- p50 line (emerald) -->
+  <polyline data-series="p50" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="70,317.6 160,316.0 250,318.2 340,314.4 430,316.6 520,315.0 610,317.1 700,315.5"/>
+  <circle data-series="p50" data-cat="W1" data-value="42" cx="70" cy="317.6" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W2" data-value="45" cx="160" cy="316.0" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W3" data-value="41" cx="250" cy="318.2" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W4" data-value="48" cx="340" cy="314.4" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W5" data-value="44" cx="430" cy="316.6" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W6" data-value="47" cx="520" cy="315.0" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W7" data-value="43" cx="610" cy="317.1" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W8" data-value="46" cx="700" cy="315.5" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+
+  <!-- p95 line (sky blue) -->
+  <polyline data-series="p95" fill="none" stroke="#0ea5e9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="70,244.2 160,236.2 250,248.4 340,228.2 430,239.9 520,230.9 610,244.7 700,234.6"/>
+  <circle data-series="p95" data-cat="W1" data-value="180" cx="70" cy="244.2" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W2" data-value="195" cx="160" cy="236.2" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W3" data-value="172" cx="250" cy="248.4" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W4" data-value="210" cx="340" cy="228.2" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W5" data-value="188" cx="430" cy="239.9" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W6" data-value="205" cx="520" cy="230.9" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W7" data-value="179" cx="610" cy="244.7" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W8" data-value="198" cx="700" cy="234.6" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+
+  <!-- p99 line (indigo) -->
+  <polyline data-series="p99" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="70,116.4 160,97.8 250,126.5 340,79.1 430,107.3 520,85.5 610,119.1 700,94.0"/>
+  <circle data-series="p99" data-cat="W1" data-value="420" cx="70" cy="116.4" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W2" data-value="455" cx="160" cy="97.8" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W3" data-value="401" cx="250" cy="126.5" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W4" data-value="490" cx="340" cy="79.1" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W5" data-value="437" cx="430" cy="107.3" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W6" data-value="478" cx="520" cy="85.5" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W7" data-value="415" cx="610" cy="119.1" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W8" data-value="462" cx="700" cy="94.0" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+
+  <!-- Legend (right-aligned, inside card) -->
+  <g class="legend" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12">
+    <line x1="580" y1="58" x2="600" y2="58" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="590" cy="58" r="3.5" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+    <text x="608" y="62" fill="#334155" font-weight="500">p99</text>
+
+    <line x1="650" y1="58" x2="670" y2="58" stroke="#0ea5e9" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="660" cy="58" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+    <text x="678" y="62" fill="#334155" font-weight="500">p95</text>
+
+    <line x1="580" y1="78" x2="600" y2="78" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="590" cy="78" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2"/>
+    <text x="608" y="82" fill="#334155" font-weight="500">p50</text>
+  </g>
+</svg>
+</body>
+</html>

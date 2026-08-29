@@ -1,0 +1,1332 @@
+[
+ {
+  "tag": "glm-none-decoy-0",
+  "model": "glm",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00086,
+  "steps": 7,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "glm-skill-decoy-0",
+  "model": "glm",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00053,
+  "steps": 6,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "v4flash-none-decoy-0",
+  "model": "v4flash",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00064,
+  "steps": 6,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "luna-inline-revenue-0",
+  "model": "luna",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.01,
+  "steps": 8,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "luna-skill-revenue-0",
+  "model": "luna",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.01,
+  "steps": 11,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 6,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "qwen-inline-revenue-0",
+  "model": "qwen",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.03,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 6,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "hy3-inline-revenue-0",
+  "model": "hy3",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": true,
+  "cost": 0.0071,
+  "steps": 4,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "glm-inline-revenue-0",
+  "model": "glm",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": true,
+  "cost": 0.0064,
+  "steps": 5,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 6,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "qwen-skill-revenue-0",
+  "model": "qwen",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.0017,
+  "steps": 2,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": true,
+  "edited": false,
+  "changed_files": [],
+  "scope_creep": [],
+  "n_rules": 0,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": false,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": false
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 16,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#00AA00",
+     "#FF0000"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [
+     "<rect x=\"0\" y=\"0\" width=\"720\" height=\"400\" fill=\"#EFEFEF\"/>"
+    ],
+    "borders": [
+     "<rect x=\"60\" y=\"40\" width=\"630\" height=\"300\" fill=\"#FFFFFF\" "
+    ],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 5,
+    "horizontal": 6,
+    "edge_lines": 2
+   }
+  }
+ },
+ {
+  "tag": "luna-skill-decoy-0",
+  "model": "luna",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0019,
+  "steps": 6,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "glm-none-revenue-0",
+  "model": "glm",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0047,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": true,
+  "edited": false,
+  "changed_files": [],
+  "scope_creep": [],
+  "n_rules": 0,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": false,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": false
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 16,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#00AA00",
+     "#FF0000"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [
+     "<rect x=\"0\" y=\"0\" width=\"720\" height=\"400\" fill=\"#EFEFEF\"/>"
+    ],
+    "borders": [
+     "<rect x=\"60\" y=\"40\" width=\"630\" height=\"300\" fill=\"#FFFFFF\" "
+    ],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 5,
+    "horizontal": 6,
+    "edge_lines": 2
+   }
+  }
+ },
+ {
+  "tag": "hy3-skill-revenue-0",
+  "model": "hy3",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.0079,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "hy3-none-decoy-0",
+  "model": "hy3",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0013,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "glm-skill-revenue-0",
+  "model": "glm",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.0051,
+  "steps": 6,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 6,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "luna-none-decoy-0",
+  "model": "luna",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0017,
+  "steps": 5,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "hy3-none-revenue-0",
+  "model": "hy3",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0063,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 2,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": true,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 15,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#4E79A7",
+     "#F28E2B"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 5,
+    "edge_lines": 0
+   }
+  }
+ },
+ {
+  "tag": "qwen-skill-decoy-0",
+  "model": "qwen",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0032,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "luna-none-revenue-0",
+  "model": "luna",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0072,
+  "steps": 8,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 0,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": false,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": false
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 16,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#00AA00",
+     "#168F8A",
+     "#172B4D",
+     "#48B7AD",
+     "#D94F62",
+     "#EF7D8C",
+     "#FF0000"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [
+     "<rect x=\"0\" y=\"0\" width=\"720\" height=\"400\" fill=\"#f4f7fb\"/>",
+     "css:svg {\n    background: #f4f7fb;\n  }"
+    ],
+    "borders": [],
+    "effects": [
+     "gradient fill",
+     "filter effect"
+    ]
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 5,
+    "horizontal": 6,
+    "edge_lines": 2
+   }
+  }
+ },
+ {
+  "tag": "v4flash-none-revenue-0",
+  "model": "v4flash",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0018,
+  "steps": 5,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 0,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": false,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": false
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 16,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#4E79A7",
+     "#F28E2B"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [
+     "<rect x=\"0\" y=\"0\" width=\"720\" height=\"400\" fill=\"#F4F6F8\"/>",
+     "css:body { margin: 0; padding: 24px; backgro"
+    ],
+    "borders": [
+     "<rect x=\"60\" y=\"40\" width=\"630\" height=\"300\" fill=\"#FFFFFF\" "
+    ],
+    "effects": [
+     "filter effect"
+    ]
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 5,
+    "horizontal": 7,
+    "edge_lines": 3
+   }
+  }
+ },
+ {
+  "tag": "mimo-inline-revenue-0",
+  "model": "mimo",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": true,
+  "cost": 0.0022,
+  "steps": 4,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "mimo-skill-decoy-0",
+  "model": "mimo",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00024,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "v4flash-skill-decoy-0",
+  "model": "v4flash",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00053,
+  "steps": 6,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "v4flash-inline-revenue-0",
+  "model": "v4flash",
+  "arm": "inline",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": true,
+  "cost": 0.002,
+  "steps": 5,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 6,
+    "edge_lines": 0
+   }
+  }
+ },
+ {
+  "tag": "mimo-none-decoy-0",
+  "model": "mimo",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.00028,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "mimo-none-revenue-0",
+  "model": "mimo",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0018,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 1,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": false,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 18,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#3A5F8A",
+     "#3D8060",
+     "#4C78B0",
+     "#5AA17B"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": [
+     "gradient fill",
+     "filter effect",
+     "filter on a data mark"
+    ]
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "v4flash-skill-revenue-0",
+  "model": "v4flash",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.0025,
+  "steps": 7,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands of USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "mimo-skill-revenue-0",
+  "model": "mimo",
+  "arm": "skill",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 1,
+  "read_skill_body": true,
+  "cost": 0.0022,
+  "steps": 4,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 5,
+  "rules": {
+   "R1_palette": true,
+   "R2_chartjunk": true,
+   "R3_unit": true,
+   "R4_direct_labels": true,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 12,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [
+     "#7A490D",
+     "#A5415A"
+    ],
+    "off_palette": []
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Revenue (thousands USD)"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": false,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 7,
+    "edge_lines": 0
+   }
+  }
+ },
+ {
+  "tag": "qwen-none-decoy-0",
+  "model": "qwen",
+  "arm": "none",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0044,
+  "steps": 5,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ },
+ {
+  "tag": "qwen-none-revenue-0",
+  "model": "qwen",
+  "arm": "none",
+  "fixture": "revenue",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.02,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "chart.html"
+  ],
+  "scope_creep": [],
+  "n_rules": 2,
+  "rules": {
+   "R1_palette": false,
+   "R2_chartjunk": true,
+   "R3_unit": false,
+   "R4_direct_labels": false,
+   "R5_gridlines": true
+  },
+  "wellformed": true,
+  "data_attrs": "present",
+  "data_ok": true,
+  "marks": 15,
+  "detail": {
+   "R1_palette": {
+    "palette_used": [],
+    "off_palette": [
+     "#2166AC",
+     "#A6BEDB"
+    ]
+   },
+   "R2_chartjunk": {
+    "backgrounds": [],
+    "borders": [],
+    "effects": []
+   },
+   "R3_unit": {
+    "labels": [
+     "Value"
+    ]
+   },
+   "R4_direct_labels": {
+    "legend": true,
+    "series_named": 2
+   },
+   "R5_gridlines": {
+    "vertical": 0,
+    "horizontal": 1,
+    "edge_lines": 1
+   }
+  }
+ },
+ {
+  "tag": "hy3-skill-decoy-0",
+  "model": "hy3",
+  "arm": "skill",
+  "fixture": "decoy",
+  "rep": 0,
+  "skill_calls": 0,
+  "read_skill_body": false,
+  "cost": 0.0013,
+  "steps": 3,
+  "empty": false,
+  "timeout": false,
+  "loop_stopped": false,
+  "edited": true,
+  "changed_files": [
+   "window.go"
+  ],
+  "scope_creep": [],
+  "decoy_fixed": true
+ }
+]

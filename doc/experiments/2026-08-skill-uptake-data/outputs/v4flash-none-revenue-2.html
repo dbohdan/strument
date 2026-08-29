@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quarterly revenue</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F3F4F6;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .chart-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    padding: 24px;
+  }
+  svg { display: block; }
+  .bar { transition: opacity 0.15s ease; }
+  .bar:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+<div class="chart-card">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11">
+  <text x="360" y="26" text-anchor="middle" font-size="17" font-weight="700" fill="#1F2937">Quarterly revenue</text>
+
+  <g class="legend" font-size="12" fill="#374151">
+    <rect x="486" y="19" width="12" height="12" rx="2" fill="#4E79A7"/>
+    <text x="504" y="29">2025</text>
+    <rect x="560" y="19" width="12" height="12" rx="2" fill="#F28E2B"/>
+    <text x="578" y="29">2026</text>
+  </g>
+
+  <rect x="70" y="60" width="630" height="300" fill="#FCFCFD" stroke="#CBD5E1" stroke-width="1"/>
+
+  <line class="grid" x1="70" y1="60" x2="700" y2="60" stroke="#E8EAED" stroke-width="1"/>
+  <line class="grid" x1="70" y1="120" x2="700" y2="120" stroke="#E8EAED" stroke-width="1"/>
+  <line class="grid" x1="70" y1="180" x2="700" y2="180" stroke="#E8EAED" stroke-width="1"/>
+  <line class="grid" x1="70" y1="240" x2="700" y2="240" stroke="#E8EAED" stroke-width="1"/>
+  <line class="grid" x1="70" y1="300" x2="700" y2="300" stroke="#E8EAED" stroke-width="1"/>
+  <line class="grid" x1="70" y1="360" x2="700" y2="360" stroke="#E8EAED" stroke-width="1"/>
+
+  <line x1="70" y1="60" x2="70" y2="360" stroke="#CBD5E1" stroke-width="1"/>
+  <line x1="70" y1="360" x2="700" y2="360" stroke="#CBD5E1" stroke-width="1"/>
+
+  <line x1="70" y1="60" x2="76" y2="60" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="70" y1="120" x2="76" y2="120" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="70" y1="180" x2="76" y2="180" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="70" y1="240" x2="76" y2="240" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="70" y1="300" x2="76" y2="300" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="70" y1="360" x2="76" y2="360" stroke="#94A3B8" stroke-width="1"/>
+
+  <text x="62" y="64" text-anchor="end" fill="#64748B">672</text>
+  <text x="62" y="124" text-anchor="end" fill="#64748B">538</text>
+  <text x="62" y="184" text-anchor="end" fill="#64748B">403</text>
+  <text x="62" y="244" text-anchor="end" fill="#64748B">269</text>
+  <text x="62" y="304" text-anchor="end" fill="#64748B">134</text>
+  <text x="62" y="364" text-anchor="end" fill="#64748B">0</text>
+
+  <text x="14" y="210" text-anchor="middle" transform="rotate(-90 14 210)" font-size="12" fill="#6B7280">Value</text>
+
+  <line x1="112.5" y1="360" x2="112.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="217.5" y1="360" x2="217.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="322.5" y1="360" x2="322.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="427.5" y1="360" x2="427.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="532.5" y1="360" x2="532.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+  <line x1="637.5" y1="360" x2="637.5" y2="366" stroke="#94A3B8" stroke-width="1"/>
+
+  <text x="112.5" y="380" text-anchor="middle" fill="#64748B">Q1</text>
+  <text x="217.5" y="380" text-anchor="middle" fill="#64748B">Q2</text>
+  <text x="322.5" y="380" text-anchor="middle" fill="#64748B">Q3</text>
+  <text x="427.5" y="380" text-anchor="middle" fill="#64748B">Q4</text>
+  <text x="532.5" y="380" text-anchor="middle" fill="#64748B">Q5</text>
+  <text x="637.5" y="380" text-anchor="middle" fill="#64748B">Q6</text>
+
+  <g class="bars">
+    <path class="bar" data-cat="Q1" data-series="2025" data-value="412" d="M 77.5 360 V 179.1 Q 77.5 176.1 80.5 176.1 H 109.5 Q 112.5 176.1 112.5 179.1 V 360 Z" fill="#4E79A7"><title>Q1 2025: 412</title></path>
+    <path class="bar" data-cat="Q1" data-series="2026" data-value="455" d="M 112.5 360 V 159.9 Q 112.5 156.9 115.5 156.9 H 144.5 Q 147.5 156.9 147.5 159.9 V 360 Z" fill="#F28E2B"><title>Q1 2026: 455</title></path>
+    <path class="bar" data-cat="Q2" data-series="2025" data-value="388" d="M 182.5 360 V 189.8 Q 182.5 186.8 185.5 186.8 H 214.5 Q 217.5 186.8 217.5 189.8 V 360 Z" fill="#4E79A7"><title>Q2 2025: 388</title></path>
+    <path class="bar" data-cat="Q2" data-series="2026" data-value="470" d="M 217.5 360 V 153.2 Q 217.5 150.2 220.5 150.2 H 249.5 Q 252.5 150.2 252.5 153.2 V 360 Z" fill="#F28E2B"><title>Q2 2026: 470</title></path>
+    <path class="bar" data-cat="Q3" data-series="2025" data-value="455" d="M 287.5 360 V 159.9 Q 287.5 156.9 290.5 156.9 H 319.5 Q 322.5 156.9 322.5 159.9 V 360 Z" fill="#4E79A7"><title>Q3 2025: 455</title></path>
+    <path class="bar" data-cat="Q3" data-series="2026" data-value="498" d="M 322.5 360 V 140.7 Q 322.5 137.7 325.5 137.7 H 354.5 Q 357.5 137.7 357.5 140.7 V 360 Z" fill="#F28E2B"><title>Q3 2026: 498</title></path>
+    <path class="bar" data-cat="Q4" data-series="2025" data-value="501" d="M 392.5 360 V 139.4 Q 392.5 136.4 395.5 136.4 H 424.5 Q 427.5 136.4 427.5 139.4 V 360 Z" fill="#4E79A7"><title>Q4 2025: 501</title></path>
+    <path class="bar" data-cat="Q4" data-series="2026" data-value="560" d="M 427.5 360 V 113 Q 427.5 110 430.5 110 H 459.5 Q 462.5 110 462.5 113 V 360 Z" fill="#F28E2B"><title>Q4 2026: 560</title></path>
+    <path class="bar" data-cat="Q5" data-series="2025" data-value="470" d="M 497.5 360 V 153.2 Q 497.5 150.2 500.5 150.2 H 529.5 Q 532.5 150.2 532.5 153.2 V 360 Z" fill="#4E79A7"><title>Q5 2025: 470</title></path>
+    <path class="bar" data-cat="Q5" data-series="2026" data-value="544" d="M 532.5 360 V 120.2 Q 532.5 117.2 535.5 117.2 H 564.5 Q 567.5 117.2 567.5 120.2 V 360 Z" fill="#F28E2B"><title>Q5 2026: 544</title></path>
+    <path class="bar" data-cat="Q6" data-series="2025" data-value="523" d="M 602.5 360 V 129.6 Q 602.5 126.6 605.5 126.6 H 634.5 Q 637.5 126.6 637.5 129.6 V 360 Z" fill="#4E79A7"><title>Q6 2025: 523</title></path>
+    <path class="bar" data-cat="Q6" data-series="2026" data-value="611" d="M 637.5 360 V 90.3 Q 637.5 87.3 640.5 87.3 H 669.5 Q 672.5 87.3 672.5 90.3 V 360 Z" fill="#F28E2B"><title>Q6 2026: 611</title></path>
+  </g>
+
+  <g class="value-labels" font-size="10" fill="#4B5563" text-anchor="middle">
+    <text x="95" y="170.1">412</text>
+    <text x="130" y="150.9">455</text>
+    <text x="200" y="180.8">388</text>
+    <text x="235" y="144.2">470</text>
+    <text x="305" y="150.9">455</text>
+    <text x="340" y="131.7">498</text>
+    <text x="410" y="130.4">501</text>
+    <text x="445" y="104.0">560</text>
+    <text x="515" y="144.2">470</text>
+    <text x="550" y="111.2">544</text>
+    <text x="620" y="120.6">523</text>
+    <text x="655" y="81.3">611</text>
+  </g>
+</svg>
+</div>
+</body>
+</html>

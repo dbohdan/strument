@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quarterly revenue</title>
+<style>
+  svg { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .grid { stroke: #E6E6E6; stroke-width: 1; }
+  .axis { stroke: #333333; stroke-width: 1; }
+  .axis-label { fill: #666666; font-size: 11px; }
+  .axis-title { fill: #444444; font-size: 12px; font-weight: 600; }
+  .title { fill: #2B2B2B; font-size: 20px; font-weight: 700; }
+  .legend-label { fill: #444444; font-size: 12px; }
+  .bar-2025 { fill: #4E79A7; }
+  .bar-2026 { fill: #F28E2B; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="480" viewBox="0 0 760 480">
+  <rect x="0" y="0" width="760" height="480" fill="#FFFFFF"/>
+  <line class="grid" x1="70" y1="410.00" x2="710" y2="410.00"/>
+  <text class="axis-label" x="62" y="414.00" text-anchor="end">0</text>
+  <line class="grid" x1="70" y1="364.29" x2="710" y2="364.29"/>
+  <text class="axis-label" x="62" y="368.29" text-anchor="end">100</text>
+  <line class="grid" x1="70" y1="318.57" x2="710" y2="318.57"/>
+  <text class="axis-label" x="62" y="322.57" text-anchor="end">200</text>
+  <line class="grid" x1="70" y1="272.86" x2="710" y2="272.86"/>
+  <text class="axis-label" x="62" y="276.86" text-anchor="end">300</text>
+  <line class="grid" x1="70" y1="227.14" x2="710" y2="227.14"/>
+  <text class="axis-label" x="62" y="231.14" text-anchor="end">400</text>
+  <line class="grid" x1="70" y1="181.43" x2="710" y2="181.43"/>
+  <text class="axis-label" x="62" y="185.43" text-anchor="end">500</text>
+  <line class="grid" x1="70" y1="135.71" x2="710" y2="135.71"/>
+  <text class="axis-label" x="62" y="139.71" text-anchor="end">600</text>
+  <line class="grid" x1="70" y1="90.00" x2="710" y2="90.00"/>
+  <text class="axis-label" x="62" y="94.00" text-anchor="end">700</text>
+  <line class="axis" x1="70" y1="90" x2="70" y2="410"/>
+  <line class="axis" x1="70" y1="410" x2="710" y2="410"/>
+  <path data-cat="Q1" data-series="2025" data-value="412" class="bar-2025" d="M85.33,410 L85.33,224.66 Q85.33,221.66 88.33,221.66 L116.33,221.66 Q119.33,221.66 119.33,224.66 L119.33,410 Z"/>
+  <path data-cat="Q1" data-series="2026" data-value="455" class="bar-2026" d="M127.33,410 L127.33,205.00 Q127.33,202.00 130.33,202.00 L158.33,202.00 Q161.33,202.00 161.33,205.00 L161.33,410 Z"/>
+  <path data-cat="Q2" data-series="2025" data-value="388" class="bar-2025" d="M192.00,410 L192.00,235.63 Q192.00,232.63 195.00,232.63 L223.00,232.63 Q226.00,232.63 226.00,235.63 L226.00,410 Z"/>
+  <path data-cat="Q2" data-series="2026" data-value="470" class="bar-2026" d="M234.00,410 L234.00,198.14 Q234.00,195.14 237.00,195.14 L265.00,195.14 Q268.00,195.14 268.00,198.14 L268.00,410 Z"/>
+  <path data-cat="Q3" data-series="2025" data-value="455" class="bar-2025" d="M298.67,410 L298.67,205.00 Q298.67,202.00 301.67,202.00 L329.67,202.00 Q332.67,202.00 332.67,205.00 L332.67,410 Z"/>
+  <path data-cat="Q3" data-series="2026" data-value="498" class="bar-2026" d="M340.67,410 L340.67,185.34 Q340.67,182.34 343.67,182.34 L371.67,182.34 Q374.67,182.34 374.67,185.34 L374.67,410 Z"/>
+  <path data-cat="Q4" data-series="2025" data-value="501" class="bar-2025" d="M405.33,410 L405.33,183.97 Q405.33,180.97 408.33,180.97 L436.33,180.97 Q439.33,180.97 439.33,183.97 L439.33,410 Z"/>
+  <path data-cat="Q4" data-series="2026" data-value="560" class="bar-2026" d="M447.33,410 L447.33,157.00 Q447.33,154.00 450.33,154.00 L478.33,154.00 Q481.33,154.00 481.33,157.00 L481.33,410 Z"/>
+  <path data-cat="Q5" data-series="2025" data-value="470" class="bar-2025" d="M512.00,410 L512.00,198.14 Q512.00,195.14 515.00,195.14 L543.00,195.14 Q546.00,195.14 546.00,198.14 L546.00,410 Z"/>
+  <path data-cat="Q5" data-series="2026" data-value="544" class="bar-2026" d="M554.00,410 L554.00,164.31 Q554.00,161.31 557.00,161.31 L585.00,161.31 Q588.00,161.31 588.00,164.31 L588.00,410 Z"/>
+  <path data-cat="Q6" data-series="2025" data-value="523" class="bar-2025" d="M618.67,410 L618.67,173.91 Q618.67,170.91 621.67,170.91 L649.67,170.91 Q652.67,170.91 652.67,173.91 L652.67,410 Z"/>
+  <path data-cat="Q6" data-series="2026" data-value="611" class="bar-2026" d="M660.67,410 L660.67,133.69 Q660.67,130.69 663.67,130.69 L691.67,130.69 Q694.67,130.69 694.67,133.69 L694.67,410 Z"/>
+  <text class="axis-label" x="123.33" y="438" text-anchor="middle">Q1</text>
+  <text class="axis-label" x="230.00" y="438" text-anchor="middle">Q2</text>
+  <text class="axis-label" x="336.67" y="438" text-anchor="middle">Q3</text>
+  <text class="axis-label" x="443.33" y="438" text-anchor="middle">Q4</text>
+  <text class="axis-label" x="550.00" y="438" text-anchor="middle">Q5</text>
+  <text class="axis-label" x="656.67" y="438" text-anchor="middle">Q6</text>
+  <text class="axis-title" x="24" y="250" text-anchor="middle" transform="rotate(-90 24 250)">Value</text>
+  <text class="axis-title" x="390.00" y="462" text-anchor="middle">Quarter</text>
+  <text class="title" x="70" y="44" text-anchor="start">Quarterly revenue</text>
+  <g class="legend">
+    <rect x="592" y="30" width="14" height="14" rx="2" fill="#4E79A7"/>
+    <text class="legend-label" x="610" y="41">2025</text>
+    <rect x="656" y="30" width="14" height="14" rx="2" fill="#F28E2B"/>
+    <text class="legend-label" x="674" y="41">2026</text>
+  </g>
+</svg>
+</body>
+</html>

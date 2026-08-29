@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Request latency by week</title>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11">
+  <g class="grid">
+    <line x1="60" y1="74.0" x2="690" y2="74.0" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="60" y1="127.2" x2="690" y2="127.2" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="60" y1="180.4" x2="690" y2="180.4" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="60" y1="233.6" x2="690" y2="233.6" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="60" y1="286.8" x2="690" y2="286.8" stroke="#E5E7EB" stroke-width="1"/>
+  </g>
+  <g class="axes">
+    <line x1="60" y1="40" x2="60" y2="340" stroke="#94A3B8" stroke-width="1"/>
+    <line x1="60" y1="340" x2="690" y2="340" stroke="#94A3B8" stroke-width="1"/>
+    <g stroke="#94A3B8" stroke-width="1">
+      <line x1="55" y1="74.0" x2="60" y2="74.0"/>
+      <line x1="55" y1="127.2" x2="60" y2="127.2"/>
+      <line x1="55" y1="180.4" x2="60" y2="180.4"/>
+      <line x1="55" y1="233.6" x2="60" y2="233.6"/>
+      <line x1="55" y1="286.8" x2="60" y2="286.8"/>
+      <line x1="60" y1="340" x2="60" y2="345"/>
+      <line x1="150.0" y1="340" x2="150.0" y2="345"/>
+      <line x1="240.0" y1="340" x2="240.0" y2="345"/>
+      <line x1="330.0" y1="340" x2="330.0" y2="345"/>
+      <line x1="420.0" y1="340" x2="420.0" y2="345"/>
+      <line x1="510.0" y1="340" x2="510.0" y2="345"/>
+      <line x1="600.0" y1="340" x2="600.0" y2="345"/>
+      <line x1="690.0" y1="340" x2="690.0" y2="345"/>
+    </g>
+  </g>
+  <polyline data-series="p50" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="60.0,317.6 150.0,316.0 240.0,318.2 330.0,314.4 420.0,316.6 510.0,315.0 600.0,317.1 690.0,315.5"/>
+  <circle data-series="p50" data-cat="W1" data-value="42" cx="60.0" cy="317.6" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W2" data-value="45" cx="150.0" cy="316.0" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W3" data-value="41" cx="240.0" cy="318.2" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W4" data-value="48" cx="330.0" cy="314.4" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W5" data-value="44" cx="420.0" cy="316.6" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W6" data-value="47" cx="510.0" cy="315.0" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W7" data-value="43" cx="600.0" cy="317.1" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <circle data-series="p50" data-cat="W8" data-value="46" cx="690.0" cy="315.5" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <polyline data-series="p95" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="60.0,244.2 150.0,236.2 240.0,248.4 330.0,228.2 420.0,239.9 510.0,230.9 600.0,244.7 690.0,234.6"/>
+  <circle data-series="p95" data-cat="W1" data-value="180" cx="60.0" cy="244.2" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W2" data-value="195" cx="150.0" cy="236.2" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W3" data-value="172" cx="240.0" cy="248.4" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W4" data-value="210" cx="330.0" cy="228.2" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W5" data-value="188" cx="420.0" cy="239.9" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W6" data-value="205" cx="510.0" cy="230.9" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W7" data-value="179" cx="600.0" cy="244.7" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <circle data-series="p95" data-cat="W8" data-value="198" cx="690.0" cy="234.6" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+  <polyline data-series="p99" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="60.0,116.4 150.0,97.8 240.0,126.5 330.0,79.1 420.0,107.3 510.0,85.5 600.0,119.1 690.0,94.0"/>
+  <circle data-series="p99" data-cat="W1" data-value="420" cx="60.0" cy="116.4" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W2" data-value="455" cx="150.0" cy="97.8" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W3" data-value="401" cx="240.0" cy="126.5" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W4" data-value="490" cx="330.0" cy="79.1" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W5" data-value="437" cx="420.0" cy="107.3" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W6" data-value="478" cx="510.0" cy="85.5" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W7" data-value="415" cx="600.0" cy="119.1" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <circle data-series="p99" data-cat="W8" data-value="462" cx="690.0" cy="94.0" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+  <g class="labels" fill="#64748B">
+    <text x="52" y="77.5" text-anchor="end">500</text>
+    <text x="52" y="130.7" text-anchor="end">400</text>
+    <text x="52" y="183.9" text-anchor="end">300</text>
+    <text x="52" y="237.1" text-anchor="end">200</text>
+    <text x="52" y="290.3" text-anchor="end">100</text>
+    <text x="52" y="343.5" text-anchor="end">0</text>
+    <text x="60.0" y="358" text-anchor="middle">W1</text>
+    <text x="150.0" y="358" text-anchor="middle">W2</text>
+    <text x="240.0" y="358" text-anchor="middle">W3</text>
+    <text x="330.0" y="358" text-anchor="middle">W4</text>
+    <text x="420.0" y="358" text-anchor="middle">W5</text>
+    <text x="510.0" y="358" text-anchor="middle">W6</text>
+    <text x="600.0" y="358" text-anchor="middle">W7</text>
+    <text x="690.0" y="358" text-anchor="middle">W8</text>
+  </g>
+  <text x="16" y="190.0" text-anchor="middle" fill="#475569" transform="rotate(-90 16 190.0)">Value</text>
+  <text x="360" y="24" text-anchor="middle" font-size="16" font-weight="600" fill="#0F172A">Request latency by week</text>
+  <g class="legend" fill="#334155">
+    <line x1="517" y1="20" x2="535" y2="20" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="526" cy="20" r="3.5" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+    <text x="541" y="24">p50</text>
+    <line x1="582" y1="20" x2="600" y2="20" stroke="#D97706" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="591" cy="20" r="3.5" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+    <text x="606" y="24">p95</text>
+    <line x1="647" y1="20" x2="665" y2="20" stroke="#DC2626" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="656" cy="20" r="3.5" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+    <text x="671" y="24">p99</text>
+  </g>
+</svg>
+</body>
+</html>

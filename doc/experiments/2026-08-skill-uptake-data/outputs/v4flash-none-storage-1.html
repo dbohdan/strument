@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Storage used by tier</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #eef1f4;
+  }
+  svg {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 14px rgba(23, 43, 77, 0.12);
+  }
+  .grid { stroke: #e5e7eb; shape-rendering: crispEdges; }
+  .axis { stroke: #9ca3af; shape-rendering: crispEdges; }
+  .plot-panel { fill: #fbfcfd; }
+  .bar { stroke: #ffffff; stroke-width: 1; }
+  .title { font-size: 16px; font-weight: 600; fill: #111827; }
+  .tick-label { fill: #6b7280; }
+  .month-label { fill: #374151; }
+  .axis-title { fill: #6b7280; }
+  .legend-text { fill: #4b5563; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11">
+  <rect class="plot-panel" x="60" y="40" width="630" height="300"/>
+
+  <line class="grid" x1="60" y1="40" x2="690" y2="40"/>
+  <line class="grid" x1="60" y1="100" x2="690" y2="100"/>
+  <line class="grid" x1="60" y1="160" x2="690" y2="160"/>
+  <line class="grid" x1="60" y1="220" x2="690" y2="220"/>
+  <line class="grid" x1="60" y1="280" x2="690" y2="280"/>
+
+  <line class="axis" x1="55" y1="40" x2="60" y2="40"/>
+  <line class="axis" x1="55" y1="100" x2="60" y2="100"/>
+  <line class="axis" x1="55" y1="160" x2="60" y2="160"/>
+  <line class="axis" x1="55" y1="220" x2="60" y2="220"/>
+  <line class="axis" x1="55" y1="280" x2="60" y2="280"/>
+  <line class="axis" x1="55" y1="340" x2="60" y2="340"/>
+
+  <rect class="bar" data-cat="Jan" data-series="hot" data-value="120" x="72.6" y="308.0" width="25.2" height="32.0" fill="#E4572E"><title>hot: 120</title></rect>
+  <rect class="bar" data-cat="Jan" data-series="warm" data-value="340" x="97.8" y="249.4" width="25.2" height="90.6" fill="#F5A623"><title>warm: 340</title></rect>
+  <rect class="bar" data-cat="Jan" data-series="cold" data-value="890" x="123.0" y="103.0" width="25.2" height="237.0" fill="#3B7DD8"><title>cold: 890</title></rect>
+  <rect class="bar" data-cat="Jan" data-series="archive" data-value="210" x="148.2" y="284.1" width="25.2" height="55.9" fill="#8E5EA2"><title>archive: 210</title></rect>
+  <rect class="bar" data-cat="Feb" data-series="hot" data-value="135" x="198.6" y="304.0" width="25.2" height="36.0" fill="#E4572E"><title>hot: 135</title></rect>
+  <rect class="bar" data-cat="Feb" data-series="warm" data-value="358" x="223.8" y="244.7" width="25.2" height="95.3" fill="#F5A623"><title>warm: 358</title></rect>
+  <rect class="bar" data-cat="Feb" data-series="cold" data-value="912" x="249.0" y="97.1" width="25.2" height="242.9" fill="#3B7DD8"><title>cold: 912</title></rect>
+  <rect class="bar" data-cat="Feb" data-series="archive" data-value="214" x="274.2" y="283.0" width="25.2" height="57.0" fill="#8E5EA2"><title>archive: 214</title></rect>
+  <rect class="bar" data-cat="Mar" data-series="hot" data-value="128" x="324.6" y="305.9" width="25.2" height="34.1" fill="#E4572E"><title>hot: 128</title></rect>
+  <rect class="bar" data-cat="Mar" data-series="warm" data-value="371" x="349.8" y="241.2" width="25.2" height="98.8" fill="#F5A623"><title>warm: 371</title></rect>
+  <rect class="bar" data-cat="Mar" data-series="cold" data-value="947" x="375.0" y="87.8" width="25.2" height="252.2" fill="#3B7DD8"><title>cold: 947</title></rect>
+  <rect class="bar" data-cat="Mar" data-series="archive" data-value="219" x="400.2" y="281.7" width="25.2" height="58.3" fill="#8E5EA2"><title>archive: 219</title></rect>
+  <rect class="bar" data-cat="Apr" data-series="hot" data-value="149" x="450.6" y="300.3" width="25.2" height="39.7" fill="#E4572E"><title>hot: 149</title></rect>
+  <rect class="bar" data-cat="Apr" data-series="warm" data-value="389" x="475.8" y="236.4" width="25.2" height="103.6" fill="#F5A623"><title>warm: 389</title></rect>
+  <rect class="bar" data-cat="Apr" data-series="cold" data-value="981" x="501.0" y="78.7" width="25.2" height="261.3" fill="#3B7DD8"><title>cold: 981</title></rect>
+  <rect class="bar" data-cat="Apr" data-series="archive" data-value="223" x="526.2" y="280.6" width="25.2" height="59.4" fill="#8E5EA2"><title>archive: 223</title></rect>
+  <rect class="bar" data-cat="May" data-series="hot" data-value="156" x="576.6" y="298.5" width="25.2" height="41.5" fill="#E4572E"><title>hot: 156</title></rect>
+  <rect class="bar" data-cat="May" data-series="warm" data-value="402" x="601.8" y="232.9" width="25.2" height="107.1" fill="#F5A623"><title>warm: 402</title></rect>
+  <rect class="bar" data-cat="May" data-series="cold" data-value="1024" x="627.0" y="67.3" width="25.2" height="272.7" fill="#3B7DD8"><title>cold: 1024</title></rect>
+  <rect class="bar" data-cat="May" data-series="archive" data-value="228" x="652.2" y="279.3" width="25.2" height="60.7" fill="#8E5EA2"><title>archive: 228</title></rect>
+
+  <text class="tick-label" x="52" y="44.0" text-anchor="end">1126</text>
+  <text class="tick-label" x="52" y="104.0" text-anchor="end">901</text>
+  <text class="tick-label" x="52" y="164.0" text-anchor="end">676</text>
+  <text class="tick-label" x="52" y="224.0" text-anchor="end">451</text>
+  <text class="tick-label" x="52" y="284.0" text-anchor="end">225</text>
+  <text class="tick-label" x="52" y="344.0" text-anchor="end">0</text>
+
+  <circle cx="57" cy="44.0" r="1.5" fill="#9ca3af"/>
+  <circle cx="57" cy="104.0" r="1.5" fill="#9ca3af"/>
+  <circle cx="57" cy="164.0" r="1.5" fill="#9ca3af"/>
+  <circle cx="57" cy="224.0" r="1.5" fill="#9ca3af"/>
+  <circle cx="57" cy="284.0" r="1.5" fill="#9ca3af"/>
+  <circle cx="57" cy="344.0" r="1.5" fill="#9ca3af"/>
+
+  <text class="month-label" x="123.0" y="358" text-anchor="middle">Jan</text>
+  <text class="month-label" x="249.0" y="358" text-anchor="middle">Feb</text>
+  <text class="month-label" x="375.0" y="358" text-anchor="middle">Mar</text>
+  <text class="month-label" x="501.0" y="358" text-anchor="middle">Apr</text>
+  <text class="month-label" x="627.0" y="358" text-anchor="middle">May</text>
+
+  <line class="axis" x1="123.0" y1="340" x2="123.0" y2="346"/>
+  <line class="axis" x1="249.0" y1="340" x2="249.0" y2="346"/>
+  <line class="axis" x1="375.0" y1="340" x2="375.0" y2="346"/>
+  <line class="axis" x1="501.0" y1="340" x2="501.0" y2="346"/>
+  <line class="axis" x1="627.0" y1="340" x2="627.0" y2="346"/>
+
+  <line class="axis" x1="60" y1="340" x2="690" y2="340"/>
+  <line class="axis" x1="60" y1="40" x2="60" y2="340"/>
+
+  <text class="axis-title" x="16" y="190.0" text-anchor="middle" transform="rotate(-90 16 190.0)">Amount</text>
+  <text class="title" x="360.0" y="26" text-anchor="middle">Storage used by tier</text>
+
+  <g class="legend">
+    <rect x="247" y="366" width="12" height="12" fill="#E4572E"/>
+    <text class="legend-text" x="264" y="378">hot</text>
+    <rect x="304" y="366" width="12" height="12" fill="#F5A623"/>
+    <text class="legend-text" x="321" y="378">warm</text>
+    <rect x="361" y="366" width="12" height="12" fill="#3B7DD8"/>
+    <text class="legend-text" x="378" y="378">cold</text>
+    <rect x="418" y="366" width="12" height="12" fill="#8E5EA2"/>
+    <text class="legend-text" x="435" y="378">archive</text>
+  </g>
+</svg>
+</body>
+</html>
