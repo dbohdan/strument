@@ -122,23 +122,38 @@ func newLoopDetector(on bool) *loopDetector {
 //
 // Quoted material is blanked rather than removed, which matters: dropping the
 // lines outright would pull distant repeats together and put them inside
-// loopMaxAvgGap, inventing the loop the strip is meant to prevent. A run of
+// loopMaxGap, inventing the loop the strip is meant to prevent. A run of
 // newlines is harmless because findLoop already refuses a window that is mostly
 // whitespace.
 func (s *loopStream) add(text string) {
-	s.pending += text
 	for {
-		i := strings.IndexByte(s.pending, '\n')
+		i := strings.IndexByte(text, '\n')
 		if i < 0 {
+			s.appendPending(text)
 			return
 		}
-		line := s.pending[:i]
-		s.pending = s.pending[i+1:]
+		s.appendPending(text[:i])
+		line := s.pending
+		s.pending = ""
 		if s.keepLine(line) {
 			s.kept.WriteString(line)
 		}
 		s.kept.WriteByte('\n')
+		text = text[i+1:]
 	}
+}
+
+func (s *loopStream) appendPending(text string) {
+	if len(text) >= loopTailBytes {
+		s.pending = strings.Clone(text[len(text)-loopTailBytes:])
+		return
+	}
+	if len(s.pending)+len(text) <= loopTailBytes {
+		s.pending += text
+		return
+	}
+	combined := s.pending + text
+	s.pending = strings.Clone(combined[len(combined)-loopTailBytes:])
 }
 
 // tail is what the detectors see: the kept lines, plus the line still being
@@ -227,9 +242,8 @@ func isBarePath(t string) bool {
 //
 // Narrow on purpose, because the failure mode of this whole function is
 // deleting prose and thereby hiding a real loop. The quoted form needs its
-// quotes. The bare form needs an identifier key AND a single-token value:
-// without that second condition it swallowed "Note: the following is wrong"
-// and "Then: I will read it again", which are sentences, not fields.
+// quotes. The bare form needs an identifier key and an unmistakable scalar
+// value; without that it swallows prose such as "Note: stop.".
 func isDataField(t string) bool {
 	t = strings.TrimSpace(strings.TrimLeft(t, "{[-"))
 	if strings.HasPrefix(t, `"`) {
@@ -249,7 +263,24 @@ func isDataField(t string) bool {
 			return false
 		}
 	}
-	return len(strings.Fields(value)) == 1
+	if len(strings.Fields(value)) != 1 {
+		return false
+	}
+	return isDataScalar(value)
+}
+
+func isDataScalar(value string) bool {
+	value = strings.TrimRight(value, ",;]}")
+	if value == "true" || value == "false" || value == "null" || value == "yes" || value == "no" {
+		return true
+	}
+	if value == "" {
+		return false
+	}
+	if value[0] == '+' || value[0] == '-' {
+		value = value[1:]
+	}
+	return value != "" && unicode.IsDigit(rune(value[0]))
 }
 
 // feed adds streamed text and reports a loop when one is visible.
@@ -266,13 +297,17 @@ func (d *loopDetector) feed(kind, text string) *loopFinding {
 		b = &d.reasoning
 	}
 	b.add(text)
-	if b.kept.Len() > loopTailBytes {
+	if b.kept.Len()+len(b.pending) > loopTailBytes {
 		// Keep the tail. Trimming loses a loop that started earlier and would
 		// still be running, but a running loop re-establishes itself inside the
 		// window within loopMinCount repetitions.
+		keep := max(0, loopTailBytes-len(b.pending))
 		s := b.kept.String()
+		if keep > len(s) {
+			keep = len(s)
+		}
 		b.kept.Reset()
-		b.kept.WriteString(s[len(s)-loopTailBytes:])
+		b.kept.WriteString(s[len(s)-keep:])
 	}
 	tail := b.tail()
 	f := findLoop(tail, d.MinCount)

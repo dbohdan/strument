@@ -213,16 +213,21 @@ func TestDataFieldRuleDoesNotEatProse(t *testing.T) {
 		"Then: I will read it again",
 		"So the plan is: read, edit, verify",
 		"I need to check the file again to be sure of the contents.",
+		"note: stop.",
+		"- Note: stop",
 	}
 	for _, line := range prose {
 		if !s.keepLine(line) {
 			t.Errorf("dropped prose %q", line)
 		}
 	}
-	data := []string{`"name": "widget",`, `  "enabled": true`, "weight: 42", "stroke-width: 1px;", "- name: build"}
+	data := []string{`"name": "widget",`, `  "enabled": true`, "weight: 42", "stroke-width: 1px;", "- enabled: true"}
 	for _, line := range data {
 		if s.keepLine(line) {
 			t.Errorf("kept data line %q", line)
 		}
+	}
+	if f := feedAll(t, loopReasoning, strings.Repeat("Again: Again\n", loopMinWordRun+2)); f == nil {
+		t.Error("a one-token prose loop was hidden by the data-field rule")
 	}
 }

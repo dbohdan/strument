@@ -145,9 +145,8 @@ def is_bare_path(t: str) -> str:
 def is_data_field(t: str) -> bool:
     """A JSON or YAML field line: `"key": value,` or `key: value`.
 
-    The bare form needs a single-token value as well as an identifier key.
-    Without that it swallows "Note: the following is wrong", which is a
-    sentence.
+    The bare form needs a single-token scalar value as well as an identifier
+    key. Without that it swallows prose such as "Note: stop.".
     """
     t = t.lstrip("{[-").strip()
     if t.startswith('"'):
@@ -161,7 +160,20 @@ def is_data_field(t: str) -> bool:
         return False
     if not all(c.isalnum() or c in "_-." for c in key):
         return False
-    return len(value.split()) == 1
+    if len(value.split()) != 1:
+        return False
+    return is_data_scalar(value)
+
+
+def is_data_scalar(value: str) -> bool:
+    value = value.rstrip(",;]}")
+    if value in {"true", "false", "null", "yes", "no"}:
+        return True
+    if not value:
+        return False
+    if value[0] in "+-":
+        value = value[1:]
+    return bool(value) and value[0].isdigit()
 
 
 AIDER_THINK_OPEN = re.compile(r"^<thinking-content-[0-9a-f]+>$")

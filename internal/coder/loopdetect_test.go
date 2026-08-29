@@ -187,6 +187,18 @@ func TestLoopDetectorBoundsWhatItKeeps(t *testing.T) {
 	}
 }
 
+func TestLoopDetectorBoundsAnUnterminatedLine(t *testing.T) {
+	var s loopStream
+	s.add(strings.Repeat("Dynamical ", loopTailBytes))
+
+	if got := s.kept.Len() + len(s.pending); got > loopTailBytes {
+		t.Errorf("tail %d bytes, want at most %d", got, loopTailBytes)
+	}
+	if f := findWordRun(s.tail(), loopMinWordRun); f == nil {
+		t.Error("a stutter in the bounded unterminated line was missed")
+	}
+}
+
 // loopingClient repeats one sentence forever on the first send and answers
 // normally afterwards. Forever is the point: nothing but the detector ends it,
 // so a test that hangs here is a detector that does not work.
