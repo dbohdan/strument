@@ -428,13 +428,15 @@ func (c *Coder) runAskUser(tc llm.ToolCall, needsReflection *bool) string {
 			answer = "(no answer)"
 		}
 		fmt.Fprintf(&b, "\n- %q → %q", q.Question, answer)
-		c.Out.Toolf("‹question› %s", q.Question)
-		parts := make([]string, len(q.Options))
-		for i, o := range q.Options {
-			parts[i] = o.Label
-		}
-		c.Out.Toolf("‹options› %s", strings.Join(parts, " / "))
-		c.Out.Toolf("‹answer› %s", answer)
+		// One line, not three: the interactive Asker already printed the
+		// question and the option list above the answer prompt, and this
+		// narration goes to the same screen and the same transcript record.
+		// Question and options arriving twice was the model's wording, the
+		// option list, and the answer — where one line carried everything a
+		// transcript needs. The question still travels in the tool call
+		// itself (and in the result text), so the JSONL and the result text
+		// stay self-describing without the replay.
+		c.Out.Toolf("User answered %q to %q", answer, q.Question)
 	}
 	return b.String()
 }

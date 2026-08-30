@@ -539,10 +539,16 @@ func TestAskUserReplay(t *testing.T) {
 		!strings.Contains(result.Text(), `"Which format?" → "RFC 3339"`) {
 		t.Errorf("result = %q, want the question and the chosen label", result.Text())
 	}
-	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, `‹question› Which format?`) ||
-		!strings.Contains(joined, `‹options› RFC 3339 / Unix epoch`) ||
-		!strings.Contains(joined, `‹answer› RFC 3339`) {
-		t.Errorf("missing the narration lines:\n%s", joined)
+	// One narration line: the interactive Asker already printed the question
+	// and the option list above the answer prompt, so the screen and the
+	// transcript record get the answer — with the question attached, so the
+	// line is self-describing — rather than a replay of the question block.
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, `User answered "RFC 3339"`) {
+		t.Errorf("missing the answer narration line:\n%s", joined)
+	}
+	if strings.Contains(joined, "‹question›") || strings.Contains(joined, "‹options›") {
+		t.Errorf("the narration replays the question block it follows:\n%s", joined)
 	}
 	// An ask is an ordinary work step, so it must have spent the step budget.
 	if env.coder.numSteps != 1 {
