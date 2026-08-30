@@ -167,3 +167,97 @@ func TestCodeNoNetworkAccess(t *testing.T) {
 		})
 	}
 }
+
+// --- the read-only bridge -------------------------------------------------
+
+// TestCodeBridgeReadReturnsFileContents: a program calling read() gets the
+// file's contents — the same text a direct call returns.
+func TestCodeBridgeReadReturnsFileContents(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"a.go": "package a\n\nfunc F() {}\n",
+	})
+
+	got := c.runCode(context.Background(), codeCall{
+		code: `read(path="a.go")`,
+	})
+	if !strings.Contains(got, "package a") {
+		t.Errorf("a bridged read must return the file's contents, got:\n%s", got)
+	}
+}
+
+// TestCodeBridgeGrepFilterEndToEnd is the phenomenon the bridge exists for:
+// search inside the program, filter the results in Python, return the
+// computed answer — one round trip instead of two.
+func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"a.go": "package a\n\nfunc Target() {}\n",
+		"b.go": "package b\n\n// Target again\n",
+		"c.txt": "Target here too\n",
+	})
+
+	got := c.runCode(context.Background(), codeCall{
+		code: `hits = grep(pattern="Target", mode="files")
+sorted(hits)`,
+	})
+	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"b.go"`) {
+		t.Errorf("expected both .go files in the filtered result, got:\n%s", got)
+	}
+	if strings.Contains(got, "c.txt") {
+		t.Errorf("the Python filter must have removed c.txt, got:\n%s", got)
+	}
+}
+
+// TestCodeBridgeForbiddenToolsFail is the fail-closed claim, one test per
+// forbidden tool: a program may not reach a mutating tool, and the attempt
+// returns an error naming the rule rather than an unknown-function crash.
+func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+
+	for _, name := range []string{"bash", "edit", "write", "commit", "check"} {
+		t.Run(name, func(t *testing.T) {
+			code := fmt.Sprintf("%s(command=%q)", name, "rm -rf /")
+			if name == "check" {
+				code = `check(name="build")`
+			}
+			got := c.runCode(context.Background(), codeCall{code: code})
+			if !strings.Contains(got, "The program failed") {
+				t.Errorf("calling %s from a program must fail and did not:\n%s", name, got)
+			}
+			if strings.Contains(got, "unknown function") == false && !strings.Contains(got, "read-only") {
+				t.Errorf("the error should name the read-only rule, got:\n%s", got)
+			}
+		})
+	}
+}
+
+// TestCodeBridgeCapFires: one program cannot issue unbounded work. The cap is
+// maxBridgedCalls; a program that loops past it is stopped.
+func TestCodeBridgeCapFires(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"f.txt": "x\n"})
+
+	// One over the cap. If the cap is maxBridgedCalls, the loop fails on the
+	// call after the last allowed one.
+	code := fmt.Sprintf("n = 0\ntry:\n    while True:\n        ls()\n        n = n + 1\nexcept Exception as e:\n    (n, str(e)[:80])")
+	got := c.runCode(context.Background(), codeCall{code: code})
+
+	if !strings.Contains(got, "more than") {
+		t.Errorf("the bridged-call cap must fire, got:\n%s", got)
+	}
+}
+
+// TestCodeBridgeCallsAreAnnounced: the user sees each bridged call the same
+// way they see a direct one. The review surface must not depend on where the
+// call came from.
+func TestCodeBridgeCallsAreAnnounced(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
+
+	c.runCode(context.Background(), codeCall{code: `ls()`})
+
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "‹code› ls") {
+		t.Errorf("a bridged call must be announced, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "‹code› ls()") == false && !strings.Contains(joined, "‹code› code") {
+		t.Errorf("the program itself must be announced too, got:\n%s", joined)
+	}
+}
