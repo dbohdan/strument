@@ -558,6 +558,20 @@ Both were observed. The note added on Continue names the decision and rules out
 both readings, and seven interrupts across three models then resumed, two of
 them mid-word.
 
+**SIGUSR1 is the same interrupt without a keyboard.** It shares the Ctrl-C
+handler's subscription (the `Notify` seam delivers both to one channel) and
+calls the same `InterruptSend`, so the steer menu, `settleEdits`, and the
+"Stopped…" hint all come from the coder noticing the cancelled send and need no
+second path. What it does *not* share is the chord: a chord is a keyboard
+idiom — the second press means "no really, exit" — and a signal arriving from
+a program means "interrupt" every time. Between turns the subscription does not
+exist (`withinTurn` owns it for the duration of the turn only), so the signal
+does nothing, exactly like a Ctrl-C with nothing in flight. Script mode has no
+REPL to subscribe for it; main adds the signal to its existing
+`NotifyContext` through `repl.UserInterruptSignal()`, and the turn's
+`ctx.Done()` reaches `sendSteerable` the same way an in-terminal interrupt
+does.
+
 **Fetching a page is a tool, not a guess about what a URL in your message
 meant.** `webfetch(url, purpose)` (`internal/coder/webfetch.go`) is the model's
 way to read a documentation page, and the name is the field's rather than this

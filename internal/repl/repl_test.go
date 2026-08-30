@@ -61,12 +61,42 @@ func testModel() *config.Model {
 	return m
 }
 
+// testConfig builds the config newTestREPL uses: one default model alias
+// ("test") pointing at the model under test, plus a second alias so /model
+// tests have something to switch to.
 func testConfig(m *config.Model) *config.Config {
 	return &config.Config{
 		Default: "test",
 		Models:  map[string]*config.Model{"test": m, "other": testModel()},
 	}
 }
+
+// sigREPL is a REPL whose signal source is a test channel rather than
+// os/signal, so a test can deliver SIGINT or the user-space interrupt without
+// a pty or a real kill(2). Notify captures the channel; sig() delivers.
+type sigREPL struct {
+	*REPL
+
+	sig chan os.Signal
+}
+
+func newSigREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*sigREPL, *syncBuffer) {
+	t.Helper()
+	r, _, out := newTestREPL(t, cl, input)
+	s := &sigREPL{REPL: r, sig: make(chan os.Signal, 4)}
+	r.opts.Notify = func(ch chan<- os.Signal) func() {
+		go func() {
+			for v := range s.sig {
+				ch <- v
+			}
+		}()
+		return func() {}
+	}
+	return s, out
+}
+
+// sig1 delivers one signal to the in-turn handler.
+func (s *sigREPL) sig1(v os.Signal) { s.sig <- v }
 
 // newTestREPL builds a REPL over in-memory pipes in non-interactive mode.
 func newTestREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*REPL, *coder.Coder, *syncBuffer) {
@@ -786,6 +816,40 @@ func (b *blockingClient) Send(ctx context.Context, _ llm.Request) iter.Seq2[llm.
 	}
 }
 
+// twoTurnClient answers two sends: the first blocks until released, the second
+// signals that it started and whether it observed cancellation. A test that
+// fires a signal between the two turns needs the second send to prove it was
+// untouched by it.
+type twoTurnClient struct {
+	firstStarted    chan struct{}
+	release         chan struct{}
+	secondStarted   chan struct{}
+	secondCancelled chan struct{}
+}
+
+func (b *twoTurnClient) Send(ctx context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		select {
+		case <-b.firstStarted:
+			// Second send: report started, then watch for cancellation.
+			close(b.secondStarted)
+			select {
+			case <-ctx.Done():
+				close(b.secondCancelled)
+				<-b.release
+				yield(llm.StreamEvent{}, ctx.Err())
+				return
+			case <-time.After(200 * time.Millisecond):
+			}
+		default:
+			close(b.firstStarted)
+			<-b.release
+		}
+		yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "ok."}, nil)
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
 func TestTurnCtrlCChord(t *testing.T) {
 	cl := &blockingClient{
 		started:   make(chan struct{}),
@@ -837,6 +901,108 @@ func TestTurnCtrlCChord(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "^C again to exit") {
 		t.Errorf("missing chord hint:\n%s", out.String())
+	}
+}
+
+// The user-space interrupt (SIGUSR1) stops a send in flight, like the first
+// Ctrl-C of the chord but without one: a signal arrives from a program, which
+// cannot mean "exit" the way a second keystroke can.
+//
+// It is wired through the same Notify seam as every other signal, so the test
+// delivers it by channel rather than by a real kill(2) — no pty, no process,
+// no timing window.
+func TestUserSignalInterruptsTheSend(t *testing.T) {
+	cl := &blockingClient{
+		started:   make(chan struct{}),
+		cancelled: make(chan struct{}),
+		release:   make(chan struct{}),
+	}
+
+	pr, pw := io.Pipe()
+	s, out := newSigREPL(t, cl, pr)
+	defer s.Close()
+
+	exited := make(chan int, 1)
+	s.opts.Exit = func(code int) { exited <- code }
+
+	go func() {
+		_, _ = io.WriteString(pw, "hello\n")
+	}()
+	done := make(chan error, 1)
+	go func() { done <- s.Run(context.Background()) }()
+
+	<-cl.started
+	s.sig1(interruptSignal)
+	<-cl.cancelled
+	// A repeat while the steer question is up means "interrupt again", not
+	// "exit": the chord is a keyboard idiom and SIGUSR1 is not a keystroke.
+	s.sig1(interruptSignal)
+
+	select {
+	case code := <-exited:
+		t.Errorf("a user-space interrupt exited with %d", code)
+	default:
+	}
+
+	close(cl.release)
+	_ = pw.Close()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("REPL did not stop after the turn")
+	}
+	if !strings.Contains(out.String(), "Your next message continues from here") {
+		t.Errorf("no interrupt hint after a user-space interrupt:\n%s", out.String())
+	}
+}
+
+// ...and between turns it does nothing. The subscription lives only inside
+// withinTurn, so a signal sent while the human's turn is on screen reaches no
+// handler — and the assertion that matters is the one a lazy global
+// subscription would fail: it must not sit in a channel and cancel the *next*
+// send the moment the turn begins.
+func TestUserSignalBetweenTurnsDoesNothing(t *testing.T) {
+	cl := &twoTurnClient{
+		firstStarted:    make(chan struct{}),
+		release:         make(chan struct{}),
+		secondStarted:   make(chan struct{}),
+		secondCancelled: make(chan struct{}),
+	}
+
+	pr, pw := io.Pipe()
+	s, _ := newSigREPL(t, cl, pr)
+	defer s.Close()
+
+	go func() { _, _ = io.WriteString(pw, "hello\n") }()
+	done := make(chan error, 1)
+	go func() { done <- s.Run(context.Background()) }()
+
+	<-cl.firstStarted
+	close(cl.release) // the first send finishes normally; the REPL returns to its prompt
+
+	s.sig1(interruptSignal) // the human's turn: no in-turn handler is subscribed
+	_, _ = io.WriteString(pw, "second\n")
+
+	<-cl.secondStarted
+	select {
+	case <-cl.secondCancelled:
+		t.Error("the second send was cancelled by a signal sent between turns")
+	case <-time.After(100 * time.Millisecond):
+	}
+	_ = pw.Close()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("REPL did not finish the session")
+	}
+	select {
+	case <-cl.secondCancelled:
+		t.Error("the second send was cancelled by a signal sent between turns")
+	default:
 	}
 }
 

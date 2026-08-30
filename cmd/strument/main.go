@@ -370,7 +370,7 @@ func (c *chatCmd) Run() error {
 		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, keepState, note)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
 	defer stop()
 	sentBefore, recvBefore := cdr.SessionTokens()
 	costBefore, _ := cdr.SessionCost()

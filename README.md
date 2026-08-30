@@ -151,6 +151,12 @@ Strument keeps the conversation and any completed work, then asks whether to con
 Press `Ctrl-C` twice within two seconds to exit Strument.
 In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
 
+`SIGUSR1` stops the current send the same way a single `Ctrl-C` does — same steering question, same prompt afterward — without counting toward the two-press exit chord. Sent between turns it does nothing. This is how a script or a remote assistant can stop a run it cannot reach the keyboard of:
+
+```sh
+pkill -USR1 strument
+```
+
 ### Interrupting and steering
 
 You can stop a long response and redirect the model without starting over:

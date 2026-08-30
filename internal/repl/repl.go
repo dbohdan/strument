@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"dbohdan.com/strument/internal/coder"
@@ -115,8 +116,9 @@ type Options struct {
 	// operates on the process's stdin, which tests replace with a pty.
 	MakeRaw func() error
 	ExitRaw func() error
-	// Notify subscribes ch to SIGINT for the duration of a turn and
-	// returns the unsubscribe. Default: os/signal.
+	// Notify subscribes ch to SIGINT and the user-space interrupt
+	// (interruptSignal) for the duration of a turn and returns the
+	// unsubscribe. Default: os/signal.
 	Notify func(ch chan<- os.Signal) (stop func())
 	// Exit ends the process on the second in-turn Ctrl-C. Default: os.Exit.
 	Exit func(code int)
@@ -167,7 +169,7 @@ func New(opts Options) (*REPL, error) {
 	}
 	if opts.Notify == nil {
 		opts.Notify = func(ch chan<- os.Signal) func() {
-			signal.Notify(ch, os.Interrupt)
+			signal.Notify(ch, os.Interrupt, interruptSignal)
 			return func() { signal.Stop(ch) }
 		}
 	}
@@ -508,8 +510,9 @@ func (r *REPL) showInterruptHint() {
 
 // withinTurn runs fn with the in-turn scaffolding shared by a normal turn and a
 // one-off /btw: a cancelable context, cursor restore, the double-Ctrl-C chord
-// (first cancels the send, the second within 2s exits), and the "Waiting for
-// <model>" cue. It returns fn's result.
+// (first cancels the send, the second within 2s exits), SIGUSR1 as the same
+// interrupt without the chord, and the "Waiting for <model>" cue. It returns
+// fn's result.
 func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) string {
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -528,7 +531,20 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 	go func() {
 		for {
 			select {
-			case <-sig:
+			case v := <-sig:
+				if s, ok := v.(syscall.Signal); ok && s == interruptSignal {
+					// The user-space interrupt: same effect as the first
+					// Ctrl-C of the chord, but no chord — it is a signal from
+					// a program, not a keystroke, and a second one means
+					// "interrupt again", not "exit". It reaches the same
+					// InterruptSend the Ctrl-C path does, so the steer menu
+					// and everything downstream of a stopped send come along
+					// for free. Between turns it is a no-op, matching how
+					// InterruptSend already treats a Ctrl-C with nothing in
+					// flight.
+					r.coder.InterruptSend()
+					continue
+				}
 				if r.chord() {
 					// os.Exit skips the defer above, so restore the cursor
 					// here before the hard exit (aider's on-exit guard).
@@ -763,8 +779,9 @@ func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 		// A question prompt is a hole in the double-Ctrl-C chord, and it has to
 		// be patched here rather than left alone.
 		//
-		// The chord lives in withinTurn's signal handler, which only sees
-		// SIGINT. While a question is up readline holds the terminal in raw
+		// The chord lives in withinTurn's signal handler, which sees SIGINT and
+		// the user-space interrupt interruptSignal. While a question is up
+		// readline holds the terminal in raw
 		// mode, ISIG is off, and Ctrl-C arrives as a byte that readline turns
 		// into ErrInterrupt — so the signal handler never runs and the second
 		// press of the chord vanishes. A live pty probe caught it: two Ctrl-C
