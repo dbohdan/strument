@@ -215,6 +215,15 @@ inherited from aider.
     `$XDG_STATE_HOME/strument`.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
+  - `monty/` — the vendored Monty wrapper behind the `code` tool: a
+    restricted Python interpreter compiled to WebAssembly, run through
+    wazero. The `monty.wasm` blob is vendored pre-built, not built from
+    source here (that needs a Rust toolchain); see its `NOTICE`. The
+    read-only tools are reachable from inside a program through the bridge
+    in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
+    Uptake measured in
+    [`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md):
+    0/36 calls on an exploration task built to need it.
 - `script/` — release build, the grammar build-tag list, and
   `setup-reference.sh`.
 - `testdata/` — distilled scenario fixtures and tests transliterated from

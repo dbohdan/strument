@@ -1207,3 +1207,48 @@ re-runs discovery, so trusting a skill in another window takes effect without
 restarting.
 
 [agent-skills]: https://code.claude.com/docs/en/skills
+
+## The `code` tool
+
+`code(code)` runs a short Python program and returns its value: a calculator, a
+formatter, or one program that computes over several pieces of data at once.
+The interpreter is [Monty](https://github.com/pydantic/monty), a restricted
+Python subset compiled to WebAssembly and run through `wazero` — pure Go, no
+cgo, vendored under `internal/monty/`.
+
+It is a **subset**, and the tool description names the walls rather than
+letting the model find them: no class definitions, no `with`, no `match`, no
+`eval`/`exec`, no `open`, no `os`/`pathlib` filesystem access, no network, no
+imports beyond `math`/`re`/`datetime`/`json`, no third-party libraries.
+Available: f-strings, `while`, `try/except`, comprehensions, generators,
+`lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/`abs`, and
+all of `math`. There is no `%-formatting` and no `.format()`.
+
+The program is sandboxed by construction: no filesystem, no network, and
+explicit resource limits (5 s, 32 MiB, recursion depth 100). A program that
+runs away terminates on a limit rather than hanging the turn.
+
+The tool never asks permission — it computes and reads, it does not touch
+anything — but it is announced like any other tool call. It is offered in ask
+mode too, because a discussion turn is exactly where a calculator belongs.
+
+### The read-only bridge
+
+Inside a `code` program, the five observation tools — `read`, `grep`, `glob`,
+`ls`, `symbol` — are callable as functions. Each returns the same text the
+tool itself would return, and each call is announced exactly as a direct call
+would be, so the review surface does not change: you see the same `Searched
+for …` line whether the model called `grep` directly or from inside a program.
+A program may issue at most 50 bridged calls.
+
+`bash`, `edit`, `write`, `commit`, and `check` are **deliberately unreachable**
+from inside a program. Those tools may ask you something, and a program calling
+them would turn "may I run this command?" into "may I run this program that
+will issue commands you cannot enumerate?" — the one thing the reviewable-loop
+rule forbids. The reachable set is derived from the observation tools'
+registration, so it cannot drift from it.
+
+Trials so far have not earned the tool a default slot:
+[`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md)
+found models did not call `code` at all (0/36) on an exploration task built to
+need it, though a probe that named the tool got an immediate correct call.
