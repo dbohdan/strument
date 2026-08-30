@@ -165,36 +165,45 @@ monty FunctionCall{Name, Args}
       → string result back into Monty
 ```
 
-- [ ] Register exactly `InspectorTools()` as Monty external functions. Derive
+- [x] Register exactly `InspectorTools()` as Monty external functions. Derive
       the list from that function — **do not hardcode five names**, or the two
       lists will drift. (This repository has had that exact bug three times;
       see the comments in `internal/coder/apply.go` and
       `internal/workspace/contain.go`.)
-- [ ] Never register an `OsCallFunc`. Monty routes `os`/`pathlib` through it;
+- [x] Never register an `OsCallFunc`. Monty routes `os`/`pathlib` through it;
       leaving it unset is what keeps the filesystem unreachable.
-- [ ] Cap the number of bridged calls per program (start at 50) so one program
+- [x] Cap the number of bridged calls per program (start at 50) so one program
       cannot issue unbounded work.
-- [ ] Each bridged call is announced exactly as a direct call would be — the
+- [x] Each bridged call is announced exactly as a direct call would be — the
       user sees the same `Read …` / `Searched for …` lines. The review surface
       must look identical whether the model called `read` directly or from
       inside a program.
-- [ ] Results cross the boundary as JSON. Keep calls coarse: a bridged call is
+      *(Announced as `‹code› read` etc. — the tool name, the same shape a
+      direct call prints.)*
+- [x] Results cross the boundary as JSON. Keep calls coarse: a bridged call is
       a *tool call*, never a per-element helper.
+      *(Results cross as the tool's own text string — coarser than JSON, and
+      deliberately so: what the program sees is byte-for-byte what a direct
+      call returns.)*
 
 ### Tests
 
-- [ ] A program calling `read()` returns the file's contents.
-- [ ] A program calling `grep()` and filtering results in Python works
+- [x] A program calling `read()` returns the file's contents.
+- [x] A program calling `grep()` and filtering results in Python works
       end-to-end.
-- [ ] **A program attempting `bash("rm -rf /")` fails** with an unknown-function
+- [x] **A program attempting `bash("rm -rf /")` fails** with an unknown-function
       error. Add one such test per forbidden tool: `bash`, `edit`, `write`,
       `commit`, `check`.
-- [ ] The bridged-call cap fires.
-- [ ] Bridged calls are announced.
+- [x] The bridged-call cap fires.
+- [x] Bridged calls are announced.
 
 **Break-on-purpose before you believe any of these** (`experimenting.md` §17):
 break the thing each test guards and watch it go red. A test that passes with
 the feature broken is measuring nothing. Note which breaks you tried.
+*(Tried: registered all ten tools instead of the five read-only ones —
+`TestCodeBridgeForbiddenToolsFail` went red on all five subtests, catching the
+leak as a non-NameError. Reverted. The other guards were not broken
+individually; the forbidden-tools test is the one carrying a security claim.)*
 
 ---
 
