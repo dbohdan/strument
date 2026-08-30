@@ -1,0 +1,41 @@
+‹thinking› The user wants me to find three caps in the Go code: size of a single tool result, number of work steps per turn, and chat history budget. Let me search for these.
+‹code› print(grep(pattern="maxToolOutputBytes|MaxSteps|maxChatHistoryTokens|MaxToolResult|MaxWorkSteps|historyBudget|HistoryBudget|MaxHistory", glob="**/*.go", mode="content", ignore_case=True, context_lines=2))
+‹code› grep
+Searched for maxToolOutputBytes|MaxSteps|maxChatHistoryTokens|MaxToolResult|MaxWorkSteps|historyBudget|HistoryBudget|MaxHistory matching **/*.go as content — 28 matches in 9 files
+
+‹thinking› No matches. Let me search more broadly for caps: "cap", "limit", "budget", "steps", "tool result size".
+‹code› print(grep(pattern="budget|Budget", glob="**/*.go", mode="content", context_lines=1)) print("----") print(grep(pattern="Max[A-Z]", glob="**/*.go", mode="content", context_lines=1))
+‹code› grep
+Searched for budget|Budget matching **/*.go as content — 37 matches in 14 files
+‹code› grep
+Searched for Max[A-Z] matching **/*.go as content — 45 matches in 10 files
+‹code› print(glob("**/*.go")[:50]) print(len(glob("**/*.go")))
+‹code› glob
+‹code› glob
+
+‹thinking› Odd — returns None. Maybe the code tool returns last value only; print returns None. Let me do a last-expression style.
+‹code› files = glob("**/*.go") files[:50]
+‹code› glob
+
+‹thinking› The code tool seems to be having trouble — the glob with pattern "**/*.go" returned None? Actually the first code call used grep which returned None (no matches). Second also None. Third glob... error says "The required 'pattern' argument was missing" — weird, maybe glob requires positional. Let me just use the direct tools instead.
+Matched 274 files against **/*.go
+‹code› r1 = grep(pattern="MaxSteps|maxSteps|step.*cap|maxToolResult|MaxToolResult|toolResult.*[Ll]imit|historyBudget|HistoryBudget|maxHistoryTokens", glob="internal/coder/*.go", mode="content", context_lines=2) r1
+‹code› grep
+Searched for MaxSteps|maxSteps|step.*cap|maxToolResult|MaxToolResult|toolResult.*[Ll]imit|historyBudget|HistoryBudget|maxHistoryTokens matching internal/coder/*.go as content — 14 matches in 5 files
+‹code› r = grep(pattern="maxToolOutputBytes|maxChatHistoryTokens", glob="internal/**/*.go", mode="content", context_lines=3) r
+‹code› grep
+Searched for maxToolOutputBytes|maxChatHistoryTokens matching internal/**/*.go as content — 27 matches in 8 files
+
+‹thinking›
+I have all three:
+
+1. Tool result size cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go` (line 50).
+2. Work steps per turn cap: `MaxSteps` default 25, set in `New` in `internal/coder/coder.go` (line 315). The question asks for "the cap" and "the file the constant lives in". MaxSteps is a field with a default of 25 set in New in coder.go. There isn't a separate const. The default (25) is set by New. So answer: 25 in internal/coder/coder.go.
+3. Chat history budget: `maxChatHistoryTokens` — a function, not a constant: context/8 with a 2048 floor, in `internal/coder/send.go`. The value: context/8 (min 2048). The "cap" value isn't a single constant; it's derived. I should state that.
+
+Answer on one line beginning with ANSWER:.
+‹/›
+
+ANSWER: Single tool result cap: `maxToolOutputBytes = 60_000` (internal/coder/toolobserve.go); work steps per turn cap: `MaxSteps`, default 25 (internal/coder/coder.go); chat history budget: `maxChatHistoryTokens` = context/8 with a 2048 floor (internal/coder/send.go).
+
+Tokens: 44.5k sent (38.1k cache hit), 751 received. Cost: $0.0012 turn, $0.0012 session. 8 steps.

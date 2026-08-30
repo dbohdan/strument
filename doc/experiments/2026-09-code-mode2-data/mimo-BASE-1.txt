@@ -1,0 +1,88 @@
+‹thinking› Let me search for these caps in the Go code.
+Searched for maxToolResult|maxWorkSteps|maxHistory|MaxHistory|MaxToolResult|MaxWorkSteps|toolResultSize|workSteps|historyBudget matching **/*.go as files — no matches
+Searched for const.*[Mm]ax.*=|const.*[Cc]ap.*= matching **/*.go as files — 13 matches in 10 files
+
+‹thinking› Let me look at the matches more closely.
+Searched for const.*[Mm]ax.*=|const.*[Cc]ap.*= matching **/*.go as files — 13 matches in 10 files
+
+‹thinking› Let me look more specifically for the three caps the user is asking about: tool result size, work steps per turn, and chat history budget.
+Searched for maxTool|toolResult|toolResultSize matching **/*.go as files — 28 matches in 8 files
+Searched for maxSteps|maxWork|maxTurn matching **/*.go as files — 6 matches in 3 files
+Searched for historyCap|historySize|historyLen|maxHistory|budget|maxToken matching **/*.go as files — 90 matches in 30 files
+
+‹thinking› Let me look at the specific files more carefully.
+Searched for maxSteps|maxWork|maxTurn under /usr/local/bin/internal/coder/coder.go as content — no matches
+Searched for maxTool|toolResult|toolResultSize under /usr/local/bin/internal/coder/codetool.go as content — no matches
+Searched for historyCap|historySize|budget|maxToken|maxHistory under /usr/local/bin/internal/config/types.go as content — no matches
+Searched for historyCap|historySize|budget|maxToken|maxHistory under /usr/local/bin/internal/history/history.go as content — no matches
+
+‹thinking› The path-based grep isn't working with those absolute paths. Let me use the correct relative paths.
+‹thinking› Let me find the actual project root and file paths.
+Listed the project root (20 entries)
+
+‹thinking› Let me search for these constants in the Go files.
+Searched for maxSteps|maxWork|maxTurn under internal/coder matching **/*.go as files — 1 match in 1 file
+
+‹thinking› Let me search with content mode.
+Searched for maxSteps|maxWork|maxTurn under internal/coder/coder.go as files — 1 match in 1 file
+
+‹thinking› The grep content mode isn't showing me the actual lines. Let me read the file directly.
+‹shell› (no purpose given)
+$ grep -rn 'maxSteps\|maxWork\|maxTurn\|maxTool\|toolResult\|toolResultSize\|historyCap\|budget\|maxHistory\|const.*[Mm]ax.*=' internal/coder/coder.go internal/coder/codetool.go internal/config/types.go internal/history/history.go 2>/dev/null | head -60
+Run shell command? (Y/n) ‹thinking› Let me just read the relevant files directly.
+Read internal/coder/coder.go (1046 lines)
+Read internal/coder/codetool.go (244 lines)
+Read internal/config/types.go (344 lines)
+
+‹thinking›
+Now I need to find:
+1. The cap on the size of a single tool result
+2. The cap on the number of work steps per turn (MaxSteps = 25, set in New() in coder.go)
+3. The cap on the chat history budget (maxChatHistoryTokens)
+
+Let me search for the tool result size cap and the chat history budget.
+‹/›
+Searched for maxToolOutput|toolOutput.*cap|toolResult.*limit|tool.*result.*size|tool.*output.*bytes|maxChatHist|maxHistoryTokens matching **/*.go as files — 27 matches in 8 files
+Searched for maxChatHistoryTokens|maxChatHistory|chatHistoryBudget|chat.*history.*token|chat.*history.*budget matching **/*.go as files — 6 matches in 3 files
+
+‹thinking›
+Now I have three caps to find:
+
+1. maxToolOutputBytes - this caps the size of a single tool result
+2. MaxSteps = 25 - this caps the number of work steps per turn (found in coder.go)
+3. maxChatHistoryTokens - this caps the chat history budget
+
+Let me look at the relevant files to find the exact constants.
+
+For MaxSteps, I already found it in coder.go: `MaxSteps: 25` in the `New` function, and the constant `maxAutoCheck = 3`.
+
+For maxToolOutputBytes and maxChatHistoryTokens, let me check the files that matched.
+
+From the codetool.go snippet in the user's question context, I can see:
+```python
+"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n"
+```
+
+This is the example code in the code tool description. These are the three caps the user is asking about.
+
+Let me find the actual definitions of maxToolOutputBytes and maxChatHistoryTokens.
+‹/›
+Searched for maxToolOutputBytes|maxChatHistoryTokens under internal/coder matching **/*.go as content — 27 matches in 8 files
+
+‹thinking›
+Now I have all three:
+
+1. **Tool result size cap**: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. **Work steps per turn cap**: `MaxSteps: 25` (set in `New()`) in `internal/coder/coder.go`
+3. **Chat history budget cap**: `maxChatHistoryTokens(context/8, 2048)` in `internal/coder/send.go` — this is a function, not a constant. It's `context/8` with a floor of 2048.
+
+Wait, let me re-read the question. It says "caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget." It asks for "the value of each of those three caps and the file the constant lives in."
+
+For maxChatHistoryTokens, it's a function `maxChatHistoryTokens(context int) int` that returns `max(context/8, 2048)`. It's not a single constant value but a formula. The user asked for "the value" and "the file the constant lives in." The function is in `internal/coder/send.go`.
+
+Let me give the answer as requested.
+‹/›
+
+ANSWER: maxToolOutputBytes = 60000 in internal/coder/toolobserve.go; MaxSteps = 25 in internal/coder/coder.go; maxChatHistoryTokens = max(context/8, 2048) in internal/coder/send.go
+
+Tokens: 150.0k sent (115.9k cache hit), 1.9k received. Cost: $0.0056 turn, $0.0056 session. 13 steps.

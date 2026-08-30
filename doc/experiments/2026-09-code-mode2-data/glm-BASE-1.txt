@@ -1,0 +1,33 @@
+‹thinking›
+The user wants three caps in the Go code of this repository:
+1. Size of a single tool result
+2. Number of work steps per turn
+3. Chat history budget
+
+I need to find these constants. Let me search the codebase.
+‹/›
+Searched for (max|Max|limit|Limit|cap|Cap)[A-Za-z]*(Tool|Result|Step|Turn|History|Budget) matching **/*.go as content — 102 matches in 27 files
+Searched for "const .*=.*(1024|100|50|20|10)\b" matching **/*.go as content — 6 matches in 6 files
+
+‹thinking›
+Let me verify the three:
+
+1. maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go:50
+2. MaxSteps default = 25 in internal/coder/coder.go:315 (but is it a constant? It's set in a struct literal. The question asks "caps the number of work steps per turn" — the value is 25, lives in internal/coder/coder.go). Let me check line 315 context.
+3. maxChatHistoryTokens — it's a function: context/8. Let me read send.go:596-610.
+‹/›
+Read internal/coder/send.go (lines 590-607 of 1025)
+Read internal/coder/coder.go (lines 306-319 of 1046)
+
+‹thinking›
+Three caps:
+1. Tool result size cap: `maxToolOutputBytes = 60_000` in internal/coder/toolobserve.go.
+2. Work steps per turn: MaxSteps default 25, set in New() in internal/coder/coder.go (not a const, but the default lives there; the question says "the file the constant lives in").
+3. Chat history budget: maxChatHistoryTokens = context/8 with 2048 floor, in internal/coder/send.go.
+
+Note codetool.go line 70 mentions these three names in a quiz-like prompt: "for name in ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens"]". That confirms the three.
+‹/›
+
+ANSWER: maxToolOutputBytes = 60000 (internal/coder/toolobserve.go); MaxSteps default = 25 (set in New(), internal/coder/coder.go); maxChatHistoryTokens = context/8 with a 2048 floor (internal/coder/send.go).
+
+Tokens: 17.3k sent (9.9k cache hit), 525 received. Cost: $0.00083 turn, $0.00083 session. 3 steps.

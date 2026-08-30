@@ -1,0 +1,56 @@
+‹thinking› Let me search for the three caps mentioned: tool result size, work steps per turn, and chat history budget.
+‹code› for pattern in ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens"]: results = grep(pattern=pattern, glob="**/*.go", mode="content") print(f"=== {pattern} ===") print(results)
+‹code› grep
+Searched for maxToolOutputBytes matching **/*.go as content — 22 matches in 6 files
+‹code› grep
+Searched for MaxSteps matching **/*.go as content — 41 matches in 9 files
+‹code› grep
+Searched for maxChatHistoryTokens matching **/*.go as content — 6 matches in 3 files
+
+‹thinking› Let me search more broadly for these constants.
+‹code› # Search for all three patterns with different case variations patterns = ["maxToolOutput", "MaxSteps", "maxChatHistory", "toolOutput", "MaxStep", "chatHistory", "chatHist", "maxSteps"] for pattern in patterns: results = grep(pattern=pattern, glob="**/*.go", mode="content") if results: print(f"=== {pattern} ===") print(results) print()
+‹code› grep
+Searched for maxToolOutput matching **/*.go as content — 22 matches in 6 files
+‹code› grep
+Searched for MaxSteps matching **/*.go as content — 41 matches in 9 files
+‹code› grep
+Searched for maxChatHistory matching **/*.go as content — 6 matches in 3 files
+‹code› grep
+Searched for toolOutput matching **/*.go as content — no matches
+‹code› grep
+Searched for MaxStep matching **/*.go as content — 41 matches in 9 files
+‹code› grep
+Searched for chatHistory matching **/*.go as content — no matches
+‹code› grep
+Searched for chatHist matching **/*.go as content — no matches
+‹code› grep
+Searched for maxSteps matching **/*.go as content — 6 matches in 3 files
+
+‹thinking› The code returned None, which means the grep calls returned no results. Let me try broader searches.
+Searched for maxToolOutput|MaxSteps|maxChatHistory|toolOutput|MaxStep|chatHistory matching **/*.go as files — 67 matches in 16 files
+
+‹thinking› Let me look at the config files and the coder files to find these constants.
+Searched for maxToolOutput|MaxSteps|maxChatHistory|toolOutput|MaxStep|chatHistory matching **/*.go as content — 67 matches in 16 files
+
+‹thinking›
+Now I have the three caps:
+
+1. **maxToolOutputBytes** = `60_000` (60,000) — defined in `internal/coder/toolobserve.go`
+2. **MaxSteps** = `25` — default in `internal/coder/coder.go` (line 315)
+3. **maxChatHistoryTokens** — defined as a function in `internal/coder/send.go`, it's `context / 8`
+
+Let me verify the maxChatHistoryTokens function more carefully.
+‹/›
+Read internal/coder/send.go (lines 595-604 of 1025)
+
+‹thinking›
+The three caps are:
+
+1. **maxToolOutputBytes** = 60,000 — `internal/coder/toolobserve.go`
+2. **MaxSteps** = 25 (default) — `internal/coder/coder.go`
+3. **maxChatHistoryTokens** = context/8 (with a 2048 floor) — `internal/coder/send.go`
+‹/›
+
+ANSWER: maxToolOutputBytes=60_000 in internal/coder/toolobserve.go, MaxSteps=25 in internal/coder/coder.go, maxChatHistoryTokens=context/8 (floor 2048) in internal/coder/send.go
+
+Tokens: 33.2k sent (26.2k cache hit), 665 received. Cost: $0.0012 turn, $0.0012 session. 6 steps.

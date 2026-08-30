@@ -1,0 +1,67 @@
+‹thinking› The user wants three caps: tool result size cap, work steps per turn cap, chat history budget cap. I recall the example in the tool description: "maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens". Let me search the codebase.
+‹code› for name in ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens", "maxToolResult", "maxSteps", "chatHistoryTokens"]: print("==", name) print(grep(pattern=name, glob="**/*.go", mode="content", context_lines=1))
+‹code› grep
+Searched for maxToolOutputBytes matching **/*.go as content — 22 matches in 6 files
+‹code› grep
+Searched for MaxSteps matching **/*.go as content — 41 matches in 9 files
+‹code› grep
+Searched for maxChatHistoryTokens matching **/*.go as content — 6 matches in 3 files
+‹code› grep
+Searched for maxToolResult matching **/*.go as content — no matches
+‹code› grep
+Searched for maxSteps matching **/*.go as content — 6 matches in 3 files
+‹code› grep
+Searched for chatHistoryTokens matching **/*.go as content — no matches
+
+‹thinking› Empty results. Let me search for related terms: "tool result", "steps", "history", "budget", "cap", "limit", "truncate", "MaxTurns", etc.
+‹code› for pat in ["[Tt]ool [Rr]esult", "truncate", "maxSteps|MaxSteps|max_steps", "history", "budget", "steps"]: print("==", pat) print(grep(pattern=pat, glob="**/*.go", mode="files"))
+‹code› grep
+Searched for "[Tt]ool [Rr]esult" matching **/*.go as files — 69 matches in 28 files
+‹code› grep
+Searched for truncate matching **/*.go as files — 52 matches in 29 files
+‹code› grep
+Searched for maxSteps|MaxSteps|max_steps matching **/*.go as files — 57 matches in 12 files
+‹code› grep
+Searched for history matching **/*.go as files — 374 matches in 59 files
+‹code› grep
+Searched for budget matching **/*.go as files — 81 matches in 30 files
+‹code› grep
+Searched for steps matching **/*.go as files — 50 matches in 23 files
+Listed the project root (20 entries)
+Matched 274 files against **/*.go
+
+‹thinking› The coder is in internal/coder. The three caps: tool result size cap, work steps per turn cap, chat history budget. Let me look in internal/coder for constants. Likely in coder.go or send.go or tools.go. Also internal/config may have budget. Let me grep for constants with "Max" in internal/coder.
+‹code› print(grep(pattern="^const|^\tmax|^\tMax|Max[A-Z]|max[A-Z][a-zA-Z]* *=", path="internal/coder", mode="content", ignore_case=False))
+‹code› grep
+Searched for "^const|^	max|^	Max|Max[A-Z]|max[A-Z][a-zA-Z]* *=" under internal/coder as content — 101 matches in 30 files
+‹code› import re out = grep(pattern="\\bmax[A-Z]", glob="internal/coder/*.go", mode="content") print(out)
+‹code› grep
+Searched for \bmax[A-Z] matching internal/coder/*.go as content — 101 matches in 23 files
+
+‹thinking› The grep tool returned None — maybe I need to look at output differently. Earlier greps returned None too; maybe grep prints nothing because of how I printed. Let me call grep directly as a tool.
+Searched for "max\w+ =" matching **/*.go as content — 46 matches in 18 files
+
+‹thinking›
+The user asks about three caps in the coder: (1) size of a single tool result, (2) number of work steps per turn, (3) chat history budget.
+
+1. Tool result size: `internal/coder/toolobserve.go:50: const maxToolOutputBytes = 60_000` — that's likely the tool result cap. Let me check.
+
+2. Steps per turn: maxSteps — config has `maxStepsVal` in internal/config/load.go. But the coder cap — need to find the default value. Look in config/types.go or budget-related. There's internal/config/budget_test.go, so there's a budget config. Let me find where MaxSteps default is defined.
+
+3. Chat history budget: maybe in internal/history or coder/context.go. Let me grep for "history" cap like maxHistoryTokens or contextBudget.
+‹/›
+Read internal/coder/toolobserve.go (lines 30-89 of 518)
+Searched for MaxSteps|maxStepsVal|HistoryTokens|historyTokens|ContextBudget|contextBudget matching **/*.go as content — 49 matches in 11 files
+
+‹thinking›
+The three caps:
+
+1. Tool result size cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go` (line 50).
+2. Work steps per turn: `MaxSteps: 25` in `internal/coder/coder.go` line 315. Let me confirm it's a constant-ish default. It's set in a struct default, not a named constant. Let me look at coder.go around line 315.
+3. Chat history budget: `maxChatHistoryTokens` in `internal/coder/send.go` — it's a function, context/8. Let me read it.
+‹/›
+Read internal/coder/coder.go (lines 308-322 of 1046)
+Read internal/coder/send.go (lines 592-603 of 1025)
+ANSWER: Tool result cap maxToolOutputBytes = 60,000 bytes in internal/coder/toolobserve.go; work-step cap per turn MaxSteps = 25 in internal/coder/coder.go; chat history budget maxChatHistoryTokens = context/8 with a 2048-token floor (internal/coder/send.go).
+
+Tokens: 62.6k sent (56.3k cache hit), 986 received. Cost: $0.0016 turn, $0.0016 session. 10 steps.

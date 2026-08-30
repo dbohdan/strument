@@ -1,0 +1,38 @@
+‹thinking› The user wants me to find three caps in the Go code: tool result size, number of work steps per turn, and chat history budget. Let me search.
+Searched for [Cc]ap|Max|Limit matching **/*.go as content — 108 matches in 21 files
+
+‹thinking›
+Let me find the specific constants: maxToolOutputBytes, MaxSteps, maxChatHistoryTokens.
+
+From grep:
+- `maxChatHistoryTokens` is mentioned in codetool.go. Let me search.
+- `MaxSteps` is 25 (coder.go:315).
+- `maxToolOutputBytes` - need to find.
+- `maxChatHistoryTokens` - need to find.
+
+Let me grep for these specific constants.
+‹/›
+Searched for maxToolOutputBytes\s*=|maxChatHistoryTokens\s*=|MaxSteps\s*:|maxToolOutputBytes|maxChatHistoryTokens matching **/*.go as content — 28 matches in 9 files
+Read internal/coder/send.go (lines 594-608 of 1025)
+
+‹thinking›
+The three caps:
+1. Tool result size: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go
+2. Work steps per turn: MaxSteps = 25 in internal/coder/coder.go
+3. Chat history budget: maxChatHistoryTokens is a function, not a constant — returns context/8 with a 2048 floor. The question asks for "the value of each of those three caps and the file the constant lives in." But maxChatHistoryTokens is derived from context, not a constant. Let me re-read.
+
+The question: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+So for chat history budget, it's a function. But the question says "the value of each" and "the file the constant lives in". Hmm. The chat history budget isn't a single constant value; it's a function of context with floor 2048. Let me think about what to answer.
+
+Let me give:
+- maxToolOutputBytes = 60,000 in internal/coder/toolobserve.go
+- MaxSteps = 25 in internal/coder/coder.go
+- maxChatHistoryTokens = context/8 (floor 2048) in internal/coder/send.go
+
+The question wants one line. Let me phrase conc
+‹/›
+
+ANSWER: tool result cap maxToolOutputBytes=60000 in internal/coder/toolobserve.go; steps-per-turn cap MaxSteps=25 in internal/coder/coder.go; chat history budget maxChatHistoryTokens=context/8 (floor 2048) in internal/coder/send.go.
+
+Tokens: 27.3k sent (22.9k cache hit), 646 received. Cost: $0.0010 turn, $0.0010 session. 4 steps.

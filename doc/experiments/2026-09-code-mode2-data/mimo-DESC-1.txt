@@ -1,0 +1,38 @@
+‹thinking› Let me search for these constants in the Go code.
+Searched for maxToolOutputBytes|MaxSteps|maxChatHistoryTokens matching **/*.go as files — 67 matches in 16 files
+
+‹thinking› Let me look at the definition of these constants/variables.
+Searched for maxToolOutputBytes\s*=|MaxSteps\s*=|maxChatHistoryTokens\s*= matching **/*.go as content — 9 matches in 5 files
+
+‹thinking› I found `maxToolOutputBytes` in `internal/coder/toolobserve.go` with value 60_000. Now I need to find where `MaxSteps` and `maxChatHistoryTokens` are defined (not just assigned).
+Searched for MaxSteps\s+int|maxChatHistoryTokens\s*(int|float|=) matching **/*.go as content — 2 matches in 2 files
+
+‹thinking› I need to find where `MaxSteps` and `maxChatHistoryTokens` are defined as constants or have default values. Let me look at the config and coder files.
+Searched for maxChatHistoryTokens matching **/*.go as content — 6 matches in 3 files
+
+‹thinking› Now I need to find the default value for `MaxSteps`. Let me look at where it's initialized.
+Searched for MaxSteps\s*[:=] matching **/*.go as content — 9 matches in 5 files
+
+‹thinking›
+Let me gather the three caps:
+
+1. **maxToolOutputBytes** = 60,000 — in `internal/coder/toolobserve.go`
+2. **MaxSteps** = 25 — in `internal/coder/coder.go` (the default value assigned in the Coder struct)
+3. **maxChatHistoryTokens** = max(context/8, 2048) — in `internal/coder/send.go` — this is a function, not a constant. But it's the cap on chat history budget.
+
+The user asks for "the value of each of those three caps":
+- maxToolOutputBytes: 60,000 in internal/coder/toolobserve.go
+- MaxSteps: 25 in internal/coder/coder.go
+- maxChatHistoryTokens: max(context/8, 2048) in internal/coder/send.go
+‹/›
+‹thinking›
+Let me summarize what I found:
+
+1. **maxToolOutputBytes** = 60,000 in `internal/coder/toolobserve.go`
+2. **MaxSteps** = 25 in `internal/coder/coder.go`
+3. **maxChatHistoryTokens** = max(context/8, 2048) in `internal/coder/send.go` (it's a function, not a fixed constant)
+‹/›
+
+ANSWER: maxToolOutputBytes=60,000 (internal/coder/toolobserve.go), MaxSteps=25 (internal/coder/coder.go), maxChatHistoryTokens=max(context/8, 2048) (internal/coder/send.go)
+
+Tokens: 39.6k sent (31.9k cache hit), 767 received. Cost: $0.0014 turn, $0.0014 session. 7 steps.

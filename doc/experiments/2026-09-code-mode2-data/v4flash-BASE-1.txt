@@ -1,0 +1,31 @@
+‹thinking› We need to find three caps in Go code: size of a single tool result, number of work steps per turn, chat history budget. Need to search.
+Searched for "tool result|ToolResult|toolResult" matching **/*.go as content — 88 matches in 32 files
+Searched for "work steps|workSteps|WorkStep|steps per turn|maxSteps|MaxSteps" matching **/*.go as content — 46 matches in 10 files
+Searched for "history budget|HistoryBudget|historyBudget|chatHistory|ChatHistory" matching **/*.go as content — 11 matches in 5 files
+
+‹thinking›
+Let me look at the specific constants:
+1. maxToolOutputBytes in internal/coder/toolobserve.go
+2. MaxSteps default 25 in internal/coder/coder.go
+3. maxChatHistoryTokens in internal/coder/send.go
+
+Let me read those files to get exact values.
+‹/›
+Read internal/coder/toolobserve.go (lines 35-54 of 518)
+Read internal/coder/coder.go (lines 305-324 of 1046)
+Read internal/coder/send.go (lines 590-604 of 1025)
+
+‹thinking›
+The three caps:
+1. Tool result cap: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go
+2. Work steps per turn: MaxSteps = 25 default in internal/coder/coder.go (also set in repl/commands.go:678)
+3. Chat history budget: maxChatHistoryTokens = context/8 with 2048 floor, in internal/coder/send.go. But it's a function not a constant. The user asked "caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+The history budget is a function context/8 with 2048 floor, file internal/coder/send.go. The first two are constants (60_000 in toolobserve.go, 25 in coder.go).
+
+Answer on one line beginning ANSWER:.
+‹/›
+
+ANSWER: tool result = 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); work steps/turn = 25 default (MaxSteps = 25, internal/coder/coder.go); chat history budget = context/8 with 2048 floor (maxChatHistoryTokens, internal/coder/send.go).
+
+Tokens: 21.4k sent (8.2k cache hit), 807 received. Cost: $0.0011 turn, $0.0011 session. 3 steps.

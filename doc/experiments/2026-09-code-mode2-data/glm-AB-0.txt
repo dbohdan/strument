@@ -1,0 +1,37 @@
+‹thinking›
+The user wants me to find three caps in the Go code: tool result size cap, work steps per turn cap, and chat history budget cap. I saw a hint earlier in the system prompt example: `caps = {} for name in ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens"]`. But that was just an example in the tool description, not necessarily the actual values. I need to search the codebase.
+
+Let me search for these.
+‹/›
+Searched for maxToolOutputBytes|MaxSteps|maxChatHistoryTokens matching **/*.go as files — 67 matches in 16 files
+Searched for "(tool result|work step|history).*(cap|limit|budget)|maxSteps|maxHistoryTokens|maxResult" matching **/*.go as files — 12 matches in 7 files
+
+‹thinking› The prompt itself mentions "maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens" — these were in the system prompt example. Let me search for actual constants in this repo.
+Searched for "maxToolOutputBytes\s*=|MaxSteps\s*=|maxChatHistoryTokens\s*=|maxToolOutputBytes MaxSteps maxChatHistoryTokens" matching **/*.go as content — 9 matches in 5 files
+Searched for const.*(oolResult|tep|istory|udget|oolOutput).*= matching **/*.go as content — 4 matches in 4 files
+Searched for Steps|HistoryTokens|historyBudget|maxChat matching internal/coder/*.go as content — 39 matches in 8 files
+Searched for const|\d+_?\d*\s*(//|$) matching internal/coder/coder.go as content — 16 matches in 1 file
+
+‹thinking›
+Let me check the three:
+
+1. maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go:50
+2. MaxSteps = 25 (default in coder.go:315) — is it a constant? It's set as default value 25 in a struct literal. Let me check if there's a constant. Let me look at coder.go:315 context and send.go:599.
+3. maxChatHistoryTokens is a function: context/8. Let me read it.
+‹/›
+Read internal/coder/send.go (lines 592-606 of 1025)
+Read internal/coder/coder.go (lines 308-319 of 1046)
+
+‹thinking›
+The three caps:
+
+1. Single tool result cap: `maxToolOutputBytes = 60_000` in internal/coder/toolobserve.go:50
+2. Work steps per turn cap: `MaxSteps = 25` (default in coder.go New at line 315). It's a field default, not a constant. But the question says "the file the constant lives in" — for MaxSteps the default 25 lives in internal/coder/coder.go.
+3. Chat history budget: `maxChatHistoryTokens(context)` = max(context/8, 2048) in internal/coder/send.go:599. Not a constant but a function; budget is context/8 with a 2048 floor.
+
+Answer on one line.
+‹/›
+
+ANSWER: Tool result cap = 60,000 bytes (const maxToolOutputBytes, internal/coder/toolobserve.go); work-step cap = 25 steps per turn (MaxSteps default, internal/coder/coder.go); chat history cap = context/8 with a 2048-token floor (maxChatHistoryTokens, internal/coder/send.go).
+
+Tokens: 26.0k sent (23.2k cache hit), 752 received. Cost: $0.00074 turn, $0.00074 session. 5 steps.

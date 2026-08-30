@@ -1,0 +1,39 @@
+‹thinking›
+The user asks about Go code in this repository. There are three caps: size of a single tool result, number of work steps per turn, chat history budget. I need to find the constants and their values and files.
+
+Let me search.
+‹/›
+Searched for "(tool result|ToolResult|toolResult)" matching **/*.go as files — 89 matches in 32 files
+Searched for (?i)(max.*(step|tool|chat|history|budget|result|turn|output)|budget) matching **/*.go as content — 102 matches in 31 files
+
+‹thinking›
+I found the tool result cap: `maxToolOutputBytes = 60_000` in internal/coder/toolobserve.go.
+
+MaxSteps: 25 default in internal/coder/coder.go (line 315). But let me check whether the constant lives... it's `MaxSteps` as a struct field, default 25 in NewCoder? Let me look at coder.go around line 315.
+
+Chat history budget: `maxChatHistoryTokens(context int)` — function in send.go; is it a constant? Let me check send.go around 596.
+
+The user asks: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+So for each cap, value and file. For chat history budget, it's a function of context: context/8? Let me read those lines.
+‹/›
+Read internal/coder/send.go (lines 590-609 of 1025)
+Read internal/coder/coder.go (lines 305-329 of 1046)
+Read internal/coder/toolobserve.go (lines 40-54 of 518)
+
+‹thinking›
+I have all three:
+1. maxToolOutputBytes = 60_000 (tool result cap), in internal/coder/toolobserve.go
+2. MaxSteps = 25, in internal/coder/coder.go
+3. maxChatHistoryTokens(context) = max(context/8, 2048) — a function in internal/coder/send.go, not a constant. The question asks "the value of each of those three caps and the file the constant lives in." The chat history budget is computed, not a constant. Let me phrase it: maxChatHistoryTokens = context/8 with a 2048 floor, in internal/coder/send.go.
+
+Let me double-check if there's a constant for chat history somewhere. The grep found maxChatHistoryTokens as a function returning max(context/8, 2048). Also "notesHeadShare" for input budget. The question says "caps the chat history budget" — that's maxChatHistoryTokens in send.go. Value: max(context/8, 2048).
+
+Also MaxSteps = 25 in coder.go (line 315). That's the work-step budget per turn.
+
+Answer on one line beginning with ANSWER:.
+‹/›
+
+ANSWER: maxToolOutputBytes = 60_000 (internal/coder/toolobserve.go); MaxSteps = 25 (internal/coder/coder.go); maxChatHistoryTokens = max(context/8, 2048), a function, so no constant — it lives in internal/coder/send.go.
+
+Tokens: 20.3k sent (4.1k cache hit), 971 received. Cost: $0.0013 turn, $0.0013 session. 3 steps.

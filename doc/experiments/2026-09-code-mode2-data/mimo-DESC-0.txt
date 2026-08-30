@@ -1,0 +1,48 @@
+‹thinking› I need to search for these three caps in the Go code. Let's start by exploring the repository structure and searching for relevant constants.
+Matched 274 files against **/*.go
+
+‹thinking›
+The user is asking about three specific caps in the Go code:
+1. Size of a single tool result
+2. Number of work steps per turn
+3. Chat history budget
+
+Let me search for these caps. I should look for constants related to these caps. Let me start with searching for "max" or "cap" related to tool results, work steps, and chat history.
+‹/›
+Searched for max.*tool|tool.*max|cap.*tool|tool.*cap matching **/*.go as files — 15 matches in 10 files
+
+‹thinking› I need to find the three caps mentioned: size of a single tool result, number of work steps per turn, and chat history budget. Let me search for these more specifically.
+Searched for maxTool|toolMax|toolResult|toolSize matching **/*.go as files — 28 matches in 8 files
+
+‹thinking› Let me look for constants related to tool results, work steps, and chat history budget. Let me search more specifically.
+Searched for MaxToolResult|MaxSteps|MaxChat|ChatHistory|workSteps|maxWork matching **/*.go as files — 48 matches in 12 files
+
+‹thinking› Let me search for the specific constants more precisely.
+Searched for maxToolOutput|MaxToolOutput matching **/*.go as content — 22 matches in 6 files
+Searched for maxWork|MaxWork|MaxStep|maxStep matching **/*.go as content — 45 matches in 10 files
+Searched for budget|Budget|MaxHistory|chatHistory|chat_budget matching **/*.go as content — 105 matches in 27 files
+
+‹thinking›
+Let me look at the specific constants mentioned in the grep results:
+
+1. `maxToolOutputBytes` - in `internal/coder/toolobserve.go:50` - caps a single tool result
+2. `MaxSteps` - in `internal/coder/coder.go:315` - default is 25
+3. `maxChatHistoryTokens` - in `internal/coder/send.go:596` - caps chat history budget
+
+Let me read these files to get the exact values.
+‹/›
+Read internal/coder/toolobserve.go (lines 45-59 of 518)
+Read internal/coder/coder.go (lines 310-324 of 1046)
+Read internal/coder/send.go (lines 590-609 of 1025)
+
+‹thinking›
+Now I have the three caps:
+
+1. **Tool result size cap**: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. **Work steps per turn**: `MaxSteps: 25` in `internal/coder/coder.go`
+3. **Chat history budget**: `maxChatHistoryTokens(context) = max(context/8, 2048)` in `internal/coder/send.go`
+‹/›
+
+ANSWER: 60,000 bytes (`maxToolOutputBytes` in `internal/coder/toolobserve.go`), 25 work steps (`MaxSteps` in `internal/coder/coder.go`), and context/8 with a 2048-floor (`maxChatHistoryTokens` in `internal/coder/send.go`).
+
+Tokens: 58.0k sent (44.9k cache hit), 903 received. Cost: $0.0022 turn, $0.0022 session. 7 steps.

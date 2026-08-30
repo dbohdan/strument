@@ -1,0 +1,31 @@
+I'll search the codebase for these constant definitions.
+Searched for [Tt]ool.*([Cc]ap|[Mm]ax)|[Mm]axTool|[Mm]axSteps|[Mm]axChat|[Cc]hatHistory|maxChatHistory|maxToolOutput|maxToolResult matching **/*.go as content — 91 matches in 25 files
+
+‹thinking›
+Let me find the exact values. 
+
+1. maxToolOutputBytes = 60_000 in toolobserve.go
+2. MaxSteps = 25 (default) in coder.go line 315
+3. maxChatHistoryTokens - it's computed as context/8, not a constant. Let me check send.go.
+
+The question asks for "caps the chat history budget" - this is maxChatHistoryTokens. But that's a function, not a constant value. Let me read send.go around line 596
+‹/›
+
+Let me read the relevant sections to get exact values.
+Read internal/coder/send.go (lines 594-638 of 1025)
+Read internal/coder/coder.go (lines 310-319 of 1046)
+
+‹thinking›
+I have the three caps:
+- maxToolOutputBytes = 60_000 (internal/coder/toolobserve.go)
+- MaxSteps default = 25 (internal/coder/coder.go)
+- maxChatHistoryTokens = context/8 (derived, floor 2048) in internal/coder/send.go
+
+The question asks for "the value of each of those three caps and the file the constant lives in." The chat history cap is a function. Let me give the values.
+
+ANSWER: tool result cap = maxToolOutputBytes = 60000 in internal/coder/toolobserve.go; work steps per turn cap = MaxSteps = 25 (default) in internal/coder/coder.go; chat history budget = maxChatHistoryTokens = context/8 with 2048 floor in internal/coder/send.go.
+‹/›
+
+ANSWER: single tool result cap: maxToolOutputBytes = 60000 in internal/coder/toolobserve.go; work steps per turn cap: MaxSteps = 25 (default) in internal/coder/coder.go; chat history budget: maxChatHistoryTokens = max(context/8, 2048) in internal/coder/send.go.
+
+Tokens: 18.4k sent (10.8k cache hit), 553 received. Cost: $0.0010 turn, $0.0010 session. 3 steps.

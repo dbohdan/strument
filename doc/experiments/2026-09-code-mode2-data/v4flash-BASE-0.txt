@@ -1,0 +1,31 @@
+‹thinking› Let me search the Go code for these caps.
+Searched for "tool result|ToolResult|max.*result|MaxResult" matching **/*.go as content — 105 matches in 36 files
+Searched for "work step|max.*step|MaxSteps|maxWorkSteps|max.*turn" matching **/*.go as content — 76 matches in 19 files
+Searched for "chat history|history budget|maxChat|max.*history|MaxHistory|token budget|budget" matching **/*.go as content — 108 matches in 23 files
+
+‹thinking›
+The key files seem to be:
+- `internal/coder/toolobserve.go` for `maxToolOutputBytes` (caps a single tool result)
+- `internal/coder/coder.go` for `MaxSteps` (work-step budget per turn, default 25)
+- `internal/coder/send.go` for `maxChatHistoryTokens` (context/8?)
+
+Let me read the actual constants.
+‹/›
+Read internal/coder/toolobserve.go (lines 38-57 of 518)
+Read internal/coder/coder.go (lines 300-329 of 1046)
+Read internal/coder/send.go (lines 590-614 of 1025)
+
+‹thinking›
+The three caps:
+1. Tool result size: maxToolOutputBytes = 60_000 (60,000 bytes), in internal/coder/toolobserve.go
+2. Max work steps per turn: MaxSteps = 25 (default, also in internal/coder/coder.go line 315; configurable). The value of the cap is 25, constant in... MaxSteps is a field default set in New() in coder.go. There's also repl/commands.go setting it to 25. The question: "Give the value of each of those three caps and the file the constant lives in." For MaxSteps, the default lives in internal/coder/coder.go (New default 25).
+3. Chat history budget: maxChatHistoryTokens = context/8 with floor 2048, in internal/coder/send.go.
+
+The user wants "the value of each of those three caps" — the tool result cap is 60,000 bytes; max steps is 25; chat history budget is context/8 with 2048 floor. The file each constant lives in.
+
+Answer on one line starting with ANSWER:.
+‹/›
+
+ANSWER: tool result = 60,000 bytes (maxToolOutputBytes in internal/coder/toolobserve.go); work steps = 25 (MaxSteps default in internal/coder/coder.go); chat history = context/8 with 2048-token floor (maxChatHistoryTokens in internal/coder/send.go).
+
+Tokens: 29.1k sent (15.6k cache hit), 905 received. Cost: $0.0013 turn, $0.0013 session. 3 steps.

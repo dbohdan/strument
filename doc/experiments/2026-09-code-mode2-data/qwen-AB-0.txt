@@ -1,0 +1,39 @@
+‹thinking›
+Let me try searching for these constants in the Go code. What I need to find:
+1. A limit on the size of a single tool result
+2. A limit on the number of working steps per turn
+3. A limit on the chat history budget
+
+Let me search for Go files containing names like maxToolOutputBytes, MaxSteps, and maxChatHistoryTokens.
+‹/›
+Searched for maxToolOutputBytes|MaxSteps|ChatHistory|maxChat|ToolResult|toolResultBytes matching **/*.go as content — 90 matches in 24 files
+Matched 274 files against **/*.go
+
+‹thinking›
+I've grasped two of the upper limits:
+1. `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. `MaxSteps` — default is 25. Let me check lines 50–60 and line 315 of coder.go to find the default constant.
+
+3. Chat history budget: `maxChatHistoryTokens` in `internal/coder/send.go` — it's a function, not a constant. It's `context/8`. Let me read the file to confirm.
+
+I'll read the relevant sections.
+‹/›
+Read internal/coder/coder.go (lines 40-79 of 1046)
+Read internal/coder/send.go (lines 585-644 of 1025)
+Read internal/coder/toolobserve.go (lines 38-57 of 518)
+
+‹thinking›
+All three items found:
+
+1. Tool result size cap: `maxToolOutputBytes = 60_000` (in internal/coder/toolobserve.go)
+2. Work step count cap per turn: `MaxSteps` — default 25, set on line 315 of New in internal/coder/coder.go (`MaxSteps: 25,`)
+3. Chat history budget: `maxChatHistoryTokens` = context/8 (minimum 2048) (in internal/coder/send.go)
+
+The chat history "cap" is not a fixed constant but a formula: context/8, minimum 2048. The question asks for "the value of each of the three caps and the file where that constant is located." For the history case, the value is "context/8, minimum 2048." Let me write it out concisely on one line.
+‹/›
+
+
+
+ANSWER: tool-result size cap `maxToolOutputBytes = 60_000` (internal/coder/toolobserve.go); work steps per turn `MaxSteps` default 25 (internal/coder/coder.go, set in New); settled chat-history budget `maxChatHistoryTokens` = context/8, floor 2048 (internal/coder/send.go).
+
+Tokens: 24.8k sent (3.1k cache hit), 756 received. Cost: $0.0097 turn, $0.0097 session. 3 steps.

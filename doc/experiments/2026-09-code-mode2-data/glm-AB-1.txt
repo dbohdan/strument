@@ -1,0 +1,54 @@
+‹thinking›
+The user wants three caps in the Go code: max tool result size, max work steps per turn, and chat history budget. I need to find the constants and their files. Let me grep for likely names like "maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens".
+
+I can do this with one code call combining greps.
+‹/›
+‹code› import re pats = ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens", "MaxToolResult", "maxWorkSteps", "chatHistory", "tool result", "history budget"] for p in pats: r = grep(pattern=p, glob="**/*.go", mode="content", ignore_case=True, context_lines=0) print("=== ", p) print(r)
+‹code› grep
+Searched for maxToolOutputBytes matching **/*.go as content — 22 matches in 6 files
+‹code› grep
+Searched for MaxSteps matching **/*.go as content — 45 matches in 10 files
+‹code› grep
+Searched for maxChatHistoryTokens matching **/*.go as content — 7 matches in 3 files
+‹code› grep
+Searched for MaxToolResult matching **/*.go as content — no matches
+‹code› grep
+Searched for maxWorkSteps matching **/*.go as content — no matches
+‹code› grep
+Searched for chatHistory matching **/*.go as content — 8 matches in 4 files
+‹code› grep
+Searched for "tool result" matching **/*.go as content — 69 matches in 28 files
+‹code› grep
+Searched for "history budget" matching **/*.go as content — 4 matches in 2 files
+
+‹thinking› The code tool returned None? Maybe grep wasn't returning. Let me try direct grep calls.
+Searched for (?i)(maxtool|maxsteps|maxhistory|chatbudget|historytoken) matching **/*.go as files — 78 matches in 19 files
+Searched for "(?i)(too large|truncated|result (size|length)|output (cap|limit))" matching **/*.go as files — 55 matches in 27 files
+Searched for "(?i)(max|limit|cap|budget|steps)[A-Za-z]* *= *[0-9]" under internal/coder matching internal/coder/*.go as content — 25 matches in 17 files
+
+‹thinking› Found maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go. Now need: number of work steps per turn cap, and chat history budget cap. Search for numSteps and history budget.
+Searched for (?i)(numSteps|maxTurn|stepLimit|maxSteps|stepsPerTurn) matching **/*.go as content — 57 matches in 11 files
+Searched for (?i)(historyBudget|chatBudget|historyTokens|maxHistory|budgetTokens) matching **/*.go as content — 7 matches in 3 files
+
+‹thinking›
+Let me check the three:
+
+1. maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go:50
+2. MaxSteps default = 25 in internal/coder/coder.go:315
+3. maxChatHistoryTokens in internal/coder/send.go — context/8. Let me read that to see exact value/floor.
+‹/›
+Read internal/coder/send.go (lines 590-609 of 1025)
+Read internal/coder/toolobserve.go (lines 44-55 of 518)
+
+‹thinking›
+The three caps:
+1. Single tool result size: `maxToolOutputBytes = 60_000` (60,000 bytes) in internal/coder/toolobserve.go
+2. Work steps per turn: `MaxSteps = 25` default in internal/coder/coder.go (line 315)
+3. Chat history budget: `maxChatHistoryTokens` = context/8 with 2048 floor, in internal/coder/send.go
+
+Answer on one line.
+‹/›
+
+ANSWER: single tool result cap = `maxToolOutputBytes = 60_000` (60,000 bytes) in internal/coder/toolobserve.go; work-step cap per turn = `MaxSteps = 25` default in internal/coder/coder.go (overridable via config); chat history budget = `maxChatHistoryTokens = max(context/8, 2048)` in internal/coder/send.go.
+
+Tokens: 39.5k sent (31.6k cache hit), 753 received. Cost: $0.0013 turn, $0.0013 session. 7 steps.

@@ -1,0 +1,35 @@
+‹thinking›
+The user asks for three caps in this repository's Go code: size of a single tool result, number of work steps per turn, chat history budget. Give value of each and the file the constant lives in.
+
+Let me search the codebase.
+‹/›
+Searched for "tool result|ToolResult|toolResult|maxToolResult|MaxToolResult" matching **/*.go as content — 88 matches in 32 files
+Searched for "work steps|workstep|WorkStep|maxSteps|MaxSteps|steps per turn|stepsPerTurn" matching **/*.go as content — 46 matches in 10 files
+Searched for "chat history|ChatHistory|chatHistory|history budget|HistoryBudget" matching **/*.go as content — 28 matches in 12 files
+
+‹thinking›
+Let me look at the constants. The three caps:
+1. maxToolOutputBytes — in internal/coder/toolobserve.go
+2. MaxSteps — default 25 — in internal/coder/coder.go
+3. maxChatHistoryTokens — a function in internal/coder/send.go: context/8
+
+Let me read those files to confirm exact values.
+‹/›
+Searched for maxToolOutputBytes matching internal/coder/toolobserve.go as content — 4 matches in 1 file
+Read internal/coder/coder.go (lines 305-324 of 1046)
+Read internal/coder/send.go (lines 590-604 of 1025)
+
+‹thinking›
+The user asks: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+Three caps:
+1. Single tool result: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go
+2. Work steps per turn: MaxSteps = 25 in internal/coder/coder.go
+3. Chat history budget: maxChatHistoryTokens(context) = context/8 with 2048 floor, in internal/coder/send.go.
+
+The question says "the caps ... and the file the constant lives in". So answer: maxToolOutputBytes=60000 in internal/coder/toolobserve.go; MaxSteps=25 in internal/coder/coder.go; maxChatHistoryTokens=context/8 (min 2048) in internal/coder/send.go.
+‹/›
+
+ANSWER: tool result cap maxToolOutputBytes=60_000 in internal/coder/toolobserve.go; work-step cap MaxSteps=25 in internal/coder/coder.go; chat history budget maxChatHistoryTokens=max(context/8, 2048) in internal/coder/send.go.
+
+Tokens: 23.3k sent (8.7k cache hit), 882 received. Cost: $0.0012 turn, $0.0012 session. 3 steps.

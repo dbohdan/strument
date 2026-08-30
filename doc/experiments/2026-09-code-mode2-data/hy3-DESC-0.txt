@@ -1,0 +1,21 @@
+Searched for maxToolOutputBytes|MaxSteps|maxChatHistoryTokens|MaxToolResultSize|maxHistory as content — 75 matches in 22 files
+
+‹thinking›
+Let me get the exact values. maxToolOutputBytes = 60_000 in toolobserve.go. MaxSteps = 25 in coder.go. maxChatHistoryTokens = context/8 in send.go.
+
+Let me verify the maxChatHistoryTokens function.
+‹/›
+Read internal/coder/send.go (lines 596-610 of 1025)
+
+‹thinking›
+Let me get the exact values:
+- maxToolOutputBytes = 60_000 (toolobserve.go)
+- MaxSteps = 25 (coder.go, line 315)
+- maxChatHistoryTokens = max(context/8, 2048) — this is derived, not a fixed constant. The floor is 2048, but it's context-dependent. The question says "caps the chat history budget" and "the file the constant lives in". maxChatHistoryTokens is a function, not a constant. But the floor is 2048 in send.go.
+
+Let me answer accordingly
+‹/›
+
+ANSWER: maxToolOutputBytes = 60,000 (internal/coder/toolobserve.go); MaxSteps = 25 (internal/coder/coder.go); maxChatHistoryTokens = max(context/8, 2048) floor 2048 (internal/coder/send.go).
+
+Tokens: 16.7k sent (14.1k cache hit), 328 received. Cost: $0.00061 turn, $0.00061 session. 3 steps.

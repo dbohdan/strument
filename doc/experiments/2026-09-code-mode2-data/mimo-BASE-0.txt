@@ -1,0 +1,39 @@
+‹thinking› Let me search for these caps in the Go codebase.
+Searched for (?:max|cap|limit).*(?:tool.?result|result.?size|tool.?output) matching **/*.go as content — 6 matches in 3 files
+Searched for (?:max|cap|limit).*(?:work.?step|step) matching **/*.go as content — 18 matches in 5 files
+Searched for (?:max|cap|limit|budget).*(?:history|chat|context|message) matching **/*.go as content — 15 matches in 12 files
+
+‹thinking› Let me look at the specific constants for each cap.
+Read internal/coder/toolobserve.go (lines 40-49 of 518)
+Read internal/coder/ports.go (lines 70-84 of 335)
+Read internal/coder/send.go (lines 593-607 of 1025)
+
+‹thinking› I need to find the actual value of `maxToolOutputBytes`. Let me look at the code after the comment on line 43.
+Read internal/coder/toolobserve.go (lines 48-67 of 518)
+Searched for maxToolOutputBytes\s*= matching **/*.go as files — 1 match in 1 file
+Searched for MaxSteps|DefaultMaxSteps|defaultMaxSteps|DefaultSteps matching **/*.go as files — 41 matches in 9 files
+
+‹thinking› Let me find the MaxSteps constant or default value.
+Searched for MaxSteps\s*= matching **/*.go as files — 8 matches in 4 files
+Searched for defaultMaxSteps|DefaultMaxSteps|maxSteps\s*=\s*\d matching **/*.go as files — no matches
+
+‹thinking› Let me look at the coder.go file for a default steps value, and also the config/types.go for MaxSteps.
+Searched for MaxSteps matching internal/coder/coder.go as files — 5 matches in 1 file
+Searched for MaxSteps matching internal/config/types.go as files — 3 matches in 1 file
+Searched for MaxSteps matching internal/coder/codetool.go as files — 1 match in 1 file
+
+‹thinking› Let me look at the actual content of these files to find the MaxSteps default value.
+Searched for MaxSteps matching internal/coder/coder.go as content — 5 matches in 1 file
+Searched for MaxSteps matching internal/coder/codetool.go as content — 1 match in 1 file
+
+‹thinking›
+Now I have all three answers:
+
+1. **maxToolOutputBytes = 60,000** in `internal/coder/toolobserve.go`
+2. **MaxSteps = 25** (default) in `internal/coder/coder.go`
+3. **maxChatHistoryTokens(context)** = `context/8` (with a 2048 floor) in `internal/coder/send.go`
+‹/›
+
+ANSWER: maxToolOutputBytes = 60,000 in internal/coder/toolobserve.go, MaxSteps = 25 in internal/coder/coder.go, maxChatHistoryTokens = context/8 (floor 2048) in internal/coder/send.go
+
+Tokens: 46.7k sent (42.2k cache hit), 1.0k received. Cost: $0.0010 turn, $0.0010 session. 7 steps.

@@ -1,0 +1,25 @@
+‹thinking› The user wants three caps in this repository's Go code: max size of a single tool result, max number of work steps per turn, and max chat history budget. I need to find the constants and their files. Let me search.
+Searched for max(Max)?(ToolResult|WorkStep|History|Turn) matching *.go as content — no matches
+Searched for cap|limit matching *.go as content — no matches
+Searched for max(Max)?(ToolResult|WorkStep|History|Turn) matching **/*.go as content — no matches
+Listed the project root (20 entries)
+Searched for (?i)(max|limit).*(result|step|history|budget) matching **/*.go as content — 105 matches in 30 files
+
+‹thinking›
+Let me look at the three caps:
+
+1. Tool result size cap: `maxToolOutputBytes` in internal/coder/toolobserve.go (line ~43). Need the value.
+2. Work steps per turn cap: `MaxSteps` default 25 in internal/coder/coder.go:315. But the constant might be defined elsewhere — check coder.go around line 315.
+3. Chat history budget: `maxChatHistoryTokens` in internal/coder/send.go:599 — it's a function (context/8). Let me read.
+
+Let me read the specific lines.
+‹/›
+Read internal/coder/toolobserve.go (lines 38-52 of 518)
+Read internal/coder/coder.go (lines 300-324 of 1046)
+Read internal/coder/send.go (lines 590-609 of 1025)
+
+‹thinking› MaxSteps: 25 in internal/coder/coder.go (default in New). maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go. maxChatHistoryTokens is context/8 with 2048 floor in internal/coder/send.go.
+
+ANSWER: Tool result cap = 60,000 bytes (`maxToolOutputBytes = 60_000` in internal/coder/toolobserve.go); work-steps-per-turn cap = 25 (`MaxSteps: 25` default in internal/coder/coder.go); chat history budget = context/8 with a 2048-token floor (`maxChatHistoryTokens` in internal/coder/send.go).
+
+Tokens: 26.1k sent (22.1k cache hit), 550 received. Cost: $0.00077 turn, $0.00077 session. 5 steps.

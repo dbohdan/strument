@@ -1,0 +1,66 @@
+‹thinking›
+The user is asking about the Go code in this repository: "the coder" imposes an upper limit on the size of a single tool result, the number of working steps per turn, and the budget for chat history. I need to find these constants. Let me search the codebase.
+
+Let me try searching for relevant constants.
+‹/›
+‹code› caps = {} for name in ["maxToolOutputBytes", "MaxSteps", "maxChatHistoryTokens", "maxToolOutput", "MaxToolResult", "historyTokens", "ChatHistory"]: caps[name] = grep(pattern=name + " =", glob="**/*.go") caps
+‹code› grep
+Searched for "maxToolOutputBytes =" matching **/*.go as files — 1 match in 1 file
+‹code› grep
+Searched for "MaxSteps =" matching **/*.go as files — 8 matches in 4 files
+‹code› grep
+Searched for "maxChatHistoryTokens =" matching **/*.go as files — no matches
+‹code› grep
+Searched for "maxToolOutput =" matching **/*.go as files — no matches
+‹code› grep
+Searched for "MaxToolResult =" matching **/*.go as files — no matches
+‹code› grep
+Searched for "historyTokens =" matching **/*.go as files — no matches
+‹code› grep
+Searched for "ChatHistory =" matching **/*.go as files — no matches
+
+‹thinking› Let me look at the coder package and check the constants. I'll grep-search for the coder's constants.
+Searched for "maxToolOutputBytes|MaxSteps|maxHistory|Tokens =|maxSteps" under internal/coder matching **/*.go as content — 32 matches in 8 files
+
+‹thinking›
+Already obtained the following:
+1. maxToolOutputBytes = 60_000, located at internal/coder/toolobserve.go
+2. MaxSteps default 25, located at internal/coder/coder.go (line 315)
+
+What I need next is the chat history budget. Let me try searching for the constant for the history budget inside the coder.
+‹/›
+Searched for "const .*(history|History|Budget|budget)" under internal/coder matching **/*.go as content — 1 match in 1 file
+
+‹thinking› That's a cap on the commit message context, not a cap on the chat history. Let me look for the chat history budget within the coder.
+Searched for "const \w+ = [0-9]" under internal/coder matching **/*.go as content — 17 matches in 11 files
+
+‹thinking›
+I found the tool result cap (maxToolOutputBytes = 60_000, located in internal/coder/toolobserve.go). Next, I need the cap on the number of steps per turn and the cap on the chat history budget.
+
+MaxSteps is a field of the Coder struct, with a default value of 25 set in New (internal/coder/coder.go:315). However, the question asks for "the value of each of these three caps, and the file where that constant lives." For MaxSteps, the constant value 25 might be defined somewhere as a named constant. Let me check around line 315 of coder.go and search for where the 25 comes from. Also, regarding the chat history budget — it's probably something like "maxChatHistoryBytes" or a token budget. Let me try searching more specifically.
+‹/›
+Searched for "const .*=" under internal/coder matching **/*.go as content — 15 matches in 10 files
+
+‹thinking› Need to find the cap on the chat history budget. Going to search for "history" in the constants within the coder package.
+Searched for "(?i)history.*(const|cap|budget)|const .*[Hh]istory" under internal/coder matching **/*.go as content — 6 matches in 4 files
+
+‹thinking› The upper limit for chat history is `maxChatHistoryTokens` in internal/coder/send.go, but this is a function, not a constant: "context/8, derived from the main model's window, with a lower bound of 2048 for small windows." The user is asking for "the upper limit for the chat history budget" — let's check the complete function to confirm the exact formula. Also, regarding the upper limit for tool results: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go. And regarding the upper limit for work steps: MaxSteps = 25 (the default set in New at line 315 of coder.go). Let's check the definition of the maxChatHistoryTokens function.
+Read internal/coder/send.go (lines 594-608 of 1025)
+
+‹thinking›
+All three have been found:
+
+1. **Cap on tool result size**: `maxToolOutputBytes = 60_000` (line 50) is in `internal/coder/toolobserve.go`
+2. **Cap on number of work steps per turn**: `MaxSteps int` — a struct field, not a constant, but the default is set inside `New` as `MaxSteps: 25` (line 315) in `internal/coder/coder.go`. The user asked "the file where the constant is located." The default of 25 is in `internal/coder/coder.go`.
+3. **Cap on chat history budget**: `maxChatHistoryTokens` — this is a function, not a constant, and is in `internal/coder/send.go`: `max(context/8, 2048)`. The cap is context/8 with a minimum value (floor) of 2048.
+
+Therefore the answer is: tool result = 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); steps per turn = 25 (default for MaxSteps, internal/coder/coder.go); chat history = context/8 (minimum 2048) (maxChatHistoryTokens, internal/coder/send.go).
+
+The user asked for "the value of each of these three caps, and the file where the constant is located." MaxSteps is a configurable field whose default is 25, and maxChatHistoryTokens is a function. I'll present them concisely.
+‹/›
+
+
+
+ANSWER: tool result = 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); work steps per turn = 25 (MaxSteps default, internal/coder/coder.go); chat history = main model context ÷ 8, floor 2048 (maxChatHistoryTokens, internal/coder/send.go).
+
+Tokens: 73.2k sent (15.7k cache hit), 1.6k received. Cost: $0.02 turn, $0.02 session. 8 steps.

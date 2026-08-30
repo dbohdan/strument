@@ -1,0 +1,35 @@
+‹thinking› Let me search the codebase for these caps.
+Searched for maxToolOutputBytes|MaxSteps|MaxChatHistoryTokens|chatHistory|maxChatHistory matching **/*.go as content — 68 matches in 16 files
+Searched for "tool result|result.*cap|cap.*result|work steps|steps per turn" matching **/*.go as content — 91 matches in 34 files
+
+‹thinking›
+Let me find the specific values. I need:
+1. Cap on size of a single tool result: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go:50.
+2. Cap on number of work steps per turn: MaxSteps default = 25 in internal/coder/coder.go:315.
+3. Cap on chat history budget: maxChatHistoryTokens — function in internal/coder/send.go:599, context/8. Let me read that.
+‹/›
+Read internal/coder/send.go (lines 590-644 of 1025)
+Read internal/coder/coder.go (lines 50-64 of 1046)
+Read internal/coder/toolobserve.go (lines 40-54 of 518)
+
+‹thinking›
+All three caps found:
+
+1. Tool result cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. Work steps per turn: `MaxSteps` default 25, set in coder.go New() at line 315 (`MaxSteps: 25`). The field is declared in coder.go. The "constant" — it's a default value set in New(), not a const. The constant "lives in" coder.go.
+3. Chat history budget: `maxChatHistoryTokens(context)` = max(context/8, 2048), in send.go. It's derived, not a constant. The cap value... it depends on context. The floor is 2048.
+
+The user asked: "Give the value of each of those three caps and the file the constant lives in." For the chat history, the cap is context/8 with 2048 floor. So value depends on model context. The coder's default context... The model default context? Let me check what Model.Context default is. The question phrasing: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+I should give concrete values. Tool result: 60,000 bytes (toolobserve.go). Work steps: 25 per turn (coder.go). Chat history: the budget is a function; but maybe there's a headline value. Let me look further — maybe there's a constant for the budget. Let me check send.go around line 596. It's a function returning max(context/8, 2048). The default model context? Let me find where Context default is set, default model. But the question likely expects "context/8 (min 2048)" in send.go. The answer should be brief, one line.
+
+Let me check if there is a constant for chat history elsewhere. Grep found nothing else. The file for chat history cap: internal/coder/send.go.
+
+I'll answer: ANSWER: tool result 60,000 bytes (internal/coder/toolobserve.go); work steps 25 per turn (internal/coder/coder.go); chat history context/8 with 2048 floor (internal/coder/send.go).
+
+Keep brief. One line beginning with ANSWER:.
+‹/›
+
+ANSWER: tool result 60,000 bytes (internal/coder/toolobserve.go); work steps 25 per turn (internal/coder/coder.go); chat history context/8, min 2048 tokens (internal/coder/send.go).
+
+Tokens: 23.8k sent (9.0k cache hit), 1.1k received. Cost: $0.0013 turn, $0.0013 session. 3 steps.
