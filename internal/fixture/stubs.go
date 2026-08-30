@@ -70,6 +70,11 @@ func (s *StreamStub) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.St
 				}}, nil) {
 					return
 				}
+			case "Panic":
+				// A stand-in for any panic inside the turn. Raising it here
+				// means the panic unwinds through the harness's send and
+				// turn-defer machinery exactly like a real one.
+				panic(ev.Message)
 			default:
 				yield(llm.StreamEvent{}, fmt.Errorf("fixture: unknown event kind %q", ev.Kind))
 				return

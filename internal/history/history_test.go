@@ -397,3 +397,22 @@ func TestTurnRendersWork(t *testing.T) {
 		t.Errorf("empty Work section rendered:\n%s", plain)
 	}
 }
+
+// TestTurnRendersCrash pins the crashed marker. A panic-cut turn's response is
+// a fragment, and the transcript entry has to say so — otherwise the notes
+// regenerated from this file read the fragment as the model's final word.
+func TestTurnRendersCrash(t *testing.T) {
+	got := Turn{
+		User:      "big task",
+		Assistant: "Let me look at",
+		Tools:     []string{"Read poll/poll.go (5 lines)"},
+		Crashed:   true,
+	}.render()
+	if !strings.Contains(got, "the turn crashed before finishing") {
+		t.Errorf("missing the crash marker:\n%s", got)
+	}
+	// And a normal turn must not carry it.
+	if plain := (Turn{User: "hi", Assistant: "hello"}).render(); strings.Contains(plain, "crashed") {
+		t.Errorf("normal turn marked crashed:\n%s", plain)
+	}
+}

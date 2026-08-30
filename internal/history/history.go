@@ -156,6 +156,12 @@ type Turn struct {
 	// there are no commits and this is the only durable account of what a
 	// session did to the tree.
 	Files []string
+	// Crashed marks a turn that died with a panic mid-flight and was recorded
+	// by the crash path rather than by the normal post-run append. It renders
+	// so the notes regenerated from this file — and any human reading it —
+	// know the turn's response is a fragment cut off by a crash, not the
+	// model's final word.
+	Crashed bool
 	// Tools is what the harness reported doing during the turn, in order: the
 	// one-line summaries it printed to the screen ("Read poll/poll.go (5
 	// lines)", "‹check› lint $ golangci-lint run", "failed (exit status 1)").
@@ -237,6 +243,9 @@ func (t Turn) render() string {
 	}
 	if n := len(t.Files); n > 0 {
 		meta += fmt.Sprintf(" · %d %s changed", n, map[bool]string{true: "file", false: "files"}[n == 1])
+	}
+	if t.Crashed {
+		meta += " · **the turn crashed before finishing**"
 	}
 	fmt.Fprintf(&b, "_%s_\n\n", meta)
 

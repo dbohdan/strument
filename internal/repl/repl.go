@@ -146,6 +146,11 @@ type REPL struct {
 	// and /reload.
 	envAdded   map[string]bool
 	envDropped map[string]bool
+
+	// crashRecorded says the current turn's transcript entry was written by
+	// the OnCrash path, so the post-run append in runTurn must not write it
+	// again. Set and cleared only inside runTurn.
+	crashRecorded bool
 }
 
 // New builds the REPL, wires the coder's Out to the live renderer, and
@@ -572,11 +577,14 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 	sentBefore, recvBefore := r.coder.SessionTokens()
 	costBefore, _ := r.coder.SessionCost()
 
-	answer := r.withinTurn(ctx, func(tctx context.Context) string {
-		return r.coder.Run(tctx, message)
-	})
+	if r.opts.History == nil {
+		r.withinTurn(ctx, func(tctx context.Context) string {
+			return r.coder.Run(tctx, message)
+		})
+		return
+	}
 
-	if r.opts.History != nil {
+	appendTurn := func(crashed bool, partial string) {
 		sentAfter, recvAfter := r.coder.SessionTokens()
 		costAfter, known := r.coder.SessionCost()
 		if err := r.opts.History.Append(history.Turn{
@@ -586,17 +594,36 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 			Cost:           costAfter - costBefore,
 			CostKnown:      known,
 			User:           message,
-			Assistant:      answer,
+			Assistant:      partial,
 			Files:          r.coder.TurnEditedFiles(),
 			Tools:          r.coder.TurnToolLines(),
+			Crashed:        crashed,
 		}); err != nil {
 			r.out.Warningf("Could not write chat history: %v", err)
 		}
 	}
-}
+	// OnCrash records the turn when it dies with a panic. The transcript
+	// writer lives outside the coder, so this is how a turn that never
+	// returned still reaches it. The panic continues upward after the
+	// callback — the REPL does not survive it, but the work it did is in
+	// the transcript — so the flag keeps the post-run append from recording
+	// the turn twice if that unwind ever changes.
+	r.coder.OnCrash = func(partial string) {
+		r.crashRecorded = true
+		appendTurn(true, partial)
+	}
+	defer func() {
+		r.coder.OnCrash = nil
+		r.crashRecorded = false
+	}()
 
-// showUndoHint mentions /undo after a message that moved HEAD (aider's
-// show_undo_hint: compare the pre-message HEAD with the current one).
+	answer := r.withinTurn(ctx, func(tctx context.Context) string {
+		return r.coder.Run(tctx, message)
+	})
+	if !r.crashRecorded {
+		appendTurn(false, answer)
+	}
+}
 func (r *REPL) showUndoHint() {
 	if r.coder.Repo == nil {
 		return

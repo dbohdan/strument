@@ -374,22 +374,43 @@ func (c *chatCmd) Run() error {
 	defer stop()
 	sentBefore, recvBefore := cdr.SessionTokens()
 	costBefore, _ := cdr.SessionCost()
-	answer := cdr.Run(ctx, c.Message)
+	// OnCrash records the turn even when it dies with a panic: a half-finished
+	// long turn has usually edited files, and the transcript is the only record
+	// of that when the process is gone. The panic continues upward after the
+	// callback, so crash behaviour is unchanged.
 	if hist != nil {
-		sentAfter, recvAfter := cdr.SessionTokens()
-		costAfter, known := cdr.SessionCost()
-		if err := hist.Append(history.Turn{
-			Model:          model.QualifiedSlug(),
-			TokensSent:     sentAfter - sentBefore,
-			TokensReceived: recvAfter - recvBefore,
-			Cost:           costAfter - costBefore,
-			CostKnown:      known,
-			User:           c.Message,
-			Assistant:      answer,
-			Files:          cdr.TurnEditedFiles(),
-			Tools:          cdr.TurnToolLines(),
-		}); err != nil {
-			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
+		appendTurn := func(crashed bool, assistant string) {
+			sentAfter, recvAfter := cdr.SessionTokens()
+			costAfter, known := cdr.SessionCost()
+			if err := hist.Append(history.Turn{
+				Model:          model.QualifiedSlug(),
+				TokensSent:     sentAfter - sentBefore,
+				TokensReceived: recvAfter - recvBefore,
+				Cost:           costAfter - costBefore,
+				CostKnown:      known,
+				User:           c.Message,
+				Assistant:      assistant,
+				Files:          cdr.TurnEditedFiles(),
+				Tools:          cdr.TurnToolLines(),
+				Crashed:        crashed,
+			}); err != nil {
+				fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
+			}
+		}
+		// OnCrash records the turn even when it dies with a panic: a
+		// half-finished long turn has usually edited files, and the transcript
+		// is the only record of that once the process is gone. The panic
+		// continues upward after the callback, so crash behaviour is unchanged
+		// and the post-run append below never runs — which is what the flag
+		// guards against.
+		crashRecorded := false
+		cdr.OnCrash = func(partial string) {
+			crashRecorded = true
+			appendTurn(true, partial)
+		}
+		answer := cdr.Run(ctx, c.Message)
+		if !crashRecorded {
+			appendTurn(false, answer)
 		}
 	}
 	return nil
