@@ -70,14 +70,14 @@ no cgo. Its only dependencies are `wazero` and `golang.org/x/sys`.
 
 We vendor rather than depend: upstream is ~8 commits by a single author.
 
-- [ ] Create `internal/monty/` with the wrapper source copied from upstream
+- [x] Create `internal/monty/` with the wrapper source copied from upstream
       (~3k lines), module path rewritten to `dbohdan.com/strument/internal/monty`.
-- [ ] Add `internal/monty/NOTICE` in the style of
+- [x] Add `internal/monty/NOTICE` in the style of
       [`internal/gitignore/NOTICE`](../../internal/gitignore/NOTICE): name the
       upstream project, the commit or release vendored, and the MIT licence.
-- [ ] Add `github.com/tetratelabs/wazero` to `go.mod`. It is pure Go — confirm
+- [x] Add `github.com/tetratelabs/wazero` to `go.mod`. It is pure Go — confirm
       with `CGO_ENABLED=0 go build ./...`.
-- [ ] Record the `monty.wasm` blob's **SHA-256 and provenance** in the NOTICE.
+- [x] Record the `monty.wasm` blob's **SHA-256 and provenance** in the NOTICE.
 
 **Do not take on the Rust build.** Rebuilding `monty.wasm` needs a Rust
 toolchain with the `wasm32-wasip1` target, which this project deliberately does
@@ -86,7 +86,7 @@ not require (`CLAUDE.md`: "no cgo, no C toolchain"). Vendor the pre-built
 the blob is **not** built from source here and that upgrading Monty is a
 separate decision with its own cost. A reviewer must not have to guess this.
 
-- [ ] `go build ./...`, `go test ./...`, `task lint` all green with the vendored
+- [x] `go build ./...`, `go test ./...`, `task lint` all green with the vendored
       package present but unused.
 
 ---
@@ -96,18 +96,18 @@ separate decision with its own cost. A reviewer must not have to guess this.
 Ship this before touching the bridge. It is independently useful and much
 simpler. If you run out of time, stopping here is a good outcome.
 
-- [ ] New file `internal/coder/codetool.go`.
-- [ ] Add `toolCode = "code"` to the constants in `tools.go`, beside
+- [x] New file `internal/coder/codetool.go`.
+- [x] Add `toolCode = "code"` to the constants in `tools.go`, beside
       `toolSkill`.
-- [ ] `codeTool() llm.ToolDef` — one required `string` parameter, `code`.
-- [ ] `runCode(ctx, ...)` executes it through `internal/monty` and returns the
+- [x] `codeTool() llm.ToolDef` — one required `string` parameter, `code`.
+- [x] `runCode(ctx, ...)` executes it through `internal/monty` and returns the
       value, or the error text for the model to act on.
-- [ ] Offer it in `toolDefs()` **before the ask-mode early return** — computing
+- [x] Offer it in `toolDefs()` **before the ask-mode early return** — computing
       mutates nothing, so it belongs in a discussion turn too. Copy how
       `skillTool` is offered.
-- [ ] Dispatch it in the `switch` in `tools.go`, beside `toolSkill`.
-- [ ] Announce each call with `c.Out.Toolf("‹code› …")`, matching `‹skill›`.
-- [ ] Set resource limits explicitly — start with `MaxDuration: 5s`,
+- [x] Dispatch it in the `switch` in `tools.go`, beside `toolSkill`.
+- [x] Announce each call with `c.Out.Toolf("‹code› …")`, matching `‹skill›`.
+- [x] Set resource limits explicitly — start with `MaxDuration: 5s`,
       `MaxMemoryBytes: 32 MiB`, `MaxRecursionDepth: 100`. Do not leave them at
       zero.
 
@@ -120,20 +120,25 @@ is missing: **no class definitions, no `with`, no `match`, no imports beyond
 `while`, `try/except`, comprehensions, generators, `sum`/`min`/`max`/`sorted`/
 `enumerate`/`zip`/`abs`, and all of `math`.
 
-- [ ] **Check whether `round()` exists.** It is absent from upstream's builtin
+- [x] **Check whether `round()` exists.** It is absent from upstream's builtin
       list and it is the single most likely call in model-written number
       formatting. Write a test either way, and if it is missing, say so in the
       tool description.
+      *(Probed: `round()` exists and works, including the two-argument form.
+      The probe also found two walls the upstream docs do not name — no
+      %-formatting or `.format()`, and f-string zero-padding applies to
+      decimal only, not `b`/`x` — so the description says so and `zfill` is
+      named as the workaround. Both are pinned in `TestCodeArithmetic`.)*
 
 ### Tests (`internal/coder/codetool_test.go`)
 
-- [ ] Arithmetic returns the right value.
-- [ ] An infinite loop terminates on the duration limit rather than hanging.
-- [ ] A memory bomb terminates on the memory limit.
-- [ ] Unsupported syntax (a `class` definition) returns a *useful error string*
+- [x] Arithmetic returns the right value.
+- [x] An infinite loop terminates on the duration limit rather than hanging.
+- [x] A memory bomb terminates on the memory limit.
+- [x] Unsupported syntax (a `class` definition) returns a *useful error string*
       to the model, and does not crash the turn.
-- [ ] The tool is offered in ask mode.
-- [ ] **No filesystem or network access** — assert that a program attempting
+- [x] The tool is offered in ask mode.
+- [x] **No filesystem or network access** — assert that a program attempting
       either fails. This is the security claim; test it, do not assume it.
 
 ---
