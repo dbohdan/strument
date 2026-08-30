@@ -425,6 +425,12 @@ func (c *Coder) runAskUser(tc llm.ToolCall, needsReflection *bool) string {
 			answer = "(no answer)"
 		}
 		fmt.Fprintf(&b, "\n- %q → %q", q.Question, answer)
+		c.Out.Toolf("‹question› %s", q.Question)
+		parts := make([]string, len(q.Options))
+		for i, o := range q.Options {
+			parts[i] = o.Label
+		}
+		c.Out.Toolf("‹options› %s", strings.Join(parts, " / "))
 		c.Out.Toolf("‹answer› %s", answer)
 	}
 	return b.String()
