@@ -195,6 +195,7 @@ func (c *Coder) platformText() string {
 	}
 	if c.Platform.InGit {
 		b.WriteString("- The user is operating inside a git repository\n")
+		b.WriteString("- Git is available via the bash tool: git log, git diff, git status, etc.\n")
 	}
 	return b.String()
 }
