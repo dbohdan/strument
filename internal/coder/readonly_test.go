@@ -62,6 +62,14 @@ func TestOrdinaryFilesStillEditable(t *testing.T) {
 	if ok, why := c.allowedToEdit("ref.md", map[string]bool{}); !ok {
 		t.Errorf("an unmarked file was refused: %q", why)
 	}
+	// An edit also must not add the file to the chat. Chat membership is what
+	// the user pinned (/add): if the edit path could write to absFnames, the
+	// system prompt would name the file as one "the user has pinned", resume
+	// would restore it as a pin next session, and the model could widen what
+	// isPinned exempts from containment one edit at a time.
+	if got := c.ChatFiles(); len(got) != 0 {
+		t.Errorf("an edit promoted its file into the chat: %v", got)
+	}
 }
 
 // A reference reached outside the project is what the feature exists for: the

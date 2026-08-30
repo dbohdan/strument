@@ -141,8 +141,11 @@ func (c *Coder) normalizeToolPath(p string) string {
 	return filepath.ToSlash(relBack)
 }
 
-// allowedToEdit decides whether an edit may touch rel, and brings the file into
-// the chat when it does. The second return is a model-facing reason on refusal,
+// allowedToEdit decides whether an edit may touch rel. It does not add the
+// file to the chat: chat membership is what the user pinned (/add), and the
+// prompt would otherwise name a model-edited file as one "the user has pinned"
+// and resume would restore it as a pin next session. The second return is a
+// model-facing reason on refusal,
 // "" otherwise: a call that is skipped answers with why, so the model can act on
 // it within the turn instead of re-trying the same thing.
 //
@@ -178,11 +181,6 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 			"Make the change elsewhere, or ask the user to add it with /add if it should be editable."
 	}
 
-	if slices.Contains(c.absFnames, full) {
-		c.checkForDirtyCommit(rel, needDirtyCommit)
-		return true, ""
-	}
-
 	// Still refused, and not as a prompt: an ignored file is one the project
 	// declared out of scope, and the observation tools do not show it either.
 	if c.Repo != nil && c.Repo.GitIgnored(rel) {
@@ -190,18 +188,9 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
 
-	if _, err := os.Stat(full); err != nil {
-		if !c.DryRun {
-			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-				c.Out.Errorf("Unable to create %s, skipping edits.", rel)
-				return false, "the parent directory could not be created."
-			}
-		}
-		c.absFnames = append(c.absFnames, full)
-		return true, ""
-	}
-
-	c.absFnames = append(c.absFnames, full)
+	// Runs on every editable path, not only for a file that is already pinned,
+	// so a first edit to a file carrying the user's uncommitted work still gets
+	// a clean base for /undo.
 	c.checkForDirtyCommit(rel, needDirtyCommit)
 	return true, ""
 }

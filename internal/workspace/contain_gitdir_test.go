@@ -48,8 +48,7 @@ func TestUnderGitDir(t *testing.T) {
 // The read path refuses it, and refuses it even for a pinned file.
 //
 // Pinning is the strongest signal the interface has, and it still does not
-// unlock this one: absFnames is appended to by the edit path itself, so a list
-// the model can grow must not be able to open the door.
+// unlock this one; it must stay a record of user intent (/add, /read-only).
 func TestContainRefusesGitDir(t *testing.T) {
 	w := New(t.TempDir())
 	w.Pinned = func(string) bool { return true } // everything pinned

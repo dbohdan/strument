@@ -47,10 +47,9 @@ import (
 func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	// First, and ahead of the pinned exemption below rather than after it.
 	// .git is machine state at any depth and however the caller spells it, and
-	// the exemption is not the pure record of user intent it reads as: the edit
-	// path appends to absFnames as it goes (apply.go), so a list the model can
-	// grow must not be able to unlock this. The user has /run for the rare
-	// legitimate look at their own repository's internals.
+	// the exemption must stay a record of user intent (/add, /read-only). The
+	// user has /run for the rare legitimate look at their own repository's
+	// internals.
 	if UnderGitDir(raw) {
 		return "", "", gitDirRefusal
 	}

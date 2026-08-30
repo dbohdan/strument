@@ -60,9 +60,10 @@ func TestEditPathRefusesGitDir(t *testing.T) {
 	}
 }
 
-// Pinning does not unlock it. absFnames is appended to by allowedToEdit itself,
-// so treating "pinned" as user intent here would let the model widen its own
-// permissions one edit at a time.
+// Pinning does not unlock it: isPinned's result is fed to Workspace as a
+// containment exemption, so if an edit could add to absFnames the model could
+// widen its own permissions one edit at a time. It cannot; only /add writes
+// there.
 func TestEditPathRefusesGitDirEvenWhenPinned(t *testing.T) {
 	c := gitDirCoder(t)
 	full := filepath.Join(c.Root, ".git", "config")
