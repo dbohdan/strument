@@ -347,3 +347,45 @@ func TestLoopDetectionOffLetsTheLoopRun(t *testing.T) {
 		t.Errorf("last outcome = %v with detection on, want OutcomeLooping", on.lastSendOutcome)
 	}
 }
+
+// A steered turn's answer includes the interrupted content so the transcript
+// records the full arc: what the model was saying, the steer, and the final
+// answer. Without this the transcript shows only the last send's output, and
+// the interrupted attempt vanishes.
+func TestSteeredTurnIncludesInterruptedContent(t *testing.T) {
+	// "Try again" — the model loops, is stopped, told to try again, succeeds.
+	c, _, _ := loopCoder(t, llm.EventAnswer, "2")
+	got := c.Run(context.Background(), "do the thing")
+
+	if !strings.Contains(got, "I need to check the file again") {
+		t.Errorf("answer does not include the interrupted content:\n%s", got)
+	}
+	if !strings.Contains(got, "All done.") {
+		t.Errorf("answer does not include the final content:\n%s", got)
+	}
+}
+
+// A custom steer appears in the answer so the transcript shows what the user
+// told the model to do between the interrupted send and the final one.
+func TestSteeredTurnIncludesSteerMessage(t *testing.T) {
+	c, _, _ := loopCoder(t, llm.EventAnswer, "You got stuck. Focus on contain.go first.")
+	got := c.Run(context.Background(), "do the thing")
+
+	if !strings.Contains(got, "> You got stuck. Focus on contain.go first.") {
+		t.Errorf("answer does not include the steer as a blockquote:\n%s", got)
+	}
+}
+
+// When the user stops after a loop, the interrupted content is still the
+// answer — nothing is accumulated because there is no continuation.
+func TestStoppedTurnReturnsInterruptedContent(t *testing.T) {
+	c, client, _ := loopCoder(t, llm.EventAnswer, "1") // "Stop"
+	c.runOne(context.Background(), "do the thing")
+
+	if client.sends != 1 {
+		t.Errorf("sends = %d, want 1 — Stop should not resume", client.sends)
+	}
+	if c.turnHistory != "" {
+		t.Errorf("turnHistory = %q after Stop, want empty", c.turnHistory)
+	}
+}

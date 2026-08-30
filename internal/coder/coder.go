@@ -183,6 +183,13 @@ type Coder struct {
 	partialReasoningContent string
 	multiResponseContent    string
 
+	// turnHistory accumulates content from interrupted sends so the
+	// transcript records the full arc of a steered turn — what the model
+	// was saying when it was stopped, the steer, and the final answer —
+	// rather than only the last send's output. Reset at the start of
+	// each turn; accumulated in runOne between sends.
+	turnHistory string
+
 	// Send-scoped tool-call accumulation, in first-seen index order.
 	partialToolCalls []llm.ToolCall
 	toolCallIndex    map[int]int
@@ -495,7 +502,7 @@ func (c *Coder) confirmGrouped(req ConfirmRequest) bool {
 // last send's content regardless of outcome.
 func (c *Coder) Run(ctx context.Context, withMessage string) string {
 	c.runOne(ctx, withMessage)
-	return c.multiResponseContent + c.partialResponseContent
+	return c.turnHistory + c.multiResponseContent + c.partialResponseContent
 }
 
 // runOne is the turn loop. It keeps sending while the model has something to
@@ -505,6 +512,7 @@ func (c *Coder) Run(ctx context.Context, withMessage string) string {
 // human's: nothing here starts new work of its own.
 func (c *Coder) runOne(ctx context.Context, userMessage string) {
 	c.initBeforeMessage()
+	c.turnHistory = ""
 
 	if userMessage == "" {
 		return
@@ -569,6 +577,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 			if !keepGoing {
 				return
 			}
+			c.accumulateInterrupt(next)
 			message = next
 
 		case OutcomeLooping:
@@ -576,11 +585,28 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 			if !keepGoing {
 				return
 			}
+			c.accumulateInterrupt(next)
 			message = next
 
 		default:
 			return
 		}
+	}
+}
+
+// accumulateInterrupt saves the content of a send that was stopped before the
+// next send resets it, so the transcript can show the full arc of a steered
+// turn: what the model was saying, the steer, and the final answer.
+//
+// The steer is included when the user typed a custom correction rather than
+// choosing "Continue" (which carries no user text). A blockquote prefix makes
+// the authorship unambiguous in the markdown transcript.
+func (c *Coder) accumulateInterrupt(steer string) {
+	if c.partialResponseContent != "" {
+		c.turnHistory += c.partialResponseContent + "\n\n"
+	}
+	if steer != "" {
+		c.turnHistory += "> " + steer + "\n\n"
 	}
 }
 
