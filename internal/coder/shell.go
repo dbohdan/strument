@@ -77,7 +77,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	// unexplained failure is to change the code.
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		output += fmt.Sprintf("\nThe command was stopped after %s. Strument's `shell_timeout` did it, not the command.", deadline)
+		output += fmt.Sprintf("\nThe command was stopped after %s by Strument's shell_timeout.", deadline)
 		if exitCode == 0 {
 			exitCode = -1
 		}
@@ -88,7 +88,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 		// user what they meant and can carry on — so the model is left with a
 		// command that died for no stated reason, which is exactly what it
 		// answers by editing code.
-		output += "\nThe user pressed Ctrl-C and stopped this command. Its output above is however far it got. Nothing here failed on its own."
+		output += "\nThe user pressed Ctrl-C and stopped this command. The output above is how far the command got."
 		if exitCode == 0 {
 			exitCode = -1
 		}
