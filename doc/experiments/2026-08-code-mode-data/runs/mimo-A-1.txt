@@ -1,0 +1,79 @@
+‹thinking› Let me search for the cap constants in the Go code.
+Searched for const.*[Cc]ap|const.*[Bb]udget|const.*[Mm]ax.*[Ss]ize|const.*[Mm]ax.*[Ss]tep|const.*[Mm]ax.*[Hh]ist|const.*[Mm]ax.*[Rr]esult matching **/*.go as files — 4 matches in 4 files
+
+‹thinking› Let me search more broadly for caps related to tool result size, work steps, and chat history budget.
+Searched for maxToolResult|maxSteps|chatHistory|toolResult.*Cap|steps.*Cap|history.*Cap|max.*Tool|MaxSteps|MaxTool|MaxHistory matching **/*.go as files — 71 matches in 16 files
+
+‹thinking› Let me search more specifically for the three caps mentioned.
+Searched for maxToolResult|maxSteps|maxHistory matching **/*.go as files — 6 matches in 3 files
+
+‹thinking› Let me look at the constants in these files.
+Searched for maxToolResult|maxSteps|maxHistory matching **/*.go as content — 6 matches in 3 files
+
+‹thinking› Let me look for the actual constant values. I need to find where maxSteps, maxToolResult, and maxHistory (or similar) are defined as constants.
+Searched for maxToolResult\s*=|maxSteps\s*=|maxHistory\s*=|MaxToolResult\s*=|MaxSteps\s*=|MaxHistory\s*= matching **/*.go as files — 8 matches in 4 files
+
+‹thinking› Let me look at the specific lines in these files.
+Searched for maxToolResult\s*=|maxSteps\s*=|maxHistory\s*=|MaxToolResult\s*=|MaxSteps\s*=|MaxHistory\s*= matching **/*.go as content — 8 matches in 4 files
+
+‹thinking›
+Now let me look for the three caps more carefully. I need to find:
+1. The cap on size of a single tool result
+2. The cap on number of work steps per turn
+3. The cap on chat history budget
+
+Let me look for these more specifically.
+‹/›
+Searched for const.*MaxSteps|const.*MaxToolResult|const.*MaxHistory|maxToolResult|maxChatHistory|toolResultCap|historyCap matching **/*.go as files — 5 matches in 2 files
+
+‹thinking› Let me search more broadly.
+Searched for maxToolResult|maxChatHistory matching **/*.go as content — 5 matches in 2 files
+
+‹thinking› Now let me look at the send.go file for maxToolResult.
+Searched for maxToolResult matching **/*.go as content — no matches
+
+‹thinking› Let me look for the cap on tool result size. Let me search for different terms.
+Searched for toolResult.*[Ss]ize|[Tt]ool.*[Rr]esult.*[Cc]ap|[Tt]runcate.*[Tt]ool|[Mm]ax.*[Tt]ool.*[Rr]esult|tool.*budget matching **/*.go as files — 9 matches in 7 files
+
+‹thinking› Let me look at these files to find the cap on tool result size.
+Searched for toolResult.*[Ss]ize|[Tt]ool.*[Rr]esult.*[Cc]ap|[Tt]runcate.*[Tt]ool|[Mm]ax.*[Tt]ool.*[Rr]esult|tool.*budget matching **/*.go as content — 9 matches in 7 files
+
+‹thinking› Now I can see `maxToolOutputBytes` is used in `internal/coder/toolobserve.go`. Let me find its definition.
+Searched for maxToolOutputBytes\s*[=:] matching **/*.go as content — 1 match in 1 file
+
+‹thinking› Now let me find the MaxSteps constant and the chat history budget.
+
+Now let me find the default MaxSteps constant and the chat history budget:
+Searched for MaxSteps\s*[:=].*[0-9]+|maxSteps\s*[:=].*[0-9]+ matching **/*.go as content — 4 matches in 3 files
+
+‹thinking› Now let me verify the `maxChatHistoryTokens` function - it's a function, not a constant. Let me re-read the question: "caps the chat history budget". The function `maxChatHistoryTokens` in `internal/coder/send.go` computes the budget as `max(context/8, 2048)`. The question asks for "the value of each of those three caps and the file the constant lives in." This one is a function, not a constant with a fixed value. Let me re-read the function.
+
+Now let me confirm the chat history budget function:
+Read internal/coder/send.go (lines 594-603 of 1025)
+
+‹thinking›
+The user asks for three caps:
+1. Cap on a single tool result size: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. Cap on work steps per turn: `MaxSteps = 25` in `internal/coder/coder.go` (default)
+3. Cap on chat history budget: `maxChatHistoryTokens(context/8, 2048)` in `internal/coder/send.go` — but this isn't a simple constant, it's a function. The user said "the value of each of those three caps and the file the constant lives in."
+
+For the chat history, it's `context/8` (or at least 2048). It's not a single constant. Let me think about what the user is asking...
+
+The user says "the coder caps" these three things. Let me re-read:
+
+1. "caps the size of a single tool result" → `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. "caps the number of work steps per turn" → `MaxSteps = 25` in `internal/coder/coder.go`
+3. "caps the chat history budget" → `maxChatHistoryTokens` returns `max(context/8, 2048)` in `internal/coder/send.go` — but this is a function, not a constant.
+
+Hmm, but the user asks for "the value of each of those three caps and the file the constant lives in." For the chat history one, it's a function. But the floor is 2048 and the formula is context/8. I should just describe what I found.
+
+Actually, let me re-read the question: "Give the value of each of those three caps and the file the constant lives in."
+
+The chat history budget isn't a fixed constant — it's `context/8` (floor2048). But I can still answer. The user wants a brief answer on one line starting with ANSWER:.
+
+Let me formulate the answer.
+‹/›
+
+ANSWER: maxToolOutputBytes = 60,000 in internal/coder/toolobserve.go; MaxSteps = 25 in internal/coder/coder.go; maxChatHistoryTokens = context/8 (floor 2048) in internal/coder/send.go
+
+Tokens: 107.6k sent (95.8k cache hit), 1.8k received. Cost: $0.0029 turn, $0.0029 session. 15 steps.

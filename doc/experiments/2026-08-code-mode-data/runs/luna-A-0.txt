@@ -1,0 +1,15 @@
+Matched 274 files against **/*.go
+Searched for max|limit|budget|history|step|result under internal/coder matching internal/coder/*.go as content — 34 matches in 3 files
+Searched for "tool result|work steps|chat history|Max.*(Result|Step|History)|max.*(result|step|history)" matching **/*.go as content — 24 matches in 7 files
+Read internal/coder/coder.go (lines 1-100 of 1039)
+Searched for "const \(|MaxBytes|MaxTokens|History.*Budget|history.*budget|chat.*budget|tool.*bytes|result.*bytes" under internal/coder matching internal/coder/*.go as content — 17 matches in 8 files
+Searched for [Cc]ap|[Bb]udget|[Ll]imit under internal/coder matching internal/coder/*.go as content — 28 matches in 5 files
+Searched for maxToolOutputBytes under internal/coder matching internal/coder/*.go as content — 21 matches in 5 files
+Searched for history.*(Token|token|budget|Budget)|max.*History|historyMax|MaxHistory under internal/coder matching internal/coder/*.go as content — 15 matches in 5 files
+Searched for maxSteps|MaxSteps|numSteps under internal/coder matching internal/coder/*.go as content — 14 matches in 2 files
+Read internal/coder/send.go (lines 580-619 of 1025)
+Read internal/coder/coder.go (lines 290-339 of 1039)
+Searched for Context: matching internal/**/*.go as content — 15 matches in 7 files
+ANSWER: Single tool result: 60,000 bytes (internal/coder/toolobserve.go); work steps per turn: 25 (internal/coder/coder.go); chat history: context/8 tokens, minimum 2,048 (internal/coder/send.go).
+
+Tokens: 81.0k sent (20.4k cache write, 60.6k cache hit), 910 received. Cost: $0.0074 turn, $0.0074 session. 6 steps.

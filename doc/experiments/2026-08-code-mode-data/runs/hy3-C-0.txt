@@ -1,0 +1,33 @@
+‹thinking› Let me search the codebase for these caps.
+Searched for (Result|Step|History|Context|Turn|Chat)[A-Za-z]*(Cap|Limit|Max|Budget|Size) matching **/*.go as content — 14 matches in 7 files
+
+‹thinking› The grep didn't find the coder caps directly. Let me search for tool result size, work steps, chat history budget caps. Let me search more specifically.
+Searched for (Max|Cap|Limit)[A-Za-z]*\s*=\s*[0-9]+|const\s*\(\s*\n.*[A-Za-z]+.*=.*[0-9] matching **/*.go as content — 28 matches in 15 files
+Searched for "tool result|result size|max.*result|truncate|step.*turn|history budget|max.*step" matching **/*.go as content — 104 matches in 33 files
+
+‹thinking›
+Let me look at the relevant constants. There are three caps:
+1. Tool result size cap: `maxToolOutputBytes` in `internal/coder/toolobserve.go`
+2. Max steps per turn: `MaxSteps` in `internal/coder/coder.go` - default 25
+3. Chat history budget: `maxChatHistoryTokens` in `internal/coder/send.go`
+
+Let me read these to get exact values.
+‹/›
+Read internal/coder/toolobserve.go (lines 40-54 of 518)
+Read internal/coder/send.go (lines 594-601 of 1025)
+Read internal/coder/coder.go (lines 293-300 of 1011)
+
+‹thinking›
+Now I have the three caps:
+1. Single tool result size: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. Number of work steps per turn: `MaxSteps = 25` (default) in `internal/coder/coder.go`
+3. Chat history budget: `maxChatHistoryTokens` = context/8 with 2048 floor, in `internal/coder/send.go`
+
+The chat history budget is a function, not a fixed constant. Let me give the answer. The user wants the value of each cap. For maxChatHistoryTokens, the value is context/8 with a 2048 floor. The user said "the value of each of those three caps". For the history budget, it's derived, so I'll describe it.
+
+Let me put everything on one line beginning with ANSWER:.
+‹/›
+
+ANSWER: maxToolOutputBytes = 60000 (single tool result size) in internal/coder/toolobserve.go; MaxSteps = 25 (work steps per turn, default) in internal/coder/coder.go; maxChatHistoryTokens = context/8 with a 2048 floor (chat history budget) in internal/coder/send.go.
+
+Tokens: 25.8k sent (10.2k cache hit), 716 received. Cost: $0.0028 turn, $0.0028 session. 4 steps.

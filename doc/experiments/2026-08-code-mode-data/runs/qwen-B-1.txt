@@ -1,0 +1,63 @@
+‹thinking›
+The user is asking about specific Go code in this repository: the coder caps the size of a single tool result, caps the number of working steps per turn, and caps the budget for chat history. For each of these three caps, I need to provide its value and the file in which that constant lives.
+
+Let me search the codebase for these constants.
+‹/›
+Searched for MaxToolResult|MaxToolOutput|MaxStep|MaxSteps|MaxHistory|HistoryBudget as files — 40 matches in 8 files
+Listed the project root (22 entries)
+
+‹thinking› Let's look at the related files and search for the upper limit (cap) within the coder.
+Searched for MaxToolResult|MaxToolOutput|MaxStep|MaxSteps|MaxHistory|HistoryBudget|Budget under internal/coder as content — 13 matches in 3 files
+
+‹thinking› I'll read coder.go to look for the constants — the tool result cap, the number of steps per turn, and the chat history budget.
+Read internal/coder/coder.go (lines 1-120 of 1011)
+
+‹thinking›
+What we need next:
+1. Cap on the size of a single tool result
+2. Cap on the number of work steps per turn — MaxSteps = 25 (default in New)
+3. Cap on the chat history budget
+
+Let me try searching for the tool result size cap and the chat history budget.
+‹/›
+Searched for const|maxBytes|MaxBytes|maxResult|truncat|TokenBudget|maxTokens|MaxTokens under internal/coder as content — 101 matches in 38 files
+
+‹thinking›
+I need to find the following:
+1. The cap on a single tool result — probably `maxToolOutputBytes` inside some tool file.
+2. The per-turn work step cap — `MaxSteps` defaults to 25, set in `New` (coder.go:297).
+3. The chat history budget — probably in summary.go or coder.go (historyBudget, etc.).
+
+Let me search for `maxToolOutputBytes` and the history budget.
+‹/›
+Searched for maxToolOutputBytes|historyBudget|HistoryBudget|chatHistory|ChatHistory as content — 32 matches in 12 files
+
+‹thinking›
+Now, I need the details of the three upper limits:
+
+1. Tool result upper limit: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`. ✓
+2. Work steps per turn: MaxSteps, default value 25 in `internal/coder/coder.go` (line 297). Let me confirm the default is set in New. Line 297: `MaxSteps: 25`. Let me confirm.
+3. Chat history budget: `maxChatHistoryTokens` in `internal/coder/send.go` — this is a function, "context/8". Hmm, the user is asking for "the value of each of these three upper limits and the file where the constant is." In the case of the chat history budget, it might not be a constant but rather context/8 with a lower bound of 1024. Let me read around lines 590–640 of send.go.
+‹/›
+Read internal/coder/send.go (lines 580-649 of 1025)
+Read internal/coder/coder.go (lines 270-329 of 1011)
+
+‹thinking›
+All three items have been checked:
+
+1. Tool result cap: `maxToolOutputBytes = 60_000` is in `internal/coder/toolobserve.go`
+2. Work steps per turn: the default for `MaxSteps` is 25 (set in `New` in `internal/coder/coder.go`)
+3. Chat history budget: `maxChatHistoryTokens` is in `internal/coder/send.go` — it's not a fixed constant, it's a function: context/8, with a lower bound of 2048.
+
+The question asks "please tell me each of those three caps' value and the file that constant is in." In the case of the history budget, there is no single value — it's derived: max(context/8, 2048). The docs say "maxChatHistoryTokens is at the lower bound of 1024" — wait, doc/experimenting.md says "lower bound of 1024." Let me check: the doc says 1024, but the code says 2048. The docs might be out of date. What matters is the code. The code has `max(context/8, 2048)`.
+
+Therefore the answer: maxToolOutputBytes = 60_000 (60 KB), internal/coder/toolobserve.go; MaxSteps = 25, internal/coder/coder.go; the chat history budget is max(context/8, 2048) tokens, internal/coder/send.go.
+
+Keep it concise, in one line starting with ANSWER:.
+‹/›
+
+
+
+ANSWER: tool result maxToolOutputBytes=60_000 (internal/coder/toolobserve.go); work steps MaxSteps=25 (internal/coder/coder.go); chat history maxChatHistoryTokens = max(context/8, 2048) (internal/coder/send.go).
+
+Tokens: 53.4k sent (11.0k cache hit), 1.4k received. Cost: $0.02 turn, $0.02 session. 7 steps.

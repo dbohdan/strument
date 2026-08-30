@@ -1,0 +1,21 @@
+‹thinking› The user wants three caps in the Go code: tool result size cap, work steps per turn cap, chat history budget cap. Let me search the codebase.
+Searched for (?i)(max|limit|cap|budget)[A-Za-z]*(Result|Step|Turn|History|Tool|Chat) matching **/*.go as content — 101 matches in 26 files
+Listed the project root (22 entries)
+
+‹thinking›
+I have most of what I need:
+
+1. Single tool result cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`.
+2. Work steps per turn: default `MaxSteps: 25` in `internal/coder/coder.go` (line 297). Let me check whether there's a named constant.
+3. Chat history budget: `maxChatHistoryTokens(context int)` in `internal/coder/send.go` — context/8. Let me read that to see the exact value/formula and if there's a constant.
+
+Let me read send.go around line 596 and coder.go around 290.
+‹/›
+Read internal/coder/send.go (lines 590-614 of 1025)
+Read internal/coder/coder.go (lines 285-304 of 1011)
+
+‹thinking› ANSWER: tool result cap = 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); work steps per turn = 25 (MaxSteps default, internal/coder/coder.go); chat history budget = context/8 with 2048 floor (maxChatHistoryTokens, internal/coder/send.go).
+
+ANSWER: tool result cap 60000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); work steps per turn 25 (MaxSteps default, internal/coder/coder.go); chat history budget context/8 with a 2048 floor (maxChatHistoryTokens, internal/coder/send.go).
+
+Tokens: 17.8k sent (10.2k cache hit), 414 received. Cost: $0.00082 turn, $0.00082 session. 3 steps.

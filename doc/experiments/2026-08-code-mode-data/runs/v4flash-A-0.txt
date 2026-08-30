@@ -1,0 +1,83 @@
+‹thinking›
+The user asks about Go code in this repository: the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. They want the value of each of those three caps and the file each constant lives in. Answer on one line beginning with ANSWER:.
+
+I need to search the codebase. Let me look at the project structure.
+‹/›
+Listed the project root (22 entries)
+Searched for "(?i)(tool result|max.*tool|history budget|chat history|work steps|max.*step)" matching **/*.go as files — 177 matches in 46 files
+
+‹thinking› Let me look for the constants. The coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Let me grep for constants.
+Searched for (?i)(max.*(tool|result|step|history|budget)|history.*budget|budget|tool.*result) under internal/coder matching **/*.go as content — 100 matches in 27 files
+Searched for const\s*\( under internal/coder matching **/*.go as content — 14 matches in 11 files
+
+‹thinking›
+The user asks: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+Let me find the three caps:
+
+1. Size of a single tool result — `maxToolOutputBytes` (referenced in scrapelinks_test.go, searxng_test.go). Where is it defined? Let's check grep for `maxToolOutputBytes`.
+
+2. Number of work steps per turn — `MaxSteps: 25` in coder.go, and the constant might be defined in the `const` block at coder.go:27. Let me read coder.go around line 27.
+
+3. Chat history budget — `maxChatHistoryTokens` in send.go with a comment "context/8". It's a function returning context/8. But is there a constant? The asked "caps the chat history budget ... Give the value ... and the file the constant lives in." Maybe the constant is in coder.go or send.go. Let me look.
+
+Let me grep for maxToolOutputBytes definition and read the const blocks.
+‹/›
+Searched for maxToolOutputBytes matching **/*.go as content — 21 matches in 5 files
+Read internal/coder/coder.go (lines 20-69 of 1011)
+Read internal/coder/send.go (lines 15-124 of 1025)
+
+‹thinking›
+Let me look at the maxAutoCheck, MaxSteps default (25), maxToolOutputBytes (60_000), and maxChatHistoryTokens. Also there's `maxCommitHistory` but the question is specifically about "caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget."
+
+So:
+1. Single tool result cap: maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go
+2. Number of work steps per turn: MaxSteps, default 25, in internal/coder/coder.go (the constant lives in... well MaxSteps is a field; the default is set by New at line 297: `MaxSteps: 25`). Actually the user asked "the file the constant lives in". Let me check coder.go line 297 area.
+3. Chat history budget: maxChatHistoryTokens in internal/coder/send.go — function `func maxChatHistoryTokens(context int) int` returns context/8. Let me read that.
+
+Let me read coder.go around line 290-300 and send.go around 590-640.
+‹/›
+Read internal/coder/coder.go (lines 285-314 of 1011)
+Read internal/coder/send.go (lines 590-649 of 1025)
+
+‹thinking›
+Now I have the three caps:
+
+1. Tool result size cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`.
+2. Number of work steps per turn: `MaxSteps = 25` (default set in `New` in `internal/coder/coder.go`). The comment says "MaxSteps is the work-step budget per turn". It's a field, configured at coder.go line 297. The constant isn't a const, it's a default field value in `New`. Hmm. The question asks "the file the constant lives in". For the work steps, it's `MaxSteps: 25` in coder.go.
+3. Chat history budget: `maxChatHistoryTokens(context) = max(context/8, 2048)` in `internal/coder/send.go`. It's derived from the model's context. The floor is 2048. The formula is context/8.
+
+Let me double check the tool result cap const in toolobserve.go and confirm. Also should I check if there's a max tool result elsewhere. The search showed `const maxToolOutputBytes = 60_000` at toolobserve.go:50.
+
+The question: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+- tool result: 60,000 bytes — internal/coder/toolobserve.go
+- work steps: 25 per turn (default; configurable) — internal/coder/coder.go (MaxSteps field set in New). Not actually a constant — it's a field default. Hmm, but maybe there's a constant elsewhere. Let me search for maxSteps const.
+- chat history: max(context/8, 2048) tokens — internal/coder/send.go
+
+Let me verify there isn't a stricter history budget constant. Also check whether there's a "budget" for history elsewhere. The question says "caps the chat history budget". The `maxChatHistoryTokens` is a function, not a constant. But it's in send.go with a floor of 2048.
+
+Let me search for any other relevant caps to be sure I'm giving the right values. Let me look at tools.go for "cap" and maybe the tool result cap for the bridged calls. But the user specifically says: "caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget."
+
+Those are the three. Let me verify the MaxSteps is not a const. The grep for const in coder.go only showed maxAutoCheck = 3. The MaxSteps is a configurable field with default 25.
+
+So the answer should be precise:
+
+- Single tool result: 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go)
+- Work steps per turn: 25 (MaxSteps default, internal/coder/coder.go in New)
+- Chat history budget: context/8 tokens, floor 2048 (maxChatHistoryTokens, internal/coder/send.go)
+
+The user wants "the value of each of those three caps and the file the constant lives in." For the chat history, since it's a function of context, the value is not a single number. I could phrase it as "max(context/8, 2048) tokens". The question is brief; put whole answer on one line beginning with ANSWER:.
+
+Let me double-check the maxChatHistoryTokens usage - the summary budget. Also note the "settled-history budget". Yes.
+
+Also, let me double check the tool result cap of 60,000 — is it bytes or characters? toolobserve.go says "caps a single tool result" and code trims s[:maxToolOutputBytes] which on a string is bytes in Go. The tests compare len(got) > maxToolOutputBytes. And message "it exceeded the size one tool result may carry." So bytes.
+
+Let me make sure there isn't another "chat history budget" constant like maxChatHistory or similar. The grep hit `maxChatHistoryTokens` only. Also there was `maxCommitHistory = 8000` but that's for commit messages, not chat history budget.
+
+I think I have everything. One line answer.
+‹/›
+
+ANSWER: single tool result = 60,000 bytes (`maxToolOutputBytes`, internal/coder/toolobserve.go); work steps per turn = 25 (`MaxSteps` default in `New`, internal/coder/coder.go); chat history budget = max(context/8, 2048) tokens (`maxChatHistoryTokens`, internal/coder/send.go).
+
+Tokens: 38.3k sent (26.4k cache hit), 2.3k received. Cost: $0.0016 turn, $0.0016 session. 5 steps.

@@ -1,0 +1,78 @@
+‹thinking› Let me search for these three caps in the Go code.
+Searched for max.*(?:tool|result|step|turn|history|budget|size) matching **/*.go as content — 31 matches in 15 files
+Matched 271 files against **/*.go
+
+‹thinking›
+Let me look at the three specific files mentioned in the grep results:
+
+1. `toolobserve.go` - `maxToolOutputBytes` caps a single tool result
+2. `send.go` - `maxChatHistoryTokens` is the chat history budget
+3. Need to find the cap for work steps per turn
+
+Let me read those files.
+‹/›
+Searched for maxToolOutputBytes|maxChatHistoryTokens|maxStepsPerTurn|maxSteps\b|max_turn_steps|maxTurnSteps|maxWorkSteps matching **/*.go as files — 28 matches in 9 files
+Read internal/coder/toolobserve.go (518 lines)
+Read internal/coder/send.go (1025 lines)
+
+‹thinking› Now I need to find the cap for work steps per turn. Let me search for that.
+Searched for maxSteps|numSteps.*cap|max.*steps.*per.*turn|maxTurnSteps|stepsCap|defaultMaxSteps matching **/*.go as files — 6 matches in 3 files
+
+‹thinking› Let me look at coder.go for the steps cap.
+Searched for maxSteps|defaultMaxSteps matching **/*.go as files — 6 matches in 3 files
+
+‹thinking› Let me get the content of these matches.
+Searched for maxSteps|defaultMaxSteps matching **/*.go as files — 6 matches in 3 files
+
+‹thinking› I need to actually see the content lines. Let me search with context lines.
+Searched for maxSteps|defaultMaxSteps|max_steps matching **/*.go as content — 20 matches in 4 files
+
+‹thinking› Now I need to find the default value for maxSteps in the coder. The comment says "the coder applies its own default of 25". Let me find the constant.
+Searched for maxSteps\s*=|default.*steps|25.*steps|steps.*25|maxSteps\s+\w+\s*=\s*\d matching internal/coder/*.go as content — 1 match in 1 file
+
+‹thinking› Let me search for where the default maxSteps is defined in the coder package.
+Searched for const.*=.*25|maxSteps|maxStepsPerTurn|maxWorkSteps matching internal/coder/coder.go as content — 1 match in 1 file
+
+‹thinking› Let me search more broadly for the constant that caps work steps per turn.
+Searched for const.*maxSteps|maxSteps\s*=\s*\d matching internal/coder/*.go as content — no matches
+
+‹thinking› Let me search for "maxSteps" more broadly and check coder.go and the step budget constant.
+Searched for maxSteps matching internal/coder/*.go as content — 1 match in 1 file
+
+‹thinking› The comment says "maxSteps" but I need to find where this is actually defined. Let me search for where the step budget is used.
+Searched for MaxSteps|step.*budget|budget.*step|GrantSteps|GrantStep matching internal/coder/*.go as content — 12 matches in 5 files
+
+‹thinking›
+I now have all three values:
+
+1. **maxToolOutputBytes** = 60_000 — caps a single tool result. File: `internal/coder/toolobserve.go`
+2. **MaxSteps** = 25 — caps the number of work steps per turn. File: `internal/coder/coder.go`
+3. **maxChatHistoryTokens** = `context/8` (with a floor of 2048) — caps the chat history budget. File: `internal/coder/send.go`
+
+Let me verify each:
+
+1. `maxToolOutputBytes = 60_000` at `internal/coder/toolobserve.go:50`
+2. `MaxSteps: 25` at `internal/coder/coder.go:297` (default set in `New`)
+3. `maxChatHistoryTokens` returns `max(context/8, 2048)` at `internal/coder/send.go:599-601`
+
+The question asks for the "value of each of those three caps." The third one is a function, not a single constant. Let me re-read the question: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget."
+
+For maxChatHistoryTokens, it's a function that depends on the context window. The description says "context/8, with a 2048 floor." The comment on line 596-598 says: "maxChatHistoryTokens is the settled-history budget: context/8, derived from the main model's window, with a 2048 floor for small windows."
+
+I should describe it as context/8 (with a 2048 floor).
+‹/›
+Read internal/coder/toolobserve.go (lines 43-52 of 518)
+Read internal/coder/coder.go (lines 46-55 of 1011)
+Read internal/coder/send.go (lines 596-603 of 1025)
+
+‹thinking›
+Let me verify the three caps:
+
+1. **maxToolOutputBytes** = 60,000 in `internal/coder/toolobserve.go` — caps a single tool result
+2. **MaxSteps** = 25 (default) in `internal/coder/coder.go` — caps work steps per turn
+3. **maxChatHistoryTokens** = context/8 (with a 2048 floor) in `internal/coder/send.go` — caps chat history budget
+‹/›
+
+ANSWER: maxToolOutputBytes=60,000 (internal/coder/toolobserve.go), MaxSteps=25 (internal/coder/coder.go), maxChatHistoryTokens=context/8 with floor 2048 (internal/coder/send.go)
+
+Tokens: 359.2k sent (323.1k cache hit), 1.7k received. Cost: $0.0077 turn, $0.0077 session. 13 steps.

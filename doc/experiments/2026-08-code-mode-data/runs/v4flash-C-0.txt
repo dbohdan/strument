@@ -1,0 +1,35 @@
+‹thinking›
+The user wants me to find three constants in the Go code: cap on size of a single tool result, cap on number of work steps per turn, and cap on chat history budget. Give value and file for each. Answer on one line beginning with ANSWER:.
+
+Let me search the codebase.
+‹/›
+Searched for "tool result|ToolResult|tool.*limit|MaxTool|maxTool" under . as content — 117 matches in 42 files
+Searched for "work step|workStep|WorkStep|steps per turn|maxSteps|MaxSteps" under . as content — 57 matches in 16 files
+Searched for "history budget|HistoryBudget|chat.*budget|chatBudget|maxHistory|MaxHistory" under . as content — 7 matches in 3 files
+
+‹thinking›
+Let me look at the relevant files. The tool result cap is `maxToolOutputBytes = 60_000` in internal/coder/toolobserve.go. The work steps cap: `MaxSteps: 25` default in internal/coder/coder.go line 297. The chat history budget: `maxChatHistoryTokens` in internal/coder/send.go — need its value.
+
+Let me read those spots.
+‹/›
+Read internal/coder/toolobserve.go (lines 40-54 of 518)
+Read internal/coder/coder.go (lines 40-59 of 1011)
+Read internal/coder/send.go (lines 590-614 of 1025)
+
+‹thinking›
+Now I need to find:
+1. maxToolOutputBytes = 60_000 in internal/coder/toolobserve.go — that's 60 KB.
+2. MaxSteps default 25 in internal/coder/coder.go (line 297: MaxSteps: 25).
+3. maxChatHistoryTokens = max(context/8, 2048) in internal/coder/send.go.
+
+Let me verify the MaxSteps default line.
+‹/›
+Read internal/coder/coder.go (lines 292-303 of 1011)
+
+‹thinking›
+The three caps:
+1. Single tool result size: `maxToolOutputBytes = 60_000` (60 KB) in `internal/coder/toolobserve.go`.
+2. Work steps per turn: `MaxSteps` default 25, set in `New` in `internal/coder/coder.go` (line 297). The constant... MaxSteps is a field, not a const. The default value 25 is in coder.go.
+3. Chat history budget: `maxChatHistoryTokens(context) = max(context/8, 2048)` in `internal/coder/send.go`.
+
+The question: "the coder caps the size

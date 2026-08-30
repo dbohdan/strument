@@ -1,0 +1,48 @@
+‹thinking› The user wants me to find three caps in the Go code: the size of a single tool result, the number of work steps per turn, and the chat history budget. Let me search the codebase.
+Searched for Cap|cap|MAX|Max|limit|Limit matching **/*.go as files — 917 matches in 140 files
+
+‹thinking› Let me search for the specific caps. The coder caps tool result size, number of work steps per turn, and chat history budget. Let me look in internal/coder.
+Searched for "tool result|work step|history budget|historyBudget|maxSteps|maxResult|resultSize|step" matching internal/coder/*.go as content — 101 matches in 30 files
+
+‹thinking›
+Let me look at the specific constants. I need:
+1. Tool result size cap
+2. Work steps per turn cap
+3. Chat history budget cap
+
+Let me look at the relevant files. The coder.go has MaxSteps = 25. The send.go has maxChatHistoryTokens. The summary.go has summaryToolBytes. Let me find the tool result size cap.
+‹/›
+Searched for maxChatHistoryTokens|summaryToolBytes|maxToolResult|toolResultBytes|MaxResultBytes|resultBytes|maxResultBytes matching internal/coder/*.go as content — 11 matches in 3 files
+
+‹thinking› Let me find the cap on a single tool result size. Let me look for where tool results are capped. The summaryToolBytes is for the summarizer. There's likely a separate cap on actual tool results returned to the model. Let me search.
+Searched for "truncat|trunc|cut|2000|50000|maxBytes|MaxBytes|too long|too big" matching internal/coder/*.go as content — 100 matches in 36 files
+Searched for "SearchMaxBytes|searchMaxBytes|maxToolOutputBytes|toolOutputBytes|maxResult|result cap|resultCap|clipRunes|clipForSummary|truncateResult" matching internal/coder/*.go as content — 50 matches in 11 files
+
+‹thinking›
+Now I have the three caps:
+
+1. Tool result size cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. Work steps per turn cap: `MaxSteps: 25` (default) in `internal/coder/coder.go`
+3. Chat history budget: `maxChatHistoryTokens` is a function `context/8` in `internal/coder/send.go`. But there might be a constant. Let me check the send.go for the context/8 definition.
+
+Let me look at send.go line 596.
+‹/›
+Read internal/coder/send.go (lines 594-605 of 1025)
+
+‹thinking›
+Now I have all three caps:
+
+1. Single tool result cap: `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go`
+2. Work steps per turn: `MaxSteps: 25` in `internal/coder/coder.go` (line 297)
+3. Chat history budget: `maxChatHistoryTokens(context) = max(context/8, 2048)` — dynamic, in `internal/coder/send.go`
+
+The history budget is a function, not a constant. Let me re-read the question: "the coder caps the size of a single tool result, caps the number of work steps per turn, and caps the chat history budget. Give the value of each of those three caps and the file the constant lives in."
+
+The chat history budget is a function returning max(context/8, 2048). I should describe it accurately. Let me give the answer.
+
+MaxSteps default value is 25 in coder.go. Let me confirm it's a constant/default value 25.
+‹/›
+
+ANSWER: tool result size cap = 60000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go); work steps per turn = 25 (MaxSteps default, internal/coder/coder.go); chat history budget = max(context/8, 2048) tokens (maxChatHistoryTokens, internal/coder/send.go).
+
+Tokens: 61.7k sent (38.7k cache hit), 992 received. Cost: $0.0048 turn, $0.0048 session. 7 steps.

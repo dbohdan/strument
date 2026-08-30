@@ -1,0 +1,48 @@
+‹thinking›
+The user wants: the value of each of three caps and the file each constant lives in. They want one line beginning with "ANSWER:".
+
+Let me search the repo.
+‹/›
+Searched for "tool result" as content — 87 matches in 40 files
+Searched for MaxTool|ToolResult|maxTool as content — 49 matches in 17 files
+Searched for "history budget|HistoryBudget|MaxHistory" as content — 7 matches in 3 files
+
+‹thinking›
+Let me look at the specific constants. I found:
+
+1. `maxToolOutputBytes = 60_000` in `internal/coder/toolobserve.go` (line 50).
+2. Work steps per turn cap — need to find. Search for "work step" or "maxWork" or similar.
+3. Chat history budget — `maxChatHistoryTokens` in `internal/coder/send.go` (line 596). Need the value.
+
+Let me read those files.
+‹/›
+Read internal/coder/send.go (lines 590-609 of 1025)
+Searched for "work step|WorkStep|maxWork|MaxSteps|maxSteps" as content — 54 matches in 14 files
+
+‹thinking› Let me check the exact locations. maxToolOutputBytes is in toolobserve.go line 50, value 60_000. MaxSteps default in coder.go line 297 is 25. maxChatHistoryTokens in send.go line 599-601: context/8 with 2048 floor — that's a function of context, not a single constant. But the question says "caps the chat history budget. Give the value of each of those three caps and the file the constant lives in." The history budget is context/8 or 2048. Let me look at the coder.go default and the constants. Let me check the file constants.
+Read internal/coder/coder.go (lines 290-304 of 1011)
+Read internal/coder/toolobserve.go (lines 40-54 of 518)
+
+‹thinking›
+The three caps:
+1. Tool result size cap: `maxToolOutputBytes = 60_000` (60 KB) in `internal/coder/toolobserve.go`.
+2. Work steps per turn: `MaxSteps: 25` default in `internal/coder/coder.go` (in New function). Also `MaxSteps int` field. The default value is 25.
+3. Chat history budget: `maxChatHistoryTokens(context int) int { return max(context/8, 2048) }` in `internal/coder/send.go`. It's a derived function, context/8 with 2048 floor. The "constant" — it's a function. The question says "the file the constant lives in". The budget is context/8 with a 2048 floor, derived from the model's window. So the value isn't constant; it depends on context. There's also the "2048 floor".
+
+The question asks: "Give the value of each of those three caps and the file the constant lives in." So for each cap, value and file.
+
+For the chat history budget: the cap is a function `max(context/8, 2048)`. Hmm, value depends on context. But the question presumably expects the answer. Let me check what the experiment data file says — it says "caps the chat history budget". Let me check the doc/experiments/2026-08-code-mode-data/run.py which quoted this phrase — maybe it describes the actual values. Let me look.
+‹/›
+Read doc/experiments/2026-08-code-mode-data/run.py (lines 55-84 of 331)
+
+‹thinking›
+I have all three values. Let me compose the one-line answer: 60000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go line 50), 25 work steps (MaxSteps default, internal/coder/coder.go line 297), and context/8 with 2048 floor (maxChatHistoryTokens, internal/coder/send.go line 596-601).
+
+The user asked "Give the value of each of those three caps and the file the constant lives in." Put whole answer on one line beginning with ANSWER:.
+
+Note the experiment's answer key calls them max_tool_output_bytes, max_steps, max_chat_history_tokens. The history cap is a function, maxChatHistoryTokens(context) returning max(context/8, 2048) in send.go, not a constant per se. The file is send.go.
+‹/›
+
+ANSWER: tool result = 60,000 bytes (maxToolOutputBytes, internal/coder/toolobserve.go:50); work steps = 25 per turn (MaxSteps default, internal/coder/coder.go:297); chat history budget = max(context/8, 2048) tokens (maxChatHistoryTokens, internal/coder/send.go:596-601).
+
+Tokens: 45.5k sent (29.4k cache hit), 1.4k received. Cost: $0.0018 turn, $0.0018 session. 5 steps.

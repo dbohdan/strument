@@ -1,0 +1,23 @@
+Matched 271 files against **/*.go
+Searched for "(max|limit|cap|budget|history|steps|tool result|result size)" matching **/*.go as content — 70 matches in 1 file
+Searched for const|MaxSteps|history.*(budget|token)|tool.*(result|output)|[0-9]+.*(token|byte|step) under internal/coder matching **/*.go as content — 21 matches in 5 files
+Searched for MaxSteps|History|Budget|Max.*(Token|Byte|Size)|Context under internal/config matching **/*.go as content — 39 matches in 1 file
+Searched for maxTool|tool.*Max|Max.*Tool|chat.*budget|history.*tokens|MaxSteps matching **/*.go as content — 21 matches in 7 files
+Read internal/coder/coder.go (lines 1-80 of 1011)
+Read internal/coder/toolobserve.go (lines 1-100 of 518)
+Searched for summary.*(Token|token|budget)|history.*(Token|token|budget)|max.*(history|context)|token.*(budget|limit)|[0-9]+_000 under internal/coder matching **/*.go as content — 17 matches in 5 files
+Read internal/coder/send.go (lines 1-130 of 1025)
+Read internal/coder/summary.go (lines 1-120 of 250)
+Searched for "const .*|const \(" under internal/coder matching **/*.go as content — 12 matches in 9 files
+
+‹thinking›
+**Exploring chat history budget**
+
+I’m considering the user's wording about the "chat history budget" and how it might refer to a specific constant like maxHistory. I think I need to search through all text to look for anything related to "history budget" to clarify. There's definitely something specific the user is asking about, and figuring this out will help me provide a more accurate response!
+‹/›
+Searched for "history budget|History.*budget|history.*cap|doneMessages|maybeSummarize|summarize\(" matching **/*.go as content — 10 matches in 6 files
+Read internal/coder/send.go (lines 500-679 of 1025)
+Read internal/coder/coder.go (lines 250-349 of 1011)
+ANSWER: Single tool result: 60,000 bytes — internal/coder/toolobserve.go; work steps per turn: 25 — internal/coder/coder.go; chat history: max(context/8, 2,048) tokens — internal/coder/send.go.
+
+Tokens: 96.7k sent (29.7k cache write, 67.0k cache hit), 883 received. Cost: $0.0098 turn, $0.0098 session. 6 steps.
