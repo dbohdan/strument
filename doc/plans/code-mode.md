@@ -214,6 +214,12 @@ use it at all.** A previous feature (`replace_all`) was used once in eighteen
 runs, so seventeen runs compared the control arm to itself and the clean-looking
 result meant nothing (`experimenting.md` §18).
 
+**Outcome: uptake was 0/36.**
+[`doc/experiments/2026-08-code-mode.md`](../experiments/2026-08-code-mode.md)
+is the writeup; it recommends against shipping `code` as a default tool. What
+remains open is the arithmetic-shaped fixture, which this trial did not
+measure.
+
 Reuse the rig in `doc/experiments/2026-08-skill-uptake-data/`: `run.py` is a
 shuffled, resumable runner and `report.py` summarises. Adapt, don't rewrite.
 
@@ -239,29 +245,50 @@ a good model for the task shape.
 - Cost and steps per run.
 
 **Non-negotiable mechanics:**
-- [ ] **Verify the arms differ on the wire before spending.** Run one of each
+- [x] **Verify the arms differ on the wire before spending.** Run one of each
       through `cmd/strumentrec` and confirm A has no `code` tool, B has it, C's
       description names the bridged functions. `wire_check.py` in the skills
       data dir does this.
-- [ ] Randomize the whole job list and record the seed.
-- [ ] `ty check` the runner before launching it (`pip install ty`). A
+      *(Done by live probe and symbol table: A has no `code` tool; B and C
+      **do not differ** — both were built from the bridge commit and are
+      byte-identical in symbol table and schema. The trial is therefore A vs
+      code+bridge; see the writeup.)*
+- [x] Randomize the whole job list and record the seed.
+      *(seed 20260830, shuffled across all 36 jobs.)*
+- [x] `ty check` the runner before launching it (`pip install ty`). A
       `TypeError` in an exception handler once killed a 234-run trial's
       bookkeeping while the work carried on — §19.
-- [ ] Wait on the runner's **PID**, not a success marker in its log:
+- [x] Wait on the runner's **PID**, not a success marker in its log:
       `until ! kill -0 "$PID"; do sleep 20; done`. A log grep cannot tell a
       crash from a slow run.
-- [ ] Read **at least ten transcripts** before believing any aggregate. Report
+      *(Used several times; three runs killed by the operator's own shell
+      timeout were caught this way and re-run. §19 confirmed from both sides.)*
+- [x] Read **at least ten transcripts** before believing any aggregate. Report
       what they say, including anything that contradicts the table.
-- [ ] Models: the usual six — `deepseek/deepseek-v4-flash-0731`,
+      *(Twelve read against the table; they found two scorer false negatives
+      (`60_000`, `**ANSWER:**`) and three operator-killed runs whose
+      `Interrupted` outcomes would otherwise have sat in arm C's column.)*
+- [x] Models: the usual six — `deepseek/deepseek-v4-flash-0731`,
       `openai/gpt-5.6-luna`, `qwen/qwen3.8-27b`, `tencent/hy3`,
       `xiaomi/mimo-v2.5`, `z-ai/glm-5.3-flash`. Budget ~$3.
-- [ ] `OPENROUTER_API_KEY` from the environment. **Never write a key to a file
+      *(Spent $0.33 all-in, reruns included.)*
+- [x] `OPENROUTER_API_KEY` from the environment. **Never write a key to a file
       or a commit.**
+      *(The plan's premise was wrong: the key is stripped from the agent's
+      environment by Strument's security policy. It came from the
+      `openrouter-api-key` helper at run time, through the environment, and
+      every model config routed through `socks5://localhost:1080` — without the
+      proxy the requests 403.)*
 
-- [ ] Write up as `doc/experiments/2026-08-code-mode.md` with a `-data/`
+- [x] Write up as `doc/experiments/2026-08-code-mode.md` with a `-data/`
       directory, following the shape of the two existing experiment writeups.
       **If uptake is low, say so plainly and recommend against shipping.** That
       is a successful trial, not a failed one.
+      *(Uptake was 0/36. The writeup recommends against shipping. Data lives
+      outside the repo in `/tmp/2026-08-code-mode-data/` — the worlds tree is
+      gigabytes of repo copies and does not belong under version control; the
+      `-data/` dir in-tree holds the transcripts, the runner, and
+      results.json, ~1.5 MB.)*
 
 ---
 
