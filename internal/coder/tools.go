@@ -35,6 +35,10 @@ const (
 	// toolSkill loads one of the user's skills. Its catalog lives in the tool
 	// description rather than the prompt — see skills.go.
 	toolSkill = "skill"
+	// toolCode runs a short Python program in Monty, the restricted interpreter
+	// in internal/monty — see codetool.go. Computing mutates nothing, so it is
+	// offered in ask mode too.
+	toolCode = "code"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -88,6 +92,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if len(skill.Usable(c.Skills)) > 0 {
 		defs = append(defs, skillTool(c.Skills))
 	}
+	// Also before the ask-mode return: computing mutates nothing, and a
+	// discussion turn is exactly where a calculator belongs.
+	defs = append(defs, codeTool())
 	if c.editFormat == "ask" {
 		return defs
 	}
@@ -589,6 +596,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			results[tc.ID] = c.runSkill(ctx, s)
+		case toolCode:
+			cc, msg := parseCodeArgs(tc)
+			if msg != "" {
+				results[tc.ID] = msg
+				needsReflection = true
+				continue
+			}
+			results[tc.ID] = c.runCode(ctx, cc)
 		case toolAskUser:
 			// Not routed through confirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.

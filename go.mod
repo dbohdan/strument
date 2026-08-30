@@ -12,6 +12,7 @@ require (
 	github.com/landlock-lsm/go-landlock v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/odvcencio/gotreesitter v0.36.0
+	github.com/tetratelabs/wazero v1.11.0
 	go.starlark.net v0.0.0-20260708150628-5395d018f003
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
