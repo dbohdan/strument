@@ -613,3 +613,69 @@ func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
 		t.Fatalf("after trusting: %d skills, trusted=%v", len(after), len(after) > 0 && after[0].Trusted)
 	}
 }
+
+// TestChatNoHistoryStillSends pins the call order in chatCmd.Run: cdr.Run is
+// unconditional, and only the transcript append is gated on the history
+// writer existing. The crash-recording commit nested Run inside
+// `if hist != nil`, which turned every `chat --no-history -m …` run into a
+// silent no-op that exited 0 — no request, no output, no error. Nothing
+// failed loudly: the process succeeded at doing nothing, which is why the
+// wire check that caught it (running a probe through the built binary) is a
+// standing rule. Here the binary is built and run against a config whose
+// endpoint is a closed port: the send must happen, so the run must fail with
+// a connection error rather than succeed silently.
+func TestChatNoHistoryStillSends(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a unix listener")
+	}
+	// A listener we immediately close gives a port where connect fails fast.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("no loopback listener available: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, "cfg", "strument")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "router = provider(adapter = \"openrouter\", base_url = \"http://" + addr + "/v1\", api_key = \"test\")\n" +
+		"models = {\"m\": model(router, \"test/model\", context = 100000)}\n" +
+		"default = \"m\"\n"
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.star"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	proj := filepath.Join(root, "proj")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	bin := filepath.Join(t.TempDir(), "strument")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	build.Dir = "."
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v: %s", err, out)
+	}
+
+	cmd := exec.Command(bin, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-m", "hello")
+	cmd.Dir = proj
+	cmd.Env = append(os.Environ(),
+		"XDG_CONFIG_HOME="+filepath.Join(root, "cfg"),
+		"XDG_DATA_HOME="+filepath.Join(root, "data"),
+		"XDG_STATE_HOME="+filepath.Join(root, "state"),
+		"XDG_CACHE_HOME="+filepath.Join(root, "cache"),
+	)
+	out, err := cmd.CombinedOutput()
+	combined := string(out)
+	// The run must fail — the endpoint is dead — and the failure must be a
+	// connection error, which proves a request was attempted. The regression
+	// produced exit 0 with empty output: success at doing nothing.
+	if err == nil {
+		t.Fatalf("--no-history run exited 0 with no send; output: %q", combined)
+	}
+	if !strings.Contains(strings.ToLower(combined), "connect") {
+		t.Errorf("expected a connection error proving the send happened, got: %s", combined)
+	}
+}
