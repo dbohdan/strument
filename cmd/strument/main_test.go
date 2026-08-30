@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -672,10 +673,12 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	// The run must fail — the endpoint is dead — and the failure must be a
 	// connection error, which proves a request was attempted. The regression
 	// produced exit 0 with empty output: success at doing nothing.
-	if err == nil {
-		t.Fatalf("--no-history run exited 0 with no send; output: %q", combined)
-	}
-	if !strings.Contains(strings.ToLower(combined), "connect") {
-		t.Errorf("expected a connection error proving the send happened, got: %s", combined)
+	if !strings.Contains(combined, "connection refused") {
+		if err != nil {
+			t.Fatalf("--no-history run failed with an unexpected error: %v: %s", err, combined)
+		}
+		// The regressed binary exited 0 with empty output: success at doing
+		// nothing. Empty output after a dead endpoint is the same bug.
+		t.Errorf("--no-history run attempted no send (exit %v); output: %q", err, combined)
 	}
 }

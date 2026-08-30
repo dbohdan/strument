@@ -374,44 +374,45 @@ func (c *chatCmd) Run() error {
 	defer stop()
 	sentBefore, recvBefore := cdr.SessionTokens()
 	costBefore, _ := cdr.SessionCost()
-	// OnCrash records the turn even when it dies with a panic: a half-finished
-	// long turn has usually edited files, and the transcript is the only record
-	// of that when the process is gone. The panic continues upward after the
-	// callback, so crash behaviour is unchanged.
-	if hist != nil {
-		appendTurn := func(crashed bool, assistant string) {
-			sentAfter, recvAfter := cdr.SessionTokens()
-			costAfter, known := cdr.SessionCost()
-			if err := hist.Append(history.Turn{
-				Model:          model.QualifiedSlug(),
-				TokensSent:     sentAfter - sentBefore,
-				TokensReceived: recvAfter - recvBefore,
-				Cost:           costAfter - costBefore,
-				CostKnown:      known,
-				User:           c.Message,
-				Assistant:      assistant,
-				Files:          cdr.TurnEditedFiles(),
-				Tools:          cdr.TurnToolLines(),
-				Crashed:        crashed,
-			}); err != nil {
-				fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
-			}
+
+	appendTurn := func(crashed bool, assistant string) {
+		sentAfter, recvAfter := cdr.SessionTokens()
+		costAfter, known := cdr.SessionCost()
+		if err := hist.Append(history.Turn{
+			Model:          model.QualifiedSlug(),
+			TokensSent:     sentAfter - sentBefore,
+			TokensReceived: recvAfter - recvBefore,
+			Cost:           costAfter - costBefore,
+			CostKnown:      known,
+			User:           c.Message,
+			Assistant:      assistant,
+			Files:          cdr.TurnEditedFiles(),
+			Tools:          cdr.TurnToolLines(),
+			Crashed:        crashed,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
 		}
-		// OnCrash records the turn even when it dies with a panic: a
-		// half-finished long turn has usually edited files, and the transcript
-		// is the only record of that once the process is gone. The panic
-		// continues upward after the callback, so crash behaviour is unchanged
-		// and the post-run append below never runs — which is what the flag
-		// guards against.
-		crashRecorded := false
-		cdr.OnCrash = func(partial string) {
-			crashRecorded = true
-			appendTurn(true, partial)
-		}
-		answer := cdr.Run(ctx, c.Message)
-		if !crashRecorded {
-			appendTurn(false, answer)
-		}
+	}
+	// OnCrash records the turn even when it dies with a panic: a
+	// half-finished long turn has usually edited files, and the transcript
+	// is the only record of that once the process is gone. The panic
+	// continues upward after the callback, so crash behaviour is unchanged
+	// and the post-run append below never runs — which is what the flag
+	// guards against.
+	crashRecorded := false
+	cdr.OnCrash = func(partial string) {
+		crashRecorded = true
+		appendTurn(true, partial)
+	}
+	// Run comes first, unconditionally: --no-history (hist == nil) must still
+	// send the message and print the answer. The crash-recording commit moved
+	// this call inside `if hist != nil`, which turned every scripted
+	// `--no-history` run — the trial runner's mode — into a silent no-op that
+	// exited 0: no request, no output, no error. Three trial binaries were
+	// built from that commit before the wire check caught it.
+	answer := cdr.Run(ctx, c.Message)
+	if hist != nil && !crashRecorded {
+		appendTurn(false, answer)
 	}
 	return nil
 }
