@@ -285,6 +285,11 @@ Ten tools, in three natures:
   `symbol(name, kind)` answers "where is this defined" from the tree-sitter
   tags rather than from text, and is offered only where grammars are. None of
   them ask the user anything, and none of them see a file the project ignores.
+  Paths are root-relative, and results are always reported that way; an
+  absolute path that resolves inside the root is accepted as a spelling of the
+  same file (small models habitually send one — see
+  [`doc/security.md`](security.md)) while `..`, out-of-root absolutes, and
+  symlink escapes are refused exactly as before.
 
   **A search says what it searched.** The outcome line and the result both name
   the scope and mode, not just the pattern, and an empty result distinguishes
@@ -397,7 +402,9 @@ Ten tools, in three natures:
   completely overwriting it, and the outcome line says which, so neither the
   user nor the model assumes the old contents survived. Both land the moment
   the call arrives. The safety net is the snapshot and the diff, not a
-  question.
+  question. Like the observation tools, they accept an absolute path that
+  resolves inside the root as a spelling of the relative one, and answer in
+  the relative form.
 - **Mutation through the shell is gated.** `bash(command, purpose)` runs only
   after the user confirms; its command is parsed and interpreted by the embedded
   pure-Go `mvdan.cc/sh/v3` shell rather than a host `/bin/sh`. Its output

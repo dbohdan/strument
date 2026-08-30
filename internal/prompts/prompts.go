@@ -134,7 +134,8 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
-	"not listed or searched.\n" +
+	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
+	"inside the project is also accepted.\n" +
 	"- edit and write change files directly: the change lands the moment you call them, with no " +
 	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
 	"make the change.\n" +
@@ -239,7 +240,8 @@ var Ask = Set{
 		"Work through the provided tools. read, grep, glob, and ls look at the project. " +
 		"They change nothing and need no permission, so use them freely rather than " +
 		"answering from memory or guessing at how the project works. Files the project " +
-		"ignores are not listed or searched.\n\n" +
+		"ignores are not listed or searched. Paths are relative to the project root; an " +
+		"absolute path that lies inside the project is also accepted.\n\n" +
 		"Every call's result comes back to you, so you can keep looking within the same " +
 		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
 		"answering the question, without calling a tool — that is what ends the turn and " +

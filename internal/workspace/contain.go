@@ -30,9 +30,9 @@ import (
 // contain resolves rel against the root and refuses anything that leaves it.
 //
 // Both halves matter and they catch different things. The lexical check stops
-// "../.." and absolute paths; the symlink check stops a directory inside the
-// project that points outside it, which no amount of string cleaning would
-// notice. It mirrors unsafePath (coder/apply.go), deliberately: two containment
+// "../.." and absolute paths that leave the root; the symlink check stops a
+// directory inside the project that points outside it, which no amount of
+// string cleaning would notice. It mirrors unsafePath (coder/apply.go), deliberately: two containment
 // rules that drift apart are worse than one that is stated twice.
 //
 // It takes the caller's path *before* normalization and normalizes it itself,
@@ -73,7 +73,32 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		if w.Pinned != nil && w.Pinned(full) {
 			return full, filepath.ToSlash(full), ""
 		}
-		return "", "", "absolute paths are not allowed; give a path relative to the project root"
+		// An absolute path that lands inside the root names the same file its
+		// relative form does, so it is answered the same. Small models
+		// (Maple-Preview by DeepGrove was the first observed) habitually send
+		// absolute paths, and a refusal here cost a round trip that taught
+		// nothing: the file was in scope either way. The checks that follow are
+		// the ones the relative path gets, applied to the file the kernel will
+		// actually see — resolve first, refuse second, never the other order.
+		rootAbs, err := filepath.Abs(w.Root)
+		if err != nil {
+			return "", "", "the project root cannot be resolved"
+		}
+		relBack, err := filepath.Rel(rootAbs, full)
+		if err != nil || EscapesRoot(relBack) {
+			return "", "", "that path is outside the project root"
+		}
+		// The resolved form is checked too, not only the caller's spelling:
+		// /proj/.gitlink/config resolving to /proj/.git/config must be refused
+		// for what it opens, and /etc/passwd was already refused above as
+		// out-of-root before this could be reached.
+		if UnderGitDir(relBack) {
+			return "", "", gitDirRefusal
+		}
+		if escapes(ResolveSymlinks(rootAbs), ResolveSymlinks(full)) {
+			return "", "", "that path resolves outside the project root through a symlink"
+		}
+		return full, filepath.ToSlash(relBack), ""
 	}
 	rel = path(raw)
 	if rel == "" {

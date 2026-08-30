@@ -133,6 +133,17 @@ APFS and NTFS. Pinning a file does not unlock it: the edit path appends to the
 pinned list as it goes, so a list the model can grow must not be able to open
 the door.
 
+Since the tools began accepting absolute paths that resolve inside the project
+(small models habitually send them — Maple-Preview by DeepGrove was the first
+observed), the rule is stated in the same order the checks run: **normalize
+first, refuse second.** An absolute path is resolved against the root, and the
+git-directory check runs on the resolved form as well as the caller's
+spelling — so `/proj/.git/config` is refused for the same reason `.git/config`
+is, and a refusal never depends on which accent the path arrived in. The
+boundary evaluates the file the kernel would open, not the string the model
+typed; that is the same principle Landlock enforces one layer down, where the
+path grant is checked at access time on the real path.
+
 This section used to say the hooks directory "adds a path, not a capability",
 on the grounds that a model can already hide an exploit in the code it writes.
 That was wrong in a way worth recording. Code the model writes into the project

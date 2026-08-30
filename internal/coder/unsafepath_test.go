@@ -181,6 +181,66 @@ func TestPinnedAbsolutePathWritesToTheRealFile(t *testing.T) {
 	}
 }
 
+// An absolute spelling the model sends is resolved and checked, not refused:
+// in-root absolute paths edit the file they name (the result names the
+// root-relative form, so the model reads the same namespace every other tool
+// result uses), out-of-root and .git ones are still refused. The write side is
+// where the old flat refusal's neighbors lived — fullPath once joined an
+// absolute path onto the root and wrote a shadow tree — so this goes through
+// applyToolEdits rather than stopping at unsafePath.
+func TestApplyEditsAcceptAbsolutePathInsideTheRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "window.go"), []byte("package w\n\nconst N = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, root)
+	abs := filepath.Join(root, "window.go")
+
+	if reason := c.unsafePath(abs); reason != "" {
+		t.Fatalf("in-root absolute path refused: %s", reason)
+	}
+	if c.unsafePath("/etc/passwd") == "" {
+		t.Error("absolute path outside the root should be refused")
+	}
+	if c.unsafePath(filepath.Join(root, ".git", "config")) == "" {
+		t.Error("absolute path into .git should be refused")
+	}
+
+	var matchFailure bool
+	edited := c.applyToolEdits([]plannedEdit{
+		{callID: "call_1", path: abs, search: "package w\n\nconst N = 1", replace: "package w\n\nconst N = 2"},
+	}, map[string]string{}, &matchFailure)
+	if matchFailure {
+		t.Error("unexpected match failure editing by absolute path")
+	}
+	if len(edited) != 1 || edited[0] != "window.go" {
+		t.Errorf("edited = %v, want [window.go] (the root-relative form)", edited)
+	}
+	got, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "package w\n\nconst N = 2\n" {
+		t.Errorf("the real file was not written: %q", got)
+	}
+	// And no shadow tree: the only .go file under the root is the one that was
+	// already there.
+	var found []string
+	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".go") {
+			rel, _ := filepath.Rel(root, p)
+			found = append(found, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(found, []string{"window.go"}) {
+		t.Errorf("files under the root = %v, want just [window.go]", found)
+	}
+}
+
 // The relative case must keep working exactly as it did.
 func TestRelativePathStillResolvesUnderTheRoot(t *testing.T) {
 	root := t.TempDir()

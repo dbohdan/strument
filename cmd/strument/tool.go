@@ -126,7 +126,7 @@ func isCharDevice(f *os.File) bool {
 }
 
 type toolReadCmd struct {
-	Path   string `arg:""                                                          help:"File to read, relative to the project root."`
+	Path   string `arg:""                                                          help:"File to read, relative to the project root (absolute inside the project also works)."`
 	Offset int    `help:"First line to return (1-based). 0 starts at the top."`
 	Limit  int    `help:"How many lines to return. 0 uses the tool's own default."`
 }

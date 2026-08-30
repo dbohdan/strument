@@ -67,9 +67,35 @@ func (c *Coder) unsafePath(rel string) string {
 	if c.isPinned(rel) {
 		return ""
 	}
+	// An absolute path the model sends is resolved to its root-relative form
+	// and the rest of the checks run on that, the same normalization contain()
+	// (workspace) does on the read side — the two are documented as mirrors and
+	// had drifted once already, on the order of the absolute-path test. Resolve
+	// first, refuse second: the refusal must see the file the kernel would
+	// open, not the string the caller spelled. Small models habitually send
+	// absolute paths (Maple-Preview by DeepGrove was the first observed), and
+	// refusing the spelling cost a round trip that taught nothing when the file
+	// was in scope either way.
 	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") {
-		return "absolute paths are not allowed"
+		rootAbs, err := filepath.Abs(c.Root)
+		if err != nil {
+			return "cannot resolve root"
+		}
+		resolved := workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(rel)))
+		relBack, err := filepath.Rel(rootAbs, resolved)
+		if err != nil || workspace.EscapesRoot(relBack) {
+			return "path escapes the project root"
+		}
+		// The resolved form is checked too, not only the caller's spelling: a
+		// path that resolves to .git/config through a link named anything else
+		// arrives here without a .git segment in the raw string.
+		if workspace.UnderGitDir(relBack) {
+			return "the repository's own .git directory is not project content"
+		}
+		rel = filepath.ToSlash(relBack)
 	}
+	// The remaining checks run on the root-relative form, whatever it arrived
+	// as. They are the ones that were always here, unchanged.
 	full := filepath.Clean(filepath.Join(c.Root, filepath.FromSlash(rel)))
 	rootAbs, err := filepath.Abs(c.Root)
 	if err != nil {
@@ -86,6 +112,33 @@ func (c *Coder) unsafePath(rel string) string {
 		return "path resolves outside the project root (symlink escape)"
 	}
 	return ""
+}
+
+// normalizeToolPath rewrites an absolute path that resolves inside the root to
+// its root-relative form, and leaves everything else alone.
+//
+// The edit pipeline keys its overlay, its rollback map, and its result lines on
+// the path as given, and its disk reader joins it to the root — all of which
+// are written for the relative form the tools' own listings use. Rather than
+// teach each of those about two spellings, the absolute one is folded away
+// here: the model gets its answer in the same namespace every other tool
+// result uses, and the write lands on the file it named. Out-of-root absolute
+// paths pass through unchanged — they name a pinned file (unsafePath's
+// carve-out, and fullPath already keeps those straight) or they will be
+// refused.
+func (c *Coder) normalizeToolPath(p string) string {
+	if !filepath.IsAbs(p) && !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "\\") {
+		return p
+	}
+	rootAbs, err := filepath.Abs(c.Root)
+	if err != nil {
+		return p
+	}
+	relBack, err := filepath.Rel(rootAbs, workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(p))))
+	if err != nil || workspace.EscapesRoot(relBack) {
+		return p
+	}
+	return filepath.ToSlash(relBack)
 }
 
 // allowedToEdit decides whether an edit may touch rel, and brings the file into

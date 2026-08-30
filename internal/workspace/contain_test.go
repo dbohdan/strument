@@ -35,7 +35,8 @@ func TestReadAndListAreContained(t *testing.T) {
 	for _, tc := range []struct{ name, path, wantErr string }{
 		{"parent traversal", "../outside.env", "outside the project root"},
 		{"deep traversal", "../../etc/passwd", "outside the project root"},
-		{"absolute path", "/etc/passwd", "absolute paths are not allowed"},
+		{"absolute outside", "/etc/passwd", "outside the project root"},
+		{"absolute into .git", filepath.Join(root, ".git", "config"), ".git directory"},
 		{"through a symlinked directory", "up-link/outside.env", "through a symlink"},
 		{"the repository's internals", ".git/config", ".git directory"},
 		{"nested .git", "sub/.git/config", ".git directory"},
@@ -75,6 +76,55 @@ func TestReadAndListAreContained(t *testing.T) {
 	}
 	if _, err := w.List("sub"); err != nil {
 		t.Errorf("List(\"sub\") = %v", err)
+	}
+}
+
+// An absolute path that lands inside the root names the file its relative form
+// does, and is answered the same: small models habitually send absolute paths
+// (Maple-Preview by DeepGrove was the first observed), and the old flat refusal
+// cost a round trip that taught nothing. Everything the relative form is
+// subject to — escapes, symlinks, .git — still applies to the resolved file.
+func TestAbsolutePathsInsideTheRootAreContained(t *testing.T) {
+	root := tree(t, map[string]string{
+		"normal.txt":     "inside\n",
+		"sub/nested.txt": "also inside\n",
+	})
+	outside := filepath.Join(filepath.Dir(root), "outside.env")
+	if err := os.WriteFile(outside, []byte("SECRET=outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "up-link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	w := New(root)
+
+	got, err := w.Read(filepath.Join(root, "normal.txt"), 0, 0)
+	if err != nil {
+		t.Fatalf("Read(absolute in-root) = %v", err)
+	}
+	if want := "normal.txt"; got.Path != want {
+		t.Errorf("Path = %q, want the root-relative form %q", got.Path, want)
+	}
+	// ls answers the same file ls(relative) does.
+	entries, err := w.List(filepath.Join(root, "sub"))
+	if err != nil {
+		t.Fatalf("List(absolute in-root) = %v", err)
+	}
+	if len(entries) != 1 || entries[0].Path != "sub/nested.txt" {
+		t.Errorf("entries = %+v, want [sub/nested.txt]", entries)
+	}
+
+	for _, tc := range []struct{ name, path, wantErr string }{
+		{"outside the root", outside, "outside the project root"},
+		{"into .git", filepath.Join(root, ".git", "config"), ".git directory"},
+		{"resolving outside through a link", filepath.Join(root, "up-link"), "through a symlink"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := w.Read(tc.path, 0, 0); err == nil ||
+				!strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("Read(%q) err = %v, want one mentioning %q", tc.path, err, tc.wantErr)
+			}
+		})
 	}
 }
 

@@ -118,7 +118,7 @@ func readOnlyTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path":   strProp("The file's path, relative to the project root."),
+					"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
 					"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
 					"limit":  intProp("How many lines to return. Omit for a default window."),
 				},
@@ -136,7 +136,8 @@ func readOnlyTools() []llm.ToolDef {
 					"glob": strProp("Optional. Only search paths matching this glob. It is matched " +
 						"against the whole path, so use \"**/*.go\" for every directory; \"*.go\" " +
 						"matches only the project root and a bare directory name matches nothing."),
-					"path": strProp("Optional. Only search under this directory. This, not glob, " +
+					"path": strProp("Optional. Only search under this directory, relative to the project root " +
+						"(an absolute path inside the project also works). This, not glob, " +
 						"is how to restrict a search to a subtree."),
 					"mode": map[string]any{
 						"type": "string",
@@ -174,7 +175,7 @@ func readOnlyTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The directory, relative to the project root. Omit for the root itself."),
+					"path": strProp("The directory, relative to the project root. Omit for the root itself. An absolute path that lies inside the project also works; relative is preferred."),
 				},
 			},
 		},
@@ -193,7 +194,7 @@ func editTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The file's path, relative to the project root."),
+					"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
 					"old_string": strProp("The exact existing text to replace, character for character, " +
 						"including all whitespace, comments, and docstrings. It must match exactly once: " +
 						"include enough surrounding lines to pick out the one place you mean, and make " +
@@ -211,7 +212,7 @@ func editTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path":    strProp("The file's path, including any directories."),
+					"path":    strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
 					"content": strProp("The complete contents of the file."),
 				},
 				"required": []any{"path", "content"},
@@ -800,6 +801,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 	}
 
 	for _, e := range edits {
+		// Fold an absolute spelling away before anything keys on it. unsafePath
+		// below has already accepted exactly these, so this is a rename of the
+		// bookkeeping, not a second gate.
+		e.path = c.normalizeToolPath(e.path)
 		if reason := c.unsafePath(e.path); reason != "" {
 			c.Out.Errorf("Skipping edit to %s: %s", quoteToolArg(e.path), reason)
 			results[e.callID] = fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), reason)
