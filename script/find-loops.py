@@ -22,7 +22,7 @@ Formats, detected per file rather than declared:
 Three detectors, because they fail differently:
 
   chunk     Gemini CLI's shape: a fixed-width window that recurs many times at
-            short average spacing. Catches loops whose period is not a whole
+            bounded, regular spacing. Catches loops whose period is not a whole
             number of sentences.
   period    The tail of the output is exactly some string repeated N times,
             found with the KMP failure function (minimal period = n - border).
@@ -155,7 +155,7 @@ def is_data_field(t: str) -> bool:
     i = t.find(":")
     if i <= 0 or i == len(t) - 1:
         return False
-    key, value = t[:i], t[i + 1:].strip()
+    key, value = t[:i], t[i + 1 :].strip()
     if not any(c.isalpha() for c in key):
         return False
     if not all(c.isalnum() or c in "_-." for c in key):
@@ -205,7 +205,9 @@ def read_aider(path: str) -> list[Block]:
             body = "\n".join(current)
             lead = len(body) - len(body.lstrip("\n"))
             if body.strip():
-                blocks.append(Block(path, session, len(blocks), kind, body.strip(), start + lead))
+                blocks.append(
+                    Block(path, session, len(blocks), kind, body.strip(), start + lead)
+                )
             current.clear()
         kind = "answer"
 
@@ -251,7 +253,11 @@ def read_strument_md(path: str) -> list[Block]:
             body = "\n".join(current)
             lead = len(body) - len(body.lstrip("\n"))
             if body.strip():
-                blocks.append(Block(path, session, len(blocks), "answer", body.strip(), start + lead))
+                blocks.append(
+                    Block(
+                        path, session, len(blocks), "answer", body.strip(), start + lead
+                    )
+                )
             current.clear()
         in_response = False
 
@@ -320,7 +326,12 @@ def looks_like_session_log(path: str, probe_lines: int = 20) -> bool:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     return False
-                if isinstance(rec, dict) and rec.get("type") in {"session", "message", "reasoning", "turn"}:
+                if isinstance(rec, dict) and rec.get("type") in {
+                    "session",
+                    "message",
+                    "reasoning",
+                    "turn",
+                }:
                     return True
     except OSError:
         return False
@@ -434,7 +445,9 @@ class Finding:
     offset: int = 0  # character offset into the stripped block, for the line
 
 
-def detect_period(units: list[str], min_repeats: int, max_tail: int, min_unit: int) -> Finding | None:
+def detect_period(
+    units: list[str], min_repeats: int, max_tail: int, min_unit: int
+) -> Finding | None:
     """The longest suffix that is one unit sequence repeated min_repeats+ times.
 
     Suffixes, not the whole block, because the failure mode is a response that
@@ -497,7 +510,13 @@ def detect_run(units: list[str], min_run: int, min_unit: int) -> Finding | None:
             best_len, best_unit, best_off = run_len, u, start
     if best_len < min_run:
         return None
-    return Finding("run", best_len, f"one sentence repeated {best_len}x in a row", best_unit[:300], best_off)
+    return Finding(
+        "run",
+        best_len,
+        f"one sentence repeated {best_len}x in a row",
+        best_unit[:300],
+        best_off,
+    )
 
 
 def detect_word_run(text: str, min_run: int) -> Finding | None:
@@ -524,18 +543,26 @@ def detect_word_run(text: str, min_run: int) -> Finding | None:
             best_len, best_word, best_off = run_len, w, start
     if best_len < min_run:
         return None
-    return Finding("word", best_len, f'the word "{best_word}" repeats {best_len}x in a row', best_word, best_off)
+    return Finding(
+        "word",
+        best_len,
+        f'the word "{best_word}" repeats {best_len}x in a row',
+        best_word,
+        best_off,
+    )
 
 
-def detect_chunk(text: str, size: int, min_count: int, max_avg_gap: float) -> Finding | None:
-    """Gemini CLI's shape: a window that recurs often at short average spacing.
+def detect_chunk(
+    text: str, size: int, min_count: int, max_gap: int, gap_jitter: int
+) -> Finding | None:
+    """A window that recurs often enough at close, regular spacing.
 
     Positions are bucketed by hash rather than by the substring itself, so the
     memory is O(n) integers rather than O(n * size) characters; the winner is
     re-sliced and compared before it is reported, so a hash collision cannot
     produce a finding.
     """
-    if len(text) < size * 2:
+    if min_count <= 0 or len(text) < size * min_count:
         return None
     buckets: dict[int, list[int]] = defaultdict(list)
     for i in range(len(text) - size + 1):
@@ -559,18 +586,19 @@ def detect_chunk(text: str, size: int, min_count: int, max_avg_gap: float) -> Fi
         positions = [i for i in positions if text[i : i + size] == first]
         if len(positions) < min_count:
             continue
-        gaps = [b - a for a, b in zip(positions, positions[1:])]
-        avg = sum(gaps) / len(gaps)
-        if avg > max_avg_gap:
-            continue
-        if best is None or len(positions) > best.severity:
-            best = Finding(
-                "chunk",
-                len(positions),
-                f"a {size}-char window recurs {len(positions)}x, {avg:.0f} chars apart on average",
-                first,
-                positions[0],
+        for start in range(len(positions) - min_count + 1):
+            group = positions[start : start + min_count]
+            gaps = [b - a for a, b in zip(group, group[1:])]
+            smallest, largest = min(gaps), max(gaps)
+            if largest > max_gap or largest > gap_jitter * smallest:
+                continue
+            detail = (
+                f"a {size}-char window recurs {min_count}x, "
+                f"{smallest}-{largest} chars apart"
             )
+            finding = Finding("chunk", min_count, detail, first, group[0])
+            if best is None or finding.severity > best.severity:
+                best = finding
     return best
 
 
@@ -613,7 +641,9 @@ def analyze(block: Block, args) -> list[Finding]:
         word,
         detect_run(units, args.min_run, args.min_unit_chars),
         detect_period(units, args.min_repeats, args.max_tail, args.min_unit_chars),
-        detect_chunk(text, args.chunk_size, args.min_chunk_count, args.max_avg_gap),
+        detect_chunk(
+            text, args.chunk_size, args.min_chunk_count, args.max_gap, args.gap_jitter
+        ),
     ):
         if f:
             out.append(f)
@@ -621,21 +651,62 @@ def analyze(block: Block, args) -> list[Finding]:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("paths", nargs="*", help="files or directories to scan")
     ap.add_argument("--json", action="store_true", help="emit findings as JSON")
     ap.add_argument("--show", action="store_true", help="print the repeating text")
-    ap.add_argument("--self-test", action="store_true", help="check the detectors discriminate, then exit")
-    ap.add_argument("--keep-code", action="store_true", help="do not strip fenced code and tables")
-    ap.add_argument("--min-chars", type=int, default=200, help="skip blocks shorter than this")
-    ap.add_argument("--min-run", type=int, default=3, help="run: identical sentences in a row")
-    ap.add_argument("--min-word-run", type=int, default=6, help="word: identical words in a row")
-    ap.add_argument("--min-repeats", type=int, default=3, help="period: repetitions of the tail unit")
-    ap.add_argument("--max-tail", type=int, default=200, help="period: longest suffix considered")
-    ap.add_argument("--min-unit-chars", type=int, default=24, help="run/period: shortest repeating unit worth reporting")
-    ap.add_argument("--chunk-size", type=int, default=50, help="chunk: window width in characters")
-    ap.add_argument("--min-chunk-count", type=int, default=10, help="chunk: occurrences to report")
-    ap.add_argument("--max-avg-gap", type=float, default=250, help="chunk: mean spacing allowed")
+    ap.add_argument(
+        "--self-test",
+        action="store_true",
+        help="check the detectors discriminate, then exit",
+    )
+    ap.add_argument(
+        "--keep-code", action="store_true", help="do not strip fenced code and tables"
+    )
+    ap.add_argument(
+        "--min-chars", type=int, default=200, help="skip blocks shorter than this"
+    )
+    ap.add_argument(
+        "--min-run", type=int, default=3, help="run: identical sentences in a row"
+    )
+    ap.add_argument(
+        "--min-word-run", type=int, default=6, help="word: identical words in a row"
+    )
+    ap.add_argument(
+        "--min-repeats",
+        type=int,
+        default=3,
+        help="period: repetitions of the tail unit",
+    )
+    ap.add_argument(
+        "--max-tail", type=int, default=200, help="period: longest suffix considered"
+    )
+    ap.add_argument(
+        "--min-unit-chars",
+        type=int,
+        default=24,
+        help="run/period: shortest repeating unit worth reporting",
+    )
+    ap.add_argument(
+        "--chunk-size", type=int, default=50, help="chunk: window width in characters"
+    )
+    ap.add_argument(
+        "--min-chunk-count", type=int, default=10, help="chunk: occurrences to report"
+    )
+    ap.add_argument(
+        "--max-gap",
+        type=int,
+        default=1000,
+        help="chunk: maximum spacing between occurrences",
+    )
+    ap.add_argument(
+        "--gap-jitter",
+        type=int,
+        default=2,
+        help="chunk: largest/smallest spacing ratio allowed",
+    )
     args = ap.parse_args(argv)
 
     if args.self_test:
@@ -668,7 +739,12 @@ def main(argv: list[str]) -> int:
 
     if args.json:
         json.dump(
-            {"files": scan.files, "blocks": scan.blocks, "chars": scan.chars, "findings": scan.findings},
+            {
+                "files": scan.files,
+                "blocks": scan.blocks,
+                "chars": scan.chars,
+                "findings": scan.findings,
+            },
             sys.stdout,
             indent=2,
         )
@@ -680,7 +756,9 @@ def main(argv: list[str]) -> int:
     by_block: dict[tuple, list[dict]] = defaultdict(list)
     for r in scan.findings:
         by_block[(r["file"], r["block"], r["kind"], r["session"])].append(r)
-    ordered = sorted(by_block.items(), key=lambda kv: -max(x["severity"] for x in kv[1]))
+    ordered = sorted(
+        by_block.items(), key=lambda kv: -max(x["severity"] for x in kv[1])
+    )
     for (path, index, kind, session), rows in ordered:
         # path:line first, so the line is clickable and greppable.
         print(f"{path}:{min(r['line'] for r in rows)}  ({kind})  [{session}]")
@@ -697,7 +775,10 @@ def main(argv: list[str]) -> int:
         f"out of {scan.blocks} block(s) ({scan.chars:,} chars) across {scan.files} file(s)."
     )
     if scan.files and not scan.blocks:
-        print("No blocks were extracted. The format sniffer or a reader is wrong.", file=sys.stderr)
+        print(
+            "No blocks were extracted. The format sniffer or a reader is wrong.",
+            file=sys.stderr,
+        )
         return 2
     return 1 if scan.findings else 0
 
@@ -714,7 +795,9 @@ def self_test(args) -> int:
     numbered list and a diff repeat by nature.
     """
     loop = "I'll check the file. " * 30
-    stutter = "The file contains the the the the the the the the the the the the the the the"
+    stutter = (
+        "The file contains the the the the the the the the the the the the the the the"
+    )
     tail_loop = (
         "Let me look at the configuration to understand the failure mode here. "
         + "Actually, let me reconsider. Let me try again. " * 12
@@ -726,7 +809,9 @@ def self_test(args) -> int:
         "of running under it is close to nothing for an ordinary session. "
         "Removing a path from the writable set is a one-line change in the config."
     )
-    listy = "\n".join(f"{i}. Renamed verify to check in module {i}." for i in range(1, 15))
+    listy = "\n".join(
+        f"{i}. Renamed verify to check in module {i}." for i in range(1, 15)
+    )
     # A real diff alternates - and + but the content differs every time, which is
     # the whole difference between a diff and a loop. The first version of this
     # fixture repeated two identical lines twelve times and was correctly
@@ -734,15 +819,30 @@ def self_test(args) -> int:
     diffish = "\n".join(
         f"- {name} = {i}\n+ {name} = {i + 1}"
         for i, name in enumerate(
-            ["timeout", "retries", "budget", "window", "depth", "width", "limit", "stride"], start=1
+            [
+                "timeout",
+                "retries",
+                "budget",
+                "window",
+                "depth",
+                "width",
+                "limit",
+                "stride",
+            ],
+            start=1,
         )
     )
 
     # Every loop in the real corpus ended in a fragment, and none of the
     # fixtures did — so the period detector passed this self-test and found
     # nothing at all in the wild. Two of these now stop mid-unit on purpose.
-    truncated = "Actually, the age package uses Recipient. " * 14 + "Actually, the age package uses"
-    cycle = ("We protect the rows. We protect the flags. We protect the query. " * 9) + "We protect the"
+    truncated = (
+        "Actually, the age package uses Recipient. " * 14
+        + "Actually, the age package uses"
+    )
+    cycle = (
+        "We protect the rows. We protect the flags. We protect the query. " * 9
+    ) + "We protect the"
 
     # A real answer made of aider SEARCH/REPLACE blocks: the filename heads every
     # one of them. This was the tool's only false positive on a real corpus.
@@ -753,16 +853,38 @@ def self_test(args) -> int:
 
     # A model reading a chart back to itself, with no fence around it. This is
     # the shape that stopped two runs of the skills trial mid-turn.
-    svgish = "Current contents:\n\n" + "".join(
-        f'  <line class="grid" x1="60" y1="{y}" x2="690" y2="{y}" '
-        f'stroke="#999999" stroke-width="1"/>\n'
-        for y in (40, 100, 160, 220, 280, 340)
-    ) + "".join(
-        f'  <line class="grid" x1="{x}" y1="40" x2="{x}" y2="340" '
-        f'stroke="#999999" stroke-width="1"/>\n'
-        for x in (60, 165, 270, 375, 480, 585, 690)
-    ) + "\nI will remove the vertical ones.\n"
+    svgish = (
+        "Current contents:\n\n"
+        + "".join(
+            f'  <line class="grid" x1="60" y1="{y}" x2="690" y2="{y}" '
+            f'stroke="#999999" stroke-width="1"/>\n'
+            for y in (40, 100, 160, 220, 280, 340)
+        )
+        + "".join(
+            f'  <line class="grid" x1="{x}" y1="40" x2="{x}" y2="340" '
+            f'stroke="#999999" stroke-width="1"/>\n'
+            for x in (60, 165, 270, 375, 480, 585, 690)
+        )
+        + "\nI will remove the vertical ones.\n"
+    )
 
+    # A repeated user-facing message quoted between irregular rounds of
+    # deliberation. The average spacing is acceptable, but the gap jitter is
+    # not; this is the false positive the runtime detector must reject.
+    quoted_message = (
+        "The file gitcmds.go has uncommitted changes. Please stash them before undoing."
+    )
+    deliberation = [
+        "Hmm, which is the long one here? Let me reconsider round {i}.",
+        "Wait, this is pass {i}.",
+        "Right. That one has a Please that can go, and the test pins only the prefix. "
+        "The uncommitted-changes message has the same shape. Let me check pass {i}.",
+    ]
+    quoted = "\n".join(
+        f"{deliberation[i % len(deliberation)].format(i=i)}\n{quoted_message}"
+        for i in range(13)
+    )
+    metronomic = "\n".join(quoted_message for _ in range(13))
     cases = [
         ("aider edit blocks in an answer", editblocks, False),
         ("sentence loop", loop, True),
@@ -774,6 +896,8 @@ def self_test(args) -> int:
         ("numbered list of similar items", listy, False),
         ("diff-like alternation", diffish, False),
         ("unfenced svg quoted back", svgish, False),
+        ("irregular quoted message", quoted, False),
+        ("regular quoted message", metronomic, True),
     ]
 
     failures = 0
@@ -789,9 +913,13 @@ def self_test(args) -> int:
 
     print()
     if failures:
-        print(f"{failures} self-test case(s) failed. Do not trust a scan until these pass.")
+        print(
+            f"{failures} self-test case(s) failed. Do not trust a scan until these pass."
+        )
         return 2
-    print("Detectors discriminate on all cases. A zero from a scan is now worth something.")
+    print(
+        "Detectors discriminate on all cases. A zero from a scan is now worth something."
+    )
     return 0
 
 
