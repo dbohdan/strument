@@ -150,6 +150,10 @@ paths = [
     # key-handling changes. It is not held to Strument's lint ruleset; go vet
     # and go test still cover it.
     "internal/readline",
+    # Vendored wrapper for the Pydantic Monty Python interpreter (MIT); see the
+    # adjacent NOTICE. Kept in upstream style, like internal/readline; go vet
+    # and go test still cover it.
+    "internal/monty",
     # Verbatim copies of go-git's gitignore matcher (Apache 2.0); see the
     # adjacent NOTICE. Only these three files are vendored — read.go and its
     # test are Strument's own and stay linted.
@@ -174,6 +178,7 @@ enable = [
 generated = "lax"
 paths = [
     "internal/readline",
+    "internal/monty",
     "internal/gitignore/doc\\.go",
     "internal/gitignore/pattern\\.go",
     "internal/gitignore/matcher\\.go",

@@ -1,0 +1,36 @@
+internal/monty vendors the Go wrapper for the Pydantic Monty Python
+interpreter (https://github.com/fugue-labs/monty-go), taken at release
+v0.2.0 (commit c5fede1ca39482ff3da7dc04c5fd569b8bc313b8, tag v0.2.0; the
+vendored tree was checked out from the tag itself). Monty is distributed
+under the MIT License; the LICENSE
+file taken alongside the code is the upstream one and applies to this
+directory rather than the repository-root licence.
+
+The package code was copied and only mechanically changed: the package name
+was rewritten from `montygo` to `monty` and error strings from
+`montygo: …` to `monty: …`. Otherwise the files are upstream verbatim:
+
+  * monty.go   — Runner, Limits, FunctionCall/FuncDef, Execute options
+  * wasm.go    — the wazero instance plumbing and the pause/resume for
+                 external function calls
+  * errors.go  — MontyError
+
+The upstream tests (monty_test.go) are not vendored; they use only the
+standard library, but codetool_test.go in internal/coder covers the
+behavior Strument depends on.
+
+**The monty.wasm blob is NOT built from source here.** Rebuilding it needs
+a Rust toolchain with the `wasm32-wasip1` target, and Strument deliberately
+requires none (no cgo, no C toolchain — see CLAUDE.md). The pre-built blob
+from the v0.2.0 release is vendored as-is:
+
+  * monty.wasm — SHA-256
+    d106ecf55330a09f5d54ea1dc159f8b6452db126a0bb161cd48d1585618a6ca8
+
+Upgrading Monty — new wrapper code or a new blob — is a separate decision
+with its own cost, and a reviewer should not have to guess that. The
+wrapper is ~3 files by a single upstream author, which is why it is
+vendored rather than taken as a module dependency.
+
+The only dependencies are github.com/tetratelabs/wazero (pure Go) and
+golang.org/x/sys.
