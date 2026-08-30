@@ -1,7 +1,11 @@
 # Plan: a `code` tool — sandboxed Python, then a read-only tool bridge
 
-**Status:** not started. Tick the boxes as you go; this file is the progress
-record. Delete it when the work lands.
+**Status: complete.** Parts 1–3 shipped (`fdadd01`, `328f01d`, `e958f85`); the
+Part 4 trial ran 36 runs and found **0/36 `code` uptake** — see
+[`doc/experiments/2026-08-code-mode.md`](../experiments/2026-08-code-mode.md),
+which recommends against shipping it as a default tool. The tool stays in the
+tree with docs; the open question is an arithmetic-shaped fixture, which the
+trial did not measure. This file can be deleted once that is settled.
 
 **You are implementing this in a fresh session.** Everything you need is below
 or named by path. Read Part 0 before writing any code.
@@ -294,17 +298,19 @@ a good model for the task shape.
 
 ## Part 5 — docs and final verification
 
-- [ ] `doc/config.md`: a `code` section — what the tool is, the Python subset,
+- [x] `doc/config.md`: a `code` section — what the tool is, the Python subset,
       the bridge, and that mutating tools are deliberately unreachable.
-- [ ] `README.md`: one bullet in Features; one row in the tool table if there is
+- [x] `README.md`: one bullet in Features; one row in the tool table if there is
       one.
-- [ ] `doc/README.md`: add `internal/monty/` to the codebase map.
-- [ ] `gofmt -l cmd internal` is empty.
-- [ ] `go test ./...` passes.
-- [ ] `go vet ./...` on `GOOS=linux`, `windows`, `darwin`.
-- [ ] `task lint` reports **0 issues**. Run it unpiped — `| tail` has hidden a
+      *(A feature bullet, plus a pointer after the slash-command table — `code`
+      is a model tool, not a command, so it does not belong in that table.)*
+- [x] `doc/README.md`: add `internal/monty/` to the codebase map.
+- [x] `gofmt -l cmd internal` is empty.
+- [x] `go test ./...` passes.
+- [x] `go vet ./...` on `GOOS=linux`, `windows`, `darwin`.
+- [x] `task lint` reports **0 issues**. Run it unpiped — `| tail` has hidden a
       failure here before.
-- [ ] Commits are conventional-commit style, one logical change each, and
+- [x] Commits are conventional-commit style, one logical change each, and
       explain *why*.
 
 ---
