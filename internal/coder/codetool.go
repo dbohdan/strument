@@ -46,32 +46,46 @@ const maxBridgedCalls = 50
 // in the system prompt, for the same reason the skill catalog does: prose must
 // not promise a tool that is only sometimes offered, and the schema is sent
 // with the tool regardless of mode.
+//
+// The order is the finding, not a style: the first version led with mechanism
+// ("Run a short Python program…") and prohibitions, and the bridge — the thing
+// that answers the measured 4-removable-round-trips problem — came last. The
+// symbol fix (doc/experiments/2026-08-symbol-uptake.md) established that the
+// description that moves uptake is the one that opens by mapping the felt need
+// ("I have several lookups to combine") to the tool; a spec sheet selects for
+// nobody. The negations are compressed to one sentence and paired with the
+// recovery path, because "grep always works; this opens with a failure
+// surface" was the risk asymmetry the first version created.
 func codeTool() llm.ToolDef {
 	var b strings.Builder
-	b.WriteString("Run a short Python program and return its value: a calculator, " +
-		"a formatter, or one program that computes over several pieces of data at once. " +
-		"The interpreter is Monty, a restricted Python subset — not full Python.\n\n" +
-		"NOT available: class definitions, `with`, `match`, `eval`/`exec`, `open`, " +
-		"os/pathlib filesystem access, network access, imports beyond " +
-		"math/re/datetime/json, and third-party libraries.\n\n" +
-		"Available: f-strings, while, try/except, comprehensions, generators, " +
-		"lambda, round(), sum/min/max/sorted/enumerate/zip/abs, and all of math. " +
-		"Write the expression or statements whose last value is the answer; " +
-		"`round(x, 2)` rounds to 2 decimal places. Format specs work in " +
-		"f-strings (`f'{x:.2f}'`, `f'{n:5d}'`) but zero-padding applies to " +
-		"decimal only — use `s.zfill(n)` for other bases; there is no " +
-		"%-formatting and no .format().")
+	b.WriteString("Do several lookups, or a computation, in one call instead of " +
+		"several. Use this when one answer needs multiple read/grep/glob/ls " +
+		"results combined, or needs arithmetic, counting, sorting, or date " +
+		"math.\n\n" +
+		"The program can call the read-only tools directly — " +
+		"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)" +
+		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. Example:\n\n", maxBridgedCalls) +
+		"```python\n" +
+		"caps = {}\n" +
+		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
+		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
+		"caps\n" +
+		"```\n\n" +
+		"The interpreter is Monty, a restricted Python subset. Expressions, " +
+		"statements, loops, f-strings, comprehensions, try/except, and " +
+		"math/re/datetime/json all work; the last value evaluated is returned, " +
+		"and print() shows intermediate values. Not available: classes, with, " +
+		"match, eval/exec, open, filesystem or network access, other imports. " +
+		"A missing construct raises an error naming it — simplify and rerun; a " +
+		"failed program costs one cheap retry.")
 
-	// The bridge, named in the schema rather than the prompt: the same rule
-	// that keeps the skill catalog out of the prose. The names come from
-	// InspectorTools() itself, so the description and the dispatch cannot
-	// drift — the exact drift this repository has had three times elsewhere.
+	// The bridged names are enumerated from InspectorTools() itself, so the
+	// description and the dispatch cannot drift — the exact drift this
+	// repository has had three times elsewhere. The example above names two;
+	// the authoritative list rides behind it.
 	if names := InspectorTools(); len(names) > 0 {
-		fmt.Fprintf(&b, "\n\nYou may also call these read-only tools as functions "+
-			"(at most %d calls per program): %s. Each returns the same text the "+
-			"tool would return, and each call is shown to the user. Pass arguments "+
-			"by name, e.g. read(path=\"a.go\", limit=20).",
-			maxBridgedCalls, strings.Join(names, ", "))
+		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
+			strings.Join(names, ", "))
 	}
 
 	return llm.ToolDef{

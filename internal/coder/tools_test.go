@@ -107,7 +107,7 @@ func TestToolSetGating(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &Coder{}
+			c := &Coder{OfferCode: true}
 			tc.mutate(c)
 			var names []string
 			for _, td := range c.toolDefs() {

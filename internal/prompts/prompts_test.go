@@ -6,16 +6,16 @@ import (
 )
 
 func TestToolPromptShape(t *testing.T) {
-	// The tool format's system prompt uses only the {final_reminders} and
-	// {platform} slots (the schema does the rest); no other braces may linger
-	// to survive substitution as a literal.
-	for _, slot := range []string{"{final_reminders}", "{platform}"} {
+	// The tool format's system prompt uses only the {final_reminders},
+	// {platform}, and {code_tools} slots (the schema does the rest); no other
+	// braces may linger to survive substitution as a literal.
+	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}"} {
 		if !strings.Contains(Tool.MainSystem, slot) {
 			t.Errorf("tool main_system missing slot %s", slot)
 		}
 	}
 	stripped := Tool.MainSystem
-	for _, slot := range []string{"{final_reminders}", "{platform}"} {
+	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}"} {
 		stripped = strings.ReplaceAll(stripped, slot, "")
 	}
 	if strings.ContainsAny(stripped, "{}") {

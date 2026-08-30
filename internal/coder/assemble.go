@@ -200,12 +200,29 @@ func (c *Coder) platformText() string {
 	return b.String()
 }
 
+// codeToolsText renders the {code_tools} slot: the code bullet when the code
+// tool is in this session's tool set, "" when it is not. The condition is the
+// same one toolDefs uses, so the prose tracks the schema by construction
+// rather than by a second copy of the condition drifting away from it.
+func (c *Coder) codeToolsText() string {
+	if !c.OfferCode {
+		return ""
+	}
+	return prompts.CodeToolsBullet
+}
+
 // fmtSystemPrompt substitutes the template slots.
 //
-// Three slots remain. The fence and shell-command slots went with the text edit
+// Four slots remain. The fence and shell-command slots went with the text edit
 // formats: fences framed SEARCH/REPLACE blocks, and the shell-command guidance
 // described a format where commands were prose the harness parsed back out.
 // Both are the schema's job now.
+//
+// {code_tools} is filled from the same condition that offers the code tool in
+// the schema, so the prose and the schema cannot drift apart in either
+// direction: a prompt naming a tool the model does not have, or a schema tool
+// the prompt's cost list omits — the closed-world reading that produced the
+// 0/36 uptake in doc/experiments/2026-08-code-mode.md.
 func (c *Coder) fmtSystemPrompt(prompt string) string {
 	var finalReminders []string
 	if c.Platform.Language != "" {
@@ -221,6 +238,7 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 		"final_reminders": strings.Join(finalReminders, "\n\n"),
 		"platform":        c.platformText(),
 		"language":        language,
+		"code_tools":      c.codeToolsText(),
 	})
 }
 

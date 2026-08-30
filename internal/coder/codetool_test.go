@@ -91,6 +91,7 @@ func TestCodeUnsupportedSyntaxIsUsefulError(t *testing.T) {
 // turn gets the calculator too.
 func TestCodeToolOfferedInAskMode(t *testing.T) {
 	c, _ := observeEnv(t, nil)
+	c.OfferCode = true
 	c.editFormat = "ask"
 
 	found := false

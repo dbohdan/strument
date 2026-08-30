@@ -93,8 +93,11 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		defs = append(defs, skillTool(c.Skills))
 	}
 	// Also before the ask-mode return: computing mutates nothing, and a
-	// discussion turn is exactly where a calculator belongs.
-	defs = append(defs, codeTool())
+	// discussion turn is exactly where a calculator belongs. Offered unless
+	// withheld — OfferCode, and the {code_tools} slot follows the same flag.
+	if c.OfferCode {
+		defs = append(defs, codeTool())
+	}
 	if c.editFormat == "ask" {
 		return defs
 	}

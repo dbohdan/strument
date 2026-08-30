@@ -122,6 +122,39 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // in an answer. A reviewer predicted the shape it produces — "I ran grep and
 // read main.go; startup is slow because …", the narration ahead of the answer.
 // "or what you found" is four words against that.
+
+// CodeToolsBullet is the {code_tools} slot's text, exported for the coder's
+// assembler, which fills the slot when (and only when) the code tool is
+// offered. It lives beside the prompt it extends because it is prompt prose;
+// the *condition* lives in the coder, derived from the tool set itself.
+//
+// The tool list is the closed-world hazard the code-mode trial measured: the
+// sentence "these are the ones you will reach for most" reads as policy, and a
+// flash-class model treats the enumeration as exhaustive —
+// doc/experiments/2026-08-code-mode.md found 0/36 `code` calls with the tool
+// offered in the schema but absent from this list. So `code` gets a bullet
+// through the {code_tools} slot, filled at assembly time only when the tool is
+// actually offered (the same mechanism {platform} uses), so the prose can
+// never promise a tool the schema withholds — the rule that kept `code` out
+// of the prompt when it was first added. The bullet is a conditional rule
+// ("when one answer needs several lookups combined"), not an announcement:
+// per the symbol fix, the description that moves uptake is the one that maps
+// a felt need to a tool, and the arithmetic clause is explicit because models
+// do not recognize their own mental arithmetic as costly.
+const CodeToolsBullet = "- code runs a short Python program, which can itself call read, grep, glob, " +
+	"and ls — the results come back to the program, not to you, until it returns. " +
+	"It changes nothing and needs no permission. Reach for it when one answer " +
+	"needs several lookups combined — three greps you already know you need are " +
+	"one program, and each tool call you make separately costs the user a full " +
+	"round trip — and for any arithmetic or counting beyond a single step, " +
+	"rather than working figures out in your head. A single lookup, or " +
+	"exploration where each search depends on the last result, is a direct call " +
+	"to the tool itself.\n"
+
+// toolMainSystem is the tool format's system prompt. {code_tools} renders as
+// the code bullet above when the code tool is offered, and as "" when it is
+// not — the empty case is the feature-reverted baseline, where prose naming
+// `code` would promise a tool the schema does not carry.
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
@@ -131,6 +164,7 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"If a request is ambiguous, ask clarifying questions before making changes.\n\n" +
 	"Work through the provided tools. These are the ones you will reach for most, and they differ " +
 	"in what they cost the user:\n\n" +
+	"{code_tools}" +
 	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
@@ -197,9 +231,11 @@ var Tool = Set{
 	// reference block was not to be trusted. One session spent twelve steps
 	// hunting the project for the "real" file it thought the denial implied.
 	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
-		"what you need — you can edit any file in the project. If the user asks how something " +
-		"here works, read the code that implements it: what you remember about a project is not " +
-		"evidence about this one.",
+		"what you need — or one code program that calls them, when you already " +
+		"know the several things you are looking for. You can edit any file in " +
+		"the project. If the user asks how something here works, read the code " +
+		"that implements it: what you remember about a project is not evidence " +
+		"about this one.",
 	// The empty-string sentinel disables the repo-map branch in assembly, like
 	// Ask. Its text was written for a harness where the model could not look:
 	// it told the model to name the files it needed and stop so the user could
@@ -262,7 +298,8 @@ var Ask = Set{
 	// morning and two reviewers independently identified it as
 	// 2026-08-readonly-honest.md's twelve-step file hunt, reintroduced.
 	FilesNoFullFiles: "Use read, grep, glob, and ls to look at the project, and answer from what " +
-		"you find there rather than from memory.",
+		"you find there rather than from memory — or one code program that calls " +
+		"them, when you already know the several things you are looking for.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,

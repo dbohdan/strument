@@ -13,6 +13,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 func testCoder(t *testing.T) *Coder {
@@ -408,7 +409,7 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 
 	// A coder built with the code tool withheld: the slot must come back empty.
 	withheld := testCoder(t)
-	withheld.offerCode = false
+	withheld.OfferCode = false
 	sys := withheld.fmtSystemPrompt(prompts.Tool.MainSystem)
 	if strings.Contains(sys, "code runs a short Python program") {
 		t.Error("the code tool is withheld, but the prompt names it")

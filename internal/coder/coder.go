@@ -46,6 +46,12 @@ type Coder struct {
 	ExamplesAsSysMsg     bool
 	SystemPromptPrefix   string
 	ChatLanguage         string
+	// OfferCode, when false, withholds the code tool from the schema and
+	// empties the {code_tools} prompt slot. Default true, set in New; the
+	// false case is the feature-reverted arm of the code-mode trial and a
+	// future user setting. Keeping the condition in one field is what lets
+	// the prompt's tool list track the schema instead of drifting from it.
+	OfferCode bool
 
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked
@@ -305,6 +311,7 @@ func New(root string, model *config.Model) *Coder {
 		SuggestShellCommands: true,
 		Stream:               true,
 		PrefillSupported:     true,
+		OfferCode:            true,
 		MaxSteps:             25,
 		MaxErrorReflections:  3,
 		LoopDetection:        true,
