@@ -201,14 +201,51 @@ func TestAppendFormat(t *testing.T) {
 	}
 }
 
-func TestAppendSkipsEmptyAssistant(t *testing.T) {
+// A turn with no answer and no work is still not a real exchange; the file is
+// not created for it.
+func TestAppendSkipsEmptyTurn(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "chat.md")
 	w := New(path)
 	if err := w.Append(Turn{User: "hi", Assistant: "   \n"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("empty-answer turn should not create the file: err=%v", err)
+		t.Errorf("empty turn should not create the file: err=%v", err)
+	}
+}
+
+// TestAppendRecordsUnansweredTurn pins the budget-declined shape: a turn that
+// ran tools and ended without a final answer — max_steps declined, a send
+// failed, an interrupt — is written with the tool lines and a response
+// section that says why it is empty. Dropping the turn would make the notes
+// regenerated from the transcript blind to work that happened.
+func TestAppendRecordsUnansweredTurn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chat.md")
+	w := New(path)
+	if err := w.Append(Turn{
+		User: "big task",
+		Tools: []string{
+			"Read poll/poll.go (5 lines)",
+			"Applied edit to poll/poll.go",
+		},
+		Files: []string{"poll/poll.go"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"big task",
+		"- `poll/poll.go`",
+		"- Applied edit to poll/poll.go",
+		"the turn ended without a final answer",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("transcript missing %q:\n%s", want, got)
+		}
 	}
 }
 

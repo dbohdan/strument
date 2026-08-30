@@ -181,11 +181,17 @@ func New(path string) *Writer { return &Writer{path: path} }
 // Path returns the file the Writer appends to.
 func (w *Writer) Path() string { return w.path }
 
-// Append writes one turn. A turn with an empty assistant answer (a failed
-// or interrupted send) is skipped, so the transcript records real
-// exchanges only.
+// Append writes one turn.
+//
+// A turn whose assistant answer is empty is still written when it has other
+// content — tool lines, changed files — with the response section saying so.
+// That is the shape of a turn that ended without an answer: the step budget
+// was declined, a send failed, the model was interrupted. The work happened;
+// dropping the turn because its last sentence is missing records nothing, and
+// the notes regenerated from this file would not know the work existed. A
+// turn with nothing at all — no answer, no work — is still skipped.
 func (w *Writer) Append(t Turn) error {
-	if strings.TrimSpace(t.Assistant) == "" {
+	if strings.TrimSpace(t.Assistant) == "" && len(t.Tools) == 0 && len(t.Files) == 0 {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(w.path), dirMode); err != nil {
@@ -258,7 +264,14 @@ func (t Turn) render() string {
 	b.WriteString("### Prompt\n\n")
 	b.WriteString(strings.TrimRight(t.User, "\n"))
 	b.WriteString("\n\n### Response\n\n")
-	b.WriteString(strings.TrimRight(t.Assistant, "\n"))
+	if strings.TrimSpace(t.Assistant) == "" {
+		// A turn that did work and ended without an answer: budget declined,
+		// send failed, interrupted. Saying so beats an empty section, which
+		// reads as a rendering bug rather than as what happened.
+		b.WriteString("_(the turn ended without a final answer)_")
+	} else {
+		b.WriteString(strings.TrimRight(t.Assistant, "\n"))
+	}
 	b.WriteString("\n\n---\n\n")
 	return b.String()
 }
