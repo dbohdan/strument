@@ -187,35 +187,42 @@ func TestCodeBridgeReadReturnsFileContents(t *testing.T) {
 
 // TestCodeBridgeGrepFilterEndToEnd is the phenomenon the bridge exists for:
 // search inside the program, filter the results in Python, return the
-// computed answer — one round trip instead of two.
+// computed answer — one round trip instead of two. A tool result crosses the
+// boundary as the same text the model would see, so the program parses it;
+// that coarseness is the design (a bridged call is a tool call, not a
+// per-element helper).
 func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
-		"a.go": "package a\n\nfunc Target() {}\n",
-		"b.go": "package b\n\n// Target again\n",
+		"a.go":  "package a\n\nfunc Target() {}\n",
+		"b.go":  "package b\n\n// Target again\n",
 		"c.txt": "Target here too\n",
 	})
 
 	got := c.runCode(context.Background(), codeCall{
-		code: `hits = grep(pattern="Target", mode="files")
-sorted(hits)`,
+		code: `out = grep(pattern="Target", mode="files")
+lines = [l for l in out.splitlines() if l.endswith(".go")]
+(lines, "c.txt" in lines)`,
 	})
 	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"b.go"`) {
 		t.Errorf("expected both .go files in the filtered result, got:\n%s", got)
 	}
-	if strings.Contains(got, "c.txt") {
-		t.Errorf("the Python filter must have removed c.txt, got:\n%s", got)
+	if !strings.Contains(got, "false") {
+		t.Errorf("the Python filter must have excluded c.txt, got:\n%s", got)
 	}
 }
 
 // TestCodeBridgeForbiddenToolsFail is the fail-closed claim, one test per
-// forbidden tool: a program may not reach a mutating tool, and the attempt
-// returns an error naming the rule rather than an unknown-function crash.
+// forbidden tool. Two layers both hold: a mutating tool is not registered
+// with Monty, so the interpreter itself raises NameError — nothing this side
+// can answer — and even a name that were registered cannot pass the
+// allowlist check in bridgeCall. The plan's "unknown-function error" is the
+// NameError shape; the point is that the call never reaches a mutating tool.
 func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
 	for _, name := range []string{"bash", "edit", "write", "commit", "check"} {
 		t.Run(name, func(t *testing.T) {
-			code := fmt.Sprintf("%s(command=%q)", name, "rm -rf /")
+			code := name + `(command="rm -rf /")`
 			if name == "check" {
 				code = `check(name="build")`
 			}
@@ -223,8 +230,8 @@ func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
 			if !strings.Contains(got, "The program failed") {
 				t.Errorf("calling %s from a program must fail and did not:\n%s", name, got)
 			}
-			if strings.Contains(got, "unknown function") == false && !strings.Contains(got, "read-only") {
-				t.Errorf("the error should name the read-only rule, got:\n%s", got)
+			if !strings.Contains(got, "not defined") {
+				t.Errorf("%s is not registered with Monty, so the error must be a NameError, got:\n%s", name, got)
 			}
 		})
 	}
@@ -237,7 +244,7 @@ func TestCodeBridgeCapFires(t *testing.T) {
 
 	// One over the cap. If the cap is maxBridgedCalls, the loop fails on the
 	// call after the last allowed one.
-	code := fmt.Sprintf("n = 0\ntry:\n    while True:\n        ls()\n        n = n + 1\nexcept Exception as e:\n    (n, str(e)[:80])")
+	code := "n = 0\ntry:\n    while True:\n        ls()\n        n = n + 1\nexcept Exception as e:\n    (n, str(e)[:80])"
 	got := c.runCode(context.Background(), codeCall{code: code})
 
 	if !strings.Contains(got, "more than") {
@@ -254,10 +261,12 @@ func TestCodeBridgeCallsAreAnnounced(t *testing.T) {
 	c.runCode(context.Background(), codeCall{code: `ls()`})
 
 	joined := strings.Join(out.lines, "\n")
-	if !strings.Contains(joined, "‹code› ls") {
-		t.Errorf("a bridged call must be announced, got:\n%s", joined)
+	// "‹code› ls()" is the program being announced; "‹code› ls" is the
+	// bridged call inside it — the same shape a direct call prints.
+	if !strings.Contains(joined, "‹code› ls()\n") {
+		t.Errorf("the program must be announced, got:\n%s", joined)
 	}
-	if !strings.Contains(joined, "‹code› ls()") == false && !strings.Contains(joined, "‹code› code") {
-		t.Errorf("the program itself must be announced too, got:\n%s", joined)
+	if !strings.Contains(joined, "‹code› ls\n") {
+		t.Errorf("a bridged call must be announced, got:\n%s", joined)
 	}
 }

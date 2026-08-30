@@ -17,8 +17,8 @@ import (
 // measured facts motivate it (doc/plans/code-mode.md): arithmetic costs a
 // quarter of the reasoning lines in this repository's own experiments, and
 // models spend full request round trips on runs of read-only calls a program
-// could make in one step. Part 2 is pure computation; Part 3 bridges the
-// read-only tools in.
+// could make in one step. This file is both halves — pure computation, and
+// the read-only bridge.
 //
 // Monty is a Python *subset*, and the description below is load-bearing: a
 // model writing ordinary Python will hit walls, and the description is the
@@ -36,26 +36,47 @@ var codeLimits = monty.Limits{
 	MaxRecursionDepth: 100,
 }
 
+// maxBridgedCalls caps how many read-only tool calls one program may issue.
+// The bridge is a tool call, never a per-element helper — a program that loops
+// over a list calling read() on each element is a run of observation calls
+// with extra steps — and without a cap the number is unbounded.
+const maxBridgedCalls = 50
+
 // codeTool describes the tool. The Python-subset caveats live here rather than
 // in the system prompt, for the same reason the skill catalog does: prose must
 // not promise a tool that is only sometimes offered, and the schema is sent
 // with the tool regardless of mode.
 func codeTool() llm.ToolDef {
+	var b strings.Builder
+	b.WriteString("Run a short Python program and return its value: a calculator, " +
+		"a formatter, or one program that computes over several pieces of data at once. " +
+		"The interpreter is Monty, a restricted Python subset — not full Python.\n\n" +
+		"NOT available: class definitions, `with`, `match`, `eval`/`exec`, `open`, " +
+		"os/pathlib filesystem access, network access, imports beyond " +
+		"math/re/datetime/json, and third-party libraries.\n\n" +
+		"Available: f-strings, while, try/except, comprehensions, generators, " +
+		"lambda, round(), sum/min/max/sorted/enumerate/zip/abs, and all of math. " +
+		"Write the expression or statements whose last value is the answer; " +
+		"`round(x, 2)` rounds to 2 decimal places. Format specs work in " +
+		"f-strings (`f'{x:.2f}'`, `f'{n:5d}'`) but zero-padding applies to " +
+		"decimal only — use `s.zfill(n)` for other bases; there is no " +
+		"%-formatting and no .format().")
+
+	// The bridge, named in the schema rather than the prompt: the same rule
+	// that keeps the skill catalog out of the prose. The names come from
+	// InspectorTools() itself, so the description and the dispatch cannot
+	// drift — the exact drift this repository has had three times elsewhere.
+	if names := InspectorTools(); len(names) > 0 {
+		fmt.Fprintf(&b, "\n\nYou may also call these read-only tools as functions "+
+			"(at most %d calls per program): %s. Each returns the same text the "+
+			"tool would return, and each call is shown to the user. Pass arguments "+
+			"by name, e.g. read(path=\"a.go\", limit=20).",
+			maxBridgedCalls, strings.Join(names, ", "))
+	}
+
 	return llm.ToolDef{
-		Name: toolCode,
-		Description: "Run a short Python program and return its value: a calculator, " +
-			"a formatter, or one program that computes over several pieces of data at once. " +
-			"The interpreter is Monty, a restricted Python subset — not full Python.\n\n" +
-			"NOT available: class definitions, `with`, `match`, `eval`/`exec`, `open`, " +
-			"imports beyond math/re/datetime/json, and third-party libraries. There is " +
-			"no filesystem or network access.\n\n" +
-			"Available: f-strings, while, try/except, comprehensions, generators, " +
-			"lambda, round(), sum/min/max/sorted/enumerate/zip/abs, and all of math. " +
-			"Write the expression or statements whose last value is the answer; " +
-			"`round(x, 2)` rounds to 2 decimal places. Format specs work in " +
-			"f-strings (`f'{x:.2f}'`, `f'{n:5d}'`) but zero-padding applies to " +
-			"decimal only — use `s.zfill(n)` for other bases; there is no " +
-			"%-formatting and no .format().",
+		Name:        toolCode,
+		Description: b.String(),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -91,8 +112,9 @@ func parseCodeArgs(tc llm.ToolCall) (codeCall, string) {
 // so they pass through stripped of only the traceback's file framing, which
 // says "script.py" regardless of anything the model did.
 //
-// No confirmation, like the other read-only tools: a program computes, it does
-// not touch anything outside its own WASM instance. It is announced instead.
+// No confirmation, like the other read-only tools: a program computes and
+// reads, it does not touch anything outside its own WASM instance and the
+// project's observation tools. It is announced instead.
 func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	c.Out.Toolf("‹code› %s", oneLine(cc.code))
 
@@ -106,9 +128,83 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// canceled context by closing on it — but MaxDuration is the mechanism the
 	// interpreter enforces from inside, which the limit test below pins.
 	result, err := runner.Execute(context.Background(), cc.code, nil,
-		monty.WithLimits(codeLimits))
+		c.codeOptions()...)
 	if err != nil {
 		return codeErrorText(err)
+	}
+	return codeResultText(result)
+}
+
+// codeOptions assembles the Execute options: the resource limits, plus the
+// read-only bridge.
+func (c *Coder) codeOptions() []monty.ExecuteOption {
+	opts := make([]monty.ExecuteOption, 0, 2)
+	opts = append(opts, monty.WithLimits(codeLimits))
+
+	names := InspectorTools()
+	funcs := make([]monty.FuncDef, 0, len(names))
+	// Each tool takes its arguments as keywords; the params list is what lets
+	// Monty map a positional call's arguments onto those names. The schemas
+	// differ per tool (path, pattern, limit, …), so the program passes
+	// everything by name and Monty hands over whatever it got — an argument
+	// this side does not recognize is answered by the tool itself, exactly as
+	// a direct call with a wrong field would be.
+	for _, n := range names {
+		funcs = append(funcs, monty.Func(n))
+	}
+	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names), funcs...))
+	return opts
+}
+
+// bridgeCall is the ExternalFunc that pauses the program and answers one
+// read-only tool call. It is an adapter, not a reimplementation: the call
+// crosses the boundary as JSON and is answered by the same Inspector.Run a
+// direct tool call goes through, so what the program sees is byte-for-byte
+// what the model would have seen.
+func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
+	isAllowed := make(map[string]bool, len(allowed))
+	for _, n := range allowed {
+		isAllowed[n] = true
+	}
+
+	calls := 0
+	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
+		// Fail closed. This runs behind the registration check already — a
+		// name outside `allowed` is not registered with Monty at all and
+		// raises NameError inside the program — but the check lives here too
+		// so the invariant does not depend on the registration list staying
+		// in step with it.
+		if !isAllowed[call.Name] {
+			return nil, fmt.Errorf("unknown function %q: only the read-only tools "+
+				"(%s) can be called from a program", call.Name, strings.Join(allowed, ", "))
+		}
+		calls++
+		if calls > maxBridgedCalls {
+			return nil, fmt.Errorf("the program made more than %d tool calls; "+
+				"stop and do the rest with direct tool calls", maxBridgedCalls)
+		}
+
+		// Announce exactly as a direct call would be, so the review surface
+		// looks the same whether the model called read directly or from inside
+		// a program.
+		c.Out.Toolf("‹code› %s", call.Name)
+		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
+		return c.inspector().Run(call.Name, tc.Arguments), nil
+	}
+}
+
+// codeResultText renders a program's value. A list or dict the model wants to
+// read comes back as JSON rather than Go's `%v` spacing, which a model would
+// otherwise have to misread as Python.
+func codeResultText(result any) string {
+	switch result.(type) {
+	case nil:
+		return "None"
+	case []any, map[string]any:
+		b, err := json.Marshal(result)
+		if err == nil {
+			return string(b)
+		}
 	}
 	return fmt.Sprintf("%v", result)
 }
