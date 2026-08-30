@@ -498,8 +498,10 @@ func (c *Coder) confirmGrouped(req ConfirmRequest) bool {
 	return res.Yes || res.Always
 }
 
-// Run executes one scripted message (script mode) and returns the
-// last send's content regardless of outcome.
+// Run executes one scripted message (script mode) and returns the turn's
+// answer: every interrupted send's content in order, each steer as a
+// blockquote, and the final send's content — the same string the transcript
+// records.
 func (c *Coder) Run(ctx context.Context, withMessage string) string {
 	c.runOne(ctx, withMessage)
 	return c.turnHistory + c.multiResponseContent + c.partialResponseContent
@@ -606,7 +608,7 @@ func (c *Coder) accumulateInterrupt(steer string) {
 		c.turnHistory += c.partialResponseContent + "\n\n"
 	}
 	if steer != "" {
-		c.turnHistory += "> " + steer + "\n\n"
+		c.turnHistory += "> " + strings.ReplaceAll(steer, "\n", "\n> ") + "\n\n"
 	}
 }
 
