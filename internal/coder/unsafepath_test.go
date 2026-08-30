@@ -255,6 +255,51 @@ func TestRelativePathStillResolvesUnderTheRoot(t *testing.T) {
 	}
 }
 
+// A root whose own path resolves to a different spelling is the shape macOS
+// and Windows CI run under — TMPDIR under /var, a symlink to /private/var, on
+// Windows an 8.3 short name that EvalSymlinks expands — and it used to refuse
+// every in-root absolute path: the absolute branch compared a resolved target
+// against an unresolved root, Rel cannot bridge the two spellings, and the
+// pair read as an escape. CI caught it on both platforms with the same line.
+// The linked root here reproduces that shape on Linux, so the suite guards it
+// instead of the fix being right by argument.
+func TestAbsolutePathInsideALinkedRootIsAccepted(t *testing.T) {
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realDir, "window.go"), []byte("package w\n\nconst N = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// root (and every path built from it) is spelled through the link; the
+	// filesystem answers through "real".
+	root := filepath.Join(link, "sub")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	abs := filepath.Join(root, "window.go")
+	if got, want := workspace.ResolveSymlinks(abs), filepath.Join(realDir, "sub", "window.go"); got != want {
+		t.Skipf("this filesystem does not resolve the link (got %q, want %q)", got, want)
+	}
+
+	c := toolCoder(t, root)
+
+	if reason := c.unsafePath(abs); reason != "" {
+		t.Fatalf("in-root absolute path through a symlinked root refused: %s", reason)
+	}
+	// normalizeToolPath must fold the absolute spelling away all the same —
+	// the overlay and rollback map key on the relative form.
+	if got, want := c.normalizeToolPath(abs), "window.go"; got != want {
+		t.Errorf("normalizeToolPath = %q, want %q", got, want)
+	}
+}
+
 // The same defect one layer up, through the code a write tool call actually
 // runs. fullPath is where it lived, but a unit test on fullPath alone would go
 // green for a fix that applyToolEdits then undoes on its own.

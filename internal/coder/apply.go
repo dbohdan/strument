@@ -82,7 +82,14 @@ func (c *Coder) unsafePath(rel string) string {
 			return "cannot resolve root"
 		}
 		resolved := workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(rel)))
-		relBack, err := filepath.Rel(rootAbs, resolved)
+		// The root is resolved to the same reality as the target before Rel.
+		// Comparing a resolved target to an unresolved root makes Rel fail
+		// wherever the root's path resolves to a different spelling — macOS's
+		// TMPDIR is under /var, a symlink to /private/var, and Windows'
+		// EvalSymlinks expands 8.3 short names — and every in-root absolute
+		// path was then refused as escaping. The same idiom the symlink check
+		// below uses.
+		relBack, err := filepath.Rel(workspace.ResolveSymlinks(rootAbs), resolved)
 		if err != nil || workspace.EscapesRoot(relBack) {
 			return "path escapes the project root"
 		}
@@ -134,7 +141,10 @@ func (c *Coder) normalizeToolPath(p string) string {
 	if err != nil {
 		return p
 	}
-	relBack, err := filepath.Rel(rootAbs, workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(p))))
+	// ResolveSymlinks on both sides, for the same reason unsafePath does it:
+	// a resolved target against an unresolved root makes Rel fail on macOS
+	// (/var → /private/var) and Windows (8.3 names), and the fold-away stops.
+	relBack, err := filepath.Rel(workspace.ResolveSymlinks(rootAbs), workspace.ResolveSymlinks(filepath.Clean(filepath.FromSlash(p))))
 	if err != nil || workspace.EscapesRoot(relBack) {
 		return p
 	}
