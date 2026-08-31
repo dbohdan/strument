@@ -212,7 +212,9 @@ func editTools() []llm.ToolDef {
 		{
 			Name: toolEdit,
 			Description: "Replace an exact span of text in a file. The edit applies immediately. " +
-				"Make one call per change; call it several times to make several changes.",
+				"Make one call per change; call it several times to make several changes. " +
+				"Paths must be inside the project root or the platform's standard " +
+				"temporary directory (e.g. /tmp), by absolute path for temp.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -230,7 +232,9 @@ func editTools() []llm.ToolDef {
 			Name: toolWrite,
 			Description: "Write a file with the given full contents, creating it — or completely " +
 				"overwriting it if it already exists. Applies immediately. To change part of an " +
-				"existing file use edit instead; use this only when you are providing the whole file.",
+				"existing file use edit instead; use this only when you are providing the whole file. " +
+				"Paths must be inside the project root or the platform's standard " +
+				"temporary directory (e.g. /tmp), by absolute path for temp.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

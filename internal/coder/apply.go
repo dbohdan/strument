@@ -23,10 +23,23 @@ type writePlan struct {
 }
 
 // diskReader reads current file contents for the edit planner.
+//
+// An absolute path is read as itself, not joined onto the root. The overlay's
+// own writes go through fullPath, which already keeps absolute paths straight
+// — but this reader joined them, so an *edit* (as opposed to a create) of an
+// out-of-root absolute path read "<root>/tmp/..." from a shadow tree that
+// did not exist, planned against "file missing", and the write would have
+// replaced the real file's contents wholesale while reporting success.
+// Found the same day the temp-dir carve-out made absolute out-of-root paths
+// reachable at all; the same defect was live for pinned files before that.
 type diskReader struct{ root string }
 
 func (d diskReader) ReadFile(rel string) (string, bool) {
-	data, err := os.ReadFile(filepath.Join(d.root, filepath.FromSlash(rel)))
+	full := rel
+	if !filepath.IsAbs(rel) {
+		full = filepath.Join(d.root, filepath.FromSlash(rel))
+	}
+	data, err := os.ReadFile(filepath.Clean(full))
 	if err != nil {
 		return "", false
 	}
@@ -66,6 +79,26 @@ func (c *Coder) unsafePath(rel string) string {
 	// twelve steps. Told it is read-only, they say so and move on.
 	if c.isPinned(rel) {
 		return ""
+	}
+	// A file under the platform's standard temporary directory is sanctioned,
+	// by absolute path only. The sandbox already grants temp writes to every
+	// model-run command, so the model that prepares a scratch file for its
+	// build met one boundary through bash and was refused the same ground
+	// through edit — the trial that found it (2026-10-code-only) had models
+	// wanting scripts and fixtures outside the tree they were exploring. The
+	// grant matches the sandbox's own tempDirs rule rather than inventing a
+	// second list.
+	//
+	// Absolute only, deliberately. A relative path that traverses out of the
+	// root into temp would still be refused below, so "../.." stays a hole
+	// nowhere opens; and temp has no pinned-file honesty problem — /tmp/x is
+	// the name, and fullPath already passes absolute paths through untouched.
+	// The raw .git check above stays first, so a temp path that resolves
+	// inside a cloned repository's .git is still refused.
+	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") {
+		if workspace.UnderTempDir(filepath.Clean(filepath.FromSlash(rel))) {
+			return ""
+		}
 	}
 	// An absolute path the model sends is resolved to its root-relative form
 	// and the rest of the checks run on that, the same normalization contain()

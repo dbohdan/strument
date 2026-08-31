@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // commitTurn commits everything the turn changed, as one commit.
@@ -38,7 +40,7 @@ func (c *Coder) commitTurn(message string) {
 	// It stops being invisible the moment the user edits one of them
 	// themselves between two commits, and their work joins a model-authored
 	// commit they never saw.
-	edited := c.turnSnap.paths()
+	edited := c.committablePaths(c.turnSnap.paths())
 	if len(edited) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
 		return
 	}
@@ -64,6 +66,44 @@ func (c *Coder) commitTurn(message string) {
 	}
 	c.sessionCommits[hash] = true
 	c.Out.Toolf("Commit %s %s", hash, message)
+}
+
+// committablePaths splits the turn's writes into what git can record and what
+// it cannot: repo-relative names pass through, and a path outside the
+// repository — a scratch file under the platform temp directory, or an
+// out-of-tree pinned file the turn edited — is dropped. It reports what it
+// dropped, once, because a silent half-commit is the failure the readonly
+// work documented: the model believes its work is recorded when only part of
+// it is.
+//
+// The filter exists because git add with an outside path fails the *whole*
+// commit, taking the in-repo edits' commit with it — one temp file in the
+// batch would have cost the turn every commit it had. The snapshot keeps the
+// dropped paths, so /undo still reaches them.
+func (c *Coder) committablePaths(paths []string) []string {
+	if c.Repo == nil {
+		return paths
+	}
+	repoRoot := c.Repo.Root()
+	if repoRoot == "" {
+		// A Repo that does not report a root cannot be containment-checked;
+		// pass everything through rather than silently committing nothing.
+		// The real implementation always reports its root.
+		return paths
+	}
+	var keep, dropped []string
+	for _, p := range paths {
+		if filepath.IsAbs(p) || !workspace.PathInRoot(repoRoot, p) {
+			dropped = append(dropped, p)
+			continue
+		}
+		keep = append(keep, p)
+	}
+	if len(dropped) > 0 {
+		c.Out.Toolf("Not committing %s — outside the repository; /undo still covers them.",
+			strings.Join(dropped, ", "))
+	}
+	return keep
 }
 
 // commitContext formats curMessages for the commit-message model (aider's

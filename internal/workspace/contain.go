@@ -2,7 +2,9 @@ package workspace
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -126,8 +128,47 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	return full, rel, ""
 }
 
-// EscapesRoot reports whether a path leaves the root it was made relative to.
+// UnderTempDir reports whether abs lies under the platform's standard
+// temporary directory — os.TempDir() (TMPDIR on Unix, TMP/TEMP on Windows),
+// plus /tmp on Unix, mirroring sandbox.tempDirs: plenty of tools write to
+// /tmp regardless of TMPDIR, and os.TempDir is the answer every Go program
+// gives to the same question.
 //
+// Exported because two boundaries ask it: the sandbox, which already grants
+// temp writes to model-run commands, and the edit path, which now sanctions
+// the same ground for edit/write so a model preparing scratch files for a
+// build meets the same boundary on both routes. Both sides compare resolved
+// paths — a symlinked root's spelling must not decide containment.
+func UnderTempDir(abs string) bool {
+	resolved := ResolveSymlinks(filepath.Clean(abs))
+	dirs := []string{os.TempDir()}
+	if runtime.GOOS != "windows" && os.TempDir() != "/tmp" {
+		dirs = append(dirs, "/tmp")
+	}
+	for _, dir := range dirs {
+		rel, err := filepath.Rel(ResolveSymlinks(dir), resolved)
+		if err == nil && !EscapesRoot(rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// PathInRoot reports whether a root-relative path names a file inside the
+// named repository root. It is the containment test the commit path needs:
+// the turn snapshot keys on the path as the model spelled it, and a path that
+// does not live under the repo (a temp-dir scratch file, an out-of-tree pin)
+// cannot be handed to git.
+func PathInRoot(root, rel string) bool {
+	if root == "" {
+		return false
+	}
+	full := filepath.Clean(filepath.Join(root, filepath.FromSlash(rel)))
+	inside, err := filepath.Rel(root, full)
+	return err == nil && !EscapesRoot(inside)
+}
+
+// EscapesRoot reports whether a path leaves the root it was made relative to.
 // It takes what filepath.Rel returned, not the pair, because every caller has
 // already computed that for its own use. The exact test matters: a bare
 // HasPrefix(rel, "..") also catches a file honestly named "..notes", and three

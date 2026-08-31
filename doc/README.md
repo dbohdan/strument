@@ -413,7 +413,15 @@ Ten tools, in three natures:
   the call arrives. The safety net is the snapshot and the diff, not a
   question. Like the observation tools, they accept an absolute path that
   resolves inside the root as a spelling of the relative one, and answer in
-  the relative form.
+  the relative form. They also accept an absolute path under the platform's
+  standard temporary directory — the same grant `sandbox.tempDirs` gives
+  model-run commands, so scratch files a model prepares for its build meet
+  the same boundary through both routes (found from
+  [`2026-10-code-only.md`](experiments/2026-10-code-only.md), whose models
+  wanted exactly this). Temp writes are absolute-path only: a relative
+  traversal that lands in temp is still refused, and the snapshot keeps them
+  for /undo while the turn commit skips them — `git add` on an out-of-repo
+  path would fail the whole commit, taking the in-repo edits with it.
 - **Mutation through the shell is gated.** `bash(command, purpose)` runs only
   after the user confirms; its command is parsed and interpreted by the embedded
   pure-Go `mvdan.cc/sh/v3` shell rather than a host `/bin/sh`. Its output

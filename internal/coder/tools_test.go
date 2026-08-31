@@ -142,16 +142,26 @@ func TestCheckToolListsChecksInDescription(t *testing.T) {
 }
 
 // committingRepo is a Repo whose Commit succeeds with a fixed hash, so the
-// auto-commit path (and its message) can be asserted.
-type committingRepo struct{ tracked []string }
+// auto-commit path (and its message) can be asserted. When asked is non-nil,
+// Commit appends the fnames it received, so a test can assert exactly what
+// git was asked to record. root, when set, is what Root answers — the
+// commit-path filter needs a real root to test containment against.
+type committingRepo struct {
+	tracked []string
+	asked   [][]string
+	root    string
+}
 
-func (r *committingRepo) Root() string             { return "" }
+func (r *committingRepo) Root() string             { return r.root }
 func (r *committingRepo) TrackedFiles() []string   { return r.tracked }
 func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
+func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool) (string, string, bool, error) {
+	if r.asked != nil {
+		r.asked = append(r.asked, fnames)
+	}
 	return "abc1234", "feat: change world to mars", true, nil
 }
 
