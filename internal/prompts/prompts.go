@@ -186,6 +186,7 @@ const AskObservationBullet = "read, grep, glob, and ls look at the project. " +
 	"answering from memory or guessing at how the project works. Files the project " +
 	"ignores are not listed or searched. Paths are relative to the project root; an " +
 	"absolute path that lies inside the project is also accepted.\n\n"
+
 // the code bullet above when the code tool is offered, and as "" when it is
 // not — the empty case is the feature-reverted baseline, where prose naming
 // `code` would promise a tool the schema does not carry. {observation_tools}
@@ -306,6 +307,7 @@ const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the proj
 const AskFilesNoFullFilesViaCode = "Look at the project with the code tool: write a program that calls " +
 	"read, grep, glob, and ls, and answer from what it returns rather than " +
 	"from memory."
+
 // /add described a mode with no way to look at anything. Nothing said results
 // come back either, so a model had no picture of the loop and could repeat a
 // call it had already made. Observed: MiMo looping.
