@@ -279,14 +279,6 @@ var Tool = Set{
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 }
 
-// Ask is the discussion mode. What it withholds is enforced by the tool set,
-// not by this prompt: toolDefs drops edit, write, bash, and check, so there is
-// nothing to parse back out and nothing to discard.
-//
-// What it *keeps* has to be said here, though, and for a while was not. Ask
-// offers read, grep, glob, ls, and symbol, and this prompt named none of them
-// while opening with "you cannot apply edits from it" — a sentence a model can
-// read as "you cannot act". The only mention of the observation tools sat in
 // FilesNoFullFilesViaCode replaces Tool.FilesNoFullFiles under the force arm:
 // the base text tells the model to "use read, grep, glob, and ls", which the
 // schema withholds — the exact task-proximal steering fable.md identified in
@@ -308,6 +300,15 @@ const AskFilesNoFullFilesViaCode = "Look at the project with the code tool: writ
 	"read, grep, glob, and ls, and answer from what it returns rather than " +
 	"from memory."
 
+// Ask is the discussion mode. What it withholds is enforced by the tool set,
+// not by this prompt: toolDefs drops edit, write, bash, and check, so there is
+// nothing to parse back out and nothing to discard.
+//
+// What it *keeps* has to be said here, though, and for a while was not. Ask
+// offers read, grep, glob, ls, and symbol, and this prompt named none of them
+// while opening with "you cannot apply edits from it" — a sentence a model can
+// read as "you cannot act". The only mention of the observation tools sat in
+// FilesNoFullFiles, which is used solely when nothing is pinned, so /ask after
 // /add described a mode with no way to look at anything. Nothing said results
 // come back either, so a model had no picture of the loop and could repeat a
 // call it had already made. Observed: MiMo looping.

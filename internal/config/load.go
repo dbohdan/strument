@@ -65,6 +65,8 @@ type fileGlobals struct {
 	maxErrorReflectionsVal int
 	hasLoopDetection       bool
 	loopDetectionVal       bool
+	hasObservationViaCode  bool
+	observationViaCodeVal  bool
 	hasWebfetchAllow       bool
 	webfetchAllowVal       []string
 	hasWebSearch           bool
@@ -349,6 +351,9 @@ func Load(opts Options) (*Config, error) {
 	}
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
+	}
+	if user.hasObservationViaCode {
+		cfg.ObservationViaCode = user.observationViaCodeVal
 	}
 	if user.hasSandbox {
 		cfg.Sandbox = user.sandboxVal
@@ -763,6 +768,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasLoopDetection = true
 		out.loopDetectionVal = bool(b)
+	}
+
+	if ov, ok := globals["observation_via_code"]; ok {
+		b, ok := ov.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `observation_via_code` must be a boolean, got %s", path, ov.Type())
+		}
+		out.hasObservationViaCode = true
+		out.observationViaCodeVal = bool(b)
 	}
 
 	if sv, ok := globals["sandbox"]; ok {

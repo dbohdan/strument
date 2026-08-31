@@ -182,6 +182,42 @@ func TestLoopDetectionRejectsNonBooleans(t *testing.T) {
 	}
 }
 
+// TestObservationViaCodeDefaultsOff mirrors the loop_detection shape: unset
+// leaves the force arm off, `True` turns it on, and a non-boolean is refused.
+// The arm is off by default because it is an experiment, not a supported mode.
+func TestObservationViaCodeDefaultsOff(t *testing.T) {
+	cfg, err := loadBudget(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ObservationViaCode {
+		t.Error("unset observation_via_code should leave the force arm off")
+	}
+}
+
+func TestObservationViaCodeOn(t *testing.T) {
+	cfg, err := loadBudget(t, "observation_via_code = True")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ObservationViaCode {
+		t.Error("observation_via_code = True did not take effect")
+	}
+}
+
+func TestObservationViaCodeRejectsNonBooleans(t *testing.T) {
+	for _, setting := range []string{`observation_via_code = "yes"`, "observation_via_code = 1"} {
+		_, err := loadBudget(t, setting)
+		if err == nil {
+			t.Errorf("%s should not load", setting)
+			continue
+		}
+		if !strings.Contains(err.Error(), "must be a boolean") {
+			t.Errorf("%s: error %q should say it must be a boolean", setting, err)
+		}
+	}
+}
+
 // A project can turn it off — a repo whose model output legitimately repeats
 // (generated tables, fixtures) is exactly who needs to.
 func TestLoopDetectionProjectOverrides(t *testing.T) {

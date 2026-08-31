@@ -34,6 +34,7 @@ The loader reads these module-level variables after running your file:
 | `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
+| `observation_via_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `code` programs. Default `False`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
@@ -591,6 +592,26 @@ Stopping looks like an interrupt without the Ctrl-C: the partial reply stays in
 the chat, Strument tells the model what repeated and to take another approach,
 and you are asked whether to stop, let it try again, or steer it with a message
 of your own.
+
+### `observation_via_code`
+
+```python
+observation_via_code = False    # the default
+observation_via_code = True     # force arm
+```
+
+Experimental. With `True`, the direct read-only tools (`read`, `grep`, `glob`,
+`ls`, `symbol`) are withheld from the tool schema and all file observation goes
+through the `code` tool: the model writes a short Python program that calls
+those tools itself, and the results come back to the program. A direct call a
+model makes anyway is answered with a pointer to the `code` route rather than
+silently failing.
+
+This is the force arm of the code-uptake experiments
+(`doc/experiments/2026-09-code-mode2.md`): prompting moved `code` uptake from
+0/36 to 8/24, and this setting tests the complementary condition — removing the
+competing tools instead of persuading the model to prefer the program. It is
+off by default and may change or be withdrawn based on those results.
 
 Turn it off if your model's ordinary output trips it — generated tables and
 fixture data are the plausible cases. Nothing else changes.

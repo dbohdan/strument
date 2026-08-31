@@ -204,6 +204,13 @@ type Config struct {
 	// sets it.
 	NoLoopDetection bool
 
+	// ObservationViaCode turns on the code-observation force arm: the direct
+	// read-only tools are withheld from the schema and all file observation
+	// goes through code programs. Default false; `observation_via_code = True`
+	// sets it. It is the experimental arm of the code-uptake trials
+	// (doc/experiments/2026-09-code-mode2.md), not a supported mode — yet.
+	ObservationViaCode bool
+
 	// Sandbox names the confinement mechanism: SandboxLandlock or "" for
 	// none. It defaults to Landlock on Linux and "" elsewhere, and when it is
 	// set it is a requirement rather than a preference — see doc/security.md.
