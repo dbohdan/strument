@@ -175,6 +175,13 @@ because that is what makes a result safe to act on.
   green. For anything with a runtime surface, exercise it, don't just test it.
 - **Never commit secrets** — API keys go in the environment
   (`OPENROUTER_API_KEY`), never in files, docs, or commits.
+- **Keep bulk disposable artifacts out of the repository.** The project
+  directory is backed up regularly in some enviornments, so don't put large
+  temporary data anywhere tracked — project checkouts, one-off binaries,
+  pty captures, scratch runs. Use the environment's scratch space
+  (`/tmp/` where there is no dedicated one) and keep only the distilled
+  report in `doc/experiments/`. JSONL transcripts are fine when they
+  are intended for preservation.
 - **Model-run commands get a filtered environment.** The rule is about *who
   caused the command*, not which command it is: anything the model caused —
   the `bash` tool, the `check` tool, the `scraper` command — runs under the
