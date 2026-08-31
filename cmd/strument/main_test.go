@@ -638,14 +638,29 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	_ = ln.Close()
 
 	root := t.TempDir()
-	cfgDir := filepath.Join(root, "cfg", "strument")
+
+	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
+	// the same pattern as writeTempUserConfig.
+	switch runtime.GOOS {
+	case "darwin":
+		t.Setenv("HOME", filepath.Join(root, "cfg"))
+	default:
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "cfg"))
+	}
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+
+	userCfgPath, err := config.DefaultUserConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgDir := filepath.Dir(userCfgPath)
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cfg := "router = provider(adapter = \"openrouter\", base_url = \"http://" + addr + "/v1\", api_key = \"test\")\n" +
 		"models = {\"m\": model(router, \"test/model\", context = 100000)}\n" +
 		"default = \"m\"\n"
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.star"), []byte(cfg), 0o644); err != nil {
+	if err := os.WriteFile(userCfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	proj := filepath.Join(root, "proj")
@@ -668,6 +683,11 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 		"XDG_STATE_HOME="+filepath.Join(root, "state"),
 		"XDG_CACHE_HOME="+filepath.Join(root, "cache"),
 	)
+	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
+	// the subprocess needs the same redirect.
+	if runtime.GOOS == "darwin" {
+		cmd.Env = append(cmd.Env, "HOME="+filepath.Join(root, "cfg"))
+	}
 	out, err := cmd.CombinedOutput()
 	combined := string(out)
 	// The run must fail — the endpoint is dead — and the failure must be a
