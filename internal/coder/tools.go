@@ -136,11 +136,12 @@ func readOnlyTools() []llm.ToolDef {
 		{
 			Name: toolRead,
 			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
-				"use offset and limit to page through a long one.",
+				"use offset and limit to page through a long one. Absolute paths under the platform's " +
+				"standard temporary directory are also allowed.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
+					"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
 					"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
 					"limit":  intProp("How many lines to return. Omit for a default window."),
 				},
@@ -158,9 +159,7 @@ func readOnlyTools() []llm.ToolDef {
 					"glob": strProp("Optional. Only search paths matching this glob. It is matched " +
 						"against the whole path, so use \"**/*.go\" for every directory; \"*.go\" " +
 						"matches only the project root and a bare directory name matches nothing."),
-					"path": strProp("Optional. Only search under this directory, relative to the project root " +
-						"(an absolute path inside the project also works). This, not glob, " +
-						"is how to restrict a search to a subtree."),
+					"path": strProp("Optional. Only search under this directory, relative to the project root (an absolute path inside the project also works). This, not glob, is how to restrict a search to a subtree."),
 					"mode": map[string]any{
 						"type": "string",
 						"enum": []any{"files", "content", "count"},
@@ -192,12 +191,13 @@ func readOnlyTools() []llm.ToolDef {
 			},
 		},
 		{
-			Name:        toolLS,
-			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree.",
+			Name: toolLS,
+			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree. " +
+				"Absolute paths under the platform's standard temporary directory are also allowed.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The directory, relative to the project root. Omit for the root itself. An absolute path that lies inside the project also works; relative is preferred."),
+					"path": strProp("The directory, relative to the project root. Omit for the root itself. An absolute path inside the project or under the platform's standard temporary directory also works; relative is preferred for project directories."),
 				},
 			},
 		},
@@ -218,7 +218,7 @@ func editTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
+					"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
 					"old_string": strProp("The exact existing text to replace, character for character, " +
 						"including all whitespace, comments, and docstrings. It must match exactly once: " +
 						"include enough surrounding lines to pick out the one place you mean, and make " +

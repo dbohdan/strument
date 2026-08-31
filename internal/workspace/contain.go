@@ -25,11 +25,15 @@ import (
 // confirms a read, and what it returns goes to the provider and into the
 // transcript.
 //
-// glob and grep were never affected — they walk the tree rather than joining a
-// path — which is exactly why the gap in read survived: three of four tools
-// behaved, so the fourth looked like it did too.
+// The read-only tools are deliberately split. read and ls accept an absolute
+// path under the platform's standard temporary directory, matching edit and
+// write. glob and grep remain project-only walkers: using them on temp paths
+// would turn a narrow explicit access into recursive discovery of unrelated
+// scratch files.
 
-// contain resolves rel against the root and refuses anything that leaves it.
+// contain resolves rel against the root and refuses anything that leaves it,
+// except for an absolute path under the standard temporary directory. The
+// exception is used by read and ls; glob and grep remain project-only walkers.
 //
 // Both halves matter and they catch different things. The lexical check stops
 // "../.." and absolute paths that leave the root; the symlink check stops a
@@ -74,6 +78,18 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		if w.Pinned != nil && w.Pinned(full) {
 			return full, filepath.ToSlash(full), ""
 		}
+		rootAbs, err := filepath.Abs(w.Root)
+		if err != nil {
+			return "", "", "the project root cannot be resolved"
+		}
+		// The edit path grants the platform's standard temporary directory by
+		// absolute path. Read and ls mirror that grant, but an absolute path that
+		// is also inside a project rooted under /tmp must continue through the
+		// project-relative checks below.
+		if UnderTempDir(full) && escapes(rootAbs, full) &&
+			escapes(ResolveSymlinks(rootAbs), ResolveSymlinks(full)) {
+			return full, filepath.ToSlash(full), ""
+		}
 		// An absolute path that lands inside the root names the same file its
 		// relative form does, so it is answered the same. Small models
 		// (Maple-Preview by DeepGrove was the first observed) habitually send
@@ -81,18 +97,14 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		// nothing: the file was in scope either way. The checks that follow are
 		// the ones the relative path gets, applied to the file the kernel will
 		// actually see — resolve first, refuse second, never the other order.
-		rootAbs, err := filepath.Abs(w.Root)
-		if err != nil {
-			return "", "", "the project root cannot be resolved"
-		}
-		relBack, err := filepath.Rel(rootAbs, full)
-		if err != nil || EscapesRoot(relBack) {
-			return "", "", "that path is outside the project root"
-		}
 		// The resolved form is checked too, not only the caller's spelling:
 		// /proj/.gitlink/config resolving to /proj/.git/config must be refused
 		// for what it opens, and /etc/passwd was already refused above as
 		// out-of-root before this could be reached.
+		relBack, err := filepath.Rel(rootAbs, full)
+		if err != nil || EscapesRoot(relBack) {
+			return "", "", "that path is outside the project root"
+		}
 		if UnderGitDir(relBack) {
 			return "", "", gitDirRefusal
 		}

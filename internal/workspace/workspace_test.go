@@ -172,6 +172,58 @@ func TestListIsOneLevel(t *testing.T) {
 	}
 }
 
+func TestReadAndListAllowAbsoluteTempPaths(t *testing.T) {
+	root := t.TempDir()
+	temp := t.TempDir()
+	file := filepath.Join(temp, "scratch.txt")
+	if err := os.WriteFile(file, []byte("scratch contents\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := New(root)
+
+	got, err := w.Read(file, 0, 0)
+	if err != nil {
+		t.Fatalf("Read(%q): %v", file, err)
+	}
+	if got.Path != filepath.ToSlash(file) || len(got.Lines) != 1 || got.Lines[0] != "scratch contents" {
+		t.Errorf("Read(%q) = %+v", file, got)
+	}
+
+	entries, err := w.List(temp)
+	if err != nil {
+		t.Fatalf("List(%q): %v", temp, err)
+	}
+	if len(entries) != 1 || entries[0].Path != filepath.ToSlash(file) {
+		t.Errorf("List(%q) = %+v, want the temp file", temp, entries)
+	}
+}
+
+func TestGlobAndGrepRemainProjectOnlyForTempPaths(t *testing.T) {
+	root := t.TempDir()
+	temp := t.TempDir()
+	file := filepath.Join(temp, "scratch.txt")
+	if err := os.WriteFile(file, []byte("TEMP_ONLY\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := New(root)
+
+	paths, _, err := w.Glob(filepath.Join(temp, "**", "*.txt"))
+	if err != nil {
+		t.Fatalf("Glob: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Errorf("Glob found temp files: %v", paths)
+	}
+
+	res, err := w.Grep(GrepQuery{Pattern: "TEMP_ONLY", Dir: temp, Mode: GrepFiles})
+	if err != nil {
+		t.Fatalf("Grep: %v", err)
+	}
+	if len(res.Files) != 0 || res.InScope != 0 {
+		t.Errorf("Grep searched temp files: %+v", res)
+	}
+}
+
 func TestReadWindow(t *testing.T) {
 	var b strings.Builder
 	for i := 1; i <= 10; i++ {

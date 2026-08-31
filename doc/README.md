@@ -394,11 +394,10 @@ Ten tools, in three natures:
   that asked for one anyway.
 
   One correction that pass forced, worth recording because the sentence above
-  used to contain it: `read` is *not* scoped to the root. It joins its argument
-  to the root with no containment check, so a relative path with `..` reads
-  fine, and transcripts show models doing exactly that. Only `grep`, `glob`, and
-  `ls` are confined. Edits are confined separately and properly, in
-  `unsafePath`.
+  used to contain it: `read` and `ls` accept an absolute path under the
+  platform's standard temporary directory, matching `edit` and `write`. Relative
+  traversal into temp remains refused. `glob` and `grep` remain project-only
+  walkers, so they do not recursively discover unrelated temporary files.
 - **Edits are direct**, exactly as a SEARCH/REPLACE block was.
   `edit(path, old_string, new_string)` replaces an exact span, through the
   same fuzzy matcher aider's format used, and returns a did-you-mean when it

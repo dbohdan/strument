@@ -184,11 +184,19 @@ func TestReadOnlyNameIsUsable(t *testing.T) {
 			}
 
 			// The exemption is exactly the pinned set, not "absolute paths now
-			// work".
-			other := filepath.Join(root, "other.md")
-			if err := os.WriteFile(other, []byte("x\n"), 0o644); err != nil {
-				t.Fatal(err)
+			// work". An unpinned path outside the project and temp roots remains
+			// refused.
+			home, err := os.UserHomeDir()
+			if err != nil {
+				t.Skipf("cannot find a path outside the project and temp roots: %v", err)
 			}
+			file, err := os.CreateTemp(home, "strument-unpinned-absolute-path-")
+			if err != nil {
+				t.Skipf("cannot create a path outside the project and temp roots: %v", err)
+			}
+			other := file.Name()
+			file.Close()
+			t.Cleanup(func() { os.Remove(other) })
 			if _, err := c.Files.Read(other, 0, 0); err == nil {
 				t.Errorf("an unpinned absolute path was accepted: %s", other)
 			}

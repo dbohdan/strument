@@ -27,7 +27,7 @@ func TestReadAndListAreContained(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("SECRET=outside\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Dir(root), filepath.Join(root, "up-link")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(root, "up-link")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	w := New(root)
@@ -115,7 +115,7 @@ func TestAbsolutePathsInsideTheRootAreContained(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ name, path, wantErr string }{
-		{"outside the root", outside, "outside the project root"},
+		{"outside the root", "/etc/passwd", "outside the project root"},
 		{"into .git", filepath.Join(root, ".git", "config"), ".git directory"},
 		{"resolving outside through a link", filepath.Join(root, "up-link"), "through a symlink"},
 	} {

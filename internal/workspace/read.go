@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -33,25 +34,34 @@ type FileText struct {
 }
 
 // Read returns a window of a text file. offset is 1-based; 0 means the start.
-// limit is a line count; 0 means defaultReadLines.
+// limit is a line count; 0 means defaultReadLines. An absolute path under the
+// standard temporary directory is also allowed.
 //
 // Reading is deliberately line-windowed rather than whole-file. A read tool
 // that can only return everything makes a large file unusable, and a model
 // that receives a silently truncated file will edit against text that is not
 // there. Truncated says so, and the tool layer turns it into a paging hint.
 func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
-	full, rel, reason := w.contain(rel)
+	raw := rel
+	full, rel, reason := w.contain(raw)
 	if reason != "" {
 		return FileText{}, errors.New(reason)
 	}
 	if rel == "" {
 		return FileText{}, errors.New("no path given")
 	}
-	// The ignore rules bind here too. They always bound ls, glob, and grep,
-	// which is what made this easy to miss: a gitignored .env was invisible to
-	// every way of finding it and one guessed filename away from being read.
-	if err := w.refuseIgnored(rel, full); err != nil {
-		return FileText{}, err
+	// Temporary-directory paths are outside the project, so project ignore rules
+	// do not apply to them. The path was already restricted to the standard temp
+	// directories by contain. A project itself may also live under /tmp, so the
+	// original spelling must be absolute before this exception applies.
+	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
+	if !absolute || !UnderTempDir(full) {
+		// The ignore rules bind here too. They always bound ls, glob, and grep,
+		// which is what made this easy to miss: a gitignored .env was invisible to
+		// every way of finding it and one guessed filename away from being read.
+		if err := w.refuseIgnored(rel, full); err != nil {
+			return FileText{}, err
+		}
 	}
 
 	info, err := os.Stat(full)

@@ -303,23 +303,30 @@ func (w *Workspace) Files() ([]string, Truncated, error) {
 
 // List reports the immediate contents of one directory, root-relative and
 // sorted, directories included. dir is root-relative; "" or "." is the root.
+// An absolute directory under the standard temporary directory is also allowed.
 //
 // It is not redundant with Glob: models use ls to orient themselves in an
 // unfamiliar tree, and answer "what is in here" badly when they have to guess
 // a pattern first.
 func (w *Workspace) List(dir string) ([]Entry, error) {
-	full, rel, reason := w.contain(dir)
+	raw := dir
+	full, rel, reason := w.contain(raw)
 	if reason != "" {
 		return nil, errors.New(reason)
 	}
+	temp := (filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)) && UnderTempDir(full)
 	var domain []string
 	if rel != "" {
 		domain = strings.Split(rel, "/")
 	}
 
-	matcher, err := w.matcherFor(domain)
-	if err != nil {
-		return nil, err
+	var matcher gitignore.Matcher
+	if !temp {
+		var err error
+		matcher, err = w.matcherFor(domain)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	entries, err := os.ReadDir(full)
@@ -333,7 +340,7 @@ func (w *Workspace) List(dir string) ([]Entry, error) {
 			continue
 		}
 		components := append(slices.Clone(domain), name)
-		if matcher.Match(components, e.IsDir()) {
+		if !temp && matcher.Match(components, e.IsDir()) {
 			continue
 		}
 		ent := Entry{Path: strings.Join(components, "/"), IsDir: e.IsDir()}
