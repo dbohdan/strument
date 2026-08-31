@@ -63,14 +63,24 @@ func intProp(desc string) map[string]any {
 // means — a restricted tool set rather than a separate prompt set with an
 // engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
-	defs := readOnlyTools()
-	// ask_user_question is always offered: it has no side effect to gate, and
-	// a discussion turn is exactly where a clarifying question belongs.
-	defs = append(defs, askTool())
-	if c.RepoMap != nil {
-		// symbol reads the same tree-sitter layer the repo map is built from,
-		// so it is offered exactly when that layer is available.
-		defs = append(defs, symbolTool())
+	var defs []llm.ToolDef
+	// ObservationViaCode withholds the direct read-only tools — including
+	// symbol, which the bridge itself carries — and forces code on. The mode
+	// is incoherent without the tool it redirects to, so the force arm ignores
+	// OfferCode=false rather than producing a session that can look at
+	// nothing.
+	if !c.ObservationViaCode {
+		defs = readOnlyTools()
+		// ask_user_question is always offered: it has no side effect to gate, and
+		// a discussion turn is exactly where a clarifying question belongs.
+		defs = append(defs, askTool())
+		if c.RepoMap != nil {
+			// symbol reads the same tree-sitter layer the repo map is built from,
+			// so it is offered exactly when that layer is available.
+			defs = append(defs, symbolTool())
+		}
+	} else {
+		defs = append(defs, askTool())
 	}
 	// Offered in ask mode too: fetching mutates nothing, and reading a
 	// specification is exactly what a discussion turn is for. The port is
@@ -95,7 +105,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// Also before the ask-mode return: computing mutates nothing, and a
 	// discussion turn is exactly where a calculator belongs. Offered unless
 	// withheld — OfferCode, and the {code_tools} slot follows the same flag.
-	if c.OfferCode {
+	// ObservationViaCode forces it past that flag: the redirect arm has no
+	// other way to look at anything.
+	if c.OfferCode || c.ObservationViaCode {
 		defs = append(defs, codeTool())
 	}
 	if c.editFormat == "ask" {
@@ -571,16 +583,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			}
 			parsed := ca
 			commit = &parsed
-		case toolRead:
-			results[tc.ID] = c.runRead(tc)
-		case toolGrep:
-			results[tc.ID] = c.runGrep(tc)
-		case toolGlob:
-			results[tc.ID] = c.runGlob(tc)
-		case toolLS:
-			results[tc.ID] = c.runLS(tc)
-		case toolSymbol:
-			results[tc.ID] = c.runSymbol(tc)
+		case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
+			results[tc.ID] = c.runObservationRedirect(tc)
 		case toolCheck:
 			results[tc.ID] = c.runCheckTool(ctx, tc)
 		case toolWebfetch:
@@ -688,6 +692,47 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		return OutcomeReflect
 	}
 	return OutcomeContinue
+}
+
+// runObservationRedirect answers a direct read-only call. Normally it is the
+// call itself; under ObservationViaCode the tool was withheld from the schema,
+// and a model calling it anyway is acting on habit rather than on the schema.
+// The answer is a redirect — which tool to use, and what a program calling it
+// looks like — rather than "Unknown tool": the name is known, the habit is
+// fixable in one reflection, and the redirect text is the only dialect
+// instruction that arrives exactly when the model is trying to observe.
+// argsJSON is passed through so the bridged example can quote the model's own
+// arguments back at it.
+func (c *Coder) runObservationRedirect(tc llm.ToolCall) string {
+	if !c.ObservationViaCode {
+		return c.inspector().Run(tc.Name, tc.Arguments)
+	}
+	return fmt.Sprintf("%q is not offered directly in this session: all file observation "+
+		"goes through the code tool. Call code with a program that calls %s(%s) — for "+
+		"example:\n\n```python\n%s\n```\n\nThe result of the call comes back to the "+
+		"program; return what you need from the program's final value.",
+		tc.Name, tc.Name, quoteToolArg(strings.TrimSpace(tc.Arguments)),
+		observationExample(tc.Name))
+}
+
+// observationExample renders one bridged call for the redirect text, in the
+// dialect the program actually speaks: the result is assigned, because an
+// unassigned call's value is discarded and the model would see only "None".
+func observationExample(name string) string {
+	switch name {
+	case toolRead:
+		return "text = read(path=\"a.go\", limit=20)\ntext"
+	case toolGrep:
+		return "hits = grep(pattern=\"TODO\", glob=\"**/*.go\")\nhits"
+	case toolGlob:
+		return "paths = glob(pattern=\"**/*.go\")\npaths"
+	case toolLS:
+		return "entries = ls(path=\"internal\")\nentries"
+	case toolSymbol:
+		return "found = symbol(name=\"runOne\", kind=\"definition\")\nfound"
+	default:
+		return name + "()"
+	}
 }
 
 // parseCommandArgs decodes a bash call. The second return is a model-facing
