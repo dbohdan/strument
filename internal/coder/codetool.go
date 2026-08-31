@@ -137,16 +137,19 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		return fmt.Sprintf("The Python interpreter failed to start: %v", err)
 	}
 
-	// A fresh context rather than the send's: the duration limit is the
-	// harness's promise that a runaway loop terminates, and wazero honors a
-	// canceled context by closing on it — but MaxDuration is the mechanism the
-	// interpreter enforces from inside, which the limit test below pins.
+	// print() output is collected and shipped in the result text. The
+	// description tells the model to "use print() for intermediate values",
+	// and a program that ends in print(...) rather than a bare expression —
+	// most of them, observed live — would otherwise return None with its
+	// actual output dropped on the floor. Under the observation force arm
+	// print is the primary reporting channel, so this is not cosmetic.
+	var printed strings.Builder
 	result, err := runner.Execute(context.Background(), cc.code, nil,
-		c.codeOptions()...)
+		append(c.codeOptions(), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
 	if err != nil {
 		return codeErrorText(err)
 	}
-	return codeResultText(result)
+	return codeResultText(result, printed.String())
 }
 
 // codeOptions assembles the Execute options: the resource limits, plus the
@@ -207,20 +210,33 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 	}
 }
 
-// codeResultText renders a program's value. A list or dict the model wants to
-// read comes back as JSON rather than Go's `%v` spacing, which a model would
-// otherwise have to misread as Python.
-func codeResultText(result any) string {
-	switch result.(type) {
-	case nil:
-		return "None"
-	case []any, map[string]any:
-		b, err := json.Marshal(result)
-		if err == nil {
-			return string(b)
+// codeResultText renders a program's value, plus anything it printed. The
+// printed section comes first: it is what the model chose to show, and the
+// final value (often None in a print-driven program) reads as the tail. A
+// list or dict the model wants to read comes back as JSON rather than Go's
+// `%v` spacing, which a model would otherwise have to misread as Python.
+func codeResultText(result any, printed string) string {
+	var b strings.Builder
+	if printed != "" {
+		b.WriteString(strings.TrimRight(printed, "\n"))
+		if result != nil {
+			b.WriteString("\n")
 		}
 	}
-	return fmt.Sprintf("%v", result)
+	switch result.(type) {
+	case nil:
+		if printed == "" {
+			return "None"
+		}
+		return strings.TrimRight(b.String(), "\n")
+	case []any, map[string]any:
+		if data, err := json.Marshal(result); err == nil {
+			b.Write(data)
+			return b.String()
+		}
+	}
+	fmt.Fprintf(&b, "%v", result)
+	return b.String()
 }
 
 // codeErrorText renders an execution failure for the model. The traceback's

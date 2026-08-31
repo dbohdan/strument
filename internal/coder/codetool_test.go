@@ -36,6 +36,26 @@ func TestCodeArithmetic(t *testing.T) {
 	}
 }
 
+// TestCodePrintOutputIsDelivered pins the fix the CO smoke run caught: the
+// description says "use print() for intermediate values", most model programs
+// end in print(...) rather than a bare expression, and without a print
+// handler every such program returned "None" with its actual output dropped.
+// A print-driven program must see its output, printed section before the
+// final value; a bare-expression program is unchanged.
+func TestCodePrintOutputIsDelivered(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+
+	if got := c.runCode(context.Background(), codeCall{code: "print(\"hello\")\nprint(\"world\")"}); got != "hello\nworld" {
+		t.Errorf("a print-driven program returned %q, want its printed output", got)
+	}
+	if got := c.runCode(context.Background(), codeCall{code: "x = 6\nprint(x)\nx * 7"}); got != "6\n42" {
+		t.Errorf("print plus a final value returned %q, want \"6\\n42\"", got)
+	}
+	if got := c.runCode(context.Background(), codeCall{code: "1 + 2"}); got != "3" {
+		t.Errorf("a bare expression returned %q, want \"3\"", got)
+	}
+}
+
 // TestCodeRoundExists pins the probe result that decided the tool
 // description: round() is available. It is the single most likely call in
 // model-written number formatting, and its absence would have to be said so.
