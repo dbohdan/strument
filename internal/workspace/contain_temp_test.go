@@ -24,18 +24,21 @@ func TestUnderTempDirAcceptsThePlatformTempDir(t *testing.T) {
 }
 
 func TestUnderTempDirRejectsOrdinaryPaths(t *testing.T) {
-	root := t.TempDir() // deliberately NOT under temp for this assertion
 	if runtime.GOOS == "windows" {
-		t.Skip("t.TempDir is under the platform temp dir on every platform; an out-of-temp root needs a second drive")
+		t.Skip("an out-of-temp root needs a second drive on Windows")
 	}
-	// os.TempDir here is /tmp or $TMPDIR; a fresh temp dir *is* under it, so
-	// build the refusal case from the parent of temp instead.
-	outside := filepath.Join(filepath.Dir(filepath.Clean(os.TempDir())), "strument-not-temp")
+	// t.TempDir is under the granted temp directory, so use the user's home
+	// directory for a refusal case instead.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot find a directory outside temp: %v", err)
+	}
+	outside := filepath.Join(home, "strument-not-temp")
 	if UnderTempDir(outside) {
-		t.Errorf("UnderTempDir(%q) = false expected", outside)
+		t.Skipf("user home is under the platform temp directory: %q", home)
 	}
-	if UnderTempDir(root) && !UnderTempDir(root) {
-		t.Error("unreachable")
+	if UnderTempDir(outside) {
+		t.Errorf("UnderTempDir(%q) = true; expected false", outside)
 	}
 }
 

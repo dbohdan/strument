@@ -145,6 +145,40 @@ func TestTurnCommitSkipsTempFiles(t *testing.T) {
 	}
 }
 
+func TestTurnCommitSkipsSymlinkEscapes(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(root, "scratch")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	c := toolCoder(t, root)
+	c.AddFile(filepath.Join(link, "outside.txt"))
+	repo := &committingRepo{asked: [][]string{}, root: root}
+	c.Repo = repo
+	c.AutoCommits = true
+
+	results := map[string]string{}
+	var matchFailure bool
+	c.applyToolEdits([]plannedEdit{
+		wholeFileWrite("call_1", "in.go", "package in\n"),
+		wholeFileWrite("call_2", filepath.Join("scratch", "outside.txt"), "package out\n"),
+	}, results, &matchFailure)
+	if matchFailure {
+		t.Fatal("unexpected match failure applying edits")
+	}
+	if got, err := os.ReadFile(filepath.Join(outside, "outside.txt")); err != nil || string(got) != "package out\n" {
+		t.Fatalf("the symlink target was not written: %q, %v", got, err)
+	}
+
+	c.commitTurn("test: skip symlink escape")
+
+	if len(repo.asked) != 1 || len(repo.asked[0]) != 1 || repo.asked[0][0] != "in.go" {
+		t.Errorf("git was asked to commit %v, want [in.go] — the symlink target must be filtered", repo.asked)
+	}
+}
+
 // The drop is announced, not silent — the readonly work documented what a
 // model believes-is-committed-but-is-not costs.
 func TestTurnCommitAnnouncesSkippedTempFiles(t *testing.T) {

@@ -157,14 +157,24 @@ func UnderTempDir(abs string) bool {
 // PathInRoot reports whether a root-relative path names a file inside the
 // named repository root. It is the containment test the commit path needs:
 // the turn snapshot keys on the path as the model spelled it, and a path that
-// does not live under the repo (a temp-dir scratch file, an out-of-tree pin)
-// cannot be handed to git.
+// does not live under the repo (a temp-dir scratch file, an out-of-tree pin, or
+// a symlink target outside it) cannot be handed to git.
 func PathInRoot(root, rel string) bool {
-	if root == "" {
+	if root == "" || filepath.IsAbs(rel) {
 		return false
 	}
-	full := filepath.Clean(filepath.Join(root, filepath.FromSlash(rel)))
-	inside, err := filepath.Rel(root, full)
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	full := filepath.Clean(filepath.Join(rootAbs, filepath.FromSlash(rel)))
+	inside, err := filepath.Rel(rootAbs, full)
+	if err != nil || EscapesRoot(inside) {
+		return false
+	}
+	resolvedRoot := ResolveSymlinks(rootAbs)
+	resolvedFull := ResolveSymlinks(full)
+	inside, err = filepath.Rel(resolvedRoot, resolvedFull)
 	return err == nil && !EscapesRoot(inside)
 }
 
