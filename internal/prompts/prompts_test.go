@@ -7,15 +7,16 @@ import (
 
 func TestToolPromptShape(t *testing.T) {
 	// The tool format's system prompt uses only the {final_reminders},
-	// {platform}, and {code_tools} slots (the schema does the rest); no other
-	// braces may linger to survive substitution as a literal.
-	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}"} {
+	// {platform}, {code_tools}, and {observation_tools} slots (the schema does
+	// the rest); no other braces may linger to survive substitution as a
+	// literal.
+	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}", "{observation_tools}"} {
 		if !strings.Contains(Tool.MainSystem, slot) {
 			t.Errorf("tool main_system missing slot %s", slot)
 		}
 	}
 	stripped := Tool.MainSystem
-	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}"} {
+	for _, slot := range []string{"{final_reminders}", "{platform}", "{code_tools}", "{observation_tools}"} {
 		stripped = strings.ReplaceAll(stripped, slot, "")
 	}
 	if strings.ContainsAny(stripped, "{}") {
@@ -25,17 +26,23 @@ func TestToolPromptShape(t *testing.T) {
 		t.Errorf("tool system_reminder missing {final_reminders}")
 	}
 
-	// The prompt must convey what separates the three groups of tools, since
-	// that is the part the schema cannot carry: observation is free, edits land
-	// directly, and the shell asks first.
+	// The observation paragraph moved behind {observation_tools}, which the
+	// coder fills from the tool-set flag; the pinned phrases live in
+	// ObservationBullet now. The other two group separations are still in the
+	// template itself — that is the part the schema cannot carry.
 	for _, want := range []string{
-		"change nothing and need no permission", // read/grep/glob/ls
-		"change files directly",                 // edit/write
-		"the user is asked before it runs",      // bash
+		"change files directly",            // edit/write
+		"the user is asked before it runs", // bash
 	} {
 		if !strings.Contains(Tool.MainSystem, want) {
 			t.Errorf("tool main_system should convey %q", want)
 		}
+	}
+	if obs := ObservationBullet; !strings.Contains(obs, "change nothing and need no permission") {
+		t.Errorf("the observation bullet lost its cost sentence: %q", obs)
+	}
+	if !strings.Contains(Tool.MainSystem, "{observation_tools}") {
+		t.Error("tool main_system lost the observation slot")
 	}
 	// The loop's shape is the other thing only the prompt can say: results come
 	// back, and a reply without a tool call is what ends the turn.
@@ -97,14 +104,20 @@ func TestAskPromptShape(t *testing.T) {
 	// to look at anything. These are the sentences whose absence caused that, so
 	// they are pinned rather than left to a future tidy-up.
 	for _, want := range []string{
-		"read, grep, glob, and ls look at the project",
-		"change nothing and need no permission",
 		"result comes back to you", // the loop closes here too
 		"ends the turn",
 	} {
 		if !strings.Contains(Ask.MainSystem, want) {
 			t.Errorf("ask main_system should convey %q:\n%s", want, Ask.MainSystem)
 		}
+	}
+	// The observation paragraph rides the {observation_tools} slot; its pinned
+	// phrases live in AskObservationBullet.
+	if !strings.Contains(Ask.MainSystem, "{observation_tools}") {
+		t.Error("ask main_system lost the observation slot")
+	}
+	if obs := AskObservationBullet; !strings.Contains(obs, "change nothing and need no permission") {
+		t.Errorf("the ask observation bullet lost its cost sentence: %q", obs)
 	}
 	// The no-editing rule has to name the mechanism rather than sound like a ban
 	// on acting: this mode has no editing tools, so describe changes instead.
@@ -128,9 +141,11 @@ func TestAskPromptShape(t *testing.T) {
 	if strings.Contains(Ask.FilesNoFullFiles, "No files are pinned") {
 		t.Errorf("the ask empty-pin line is a flat denial again:\n%s", Ask.FilesNoFullFiles)
 	}
-	// {language} is the only slot Ask substitutes; a stray brace would survive
-	// into the prompt as a literal.
-	if strings.ContainsAny(strings.ReplaceAll(Ask.MainSystem, "{language}", ""), "{}") {
+	// {language} and {observation_tools} are the slots Ask substitutes; a stray
+	// brace would survive into the prompt as a literal.
+	stripped := strings.ReplaceAll(Ask.MainSystem, "{language}", "")
+	stripped = strings.ReplaceAll(stripped, "{observation_tools}", "")
+	if strings.ContainsAny(stripped, "{}") {
 		t.Errorf("ask main_system has an unexpected brace:\n%s", Ask.MainSystem)
 	}
 }

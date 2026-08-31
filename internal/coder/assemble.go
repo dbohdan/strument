@@ -204,7 +204,18 @@ func (c *Coder) platformText() string {
 // tool is in this session's tool set, "" when it is not. The condition is the
 // same one toolDefs uses, so the prose tracks the schema by construction
 // rather than by a second copy of the condition drifting away from it.
+//
+// ObservationViaCode replaces the bullet with the force arm's paragraph: the
+// bullet's "reach for it when one answer needs several lookups" presupposes a
+// direct-call alternative that no longer exists, and would read as optional.
+// The replacement states the arrangement as fact, in the same register —
+// calm, specific — and carries the two facts the mode's description leans on:
+// that results come back to the program, and that the last value is what
+// returns to the model.
 func (c *Coder) codeToolsText() string {
+	if c.ObservationViaCode {
+		return prompts.ObservationViaCodeParagraph
+	}
 	if !c.OfferCode {
 		return ""
 	}
@@ -235,11 +246,40 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 	}
 
 	return pyFormat(prompt, map[string]string{
-		"final_reminders": strings.Join(finalReminders, "\n\n"),
-		"platform":        c.platformText(),
-		"language":        language,
-		"code_tools":      c.codeToolsText(),
+		"final_reminders":   strings.Join(finalReminders, "\n\n"),
+		"platform":          c.platformText(),
+		"language":          language,
+		"code_tools":        c.codeToolsText(),
+		"observation_tools": c.observationToolsText(),
 	})
+}
+
+// observationToolsText renders the {observation_tools} slot: the standard
+// read/grep/glob/ls paragraph normally, "" under the force arm — where the
+// ObservationViaCodeParagraph in {code_tools} has already said how observation
+// works and naming the tools as directly callable would contradict the schema.
+// The slot's condition is the same one toolDefs uses.
+func (c *Coder) observationToolsText() string {
+	if c.ObservationViaCode {
+		return ""
+	}
+	if c.editFormat == "ask" {
+		return prompts.AskObservationBullet
+	}
+	return prompts.ObservationBullet
+}
+
+// filesNoFullFilesText picks the nothing-pinned note: the standard one, or the
+// force arm's variant, which must not tell the model to use tools the schema
+// withholds. The swap follows the same flag the tool set does.
+func (c *Coder) filesNoFullFilesText() string {
+	if c.ObservationViaCode {
+		if c.editFormat == "ask" {
+			return prompts.AskFilesNoFullFilesViaCode
+		}
+		return prompts.FilesNoFullFilesViaCode
+	}
+	return c.Prompts.FilesNoFullFiles
 }
 
 // formatChatChunks builds the canonical slots.
@@ -369,7 +409,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 // create, and saying so is the whole of what it needs.
 func (c *Coder) pinnedFilesNote() string {
 	if len(c.absFnames) == 0 {
-		return c.Prompts.FilesNoFullFiles
+		return c.filesNoFullFilesText()
 	}
 
 	var existing, missing []string

@@ -415,3 +415,61 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 		t.Error("the code tool is withheld, but the prompt names it")
 	}
 }
+
+// The force arm's prompt must state the arrangement as fact and must not name
+// the withheld tools as directly callable — the closed-world hazard in mirror
+// image: a prompt saying "use read, grep, glob, and ls" beside a schema that
+// offers none of them is the self-contradiction the first trial's arms
+// shipped, read the other way.
+func TestObservationViaCodePromptTracksTheSchema(t *testing.T) {
+	c := testCoder(t)
+	c.ObservationViaCode = true
+	sys := c.fmtSystemPrompt(prompts.Tool.MainSystem)
+
+	if !strings.Contains(sys, "all file observation") {
+		t.Errorf("the force arm is on, but the prompt does not state it:\n%s", sys)
+	}
+	if strings.Contains(sys, "- read, grep, glob, and ls look at the project") {
+		t.Errorf("the force arm names the withheld tools as a direct-call bullet:\n%s", sys)
+	}
+
+	// The nothing-pinned note follows the same flag.
+	if note := c.filesNoFullFilesText(); !strings.Contains(note, "code tool") {
+		t.Errorf("the force arm's nothing-pinned note still steers to direct tools: %q", note)
+	}
+
+	// And the tool set itself: no read-only tools, code present even with
+	// OfferCode false.
+	c.OfferCode = false
+	defs := c.toolDefs()
+	names := map[string]bool{}
+	for _, d := range defs {
+		names[d.Name] = true
+	}
+	for _, withheld := range []string{toolRead, toolGrep, toolGlob, toolLS, toolSymbol} {
+		if names[withheld] {
+			t.Errorf("tool %q is offered under ObservationViaCode", withheld)
+		}
+	}
+	if !names[toolCode] {
+		t.Error("ObservationViaCode did not force the code tool on")
+	}
+	if !names[toolAskUser] {
+		t.Error("ask_user_question vanished under ObservationViaCode")
+	}
+
+	// A direct read-only call under the arm redirects, quoting the model's own
+	// arguments, rather than running as if the schema had offered it.
+	tc := llm.ToolCall{ID: "t1", Name: toolGrep, Arguments: `{"pattern":"TODO"}`}
+	got := c.runObservationRedirect(tc)
+	if !strings.Contains(got, `"grep" is not offered directly`) ||
+		!strings.Contains(got, `grep(pattern="TODO", glob="**/*.go")`) {
+		t.Errorf("the redirect does not teach the call shape:\n%s", got)
+	}
+
+	// With the arm off, the same dispatch runs the tool for real.
+	off := testCoder(t)
+	if strings.Contains(off.runObservationRedirect(tc), "not offered directly") {
+		t.Error("the redirect fired with ObservationViaCode off")
+	}
+}

@@ -151,10 +151,46 @@ const CodeToolsBullet = "- code runs a short Python program, which can itself ca
 	"exploration where each search depends on the last result, is a direct call " +
 	"to the tool itself.\n"
 
-// toolMainSystem is the tool format's system prompt. {code_tools} renders as
+// ObservationViaCodeParagraph is what the {code_tools} slot renders under the
+// force arm (coder.ObservationViaCode): all direct observation tools
+// withheld, all observation through code programs. It replaces the code
+// bullet, whose "reach for it when one answer needs several lookups"
+// presupposes a direct-call alternative that no longer exists, and would read
+// as optional. It states the arrangement as fact, in the register the rest of
+// the prompt uses, and carries the two facts the mode leans on: results come
+// back to the program, and the program's final value is what the model
+// receives.
+const ObservationViaCodeParagraph = "- code runs a short Python program. In this session all file observation — " +
+	"reading, searching, listing, and symbol lookup — goes through it: the " +
+	"program calls read, grep, glob, ls, and symbol itself, and the results " +
+	"come back to the program, not to you, until it returns. Write one program " +
+	"for the several lookups you need, and return the combined answer as the " +
+	"program's final value. It changes nothing and needs no permission.\n"
+
+// ObservationBullet is the tool prompt's read/grep/glob/ls paragraph, moved
+// here from toolMainSystem so the same slot can render the force arm's
+// replacement (an empty string — the paragraph above already says what the
+// model needs) without the prompt naming tools the schema withholds.
+const ObservationBullet = "- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
+	"so use them freely rather than guessing at a file's contents or at how the project works. " +
+	"Files the project ignores are " +
+	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
+	"inside the project is also accepted.\n"
+
+// AskObservationBullet is the ask-mode variant of the same paragraph. Its two
+// divergences from ObservationBullet are the original text's: "answering from
+// memory" because an analysis mode's characteristic failure is the confident
+// answer from nothing, and no mention of editing.
+const AskObservationBullet = "read, grep, glob, and ls look at the project. " +
+	"They change nothing and need no permission, so use them freely rather than " +
+	"answering from memory or guessing at how the project works. Files the project " +
+	"ignores are not listed or searched. Paths are relative to the project root; an " +
+	"absolute path that lies inside the project is also accepted.\n\n"
 // the code bullet above when the code tool is offered, and as "" when it is
 // not — the empty case is the feature-reverted baseline, where prose naming
-// `code` would promise a tool the schema does not carry.
+// `code` would promise a tool the schema does not carry. {observation_tools}
+// renders the same paragraph or, under the force arm, nothing — the
+// ObservationViaCodeParagraph has already described how observation works.
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
@@ -165,11 +201,7 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"Work through the provided tools. These are the ones you will reach for most, and they differ " +
 	"in what they cost the user:\n\n" +
 	"{code_tools}" +
-	"- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
-	"so use them freely rather than guessing at a file's contents or at how the project works. " +
-	"Files the project ignores are " +
-	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
-	"inside the project is also accepted.\n" +
+	"{observation_tools}" +
 	"- edit and write change files directly: the change lands the moment you call them, with no " +
 	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
 	"make the change.\n" +
@@ -254,7 +286,26 @@ var Tool = Set{
 // offers read, grep, glob, ls, and symbol, and this prompt named none of them
 // while opening with "you cannot apply edits from it" — a sentence a model can
 // read as "you cannot act". The only mention of the observation tools sat in
-// FilesNoFullFiles, which is used solely when nothing is pinned, so /ask after
+// FilesNoFullFilesViaCode replaces Tool.FilesNoFullFiles under the force arm:
+// the base text tells the model to "use read, grep, glob, and ls", which the
+// schema withholds — the exact task-proximal steering fable.md identified in
+// arm B/C of the first trial, here a self-contradiction rather than mere
+// competition. The replacement says the same thing about the one channel that
+// exists. The trailing sentences (edit anything; read, don't recall) are
+// unchanged and shared.
+const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the project with the code tool: " +
+	"write a program that calls read, grep, glob, and ls, and answer from what " +
+	"it returns. You can edit any file in " +
+	"the project. If the user asks how something here works, read the code " +
+	"that implements it: what you remember about a project is not evidence " +
+	"about this one."
+
+// AskFilesNoFullFilesViaCode replaces Ask.FilesNoFullFiles under the force
+// arm, for the same reason. Ask mode has no editing to narrow the denial
+// with, so — like its base text — this one drops it.
+const AskFilesNoFullFilesViaCode = "Look at the project with the code tool: write a program that calls " +
+	"read, grep, glob, and ls, and answer from what it returns rather than " +
+	"from memory."
 // /add described a mode with no way to look at anything. Nothing said results
 // come back either, so a model had no picture of the loop and could repeat a
 // call it had already made. Observed: MiMo looping.
@@ -273,11 +324,7 @@ var Ask = Set{
 	MainSystem: "You are an expert code analyst.\n" +
 		"Answer questions about the user's codebase.\n" +
 		"Always reply to the user in {language}.\n\n" +
-		"Work through the provided tools. read, grep, glob, and ls look at the project. " +
-		"They change nothing and need no permission, so use them freely rather than " +
-		"answering from memory or guessing at how the project works. Files the project " +
-		"ignores are not listed or searched. Paths are relative to the project root; an " +
-		"absolute path that lies inside the project is also accepted.\n\n" +
+		"Work through the provided tools. {observation_tools}\n\n" +
 		"Every call's result comes back to you, so you can keep looking within the same " +
 		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
 		"answering the question, without calling a tool — that is what ends the turn and " +
