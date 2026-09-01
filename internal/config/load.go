@@ -88,6 +88,9 @@ type fileGlobals struct {
 
 	hasEnvSet bool
 	envSetVal map[string]string
+
+	hasExampleMessages bool
+	exampleMessagesVal []ExampleMessage
 }
 
 // defaultSandbox is what `sandbox` means when a config does not say.
@@ -373,6 +376,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasEnvSet {
 		cfg.EnvSet = user.envSetVal
 	}
+	if user.hasExampleMessages {
+		cfg.ExampleMessages = user.exampleMessagesVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -449,6 +455,11 @@ func Load(opts Options) (*Config, error) {
 				cfg.EnvSet = map[string]string{}
 			}
 			maps.Copy(cfg.EnvSet, project.envSetVal)
+		}
+		// Appended, not replaced: examples are additive teaching, and a
+		// project's pair alongside the user's is worth more than either alone.
+		if project.hasExampleMessages {
+			cfg.ExampleMessages = append(cfg.ExampleMessages, project.exampleMessagesVal...)
 		}
 	}
 
@@ -893,6 +904,54 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasEnvSet = true
 		out.envSetVal = vals
+	}
+
+	if em, ok := globals["example_messages"]; ok {
+		list, ok := em.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `example_messages` must be a list of [role, content] pairs, got %s", path, em.Type())
+		}
+		examples := make([]ExampleMessage, 0, list.Len())
+		for i := range list.Len() {
+			// Both spellings are accepted: ["user", "..."] is what a user
+			// naturally writes, and a starlark tuple ("user", "...") is the
+			// same pair — refusing the list spelling because it is not a
+			// tuple would be refusing the obvious way to write it.
+			var items []starlark.Value
+			switch pair := list.Index(i).(type) {
+			case *starlark.List:
+				if pair.Len() != 2 {
+					return nil, fmt.Errorf(
+						"%s: `example_messages`[%d] must be a [role, content] pair, got a list of %d", path, i, pair.Len())
+				}
+				items = []starlark.Value{pair.Index(0), pair.Index(1)}
+			case *starlark.Tuple:
+				if pair.Len() != 2 {
+					return nil, fmt.Errorf(
+						"%s: `example_messages`[%d] must be a [role, content] pair, got a tuple of %d", path, i, pair.Len())
+				}
+				items = []starlark.Value{pair.Index(0), pair.Index(1)}
+			default:
+				return nil, fmt.Errorf(
+					"%s: `example_messages`[%d] must be a [role, content] pair, got %s", path, i, list.Index(i).Type())
+			}
+			role, ok := starlark.AsString(items[0])
+			if !ok {
+				return nil, fmt.Errorf("%s: `example_messages`[%d] role must be a string", path, i)
+			}
+			if role != "user" && role != "assistant" {
+				return nil, fmt.Errorf(
+					"%s: `example_messages`[%d] role must be \"user\" or \"assistant\", got %q", path, i, role)
+			}
+			content, ok := starlark.AsString(items[1])
+			if !ok {
+				return nil, fmt.Errorf("%s: `example_messages`[%d] content must be a string", path, i)
+			}
+			examples = append(examples, ExampleMessage{Role: role, Content: content})
+		}
+		out.hasExampleMessages = true
+		out.exampleMessagesVal = examples
 	}
 
 	return out, nil

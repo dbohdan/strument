@@ -61,9 +61,9 @@ func TestRecordWithCharacterStream(t *testing.T) {
 	}
 	// And no record anywhere carries a fragment of the answer. (Records with
 	// no text — the turn header — are not fragments.)
+	const answer = "The answer is 42."
 	for _, r := range rec.recs {
-		if r.Text == "" || len(r.Text) >= len("The answer") ||
-			!strings.Contains("The answer is 42.", r.Text) {
+		if r.Text == "" || len(r.Text) >= len(answer) || !strings.Contains(answer, r.Text) {
 			continue
 		}
 		t.Errorf("a fragment landed as its own record: %+v", r)

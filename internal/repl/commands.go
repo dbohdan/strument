@@ -18,6 +18,7 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/origin"
+	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/workspace"
 )
@@ -686,6 +687,13 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	r.coder.LoopDetection = !cfg.NoLoopDetection
 	r.coder.WebfetchAllow = cfg.WebfetchAllow
 	r.coder.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
+	// Re-applied by SetEditFormat on the next format switch; applied to the
+	// current set here so a reload takes effect mid-session.
+	r.coder.Examples = cfg.ExampleMessages
+	for _, ex := range cfg.ExampleMessages {
+		r.coder.Prompts.ExampleMessages = append(r.coder.Prompts.ExampleMessages,
+			prompts.Example{Role: ex.Role, Content: ex.Content})
+	}
 	// The named checks and what runs after an edit: both are plain values, and
 	// both were missing here, so editing a check and reloading did nothing.
 	r.coder.Check = cfg.Check

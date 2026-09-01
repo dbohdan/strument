@@ -211,6 +211,15 @@ type Config struct {
 	// (doc/experiments/2026-09-code-mode2.md), not a supported mode — yet.
 	ObservationViaCode bool
 
+	// ExampleMessages are few-shot example messages appended to the prompt
+	// set's example block, from the `example_messages` setting — a list of
+	// [role, content] pairs. Empty means none. It exists for the
+	// shell-parallelism trial's EX arm (doc/experiments/2026-09-shell-parallel.md):
+	// the planning-side lever the code-only report named, which prose in the
+	// system prompt could not supply on its own. Like observation_via_code it
+	// is an experimental arm, not a supported mode — yet.
+	ExampleMessages []ExampleMessage
+
 	// Sandbox names the confinement mechanism: SandboxLandlock or "" for
 	// none. It defaults to Landlock on Linux and "" elsewhere, and when it is
 	// set it is a requirement rather than a preference — see doc/security.md.
@@ -243,6 +252,13 @@ type Config struct {
 	// the allowlist to reach a model-run command, which is what keeps a value
 	// written in a config file from being handed to the model by accident.
 	EnvSet map[string]string
+}
+
+// ExampleMessage is one few-shot example: a role ("user" or "assistant") and
+// its content.
+type ExampleMessage struct {
+	Role    string
+	Content string
 }
 
 // ReasoningMode is what ReasoningDisplay does with a thinking block.

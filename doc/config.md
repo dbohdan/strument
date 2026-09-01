@@ -35,6 +35,7 @@ The loader reads these module-level variables after running your file:
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `observation_via_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `code` programs. Default `False`. See below. |
+| `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
@@ -615,6 +616,27 @@ off by default and may change or be withdrawn based on those results.
 
 Turn it off if your model's ordinary output trips it — generated tables and
 fixture data are the plausible cases. Nothing else changes.
+
+### `example_messages`
+
+```python
+example_messages = [
+    ["user", "check services a, b, c and d and tell me which are down"],
+    ["assistant", "Checking all four in one call, since none depends on another:\n\n`a & b & c & d & wait`"],
+]
+```
+
+Optional. A list of `[role, content]` pairs (`"user"` or `"assistant"`)
+appended to the prompt set's example block, so the model sees them as a
+worked exchange before the conversation starts. Empty means none.
+
+Experimental, like `observation_via_code`: it is the few-shot arm of the
+shell-parallelism trial (`doc/experiments/2026-09-shell-parallel.md`) — the
+planning-side lever that trial's predecessor named, aimed at whether a worked
+example changes how models batch commands. It exists because prose in the
+system prompt moves *uptake* (the code-mode trials) but has not been shown to
+move *granularity* (how much work one call plans). User and project configs
+append rather than replace: a project's examples appear alongside the user's.
 
 ### `shell_timeout`
 

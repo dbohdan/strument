@@ -10,6 +10,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/skill"
 )
 
@@ -144,6 +145,16 @@ func (c *Coder) SetEditFormat(format string) {
 	}
 	c.editFormat = format
 	c.Prompts = promptsForFormat(format)
+	// Config-provided examples (example_messages) ride on top of whatever
+	// format's set is active, so they are re-applied on every switch. They are
+	// experimental-arm input (the shell-parallelism trial's EX arm), not part
+	// of any built-in set — which is why they live on the Coder rather than in
+	// prompts.Set.
+	for _, ex := range c.Examples {
+		c.Prompts.ExampleMessages = append(c.Prompts.ExampleMessages, prompts.Example{
+			Role: ex.Role, Content: ex.Content,
+		})
+	}
 }
 
 // LastCommitHash is the short hash of the session's last auto-commit ("" if

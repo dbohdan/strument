@@ -33,7 +33,9 @@ PROSE is the minimal known-effective intervention (the 2026-09 prose moved
 `code` uptake from 0/36 to 8/24); EX is the planning-side lever the
 code-only report named. Both arms share the same BASE tool description, so
 any BASE/EX or BASE/PROSE difference is attributable to the prompt, not the
-schema.
+schema. EX is delivered by the `example_messages` config setting (added for
+this trial, following the `observation_via_code` experimental-arm pattern):
+a list of `[role, content]` pairs appended to the prompt set's example block.
 
 ### Task
 

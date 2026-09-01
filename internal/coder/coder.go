@@ -130,6 +130,11 @@ type Coder struct {
 	// defaultShellTimeout; negative means no deadline. /run is never bounded.
 	ShellTimeout time.Duration
 
+	// Examples are config-provided few-shot messages (example_messages),
+	// appended to the active prompt set's examples on every format switch.
+	// nil in a session without them. See SetEditFormat.
+	Examples []config.ExampleMessage
+
 	// EnvAllow extends the default environment allowlist (envallow.go) with
 	// names from the config's `env_allow`. It applies to every command the
 	// model caused to run — bash, checks, the scraper — never to /run.
