@@ -164,8 +164,14 @@ func (r *REPL) completer() readline.AutoCompleter {
 	for _, c := range commands {
 		var sub []*readline.PrefixCompleter
 		switch c.name {
-		case "add", "read-only", "submit":
+		case "add":
 			sub = append(sub, recursiveDynamic(r.completeAddable))
+		case "submit", "read-only":
+			// Arbitrary filesystem paths, absolute included: /read-only's
+			// documented purpose is material outside the project, and /submit
+			// reads a drafted prompt from anywhere. completeAddable's flat
+			// root listing cannot offer those.
+			sub = append(sub, recursiveDynamic(r.completePaths))
 		case "check":
 			sub = append(sub, readline.PcItemDynamic(r.completeChecks))
 		case "drop":
