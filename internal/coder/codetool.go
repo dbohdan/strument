@@ -72,10 +72,10 @@ func codeTool() llm.ToolDef {
 		"caps\n" +
 		"```\n\n" +
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
-		"statements, loops, f-strings, comprehensions, try/except, and " +
+		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
 		"math/re/datetime/json all work; the last value evaluated is returned, " +
-		"and print() shows intermediate values. Not available: classes, with, " +
-		"match, eval/exec, open, filesystem or network access, other imports. " +
+		"and print() shows intermediate values. Not available: with, match, " +
+		"del, eval/exec, open, filesystem or network access, other imports. " +
 		"A missing construct raises an error naming it — simplify and rerun; a " +
 		"failed program costs one cheap retry.")
 

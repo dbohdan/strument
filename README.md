@@ -456,3 +456,8 @@ Three components are forked and vendored, each with a `NOTICE` recording the cha
   [ergochat/readline](https://github.com/ergochat/readline) v0.1.3 (MIT).
   Its redraw was reworked to be flicker-free using the single-write technique from
   [bestline](https://github.com/jart/bestline) by Justine Tunney (2-clause BSD).
+- The `run_code` Python sandbox (`internal/monty/`) wraps
+  [monty-go](https://github.com/fugue-labs/monty-go) at `v0.2.0` (MIT), the pure-Go
+  wazero bindings for [Pydantic's Monty](https://github.com/pydantic/monty); the
+  vendored `monty.wasm` blob is built from monty-go's Rust shim against Monty
+  v0.0.21.

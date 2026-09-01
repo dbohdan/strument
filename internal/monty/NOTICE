@@ -21,11 +21,25 @@ behavior Strument depends on.
 
 **The monty.wasm blob is NOT built from source here.** Rebuilding it needs
 a Rust toolchain with the `wasm32-wasip1` target, and Strument deliberately
-requires none (no cgo, no C toolchain — see CLAUDE.md). The pre-built blob
-from the v0.2.0 release is vendored as-is:
+requires none (no cgo, no C toolchain — see CLAUDE.md). The vendored blob was
+rebuilt in September 2026 from monty-go's own Rust shim
+(`crates/monty-wasm`, commit c5fede1) with its `monty` git dependency bumped
+to the Pydantic Monty v0.0.21 tag:
 
   * monty.wasm — SHA-256
-    d106ecf55330a09f5d54ea1dc159f8b6452db126a0bb161cd48d1585618a6ca8
+    c710466336591ead5f5620c3527b63459d061053dc4e3fc49b842f666b619228
+
+The shim needed three changes for the v0.0.11 → v0.0.21 API (kept locally;
+not upstreamed): types split out into the new `monty_types` crate, the
+generic `<LimitedTracker>` parameter dropped from `RunProgress` and the
+snapshot structs, `MontyRun::new` gaining a `CompileOptions` argument, and
+`OsCall` now carrying a typed `OsFunctionCall` (unpacked with `to_args()`).
+The C-ABI wire format to the Go wrapper is unchanged. One behavioral change:
+`max_allocations` is no longer enforced (upstream moved allocation
+accounting into the `monty-alloc` global allocator, which the shim does not
+arm) — `max_duration` and `max_recursion_depth` still are. Classes are now
+supported; the tool description's wall list moved `classes` to the
+available column accordingly.
 
 Upgrading Monty — new wrapper code or a new blob — is a separate decision
 with its own cost, and a reviewer should not have to guess that. The

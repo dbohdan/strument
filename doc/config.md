@@ -1260,12 +1260,12 @@ Python subset compiled to WebAssembly and run through `wazero` — pure Go, no
 cgo, vendored under `internal/monty/`.
 
 It is a **subset**, and the tool description names the walls rather than
-letting the model find them: no class definitions, no `with`, no `match`, no
-`eval`/`exec`, no `open`, no `os`/`pathlib` filesystem access, no network, no
+letting the model find them: no `with`, no `match`, no `eval`/`exec`, no
+`open`, no `os`/`pathlib` filesystem access, no network, no
 imports beyond `math`/`re`/`datetime`/`json`, no third-party libraries.
 Available: f-strings, `while`, `try/except`, comprehensions, generators,
-`lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/`abs`, and
-all of `math`. There is no `%-formatting` and no `.format()`.
+classes, `lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/
+`abs`, and all of `math`. There is no `%-formatting` and no `.format()`.
 
 The program is sandboxed by construction: no filesystem, no network, and
 explicit resource limits (5 s, 32 MiB, recursion depth 100). A program that

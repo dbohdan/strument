@@ -101,9 +101,9 @@ func TestCodeMemoryBombTerminates(t *testing.T) {
 func TestCodeUnsupportedSyntaxIsUsefulError(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
-	got := c.runCode(context.Background(), codeCall{code: "class A: pass"})
-	if !strings.Contains(got, "class definitions") {
-		t.Errorf("a class definition must name itself in the error, got: %q", got)
+	got := c.runCode(context.Background(), codeCall{code: "match x:\n    case 1: pass"})
+	if !strings.Contains(got, "match") {
+		t.Errorf("a match statement must name itself in the error, got: %q", got)
 	}
 }
 

@@ -119,10 +119,10 @@ simpler. If you run out of time, stopping here is a good outcome.
 
 Monty is a Python **subset**. A model writing ordinary Python will hit walls,
 and the description is the only thing that can prevent that. State plainly what
-is missing: **no class definitions, no `with`, no `match`, no imports beyond
+is missing: **no `with`, no `match`, no imports beyond
 `math`/`re`/`datetime`/`json`, no third-party libraries.** Available: f-strings,
-`while`, `try/except`, comprehensions, generators, `sum`/`min`/`max`/`sorted`/
-`enumerate`/`zip`/`abs`, and all of `math`.
+`while`, `try/except`, comprehensions, generators, classes, `sum`/`min`/`max`/
+`sorted`/`enumerate`/`zip`/`abs`, and all of `math`.
 
 - [x] **Check whether `round()` exists.** It is absent from upstream's builtin
       list and it is the single most likely call in model-written number
