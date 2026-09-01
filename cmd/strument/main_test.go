@@ -639,6 +639,19 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 
 	root := t.TempDir()
 
+	// Build before redirecting HOME below. A redirected HOME moves GOPATH's
+	// default module cache ($HOME/go/pkg/mod) into the temp dir, and the
+	// build fills it with Go's read-only module files — which t.TempDir's
+	// RemoveAll cannot unlink (macOS CI: "TempDir RemoveAll cleanup:
+	// permission denied"). Linux never saw this because only darwin
+	// redirects HOME.
+	bin := filepath.Join(t.TempDir(), "strument")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	build.Dir = "."
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v: %s", err, out)
+	}
+
 	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
 	// the same pattern as writeTempUserConfig.
 	switch runtime.GOOS {
@@ -666,13 +679,6 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	proj := filepath.Join(root, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
-	}
-
-	bin := filepath.Join(t.TempDir(), "strument")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = "."
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v: %s", err, out)
 	}
 
 	cmd := exec.Command(bin, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-m", "hello")

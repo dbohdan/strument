@@ -85,12 +85,28 @@ func newSigREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*sigREPL, *s
 	r, _, out := newTestREPL(t, cl, input)
 	s := &sigREPL{REPL: r, sig: make(chan os.Signal, 4)}
 	r.opts.Notify = func(ch chan<- os.Signal) func() {
+		// One forwarder per subscription, stopped by the returned func — the
+		// shape signal.Notify/Stop has. The first version returned a no-op,
+		// which leaked a live forwarder per turn: turn 2's fresh goroutine
+		// drained a signal the test fired between turns and delivered it into
+		// turn 2's handler, cancelling a send that must not be cancelled
+		// (macOS CI, where the scheduling gap is wide enough to hit).
+		stop := make(chan struct{})
 		go func() {
-			for v := range s.sig {
-				ch <- v
+			for {
+				select {
+				case v := <-s.sig:
+					select {
+					case ch <- v:
+					case <-stop:
+						return
+					}
+				case <-stop:
+					return
+				}
 			}
 		}()
-		return func() {}
+		return func() { close(stop) }
 	}
 	return s, out
 }
