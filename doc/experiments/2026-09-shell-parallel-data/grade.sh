@@ -44,13 +44,19 @@ if short:
     sys.exit(f"VALIDATION FAIL: {len(short)} suspiciously short text field(s): {details}")
 
 # --- statuses: what the checks printed in tool-result records -------------
+# Two shapes are accepted, because both are the check output reaching the
+# model: a bash result's raw stdout ("storage: OK ...") and a read of a
+# redirect file ("1\tstorage: OK ..."). Source matches are excluded: a
+# line ending in `" ;;` is the script's own case arm, not output.
 printed = {}
-pat = re.compile(r"^(storage|search|auth|billing): (.+)$", re.M)
+pat = re.compile(r"^\s*(?:\d+\t)?\s*((storage|search|auth|billing): (.+?))\s*$", re.M)
 for r in records:
     if r.get("role") != "tool":
         continue
-    for comp, line in pat.findall(r.get("text", "")):
-        printed[comp] = f"{comp}: {line}"
+    for full, comp, rest in pat.findall(r.get("text", "")):
+        if full.rstrip().endswith('" ;;'):
+            continue
+        printed[comp] = full
 
 missing = {"storage", "search", "auth", "billing"} - set(printed)
 if missing:
@@ -70,16 +76,31 @@ states = {c: ("FAIL" if "FAIL" in t else "DEGRADED" if "DEGRADED" in t else "OK"
 fails = sorted(c for c, s in states.items() if s == "FAIL")
 degs = sorted(c for c, s in states.items() if s == "DEGRADED")
 if fails:
-    want = "FLEET FAIL: " + ", ".join(fails)
+    kind, comps = "FLEET FAIL", fails
 elif degs:
-    want = "FLEET DEGRADED: " + ", ".join(degs)
+    kind, comps = "FLEET DEGRADED", degs
 else:
-    want = "FLEET HEALTHY"
-health_ok = want in body
+    kind, comps = "FLEET HEALTHY", []
+# The handoff names no component order, so the line is graded as a set: every
+# listed component present, none missing, none extra. A component listed in
+# the wrong line (a DEGRADED name inside a FAIL line) is a wrong answer: the
+# three lines name different component sets, and "even if something else is
+# also degraded, FAIL outranks it" is about which *line* applies, not what it
+# lists.
+m = re.search(r"FLEET (HEALTHY|DEGRADED|FAIL)([^\n]*)", body)
+health_ok = False
+if m:
+    kind_seen, rest = m.group(1), m.group(2)
+    if kind == "FLEET HEALTHY":
+        health_ok = kind_seen == "HEALTHY"
+    else:
+        want_kind = kind.split()[1]
+        listed = [c.strip() for c in rest.split(":")[-1].split(",") if c.strip()]
+        health_ok = kind_seen == want_kind and sorted(listed) == comps
 
 print(f"statuses copied exactly: {'PASS' if ok else f'FAIL ({len(wrong)} wrong)'}")
 for t in wrong:
     print(f"  missing from report: {t}")
-print(f"health line: {want!r} {'present' if health_ok else 'MISSING/WRONG'}")
+print(f"health line: {kind}: {comps} {'present' if health_ok else 'MISSING/WRONG'}")
 print(f"GRADE: {'PASS' if ok and health_ok else 'FAIL'}")
 EOF

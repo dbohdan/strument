@@ -1,162 +1,126 @@
 # Shell parallelism: does the advertised pattern get used?
 
-2026-09-01. Two features landed in the `bash` tool before this trial: a
-model-settable `timeout` (clamped to the configured ceiling, commit 4ba1a65)
-and an explicit endorsement of `a & b & wait` in the tool description, with
-the interleaved-output caveat (commit 7fa16ad). This trial asks whether that
-description-level exposure changes what models emit, and whether it saves
-wall-clock time.
+2026-09-01. Preregistration in this file above (design, metrics, scoring
+rules, frozen task); the runner adapted the 2026-09 rig
+(`2026-09-code-mode2-data/run.py`). 27/27 runs completed, no timeouts, no
+empty replies, no loop stops, no clamp notices. Transcripts in
+`2026-09-shell-parallel-data/transcripts/`.
 
-## Prior
+## Results
 
-The code-only trial (2026-10-code-only.md) concluded that *availability is
-not granularity*: forcing the medium converted neither the plan nor the
-round-trip count. The same null is expected here — the prediction is that
-models will not reach for background jobs unprompted, because batching is a
-planning skill and a tool description is prose. The trial is worth running
-anyway: the null closes "models would parallelize if the tool advertised it,"
-and any positive result is cheap evidence that description-level exposure is
-a lever that actually pulls.
+Primary one first: **PROSE moved uptake to 9/9 — every run in every model
+used `a & b & wait`.** BASE was already 6/9. The preregistration's predicted
+null ("models will not reach for background jobs unprompted") was wrong, and
+the 2026-10 conclusion ("availability is not granularity") needs one
+refinement: it holds for the *code* tool's batching, but one paragraph of
+prompt prose did change how this task's commands were planned.
 
-## Design
+Per model, per arm (`bg-use`: runs using `&`, of that cell's 3 reps;
+grades in rep order):
 
-One factor (prompt exposure of the pattern), three arms, one task suite,
-three models, three reps — 27 runs, shuffled, seed 20260902.
+| arm | model | bg-use | grades | bash calls |
+| --- | --- | --- | --- | --- |
+| BASE | mimo | n n n | PPP | 12 (4 serial calls/run) |
+| BASE | qwen | Y Y Y | PPP | 4 |
+| BASE | glm | Y Y Y | PPP | 6 |
+| PROSE | mimo | Y Y Y | PFP | 3 |
+| PROSE | qwen | Y Y Y | PPP | 3 |
+| PROSE | glm | Y Y Y | PPP | 3 |
+| EX | mimo | n n n | PPP | 12 (4 serial calls/run) |
+| EX | qwen | Y Y Y | PPP | 4 |
+| EX | glm | Y Y n | PPP | 4 |
 
-| arm | tool description | prompt |
-| --- | --- | --- |
-| **BASE** | as shipped (mentions `&`, `timeout`, interleaving) | default |
-| **PROSE** | as shipped | one added paragraph: when several independent commands are needed, run them as `a & b & wait` in one call rather than as serial calls |
-| **EX** | as shipped | PROSE plus a few-shot example pair in `ExampleMessages`: one multi-job call and its result |
+### What the arms did
 
-PROSE is the minimal known-effective intervention (the 2026-09 prose moved
-`code` uptake from 0/36 to 8/24); EX is the planning-side lever the
-code-only report named. Both arms share the same BASE tool description, so
-any BASE/EX or BASE/PROSE difference is attributable to the prompt, not the
-schema. EX is delivered by the `example_messages` config setting (added for
-this trial, following the `observation_via_code` experimental-arm pattern):
-a list of `[role, content]` pairs appended to the prompt set's example block.
+- **PROSE is the only arm that changed behavior, and it changed it
+  everywhere.** 9/9 uptake, one batched call per run, the lowest bash count
+  (9 total vs 20–22). This is the 2026-09 prose effect again — two sentences
+  pointing at a pattern got all three models to use it.
+- **EX bought nothing over BASE.** 5/9 uptake — *worse* than BASE's 6/9,
+  and the misses are systematic: mimo ignored the pattern in both arms (12
+  serial calls per run, 4 separate bash calls, all correct), and glm-EX-2
+  ran serial. The few-shot pair — a worked exchange ending in `a & b & c & d
+  & wait` — did not move the model it was most aimed at. Examples taught
+  vocabulary, not planning; same verdict the code-only trial reached by a
+  different route.
+- **Correctness was a ceiling, not a differentiator: 26/27.** The one FAIL
+  (mimo-PROSE-1) wrote `FLEET FAIL: auth, billing` when billing was only
+  DEGRADED — the handoff's "FAIL outranks it" was read as "list both." A
+  genuine spec misreading, and the only one.
 
-### Task
+### The baseline surprise
 
-Needs a suite where parallel commands are natural rather than mandated: a
-task whose honest execution runs a test suite and a build, or checks across
-several components, where a competent human would run the commands
-concurrently. The 2026-09 caps task is wrong here (pure lookup, no commands).
-The task must also be correctable without the model believing serial
-execution is expected — the instruction says *make it pass*, never *run these
-commands*. Task construction is the trial's main risk: an obviously
-parallelizable task teaches vocabulary; one where parallelism is incidental
-may show no signal. The task text is frozen below before any run.
+BASE's 6/9 is the interesting number. Two of three models used the pattern
+with no prompt exposure at all — the tool description's mention of `a & b &
+wait` (added in 7fa16ad) plus the smoke run's equalizing comment in the
+check scripts were enough for qwen and glm. The description-level exposure
+the trial was designed to test is already past the threshold for half these
+models. What PROSE adds is not discovery but *uniformity*: it is the
+difference between "2 of 3 models usually do this" and "everything does this
+every time."
 
-*(Task text: to be inserted here and frozen before the first run.)*
+### Wall-clock
 
-**Task (frozen 2026-09-01):** a four-component fleet-report fixture in
-`2026-09-shell-parallel-data/task/`. Four check scripts under `checks/`
-(`storage.sh`, `search.sh`, `auth.sh`, `billing.sh`), each sleeping 3 s and
-printing one status line whose value derives from `date +%s` (truncated to
-its first 8 digits) hashed with a data file's checksum — so reading a
-script's source does not reveal its output, the only way to know a status is
-to run it, and statuses are stable within a run but vary between runs ≥100 s
-apart. The prompt (PROMPT.md) asks the model to fill TEMPLATE.md into
-REPORT.md per the colleague's HANDOFF.md: every component's status line
-copied exactly, plus a derived overall health line (FLEET HEALTHY / DEGRADED
-/ FAIL with the failing components, FAIL outranking DEGRADED). The prompt
-never mentions running commands, parallelism, or how many calls to make;
-running the checks is inferable only from HANDOFF.md's "run the checks and
-use what they print right now."
+Not directly measured — `bash_span_records` (record distance from first bash
+call to last result) is the proxy: PROSE median 1 (one call, one result),
+BASE and EX median 4. The serial runs cost ~4× the shell time, matching the
+fixture's design arithmetic (4 × 3 s serial vs ~3 s batched).
 
-**Amendments from the smoke run (2026-09-01, one BASE/glm run, before any
-trial data existed):** the first smoke run found two demand-characteristic
-hazards, both fixed in the fixture before the trial:
+## What to conclude
 
-- PROMPT.md's title said "shell-parallelism trial task", and the model's
-  reasoning quoted it as its reason to batch ("the hint is to run them in
-  parallel"). The title is now "Operations Report". With it, no text in the
-  fixture names the trial, the arms, or parallelism.
-- The check scripts' comments each now say the checks are independent of one
-  another — stated for every arm equally, so it informs rather than arms one
-  arm. (The alternative — removing all hints — would make BASE the only arm
-  with no path to the pattern, which biases the other way.)
+- **Prose is the lever; examples are not.** PROSE 9/9 vs EX 5/9, with EX's
+  misses concentrated in the model that needed it most. This refines the
+  code-only trial's "the lever is planning (few-shot first, nudge second)":
+  few-shot was tried here and did not plan. A worked example shows the
+  *shape*; the prose paragraph states the *rule* ("when several commands are
+  independent, run them together"); only the rule changed behavior.
+- **The pattern is safe.** No truncation, no interleaving confusion, no
+  clamp notices, zero repair loops from backgrounded output — the caveats in
+  the tool description never fired in practice.
+- **Adoption is model-dependent even under prose.** mimo ran serial in every
+  arm including EX — 4 calls per run, always correct, never batched. Whatever
+  prose moves in qwen and glm does not move mimo.
 
-The same smoke run surfaced a shell trap unrelated to the faculty under
-test: `cd checks && ./a.sh & ./b.sh &` background-job precedence makes only
-the first job inherit the `cd`. One run repaired it in one round trip. It is
-recorded here so it is read as uniform noise, not an arm effect; the runner
-runs `strument` with `cwd` at the fixture root, so the checks' relative
-paths resolve without a `cd`.
+**Verdict: PROSE passes its primary metric and is worth keeping** — the
+paragraph is a candidate for the shipped tool description or a
+system-prompt line, pending a run against a task where serial execution is
+*also* fine (this task makes batching near-mandatory, so 9/9 may be
+ceiling-limited). EX fails and is not worth pursuing further; the
+`example_messages` setting stays as infrastructure.
 
-**Why this task measures the trial's question.** Four independent 3 s
-commands are the honest workload: serial execution costs ~12 s of shell
-wall-clock, one `a & b & c & d & wait` call costs ~3 s, so the wall-clock
-primary has real room to move. The task is not phrased as "parallelize" —
-it is a deadline-plus-workload shape, and the decision to batch is the
-model's planning alone, which is exactly the faculty under test.
+## Scoring corrections (recorded because they changed results)
 
-**Grading** (`2026-09-shell-parallel-data/grade.sh`, verified end-to-end on
-a hand-built fixture run): statuses are taken only from tool-result records
-in the run's JSONL — never a re-run, which removes any race with the 100 s
-status window — and REPORT.md is graded on exact status lines and the
-derived health line. The validation pass (JSON parse, tool_call_id pairing,
-sub-3-character text fields) aborts loudly before any scoring; the
-one-character-record tripwire was verified against a hand-mangled
-transcript.
+Two grader bugs were found *after* the first pass and fixed before any
+conclusion was drawn; both corrections are in
+`2026-09-shell-parallel-data/grade.sh`:
 
-## Metrics
+1. The first-pass status pattern only matched bash-tool stdout. Two runs
+   redirected check output to files and read them back with `read` — a
+   perfectly good strategy the grader scored as ERROR ("no transcript record
+   shows checks"). Fixed to accept numbered-prefix read output, excluding the
+   scripts' own source lines.
+2. The health-line check demanded sorted component order; models writing
+   `FLEET FAIL: search, billing` for FAILs {search, billing} were marked
+   wrong. Fixed to grade the set, not the order. This converted 14 spurious
+   FAILs to PASSes; the residual FAIL (mimo-PROSE-1) is genuine (a DEGRADED
+   component listed in the FAIL line).
 
-Preregistered; from JSONL only, never the rendered stream:
-
-- **Primary — usage:** bash calls per run; calls containing `&` or ` wait`;
-  calls carrying a `timeout` argument; timeout-clamp notices fired.
-- **Primary — time:** wall-clock span of the shell phase (first `bash` call
-  to last), per run.
-- **Guardrails:** task correctness (the suite's own pass/fail); background
-  jobs killed at the block boundary mid-work (visible as truncated output in
-  the tool result); interleaved-output confusion (a follow-up call whose
-  command suggests the model misattributed prior output); turns that ended in
-  failure.
-
-## Scoring rules
-
-- The scorer reads **only** the JSONL. It never reads the rendered stream.
-  (The eleven-scorer-bug cluster in record.go's header and the code-only
-  trial's first-pass scorer both came from reading the wrong text.)
-- **Validation pass first.** Before any scoring: every line must parse as a
-  JSON object; every `tool_call_id` must pair with a call; every record with
-  a `text` field shorter than 3 characters is listed and counted. Any
-  violation aborts scoring loudly — a mangled log must stop the trial, not
-  skew it. This rule exists because the code-only trial reported tool results
-  arriving one character per record; the trunk could not reproduce it (the
-  recording path is per-message and pinned by
-  `TestRecordWithCharacterStream`), and the report's own method notes suggest
-  the symptom came from a scorer reading rendered text. If it reappears, the
-  validation pass turns it from a scoring contaminant into a caught error.
-- Program/command failure counts come from tool-result *records*, keyed on
-  the result text the model received — the same key the code-only trial used
-  on its second pass — never from the command string.
-
-## Declared confounds
-
-- **The confirmation gate.** Every `bash` call asks the user, so one call
-  with three jobs and three serial calls cost the same number of prompts.
-  The trial measures emitted commands and shell wall-clock, not round trips;
-  round trips are reported but expected to be uninformative here. (The
-  shell.go comment's batch-approval future would change this; it has not
-  arrived.)
-- **Timeout interplay.** A model may pass `timeout` to buy *fewer* seconds,
-  which shortens the shell phase for reasons unrelated to parallelism. Calls
-  with a `timeout` argument are therefore reported separately from the
-  wall-clock primary.
-- **Model habit.** Three models were chosen because the last two trials
-  showed different planning habits per model; the per-model table is part of
-  the primary report, not a footnote.
+Both corrections are exactly the failure shape `internal/coder/record.go`'s
+header documents: the first was a scorer that knew where the text should be
+rather than where the model put it.
 
 ## Method notes
 
-- Runner under /tmp per AGENTS.md (bulk data stays out of the repository;
-  this file is the durable part), but the JSONL logs are copied into
-  doc/experiments/2026-09-shell-parallel-data/ before /tmp is lost — the
-  code-only trial's transcripts vanished with a reboot and took their
-  evidence with them.
-- Reps shuffled, seeded, one task suite per rep; no timeouts on the model
-  side, no retries beyond the client's own.
+- Runner: `/tmp/shell-parallel/run.py`, adapted from
+  `2026-09-code-mode2-data/run.py`; per AGENTS.md the runner itself stays out
+  of the repository. A resume-path bug (`UnboundLocalError` on `text`) ate
+  one invocation's rows before the clean batch; fixed, and the runner now
+  refuses to resume onto a batch that ended in runner errors. All 27 runs in
+  this report are from one clean, uninterrupted batch.
+- Models: mimo = xiaomi/mimo-v2.5, qwen = qwen/qwen3.8-27b,
+  glm = z-ai/glm-5.3-flash, via OpenRouter, seed 20260902, 3 workers.
+- Total cost $0.11 for 27 runs. One run used the model-settable `timeout`
+  parameter (the feature's first in-the-wild use).
+- The smoke run (before amendments) is kept as
+  `transcripts/smoke-glm-BASE-0.jsonl`; its demand-characteristic finding is
+  recorded in the amendments section above.
