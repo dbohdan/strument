@@ -227,7 +227,13 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	if f.outline {
 		return truncateResult(content) // an outline that overruns has no map of its own
 	}
-	return truncateFetch(content, f.url)
+	// The kind is re-derived here rather than threaded through the Scraper
+	// port, whose other implementer (a user's `scraper` command) has no
+	// reason to know it exists. classifyBody is deterministic over the body,
+	// and the framing line wrapContent added is stripped first so the
+	// classification and the outline both see the file the server sent.
+	kind := classifyBody(f.url, unwrapContent(content))
+	return truncateFetch(content, f.url, kind)
 }
 
 // rangeArg is the fetch's range as the ScrapeOptions field, "" for none.
@@ -239,6 +245,45 @@ func rangeArg(f toolFetch) string {
 		return strconv.Itoa(f.lineLo)
 	}
 	return fmt.Sprintf("%d-%d", f.lineLo, f.lineHi)
+}
+
+// fetchOutline is the map handed back with an oversized page, built by the
+// outline builder the page's own kind has: heading anchors for HTML and
+// Markdown, definition spans for code, a line count for anything else.
+//
+// It runs on the body the scraper fetched — before wrapContent's framing line
+// — because the builders answer in line numbers and anchors of the *file*, and
+// a framing line added two lines to the top would shift every one of them. A
+// body can only be classified where the kind is still known, so the kind
+// travels from renderFetched as the third return value.
+func fetchOutline(pageURL, body string, kind contentKind) string {
+	switch kind {
+	case kindHTML, kindMarkdown:
+		// The HTML outline answers in URL fragments, which are how an HTML or
+		// Markdown page is fetched; the Markdown builders answer in line
+		// ranges, which is how a text page is fetched.
+		if kind == kindHTML {
+			return outlineOf(body, pageURL)
+		}
+		return markdownOutline(body)
+	case kindCode:
+		return defOutlineOf(pageURL, body, 0)
+	default:
+		return plainTextOutline(body, 0)
+	}
+}
+
+// unwrapContent reverses wrapContent's framing line, so an outline computed
+// over the returned text answers in the file's own line numbers. The framing
+// is deterministic (a fixed prefix and a trailing newline), so exact reversal
+// is a Cut, not a parse.
+func unwrapContent(wrapped string) string {
+	if rest, ok := strings.CutPrefix(wrapped, "Here is the content of "); ok {
+		if _, body, ok := strings.Cut(rest, ":\n\n"); ok {
+			return body
+		}
+	}
+	return wrapped
 }
 
 // truncateFetch cuts an oversized page and hands back its map.
@@ -271,10 +316,17 @@ func rangeArg(f toolFetch) string {
 // and be the signal to raise this number.
 const outlineSwitchRatio = 4
 
-func truncateFetch(content, pageURL string) string {
+// truncateFetch cuts an oversized page and hands back its map.
+//
+// The map is built by the page's own kind (fetchOutline), over the unwrapped
+// body, so a text page's line numbers are the file's — which is what makes
+// the "fetch a range" advice true rather than aspirational.
+func truncateFetch(content, pageURL string, kind contentKind) string {
 	if len(content) <= maxToolOutputBytes {
 		return content
 	}
+	body := unwrapContent(content)
+	outline := fetchOutline(pageURL, body, kind)
 	if len(content) > outlineSwitchRatio*maxToolOutputBytes {
 		// Far more page than one result can carry, so send the map. Four of
 		// six models with an order-independent preference chose this over a
@@ -282,12 +334,11 @@ func truncateFetch(content, pageURL string) string {
 		// rather than content and were counted as saying nothing.
 		return fmt.Sprintf(
 			"(This page is %d KB, about %d times what one tool result carries, so its outline "+
-				"follows instead of the first %d%% of it. Fetch any section by adding its "+
-				"anchor to the URL.)\n\n",
+				"follows instead of the first %d%% of it. %s)\n\n",
 			len(content)/1024, len(content)/maxToolOutputBytes,
-			100*maxToolOutputBytes/len(content)) + outlineOf(content, pageURL)
+			100*maxToolOutputBytes/len(content), navigationHint(kind)) +
+			outline
 	}
-	outline := outlineOf(content, pageURL)
 	// The map gets a budget of its own. Without one a page of four thousand
 	// headings produced an outline twice the cap, and the result overran the
 	// limit it exists to respect — found by a test written for the opposite
@@ -312,13 +363,23 @@ func truncateFetch(content, pageURL string) string {
 			"result carries %d KB. If what you need is not in the text below, it may still be "+
 			"on the page — the outline of the whole page is at the end of this result.)\n\n",
 		pct, len(content)/1024, maxToolOutputBytes/1024)
-	note := "\n\n(End of the partial page. Outline of the whole of it follows; fetch a section " +
-		"by adding its anchor to the URL rather than fetching this page again, which returns " +
-		"this same prefix.)\n\n"
+	note := "\n\n(End of the partial page. " + navigationHint(kind) + ")\n\n"
 
 	room := max(maxToolOutputBytes-len(head)-len(note)-len(outline), 0)
 	room = min(room, len(content))
 	return head + content[:room] + note + outline
+}
+
+// navigationHint is the sentence each kind's truncation note ends with: the
+// one action that actually navigates this kind of page. An anchor on a text
+// page fetches nothing, so the advice has to change with the kind.
+func navigationHint(kind contentKind) string {
+	if kind == kindHTML {
+		return "Outline of the whole of it follows; fetch a section by adding its anchor to " +
+			"the URL rather than fetching this page again, which returns this same prefix"
+	}
+	return "Outline of the whole of it follows; fetch a part of it by giving webfetch a range " +
+		"of lines, as the outline lists"
 }
 
 // SessionOrigins lists the origins approved by an "a" answer this session,

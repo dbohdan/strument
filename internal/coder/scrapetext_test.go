@@ -5,6 +5,7 @@
 package coder
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -96,7 +97,7 @@ func TestMarkdownOutlineTracksFences(t *testing.T) {
 }
 
 func TestPlainTextOutlineOffersRanges(t *testing.T) {
-	out := plainTextOutline(strings.Repeat("line\n", 499) + "last")
+	out := plainTextOutline(strings.Repeat("line\n", 499)+"last", 0)
 	if !strings.Contains(out, "500 lines") {
 		t.Errorf("the line count is wrong:\n%s", out)
 	}
@@ -141,5 +142,77 @@ func TestParseLineRangeForms(t *testing.T) {
 	// The empty string is "no range", not an error.
 	if lo, _, err := parseLineRange(""); err != nil || lo != 0 {
 		t.Error("an absent range must parse as none")
+	}
+}
+
+// P1: an oversized text page that arrives without outline:true must still get
+// a kind-aware map — the old path ran the HTML heading scanner over it and
+// answered "This page has no headings", with navigation advice (URL anchors)
+// that a text page cannot act on.
+func TestTruncatedCodePageCarriesADefOutline(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package interp\n\n")
+	// Enough bulk to cross the 4x outline-switch threshold, but few enough
+	// definitions for the outline to fit its own budget: wide functions, not
+	// many of them. This walks the map-only path — the one a model is most
+	// likely to meet without outline:true.
+	for i := range 40 {
+		fmt.Fprintf(&b, "func handler%d(w *Writer) {\n", i)
+		b.WriteString(strings.Repeat("\twork(step)\n", 400))
+		fmt.Fprintf(&b, "\t_ = w\n}\n\n")
+	}
+	wrapped := wrapContent("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
+	kind := classifyBody("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
+	got := truncateFetch(wrapped, "https://raw.githubusercontent.com/x/y/v1/interp.go", kind)
+
+	if strings.Contains(got, "no headings") {
+		t.Errorf("the text page got the HTML scanner's no-headings answer:\n%s", got[:300])
+	}
+	// The line numbers must be the file's, not the wrapped text's: the
+	// framing line added two lines, and a range computed over the wrapped
+	// text would fetch the wrong lines.
+	if !strings.Contains(got, "lines 1-1") && !strings.Contains(got, "lines 5-7") {
+		t.Errorf("the def outline's line numbers are not the file's:\n%s", got[len(got)-600:])
+	}
+	if !strings.Contains(got, "function handler0") || !strings.Contains(got, "function handler39") {
+		t.Errorf("the map does not cover the whole file:\n%s", got[len(got)-600:])
+	}
+}
+
+// P2: an outline computed over a range slice must report the file's line
+// numbers, not the slice's — "lines 1-30" of a slice that starts at file line
+// 100 would send the next fetch to the wrong place.
+func TestOutlineOverARangeSliceKeepsFileLineNumbers(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package p\n\n")
+	for i := range 120 { // lines 3..122 are filler functions
+		fmt.Fprintf(&b, "func fill%d() {}\n\n", i)
+	}
+	body := b.String()
+	sliced := sliceLines(body, 100, 122)
+	out := defOutlineOf("https://example.com/p.go", sliced, 99)
+	if !strings.Contains(out, "lines 101-101") {
+		t.Errorf("an outline over a slice did not report file lines:\n%s", out)
+	}
+
+	// Through the full render path, with the range in the options.
+	text, _ := renderFetched("https://example.com/p.go", body,
+		ScrapeOptions{Outline: true, Range: "100-122"})
+	if !strings.Contains(text, "lines 101-101") {
+		t.Errorf("the rendered outline lost the offset:\n%s", text)
+	}
+}
+
+// A range on an HTML page is said rather than silently misapplied: lines of
+// raw markup are not a thing the model has seen, and the right move there is
+// a URL fragment.
+func TestRangeOnHTMLPageIsRefusedWithDirections(t *testing.T) {
+	page := "<html><body><h1 id=\"a\">T</h1><p>body</p></body></html>"
+	text, _ := renderFetched("https://example.com/p", page, ScrapeOptions{Range: "1-5"})
+	if !strings.Contains(text, "range applies to plain-text pages") {
+		t.Errorf("the range on HTML was applied or dropped silently:\n%s", text)
+	}
+	if !strings.Contains(text, "body") {
+		t.Errorf("the page content did not come along:\n%s", text)
 	}
 }

@@ -162,34 +162,80 @@ func wrapOutline(url, text string) string {
 // rather than asking the server.
 func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap func(url, text string) string) {
 	kind := classifyBody(pageURL, body)
-	// A range applies to whatever body was fetched, before any other framing:
-	// the model asked for lines, so lines are what it gets, whatever the
-	// format turned out to be. lo/hi are clamped to the file rather than
-	// refused, because the file's length is only known here and a range past
-	// the end still names the part the model wanted to see.
+	// A range applies before anything else, but not to every kind: lines of
+	// raw HTML mean nothing to a reader who has never seen the markup, so a
+	// range on an HTML page is said rather than silently misapplied. The
+	// model's next move there is a URL fragment, which the tool description
+	// already covers.
+	if kind == kindHTML {
+		if lo, _ := opts.lineRange(); lo > 0 {
+			note := "(range applies to plain-text pages; on HTML, fetch a section by its URL " +
+				"fragment instead)\n\n"
+			return note + htmlToMarkdown(body, pageURL, opts), wrapContent
+		}
+		return htmlToMarkdown(body, pageURL, opts), wrapContent
+	}
+	// The range slices the body, so any line numbers an outline reports must
+	// be shifted back to the file's coordinate system: the model asked for
+	// lines 100-200 of the file, and "lines 1-30" of the slice would send its
+	// next fetch to the wrong place. Offset, not clamp — the map's numbers
+	// are only as good as they are absolute.
+	base := 0
 	if lo, hi := opts.lineRange(); lo > 0 {
 		body = sliceLines(body, lo, hi)
+		base = lo - 1
 	}
 	switch kind {
-	case kindHTML:
-		return htmlToMarkdown(body, pageURL, opts), wrapContent
 	case kindMarkdown:
 		if opts.Outline {
-			return markdownOutline(body), wrapOutline
+			return markdownOutlineOffset(body, base), wrapOutline
 		}
 		return body, wrapContent
 	case kindCode:
 		if opts.Outline {
-			return defOutlineOf(pageURL, body), wrapOutline
+			return defOutlineOf(pageURL, body, base), wrapOutline
 		}
 		return body, wrapContent
 	default: // kindText
 		if opts.Outline {
-			return plainTextOutline(body), wrapOutline
+			return plainTextOutline(body, base), wrapOutline
 		}
 		return body, wrapContent
 	}
 }
+
+// markdownOutlineOffset is markdownOutline with every reported line number
+// shifted by base, for an outline computed over a range slice.
+func markdownOutlineOffset(body string, base int) string {
+	out := markdownOutline(body)
+	if base == 0 {
+		return out
+	}
+	return shiftLineNumbers(out, base)
+}
+
+// shiftLineNumbers rewrites "(line N)" and "(lines N-M)" by adding base.
+func shiftLineNumbers(out string, base int) string {
+	return lineRefRe.ReplaceAllStringFunc(out, func(m string) string {
+		nums := lineNumRe.FindAllString(m, -1)
+		var b strings.Builder
+		b.WriteString("(lines ")
+		for i, n := range nums {
+			if i > 0 {
+				b.WriteString("-")
+			}
+			v, _ := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(n, "line")))
+			fmt.Fprintf(&b, "%d", v+base)
+		}
+		b.WriteString(")")
+		return b.String()
+	})
+}
+
+var (
+	lineRefRe = regexp.MustCompile(`\(lines? [0-9][0-9 -]*\)`)
+	lineNumRe = regexp.MustCompile(`[0-9]+`)
+)
 
 // sliceLines returns lines lo through hi, 1-based and inclusive, clamped to
 // the body's length.
@@ -538,12 +584,13 @@ func lineCount(s string) int {
 }
 
 // defOutlineOf renders a source file's top-level definitions as the outline
-// the model fetches ranges by. kindText's fallback awaits it when the
-// extension names no grammar.
-func defOutlineOf(pageURL, body string) string {
+// the model fetches ranges by. base shifts every reported line number — set
+// when the outline is computed over a range slice, so the numbers stay the
+// file's. kindText's fallback awaits it when the extension names no grammar.
+func defOutlineOf(pageURL, body string, base int) string {
 	defs, known := repomap.DefOutlines(pageURL, []byte(body))
 	if !known {
-		return plainTextOutline(body)
+		return plainTextOutline(body, base)
 	}
 	if len(defs) == 0 {
 		return "This file parses as " + path.Ext(pageURL) + " but has no top-level definitions. It is " +
@@ -551,7 +598,7 @@ func defOutlineOf(pageURL, body string) string {
 	}
 	var b strings.Builder
 	for _, d := range defs {
-		fmt.Fprintf(&b, "- %s %s  (lines %d-%d)\n", d.Kind, d.Name, d.Start, d.End)
+		fmt.Fprintf(&b, "- %s %s  (lines %d-%d)\n", d.Kind, d.Name, d.Start+base, d.End+base)
 	}
 	b.WriteString("\nFetch a definition by giving webfetch a range, as in \"107-187\".\n")
 	return b.String()
@@ -559,12 +606,16 @@ func defOutlineOf(pageURL, body string) string {
 
 // plainTextOutline is the honest answer for a body nothing in the toolkit
 // understands: the line count, the size, and the way to fetch part of it. No
-// map is offered, because none can be drawn without guessing.
-func plainTextOutline(body string) string {
+// map is offered, because none can be drawn without guessing. base is the
+// offset of this body within the file it was sliced from, when it was.
+func plainTextOutline(body string, base int) string {
 	n := lineCount(body)
-	return fmt.Sprintf("This is plain text, %d lines, %d KB. It has no recognizable structure, so "+
-		"there is no outline to give; fetch a range of lines with webfetch, as in \"1-100\".",
-		n, len(body)/1024)
+	first := 1 + base
+	last := n + base
+	return fmt.Sprintf("This is plain text, %d lines (file lines %d-%d), %d KB. It has no "+
+		"recognizable structure, so there is no outline to give; fetch a range of lines with "+
+		"webfetch, as in \"%d-%d\".",
+		n, first, last, len(body)/1024, first, min(last, first+99))
 }
 
 // unwrapHeadingLists lifts document sections out of the lists they are laid

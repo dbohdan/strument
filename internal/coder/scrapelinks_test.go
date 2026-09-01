@@ -97,7 +97,7 @@ func TestConversionSurvivesABadPageURL(t *testing.T) {
 // is to abandon the tool for curl.
 func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	short := "a short page"
-	if got := truncateFetch(short, "https://example.com/p"); got != short {
+	if got := truncateFetch(short, "https://example.com/p", kindHTML); got != short {
 		t.Errorf("a page under the cap was altered: %q", got)
 	}
 
@@ -105,7 +105,7 @@ func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	for i := range 40 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 4000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p")
+	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
 
 	// The result respects the cap it exists to enforce. An earlier version
 	// appended the note past it, which is the bug this pins.
@@ -144,7 +144,7 @@ func TestVeryLargePageAnswersWithItsOutline(t *testing.T) {
 	for i := range 60 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p")
+	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
 
 	if !strings.Contains(got, "times what one tool result carries") {
 		t.Errorf("a page far over the cap did not answer with its outline:\n%s", got[:200])
@@ -168,7 +168,7 @@ func TestBarelyOversizedPageKeepsItsContent(t *testing.T) {
 	for i := range 12 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p")
+	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
 
 	if !strings.Contains(got, "Partial page") {
 		t.Errorf("a page just over the cap did not return a partial page:\n%s", got[:200])
@@ -188,7 +188,7 @@ func TestFetchTruncationKeepsTheMapOnAHeadingHeavyPage(t *testing.T) {
 	for i := range 4000 {
 		fmt.Fprintf(&b, "### Item %d {#item-%d}\n\ntext\n\n", i, i)
 	}
-	got := truncateFetch(b.String(), "https://example.com/p")
+	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
 
 	if len(got) > maxToolOutputBytes {
 		t.Errorf("result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
