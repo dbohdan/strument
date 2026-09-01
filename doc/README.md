@@ -218,7 +218,9 @@ inherited from aider.
   - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
     restricted Python interpreter compiled to WebAssembly, run through
     wazero. The `monty.wasm` blob is vendored pre-built, not built from
-    source here (that needs a Rust toolchain); see its `NOTICE`. The
+    source here (that needs a Rust toolchain); see its `NOTICE` for
+    provenance and [`REBUILD.md`](../internal/monty/REBUILD.md) for the
+    rebuild procedure. The
     read-only tools are reachable from inside a program through the bridge
     in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
     Uptake measured in
