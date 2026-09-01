@@ -49,6 +49,37 @@ may show no signal. The task text is frozen below before any run.
 
 *(Task text: to be inserted here and frozen before the first run.)*
 
+**Task (frozen 2026-09-01):** a four-component fleet-report fixture in
+`2026-09-shell-parallel-data/task/`. Four check scripts under `checks/`
+(`storage.sh`, `search.sh`, `auth.sh`, `billing.sh`), each sleeping 3 s and
+printing one status line whose value derives from `date +%s` (truncated to
+its first 8 digits) hashed with a data file's checksum — so reading a
+script's source does not reveal its output, the only way to know a status is
+to run it, and statuses are stable within a run but vary between runs ≥100 s
+apart. The prompt (PROMPT.md) asks the model to fill TEMPLATE.md into
+REPORT.md per the colleague's HANDOFF.md: every component's status line
+copied exactly, plus a derived overall health line (FLEET HEALTHY / DEGRADED
+/ FAIL with the failing components, FAIL outranking DEGRADED). The prompt
+never mentions running commands, parallelism, or how many calls to make;
+running the checks is inferable only from HANDOFF.md's "run the checks and
+use what they print right now."
+
+**Why this task measures the trial's question.** Four independent 3 s
+commands are the honest workload: serial execution costs ~12 s of shell
+wall-clock, one `a & b & c & d & wait` call costs ~3 s, so the wall-clock
+primary has real room to move. The task is not phrased as "parallelize" —
+it is a deadline-plus-workload shape, and the decision to batch is the
+model's planning alone, which is exactly the faculty under test.
+
+**Grading** (`2026-09-shell-parallel-data/grade.sh`, verified end-to-end on
+a hand-built fixture run): statuses are taken only from tool-result records
+in the run's JSONL — never a re-run, which removes any race with the 100 s
+status window — and REPORT.md is graded on exact status lines and the
+derived health line. The validation pass (JSON parse, tool_call_id pairing,
+sub-3-character text fields) aborts loudly before any scoring; the
+one-character-record tripwire was verified against a hand-mangled
+transcript.
+
 ## Metrics
 
 Preregistered; from JSONL only, never the rendered stream:

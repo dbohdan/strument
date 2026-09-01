@@ -1,0 +1,4 @@
+q=health+endpoint
+q=metrics+scrape
+q=alert+manager
+q=trace+search
