@@ -54,9 +54,17 @@ func (c *Coder) commitTurn(message string) {
 		return
 	}
 	if !ok {
-		// The turn's edits netted out against HEAD — a change and its reversal,
-		// or a rewrite of what was already there.
-		c.Out.Toolf("The turn left the files as they were; nothing to commit.")
+		// The turn's writes since the last settle net out against what is
+		// committed — a change and its reversal, or a rewrite of what was
+		// already there. Since the commit tool arrived, this can also be the
+		// tail of a turn that already committed: the message must not say
+		// "the turn left the files as they were", which is false the moment
+		// the turn holds a commit.
+		if c.lastCommitHash != "" {
+			c.Out.Toolf("Nothing to commit since %s.", c.lastCommitHash)
+		} else {
+			c.Out.Toolf("The turn left the files as they were; nothing to commit.")
+		}
 		return
 	}
 
