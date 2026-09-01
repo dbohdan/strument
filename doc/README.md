@@ -439,7 +439,12 @@ Ten tools, in three natures:
   `wait` joins them and collects their exit codes. They live only as long as
   the block — a deliberate fit for turn-delimited job batches — and the
   capture buffer is mutex-guarded, because the interpreter documents
-  concurrent writes to stdout/stderr once background statements appear.
+  concurrent writes to stdout/stderr once background statements appear. The
+  description carries the trial's PROSE paragraph
+  (doc/experiments/2026-09-shell-parallel.md): stating the rule — independent
+  commands go in one batched call, because each call asks the user — moved
+  uptake to 9/9 across three models, where the bare mechanism mention left
+  one of three models serial.
   `check(name)` runs a *configured* argv from the `check` dict by name, so
   it needs no gate — the model supplies a key, never a command, and there is
   nothing to classify or smuggle. It is offered only when `check` is
