@@ -71,7 +71,7 @@ func TestToolRequestCarriesTools(t *testing.T) {
 	// The read-only tools always come first, ask_user_question with them (it
 	// mutates nothing), then code (it computes, and mutates nothing either);
 	// bash is gated off here, and no check is configured.
-	want := []string{"read", "grep", "glob", "ls", "ask_user_question", "run_code", "edit", "write", "commit"}
+	want := []string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "run_code", "edit", "write", "commit"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v (bash gated off)", names, want)
 	}
@@ -90,7 +90,7 @@ func TestToolSetGating(t *testing.T) {
 		{
 			"shell enabled, no check configured",
 			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "run_code", "edit", "write", "bash", "commit"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "run_code", "edit", "write", "bash", "commit"},
 		},
 		{
 			"check configured",
@@ -99,12 +99,12 @@ func TestToolSetGating(t *testing.T) {
 				c.SuggestShellCommands = true
 				c.Check = []config.Check{{Name: "test", Argv: []string{"go", "test", "./..."}}}
 			},
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "run_code", "edit", "write", "bash", "check", "commit"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "run_code", "edit", "write", "bash", "check", "commit"},
 		},
 		{
 			"ask mode is read-only",
 			func(c *Coder) { c.editFormat = "ask"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "run_code"},
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "run_code"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

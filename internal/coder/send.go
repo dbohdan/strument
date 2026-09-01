@@ -26,6 +26,11 @@ const (
 	// re-sends rather than handing control back to the human.
 	OutcomeContinue
 	OutcomeInterrupted
+	// OutcomeSelfInterrupted: the model called the interrupt tool to end its
+	// own turn. Distinct from OutcomeInterrupted so the human is not asked
+	// "what now?" — the model already answered that by stopping — and from
+	// OutcomeLooping because nothing degenerated; this is a deliberate stop.
+	OutcomeSelfInterrupted
 	// OutcomeLooping: the reply degenerated into repeating itself and the
 	// harness stopped it. Distinct from OutcomeInterrupted because the human
 	// did not do it, and because "carry on from where you stopped" — the right
@@ -47,6 +52,8 @@ func (o SendOutcome) String() string {
 		return "Continue"
 	case OutcomeInterrupted:
 		return "Interrupted"
+	case OutcomeSelfInterrupted:
+		return "SelfInterrupted"
 	case OutcomeLooping:
 		return "Looping"
 	case OutcomeContextExhausted:

@@ -198,6 +198,9 @@ type Coder struct {
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
 	autoChecks     int // automatic check rounds this turn (maxAutoCheck)
+	// toolLoops counts this turn's read-class tool calls for exact repetition.
+	// Per turn: a new task may legitimately re-read what the last one read.
+	toolLoops *toolLoopWatcher
 	// editedSinceCheck gates the automatic checks: they run only when a file
 	// has changed since the last time they ran. Without it, a model that
 	// answers a failure in prose — "that break was already there and isn't
@@ -333,6 +336,7 @@ func New(root string, model *config.Model) *Coder {
 		MaxSteps:             25,
 		MaxErrorReflections:  3,
 		LoopDetection:        true,
+		toolLoops:            newToolLoopWatcher(),
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
@@ -494,6 +498,14 @@ func (c *Coder) initBeforeMessage() {
 	c.numReflections = 0
 	c.numSteps = 0
 	c.autoChecks = 0
+	// The tool-loop watcher follows LoopDetection, the same switch the text
+	// detector answers to — a user who turned detection off asked for neither
+	// kind of interruption.
+	if c.LoopDetection {
+		c.toolLoops = newToolLoopWatcher()
+	} else {
+		c.toolLoops = nil
+	}
 	c.editedSinceCheck = false
 	c.turnSnap = nil
 	c.messageCost = 0
@@ -626,6 +638,12 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 				return
 			}
 			message = report
+
+		case OutcomeSelfInterrupted:
+			// The model ended its own turn. Work so far is applied (the
+			// normal turn-end machinery settles it); no question to the user,
+			// who is simply told the turn stopped and why.
+			return
 
 		case OutcomeInterrupted:
 			next, keepGoing := c.afterInterrupt()
@@ -917,6 +935,9 @@ func (c *Coder) confirmMoreSteps() bool {
 	c.numSteps = 0
 	c.autoChecks = 0
 	c.editedSinceCheck = false
+	if c.LoopDetection {
+		c.toolLoops = newToolLoopWatcher()
+	}
 	return true
 }
 

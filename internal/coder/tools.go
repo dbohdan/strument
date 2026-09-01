@@ -45,6 +45,9 @@ const (
 	// tools — a discussion turn is precisely where a clarifying question is
 	// most useful.
 	toolAskUser = "ask_user_question"
+	// toolInterrupt ends the turn the way Ctrl-C does, but initiated by the
+	// model. See interruptTool.
+	toolInterrupt = "interrupt"
 )
 
 // strProp is a JSON-Schema string property with a description.
@@ -75,6 +78,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// ask_user_question is always offered: it has no side effect to gate, and
 		// a discussion turn is exactly where a clarifying question belongs.
 		defs = append(defs, askTool())
+		// interrupt is always offered too, and for the same structural reason:
+		// it mutates nothing, and the turn it ends may be a discussion one.
+		defs = append(defs, interruptTool())
 		if c.RepoMap != nil {
 			// symbol reads the same tree-sitter layer the repo map is built from,
 			// so it is offered exactly when that layer is available.
@@ -82,6 +88,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		}
 	} else {
 		defs = append(defs, askTool())
+		defs = append(defs, interruptTool())
 	}
 	// Offered in ask mode too: fetching mutates nothing, and reading a
 	// specification is exactly what a discussion turn is for. The port is
@@ -385,6 +392,27 @@ func askTool() llm.ToolDef {
 	}
 }
 
+// interruptTool lets the model end its own turn, the way Ctrl-C ends it when
+// the user does. It exists for the same episode loopdetect.go's notes warn
+// about: a model that realizes mid-turn it is repeating itself needs an exit
+// that is not "keep going" — the next-best action, announcing it is stuck and
+// carrying on anyway, is how the log of a stuck turn fills with meta-text
+// that changes nothing. Ending the turn is a complete answer to "I am stuck";
+// the user reads where it stopped and decides.
+//
+// No parameters: a reason would invite the tool's use as a report channel.
+// Ending is the whole contract.
+func interruptTool() llm.ToolDef {
+	return llm.ToolDef{
+		Name: toolInterrupt,
+		Description: "End the turn now, as if interrupted. Use it when you notice you are " +
+			"stuck — repeating the same action, unable to make progress — rather than " +
+			"continuing to repeat yourself. The turn stops cleanly: work already applied " +
+			"stays, nothing part-way through runs. The user reads the transcript and decides " +
+			"what happens next.",
+	}
+}
+
 // AskOption is one modeled choice of a question. Exported because an Asker
 // implementation outside this package (the REPL's, the fixture stub's)
 // constructs the request the coder hands it.
@@ -563,11 +591,16 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	var commit *commitArgs
 	results := map[string]string{} // call id -> result text
 	needsReflection := false
+	interrupted := false
 
 	// Read-only calls answer immediately, in the order the model made them.
 	// Edits are collected first and applied as one batch below, so sequential
 	// edits to one file compose and the whole batch commits together.
+	loopNote := ""
 	for _, tc := range c.partialToolCalls {
+		if note := c.toolLoops.observeCall(tc.Name, tc.Arguments); note != "" {
+			loopNote = note
+		}
 		switch tc.Name {
 		case toolEdit, toolWrite:
 			e, msg := parseEditArgs(tc)
@@ -577,6 +610,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			edits = append(edits, e)
+			c.toolLoops.observeMutation()
 		case toolBash:
 			cmd, msg := parseCommandArgs(tc)
 			if msg != "" {
@@ -585,6 +619,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			commands = append(commands, cmd)
+			c.toolLoops.observeMutation()
 		case toolCommit:
 			ca, msg := parseCommitArgs(tc)
 			if msg != "" {
@@ -605,6 +640,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			}
 			parsed := ca
 			commit = &parsed
+			c.toolLoops.observeMutation()
 		case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
 			results[tc.ID] = c.runObservationRedirect(tc)
 		case toolCheck:
@@ -645,6 +681,11 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			// Not routed through confirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
 			results[tc.ID] = c.runAskUser(tc, &needsReflection)
+		case toolInterrupt:
+			// Answer every call so the wire stays well-formed, but record the
+			// interrupt: the turn ends after the results are appended.
+			results[tc.ID] = "The turn has ended."
+			interrupted = true
 		default:
 			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
 		}
@@ -686,6 +727,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// Append one tool result per call, in call order, then re-send on them.
 	c.appendToolResults(results)
 
+	// A loop note rides the tool results as a harness note, not a new user
+	// turn — it is the harness speaking, the voice noteInterrupt and noteLoop
+	// established — and lands after the results it describes, so the model
+	// reads "here is your result" and then "and you have done this N times".
+	if loopNote != "" {
+		c.curMessages = append(c.curMessages, llm.HarnessNote(loopNote))
+	}
+
 	// Either way the next send re-enters on the tool results already appended
 	// to curMessages, adding no user turn. The two outcomes differ only in
 	// which budget they spend: a failure the model must fix is a reflection, a
@@ -708,6 +757,19 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	if ctx.Err() != nil {
 		c.noteToolInterrupt()
 		return OutcomeInterrupted
+	}
+
+	if interrupted {
+		// The model ended its own turn. Same shape as a human Ctrl-C — the
+		// history gets a harness note, the turn stops — but in the honest
+		// voice about who did it, and *after* the tool results: unlike the
+		// stream-interrupt path, every call this round ran and its result is
+		// real. The outcome is distinct from OutcomeInterrupted so runOne
+		// ends the turn without the steer menu: the model already answered
+		// the "what now" that menu exists to ask.
+		c.curMessages = append(c.curMessages, llm.HarnessNote(
+			"The model interrupted the turn."))
+		return OutcomeSelfInterrupted
 	}
 
 	if needsReflection {
