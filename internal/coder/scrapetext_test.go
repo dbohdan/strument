@@ -66,7 +66,7 @@ func NewRunner() *Runner {
 	return &Runner{}
 }
 `
-	out := defOutlineOf("https://raw.githubusercontent.com/x/y/v1/interp.go", src)
+	out := defOutlineOf("https://raw.githubusercontent.com/x/y/v1/interp.go", src, 0)
 	for _, want := range []string{
 		"method Run", "lines 6-8",
 		"constant timeout", "lines 11-11",
