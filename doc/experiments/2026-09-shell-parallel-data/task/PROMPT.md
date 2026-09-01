@@ -1,4 +1,4 @@
-# Prompt for the shell-parallelism trial task.
+# Operations Report
 
 A colleague left for the day and asked you to write up the operations
 report before the morning review. Everything you need is in this

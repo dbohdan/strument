@@ -1,6 +1,6 @@
 #!/bin/sh
-# Component check: storage. Output depends on runtime state, so reading this
-# file does not reveal the status — running it is the only way to know it.
+# Component check: storage.
+# Checks run long (a few seconds each); they are independent of one another.
 sleep 3
 seed=$(date +%s | cut -c1-8)
 key=$(cksum < "$(dirname "$0")/../data/roster.csv" | cut -d' ' -f1)

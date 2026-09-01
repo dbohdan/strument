@@ -1,5 +1,6 @@
 #!/bin/sh
 # Component check: search index.
+# Checks run long (a few seconds each); they are independent of one another.
 sleep 3
 seed=$(date +%s | cut -c1-8)
 key=$(cksum < "$(dirname "$0")/../data/queries.txt" | cut -d' ' -f1)

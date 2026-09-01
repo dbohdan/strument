@@ -11,7 +11,7 @@
 
 set -eu
 run=$1
-jsonl=$run/transcript.jsonl
+jsonl=${2:-$run/transcript.jsonl}
 report=$run/REPORT.md
 
 python3 - "$jsonl" "$report" <<'EOF'

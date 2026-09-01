@@ -1,5 +1,6 @@
 #!/bin/sh
 # Component check: auth service.
+# Checks run long (a few seconds each); they are independent of one another.
 sleep 3
 seed=$(date +%s | cut -c1-8)
 key=$(cksum < "$(dirname "$0")/../data/roster.csv" | cut -d' ' -f1)

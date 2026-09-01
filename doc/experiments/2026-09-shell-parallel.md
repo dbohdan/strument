@@ -66,6 +66,26 @@ never mentions running commands, parallelism, or how many calls to make;
 running the checks is inferable only from HANDOFF.md's "run the checks and
 use what they print right now."
 
+**Amendments from the smoke run (2026-09-01, one BASE/glm run, before any
+trial data existed):** the first smoke run found two demand-characteristic
+hazards, both fixed in the fixture before the trial:
+
+- PROMPT.md's title said "shell-parallelism trial task", and the model's
+  reasoning quoted it as its reason to batch ("the hint is to run them in
+  parallel"). The title is now "Operations Report". With it, no text in the
+  fixture names the trial, the arms, or parallelism.
+- The check scripts' comments each now say the checks are independent of one
+  another — stated for every arm equally, so it informs rather than arms one
+  arm. (The alternative — removing all hints — would make BASE the only arm
+  with no path to the pattern, which biases the other way.)
+
+The same smoke run surfaced a shell trap unrelated to the faculty under
+test: `cd checks && ./a.sh & ./b.sh &` background-job precedence makes only
+the first job inherit the `cd`. One run repaired it in one round trip. It is
+recorded here so it is read as uniform noise, not an arm effect; the runner
+runs `strument` with `cwd` at the fixture root, so the checks' relative
+paths resolve without a `cd`.
+
 **Why this task measures the trial's question.** Four independent 3 s
 commands are the honest workload: serial execution costs ~12 s of shell
 wall-clock, one `a & b & c & d & wait` call costs ~3 s, so the wall-clock
