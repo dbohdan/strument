@@ -216,3 +216,25 @@ func TestRangeOnHTMLPageIsRefusedWithDirections(t *testing.T) {
 		t.Errorf("the page content did not come along:\n%s", text)
 	}
 }
+
+// A shebang first line votes "code, not Markdown" on its own: a shell script's
+// `# comment` lines match the ATX pattern, and three of them would otherwise
+// clear the Markdown bar and hand the model a heading map of a script.
+func TestShebangBeatsTheMarkdownSniff(t *testing.T) {
+	script := "#!/usr/bin/env bash\n" +
+		"# Set up the build directory.\n" +
+		"# Then run the tests.\n" +
+		"# Finally, package the result.\n" +
+		"mkdir -p build && go test ./...\n"
+	if got := classifyBody("https://example.com/setup", script); got != kindText {
+		t.Errorf("a shebang script classified as %v; the sniff must not read its comments as headings", got)
+	}
+
+	// The same comments without the shebang stay ambiguous — the bar holds at
+	// three headings either way; the shebang is the extra evidence, not the
+	// only one.
+	noShebang := strings.TrimPrefix(script, "#!/usr/bin/env bash\n")
+	if got := classifyBody("https://example.com/setup", noShebang); got != kindMarkdown {
+		t.Errorf("the same comments without a shebang classified as %v", got)
+	}
+}

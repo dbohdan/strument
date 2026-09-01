@@ -274,15 +274,20 @@ var excludedDocExts = map[string]bool{
 // The bar is deliberately high — three ATX headings in the first hundred
 // lines — and deliberately asymmetric: a missed Markdown file costs one extra
 // fetch with a line range, while a false positive hands the model a wrong map
-// of a ReST or org file that it will then trust. Setext underlines (`Title`
-// over `=====`, which is where ReST's section markers live) count only when
-// they sit under a text line, and any `.. directive::` in sight votes no.
+// of a ReST or org file that it will then trust. A shebang first line votes
+// no on its own: a shell or Python script's `# comment` lines match the ATX
+// pattern, and three of them in the first hundred lines would otherwise clear
+// the bar. Any `.. directive::` in sight also votes no.
 var (
 	atxHeadingRe   = regexp.MustCompile(`(?m)^#{1,6} \S`)
 	rstDirectiveRe = regexp.MustCompile(`(?m)^\.\. [\w-]+::`)
+	shebangRe      = regexp.MustCompile(`\A#!\s*/\S+`)
 )
 
 func looksLikeMarkdown(body string) bool {
+	if shebangRe.MatchString(body) {
+		return false
+	}
 	lines := strings.Split(body, "\n")
 	if len(lines) > 100 {
 		lines = lines[:100]
