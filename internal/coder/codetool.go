@@ -82,11 +82,14 @@ func codeTool() llm.ToolDef {
 	// The bridged names are enumerated from InspectorTools() itself, so the
 	// description and the dispatch cannot drift — the exact drift this
 	// repository has had three times elsewhere. The example above names two;
-	// the authoritative list rides behind it.
+	// the authoritative list rides behind it. The code functions (codefuncs.go)
+	// are run_code-only and ride in through codeFuncDoc, from the same
+	// registry the bridge dispatches on.
 	if names := InspectorTools(); len(names) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
 			strings.Join(names, ", "))
 	}
+	b.WriteString(codeFuncDoc())
 
 	return llm.ToolDef{
 		Name:        toolRunCode,
@@ -159,7 +162,7 @@ func (c *Coder) codeOptions() []monty.ExecuteOption {
 	opts = append(opts, monty.WithLimits(codeLimits))
 
 	names := InspectorTools()
-	funcs := make([]monty.FuncDef, 0, len(names))
+	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs))
 	// Each tool takes its arguments as keywords; the params list is what lets
 	// Monty map a positional call's arguments onto those names. The schemas
 	// differ per tool (path, pattern, limit, …), so the program passes
@@ -168,6 +171,12 @@ func (c *Coder) codeOptions() []monty.ExecuteOption {
 	// a direct call with a wrong field would be.
 	for _, n := range names {
 		funcs = append(funcs, monty.Func(n))
+	}
+	// Code functions ride the same registration: positional calls map onto
+	// their parameter names the same way, and an unregistered one raises
+	// NameError inside the program, which is the fail-closed path.
+	for _, d := range codeFuncs {
+		funcs = append(funcs, monty.Func(d.name))
 	}
 	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names), funcs...))
 	return opts
@@ -179,9 +188,15 @@ func (c *Coder) codeOptions() []monty.ExecuteOption {
 // direct tool call goes through, so what the program sees is byte-for-byte
 // what the model would have seen.
 func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
-	isAllowed := make(map[string]bool, len(allowed))
+	isAllowed := make(map[string]bool, len(allowed)+len(codeFuncs))
 	for _, n := range allowed {
 		isAllowed[n] = true
+	}
+	// The code functions are allowed by the same fail-closed check — they are
+	// called from the same bridge, counted in the same cap, and announced the
+	// same way. Their own dispatch happens below the check.
+	for _, d := range codeFuncs {
+		isAllowed[d.name] = true
 	}
 
 	calls := 0
@@ -199,6 +214,16 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		if calls > maxBridgedCalls {
 			return nil, fmt.Errorf("the program made more than %d tool calls; "+
 				"stop and do the rest with direct tool calls", maxBridgedCalls)
+		}
+
+		// Code functions answer with data, not model text, so they bypass
+		// Inspector.Run and the prefix classification — their errors are
+		// already Go errors and become exceptions with the right traceback.
+		// Announced under the run_code tag, same as a bridged tool call: the
+		// program, not a direct call, is what caused this either way.
+		if d := codeFuncByName(call.Name); d != nil {
+			c.Out.Toolf("‹run_code› %s", call.Name)
+			return d.fn(c, call)
 		}
 
 		// Announce exactly as a direct call would be, so the review surface

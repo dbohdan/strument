@@ -4,11 +4,24 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
+
+// defaultReadBinBytes is how many bytes one ReadBytes window returns when the
+// caller asks for no particular window. Sized so a window's JSON encoding
+// (~3 bytes per byte through the run_code bridge) stays well under the tool
+// result cap.
+const defaultReadBinBytes = 4096
+
+// maxReadBinBytes caps one ReadBytes window. A larger appetite is paged, not
+// granted, for the same reason read is line-windowed: a silently truncated
+// result reads as "nothing else exists", and an uncapped window lets one call
+// eat the result cap.
+const maxReadBinBytes = 64 << 10
 
 // defaultReadLines is how many lines one read returns when the caller asks for
 // no particular window. Large enough for most source files to arrive whole,
@@ -103,6 +116,95 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 	out.Lines = lines[offset-1 : end]
 	out.Truncated = end < len(lines)
 	return out, nil
+}
+
+// FileBytes is one binary read: a window of raw bytes plus enough context for
+// the caller to page and to know the whole size.
+type FileBytes struct {
+	Path string
+	// Data is the requested window, raw — no encoding applied; the caller
+	// decides how to present it.
+	Data []byte
+	// Offset is where Data starts, 0-based.
+	Offset int64
+	// Size is the file's full size.
+	Size int64
+	// Truncated reports that the window stops short of the end of the file.
+	Truncated bool
+}
+
+// ReadBytes returns a window of a file's raw bytes. offset is 0-based, unlike
+// Read's 1-based line offset — bytes have no line numbers to be 1-based from —
+// and limit is a byte count; 0 means defaultReadBinBytes. The containment,
+// ignore, and size rules are Read's exactly: the same contain, the same
+// refuseIgnored, the same fileBytes limit. Deliberately no isBinary check —
+// refusing binaries is Read's job; this is the way in when Read has refused.
+//
+// It exists for the run_code bridge's read_bin function, not as a tool: the
+// observation surface is text-shaped, and this returns data a program computes
+// over rather than prose a model reads.
+func (w *Workspace) ReadBytes(rel string, offset, limit int64) (FileBytes, error) {
+	raw := rel
+	full, rel, reason := w.contain(raw)
+	if reason != "" {
+		return FileBytes{}, errors.New(reason)
+	}
+	if rel == "" {
+		return FileBytes{}, errors.New("no path given")
+	}
+	// Same temp-directory exception as Read, and for the same reason: a
+	// project itself may live under /tmp, so the original spelling must be
+	// absolute before the exception applies.
+	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
+	if !absolute || !UnderTempDir(full) {
+		if err := w.refuseIgnored(rel, full); err != nil {
+			return FileBytes{}, err
+		}
+	}
+
+	info, err := os.Stat(full)
+	if err != nil {
+		return FileBytes{}, err
+	}
+	if info.IsDir() {
+		return FileBytes{}, fmt.Errorf("%s is a directory", rel)
+	}
+	if info.Size() > w.Limits.fileBytes() {
+		return FileBytes{}, fmt.Errorf("%s is %s, larger than the %s read limit",
+			rel, humanBytes(info.Size()), humanBytes(w.Limits.fileBytes()))
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = defaultReadBinBytes
+	}
+	if limit > maxReadBinBytes {
+		limit = maxReadBinBytes
+	}
+	if offset > info.Size() {
+		offset = info.Size()
+	}
+
+	f, err := os.Open(full)
+	if err != nil {
+		return FileBytes{}, err
+	}
+	defer f.Close()
+
+	n := min(limit, info.Size()-offset)
+	data := make([]byte, n)
+	if _, err := io.ReadFull(io.NewSectionReader(f, offset, n), data); err != nil && err != io.EOF {
+		return FileBytes{}, err
+	}
+	return FileBytes{
+		Path:      rel,
+		Data:      data,
+		Offset:    offset,
+		Size:      info.Size(),
+		Truncated: offset+n < info.Size(),
+	}, nil
 }
 
 // splitLines splits text into lines without a trailing empty element for a
