@@ -226,7 +226,9 @@ inherited from aider.
     in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
     Uptake measured in
     [`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md):
-    0/36 calls on an exploration task built to need it.
+    0/36 calls on an exploration task built to need it (later trials moved
+    it to 8/24; tool-call error attribution inside programs:
+    [`2026-09-error-attribution.md`](experiments/2026-09-error-attribution.md)).
 - `script/` — release build, the grammar build-tag list, and
   `setup-reference.sh`.
 - `testdata/` — distilled scenario fixtures and tests transliterated from

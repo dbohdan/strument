@@ -7,6 +7,12 @@ which recommends against shipping it as a default tool. The tool stays in the
 tree with docs; the open question is an arithmetic-shaped fixture, which the
 trial did not measure. This file can be deleted once that is settled.
 
+Post-completion, 2026-09-01: a live-session bug report on tool-call error
+reporting inside programs — flat one-liner, no line number — was fixed by
+resuming the snapshot with an exception (new `monty_resume_error` C-ABI
+export; the shim is now a hard fork, see `internal/monty/shim/`). Write-up:
+[`doc/experiments/2026-09-error-attribution.md`](../experiments/2026-09-error-attribution.md).
+
 **You are implementing this in a fresh session.** Everything you need is below
 or named by path. Read Part 0 before writing any code.
 
