@@ -53,6 +53,15 @@ func (t *toolLog) Toolf(format string, args ...any) {
 	t.Output.Toolf(format, args...)
 }
 
+// ToolBlock is deliberately not forwarded or recorded. The block is the
+// screen-shaped rendering of a run_code program; the record's entry is the
+// prose line runCode writes beside it ("Ran 5 lines of code calling grep."),
+// and recording a flattened copy of the source would resurrect the very
+// single-line blob that rendering exists to replace.
+func (t *toolLog) ToolBlock(title, body string) {
+	t.Output.ToolBlock(title, body)
+}
+
 func (t *toolLog) reset() {
 	t.mu.Lock()
 	t.lines = nil

@@ -302,6 +302,14 @@ type Output interface {
 	// so it gets a recessive color of its own: the harness narrating its own
 	// work should sit behind the diffs and the answer, not compete with them.
 	Toolf(format string, args ...any)
+	// ToolBlock reports a tool's multi-line payload, such as a run_code
+	// program's source, in the shape render.ToolBlock gives it — preserved
+	// lines, bracketed past one line. It is display-shaped: it writes to the
+	// user's screen and is deliberately not recorded line-by-line by the
+	// transcript tee, which captures the summary line instead (the
+	// ask_user_question pattern — the interactive surface and the record get
+	// separate renderings of one event).
+	ToolBlock(title, body string)
 	// Link prints one URL on its own line, hyperlinked where the terminal can
 	// and plain where it cannot. Separate from Printf because a URL reaching
 	// the screen is model-supplied text next to escapes Strument writes: this

@@ -12,6 +12,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 )
 
 // toolMode sets the coder to the "tool" edit format for a replay.
@@ -823,8 +824,15 @@ func TestToolLoopBudgetStops(t *testing.T) {
 }
 
 // captureOut records the user-facing lines so a test can assert on them; the
-// streaming Output methods are no-ops.
+// streaming Output methods are no-ops. ToolBlock records through the same
+// renderer the real outputs use, so a test asserts on the production shape.
 type captureOut struct{ lines []string }
+
+func (o *captureOut) ToolBlock(title, body string) {
+	var b strings.Builder
+	render.ToolBlock(&b, title, body)
+	o.lines = append(o.lines, b.String())
+}
 
 func (o *captureOut) Printf(format string, args ...any) {
 	o.lines = append(o.lines, fmt.Sprintf(format, args...))

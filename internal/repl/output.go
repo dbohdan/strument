@@ -236,6 +236,33 @@ func (o *termOutput) Toolf(format string, args ...any) {
 	o.sep.Drew()
 }
 
+// ToolBlock writes a run_code program as a bracketed block, thinking's shape:
+// markers in the recessive tool color, the body plain — the source is content
+// the user reads, not narration, and coloring Python by the tool palette would
+// fight its own syntax.
+func (o *termOutput) ToolBlock(title, body string) {
+	o.guard()
+	o.clearWaiting()
+	var b strings.Builder
+	render.ToolBlock(&b, title, body)
+	lines := strings.SplitAfter(strings.TrimSuffix(b.String(), "\n"), "\n")
+	for i, line := range lines {
+		if i > 0 {
+			fmt.Fprint(o.w, "\n")
+		}
+		// The delimiters take the tool color; body lines print uncolored. A
+		// first/last-line test on the trimmed block tells them apart, since the
+		// body is written verbatim and the markers are the frame.
+		if i == 0 || i == len(lines)-1 || line == render.CodeClose {
+			fmt.Fprint(o.w, o.sgr(o.theme.Tool)+line+o.sgr("0"))
+		} else {
+			fmt.Fprint(o.w, line)
+		}
+	}
+	fmt.Fprint(o.w, "\n")
+	o.sep.Drew()
+}
+
 func (o *termOutput) Warningf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()

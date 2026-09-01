@@ -946,6 +946,15 @@ func (o *StdOutput) Toolf(format string, args ...any) {
 	o.sep.Drew()
 }
 
+// ToolBlock writes the shaped program block to the screen. It carries no
+// record: the tee deliberately ignores it and captures the prose summary
+// instead — a flattened copy of the block would be the unreadable line this
+// rendering exists to replace.
+func (o *StdOutput) ToolBlock(title, body string) {
+	render.ToolBlock(os.Stdout, title, body)
+	o.sep.Drew()
+}
+
 // Link outside the REPL is a plain sanitized line: script mode's output is
 // captured as often as it is read, and an OSC 8 escape there is the hazard
 // doc/experimenting.md records breaking a scorer.

@@ -347,6 +347,7 @@ type captureOutput struct{ b strings.Builder }
 
 func (o *captureOutput) Printf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
 func (o *captureOutput) Toolf(format string, args ...any)    { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) ToolBlock(title, body string)        { fmt.Fprintf(&o.b, "%s %s\n", title, body) }
 func (o *captureOutput) Warningf(format string, args ...any) { fmt.Fprintf(&o.b, format+"\n", args...) }
 func (o *captureOutput) Errorf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
 func (o *captureOutput) Link(target string)                  { o.Printf("%s", target) }

@@ -286,12 +286,56 @@ func TestCodeBridgeCallsAreAnnounced(t *testing.T) {
 	c.runCode(context.Background(), codeCall{code: `ls()`})
 
 	joined := strings.Join(out.lines, "\n")
-	// "‹run_code› ls()" is the program being announced; "‹run_code› ls" is the
-	// bridged call inside it — the same shape a direct call prints.
+	// "‹run_code› ls()" is the program being announced — one line, no closing
+	// marker, thinking's one-line shape; "‹run_code› ls" is the bridged call
+	// inside it — the same shape a direct call prints. The outcome line names
+	// the tools the program actually called, collected at the bridge.
 	if !strings.Contains(joined, "‹run_code› ls()\n") {
 		t.Errorf("the program must be announced, got:\n%s", joined)
 	}
 	if !strings.Contains(joined, "‹run_code› ls\n") {
 		t.Errorf("a bridged call must be announced, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Ran 1 line of code calling ls.") {
+		t.Errorf("the outcome line must name the called tools, got:\n%s", joined)
+	}
+}
+
+// TestCodeProgramShapes pins the two renderings of one run_code call, the
+// ask_user_question pattern: a shaped block for the screen (one line stays
+// one line; a multi-line program is bracketed, its lines preserved — the
+// flattening this replaced made Python's indentation-meaningful source
+// unreadable) and one prose line for the transcript.
+func TestCodeProgramShapes(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
+
+	// Multi-line program, no tool calls: pure computation is said as such.
+	c.runCode(context.Background(), codeCall{code: "x = 40\ny = 2\nx + y"})
+
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "‹run_code›\nx = 40\ny = 2\nx + y\n‹/›") {
+		t.Errorf("a multi-line program must render as a bracketed block with its lines preserved, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Ran 3 lines of code.") {
+		t.Errorf("a call-free program must be summarized without tools, got:\n%s", joined)
+	}
+}
+
+// TestCodeSummaryAfterFailure pins the outcome line on the error path: a
+// program that aborted mid-way still called what it called, and the summary is
+// precisely where that survives — the value cannot report it.
+func TestCodeSummaryAfterFailure(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
+
+	c.runCode(context.Background(), codeCall{code: "a = read(path='f.txt')\nb = read(path='missing')\nb"})
+
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "Ran 3 lines of code calling read.") {
+		t.Errorf("the outcome line must survive a failed program, got:\n%s", joined)
+	}
+	// The error text travels in the tool result (to the model), not the
+	// user-facing lines; runCode's return is what carries it.
+	if got := c.runCode(context.Background(), codeCall{code: "b = read(path='missing')\nb"}); !strings.Contains(got, "The program failed:") {
+		t.Errorf("the error text must still reach the model, got:\n%s", got)
 	}
 }

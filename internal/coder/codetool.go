@@ -10,6 +10,7 @@ import (
 
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/monty"
+	"dbohdan.com/strument/internal/render"
 )
 
 // The run_code tool: the model writes one small program and it runs in Monty, a
@@ -131,9 +132,13 @@ func parseCodeArgs(tc llm.ToolCall) (codeCall, string) {
 //
 // No confirmation, like the other read-only tools: a program computes and
 // reads, it does not touch anything outside its own WASM instance and the
-// project's observation tools. It is announced instead.
+// project's observation tools. It is announced twice, the two renderings of
+// one event (the ask_user_question pattern): the shaped source block for the
+// screen before the run, and one prose line after — for the transcript and as
+// the outcome — naming what the program actually called, collected at the
+// bridge rather than scanned from the source.
 func (c *Coder) runCode(_ context.Context, cc codeCall) string {
-	c.Out.Toolf("‹run_code› %s", oneLine(cc.code))
+	c.Out.ToolBlock(render.CodeOpen, cc.code)
 
 	runner, err := montyRunner()
 	if err != nil {
@@ -147,17 +152,47 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// actual output dropped on the floor. Under the observation force arm
 	// print is the primary reporting channel, so this is not cosmetic.
 	var printed strings.Builder
+	var called []string
 	result, err := runner.Execute(context.Background(), cc.code, nil,
-		append(c.codeOptions(), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
+		append(c.codeOptions(&called), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
+	summary := codeCalledText(codeLines(cc.code), called)
 	if err != nil {
+		// The calls made before the failure still happened, and a program that
+		// aborted mid-way is precisely where the summary carries information
+		// the value cannot.
+		c.Out.Toolf("%s", summary)
 		return codeErrorText(err)
 	}
+	c.Out.Toolf("%s", summary)
 	return codeResultText(result, printed.String())
 }
 
+// codeLines counts the program's lines, discounting the leading and trailing
+// blank lines the model's formatting may have added. Named apart from
+// scrape.go's lineCount, which counts newline-terminated lines of a body.
+func codeLines(code string) int {
+	lines := strings.Split(strings.TrimSpace(code), "\n")
+	return len(lines)
+}
+
+// codeCalledText is the outcome line: how big the program was and which tools
+// it actually called. A program with no calls ran pure computation — a
+// legitimate program, and said as such rather than left silent.
+func codeCalledText(n int, called []string) string {
+	size := fmt.Sprintf("%d lines", n)
+	if n == 1 {
+		size = "1 line"
+	}
+	if len(called) == 0 {
+		return fmt.Sprintf("Ran %s of code.", size)
+	}
+	return fmt.Sprintf("Ran %s of code calling %s.", size, strings.Join(called, ", "))
+}
+
 // codeOptions assembles the Execute options: the resource limits, plus the
-// read-only bridge.
-func (c *Coder) codeOptions() []monty.ExecuteOption {
+// read-only bridge. called collects the tool names the program actually
+// invoked, for the outcome line.
+func (c *Coder) codeOptions(called *[]string) []monty.ExecuteOption {
 	opts := make([]monty.ExecuteOption, 0, 2)
 	opts = append(opts, monty.WithLimits(codeLimits))
 
@@ -178,7 +213,7 @@ func (c *Coder) codeOptions() []monty.ExecuteOption {
 	for _, d := range codeFuncs {
 		funcs = append(funcs, monty.Func(d.name))
 	}
-	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names), funcs...))
+	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, called), funcs...))
 	return opts
 }
 
@@ -187,7 +222,13 @@ func (c *Coder) codeOptions() []monty.ExecuteOption {
 // crosses the boundary as JSON and is answered by the same Inspector.Run a
 // direct tool call goes through, so what the program sees is byte-for-byte
 // what the model would have seen.
-func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
+//
+// The tools the program actually called are collected as they happen —
+// recording at the bridge rather than scanning the source, because a scan
+// overreports: a comment naming read, a variable called ls, a call in a branch
+// that never runs. The interpreter pauses at every real call, so this side has
+// the truth without parsing anything.
+func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFunc {
 	isAllowed := make(map[string]bool, len(allowed)+len(codeFuncs))
 	for _, n := range allowed {
 		isAllowed[n] = true
@@ -199,6 +240,7 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		isAllowed[d.name] = true
 	}
 
+	seen := map[string]bool{}
 	calls := 0
 	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
 		// Fail closed. This runs behind the registration check already — a
@@ -209,6 +251,10 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		if !isAllowed[call.Name] {
 			return nil, fmt.Errorf("unknown function %q: only the read-only tools "+
 				"(%s) can be called from a program", call.Name, strings.Join(allowed, ", "))
+		}
+		if !seen[call.Name] {
+			seen[call.Name] = true
+			*called = append(*called, call.Name)
 		}
 		calls++
 		if calls > maxBridgedCalls {
