@@ -206,8 +206,48 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		// a program.
 		c.Out.Toolf("‹code› %s", call.Name)
 		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
-		return c.inspector().Run(call.Name, tc.Arguments), nil
+		out := c.inspector().Run(call.Name, tc.Arguments)
+
+		// A tool failure raises instead of returning. The tool's own error
+		// text becomes the exception message and Monty's traceback names the
+		// program line that made the call — the attribution a bare string
+		// return cannot give, and the reason a program that misindexed its
+		// way to a nonexistent file used to keep running on the error string
+		// as if it were data. An *empty result* is not a failure: "No
+		// matches" and a symbol miss are answers a program may legitimately
+		// filter on, so those stay values.
+		if msg, bad := bridgeToolFailure(out); bad {
+			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
+		}
+		return out, nil
 	}
+}
+
+// bridgeToolFailure classifies a tool's returned text as a failure of the
+// call itself. It is prefix-matching on the tools' own error sentences — the
+// alternative is a parallel error channel through every Inspector method,
+// five signatures changed for one caller, which the bridge's byte-for-byte
+// contract makes unnecessary: the text the program sees is the text the
+// model would see, so the classification reads the same text.
+//
+// The failures are the calls that could not do what they were asked: missing
+// or malformed arguments, unreadable paths, unknown modes. Deliberately not
+// failures, because continuing on them is the point of a program: "No
+// matches", "No files match", "is empty", and symbol's miss message are
+// empty results, not errors.
+func bridgeToolFailure(out string) (string, bool) {
+	for _, prefix := range []string{
+		"Could not read", "Could not list", "Could not match",
+		"The required ", "The arguments were not valid JSON",
+		"Unknown mode ", "Unknown kind ", "Unknown tool ",
+		"context_lines cannot be negative", "context_lines is capped",
+		"The language parser is not available",
+	} {
+		if strings.HasPrefix(out, prefix) {
+			return out, true
+		}
+	}
+	return "", false
 }
 
 // codeResultText renders a program's value, plus anything it printed. The
