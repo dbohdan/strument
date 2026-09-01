@@ -15,6 +15,11 @@ func TestClassifyByExtension(t *testing.T) {
 		url, body, want string
 	}{
 		{"https://raw.githubusercontent.com/mvdan/sh/v3.13.0/interp/runner.go", "package interp\n", "code"},
+		// Query and fragment must not ride on the extension: a GitHub line
+		// anchor on a raw URL is a natural fetch after seeing one.
+		{"https://example.com/interp.go?raw=1", "package interp\n", "code"},
+		{"https://example.com/interp.go#L10", "package interp\n", "code"},
+		{"https://example.com/README.md?plain=1", "# Title\n", "markdown"},
 		{"https://example.com/README.md", "# Title\n", "markdown"},
 		{"https://example.com/api.rst", "Title\n=====\n\nSection\n-------\n", "text"},
 		{"https://example.com/manual.org", "* Heading one\n* Heading two\n", "text"},

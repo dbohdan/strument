@@ -117,7 +117,10 @@ func classifyBody(pageURL, body string) contentKind {
 		return kindHTML
 	}
 	ext := strings.ToLower(path.Ext(pageURL))
-	if i := strings.IndexByte(ext, '?'); i >= 0 {
+	// A query or fragment rides on the extension and would break every table
+	// lookup: path.Ext("interp.go?raw=1") is ".go?raw=1", and a GitHub line
+	// anchor gives ".go#l10". Cut both, whichever comes first.
+	if i := strings.IndexAny(ext, "?#"); i >= 0 {
 		ext = ext[:i]
 	}
 	switch {
