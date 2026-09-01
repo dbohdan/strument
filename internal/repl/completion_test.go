@@ -135,10 +135,18 @@ func TestPathCommandCompletion(t *testing.T) {
 		}
 	}
 
+	// A directory candidate ends in a slash and no trailing space is offered
+	// after it: the slash is the invitation to descend, and a space would
+	// force the user to back up before the next Tab could list into it.
+	got := completionsFor(r.completer(), "/submit "+filepath.Join(outside, "s"))
+	if len(got) != 1 || got[0] != "ubdir/" {
+		t.Errorf("/submit …/s = %q, want [ubdir/] with no trailing space", got)
+	}
+
 	// A trailing slash lists the directory: both entries, the directory one
 	// with its slash so the next Tab descends.
 	slash := outside + string(filepath.Separator)
-	got := completionsFor(r.completer(), "/read-only "+slash)
+	got = completionsFor(r.completer(), "/read-only "+slash)
 	if len(got) != 2 || got[0] != "prompt.md" || got[1] != "subdir/" {
 		t.Errorf("/read-only %s = %q, want [prompt.md subdir/]", slash, got)
 	}

@@ -65,7 +65,12 @@ func (p *PrefixCompleter) getDynamicNames(line []rune) [][]rune {
 	var result [][]rune
 	for _, name := range p.Callback(string(line)) {
 		nameRunes := []rune(name)
-		nameRunes = append(nameRunes, ' ')
+		// A directory candidate carries its trailing slash, which already
+		// signals "keep typing": appending a space after it would force the
+		// user to back up before descending. Files get the usual separator.
+		if !strings.HasSuffix(name, "/") {
+			nameRunes = append(nameRunes, ' ')
+		}
 		result = append(result, nameRunes)
 	}
 	return result
