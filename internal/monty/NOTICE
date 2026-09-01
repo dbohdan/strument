@@ -21,13 +21,32 @@ behavior Strument depends on.
 
 **The monty.wasm blob is NOT built from source here.** Rebuilding it needs
 a Rust toolchain with the `wasm32-wasip1` target, and Strument deliberately
-requires none (no cgo, no C toolchain — see CLAUDE.md). The vendored blob was
-rebuilt in September 2026 from monty-go's own Rust shim
-(`crates/monty-wasm`, commit c5fede1) with its `monty` git dependency bumped
-to the Pydantic Monty v0.0.21 tag:
+requires none (no cgo, no C toolchain — see CLAUDE.md). Rebuild procedure
+(last done September 2026, from monty-go commit c5fede1 with the shim's
+`monty` git dependency bumped to the Pydantic Monty v0.0.21 tag):
+
+1. Clone https://github.com/fugue-labs/monty-go and check out commit
+   `c5fede1ca39482ff3da7dc04c5fd569b8bc313b8`. Apply the shim changes
+   recorded at the end of this notice (not upstream).
+2. `rustup target add wasm32-wasip1`
+3. `make build` — the Makefile passes `--remap-path-prefix` for the build
+   directory and the cargo home (Rust's `-trimpath`), and strips DWARF, so
+   the blob embeds no local paths. If the build directory differs from
+   `/tmp/monty-go`, the absolute prefix in the Makefile's `RUSTFLAGS` must
+   match.
+4. Copy `monty.wasm` into this directory and update the SHA-256 below.
+
+The blob is reproducible on the same toolchain: three cold builds into
+separate `CARGO_TARGET_DIR`s produced the identical hash. Nuance: the
+reproducibility gate is the rustc version and the resolved dependency
+versions — the shim builds against git dependencies and the monty tag moves,
+so two machines agree only with the same `Cargo.lock` (vendored with the
+shim, but cargo updates the git checkout's lockfile entries when the tag
+resolves differently) and the same rustc. The path part — the part Go
+`-trimpath` solves — is fully handled by the remap.
 
   * monty.wasm — SHA-256
-    c710466336591ead5f5620c3527b63459d061053dc4e3fc49b842f666b619228
+    c05e79b5e163df7196ff54966da6291823a3748d788c4191be657918bac2ee9b
 
 The shim needed three changes for the v0.0.11 → v0.0.21 API (kept locally;
 not upstreamed): types split out into the new `monty_types` crate, the
