@@ -269,7 +269,9 @@ func bashTool() llm.ToolDef {
 			"Commands have a time limit set by the user's configuration. Give timeout (in seconds) to " +
 			"set a shorter limit for a command you know finishes quickly; you cannot extend the limit " +
 			"beyond the configuration. To run several commands in parallel and collect all their exit " +
-			"codes, use background jobs: `a & b & wait`.",
+			"codes, use background jobs: `a & b & wait`. Their output is interleaved in one shared " +
+			"capture with no indication of which job printed what — if the jobs' outputs must stay " +
+			"separated, redirect each to its own file (`a >a.log 2>&1 & b >b.log 2>&1 & wait`).",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
