@@ -53,7 +53,10 @@ func webfetchTool() llm.ToolDef {
 			"A URL fragment fetches just that section, so " +
 			"https://docs.python.org/3/library/stdtypes.html#string-methods returns the " +
 			"string methods rather than the whole page. On a page too large to return " +
-			"whole, ask for its outline first and fetch a section by the anchor it lists.",
+			"whole, ask for its outline first and fetch a section by the anchor it lists. " +
+			"A plain-text page — source code, Markdown — has no anchors; its outline " +
+			"instead lists line numbers or definitions with their line ranges, and " +
+			"range (\"412-470\") fetches those lines.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -65,6 +68,12 @@ func webfetchTool() llm.ToolDef {
 					"type": "boolean",
 					"description": "Return the page's headings and their anchors instead of its content. " +
 						"Use it on a page too large to read whole, then fetch the section you want.",
+				},
+				"range": map[string]any{
+					"type": "string",
+					"description": "Fetch only the given lines of a plain-text page, 1-based and " +
+						"inclusive — \"412-470\". An outline of a text page lists line numbers; " +
+						"this fetches the lines it points at.",
 				},
 			},
 			"required": []any{"url", "purpose"},
@@ -78,6 +87,8 @@ type toolFetch struct {
 	url     string
 	purpose string
 	outline bool
+	lineLo  int // range fetch: 1-based, inclusive; 0 when no range was given
+	lineHi  int
 }
 
 func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
@@ -85,6 +96,7 @@ func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
 		URL     string `json:"url"`
 		Purpose string `json:"purpose"`
 		Outline bool   `json:"outline"`
+		Range   string `json:"range"`
 	}
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
 		return toolFetch{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
@@ -100,7 +112,39 @@ func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
 	if _, err := origin.Of(raw); err != nil {
 		return toolFetch{}, "That URL cannot be fetched: " + err.Error() + "."
 	}
-	return toolFetch{callID: tc.ID, url: raw, purpose: strings.TrimSpace(a.Purpose), outline: a.Outline}, ""
+	lo, hi, err := parseLineRange(a.Range)
+	if err != nil {
+		return toolFetch{}, "The range argument was not usable: " + err.Error() +
+			" Give it as two line numbers, first and last, as in \"80-120\"."
+	}
+	return toolFetch{callID: tc.ID, url: raw, purpose: strings.TrimSpace(a.Purpose),
+		outline: a.Outline, lineLo: lo, lineHi: hi}, ""
+}
+
+// parseLineRange reads "80-120" (1-based, inclusive) or a single "80".
+func parseLineRange(s string) (lo, hi int, err error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, 0, nil
+	}
+	first, second, _ := strings.Cut(s, "-")
+	lo, err = strconv.Atoi(strings.TrimSpace(first))
+	if err != nil || lo < 1 {
+		return 0, 0, fmt.Errorf("%q is not a line number", first)
+	}
+	hi = lo
+	if second != "" {
+		hi, err = strconv.Atoi(strings.TrimSpace(second))
+		if err != nil {
+			return 0, 0, fmt.Errorf("%q is not a line number", second)
+		}
+	} else if strings.HasSuffix(s, "-") {
+		return 0, 0, fmt.Errorf("the range %s has no end", s)
+	}
+	if hi < lo {
+		return 0, 0, fmt.Errorf("the range %s ends before it starts", s)
+	}
+	return lo, hi, nil
 }
 
 // runWebfetch confirms and fetches, returning the page as the tool result.
@@ -174,7 +218,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		c.Out.Link(f.url)
 	}
 
-	content, err := c.Scrape(ctx, f.url, ScrapeOptions{Outline: f.outline})
+	content, err := c.Scrape(ctx, f.url, ScrapeOptions{Outline: f.outline, Range: rangeArg(f)})
 	if err != nil {
 		// The model gets the reason, so it can try a different URL rather than
 		// conclude the page said nothing.
@@ -184,6 +228,17 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		return truncateResult(content) // an outline that overruns has no map of its own
 	}
 	return truncateFetch(content, f.url)
+}
+
+// rangeArg is the fetch's range as the ScrapeOptions field, "" for none.
+func rangeArg(f toolFetch) string {
+	if f.lineLo == 0 {
+		return ""
+	}
+	if f.lineLo == f.lineHi {
+		return strconv.Itoa(f.lineLo)
+	}
+	return fmt.Sprintf("%d-%d", f.lineLo, f.lineHi)
 }
 
 // truncateFetch cuts an oversized page and hands back its map.

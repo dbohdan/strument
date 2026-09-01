@@ -329,6 +329,28 @@ type ScrapeOptions struct {
 	// Outline returns the page's headings and their anchors instead of its
 	// content — the map you read before deciding which section to fetch.
 	Outline bool
+
+	// Range narrows a plain-text page to the given 1-based lines, inclusive —
+	// "80-120". It is how a model navigates a fetched file that has no
+	// anchors: the outline of a text page advertises line numbers, so the
+	// fetch that follows them takes this.
+	// Range narrows a plain-text page to the given 1-based lines, inclusive —
+	// "80-120". It is how a model navigates a fetched file that has no
+	// anchors: the outline of a text page advertises line numbers, so the
+	// fetch that follows them takes this.
+	Range string
+}
+
+// lineRange is the parsed Range field: (0, 0) when unset.
+func (o ScrapeOptions) lineRange() (lo, hi int) {
+	if o.Range == "" {
+		return 0, 0
+	}
+	lo, hi, err := parseLineRange(o.Range)
+	if err != nil {
+		return 0, 0
+	}
+	return lo, hi
 }
 
 // Scraper fetches URL content; injectable for tests.

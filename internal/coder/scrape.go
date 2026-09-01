@@ -9,13 +9,17 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
+
+	"dbohdan.com/strument/internal/repomap"
 )
 
 const (
@@ -69,10 +73,7 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 			return "", err
 		}
 
-		text := string(body)
-		if strings.Contains(resp.Header.Get("Content-Type"), "html") {
-			text = htmlToMarkdown(text, url, opts)
-		}
+		text, wrap := renderFetched(url, string(body), opts)
 		// Where the content actually came from, which is not always where it
 		// was asked for. The model picks the URL now, so a shortener or an
 		// open redirect landing somewhere else is a thing the transcript should
@@ -81,14 +82,63 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 		if resp.Request != nil && resp.Request.URL != nil {
 			final = resp.Request.URL.String()
 		}
-		wrap := wrapContent
-		if opts.Outline {
-			wrap = wrapOutline
-		}
 		if final != url {
 			return wrap(url, text) + "\n\n(Redirected to " + final + ".)\n", nil
 		}
 		return wrap(url, text), nil
+	}
+}
+
+// contentKind is what a fetched body turned out to be, decided by sniffing
+// rather than by trusting the server: a `scraper` command supplies no headers
+// at all, and a text/plain label has described Go source before.
+type contentKind int
+
+const (
+	kindHTML     contentKind = iota // markup; the htmlToMarkdown pipeline
+	kindMarkdown                    // a Markdown document; heading outline
+	kindCode                        // a language tree-sitter knows; def outline
+	kindText                        // everything else; line ranges only
+)
+
+// classifyBody decides how a fetched body should be outlined.
+//
+// The order is the order of trust. HTML wins on the byte sniff
+// (http.DetectContentType reads the actual markup, which a text/plain label
+// from a misconfigured server does not override); then the URL path's
+// extension, which a raw-file host sets honestly and which decides between
+// Markdown, code, and everything else; then the conservative body sniff for
+// an extensionless Markdown file. A miss costs one extra fetch with a line
+// range; a false Markdown outline hands the model a wrong map of a ReST
+// file, which it will then trust — so the sniff exists to catch Markdown,
+// never to *make* something Markdown.
+func classifyBody(pageURL, body string) contentKind {
+	if ct := http.DetectContentType([]byte(body)); strings.Contains(ct, "html") {
+		return kindHTML
+	}
+	ext := strings.ToLower(path.Ext(pageURL))
+	if i := strings.IndexByte(ext, '?'); i >= 0 {
+		ext = ext[:i]
+	}
+	switch {
+	case markdownExts[ext]:
+		return kindMarkdown
+	case excludedDocExts[ext], ext == ".txt":
+		return kindText
+	case ext != "":
+		// A known code extension: DefOutlines owns the grammar list, and
+		// whether the file parses decides known there. Classified as code
+		// here, so an unparsable .go file gets the plain-text answer with its
+		// line ranges rather than a second-class no-outline answer.
+		return kindCode
+	default:
+		// An extensionless body could be anything; the sniff's one job is to
+		// catch Markdown, never to make something Markdown. Anything that
+		// does not clear the bar stays plain text.
+		if looksLikeMarkdown(body) {
+			return kindMarkdown
+		}
+		return kindText
 	}
 }
 
@@ -103,6 +153,103 @@ func wrapContent(url, text string) string {
 // reader calibrates on the framing line.
 func wrapOutline(url, text string) string {
 	return fmt.Sprintf("Here is the outline of %s:\n\n%s", url, text)
+}
+
+// renderFetched turns a fetched body into the text and framing the tool
+// returns. It is the one place the content kinds meet the outline modes, so
+// that the HTTP path and the `scraper` command path answer identically: the
+// command path has no headers, which is why classification sniffs the body
+// rather than asking the server.
+func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap func(url, text string) string) {
+	kind := classifyBody(pageURL, body)
+	// A range applies to whatever body was fetched, before any other framing:
+	// the model asked for lines, so lines are what it gets, whatever the
+	// format turned out to be. lo/hi are clamped to the file rather than
+	// refused, because the file's length is only known here and a range past
+	// the end still names the part the model wanted to see.
+	if lo, hi := opts.lineRange(); lo > 0 {
+		body = sliceLines(body, lo, hi)
+	}
+	switch kind {
+	case kindHTML:
+		return htmlToMarkdown(body, pageURL, opts), wrapContent
+	case kindMarkdown:
+		if opts.Outline {
+			return markdownOutline(body), wrapOutline
+		}
+		return body, wrapContent
+	case kindCode:
+		if opts.Outline {
+			return defOutlineOf(pageURL, body), wrapOutline
+		}
+		return body, wrapContent
+	default: // kindText
+		if opts.Outline {
+			return plainTextOutline(body), wrapOutline
+		}
+		return body, wrapContent
+	}
+}
+
+// sliceLines returns lines lo through hi, 1-based and inclusive, clamped to
+// the body's length.
+func sliceLines(body string, lo, hi int) string {
+	lines := strings.Split(body, "\n")
+	if lo < 1 {
+		lo = 1
+	}
+	if hi > len(lines) {
+		hi = len(lines)
+	}
+	if lo > hi {
+		return ""
+	}
+	// A trailing empty element is the artifact of the body ending in \n, not
+	// a final empty line: Split counts one more part than there are lines.
+	out := strings.Join(lines[lo-1:hi], "\n")
+	return strings.TrimSuffix(out, "\n")
+}
+
+// markdownExtRe matches the URL path extensions that mean Markdown. ReST,
+// AsciiDoc, org, and TeX are deliberately absent: each has heading-ish lines
+// an ATX scan would mangle, and a wrong map is worse than no map.
+var markdownExts = map[string]bool{
+	".md": true, ".markdown": true, ".mdown": true, ".mkd": true, ".mdx": true,
+}
+
+// excludedDocExts are the lightweight-markup formats a heading sniff must
+// never be applied to, extension or not.
+var excludedDocExts = map[string]bool{
+	".rst": true, ".adoc": true, ".asciidoc": true, ".org": true, ".tex": true,
+}
+
+// looksLikeMarkdown decides whether an extensionless body reads as Markdown.
+//
+// The bar is deliberately high — three ATX headings in the first hundred
+// lines — and deliberately asymmetric: a missed Markdown file costs one extra
+// fetch with a line range, while a false positive hands the model a wrong map
+// of a ReST or org file that it will then trust. Setext underlines (`Title`
+// over `=====`, which is where ReST's section markers live) count only when
+// they sit under a text line, and any `.. directive::` in sight votes no.
+var (
+	atxHeadingRe   = regexp.MustCompile(`(?m)^#{1,6} \S`)
+	rstDirectiveRe = regexp.MustCompile(`(?m)^\.\. [\w-]+::`)
+)
+
+func looksLikeMarkdown(body string) bool {
+	lines := strings.Split(body, "\n")
+	if len(lines) > 100 {
+		lines = lines[:100]
+	}
+	scan := strings.Join(lines, "\n")
+	headings := len(atxHeadingRe.FindAllString(scan, -1))
+	if headings < 3 {
+		return false
+	}
+	if len(rstDirectiveRe.FindAllString(scan, -1)) > 0 {
+		return false
+	}
+	return true
 }
 
 // buildScrapeArgs fills the URL into an argv template: every %s in an element is
@@ -338,14 +485,92 @@ func anchorOf(h *goquery.Selection) string {
 	return id
 }
 
+// markdownOutline reduces a Markdown document to its headings, with the line
+// each section starts on — the coordinate system a range fetch uses.
+//
+// This is the ATX-only cousin of outlineOf: it reads the document it is given
+// rather than converting it first, and it advertises line ranges rather than
+// URL fragments, because a fetched plain file has no anchor to fetch by. A
+// heading inside a fenced code block is not a heading; fences are tracked so
+// a bash example in a README does not become a section of the map.
+func markdownOutline(body string) string {
+	var b strings.Builder
+	inFence := false
+	lineNo := 0
+	type entry struct {
+		depth int
+		text  string
+		line  int
+	}
+	var entries []entry
+	for line := range strings.SplitSeq(body, "\n") {
+		lineNo++
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		hashes := len(trimmed) - len(strings.TrimLeft(trimmed, "#"))
+		if hashes < 1 || hashes > 6 || !strings.HasPrefix(trimmed[hashes:], " ") {
+			continue
+		}
+		entries = append(entries, entry{depth: hashes, text: strings.TrimSpace(trimmed[hashes:]), line: lineNo})
+	}
+	if len(entries) == 0 {
+		return fmt.Sprintf("This document has no Markdown headings, so it has no outline. It is "+
+			"%d lines; fetch a range of them.", lineCount(body))
+	}
+	for _, e := range entries {
+		b.WriteString(strings.Repeat("  ", e.depth-1) + "- " + e.text +
+			fmt.Sprintf("  (line %d)", e.line) + "\n")
+	}
+	b.WriteString("\nFetch a section by giving webfetch a range, as in \"80-120\".\n")
+	return b.String()
+}
+
+// lineCount is the number of newline-terminated lines a body has, for the
+// "fetch a range" hints.
+func lineCount(s string) int {
+	return strings.Count(s, "\n") + 1
+}
+
+// defOutlineOf renders a source file's top-level definitions as the outline
+// the model fetches ranges by. kindText's fallback awaits it when the
+// extension names no grammar.
+func defOutlineOf(pageURL, body string) string {
+	defs, known := repomap.DefOutlines(pageURL, []byte(body))
+	if !known {
+		return plainTextOutline(body)
+	}
+	if len(defs) == 0 {
+		return "This file parses as " + path.Ext(pageURL) + " but has no top-level definitions. It is " +
+			strconv.Itoa(lineCount(body)) + " lines; fetch a range of them."
+	}
+	var b strings.Builder
+	for _, d := range defs {
+		fmt.Fprintf(&b, "- %s %s  (lines %d-%d)\n", d.Kind, d.Name, d.Start, d.End)
+	}
+	b.WriteString("\nFetch a definition by giving webfetch a range, as in \"107-187\".\n")
+	return b.String()
+}
+
+// plainTextOutline is the honest answer for a body nothing in the toolkit
+// understands: the line count, the size, and the way to fetch part of it. No
+// map is offered, because none can be drawn without guessing.
+func plainTextOutline(body string) string {
+	n := lineCount(body)
+	return fmt.Sprintf("This is plain text, %d lines, %d KB. It has no recognizable structure, so "+
+		"there is no outline to give; fetch a range of lines with webfetch, as in \"1-100\".",
+		n, len(body)/1024)
+}
+
 // unwrapHeadingLists lifts document sections out of the lists they are laid
 // out in.
 //
 // A heading inside an <li> does not convert to a markdown heading — it cannot,
-// since "#" inside a list item means something else — so it comes out as plain
-// text and the page loses its structure. Javadoc puts every method's <section>
-// inside an <li>: the ArrayList page has 100 members and converted to exactly
-// one heading, its title, with all the content present and none of it findable.
 //
 // The rule is general rather than javadoc-shaped: a list whose items carry
 // headings is a document being laid out as a list, so the list markup goes and

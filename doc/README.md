@@ -651,6 +651,25 @@ markup, which is the version that works on both. `markHeadings` writes each
 anchor into the markdown as a Pandoc heading attribute, which is what makes the
 outline a string operation and lets a truncated page map itself.
 
+**A text page has no anchors, so its outline advertises line numbers and a
+`range` fetches them.** The first outline was useless on anything but HTML:
+`opts.Outline` swapped the framing line and returned raw Go source labeled as
+a map, and a model left holding it went URL-guessing — the session that
+prompted this tried three tag names, two of them 404s, hunting a function the
+outline should have named. What replaced it classifies the body by sniffing,
+never by trusting the server: `http.DetectContentType` over the bytes, since
+a `scraper` command supplies no headers at all and a `text/plain` label has
+described Go source before. The URL path's extension then decides: Markdown
+(`.md`) gets a heading outline with line numbers, a code extension gets the
+tree-sitter def outline (`repomap.DefOutlines` — the repo map's own grammars
+and tags queries, the definition spans with 1-based line ranges), and ReST,
+AsciiDoc, org, and TeX are deliberately excluded from the Markdown sniff —
+each has heading-ish lines an ATX scan would mangle, and a wrong map is worse
+than no map. An extensionless body clears a conservative Markdown bar (three
+ATX headings, no ReST directives) or falls back to an honest "plain text, N
+lines, fetch a range." The outline's footer names the fetch that uses its
+numbers: `range: "107-187"`.
+
 `internal/origin` owns what an origin is, because two packages need the
 identical answer and neither can import the other — the config loader validates
 an entry at load, the coder matches a fetch at run time.
