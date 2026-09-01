@@ -172,8 +172,9 @@ func readOnlyTools() []llm.ToolDef {
 					},
 					"ignore_case": map[string]any{"type": "boolean", "description": "Match case-insensitively."},
 					"context_lines": intProp("Lines to return either side of each match, like grep's -C. " +
-						"Asking for context returns content, whatever mode says. Matching lines are " +
-						"marked with \":\" and context lines with \"-\"."),
+						"Defaults to 2 in content mode; give 0 for bare matching lines. Asking for " +
+						"context returns content, whatever mode says. Matching lines are marked with " +
+						"\":\" and context lines with \"-\"."),
 				},
 				"required": []any{"pattern"},
 			},

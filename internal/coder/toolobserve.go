@@ -42,6 +42,13 @@ func quoteToolArg(s string) string {
 
 // maxToolOutputBytes caps a single tool result. Beyond this the result is cut
 // with a note, because one runaway command must not eat the context window.
+
+// defaultGrepContext is the context_lines a content-mode grep gets when it
+// gives none: two lines either side of each match. See runGrep for why two and
+// not zero.
+
+const defaultGrepContext = 2
+
 // maxGrepContext bounds one call's appetite for surrounding lines. Ten either
 // side is already a screenful per match; past that the file itself is what is
 // wanted, and read exists for that.
@@ -117,7 +124,9 @@ func readSummary(ft workspace.FileText) string {
 	return fmt.Sprintf("%s (lines %d-%d of %d)", p, ft.Start, ft.Start+len(ft.Lines)-1, ft.Total)
 }
 
-// runGrep answers a grep call.
+// runGrep answers a grep call. The context_lines argument is a pointer so that
+// omitted and explicit 0 stay distinct: the default of 2 applies to an omitted
+// value, while 0 is a deliberate request for bare matching lines.
 func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	var a struct {
 		Pattern    string `json:"pattern"`
@@ -125,7 +134,7 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 		Path       string `json:"path"`
 		Mode       string `json:"mode"`
 		IgnoreCase bool   `json:"ignore_case"`
-		Context    int    `json:"context_lines"`
+		Context    *int   `json:"context_lines"`
 	}
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg
@@ -145,23 +154,40 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	default:
 		return fmt.Sprintf("Unknown mode %q. Use \"files\", \"content\", or \"count\".", a.Mode)
 	}
-	if a.Context < 0 {
+	context := 0
+	if a.Context != nil {
+		context = *a.Context
+	} else if mode == workspace.GrepContent {
+		// context_lines defaults to 2 rather than 0. A bare match line locates
+		// a thing but is rarely enough to act on it — the exact-match edit
+		// anchored on one line fails more often than it should, and each
+		// failure is a round trip plus a model-facing error ("search text was
+		// not found") that says nothing about the memory it failed on. Two
+		// lines either side covers the common anchor at a token cost matches
+		// pay only when they are few, and the \":\"/\"-\" marking keeps context
+		// from blurring with hits. The default applies in content mode only:
+		// files mode stays the default for a call that names no mode, since
+		// fattening it into content output would contradict the schema's
+		// documented default. A caller that wants bare lines asks for 0.
+		context = defaultGrepContext
+	}
+	if context < 0 {
 		return "context_lines cannot be negative."
 	}
-	if a.Context > maxGrepContext {
+	if context > maxGrepContext {
 		return fmt.Sprintf("context_lines is capped at %d; ask for fewer, or read the file.", maxGrepContext)
 	}
 	// Asking for context implies wanting to see lines. Returning a file list to
 	// a call that asked for three lines either side would be answering a
 	// question nobody posed, and silently dropping an argument is the shape a
 	// model reads as its request being ignored.
-	if a.Context > 0 && mode != workspace.GrepContent {
+	if context > 0 && mode != workspace.GrepContent {
 		mode, modeName = workspace.GrepContent, "content"
 	}
 
 	res, err := i.Files.Grep(workspace.GrepQuery{
 		Pattern: a.Pattern, Glob: a.Glob, Dir: a.Path, Mode: mode,
-		IgnoreCase: a.IgnoreCase, ContextLines: a.Context,
+		IgnoreCase: a.IgnoreCase, ContextLines: context,
 	})
 	if err != nil {
 		return fmt.Sprintf("The search pattern was not valid: %v", err)

@@ -499,3 +499,46 @@ func TestGrepContextRejectsUnusableValues(t *testing.T) {
 		}
 	}
 }
+
+// A content-mode call that omits context_lines gets the default of 2, so a
+// result is enough to anchor an edit on without a follow-up read. An explicit
+// 0 must stay bare — the schema promises it — which is why the argument is
+// decoded as a pointer: omitted and 0 are different requests.
+func TestGrepContextDefault(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("one\nTARGET\nthree\nfour\nfive\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	i := &Inspector{Files: workspace.New(dir), Out: testOutput{t}}
+
+	out := i.runGrep(llm.ToolCall{ID: "1", Name: "grep",
+		Arguments: `{"pattern":"TARGET","mode":"content"}`})
+	if !strings.Contains(out, "-1- one") || !strings.Contains(out, "-3- three") {
+		t.Errorf("omitted context_lines did not default to 2:\n%s", out)
+	}
+	if strings.Contains(out, "-5- five") {
+		t.Errorf("the default gave more than 2 lines either side:\n%s", out)
+	}
+
+	out = i.runGrep(llm.ToolCall{ID: "2", Name: "grep",
+		Arguments: `{"pattern":"TARGET","mode":"content","context_lines":0}`})
+	if strings.Contains(out, "one") || strings.Contains(out, "three") {
+		t.Errorf("explicit 0 did not stay bare:\n%s", out)
+	}
+}
+
+// The default does not fire in files mode: a call that names no mode stays a
+// file list, or the schema's documented default ("files") would be a lie for
+// every call that omits both.
+func TestGrepDefaultDoesNotFlipsFilesMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("one\nTARGET\nthree\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	i := &Inspector{Files: workspace.New(dir), Out: testOutput{t}}
+
+	out := i.runGrep(llm.ToolCall{ID: "1", Name: "grep", Arguments: `{"pattern":"TARGET"}`})
+	if strings.Contains(out, "one") || strings.Contains(out, ":2:") {
+		t.Errorf("an omitted mode with omitted context produced content output:\n%s", out)
+	}
+}
