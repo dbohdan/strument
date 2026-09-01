@@ -19,7 +19,7 @@ func TestRequiredSandboxRefusesModelCommands(t *testing.T) {
 		Sandbox: SandboxState{Required: true, Active: false, Unavailable: "this kernel has no Landlock"},
 	}
 
-	exit, result := c.runAndShow(context.Background(), "touch canary")
+	exit, result := c.runAndShow(context.Background(), "touch canary", 0)
 
 	if exit == 0 {
 		t.Error("a refused command reported success")
@@ -40,7 +40,7 @@ func TestUnsandboxedSessionStillRuns(t *testing.T) {
 	unixOnly(t)
 	c := &Coder{Out: &captureOut{}, Root: t.TempDir()}
 
-	if exit, out := c.runAndShow(context.Background(), "echo ran"); exit != 0 || !strings.Contains(out, "ran") {
+	if exit, out := c.runAndShow(context.Background(), "echo ran", 0); exit != 0 || !strings.Contains(out, "ran") {
 		t.Errorf("exit=%d out=%q; an unsandboxed session was blocked", exit, out)
 	}
 }
@@ -55,7 +55,7 @@ func TestActiveSandboxDoesNotBlock(t *testing.T) {
 		Sandbox: SandboxState{Required: true, Active: true, Writable: []string{"/w"}},
 	}
 
-	if exit, out := c.runAndShow(context.Background(), "echo ran"); exit != 0 || !strings.Contains(out, "ran") {
+	if exit, out := c.runAndShow(context.Background(), "echo ran", 0); exit != 0 || !strings.Contains(out, "ran") {
 		t.Errorf("exit=%d out=%q; an active sandbox blocked a command", exit, out)
 	}
 }
@@ -70,7 +70,7 @@ func TestDeniedHintIsAppended(t *testing.T) {
 		Sandbox: SandboxState{Required: true, Active: true, Writable: []string{"/project", "/tmp"}},
 	}
 
-	_, out := c.runAndShow(context.Background(), "echo 'touch: cannot touch: Permission denied' >&2; exit 1")
+	_, out := c.runAndShow(context.Background(), "echo 'touch: cannot touch: Permission denied' >&2; exit 1", 0)
 
 	if !strings.Contains(out, "sandbox") || !strings.Contains(out, "/project") {
 		t.Errorf("no sandbox hint on a denied command:\n%s", out)
@@ -91,7 +91,7 @@ func TestNoHintOnAnOrdinaryFailure(t *testing.T) {
 		Sandbox: SandboxState{Required: true, Active: true, Writable: []string{"/project"}},
 	}
 
-	_, out := c.runAndShow(context.Background(), "echo 'syntax error near unexpected token' >&2; exit 2")
+	_, out := c.runAndShow(context.Background(), "echo 'syntax error near unexpected token' >&2; exit 2", 0)
 
 	if strings.Contains(out, "sandbox") {
 		t.Errorf("an ordinary failure was blamed on the sandbox:\n%s", out)

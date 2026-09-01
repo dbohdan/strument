@@ -429,6 +429,17 @@ Ten tools, in three natures:
   model actually emits), with one platform gap: process substitution is
   unimplemented on Windows, where `<(…)` yields a TODO notice from the
   interpreter instead of running.
+  The model may pass `timeout` (seconds) to shorten the configured
+  `shell_timeout` for one call — never to extend it, because the ceiling is
+  what keeps a hang a pause rather than a session that stopped answering; a
+  clamped request is reported in the tool result rather than applied silently.
+  Background jobs are the advertised way to run several commands in parallel:
+  `a & b & wait` runs both as real child processes concurrently inside the
+  interpreter (they are goroutines wrapping `os/exec`, tracked per runner) and
+  `wait` joins them and collects their exit codes. They live only as long as
+  the block — a deliberate fit for turn-delimited job batches — and the
+  capture buffer is mutex-guarded, because the interpreter documents
+  concurrent writes to stdout/stderr once background statements appear.
   `check(name)` runs a *configured* argv from the `check` dict by name, so
   it needs no gate — the model supplies a key, never a command, and there is
   nothing to classify or smuggle. It is offered only when `check` is

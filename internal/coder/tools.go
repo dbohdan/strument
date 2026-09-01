@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
@@ -264,7 +265,11 @@ func bashTool() llm.ToolDef {
 		Description: "Run a shell command. Unless the command is one of the project's configured checks, " +
 			"the user is asked to confirm before it runs. Its output is returned to you. Commands run " +
 			"from the project's root directory. To read, search, or list files, use the read, grep, " +
-			"glob, and ls tools instead — they are never confirmed.",
+			"glob, and ls tools instead — they are never confirmed.\n\n" +
+			"Commands have a time limit set by the user's configuration. Give timeout (in seconds) to " +
+			"set a shorter limit for a command you know finishes quickly; you cannot extend the limit " +
+			"beyond the configuration. To run several commands in parallel and collect all their exit " +
+			"codes, use background jobs: `a & b & wait`.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -272,6 +277,8 @@ func bashTool() llm.ToolDef {
 				"purpose": strProp("What this command does and why you are running it now — enough " +
 					"for the user to decide without reading the command itself. Say plainly if it " +
 					"writes, deletes, installs, or sends anything."),
+				"timeout": intProp("Optional time limit for this command, in seconds. Shortens the " +
+					"configured limit for a command you know finishes quickly; it cannot extend it."),
 			},
 			"required": []any{"command", "purpose"},
 		},
@@ -499,6 +506,11 @@ type toolCommand struct {
 	// is what the confirmation prompt is worth reading for, so it is carried
 	// rather than decoded and dropped.
 	purpose string
+	// timeout is the model's requested deadline for this call, in seconds;
+	// zero when it gave none. A request beyond the configured ceiling is
+	// clamped by shellTimeout and reported to the model (see runShellTool),
+	// not refused.
+	timeout int
 }
 
 // editArgs is the decoded argument object shared by the edit tools.
@@ -750,6 +762,7 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	var a struct {
 		Command string `json:"command"`
 		Purpose string `json:"purpose"`
+		Timeout int    `json:"timeout"`
 	}
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
 		return toolCommand{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
@@ -757,7 +770,10 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	if strings.TrimSpace(a.Command) == "" {
 		return toolCommand{}, "The required \"command\" argument was missing."
 	}
-	return toolCommand{callID: tc.ID, command: a.Command, purpose: strings.TrimSpace(a.Purpose)}, ""
+	if a.Timeout < 0 {
+		return toolCommand{}, "The \"timeout\" argument must be a non-negative number of seconds."
+	}
+	return toolCommand{callID: tc.ID, command: a.Command, purpose: strings.TrimSpace(a.Purpose), timeout: a.Timeout}, ""
 }
 
 // runShellTool confirms and runs a shell command, returning its output as the
@@ -829,7 +845,22 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		return "The user chose not to run the command."
 	}
 
-	exitCode, output := c.runAndShow(ctx, command)
+	// The model's timeout is a narrowing of the configured ceiling, so a
+	// request above it is honored as the ceiling and said so: a silent clamp
+	// is indistinguishable to the model from the command being slow, and the
+	// obvious next move after an unexplained stop is to raise the number —
+	// which cannot help. Naming the ceiling turns that into a config change,
+	// the same way the sandbox's deniedHint does.
+	requested := time.Duration(cmd.timeout) * time.Second
+	if ceiling := c.shellTimeout(requested); cmd.timeout > 0 && ceiling < requested {
+		notice := fmt.Sprintf("\nThe requested timeout of %d seconds was clamped to the configured limit of %s.",
+			cmd.timeout, ceiling)
+		exitCode, output := c.runAndShow(ctx, command, requested)
+		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
+			quoteToolArg(command), exitCode, output, notice)
+	}
+
+	exitCode, output := c.runAndShow(ctx, command, requested)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output)
 }
 

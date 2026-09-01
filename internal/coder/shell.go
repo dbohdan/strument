@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"mvdan.cc/sh/v3/expand"
@@ -16,8 +18,10 @@ import (
 // runAndShow runs a confirmed command through the configured runner, echoing
 // "Running <cmd>" and then the captured output to the user — the output
 // otherwise only reaches the model (as a tool result or chat addition), never
-// the terminal. Returns the exit code and captured output.
-func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
+// the terminal. requestedTimeout is what the model asked for on this call,
+// zero when it gave none; it can only narrow the configured deadline, never
+// widen it (see shellTimeout). Returns the exit code and captured output.
+func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout time.Duration) (int, string) {
 	c.Out.Printf("")
 	c.Out.Toolf("Running %s", quoteToolArg(command))
 
@@ -41,7 +45,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 	//
 	// /run gets no deadline: the user typed that command and may well have
 	// meant the twenty-minute build.
-	deadline := c.shellTimeout()
+	deadline := c.shellTimeout(requestedTimeout)
 	if deadline > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, deadline)
@@ -107,14 +111,45 @@ func (c *Coder) runAndShow(ctx context.Context, command string) (int, string) {
 // rather than the end of the session.
 const defaultShellTimeout = 2 * time.Minute
 
-// shellTimeout resolves the configured deadline. Zero takes the default;
-// negative means no deadline at all, which is what `shell_timeout = 0` in a
-// config asks for.
-func (c *Coder) shellTimeout() time.Duration {
+// shellTimeout resolves the effective deadline for one model-caused command.
+// requestedTimeout is what the model asked for on the call, zero when it gave
+// none. Zero on the coder takes the default; a negative one means no deadline
+// at all, which is what `shell_timeout = 0` in a config asks for.
+//
+// The model's request is a narrowing, never a widening: it can spend less than
+// the configured ceiling by saying so (a command it knows finishes in a second
+// fails fast instead of hanging the turn), but it cannot buy more time than the
+// user configured, because the ceiling exists so that a hang is a pause the
+// user notices rather than a session that stopped answering (see
+// defaultShellTimeout). A silent clamp would look to the model like the command
+// itself failing; runShellTool reports the ceiling in that case.
+func (c *Coder) shellTimeout(requested time.Duration) time.Duration {
+	var ceiling time.Duration
 	if c.ShellTimeout == 0 {
-		return defaultShellTimeout
+		ceiling = defaultShellTimeout
+	} else {
+		ceiling = c.ShellTimeout
 	}
-	return c.ShellTimeout
+	if requested > 0 && (ceiling <= 0 || requested < ceiling) {
+		return requested
+	}
+	return ceiling
+}
+
+// syncWriter serializes writes to the capture buffer. The interpreter's
+// documentation warns that "writes to Stdout and Stderr may be concurrent if
+// background commands are used" (api.go) — `a & b &` has both jobs writing to
+// the same buffer while the foreground continues — and a bytes.Buffer is not
+// safe for concurrent use. Serialize rather than race.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
 }
 
 // PipeRunner is the default deterministic CommandRunner: the whole
@@ -137,6 +172,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	}
 
 	var output bytes.Buffer
+	capture := &syncWriter{w: &output}
 	file, err := syntax.NewParser().Parse(strings.NewReader(block), "")
 	if err != nil {
 		return -1, "", err
@@ -164,7 +200,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		// exec.Command gave it an empty stdin before the interpreter replaced it,
 		// and nil says that unambiguously instead of relying on whatever keeps
 		// the self-reference from biting.
-		interp.StdIO(nil, &output, &output),
+		interp.StdIO(nil, capture, capture),
 		interp.Dir(cwd),
 	}
 	if r.Env != nil {

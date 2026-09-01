@@ -24,18 +24,24 @@ func unixOnly(t *testing.T) {
 // the two layers this setting crosses.
 func TestShellTimeoutResolution(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		set  time.Duration
-		want time.Duration
+		name      string
+		set       time.Duration
+		requested time.Duration
+		want      time.Duration
 	}{
-		{"unset takes the default", 0, defaultShellTimeout},
-		{"a value is used as given", 30 * time.Second, 30 * time.Second},
-		{"negative is no deadline", -1 * time.Second, -1 * time.Second},
+		{"unset takes the default", 0, 0, defaultShellTimeout},
+		{"a value is used as given", 30 * time.Second, 0, 30 * time.Second},
+		{"negative is no deadline", -1 * time.Second, 0, -1 * time.Second},
+		{"a request narrows the ceiling", 30 * time.Second, 5 * time.Second, 5 * time.Second},
+		{"a request cannot widen the ceiling", 30 * time.Second, 5 * time.Minute, 30 * time.Second},
+		{"a request under the default holds", 0, 5 * time.Second, 5 * time.Second},
+		{"a request over the default is clamped", 0, 5 * time.Minute, defaultShellTimeout},
+		{"a request with no deadline holds", -1 * time.Second, 5 * time.Minute, 5 * time.Minute},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &Coder{ShellTimeout: tc.set}
-			if got := c.shellTimeout(); got != tc.want {
-				t.Errorf("shellTimeout() = %s, want %s", got, tc.want)
+			if got := c.shellTimeout(tc.requested); got != tc.want {
+				t.Errorf("shellTimeout(%s) = %s, want %s", tc.requested, got, tc.want)
 			}
 		})
 	}
@@ -55,7 +61,7 @@ func TestShellTimeoutStopsACommand(t *testing.T) {
 	}
 
 	start := time.Now()
-	exit, out := c.runAndShow(context.Background(), "sleep 30")
+	exit, out := c.runAndShow(context.Background(), "sleep 30", 0)
 	elapsed := time.Since(start)
 
 	if elapsed > 10*time.Second {
@@ -77,7 +83,7 @@ func TestCtrlCIsNotReportedAsATimeout(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { time.Sleep(100 * time.Millisecond); cancel() }()
-	_, out := c.runAndShow(ctx, "sleep 30")
+	_, out := c.runAndShow(ctx, "sleep 30", 0)
 
 	if strings.Contains(out, "shell_timeout") {
 		t.Errorf("an interrupt was reported as a timeout:\n%s", out)
@@ -90,7 +96,7 @@ func TestNoDeadlineWhenDisabled(t *testing.T) {
 	unixOnly(t)
 	c := &Coder{Out: &captureOut{}, Root: t.TempDir(), ShellTimeout: -1}
 
-	exit, out := c.runAndShow(context.Background(), "echo alive")
+	exit, out := c.runAndShow(context.Background(), "echo alive", 0)
 
 	if exit != 0 || !strings.Contains(out, "alive") {
 		t.Errorf("exit=%d out=%q; a disabled timeout stopped the command", exit, out)
@@ -116,5 +122,54 @@ func TestCheckTimeoutStopsACheck(t *testing.T) {
 	}
 	if !strings.Contains(out, "shell_timeout") {
 		t.Errorf("the result does not say the harness stopped it:\n%s", out)
+	}
+}
+
+// TestModelTimeoutNarrows exercises the model's per-call timeout through the
+// real interpreter: a request below the ceiling is honored, and a command
+// killed by the model's own limit is told apart from one killed by the config
+// — the model should learn to spend its own budget, not blame the harness.
+func TestModelTimeoutNarrows(t *testing.T) {
+	unixOnly(t)
+	c := &Coder{Out: &captureOut{}, Root: t.TempDir(), ShellTimeout: time.Minute}
+
+	start := time.Now()
+	exit, out := c.runAndShow(context.Background(), "sleep 30", 150*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if elapsed > 10*time.Second {
+		t.Fatalf("the command ran for %s; the requested deadline did not fire", elapsed)
+	}
+	if exit == 0 {
+		t.Error("a command stopped by the requested deadline reported success")
+	}
+	if !strings.Contains(out, "shell_timeout") {
+		t.Errorf("the result does not say the harness stopped it:\n%s", out)
+	}
+}
+
+// TestBackgroundJobsRunConcurrently pins the semantics the bash tool's
+// description now advertises: `a & b & wait` runs both jobs concurrently and
+// collects their exit codes through the wait builtin. If either half ran
+// serially, the block would take the sum of the two sleeps; if wait failed to
+// join, the block would end before the marker files appear.
+func TestBackgroundJobsRunConcurrently(t *testing.T) {
+	unixOnly(t)
+	c := &Coder{Out: &captureOut{}, Root: t.TempDir(), ShellTimeout: time.Minute}
+
+	script := `(sleep 1; echo one; touch one.done) & (sleep 1; echo two; touch two.done) & wait
+	test -f one.done && test -f two.done`
+	start := time.Now()
+	exit, out := c.runAndShow(context.Background(), script, 0)
+	elapsed := time.Since(start)
+
+	if exit != 0 {
+		t.Errorf("exit=%d; wait did not collect both jobs' success:\n%s", exit, out)
+	}
+	if elapsed >= 2*time.Second {
+		t.Errorf("the block took %s; the jobs did not run concurrently", elapsed)
+	}
+	if !strings.Contains(out, "one") || !strings.Contains(out, "two") {
+		t.Errorf("background output was not captured:\n%s", out)
 	}
 }

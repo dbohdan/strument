@@ -853,7 +853,7 @@ func (r echoRunner) Run(context.Context, string, string) (int, string, error) {
 func TestRunAndShowDisplaysOutput(t *testing.T) {
 	out := &captureOut{}
 	c := &Coder{Out: out, Runner: echoRunner{exit: 0, output: "hello\nworld\n"}}
-	exit, output := c.runAndShow(context.Background(), "echo stuff")
+	exit, output := c.runAndShow(context.Background(), "echo stuff", 0)
 
 	if exit != 0 || output != "hello\nworld\n" {
 		t.Fatalf("runAndShow = (%d, %q), want (0, %q)", exit, output, "hello\nworld\n")

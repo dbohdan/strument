@@ -461,7 +461,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// The same deadline the bash tool gets, and for the same reason: a check is
 	// model-caused, and a test suite that waits forever on a socket hangs the
 	// session exactly as a bash block would.
-	if d := c.shellTimeout(); d > 0 {
+	if d := c.shellTimeout(0); d > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, d)
 		defer cancel()
@@ -487,7 +487,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return -1, string(out) + fmt.Sprintf(
-			"\nThe check was stopped after %s. Strument's `shell_timeout` did it, not the check.", c.shellTimeout())
+			"\nThe check was stopped after %s. Strument's `shell_timeout` did it, not the check.", c.shellTimeout(0))
 	}
 	return exit, string(out)
 }
