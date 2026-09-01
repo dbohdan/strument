@@ -403,16 +403,16 @@ func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
 // schema withholds.
 func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 	c := testCoder(t)
-	if !strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "code runs a short Python program") {
-		t.Error("the code tool is offered, but the prompt does not mention it")
+	if !strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "run_code runs a short Python program") {
+		t.Error("the run_code tool is offered, but the prompt does not mention it")
 	}
 
-	// A coder built with the code tool withheld: the slot must come back empty.
+	// A coder built with the run_code tool withheld: the slot must come back empty.
 	withheld := testCoder(t)
 	withheld.OfferCode = false
 	sys := withheld.fmtSystemPrompt(prompts.Tool.MainSystem)
-	if strings.Contains(sys, "code runs a short Python program") {
-		t.Error("the code tool is withheld, but the prompt names it")
+	if strings.Contains(sys, "run_code runs a short Python program") {
+		t.Error("the run_code tool is withheld, but the prompt names it")
 	}
 }
 
@@ -421,9 +421,9 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 // image: a prompt saying "use read, grep, glob, and ls" beside a schema that
 // offers none of them is the self-contradiction the first trial's arms
 // shipped, read the other way.
-func TestObservationViaCodePromptTracksTheSchema(t *testing.T) {
+func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
 	c := testCoder(t)
-	c.ObservationViaCode = true
+	c.ObservationViaRunCode = true
 	sys := c.fmtSystemPrompt(prompts.Tool.MainSystem)
 
 	if !strings.Contains(sys, "all file observation") {
@@ -434,7 +434,7 @@ func TestObservationViaCodePromptTracksTheSchema(t *testing.T) {
 	}
 
 	// The nothing-pinned note follows the same flag.
-	if note := c.filesNoFullFilesText(); !strings.Contains(note, "code tool") {
+	if note := c.filesNoFullFilesText(); !strings.Contains(note, "run_code tool") {
 		t.Errorf("the force arm's nothing-pinned note still steers to direct tools: %q", note)
 	}
 
@@ -448,14 +448,14 @@ func TestObservationViaCodePromptTracksTheSchema(t *testing.T) {
 	}
 	for _, withheld := range []string{toolRead, toolGrep, toolGlob, toolLS, toolSymbol} {
 		if names[withheld] {
-			t.Errorf("tool %q is offered under ObservationViaCode", withheld)
+			t.Errorf("tool %q is offered under ObservationViaRunCode", withheld)
 		}
 	}
-	if !names[toolCode] {
-		t.Error("ObservationViaCode did not force the code tool on")
+	if !names[toolRunCode] {
+		t.Error("ObservationViaRunCode did not force the run_code tool on")
 	}
 	if !names[toolAskUser] {
-		t.Error("ask_user_question vanished under ObservationViaCode")
+		t.Error("ask_user_question vanished under ObservationViaRunCode")
 	}
 
 	// A direct read-only call under the arm redirects, quoting the model's own
@@ -470,6 +470,6 @@ func TestObservationViaCodePromptTracksTheSchema(t *testing.T) {
 	// With the arm off, the same dispatch runs the tool for real.
 	off := testCoder(t)
 	if strings.Contains(off.runObservationRedirect(tc), "not offered directly") {
-		t.Error("the redirect fired with ObservationViaCode off")
+		t.Error("the redirect fired with ObservationViaRunCode off")
 	}
 }

@@ -204,19 +204,19 @@ type Config struct {
 	// sets it.
 	NoLoopDetection bool
 
-	// ObservationViaCode turns on the code-observation force arm: the direct
+	// ObservationViaRunCode turns on the code-observation force arm: the direct
 	// read-only tools are withheld from the schema and all file observation
-	// goes through code programs. Default false; `observation_via_code = True`
+	// goes through code programs. Default false; `observation_via_run_code = True`
 	// sets it. It is the experimental arm of the code-uptake trials
 	// (doc/experiments/2026-09-code-mode2.md), not a supported mode — yet.
-	ObservationViaCode bool
+	ObservationViaRunCode bool
 
 	// ExampleMessages are few-shot example messages appended to the prompt
 	// set's example block, from the `example_messages` setting — a list of
 	// [role, content] pairs. Empty means none. It exists for the
 	// shell-parallelism trial's EX arm (doc/experiments/2026-09-shell-parallel.md):
 	// the planning-side lever the code-only report named, which prose in the
-	// system prompt could not supply on its own. Like observation_via_code it
+	// system prompt could not supply on its own. Like observation_via_run_code it
 	// is an experimental arm, not a supported mode — yet.
 	ExampleMessages []ExampleMessage
 

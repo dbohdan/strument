@@ -215,7 +215,7 @@ inherited from aider.
     `$XDG_STATE_HOME/strument`.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
-  - `monty/` — the vendored Monty wrapper behind the `code` tool: a
+  - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
     restricted Python interpreter compiled to WebAssembly, run through
     wazero. The `monty.wasm` blob is vendored pre-built, not built from
     source here (that needs a Rust toolchain); see its `NOTICE`. The

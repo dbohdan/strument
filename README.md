@@ -22,10 +22,10 @@ See [`doc/`](doc/README.md) for the developer overview.
 - [Agent Skills](https://code.claude.com/docs/en/skills).
   Drop a `SKILL.md` under `~/.local/share/strument/skills/` or the project's `.strument/skills/`, and the model can ask for it by name.
   Project skills need `strument trust` too, and `allowed-tools` grants nothing: a skill is instructions, not permissions.
-- A sandboxed `code` tool.
+- A sandboxed `run_code` tool.
   The model can run a short Python program — a calculator, a formatter, or one program that computes over several pieces of data at once — in a restricted WASM interpreter with no filesystem or network access.
   The five read-only search tools are callable from inside a program; the mutating ones are deliberately not.
-  See [the `code` tool](doc/config.md#the-code-tool).
+  See [the `run_code` tool](doc/config.md#the-run_code-tool).
 - [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
   `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
 - Every turn is undoable, with or without Git.
@@ -199,7 +199,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/skill [<name>]` | Show the skills this session found, or add one's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
 | `/symbol <name> [definition \| reference]` | Find where a name is defined or used from the language parser rather than from text. |
 
-The model also has a `code` tool — a short sandboxed Python program, callable from any mode. See [the `code` tool](doc/config.md#the-code-tool).
+The model also has a `run_code` tool — a short sandboxed Python program, callable from any mode. See [the `run_code` tool](doc/config.md#the-run_code-tool).
 | `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). Bare `/web` shows which origins `webfetch` may reach unasked, and `/web drop`/`/web reset` take those back. |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |

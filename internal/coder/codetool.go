@@ -12,7 +12,7 @@ import (
 	"dbohdan.com/strument/internal/monty"
 )
 
-// The code tool: the model writes one small program and it runs in Monty, a
+// The run_code tool: the model writes one small program and it runs in Monty, a
 // restricted Python interpreter compiled to WebAssembly (internal/monty). Two
 // measured facts motivate it (doc/plans/code-mode.md): arithmetic costs a
 // quarter of the reasoning lines in this repository's own experiments, and
@@ -89,7 +89,7 @@ func codeTool() llm.ToolDef {
 	}
 
 	return llm.ToolDef{
-		Name:        toolCode,
+		Name:        toolRunCode,
 		Description: b.String(),
 		Parameters: map[string]any{
 			"type": "object",
@@ -130,7 +130,7 @@ func parseCodeArgs(tc llm.ToolCall) (codeCall, string) {
 // reads, it does not touch anything outside its own WASM instance and the
 // project's observation tools. It is announced instead.
 func (c *Coder) runCode(_ context.Context, cc codeCall) string {
-	c.Out.Toolf("‹code› %s", oneLine(cc.code))
+	c.Out.Toolf("‹run_code› %s", oneLine(cc.code))
 
 	runner, err := montyRunner()
 	if err != nil {
@@ -204,7 +204,7 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		// Announce exactly as a direct call would be, so the review surface
 		// looks the same whether the model called read directly or from inside
 		// a program.
-		c.Out.Toolf("‹code› %s", call.Name)
+		c.Out.Toolf("‹run_code› %s", call.Name)
 		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
 		out := c.inspector().Run(call.Name, tc.Arguments)
 

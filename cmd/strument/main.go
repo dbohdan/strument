@@ -156,7 +156,7 @@ func (c *chatCmd) Run() error {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	cdr.LoopDetection = !cfg.NoLoopDetection
-	cdr.ObservationViaCode = cfg.ObservationViaCode
+	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow
 	// The project's named checks, which the check tool runs without asking:

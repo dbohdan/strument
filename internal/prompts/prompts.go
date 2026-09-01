@@ -124,24 +124,24 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // "or what you found" is four words against that.
 
 // CodeToolsBullet is the {code_tools} slot's text, exported for the coder's
-// assembler, which fills the slot when (and only when) the code tool is
+// assembler, which fills the slot when (and only when) the run_code tool is
 // offered. It lives beside the prompt it extends because it is prompt prose;
 // the *condition* lives in the coder, derived from the tool set itself.
 //
 // The tool list is the closed-world hazard the code-mode trial measured: the
 // sentence "these are the ones you will reach for most" reads as policy, and a
 // flash-class model treats the enumeration as exhaustive —
-// doc/experiments/2026-08-code-mode.md found 0/36 `code` calls with the tool
-// offered in the schema but absent from this list. So `code` gets a bullet
+// doc/experiments/2026-08-code-mode.md found 0/36 `run_code` calls with the tool
+// offered in the schema but absent from this list. So `run_code` gets a bullet
 // through the {code_tools} slot, filled at assembly time only when the tool is
 // actually offered (the same mechanism {platform} uses), so the prose can
-// never promise a tool the schema withholds — the rule that kept `code` out
+// never promise a tool the schema withholds — the rule that kept `run_code` out
 // of the prompt when it was first added. The bullet is a conditional rule
 // ("when one answer needs several lookups combined"), not an announcement:
 // per the symbol fix, the description that moves uptake is the one that maps
 // a felt need to a tool, and the arithmetic clause is explicit because models
 // do not recognize their own mental arithmetic as costly.
-const CodeToolsBullet = "- code runs a short Python program, which can itself call read, grep, glob, " +
+const CodeToolsBullet = "- run_code runs a short Python program, which can itself call read, grep, glob, " +
 	"and ls — the results come back to the program, not to you, until it returns. " +
 	"It changes nothing and needs no permission. Reach for it when one answer " +
 	"needs several lookups combined — three greps you already know you need are " +
@@ -151,16 +151,16 @@ const CodeToolsBullet = "- code runs a short Python program, which can itself ca
 	"exploration where each search depends on the last result, is a direct call " +
 	"to the tool itself.\n"
 
-// ObservationViaCodeParagraph is what the {code_tools} slot renders under the
-// force arm (coder.ObservationViaCode): all direct observation tools
-// withheld, all observation through code programs. It replaces the code
+// ObservationViaRunCodeParagraph is what the {code_tools} slot renders under the
+// force arm (coder.ObservationViaRunCode): all direct observation tools
+// withheld, all observation through code programs. It replaces the run_code
 // bullet, whose "reach for it when one answer needs several lookups"
 // presupposes a direct-call alternative that no longer exists, and would read
 // as optional. It states the arrangement as fact, in the register the rest of
 // the prompt uses, and carries the two facts the mode leans on: results come
 // back to the program, and the program's final value is what the model
 // receives.
-const ObservationViaCodeParagraph = "- code runs a short Python program. In this session all file observation — " +
+const ObservationViaRunCodeParagraph = "- run_code runs a short Python program. In this session all file observation — " +
 	"reading, searching, listing, and symbol lookup — goes through it: the " +
 	"program calls read, grep, glob, ls, and symbol itself, and the results " +
 	"come back to the program, not to you, until it returns. Write one program " +
@@ -187,11 +187,12 @@ const AskObservationBullet = "read, grep, glob, and ls look at the project. " +
 	"ignores are not listed or searched. Paths are relative to the project root; an " +
 	"absolute path that lies inside the project is also accepted.\n\n"
 
-// the code bullet above when the code tool is offered, and as "" when it is
-// not — the empty case is the feature-reverted baseline, where prose naming
-// `code` would promise a tool the schema does not carry. {observation_tools}
+// {code_tools} renders the code bullet above when the run_code tool is
+// offered, and as "" when it is not — the empty case is the feature-reverted
+// baseline, where prose naming `run_code` would promise a tool the schema does
+// not carry. {observation_tools}
 // renders the same paragraph or, under the force arm, nothing — the
-// ObservationViaCodeParagraph has already described how observation works.
+// ObservationViaRunCodeParagraph has already described how observation works.
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
@@ -264,7 +265,7 @@ var Tool = Set{
 	// reference block was not to be trusted. One session spent twelve steps
 	// hunting the project for the "real" file it thought the denial implied.
 	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
-		"what you need — or one code program that calls them, when you already " +
+		"what you need — or one run_code call that calls them, when you already " +
 		"know the several things you are looking for. You can edit any file in " +
 		"the project. If the user asks how something here works, read the code " +
 		"that implements it: what you remember about a project is not evidence " +
@@ -286,7 +287,7 @@ var Tool = Set{
 // competition. The replacement says the same thing about the one channel that
 // exists. The trailing sentences (edit anything; read, don't recall) are
 // unchanged and shared.
-const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the project with the code tool: " +
+const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the project with the run_code tool: " +
 	"write a program that calls read, grep, glob, and ls, and answer from what " +
 	"it returns. You can edit any file in " +
 	"the project. If the user asks how something here works, read the code " +
@@ -296,7 +297,7 @@ const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the proj
 // AskFilesNoFullFilesViaCode replaces Ask.FilesNoFullFiles under the force
 // arm, for the same reason. Ask mode has no editing to narrow the denial
 // with, so — like its base text — this one drops it.
-const AskFilesNoFullFilesViaCode = "Look at the project with the code tool: write a program that calls " +
+const AskFilesNoFullFilesViaCode = "Look at the project with the run_code tool: write a program that calls " +
 	"read, grep, glob, and ls, and answer from what it returns rather than " +
 	"from memory."
 
@@ -348,7 +349,7 @@ var Ask = Set{
 	// morning and two reviewers independently identified it as
 	// 2026-08-readonly-honest.md's twelve-step file hunt, reintroduced.
 	FilesNoFullFiles: "Use read, grep, glob, and ls to look at the project, and answer from what " +
-		"you find there rather than from memory — or one code program that calls " +
+		"you find there rather than from memory — or one run_code call that calls " +
 		"them, when you already know the several things you are looking for.",
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",

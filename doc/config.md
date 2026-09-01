@@ -34,7 +34,7 @@ The loader reads these module-level variables after running your file:
 | `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
-| `observation_via_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `code` programs. Default `False`. See below. |
+| `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
@@ -594,22 +594,22 @@ the chat, Strument tells the model what repeated and to take another approach,
 and you are asked whether to stop, let it try again, or steer it with a message
 of your own.
 
-### `observation_via_code`
+### `observation_via_run_code`
 
 ```python
-observation_via_code = False    # the default
-observation_via_code = True     # force arm
+observation_via_run_code = False    # the default
+observation_via_run_code = True     # force arm
 ```
 
 Experimental. With `True`, the direct read-only tools (`read`, `grep`, `glob`,
 `ls`, `symbol`) are withheld from the tool schema and all file observation goes
-through the `code` tool: the model writes a short Python program that calls
+through the `run_code` tool: the model writes a short Python program that calls
 those tools itself, and the results come back to the program. A direct call a
-model makes anyway is answered with a pointer to the `code` route rather than
+model makes anyway is answered with a pointer to the `run_code` route rather than
 silently failing.
 
 This is the force arm of the code-uptake experiments
-(`doc/experiments/2026-09-code-mode2.md`): prompting moved `code` uptake from
+(`doc/experiments/2026-09-code-mode2.md`): prompting moved `run_code` uptake from
 0/36 to 8/24, and this setting tests the complementary condition — removing the
 competing tools instead of persuading the model to prefer the program. It is
 off by default and may change or be withdrawn based on those results.
@@ -630,7 +630,7 @@ Optional. A list of `[role, content]` pairs (`"user"` or `"assistant"`)
 appended to the prompt set's example block, so the model sees them as a
 worked exchange before the conversation starts. Empty means none.
 
-Experimental, like `observation_via_code`: it is the few-shot arm of the
+Experimental, like `observation_via_run_code`: it is the few-shot arm of the
 shell-parallelism trial (`doc/experiments/2026-09-shell-parallel.md`) — the
 planning-side lever that trial's predecessor named, aimed at whether a worked
 example changes how models batch commands. It exists because prose in the
@@ -1251,9 +1251,9 @@ restarting.
 
 [agent-skills]: https://code.claude.com/docs/en/skills
 
-## The `code` tool
+## The `run_code` tool
 
-`code(code)` runs a short Python program and returns its value: a calculator, a
+`run_code(code)` runs a short Python program and returns its value: a calculator, a
 formatter, or one program that computes over several pieces of data at once.
 The interpreter is [Monty](https://github.com/pydantic/monty), a restricted
 Python subset compiled to WebAssembly and run through `wazero` — pure Go, no
@@ -1277,7 +1277,7 @@ mode too, because a discussion turn is exactly where a calculator belongs.
 
 ### The read-only bridge
 
-Inside a `code` program, the five observation tools — `read`, `grep`, `glob`,
+Inside a `run_code` program, the five observation tools — `read`, `grep`, `glob`,
 `ls`, `symbol` — are callable as functions. Each returns the same text the
 tool itself would return, and each call is announced exactly as a direct call
 would be, so the review surface does not change: you see the same `Searched
@@ -1293,5 +1293,5 @@ registration, so it cannot drift from it.
 
 Trials so far have not earned the tool a default slot:
 [`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md)
-found models did not call `code` at all (0/36) on an exploration task built to
+found models did not call `run_code` at all (0/36) on an exploration task built to
 need it, though a probe that named the tool got an immediate correct call.

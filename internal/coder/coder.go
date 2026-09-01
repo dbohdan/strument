@@ -46,25 +46,25 @@ type Coder struct {
 	ExamplesAsSysMsg     bool
 	SystemPromptPrefix   string
 	ChatLanguage         string
-	// OfferCode, when false, withholds the code tool from the schema and
+	// OfferCode, when false, withholds the run_code tool from the schema and
 	// empties the {code_tools} prompt slot. Default true, set in New; the
 	// false case is the feature-reverted arm of the code-mode trial and a
 	// future user setting. Keeping the condition in one field is what lets
 	// the prompt's tool list track the schema instead of drifting from it.
 	OfferCode bool
-	// ObservationViaCode, when true, withholds the direct read-only tools
+	// ObservationViaRunCode, when true, withholds the direct read-only tools
 	// (read, grep, glob, ls, symbol) from the schema and forces OfferCode on:
 	// all observation goes through code programs calling the bridged tools.
 	// This is the force arm of the code-uptake trials — the complement of
-	// OfferCode=false. Rather than persuading the model to prefer `code`, it
+	// OfferCode=false. Rather than persuading the model to prefer `run_code`, it
 	// removes the competing tools, the closed-world condition the 2026-08
 	// trial measured from the other side. A direct call the model makes anyway
 	// is answered with a redirect to code, not silently dropped — see
-	// redirectNote. Default false; set from config `observation_via_code`.
+	// redirectNote. Default false; set from config `observation_via_run_code`.
 	// Off in this mode are only the observation tools: edit, bash, check,
 	// commit, webfetch, and ask_user_question are unchanged, and webfetch
 	// stays direct because the bridge cannot carry it.
-	ObservationViaCode bool
+	ObservationViaRunCode bool
 
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked

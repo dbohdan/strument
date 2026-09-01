@@ -205,7 +205,7 @@ func (c *Coder) platformText() string {
 // same one toolDefs uses, so the prose tracks the schema by construction
 // rather than by a second copy of the condition drifting away from it.
 //
-// ObservationViaCode replaces the bullet with the force arm's paragraph: the
+// ObservationViaRunCode replaces the bullet with the force arm's paragraph: the
 // bullet's "reach for it when one answer needs several lookups" presupposes a
 // direct-call alternative that no longer exists, and would read as optional.
 // The replacement states the arrangement as fact, in the same register —
@@ -213,8 +213,8 @@ func (c *Coder) platformText() string {
 // that results come back to the program, and that the last value is what
 // returns to the model.
 func (c *Coder) codeToolsText() string {
-	if c.ObservationViaCode {
-		return prompts.ObservationViaCodeParagraph
+	if c.ObservationViaRunCode {
+		return prompts.ObservationViaRunCodeParagraph
 	}
 	if !c.OfferCode {
 		return ""
@@ -229,7 +229,7 @@ func (c *Coder) codeToolsText() string {
 // described a format where commands were prose the harness parsed back out.
 // Both are the schema's job now.
 //
-// {code_tools} is filled from the same condition that offers the code tool in
+// {code_tools} is filled from the same condition that offers the run_code tool in
 // the schema, so the prose and the schema cannot drift apart in either
 // direction: a prompt naming a tool the model does not have, or a schema tool
 // the prompt's cost list omits — the closed-world reading that produced the
@@ -256,11 +256,11 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 
 // observationToolsText renders the {observation_tools} slot: the standard
 // read/grep/glob/ls paragraph normally, "" under the force arm — where the
-// ObservationViaCodeParagraph in {code_tools} has already said how observation
+// ObservationViaRunCodeParagraph in {code_tools} has already said how observation
 // works and naming the tools as directly callable would contradict the schema.
 // The slot's condition is the same one toolDefs uses.
 func (c *Coder) observationToolsText() string {
-	if c.ObservationViaCode {
+	if c.ObservationViaRunCode {
 		return ""
 	}
 	if c.editFormat == "ask" {
@@ -273,7 +273,7 @@ func (c *Coder) observationToolsText() string {
 // force arm's variant, which must not tell the model to use tools the schema
 // withholds. The swap follows the same flag the tool set does.
 func (c *Coder) filesNoFullFilesText() string {
-	if c.ObservationViaCode {
+	if c.ObservationViaRunCode {
 		if c.editFormat == "ask" {
 			return prompts.AskFilesNoFullFilesViaCode
 		}

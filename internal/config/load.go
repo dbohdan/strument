@@ -59,18 +59,18 @@ type fileGlobals struct {
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
 
-	hasMaxSteps            bool
-	maxStepsVal            int
-	hasMaxErrorReflections bool
-	maxErrorReflectionsVal int
-	hasLoopDetection       bool
-	loopDetectionVal       bool
-	hasObservationViaCode  bool
-	observationViaCodeVal  bool
-	hasWebfetchAllow       bool
-	webfetchAllowVal       []string
-	hasWebSearch           bool
-	webSearchVal           *WebSearch
+	hasMaxSteps              bool
+	maxStepsVal              int
+	hasMaxErrorReflections   bool
+	maxErrorReflectionsVal   int
+	hasLoopDetection         bool
+	loopDetectionVal         bool
+	hasObservationViaRunCode bool
+	observationViaRunCodeVal bool
+	hasWebfetchAllow         bool
+	webfetchAllowVal         []string
+	hasWebSearch             bool
+	webSearchVal             *WebSearch
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -355,8 +355,8 @@ func Load(opts Options) (*Config, error) {
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
-	if user.hasObservationViaCode {
-		cfg.ObservationViaCode = user.observationViaCodeVal
+	if user.hasObservationViaRunCode {
+		cfg.ObservationViaRunCode = user.observationViaRunCodeVal
 	}
 	if user.hasSandbox {
 		cfg.Sandbox = user.sandboxVal
@@ -781,13 +781,13 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		out.loopDetectionVal = bool(b)
 	}
 
-	if ov, ok := globals["observation_via_code"]; ok {
+	if ov, ok := globals["observation_via_run_code"]; ok {
 		b, ok := ov.(starlark.Bool)
 		if !ok {
-			return nil, fmt.Errorf("%s: `observation_via_code` must be a boolean, got %s", path, ov.Type())
+			return nil, fmt.Errorf("%s: `observation_via_run_code` must be a boolean, got %s", path, ov.Type())
 		}
-		out.hasObservationViaCode = true
-		out.observationViaCodeVal = bool(b)
+		out.hasObservationViaRunCode = true
+		out.observationViaRunCodeVal = bool(b)
 	}
 
 	if sv, ok := globals["sandbox"]; ok {

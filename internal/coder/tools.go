@@ -36,10 +36,10 @@ const (
 	// toolSkill loads one of the user's skills. Its catalog lives in the tool
 	// description rather than the prompt — see skills.go.
 	toolSkill = "skill"
-	// toolCode runs a short Python program in Monty, the restricted interpreter
+	// toolRunCode runs a short Python program in Monty, the restricted interpreter
 	// in internal/monty — see codetool.go. Computing mutates nothing, so it is
 	// offered in ask mode too.
-	toolCode = "code"
+	toolRunCode = "run_code"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
 	// tools — a discussion turn is precisely where a clarifying question is
@@ -65,12 +65,12 @@ func intProp(desc string) map[string]any {
 // engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
 	var defs []llm.ToolDef
-	// ObservationViaCode withholds the direct read-only tools — including
+	// ObservationViaRunCode withholds the direct read-only tools — including
 	// symbol, which the bridge itself carries — and forces code on. The mode
 	// is incoherent without the tool it redirects to, so the force arm ignores
 	// OfferCode=false rather than producing a session that can look at
 	// nothing.
-	if !c.ObservationViaCode {
+	if !c.ObservationViaRunCode {
 		defs = readOnlyTools()
 		// ask_user_question is always offered: it has no side effect to gate, and
 		// a discussion turn is exactly where a clarifying question belongs.
@@ -106,9 +106,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// Also before the ask-mode return: computing mutates nothing, and a
 	// discussion turn is exactly where a calculator belongs. Offered unless
 	// withheld — OfferCode, and the {code_tools} slot follows the same flag.
-	// ObservationViaCode forces it past that flag: the redirect arm has no
+	// ObservationViaRunCode forces it past that flag: the redirect arm has no
 	// other way to look at anything.
-	if c.OfferCode || c.ObservationViaCode {
+	if c.OfferCode || c.ObservationViaRunCode {
 		defs = append(defs, codeTool())
 	}
 	if c.editFormat == "ask" {
@@ -633,7 +633,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			results[tc.ID] = c.runSkill(ctx, s)
-		case toolCode:
+		case toolRunCode:
 			cc, msg := parseCodeArgs(tc)
 			if msg != "" {
 				results[tc.ID] = msg
@@ -717,7 +717,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 }
 
 // runObservationRedirect answers a direct read-only call. Normally it is the
-// call itself; under ObservationViaCode the tool was withheld from the schema,
+// call itself; under ObservationViaRunCode the tool was withheld from the schema,
 // and a model calling it anyway is acting on habit rather than on the schema.
 // The answer is a redirect — which tool to use, and what a program calling it
 // looks like — rather than "Unknown tool": the name is known, the habit is
@@ -726,11 +726,11 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 // argsJSON is passed through so the bridged example can quote the model's own
 // arguments back at it.
 func (c *Coder) runObservationRedirect(tc llm.ToolCall) string {
-	if !c.ObservationViaCode {
+	if !c.ObservationViaRunCode {
 		return c.inspector().Run(tc.Name, tc.Arguments)
 	}
 	return fmt.Sprintf("%q is not offered directly in this session: all file observation "+
-		"goes through the code tool. Call code with a program that calls %s(%s) — for "+
+		"goes through the run_code tool. Call run_code with a program that calls %s(%s) — for "+
 		"example:\n\n```python\n%s\n```\n\nThe result of the call comes back to the "+
 		"program; return what you need from the program's final value.",
 		tc.Name, tc.Name, quoteToolArg(strings.TrimSpace(tc.Arguments)),

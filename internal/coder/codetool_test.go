@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// The code tool's tests. Monty's own behavior is pinned here at the level the
+// The run_code tool's tests. Monty's own behavior is pinned here at the level the
 // model sees — the returned value and the error text — because that is the
 // contract the tool description promises. The security claims (no filesystem,
 // no network) are tested, not assumed: each program below was verified to
@@ -116,23 +116,23 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 
 	found := false
 	for _, d := range c.toolDefs() {
-		if d.Name == toolCode {
+		if d.Name == toolRunCode {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("the code tool must be offered in ask mode")
+		t.Error("the run_code tool must be offered in ask mode")
 	}
 
 	c.editFormat = "tool"
 	found = false
 	for _, d := range c.toolDefs() {
-		if d.Name == toolCode {
+		if d.Name == toolRunCode {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("the code tool must be offered in tool mode")
+		t.Error("the run_code tool must be offered in tool mode")
 	}
 }
 
@@ -282,12 +282,12 @@ func TestCodeBridgeCallsAreAnnounced(t *testing.T) {
 	c.runCode(context.Background(), codeCall{code: `ls()`})
 
 	joined := strings.Join(out.lines, "\n")
-	// "‹code› ls()" is the program being announced; "‹code› ls" is the
+	// "‹run_code› ls()" is the program being announced; "‹run_code› ls" is the
 	// bridged call inside it — the same shape a direct call prints.
-	if !strings.Contains(joined, "‹code› ls()\n") {
+	if !strings.Contains(joined, "‹run_code› ls()\n") {
 		t.Errorf("the program must be announced, got:\n%s", joined)
 	}
-	if !strings.Contains(joined, "‹code› ls\n") {
+	if !strings.Contains(joined, "‹run_code› ls\n") {
 		t.Errorf("a bridged call must be announced, got:\n%s", joined)
 	}
 }

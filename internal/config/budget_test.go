@@ -182,31 +182,31 @@ func TestLoopDetectionRejectsNonBooleans(t *testing.T) {
 	}
 }
 
-// TestObservationViaCodeDefaultsOff mirrors the loop_detection shape: unset
+// TestObservationViaRunCodeDefaultsOff mirrors the loop_detection shape: unset
 // leaves the force arm off, `True` turns it on, and a non-boolean is refused.
 // The arm is off by default because it is an experiment, not a supported mode.
-func TestObservationViaCodeDefaultsOff(t *testing.T) {
+func TestObservationViaRunCodeDefaultsOff(t *testing.T) {
 	cfg, err := loadBudget(t, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ObservationViaCode {
-		t.Error("unset observation_via_code should leave the force arm off")
+	if cfg.ObservationViaRunCode {
+		t.Error("unset observation_via_run_code should leave the force arm off")
 	}
 }
 
-func TestObservationViaCodeOn(t *testing.T) {
-	cfg, err := loadBudget(t, "observation_via_code = True")
+func TestObservationViaRunCodeOn(t *testing.T) {
+	cfg, err := loadBudget(t, "observation_via_run_code = True")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.ObservationViaCode {
-		t.Error("observation_via_code = True did not take effect")
+	if !cfg.ObservationViaRunCode {
+		t.Error("observation_via_run_code = True did not take effect")
 	}
 }
 
-func TestObservationViaCodeRejectsNonBooleans(t *testing.T) {
-	for _, setting := range []string{`observation_via_code = "yes"`, "observation_via_code = 1"} {
+func TestObservationViaRunCodeRejectsNonBooleans(t *testing.T) {
+	for _, setting := range []string{`observation_via_run_code = "yes"`, "observation_via_run_code = 1"} {
 		_, err := loadBudget(t, setting)
 		if err == nil {
 			t.Errorf("%s should not load", setting)
