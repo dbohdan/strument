@@ -9,8 +9,16 @@ here now, and upstream will not be pulled from again.
 It wraps pydantic/monty's Rust crate (a git dependency, currently pinned to
 tag `v0.0.21`) and exposes its pause/resume API as the C-ABI WASM exports
 the Go wrapper in `../wasm.go` drives: `wasm_alloc`, `monty_compile`,
-`monty_start`, `monty_resume`, `monty_resume_futures`, `monty_result_len`,
-`monty_result_read`, `monty_free_runner`, `monty_free_snapshot`.
+`monty_start`, `monty_resume`, `monty_resume_error`, `monty_resume_futures`,
+`monty_result_len`, `monty_result_read`, `monty_free_runner`,
+`monty_free_snapshot`.
+
+`monty_resume_error` is this fork's addition: it resumes a snapshot by
+raising a `{"type", "message"}` exception at the call site instead of
+returning a value, so a host-side tool failure re-enters the interpreter and
+the traceback names the program line that made the call. Without it, the Go
+wrapper had to drop the snapshot on handler error and tool-call failures
+reached the model as a flat one-liner with no attribution.
 
 ## Building
 

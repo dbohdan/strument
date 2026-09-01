@@ -127,3 +127,44 @@ func TestCodeFuncDocMatchesRegistry(t *testing.T) {
 		t.Errorf("the description must state read_bin's return shape; got:\n%s", desc)
 	}
 }
+
+// TestCodeErrorAttribution pins the fix for the failure mode observed in the
+// 2026-09 tool trial: a tool-call failure inside a multi-call program used to
+// come back as a flat one-liner with no line attribution, because the Go side
+// dropped the snapshot instead of resuming it with the error. The error must
+// be raised at the call site, so the traceback names the program line that
+// made the failing call — the thing a model debugging a 20-line program
+// needs.
+func TestCodeErrorAttribution(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"x.txt": "hi\n"})
+
+	// Two successful calls, then the failure: the traceback must name the
+	// failing line (5), not the first call or nothing at all.
+	code := `
+files = glob(pattern="*.go")
+a = read(path="x.txt")
+b = read(path="no-such-file")
+b`
+	got := c.runCode(context.Background(), codeCall{code: code})
+	if !strings.Contains(got, "line 4") || !strings.Contains(got, `read(path="no-such-file")`) {
+		t.Errorf("a tool failure must be attributed to its call site, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Could not read") {
+		t.Errorf("the tool's own error sentence must survive, got:\n%s", got)
+	}
+}
+
+// TestCodeErrorIsCatchable pins that a tool failure is an ordinary Python
+// exception: a program may catch it and continue. This is what makes the
+// attribution upgrade semantically safe — it did not just relabel errors, it
+// made them catchable — and it is why the bridge-call cap is pinned in its
+// uncaught form in TestCodeBridgeCapFires: a caught cap no longer stops the
+// program, the duration limit does.
+func TestCodeErrorIsCatchable(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"x.txt": "hi\n"})
+
+	code := "r = 'fallback'\ntry:\n    read(path='missing')\nexcept Exception as e:\n    r = 'caught'\nr"
+	if got := c.runCode(context.Background(), codeCall{code: code}); !strings.Contains(got, "caught") {
+		t.Errorf("a tool failure must be catchable as an ordinary exception, got:\n%s", got)
+	}
+}

@@ -212,8 +212,7 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		}
 		calls++
 		if calls > maxBridgedCalls {
-			return nil, fmt.Errorf("the program made more than %d tool calls; "+
-				"stop and do the rest with direct tool calls", maxBridgedCalls)
+			return nil, fmt.Errorf("the program made more than %d tool calls", maxBridgedCalls)
 		}
 
 		// Code functions answer with data, not model text, so they bypass
@@ -233,14 +232,13 @@ func (c *Coder) bridgeCall(allowed []string) monty.ExternalFunc {
 		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
 		out := c.inspector().Run(call.Name, tc.Arguments)
 
-		// A tool failure raises instead of returning. The tool's own error
-		// text becomes the exception message and Monty's traceback names the
-		// program line that made the call — the attribution a bare string
-		// return cannot give, and the reason a program that misindexed its
-		// way to a nonexistent file used to keep running on the error string
-		// as if it were data. An *empty result* is not a failure: "No
-		// matches" and a symbol miss are answers a program may legitimately
-		// filter on, so those stay values.
+		// A tool failure raises instead of returning. Since the Go wrapper
+		// resumes the snapshot with the error (monty_resume_error), Monty
+		// raises it at the call site — the traceback names the program line
+		// that made the call, and a try/except can catch it like any other
+		// exception. An *empty result* is not a failure: "No matches" and a
+		// symbol miss are answers a program may legitimately filter on, so
+		// those stay values.
 		if msg, bad := bridgeToolFailure(out); bad {
 			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
 		}
