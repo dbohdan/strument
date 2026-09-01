@@ -19,17 +19,18 @@ const (
 
 // instance wraps a single WASM module instance for one execution.
 type instance struct {
-	mod       api.Module
-	alloc     api.Function
-	dealloc   api.Function
-	compile   api.Function
-	start     api.Function
-	resume    api.Function
-	resumeFut api.Function
-	resLen    api.Function
-	resRead   api.Function
-	freeRun   api.Function
-	freeSnap  api.Function
+	mod        api.Module
+	alloc      api.Function
+	dealloc    api.Function
+	compile    api.Function
+	start      api.Function
+	resume     api.Function
+	resumeErr  api.Function
+	resumeFut  api.Function
+	resLen     api.Function
+	resRead    api.Function
+	freeRun    api.Function
+	freeSnap   api.Function
 }
 
 func (inst *instance) resolveExports() error {
@@ -55,6 +56,9 @@ func (inst *instance) resolveExports() error {
 		return err
 	}
 	if inst.resume, err = resolve("monty_resume"); err != nil {
+		return err
+	}
+	if inst.resumeErr, err = resolve("monty_resume_error"); err != nil {
 		return err
 	}
 	if inst.resumeFut, err = resolve("monty_resume_futures"); err != nil {
@@ -286,7 +290,20 @@ func (inst *instance) execute(ctx context.Context, code string, inputs map[strin
 
 			returnVal, fnErr := cfg.externalFunc(ctx, call)
 			if fnErr != nil {
-				return nil, fmt.Errorf("monty: external function %q failed: %w", call.Name, fnErr)
+				// Resume with the error raised at the call site, so the
+				// traceback names the program line that made the call.
+				// Dropping the snapshot instead (an early return here) left
+				// tool-call failures as a flat one-liner with no line
+				// attribution — the failure mode a multi-call program could
+				// not debug. The status code that comes back is then
+				// statusError, handled on the next loop iteration.
+				status, err = inst.resumeWithError(ctx,
+					derefU32(progress.SnapshotHandle),
+					fmt.Sprintf("external function %q failed: %v", call.Name, fnErr))
+				if err != nil {
+					return nil, err
+				}
+				continue
 			}
 
 			status, err = inst.resumeWithValue(ctx, derefU32(progress.SnapshotHandle), returnVal)
@@ -340,6 +357,35 @@ func (inst *instance) resumeWithValue(ctx context.Context, snapshotHandle uint32
 	)
 	if err != nil {
 		return 0, fmt.Errorf("monty: monty_resume call failed: %w", err)
+	}
+	return uint32(results[0]), nil
+}
+
+// resumeWithError resumes a snapshot by raising an exception at the call site
+// rather than returning a value. The exception re-enters the interpreter, so
+// Monty's traceback names the program line that made the failing call —
+// attribution a Go-side error return cannot give, because it abandons the
+// snapshot's stack frames instead of unwinding them.
+//
+// The exception type is RuntimeError: a tool failure is a plain runtime
+// failure from the program's point of view, and the message carries the
+// tool's own error sentence.
+func (inst *instance) resumeWithError(ctx context.Context, snapshotHandle uint32, msg string) (uint32, error) {
+	errPtr, errLen, err := inst.writeJSON(ctx, map[string]string{
+		"type":    "RuntimeError",
+		"message": msg,
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer inst.freeWasmMem(ctx, errPtr, errLen)
+
+	results, err := inst.resumeErr.Call(ctx,
+		uint64(snapshotHandle),
+		uint64(errPtr), uint64(errLen),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("monty: monty_resume_error call failed: %w", err)
 	}
 	return uint32(results[0]), nil
 }

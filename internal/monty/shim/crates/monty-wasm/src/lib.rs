@@ -793,6 +793,67 @@ pub extern "C" fn monty_resume(
     status
 }
 
+/// Resume execution after a function call or OS call, raising an exception at
+/// the call site instead of returning a value.
+///
+/// The exception crosses as JSON `{"type": "<ExcType>", "message": "..."}`.
+/// Resuming with `ExtFunctionResult::Error` makes Monty raise the exception
+/// at the original call site, so the resulting traceback carries the program
+/// line that made the call — the attribution a Go-side error return drops
+/// entirely, since the snapshot with its stack frames never re-enters the
+/// interpreter. The Go wrapper (wasm.go) uses this for external-function
+/// handler failures.
+#[no_mangle]
+pub extern "C" fn monty_resume_error(
+    snapshot_handle: u32,
+    error_json_ptr: u32,
+    error_json_len: u32,
+) -> u32 {
+    let snapshot = with_state(|s| s.snapshots.remove(&snapshot_handle));
+
+    let error_json = unsafe { read_str(error_json_ptr, error_json_len) };
+    let exc = match serde_json::from_str::<JsonValue>(&error_json) {
+        Ok(JsonValue::Object(map)) => {
+            let exc_type = map
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("RuntimeError");
+            // Deserialize handles the strum-serialized names ("ValueError",
+            // "json.JSONDecodeError", ...). An unknown name falls back to
+            // RuntimeError, which the hierarchy treats as a plain failure.
+            let exc_type = serde_json::from_str::<ExcType>(exc_type)
+                .unwrap_or(ExcType::RuntimeError);
+            let message = map
+                .get("message")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+                .unwrap_or_default();
+            MontyException::new(exc_type, Some(message))
+        }
+        _ => MontyException::new(ExcType::RuntimeError, Some("external function failed".to_owned())),
+    };
+
+    let mut print_writer = CollectPrintWriter::new();
+    let initial = {
+        let pw = PrintWriter::Callback(&mut print_writer);
+        match snapshot {
+            Some(SnapshotState::FunctionCall(call)) => {
+                call.resume(ExtFunctionResult::Error(exc), pw)
+            }
+            Some(SnapshotState::OsCall(call)) => call.resume(ExtFunctionResult::Error(exc), pw),
+            _ => {
+                set_result_json(&str_error_result("invalid snapshot handle", String::new()));
+                return 0;
+            }
+        }
+    };
+
+    let (status, result) =
+        with_param_registry(|reg| drive_progress(initial, &mut print_writer, reg));
+    set_result_json(&result);
+    status
+}
+
 /// Resume execution after resolving futures.
 #[no_mangle]
 pub extern "C" fn monty_resume_futures(
@@ -822,8 +883,7 @@ pub extern "C" fn monty_resume_futures(
 
     let results: Vec<(u32, ExtFunctionResult)> = pairs
         .into_iter()
-        .map(|(id, val)| (id, ExtFunctionResult::Return(json_to_monty(&val))))
-        .collect();
+        .map(|(id, val)| (id, ExtFunctionResult::Return(json_to_monty(&val))))        .collect();
 
     let mut print_writer = CollectPrintWriter::new();
     let initial = {

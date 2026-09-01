@@ -259,17 +259,21 @@ func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
 }
 
 // TestCodeBridgeCapFires: one program cannot issue unbounded work. The cap is
-// maxBridgedCalls; a program that loops past it is stopped.
+// maxBridgedCalls; a program that loops past it is stopped. Uncaught on
+// purpose: since tool-call errors became resumable (raised at the call site),
+// a try/except can swallow the cap error and keep calling — that is correct
+// Python semantics, and the 5s duration limit bounds it — so the cap's own
+// error is pinned in its uncaught form, where it stops the program.
 func TestCodeBridgeCapFires(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"f.txt": "x\n"})
 
 	// One over the cap. If the cap is maxBridgedCalls, the loop fails on the
 	// call after the last allowed one.
-	code := "n = 0\ntry:\n    while True:\n        ls()\n        n = n + 1\nexcept Exception as e:\n    (n, str(e)[:80])"
+	code := "while True:\n    ls()"
 	got := c.runCode(context.Background(), codeCall{code: code})
 
-	if !strings.Contains(got, "more than") {
-		t.Errorf("the bridged-call cap must fire, got:\n%s", got)
+	if !strings.Contains(got, "more than") || !strings.Contains(got, "line 2") {
+		t.Errorf("the bridged-call cap must fire with line attribution, got:\n%s", got)
 	}
 }
 
