@@ -1,0 +1,17 @@
+[package]
+name = "monty-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+monty = { git = "https://github.com/pydantic/monty.git", tag = "v0.0.21" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+monty-types = { git = "https://github.com/pydantic/monty.git", tag = "v0.0.21" }
+# get-size2 0.10.2+ pulls compact_str 0.10 while ruff_python_ast 0.0.3 uses
+# compact_str 0.9, so the GetSize derive fails to resolve. Pin the version
+# upstream monty v0.0.21 locks.
+get-size2 = "=0.10.1"

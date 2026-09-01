@@ -1,73 +1,37 @@
-internal/monty vendors the Go wrapper for the Pydantic Monty Python
-interpreter (https://github.com/fugue-labs/monty-go), taken at release
-v0.2.0 (commit c5fede1ca39482ff3da7dc04c5fd569b8bc313b8, tag v0.2.0; the
-vendored tree was checked out from the tag itself). Monty is distributed
-under the MIT License; the LICENSE
-file taken alongside the code is the upstream one and applies to this
-directory rather than the repository-root licence.
+internal/monty vendors the Go wrapper and the Rust WASM shim for the Pydantic
+Monty Python interpreter. Monty itself (https://github.com/pydantic/monty)
+is distributed under the MIT License; the LICENSE files in this directory
+and in shim/ are upstream's and apply here rather than the repository-root
+licence.
 
-The package code was copied and only mechanically changed: the package name
-was rewritten from `montygo` to `monty` and error strings from
-`montygo: …` to `monty: …`. Otherwise the files are upstream verbatim:
+Hard fork, September 2026. Upstream fugue-labs/monty-go (v0.2.0, commit
+c5fede1ca39482ff3da7dc04c5fd569b8bc313b8) was the source of everything in
+this directory; it is treated as frozen at that commit and will not be
+pulled from again. Upstream development has stalled, and the wrapper is
+small enough — three Go files plus a ~850-line Rust shim — that owning it
+outright costs less than tracking a dormant dependency.
 
-  * monty.go   — Runner, Limits, FunctionCall/FuncDef, Execute options
-  * wasm.go    — the wazero instance plumbing and the pause/resume for
-                 external function calls
-  * errors.go  — MontyError
+  * monty.go, wasm.go, errors.go — the Go wrapper (wazero plumbing,
+    pause/resume for external function calls). The package name was
+    rewritten from `montygo` to `monty` and error strings from `montygo: …`
+    to `monty: …`; otherwise upstream verbatim as of the fork commit.
+  * shim/ — the Rust shim (crates/monty-wasm) that exposes Monty's
+    pause/resume API as the C-ABI WASM exports the Go wrapper drives,
+    built against pydantic/monty v0.0.21. It is a hard fork of the shim
+    upstream shipped for monty v0.0.11, with the v0.0.21 API adaptation
+    described in shim/README.md.
+  * monty.wasm — the built shim, embedded by monty.go. Rebuilt with
+    `make -C shim check`; reproducible, see shim/README.md.
 
-The upstream tests (monty_test.go) are not vendored; they use only the
-standard library, but codetool_test.go in internal/coder covers the
-behavior Strument depends on.
+The fork is the maintenance point now. Changes to the shim land here, are
+committed here, and are described in shim/README.md as changes to make —
+written so a future session can re-derive them against a newer pydantic/monty
+tag without needing the upstream repository at all. Upgrading the pinned
+pydantic/monty tag is the one thing that still reaches outside this tree;
+bump the two git dependencies in shim/crates/monty-wasm/Cargo.toml and
+follow shim/README.md.
 
-**The monty.wasm blob is NOT built from source here.** Rebuilding it needs
-a Rust toolchain with the `wasm32-wasip1` target, and Strument deliberately
-requires none (no cgo, no C toolchain — see CLAUDE.md). The rebuild
-procedure and the shim changes it needs are written out in
-[`REBUILD.md`](REBUILD.md), aimed at models and humans, keyed by compile
-error so mild-to-moderate upstream divergence can be absorbed without
-re-deriving the port. Last done September 2026, from monty-go commit
-c5fede1 with the shim's `monty` git dependency bumped to the Pydantic Monty
-v0.0.21 tag.
-
-1. Clone https://github.com/fugue-labs/monty-go and check out the commit
-   named above; apply the changes in [`REBUILD.md`](REBUILD.md).
-2. `rustup target add wasm32-wasip1`
-3. `make build` — the Makefile passes `--remap-path-prefix` for the build
-   directory and the cargo home (Rust's `-trimpath`), and strips DWARF, so
-   the blob embeds no local paths. If the build directory differs from
-   `/tmp/monty-go`, the absolute prefix in the Makefile's `RUSTFLAGS` must
-   match.
-4. Copy `monty.wasm` into this directory and update the SHA-256 below.
-
-The blob is reproducible on the same toolchain: three cold builds into
-separate `CARGO_TARGET_DIR`s produced the identical hash. Nuance: the
-reproducibility gate is the rustc version and the resolved dependency
-versions — the shim builds against git dependencies and the monty tag moves,
-so two machines agree only with the same `Cargo.lock` (vendored with the
-shim, but cargo updates the git checkout's lockfile entries when the tag
-resolves differently) and the same rustc. The path part — the part Go
-`-trimpath` solves — is fully handled by the remap.
-
-  * monty.wasm — SHA-256
-    c05e79b5e163df7196ff54966da6291823a3748d788c4191be657918bac2ee9b
-
-The shim changes for the v0.0.11 → v0.0.21 API (kept locally; not
-upstreamed) are the ones described in [`REBUILD.md`](REBUILD.md): types
-split out into the new `monty_types` crate, the generic `<LimitedTracker>`
-parameter dropped from `RunProgress` and the snapshot structs,
-`MontyRun::new` gaining a `CompileOptions` argument, and `OsCall` now
-carrying a typed `OsFunctionCall` (unpacked with `to_args()`). The C-ABI
-wire format to the Go wrapper is unchanged. One behavioral change:
-`max_allocations` is no longer enforced (upstream moved allocation
-accounting into the `monty-alloc` global allocator, which the shim does not
-arm) — `max_duration` and `max_recursion_depth` still are. Classes are now
-supported; the tool description's wall list moved `classes` to the
-available column accordingly.
-
-Upgrading Monty — new wrapper code or a new blob — is a separate decision
-with its own cost, and a reviewer should not have to guess that. The
-wrapper is ~3 files by a single upstream author, which is why it is
-vendored rather than taken as a module dependency.
-
-The only dependencies are github.com/tetratelabs/wazero (pure Go) and
-golang.org/x/sys.
+The Go wrapper's only dependencies are github.com/tetratelabs/wazero (pure
+Go) and golang.org/x/sys, both already in the repository's go.mod. The shim
+builds against the pydantic/monty git crate; see shim/README.md for the
+reproducibility nuance that carries with that.

@@ -217,10 +217,11 @@ inherited from aider.
     replay stubs for the coder's ports.
   - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
     restricted Python interpreter compiled to WebAssembly, run through
-    wazero. The `monty.wasm` blob is vendored pre-built, not built from
-    source here (that needs a Rust toolchain); see its `NOTICE` for
-    provenance and [`REBUILD.md`](../internal/monty/REBUILD.md) for the
-    rebuild procedure. The
+    wazero. A hard fork of fugue-labs/monty-go (frozen; upstream has
+    stalled): the Go wrapper lives here and the Rust shim that builds the
+    `monty.wasm` blob lives in `monty/shim/`, rebuilt with
+    `make -C internal/monty/shim check`; see its `NOTICE` for provenance
+    and `shim/README.md` for the build. The
     read-only tools are reachable from inside a program through the bridge
     in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
     Uptake measured in

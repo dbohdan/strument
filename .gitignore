@@ -7,6 +7,10 @@
 /strumentrec
 /strument-subset
 
+# The Monty shim's Rust build output (internal/monty/shim/target), not to be
+# confused with the checked-in blob it produces.
+/internal/monty/shim/target/
+
 *.bak
 *.sw*
 
