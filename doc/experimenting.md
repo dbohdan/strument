@@ -611,6 +611,85 @@ the closure is called inside the iteration that binds it. Keep it for
 
 ---
 
+## 20. The resume path is the least-tested code and the last thing you wrote
+
+§19's runner died quietly; this one shipped a bug that did the opposite — it
+worked perfectly on the first invocation and fell over on the second. The
+2026-09 runner was adapted for the shell-parallelism trial, and the adaptation
+lost the `else` branch: fresh jobs assigned `text` from the subprocess,
+resumed jobs (output file already on disk) never assigned it, and the resume
+path raised `UnboundLocalError` at the scoring call. The smoke run never
+touched it, because a smoke run is one fresh job.
+
+What made it expensive was the interaction with the human loop. The first
+invocation ran real jobs until it was interrupted, leaving thirteen partial
+transcripts; the crash then ate every row. The second invocation found an
+output file for *every* remaining job, so all fourteen took the broken path
+and died instantly — "the runner did nothing," which is what a resume bug on
+an all-resumed batch reports as. Two user-visible symptoms, one root cause,
+and the second one actively misleading: nothing happening looks like
+nothing happening, not like a bug.
+
+An hour went to diagnosing ghost hypotheses (per-character record emission in
+the log writer) before anyone ran the broken path on purpose. The tell was
+in the error text the whole time: `cannot access local variable 'text' where
+it is not associated with a value` names a code path, not a data problem,
+and code paths can be exercised without the API key.
+
+Three habits, in the order they would have saved the hour:
+
+- **Run the resume path before the trial, not during it.** One job's output
+  file stubbed, `run_one` called, row printed — ten lines of driver, no model
+  calls. The rig is exercised at exactly one point by a smoke run, and that
+  point is the fresh path. The resume path only ever runs when something has
+  already gone wrong, which is the worst possible time to meet its bugs.
+- **A guard belongs at the gate, not in the docs.** The runner now refuses to
+  start when the previous batch ended in runner errors; before, resuming onto
+  a half-dead batch silently mixed two runs' outputs. Any tool with a resume
+  mode needs the same tripwire: what does it do when the last run failed?
+- **When an error names a variable, exercise the code, not the theory.** The
+  instinct was to hunt the subsystem the symptom resembled (the log writer,
+  given the prior trial's report). The error was a local variable in a file
+  that could be run in isolation. Re-read the traceback before re-reading the
+  system.
+
+---
+
+## 21. A bug report is a hypothesis about location, not a fact about it
+
+The code-only trial's report said jsonlog mangled tool results into one
+character per record — `"T"`, `"h"`, `"e"` — with the rendered transcript
+fine. That is a specific, checkable claim, and it was wrong: an hour of
+reading the writer found it per-message by construction, and a test driving
+it with one-character SSE deltas (the worst legal stream) pinned the
+invariant in fifteen lines. No reproduction could be built.
+
+The report's own method notes carried the refutation, unremarked: *"the
+first-pass scorer keyed on `The program failed` in the rendered text."* A
+scorer reading rendered text has no business reporting on the JSONL's
+structure — and the renderer *does* emit per-event, each chunk a potential
+line. The symptom was real; the address in the report was a guess that
+hardened into fact on its way into the file.
+
+Cost of treating the report as fact: an hour of archaeology aimed at the
+wrong subsystem, and one deleted report-finding (the "jsonlog bug") that
+would otherwise have been "fixed" — i.e. changed on the strength of
+unreproducible evidence. What the episode bought instead: a regression test
+that pins the writer against per-event emission forever, and a validation
+pass in the next trial's scorer (parse every line, pair every
+`tool_call_id`, flag sub-3-character text fields, abort loudly) that turns
+the symptom from a contaminant into a tripwire. When it fires, the file
+will be in hand.
+
+The rule is not "distrust bug reports" — it is that **a report asserts the
+symptom and guesses the address**. Reproduce at the stated address before
+changing anything there; if it does not reproduce, that is not a dead end,
+it is the finding. The next question is always the same: *who else reads
+this data?* The bug is usually in a reader nobody counted, because readers
+ outnumber writers.
+
+---
+
 ## The short version
 
 Most of what goes wrong is not statistics. It is the equipment.
@@ -624,6 +703,12 @@ did the runner actually finish or only stop reporting, and have I read three
 transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
+
+Two more, from the 2026-09-01 shell-parallelism trial: *has the resume path
+been run on purpose, with a stub, before the batch?* (§20 — it only ever runs
+when something has already gone wrong) and *did the bug report's address
+reproduce, and if not, who else reads this data?* (§21 — the report asserts
+the symptom and guesses the address).
 
 And get the verdict out of the hands of whoever wants it to pass: break the code
 on purpose and watch the check go red (§1, §17), or hand the check to a model
