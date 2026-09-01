@@ -204,7 +204,11 @@ func TestCommittablePathsFilter(t *testing.T) {
 	c := toolCoder(t, root)
 	c.Repo = &committingRepo{root: root}
 
-	keep := c.committablePaths([]string{"a.go", "internal/b.go", "/tmp/x/scratch", filepath.Join(t.TempDir(), "y")})
+	// The out-of-tree path must be spelled absolutely for the platform:
+	// a bare "/tmp/x/scratch" is not an absolute path on Windows (no drive
+	// letter), so it would be joined onto the repo root and kept.
+	outside := filepath.Join(t.TempDir(), "scratch")
+	keep := c.committablePaths([]string{"a.go", "internal/b.go", outside})
 	if len(keep) != 2 || keep[0] != "a.go" || keep[1] != "internal/b.go" {
 		t.Errorf("committablePaths kept %v, want the two repo-relative names", keep)
 	}

@@ -59,12 +59,21 @@ func TestUnderTempDirGrantsSlashTmpBesideAMovedTMPDIR(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("no /tmp on Windows; os.TempDir reads TMP/TEMP and is the only answer there")
 	}
-	t.Setenv("TMPDIR", t.TempDir())
+	// One TempDir call, captured: a second call makes a *sibling* of the
+	// first, and on macOS — where /tmp resolves to /private/tmp while these
+	// dirs live under /private/var — that sibling is neither under TMPDIR nor
+	// under /tmp. Sibling-of-TMPDIR is not a shape the sandbox grants, and
+	// the test's claim is about the TMPDIR dir itself.
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
 	if !UnderTempDir("/tmp/strument-x/y.go") {
 		t.Error("/tmp was not granted beside a relocated TMPDIR")
 	}
-	if !UnderTempDir(t.TempDir()) {
+	if !UnderTempDir(tmp) {
 		t.Error("the relocated TMPDIR itself was not granted")
+	}
+	if !UnderTempDir(filepath.Join(tmp, "scratch", "x.go")) {
+		t.Error("a directory inside the relocated TMPDIR was not granted")
 	}
 }
 
