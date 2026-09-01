@@ -78,19 +78,35 @@ type sigREPL struct {
 	*REPL
 
 	sig chan os.Signal
+
+	// subMu/subscribed track live in-turn subscriptions; see Notify below.
+	subMu      sync.Mutex
+	subscribed int
 }
 
 func newSigREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*sigREPL, *syncBuffer) {
 	t.Helper()
 	r, _, out := newTestREPL(t, cl, input)
 	s := &sigREPL{REPL: r, sig: make(chan os.Signal, 4)}
+	// The real os/signal drops a signal no subscription wants, and the
+	// forwarders below model that: one per Notify call, stopped by the
+	// returned func.
+	//
+	// The subscription counter exists for the between-turns case. The first
+	// version of the harness had a no-op stop, which leaked a live forwarder
+	// per turn: turn 2's forwarder drained a signal fired between turns and
+	// cancelled a send that must not be cancelled (macOS CI, where the
+	// scheduling gap is wide enough to hit). A buffered sig channel
+	// reintroduces the same artifact the other way — on slow schedulers
+	// (Windows CI) the stale signal sits in the buffer until turn 2
+	// subscribes, then is delivered to it. A signal fired while nothing is
+	// subscribed therefore reaches nothing, which is the real semantics the
+	// test models; the leaked-forwarder regression still fails the test,
+	// because its forwarder never stops and delivers the stale signal anyway.
 	r.opts.Notify = func(ch chan<- os.Signal) func() {
-		// One forwarder per subscription, stopped by the returned func — the
-		// shape signal.Notify/Stop has. The first version returned a no-op,
-		// which leaked a live forwarder per turn: turn 2's fresh goroutine
-		// drained a signal the test fired between turns and delivered it into
-		// turn 2's handler, cancelling a send that must not be cancelled
-		// (macOS CI, where the scheduling gap is wide enough to hit).
+		s.subMu.Lock()
+		s.subscribed++
+		s.subMu.Unlock()
 		stop := make(chan struct{})
 		go func() {
 			for {
@@ -106,13 +122,33 @@ func newSigREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*sigREPL, *s
 				}
 			}
 		}()
-		return func() { close(stop) }
+		return func() {
+			s.subMu.Lock()
+			s.subscribed--
+			s.subMu.Unlock()
+			close(stop)
+		}
 	}
 	return s, out
 }
 
-// sig1 delivers one signal to the in-turn handler.
-func (s *sigREPL) sig1(v os.Signal) { s.sig <- v }
+// hasSubscriber reports whether any in-turn subscription is live right now.
+func (s *sigREPL) hasSubscriber() bool {
+	s.subMu.Lock()
+	defer s.subMu.Unlock()
+	return s.subscribed > 0
+}
+
+// sig1 delivers one signal to the in-turn handler. Delivered only when some
+// turn currently subscribes — the semantics of a real signal: nothing is
+// listening between turns, so a signal fired there reaches nothing rather
+// than waiting in the buffer to ambush the next turn (see the Notify comment).
+func (s *sigREPL) sig1(v os.Signal) {
+	if !s.hasSubscriber() {
+		return
+	}
+	s.sig <- v
+}
 
 // newTestREPL builds a REPL over in-memory pipes in non-interactive mode.
 func newTestREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*REPL, *coder.Coder, *syncBuffer) {
