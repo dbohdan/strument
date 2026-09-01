@@ -160,7 +160,16 @@ func (r *REPL) completePaths(line string) []string {
 			if err != nil {
 				continue
 			}
-			cand = escapePathWord(rel)
+			// Use the typed slash style: the user typed "/"-separated
+			// segments, and on Windows filepath.Rel answers with the OS
+			// separator, which would never prefix-match the typed word.
+			cand = escapePathWord(filepath.ToSlash(rel))
+			if strings.ContainsRune(cand, ' ') && !backslashEscapes {
+				// The space cannot be quoted here (no backslash escapes), so
+				// the inserted text would never re-parse to this path: offer
+				// nothing rather than an unusable candidate.
+				continue
+			}
 		}
 		out = append(out, cand)
 	}
