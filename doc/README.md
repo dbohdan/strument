@@ -209,8 +209,10 @@ inherited from aider.
     history wiring.
   - `readline/` — the terminal line editor: a vendored fork of
     ergochat/readline (MIT, taken at v0.1.3) with a flicker-free single-write
-    redraw adapted from jart/bestline and Ctrl+arrow word motion. Kept in
-    upstream style and excluded from Strument's linters; see its `NOTICE`.
+    redraw adapted from jart/bestline, its rows self-placed with autowrap off
+    and the cursor hidden mid-frame as in prompt-toolkit, and Ctrl+arrow word
+    motion. Kept in upstream style and excluded from Strument's linters; see
+    its `NOTICE`.
   - `sandbox/` — the Landlock policy: which paths a session may write to, and
     the one call that confines the process. Linux-only, with a stub that
     refuses elsewhere; the writable-set derivation is pure and tested without
