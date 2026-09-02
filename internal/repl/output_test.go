@@ -181,6 +181,16 @@ func TestAnswerOnlyNoHeaders(t *testing.T) {
 	}
 }
 
+func TestToolBlockDoesNotAddBlankLines(t *testing.T) {
+	var buf bytes.Buffer
+	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
+	o.ToolBlock(render.CodeOpen, "x = 1\ny = 2\nx + y")
+
+	if got, want := buf.String(), "‹run_code›\nx = 1\ny = 2\nx + y\n‹/›\n"; got != want {
+		t.Errorf("multiline tool block = %q, want %q", got, want)
+	}
+}
+
 // editArgs builds a complete edit call's JSON arguments.
 func editArgs(path, old, replacement string) string {
 	return fmt.Sprintf(`{"path":%q,"old_string":%q,"new_string":%q}`, path, old, replacement)

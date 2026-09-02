@@ -247,9 +247,6 @@ func (o *termOutput) ToolBlock(title, body string) {
 	render.ToolBlock(&b, title, body)
 	lines := strings.SplitAfter(strings.TrimSuffix(b.String(), "\n"), "\n")
 	for i, line := range lines {
-		if i > 0 {
-			fmt.Fprint(o.w, "\n")
-		}
 		// The delimiters take the tool color; body lines print uncolored. A
 		// first/last-line test on the trimmed block tells them apart, since the
 		// body is written verbatim and the markers are the frame.
