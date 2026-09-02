@@ -426,3 +426,81 @@ func TestDirtyCommitBeforeEdits(t *testing.T) {
 		t.Errorf("file = %q", got)
 	}
 }
+
+// TestAttributeDirectCommits pins the retro-attribution path: a shell command
+// made commits behind the coder's back, and the rewrite gives them the
+// trailer while preserving identity, order, and ancestry.
+func TestAttributeDirectCommits(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := g.HeadSHA()
+
+	// Three commits made directly with git, the way a shell command makes
+	// them: no trailer on any.
+	for i, m := range []string{"feat: first", "fix: second", "docs: third"} {
+		if err := os.WriteFile(filepath.Join(root, "f"+string(rune('1'+i))+".txt"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run(t, root, "git", "add", ".")
+		run(t, root, "git", "commit", "-q", "-m", m)
+	}
+
+	hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != 3 {
+		t.Fatalf("hashes = %v, want 3", hashes)
+	}
+	if hashes[0] != g.HeadSHA() {
+		t.Errorf("hashes[0] = %s, want the new HEAD", hashes[0])
+	}
+
+	log := run(t, root, "git", "log", "--format=%s|%(trailers:key=Assisted-by,valueonly)")
+	lines := strings.Split(strings.TrimSpace(log), "\n")
+	for _, want := range []string{"docs: third", "fix: second", "feat: first"} {
+		if !strings.HasPrefix(lines[len(lines)-4+indexOf(t, lines, want)]+"\x00", want+"|test-model via Strument") {
+			// handled below with a clearer assertion shape
+		}
+	}
+	// Every rewritten commit carries the trailer, in order, with subjects intact.
+	if got := run(t, root, "git", "log", "--format=%s %({trailers:key=Assisted-by,valueonly)"); strings.Contains(got, "\n\n") {
+		t.Errorf("unexpected blank output: %q", got)
+	}
+	joined := strings.TrimSpace(run(t, root, "git", "log", "-3", "--format=%s -> %(trailers:key=Assisted-by,valueonly)"))
+	for _, want := range []string{
+		"docs: third -> test-model via Strument",
+		"fix: second -> test-model via Strument",
+		"feat: first -> test-model via Strument",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("log missing %q:\n%s", want, joined)
+		}
+	}
+	// Identity preserved: the commits git made as Scratch User stay that way.
+	ids := run(t, root, "git", "log", "-3", "--format=%an|%cn")
+	if strings.TrimSpace(ids) != "Scratch User|Scratch User\nScratch User|Scratch User\nScratch User|Scratch User" {
+		t.Errorf("identity changed:\n%s", ids)
+	}
+	// Ancestry: the rewrite sits on top of the original base, linear.
+	if parents := run(t, root, "git", "rev-list", "--count", "HEAD"); strings.TrimSpace(parents) != "4" {
+		t.Errorf("rev-list count = %q", parents)
+	}
+	if !g.InCommit("HEAD", "f3.txt") || g.InCommit(before, "f1.txt") {
+		t.Errorf("tree contents wrong")
+	}
+}
+
+func indexOf(t *testing.T, lines []string, want string) int {
+	t.Helper()
+	for i, l := range lines {
+		if strings.HasPrefix(l, want+"|") {
+			return i
+		}
+	}
+	t.Fatalf("%q not in %v", want, lines)
+	return 0
+}
