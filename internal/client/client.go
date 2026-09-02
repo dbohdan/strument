@@ -135,12 +135,20 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 	if len(req.Tools) > 0 {
 		tools := make([]map[string]any, len(req.Tools))
 		for i, t := range req.Tools {
+			params := t.Parameters
+			if params == nil {
+				// A parameterless tool has a nil Parameters map, which marshals
+				// as null. Strict-schema providers (e.g. GPT-5.6 Luna) reject
+				// that with "expected object, received null", so send an empty
+				// schema object instead.
+				params = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
 			tools[i] = map[string]any{
 				"type": "function",
 				"function": map[string]any{
 					"name":        t.Name,
 					"description": t.Description,
-					"parameters":  t.Parameters,
+					"parameters":  params,
 				},
 			}
 		}

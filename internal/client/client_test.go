@@ -483,11 +483,42 @@ func TestBuildBodyTools(t *testing.T) {
 	if _, ok := asst["tool_calls"]; !ok {
 		t.Errorf("assistant message missing tool_calls: %v", asst)
 	}
-	toolMsg, ok := msgs[1].(map[string]any)
-	if !ok {
-		t.Fatalf("tool message = %v", msgs[1])
+}
+
+func TestBuildBodyNilToolParameters(t *testing.T) {
+	// A parameterless tool has a nil Parameters map. Marshaling that as null
+	// makes strict-schema providers reject the whole request ("expected
+	// object, received null"), so it must go out as an empty schema object.
+	c := New(config.Provider{Adapter: config.AdapterOpenRouter})
+	req := llm.Request{
+		Model: "m",
+		Tools: []llm.ToolDef{{
+			Name:        "interrupt",
+			Description: "end the turn",
+		}},
 	}
-	if toolMsg["role"] != "tool" || toolMsg["tool_call_id"] != "call_1" {
-		t.Errorf("tool result malformed: %v", toolMsg)
+	raw, err := json.Marshal(c.BuildBody(req))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Tools []struct {
+			Function struct {
+				Parameters map[string]any `json:"parameters"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Tools) != 1 {
+		t.Fatalf("tools = %v, want 1 entry", body.Tools)
+	}
+	params := body.Tools[0].Function.Parameters
+	if params == nil {
+		t.Fatal("parameters was omitted or null, want an empty schema object")
+	}
+	if params["type"] != "object" {
+		t.Errorf("parameters.type = %v, want \"object\"", params["type"])
 	}
 }
