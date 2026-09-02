@@ -1279,10 +1279,13 @@ mode too, because a discussion turn is exactly where a calculator belongs.
 
 Inside a `run_code` program, the five observation tools — `read`, `grep`, `glob`,
 `ls`, `symbol` — are callable as functions. Each returns the same text the
-tool itself would return, and each call is announced exactly as a direct call
-would be, so the review surface does not change: you see the same `Searched
-for …` line whether the model called `grep` directly or from inside a program.
-A program may issue at most 50 bridged calls.
+tool itself would return, and each call's outcome line appears under the
+program block that caused it — you see the same `Searched for …` line whether
+the model called `grep` directly or from inside a program, minus the per-call
+announcement: a "‹run_code› read" line before each outcome read as a separate
+action the model had initiated, when it was downstream of the program already
+on screen, and the turn's `Ran N lines of code calling …` summary already
+attributes the run. A program may issue at most 50 bridged calls.
 
 `bash`, `edit`, `write`, `commit`, and `check` are **deliberately unreachable**
 from inside a program. Those tools may ask you something, and a program calling

@@ -277,24 +277,26 @@ func TestCodeBridgeCapFires(t *testing.T) {
 	}
 }
 
-// TestCodeBridgeCallsAreAnnounced: the user sees each bridged call the same
-// way they see a direct one. The review surface must not depend on where the
-// call came from.
-func TestCodeBridgeCallsAreAnnounced(t *testing.T) {
+// TestCodeBridgeCallsAreNotAnnounced pins the shape the user reads: a bridged
+// call prints only the tool's own outcome line, under the ‹run_code› program
+// block that caused it. The per-call "‹run_code› ls" announcement was removed
+// after a live session: it read as a separate action the model initiated, when
+// it was downstream of the program already on screen, and the turn's "Ran N
+// lines of code calling …" summary already attributes the run.
+func TestCodeBridgeCallsAreNotAnnounced(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
 
 	c.runCode(context.Background(), codeCall{code: `ls()`})
 
 	joined := strings.Join(out.lines, "\n")
 	// "‹run_code› ls()" is the program being announced — one line, no closing
-	// marker, thinking's one-line shape; "‹run_code› ls" is the bridged call
-	// inside it — the same shape a direct call prints. The outcome line names
-	// the tools the program actually called, collected at the bridge.
+	// marker, thinking's one-line shape. The outcome line names the tools the
+	// program actually called, collected at the bridge.
 	if !strings.Contains(joined, "‹run_code› ls()\n") {
 		t.Errorf("the program must be announced, got:\n%s", joined)
 	}
-	if !strings.Contains(joined, "‹run_code› ls\n") {
-		t.Errorf("a bridged call must be announced, got:\n%s", joined)
+	if strings.Contains(joined, "‹run_code› ls\n") {
+		t.Errorf("a bridged call must not be announced separately, got:\n%s", joined)
 	}
 	if !strings.Contains(joined, "Ran 1 line of code calling ls.") {
 		t.Errorf("the outcome line must name the called tools, got:\n%s", joined)

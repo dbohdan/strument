@@ -264,17 +264,19 @@ func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFun
 		// Code functions answer with data, not model text, so they bypass
 		// Inspector.Run and the prefix classification — their errors are
 		// already Go errors and become exceptions with the right traceback.
-		// Announced under the run_code tag, same as a bridged tool call: the
-		// program, not a direct call, is what caused this either way.
+		// No per-call announcement: every bridged call lands under the program
+		// block that caused it (the ‹run_code› the user just read), and the
+		// tools' own outcome lines plus the turn's "Ran N lines of code
+		// calling …" summary say what happened. A "‹run_code› read" line per
+		// call read as a separate action the model initiated — the confusion a
+		// live session reported.
 		if d := codeFuncByName(call.Name); d != nil {
-			c.Out.Toolf("‹run_code› %s", call.Name)
 			return d.fn(c, call)
 		}
 
-		// Announce exactly as a direct call would be, so the review surface
-		// looks the same whether the model called read directly or from inside
-		// a program.
-		c.Out.Toolf("‹run_code› %s", call.Name)
+		// The call crosses the boundary as the same Inspector.Run a direct
+		// call goes through, so the outcome line and the model's answer are
+		// byte-for-byte what a direct call would produce.
 		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
 		out := c.inspector().Run(call.Name, tc.Arguments)
 
