@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/render"
 )
@@ -165,6 +167,8 @@ func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool) (string, s
 	}
 	return "abc1234", "feat: change world to mars", true, nil
 }
+func (r *committingRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
+func (r *committingRepo) TrailerValue() string                                    { return "" }
 
 // TestToolEditApplies replays a single edit tool call and asserts
 // the edit lands on disk, the outcome is a clean success, and the history is
@@ -938,5 +942,81 @@ func TestUniqueEditStillApplies(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(dir, "f.txt"))
 	if string(after) != "Q\nx\na\nc\n" {
 		t.Errorf("got %q", after)
+	}
+}
+
+// TestShellCommitGetsTrailer is the retro-attribution hook: a model that
+// commits with plain git through bash — bypassing the commit tool — leaves
+// commits git records with no trailer, and doc/README.md's rule is to read
+// the trailer for attribution. The hook is on HEAD moving, not on parsing the
+// command, and it must cover a command that makes several commits at once.
+func TestShellCommitGetsTrailer(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "t@example.com"},
+		{"config", "user.name", "T"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git unavailable: %v %s", err, out)
+		}
+	}
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	if err := os.WriteFile(filepath.Join(root, "base.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", ".")
+	runGit("commit", "-q", "-m", "base")
+
+	repo, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.CommitTrailer = gitrepo.Trailer("test-model")
+
+	c := toolCoder(t, root)
+	c.Repo = repo
+	c.SuggestShellCommands = true
+	c.Confirm = &yesConfirmer{}
+
+	// Two commits in one shell call: the multi-commit case the hook has to
+	// survive. The command string is what a model would type, quoting and
+	// && included, which is exactly the parsing the hook avoids.
+	cmd, msg := parseCommandArgs(call("bash", `{"command":"echo one > f.txt && git add . && git commit -q -m first && echo more >> f.txt && git add . && git commit -q -m second && echo hi"}`))
+	if msg != "" {
+		t.Fatalf("parse: %s", msg)
+	}
+	c.runShellTool(context.Background(), cmd)
+
+	log := strings.TrimSpace(runGit("log", "--format=%s %(trailers:key=Assisted-by,valueonly)"))
+	if !strings.Contains(log, "second test-model via Strument") || !strings.Contains(log, "first test-model via Strument") {
+		t.Errorf("log = %q, want both commits attributed", log)
+	}
+	if strings.Contains(log, "base test-model") {
+		t.Errorf("log = %q, want the base commit untouched", log)
+	}
+	// The rewritten commits join the session's records: /undo gates on them,
+	// and a commit the model made through bash is as undoable as one it
+	// made through the tool.
+	if len(c.sessionCommits) != 2 {
+		t.Errorf("sessionCommits = %v, want 2", c.sessionCommits)
+	}
+	if c.lastCommitHash == "" {
+		t.Error("lastCommitHash not set")
 	}
 }

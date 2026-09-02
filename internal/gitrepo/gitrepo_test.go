@@ -459,17 +459,7 @@ func TestAttributeDirectCommits(t *testing.T) {
 		t.Errorf("hashes[0] = %s, want the new HEAD", hashes[0])
 	}
 
-	log := run(t, root, "git", "log", "--format=%s|%(trailers:key=Assisted-by,valueonly)")
-	lines := strings.Split(strings.TrimSpace(log), "\n")
-	for _, want := range []string{"docs: third", "fix: second", "feat: first"} {
-		if !strings.HasPrefix(lines[len(lines)-4+indexOf(t, lines, want)]+"\x00", want+"|test-model via Strument") {
-			// handled below with a clearer assertion shape
-		}
-	}
 	// Every rewritten commit carries the trailer, in order, with subjects intact.
-	if got := run(t, root, "git", "log", "--format=%s %({trailers:key=Assisted-by,valueonly)"); strings.Contains(got, "\n\n") {
-		t.Errorf("unexpected blank output: %q", got)
-	}
 	joined := strings.TrimSpace(run(t, root, "git", "log", "-3", "--format=%s -> %(trailers:key=Assisted-by,valueonly)"))
 	for _, want := range []string{
 		"docs: third -> test-model via Strument",
@@ -494,13 +484,93 @@ func TestAttributeDirectCommits(t *testing.T) {
 	}
 }
 
-func indexOf(t *testing.T, lines []string, want string) int {
-	t.Helper()
-	for i, l := range lines {
-		if strings.HasPrefix(l, want+"|") {
-			return i
+// TestAttributeDirectCommitsSkips pins the pass-through rules: a commit that
+// already carries the trailer, and one whose author is not its committer
+// (cherry-picked work), get no second attribution — but a commit above them
+// still does, and the chain stays linear.
+func TestAttributeDirectCommitsSkips(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := g.HeadSHA()
+
+	// One already-attributed commit, the way the commit tool makes them.
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run(t, root, "git", "add", ".")
+	}
+	write("a.txt", "a\n")
+	run(t, root, "git", "commit", "-q", "-m", "feat: already attributed", "--trailer",
+		"Assisted-by: someone-else via Strument")
+
+	// One foreign commit: a cherry-pick-style commit where the author is not
+	// the committer. -c user.name would set both identities, and the
+	// environment must go back to normal for the commit after, so it is set
+	// on the single invocation the way a cherry-pick sets it.
+	write("b.txt", "b\n")
+	run(t, root, "git", "add", ".")
+	cmd := exec.Command("git", "commit", "-q", "-m", "fix: someone else's work")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Original Author")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+
+	// One plain commit that should be attributed.
+	write("c.txt", "c\n")
+	run(t, root, "git", "commit", "-q", "-m", "docs: model work")
+
+	hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != 3 {
+		t.Fatalf("hashes = %v, want 3", hashes)
+	}
+	log := strings.TrimSpace(run(t, root, "git", "log", "-3", "--format=%s -> %(trailers:key=Assisted-by,valueonly)"))
+	for _, want := range []string{
+		"docs: model work -> test-model via Strument",
+		"fix: someone else's work -> \n", // no trailer, and nothing after the arrow
+		"feat: already attributed -> someone-else via Strument",
+	} {
+		if !strings.Contains(log+"\n", want) {
+			t.Errorf("log missing %q:\n%s", want, log)
 		}
 	}
-	t.Fatalf("%q not in %v", want, lines)
-	return 0
+}
+
+// TestAttributeDirectCommitsNoMove pins the no-op paths: HEAD unmoved, and a
+// reset that severed the ancestry, where nothing is rewritten because the
+// commits between are not simply new ones.
+func TestAttributeDirectCommitsNoMove(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := g.HeadSHA()
+
+	if hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model")); err != nil || hashes != nil {
+		t.Errorf("unmoved HEAD: hashes=%v err=%v, want nil/nil", hashes, err)
+	}
+	if hashes, err := g.AttributeDirectCommits("", gitrepo.Trailer("test-model")); err != nil || hashes != nil {
+		t.Errorf("empty fromSHA: hashes=%v err=%v, want nil/nil", hashes, err)
+	}
+
+	// A reset moves HEAD without adding commits; the range check must refuse.
+	if err := os.WriteFile(filepath.Join(root, "x.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", ".")
+	run(t, root, "git", "commit", "-q", "-m", "temp")
+	run(t, root, "git", "reset", "-q", "--hard", before)
+	hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model"))
+	if err != nil || hashes != nil {
+		t.Errorf("after reset: hashes=%v err=%v, want nil/nil", hashes, err)
+	}
 }

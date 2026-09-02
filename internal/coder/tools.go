@@ -913,6 +913,19 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		return "The user chose not to run the command."
 	}
 
+	// A model-caused shell command is the one way a model can commit without
+	// the commit tool: `git commit` through bash makes commits git records
+	// with no attribution trailer, and doc/README.md's own rule is to read
+	// the trailer for that. Rather than parsing the command (quoting, &&,
+	// scripts make that a losing game), the hook is on the observable
+	// effect: if HEAD moved, the commits in between are model work, and they
+	// get the same trailer the commit tool would have added. /run never comes
+	// through here, so the user's own commits stay theirs.
+	before := ""
+	if c.Repo != nil {
+		before = c.Repo.HeadSHA()
+	}
+
 	// The model's timeout is a narrowing of the configured ceiling, so a
 	// request above it is honored as the ceiling and said so: a silent clamp
 	// is indistinguishable to the model from the command being slow, and the
@@ -924,11 +937,13 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		notice := fmt.Sprintf("\nThe requested timeout of %d seconds was clamped to the configured limit of %s.",
 			cmd.timeout, ceiling)
 		exitCode, output := c.runAndShow(ctx, command, requested)
+		c.attributeShellCommits(before)
 		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
 			quoteToolArg(command), exitCode, output, notice)
 	}
 
 	exitCode, output := c.runAndShow(ctx, command, requested)
+	c.attributeShellCommits(before)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output)
 }
 

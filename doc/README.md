@@ -87,6 +87,11 @@ inherited from aider.
   configuration directory or under another SCM. Git is layered on top where it
   exists: one commit per turn, `/squash` to merge turns, and the pre-existing
   dirty state committed separately so a turn never absorbs the user's own work.
+  Every attributed commit — auto-commit, the commit tool, or commits a model
+  makes directly with git through bash — carries the `Assisted-by` trailer, so
+  the history itself says which model did the work; commits the model runs
+  through bash get it retroactively, with merges and other people's
+  cherry-picked work left alone.
   Alongside that: atomic batch writes that roll back whole, path containment,
   and an edit that preserves the file's mode and follows a symlink instead of
   replacing it.

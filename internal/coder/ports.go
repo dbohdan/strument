@@ -276,6 +276,17 @@ type Repo interface {
 	// model that made the change knows why it made it, where the generator is
 	// a side model inferring intent from a diff.
 	Commit(fnames []string, context, message string, attributed bool) (hash, message2 string, ok bool, err error)
+	// AttributeDirectCommits retro-attributes the commits a model-caused shell
+	// command made directly with git (bypassing the commit tool): it appends
+	// the trailer to the new commits and returns their final hashes —
+	// rewritten ones for those that got the trailer, the originals for those
+	// the skip rules passed through (merges, foreign work, commits that
+	// already carry it). An empty slice means HEAD did not move or nothing
+	// qualified.
+	AttributeDirectCommits(fromSHA, trailer string) ([]string, error)
+	// TrailerValue is the attribution trailer for the current model, updated
+	// on a model switch. Empty means this session does not attribute.
+	TrailerValue() string
 }
 
 // Clock injects time so retry/continuation tests don't sleep.

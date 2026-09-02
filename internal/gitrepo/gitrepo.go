@@ -7,8 +7,10 @@ package gitrepo
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -129,6 +131,13 @@ func (r *Repo) git(args ...string) (string, error) {
 func (r *Repo) ok(args ...string) bool {
 	_, err := r.git(args...)
 	return err == nil
+}
+
+// gitNoOutput runs one git command and reports only whether it succeeded —
+// for ref updates, whose stdout is nothing worth capturing.
+func (r *Repo) gitNoOutput(args ...string) error {
+	_, err := r.git(args...)
+	return err
 }
 
 // Root returns the worktree root.
@@ -312,9 +321,204 @@ func (r *Repo) LastCommits(n int) ([]Commit, error) {
 	return commits, nil
 }
 
+// TrailerValue returns the attribution trailer Commit is appending right now
+// (the port's CommitTrailer accessor); it changes when a /model switch
+// refreshes the field.
+func (r *Repo) TrailerValue() string { return r.CommitTrailer }
+
 // InCommit reports whether rel exists in the given commit's tree.
 func (r *Repo) InCommit(commitish, rel string) bool {
 	return r.ok("cat-file", "-e", commitish+":"+rel)
+}
+
+// AttributeDirectCommits adds the attribution trailer to the commits in
+// (fromSHA..HEAD] that a model-created shell command produced and git would
+// otherwise record as anonymous — the model ran `git commit` through bash
+// instead of the commit tool, so nothing appended a trailer at commit time.
+//
+// The command may have made several commits, so the whole new chain is
+// rewritten, not just the tip: a rewritten commit's descendants need new
+// parents. The rewrite is plumbing — read each commit's raw message, append
+// the trailer, create a replacement with commit-tree, and move HEAD once at
+// the end — so a failure anywhere before that point leaves the original
+// history in place, and GIT_AUTHOR_* and GIT_COMMITTER_* stay what the
+// command's environment set them to.
+//
+// Commits are skipped, not rewritten, when they already carry an Assisted-by
+// trailer (the model may have committed through the commit tool mid-chain),
+// when their author and committer differ (a cherry-pick or revert of someone
+// else's work: attributing it to this model would be the one thing a
+// provenance trailer must never do), and when the worktree's HEAD is no
+// longer a descendant of fromSHA (the command reset or checked out, so the
+// commits between are not simply new ones). Merge commits get no trailer —
+// a merge is arrangement, not authorship — but still receive rewritten
+// parents, so a fork's commits underneath one are not left dangling.
+//
+// Returns the final hashes of the commits in the range, newest first: the
+// replacement for each rewritten one, the original for each that passed
+// through. fromSHA empty or equal to the current HEAD means no new commits.
+func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error) {
+	head, err := r.git("rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	head = strings.TrimSpace(head)
+	if fromSHA == "" || fromSHA == head {
+		return nil, nil
+	}
+	// The commits to consider are the ones between the tip the coder saw
+	// before the command and the tip after it — but only when that range is
+	// a strict addition on top, never a replacement of it.
+	if !r.ok("merge-base", "--is-ancestor", fromSHA, head) {
+		return nil, nil
+	}
+	out, err := r.git("rev-list", "--reverse", fromSHA+".."+head)
+	if err != nil {
+		return nil, err
+	}
+	shas := strings.Fields(out)
+	if len(shas) == 0 {
+		return nil, nil
+	}
+
+	// rawCommit's fields are NUL-delimited to keep messages and identities
+	// byte-exact through the round trip.
+	const fields = "%T%x00%P%x00%an%x00%ae%x00%aD%x00%cn%x00%ce%x00%cD%x00%B"
+	rewrite := map[string]string{} // original SHA -> replacement SHA (or itself)
+	for _, sha := range shas {
+		out, err := r.git("show", "-s", "--format="+fields, sha)
+		if err != nil {
+			return nil, err
+		}
+		f := strings.SplitN(strings.TrimRight(out, "\n"), "\x00", 9)
+		if len(f) != 9 {
+			return nil, fmt.Errorf("unexpected git show output for %s", sha)
+		}
+		rc := rawCommit{
+			tree: f[0], parents: f[1],
+			authorName: f[2], authorEmail: f[3], authorDate: f[4],
+			committerName: f[5], committerEmail: f[6], committerDate: f[7],
+			message: f[8],
+		}
+
+		// The replacement chain: each parent that was rewritten points at its
+		// replacement; parents before fromSHA (or merge parents from outside
+		// the range) pass through as they are.
+		var newParents []string
+		for p := range strings.FieldsSeq(rc.parents) {
+			if rep, ok := rewrite[p]; ok {
+				newParents = append(newParents, rep)
+			} else {
+				newParents = append(newParents, p)
+			}
+		}
+
+		// A merge is arrangement, not authorship; keep it as-is but with
+		// rewritten parents. A commit whose author and committer differ is
+		// someone else's work in a new wrapper (cherry-pick, revert); the
+		// model arranged it, and the trailer names authors, not arrangers.
+		// A commit that already carries an Assisted-by trailer got it from
+		// whoever committed it — the commit tool mid-chain, most likely —
+		// and a second one would say the model twice.
+		isMerge := len(newParents) > 1
+		foreign := rc.authorName+"\x00"+rc.authorEmail != rc.committerName+"\x00"+rc.committerEmail
+		msg := rc.message
+		if !isMerge && !foreign && trailerLine(msg, "Assisted-by") == "" {
+			msg = strings.TrimRight(msg, "\n") + "\n\n" + trailer + "\n"
+		}
+		newSHA, err := r.commitTree(rc, newParents, msg)
+		if err != nil {
+			return nil, err
+		}
+		rewrite[sha] = newSHA
+	}
+
+	// One ref update at the end: nothing above touched a ref, so any failure
+	// left the original history fully in place. The returned hashes are the
+	// final chain, newest first.
+	newHead := rewrite[shas[len(shas)-1]]
+	if err := r.moveHead(newHead); err != nil {
+		return nil, err
+	}
+	final := make([]string, 0, len(shas))
+	for i := range slices.Backward(shas) {
+		final = append(final, rewrite[shas[i]])
+	}
+	return final, nil
+}
+
+// commitTree creates a commit object from a parsed commit's tree, parents, and
+// message, carrying the original's author and committer identity and dates
+// through GIT_AUTHOR_* and GIT_COMMITTER_* — the one place identity must be
+// preserved byte-exact, since a rewritten commit that changed the author
+// would rewrite provenance while claiming to record it.
+func (r *Repo) commitTree(rc rawCommit, parents []string, message string) (string, error) {
+	args := make([]string, 0, 2+2*len(parents)+2)
+	args = append(args, "commit-tree", rc.tree)
+	for _, p := range parents {
+		args = append(args, "-p", p)
+	}
+	args = append(args, "-m", message)
+	//nolint:gosec // Argv-only git invocation, never a shell string.
+	cmd := exec.Command(gitBinary(), append([]string{"-C", r.root}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME="+rc.authorName,
+		"GIT_AUTHOR_EMAIL="+rc.authorEmail,
+		"GIT_AUTHOR_DATE="+rc.authorDate,
+		"GIT_COMMITTER_NAME="+rc.committerName,
+		"GIT_COMMITTER_EMAIL="+rc.committerEmail,
+		"GIT_COMMITTER_DATE="+rc.committerDate,
+	)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", errors.New(msg)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// trailerLine returns the value of the last trailer-block line with the given
+// key, or "" when there is none. It scans only the final paragraph of the
+// message: a body paragraph that merely mentions "Assisted-by:" is not a
+// trailer, and over-detection only ever skips attribution, never
+// misattributes.
+func trailerLine(message, key string) string {
+	lines := strings.Split(strings.TrimRight(message, "\n"), "\n")
+	for i := range slices.Backward(lines) {
+		if lines[i] == "" {
+			break // the last paragraph before the trailers is the body
+		}
+		if rest, ok := strings.CutPrefix(lines[i], key+":"); ok && strings.HasPrefix(rest, " ") {
+			return strings.TrimSpace(rest)
+		}
+	}
+	return ""
+}
+
+// rawCommit is one commit's parsed plumbing fields, as AttributeDirectCommits
+// reads them and commitTree re-creates the object from them.
+type rawCommit struct {
+	tree, parents                 string
+	authorName, authorEmail       string
+	authorDate                    string
+	committerName, committerEmail string
+	committerDate                 string
+	message                       string
+}
+
+// moveHead points HEAD at sha. A detached HEAD moves by ref update; a branch
+// moves by updating the ref it names — the same result as `git reset --soft`,
+// without a second command that could fail between the two states.
+func (r *Repo) moveHead(sha string) error {
+	if out, err := r.git("symbolic-ref", "--quiet", "HEAD"); err == nil {
+		return r.gitNoOutput("update-ref", strings.TrimSpace(out), sha)
+	}
+	return r.gitNoOutput("update-ref", "HEAD", sha)
 }
 
 // CurrentBranch returns the checked-out branch name ("" when detached).

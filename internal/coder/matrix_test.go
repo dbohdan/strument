@@ -34,6 +34,8 @@ func (r *fakeRepo) HeadSHA() string          { return "deadbeef" }
 func (r *fakeRepo) Commit([]string, string, string, bool) (string, string, bool, error) {
 	return "", "", false, nil
 }
+func (r *fakeRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
+func (r *fakeRepo) TrailerValue() string                                    { return "" }
 
 // yesConfirmer answers yes to everything (including explicit-yes prompts).
 type yesConfirmer struct{}

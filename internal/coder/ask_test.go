@@ -154,6 +154,8 @@ func (r *recordingRepo) Commit([]string, string, string, bool) (string, string, 
 	r.commitCalls++
 	return "abc1234", "msg", true, nil
 }
+func (r *recordingRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
+func (r *recordingRepo) TrailerValue() string                                    { return "" }
 
 // recordingRunner counts shell executions.
 type recordingRunner struct{ calls int }

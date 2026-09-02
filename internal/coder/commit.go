@@ -76,6 +76,48 @@ func (c *Coder) commitTurn(message string) {
 	c.Out.Toolf("Commit %s %s", hash, message)
 }
 
+// attributeShellCommits retro-attributes the commits a model-caused shell
+// command made directly with git, when such a command moved HEAD: they get
+// the trailer the commit tool would have added, and they join the session's
+// commit records — /undo gates on those, and a commit the model made through
+// bash is as undoable as one it made through the tool.
+//
+// before is the HEAD the coder saw before the command ran; empty means there
+// was no repo to see, so there is nothing to attribute. A nil Repo is
+// tolerated for the same reason observeCall tolerates nil: the watcher is
+// off in sessions without git, not broken in them.
+func (c *Coder) attributeShellCommits(before string) {
+	if c.Repo == nil || before == "" || c.DryRun {
+		return
+	}
+	trailer := c.Repo.TrailerValue()
+	if trailer == "" {
+		return
+	}
+	hashes, err := c.Repo.AttributeDirectCommits(before, trailer)
+	if err != nil {
+		// Said on screen only, not added to the tool result: the commits are
+		// made and valid, and the failure is the session's bookkeeping, not
+		// the command's outcome — a model that reads "attribution failed"
+		// reacts by retrying the commit, which would make a second, worse
+		// copy of the problem.
+		c.Out.Errorf("Unable to attribute the commits made by the command: %v", err)
+		return
+	}
+	if len(hashes) == 0 {
+		return
+	}
+	if c.sessionCommits == nil {
+		c.sessionCommits = map[string]bool{}
+	}
+	for _, h := range hashes {
+		c.sessionCommits[h] = true
+	}
+	c.lastCommitHash = hashes[0] // newest first
+	c.saveUndo()
+	c.Out.Toolf("Attributed %d commit(s) the command made directly with git.", len(hashes))
+}
+
 // committablePaths splits the turn's writes into what git can record and what
 // it cannot: repo-relative names pass through, and a path outside the
 // repository — a scratch file under the platform temp directory, or an
