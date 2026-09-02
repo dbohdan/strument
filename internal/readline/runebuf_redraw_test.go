@@ -55,3 +55,29 @@ func TestRedrawSingleLine(t *testing.T) {
 		t.Errorf("erase must follow the buffer text:\n%q", out)
 	}
 }
+
+// TestRedrawWrapsRowsItself locks in the prompt_toolkit-style render: the
+// frame is drawn with autowrap disabled and explicit row breaks, so a
+// character landing in the last column can never leave the cursor on a
+// phantom wrapped cell (the artifact that made a character flash as erased
+// between frames).
+func TestRedrawWrapsRowsItself(t *testing.T) {
+	// 45 runes at width 40 must break into two explicit rows.
+	line := []rune("the quick brown fox jumps over the lazy dogs!")
+	rb := newRedrawTestBuf(40, "> ", line, len(line))
+	out := string(rb.redraw(rb.idxLine(40), 40))
+
+	if !strings.Contains(out, "\x1b[?7l") || !strings.Contains(out, "\x1b[?7h") {
+		t.Errorf("redraw must disable and restore autowrap around the frame:\n%q", out)
+	}
+	if !strings.Contains(out, "\x1b[?25l") || !strings.Contains(out, "\x1b[?25h") {
+		t.Errorf("redraw must hide and restore the cursor around the frame:\n%q", out)
+	}
+	if strings.Count(out, "\r\n") != 1 {
+		t.Errorf("a line longer than the width must emit exactly one explicit row break, got %d:\n%q", strings.Count(out, "\r\n"), out)
+	}
+	// Cursor lands after the last drawn row ("y dogs!"), placed explicitly.
+	if !strings.Contains(out, "\x1b[8G") {
+		t.Errorf("redraw must place the final cursor column explicitly:\n%q", out)
+	}
+}

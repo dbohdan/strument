@@ -390,11 +390,6 @@ func (r *runeBuffer) MoveTo(ch rune, prevChar, reverse bool) (success bool) {
 	return
 }
 
-func (r *runeBuffer) isInLineEdge() bool {
-	sp := r.getSplitByLine(r.buf, 1)
-	return len(sp[len(sp)-1]) == 0 // last line is 0 len
-}
-
 func (r *runeBuffer) getSplitByLine(rs []rune, nextWidth int) [][]rune {
 	tWidth, _ := r.w.GetWidthHeight()
 	cfg := r.getConfig()
@@ -488,10 +483,17 @@ func (r *runeBuffer) refreshWrite(f func()) {
 // whatever a previously longer render left below. Emitting \e[J *after* the
 // content — rather than clearing first — is bestline's anti-flicker technique
 // (bestline.c bestlineRefreshLineImpl: "overwrite cells, and then use \e[K and
-// \e[J to clear everything else"). The caller must hold the lock.
+// \e[J to clear everything else").
+//
+// Like prompt_toolkit's renderer, the frame is drawn with autowrap disabled
+// (\e[?7l) and the cursor hidden (\e[?25l): writeContent places every row
+// itself, and the cursor is never seen mid-frame in an intermediate position.
+// Both are restored at the end of the same write, so no interleaved output can
+// leak the modes. The caller must hold the lock.
 func (r *runeBuffer) redraw(idxLine, tWidth int) []byte {
 	buf := bytes.NewBuffer(nil)
-	if tWidth == 0 {
+	buf.WriteString("\x1b[?25l\x1b[?7l") // hide cursor, disable autowrap
+	if tWidth <= 0 {
 		// No width info: walk back over the whole wrapped line (mirrors the old
 		// cleanOutput fallback), then draw.
 		buf.WriteString(strings.Repeat("\r\b", len(r.buf)+r.promptLen()))
@@ -502,11 +504,30 @@ func (r *runeBuffer) redraw(idxLine, tWidth int) []byte {
 		fmt.Fprintf(buf, "\033[%dG", r.ppos+1) // to the prompt's start column
 	}
 	r.writeContent(buf)
-	buf.WriteString("\033[J") // trim rows/cells a longer previous render left
-	if len(r.buf) > r.idx {
-		buf.Write(r.getBackspaceSequence())
+	if tWidth > 0 {
+		buf.WriteString("\033[J") // trim rows/cells a longer previous render left
+		if len(r.buf) > r.idx {
+			buf.Write(r.getBackspaceSequence())
+		} else {
+			// Cursor after the last row: column is ppos on row 0, else where
+			// the last row's content ended. Explicit, since autowrap is off.
+			fmt.Fprintf(buf, "\033[%dG", r.lastRowColumn(tWidth))
+		}
 	}
+	buf.WriteString("\x1b[?7h\x1b[?25h") // restore autowrap, show cursor
 	return buf.Bytes()
+}
+
+// lastRowColumn returns the 1-based column the cursor occupies after the final
+// row of the current render — where redraw leaves the cursor when the buffer
+// index sits at the end of the buffer.
+func (r *runeBuffer) lastRowColumn(tWidth int) int {
+	sp := r.getSplitByLine(r.buf, 1)
+	col := runes.WidthAll(sp[len(sp)-1])
+	if len(sp) == 1 {
+		col += r.ppos
+	}
+	return col + 1
 }
 
 func (r *runeBuffer) SetOffset(position cursorPosition) {
@@ -553,9 +574,9 @@ func (r *runeBuffer) append(s []rune) {
 			}
 		}
 	}
-	if r.isInLineEdge() {
-		buf.WriteString(" \b")
-	}
+	// The prompt_toolkit-style row-placed write means output never relies on
+	// autowrap, so the old " \b" line-edge fix (which existed only to clean up
+	// the terminal's phantom wrapped cell) has no work left to do.
 	r.w.Write(buf.Bytes())
 }
 
@@ -583,35 +604,125 @@ func (r *runeBuffer) output() []byte {
 	return buf.Bytes()
 }
 
+// termToken is one cell of on-screen output: a visible rune with its display
+// width, optionally preceded by zero-width escape sequences that were glued to
+// it in the source. Splitting output into such tokens lets the redraw place
+// every row itself instead of trusting terminal autowrap.
+type termToken struct {
+	esc   string
+	r     rune
+	width int
+}
+
+// tokenizeTerm splits painted output into visible runes and the escape
+// sequences that decorate them. A CSI sequence runs from ESC to its final byte
+// in 0x40–0x7e; any other byte after ESC is also consumed as zero-width.
+func tokenizeTerm(rs []rune) []termToken {
+	toks := make([]termToken, 0, len(rs))
+	for i := 0; i < len(rs); {
+		if rs[i] == '\033' {
+			j := i + 1
+			if j < len(rs) && rs[j] == '[' {
+				j++
+				for j < len(rs) && (rs[j] < 0x40 || rs[j] > 0x7e) {
+					j++
+				}
+				if j < len(rs) {
+					j++
+				}
+			} else if j < len(rs) {
+				j++
+			}
+			toks = append(toks, termToken{esc: string(rs[i:j])})
+			i = j
+			continue
+		}
+		toks = append(toks, termToken{r: rs[i], width: runes.Width(rs[i])})
+		i++
+	}
+	return toks
+}
+
 // writeContent writes the prompt and the painted, tab-expanded (optionally
-// masked) buffer, clearing the first line's tail and adding the line-edge
-// space fix — everything the on-screen line shows except the final cursor
-// repositioning. Shared by output (for Print) and redraw.
+// masked) buffer as explicit rows, each ended by its own \e[K trim — the
+// borrow from prompt_toolkit's renderer. It rasterizes the line itself and
+// never trusts terminal autowrap: a character landing in the last column can
+// no longer leave the cursor on a phantom wrapped cell, which is what made an
+// occasional visible character get erased between frames. The row breaks are
+// the ones getSplitByLine computes for cursor math, so the render and the
+// cursor model can no longer disagree by a cell. Widths match SplitByLine:
+// the first row starts at r.ppos columns, \n always breaks, and a token breaks
+// when it would overflow. Only the \e[K after the last row is a *display*
+// trim; the per-row ones replace the old flat "\x1b[0K" (see #38). The caller
+// must have autowrap disabled for the duration of the write — see redraw —
+// and positions the cursor explicitly afterwards. Shared by output (for
+// Print) and redraw.
 func (r *runeBuffer) writeContent(buf *bytes.Buffer) {
-	buf.WriteString(r.prompt())
-	buf.WriteString("\x1b[0K") // VT100 "Clear line from cursor right", see #38
 	cfg := r.getConfig()
+	var content []rune
 	if cfg.EnableMask && len(r.buf) > 0 {
 		if cfg.MaskRune != 0 {
-			buf.WriteString(strings.Repeat(string(cfg.MaskRune), len(r.buf)-1))
+			content = append(content, []rune(strings.Repeat(string(cfg.MaskRune), len(r.buf)-1))...)
 		}
 		if r.buf[len(r.buf)-1] == '\n' {
-			buf.WriteRune('\n')
+			content = append(content, '\n')
 		} else if cfg.MaskRune != 0 {
-			buf.WriteRune(cfg.MaskRune)
+			content = append(content, cfg.MaskRune)
 		}
 	} else {
 		for _, e := range cfg.Painter(r.buf, r.idx) {
 			if e == '\t' {
-				buf.WriteString(strings.Repeat(" ", runes.TabWidth))
+				content = append(content, []rune(strings.Repeat(" ", runes.TabWidth))...)
 			} else {
-				buf.WriteRune(e)
+				content = append(content, e)
 			}
 		}
 	}
-	if r.isInLineEdge() {
-		buf.WriteString(" \b")
+
+	tWidth, _ := r.w.GetWidthHeight()
+	if tWidth <= 0 {
+		// No width info (or unknown): the flat legacy write (redraw walks back
+		// with \r\b).
+		buf.WriteString(r.prompt())
+		buf.WriteString("\x1b[0K")
+		buf.WriteString(string(content))
+		return
 	}
+
+	toks := tokenizeTerm([]rune(r.prompt()))
+	toks = append(toks, termToken{esc: "\x1b[0K"})
+	toks = append(toks, tokenizeTerm(content)...)
+
+	cur := r.ppos
+	var pending []termToken // escapes awaiting the next visible rune
+	flush := func() {
+		for _, t := range pending {
+			buf.WriteString(t.esc)
+		}
+		pending = pending[:0]
+	}
+	for _, t := range toks {
+		if t.r == 0 {
+			pending = append(pending, t)
+			continue
+		}
+		if t.r == '\n' {
+			flush()
+			buf.WriteString("\x1b[0K\r\n")
+			cur = 0
+			continue
+		}
+		if cur+t.width > tWidth {
+			flush()
+			buf.WriteString("\x1b[0K\r\n")
+			cur = 0
+		}
+		flush()
+		buf.WriteRune(t.r)
+		cur += t.width
+	}
+	flush()
+	buf.WriteString("\x1b[0K")
 }
 
 func (r *runeBuffer) getBackspaceSequence() []byte {
