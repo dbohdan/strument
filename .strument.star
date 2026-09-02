@@ -1,5 +1,5 @@
-check = project_checks() | {
+check = {
     "build": ["go", "build", "./..."],
-    "check": ["task", "check"],
-    "format": ["task", "format"],
+    "lint": ["golangci-lint", "run"],
+    "test": ["go", "test", "./..."],
 }
