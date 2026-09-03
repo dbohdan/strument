@@ -60,7 +60,7 @@ tasks:
       - build
       - format
       - lint
-      - test
+      - test:all
 
   clean:
     desc: 'Clean up binaries'
@@ -92,6 +92,11 @@ tasks:
       - VERSION=$(./strument{{exeExt}} --version) go run ./script/release
 
   test:
-    desc: 'Run tests'
+    desc: 'Run tests (fast: skips the sweeps guarded by -short)'
+    cmds:
+      - go test -short ./...
+
+  test:all:
+    desc: 'Run every test, including the -short sweeps — what CI runs'
     cmds:
       - go test ./...

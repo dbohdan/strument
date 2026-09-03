@@ -98,6 +98,9 @@ var languageCases = []struct {
 func TestAllLanguages(t *testing.T) {
 	for _, c := range languageCases {
 		t.Run(c.lang, func(t *testing.T) {
+			if skipSlowGrammar(t, c.lang) {
+				return
+			}
 			fixture := filepath.Join("..", "..", "testdata", "transliterated", "repomap", "languages", c.lang, "test."+c.ext)
 			content, err := os.ReadFile(fixture)
 			if err != nil {
@@ -130,14 +133,8 @@ func TestAllLanguages(t *testing.T) {
 }
 
 // Startup self-test: every embedded query for a supported language compiles.
-func TestAllQueriesCompile(t *testing.T) {
-	langs := SupportedLanguages()
-	if len(langs) < 28 {
-		t.Fatalf("expected >= 28 supported languages, got %d: %v", len(langs), langs)
-	}
-	for _, lang := range langs {
-		if _, err := langFor(lang); err != nil {
-			t.Errorf("%s: %v", lang, err)
-		}
-	}
-}
+// The sweep that used to live here — every supported language through langFor
+// — is TestAllEmbeddedQueriesCompile in compile_test.go, which makes the same
+// call with strictly stronger assertions (it also requires a compiled query,
+// and a higher language count). Two copies meant paying twice for the
+// grammars that are expensive to construct.

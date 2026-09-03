@@ -27,11 +27,20 @@ Go 1.26+, no cgo, no C toolchain. Everything runs offline without API keys.
 
 ```sh
 go build ./...        # or: task build
-go test ./...         # the full suite; no network, no sockets
+task test             # go test -short ./... — the inner loop, a few seconds
+task test:all         # go test ./... — everything, and what CI runs
 go vet ./...
 task lint             # golangci-lint — keep it at 0 issues
 task format           # gofmt/golangci-lint fmt; run before committing
 ```
+
+No test touches the network or opens a socket to the outside. A few sweeps are
+guarded by `testing.Short()` because their cost is dominated by one input
+rather than spread across the check: the Go tag-parity comparison over the
+whole repository, and the grammars in `internal/repomap`'s `slowGrammars` —
+Swift alone spends about 12.5 seconds building a 7.5 MB grammar blob inside
+the dependency, against 850 ms for the other thirty-four languages combined.
+Use `task test` while working and `task test:all` before you commit.
 
 `task setup:reference` clones aider at the pinned commit into a gitignored
 `reference/` for comparison; the build never needs it.
@@ -171,7 +180,7 @@ because that is what makes a result safe to act on.
   `docs:`, `test:`, …), imperative mood, one logical change per commit.
 - **Comments**: match the surrounding density and idiom; explain *why*, not
   *what*. Describe divergences from aider and the reasons for them.
-- **Verify before you commit**: build, `go test ./...`, and `task lint` all
+- **Verify before you commit**: build, `task test:all`, and `task lint` all
   green. For anything with a runtime surface, exercise it, don't just test it.
 - **Never commit secrets** — API keys go in the environment
   (`OPENROUTER_API_KEY`), never in files, docs, or commits.
