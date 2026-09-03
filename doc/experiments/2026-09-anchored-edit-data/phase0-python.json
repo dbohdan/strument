@@ -1,0 +1,76 @@
+{
+ "breakeven_lines_qwen": {
+  "deepseek/deepseek-v4-flash-0731.C": 486.3235250186707,
+  "deepseek/deepseek-v4-flash-0731.D": 190.6788088196539,
+  "deepseek/deepseek-v4-flash-0731.D_tab": 390.2206419910912,
+  "openai/gpt-5.6-luna.C": 1053.7009708737864,
+  "openai/gpt-5.6-luna.D": 413.1374191092501,
+  "openai/gpt-5.6-luna.D_tab": 845.4780576473643,
+  "qwen/qwen3.8-27b.C": 1053.7009708737864,
+  "qwen/qwen3.8-27b.D": 413.13741910925006,
+  "qwen/qwen3.8-27b.D_tab": 845.4780576473642,
+  "tencent/hy3.C": 702.4673139158576,
+  "tencent/hy3.D": 275.4249460728334,
+  "tencent/hy3.D_tab": 563.6520384315761,
+  "xiaomi/mimo-v2.5.C": 351.2336569579289,
+  "xiaomi/mimo-v2.5.D": 137.7124730364167,
+  "xiaomi/mimo-v2.5.D_tab": 281.8260192157881,
+  "z-ai/glm-5.3-flash.C": 585.3894282632148,
+  "z-ai/glm-5.3-flash.D": 229.52078839402782,
+  "z-ai/glm-5.3-flash.D_tab": 469.7100320263135
+ },
+ "files": 32,
+ "label": "python runners",
+ "lines": 5560,
+ "seed": 20260903,
+ "summary": {
+  "A.o200k": {
+   "extra_per_line": 0.0,
+   "pct_vs_A": 0.0,
+   "tok_per_line": 13.239568345323741,
+   "tokens": 73612
+  },
+  "A.qwen": {
+   "extra_per_line": 0.0,
+   "pct_vs_A": 0.0,
+   "tok_per_line": 14.90341726618705,
+   "tokens": 82863
+  },
+  "C.o200k": {
+   "extra_per_line": 2.606834532374101,
+   "pct_vs_A": 19.689724501439983,
+   "tok_per_line": 15.846402877697841,
+   "tokens": 88106
+  },
+  "C.qwen": {
+   "extra_per_line": 2.778776978417266,
+   "pct_vs_A": 18.64523369899714,
+   "tok_per_line": 17.682194244604318,
+   "tokens": 98313
+  },
+  "D.o200k": {
+   "extra_per_line": 8.217625899280575,
+   "pct_vs_A": 62.06868445362169,
+   "tok_per_line": 21.457194244604317,
+   "tokens": 119302
+  },
+  "D.qwen": {
+   "extra_per_line": 7.087230215827338,
+   "pct_vs_A": 47.55439701676261,
+   "tok_per_line": 21.99064748201439,
+   "tokens": 122268
+  },
+  "D_tab.o200k": {
+   "extra_per_line": 4.5956834532374105,
+   "pct_vs_A": 34.71173178286149,
+   "tok_per_line": 17.835251798561153,
+   "tokens": 99164
+  },
+  "D_tab.qwen": {
+   "extra_per_line": 3.463129496402878,
+   "pct_vs_A": 23.237150477293845,
+   "tok_per_line": 18.366546762589927,
+   "tokens": 102118
+  }
+ }
+}

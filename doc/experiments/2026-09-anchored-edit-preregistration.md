@@ -285,3 +285,36 @@ explained away:
 - **The local Qwen instance.** Covered by a separate plan.
 
 ## Amendments
+
+### 2026-09-03 — phase 0 run; the token case is refuted and demoted
+
+[`2026-09-anchored-edit-phase0.md`](2026-09-anchored-edit-phase0.md). No models
+called, nothing spent.
+
+The prediction above was right about magnitude — a yoneda row costs +6.4 to
++7.9 tokens a line against today's numbered prefix, where the body guessed +7
+to +9 — and wrong about the escape hatch it named. The indent column does not
+pay itself back on deeply indented code, because **any run of whitespace is
+already one token** in both tokenizers. Indentation was never expensive at any
+depth, so encoding it as a 2-token phrase is a loss on every line of the file
+whether or not that line is edited, and the space-indented corpus behaves the
+same as the tab-indented one. That hypothesis is closed rather than narrowed.
+
+The more useful result is that the token question was the wrong question. One
+avoided retry is worth about ten times the entire 61% output saving — 1,543
+anchored lines against 153 on `xiaomi/mimo-v2.5`, and the same ratio across the
+panel. So:
+
+- **M1 (first-try edit success) and M2 (round trips) are promoted to the only
+  primary metrics.** M3–M5 stay, as bookkeeping, and are no longer the question.
+- **Arm C must now earn its place on M9 alone**, the whitespace-rescue count,
+  since its token argument is gone. If M9 is near zero the ladder becomes
+  A → B → D.
+- **Arm B is worth building whatever phase 1 says.** Zero token cost, and it is
+  the only arm delivering staleness detection, which Strument lacks entirely.
+- **If arm D is built it uses a tab separator**, not `║`, which is over half its
+  overhead and incidental to the design.
+
+Arms, sampling and fixtures are otherwise unchanged, so the $2.54 estimate
+stands.
+
