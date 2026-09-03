@@ -216,6 +216,10 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop to ask
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
+Such a run exits non-zero when the request produced no answer — a rejected key, an endpoint that stayed unreachable through the retries, an empty reply —
+so a script can tell that apart from a model that simply had little to say.
+A truncated answer is still an answer and exits 0.
+
 Two inspection commands answer "what does my effective config say?" without editing the file.
 `strument config models` prints the keys of `models`, one per line (sorted, so scripts can rely on the order),
 and `strument config default` prints the value of `default`.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -618,56 +619,29 @@ func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
 	}
 }
 
-// TestChatNoHistoryStillSends pins the call order in chatCmd.Run: cdr.Run is
-// unconditional, and only the transcript append is gated on the history
-// writer existing. The crash-recording commit nested Run inside
-// `if hist != nil`, which turned every `chat --no-history -m …` run into a
-// silent no-op that exited 0 — no request, no output, no error. Nothing
-// failed loudly: the process succeeded at doing nothing, which is why the
-// wire check that caught it (running a probe through the built binary) is a
-// standing rule. Here the binary is built and run against a stub endpoint
-// that records what reaches it: the request arriving is the evidence.
+// stubEndpoint runs `chat -m hello` through the built binary against handler,
+// in a fresh project with a fresh config directory pointed at it. It returns
+// what the process printed, the paths the endpoint was asked for, and the
+// error from waiting on it (nil means exit 0).
 //
-// The endpoint answers 401. That is deliberate on two counts. It is a
-// non-retryable class, so the run ends on the first attempt — an earlier
-// version of this test pointed the binary at a closed port, and a refused
-// connection is retryable, so the test sat through the whole doubling ladder
-// (0.2s … 32s) for an answer it already had after the first attempt. It cost
-// 64 of the suite's 70 seconds. And a server that logs the hit is stronger
-// evidence than a connection error anyway: it proves the request was sent,
-// not merely that a socket was attempted.
-func TestChatNoHistoryStillSends(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix listener")
-	}
+// Driving the real binary rather than calling chatCmd.Run is the point: the
+// regressions these tests cover — a send that never happens, an exit status
+// that does not follow the outcome — are only visible from outside the
+// process. The binary itself is built once for the package; see TestMain.
+func stubEndpoint(t *testing.T, handler http.HandlerFunc) (out string, paths []string, runErr error) {
+	t.Helper()
 
 	var mu sync.Mutex
-	var paths []string
+	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		paths = append(paths, r.URL.Path)
+		seen = append(seen, r.URL.Path)
 		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = io.WriteString(w, `{"error":{"message":"stub endpoint","type":"invalid_request_error"}}`)
+		handler(w, r)
 	}))
 	defer srv.Close()
 
 	root := t.TempDir()
-
-	// Build before redirecting HOME below. A redirected HOME moves GOPATH's
-	// default module cache ($HOME/go/pkg/mod) into the temp dir, and the
-	// build fills it with Go's read-only module files — which t.TempDir's
-	// RemoveAll cannot unlink (macOS CI: "TempDir RemoveAll cleanup:
-	// permission denied"). Linux never saw this because only darwin
-	// redirects HOME.
-	bin := filepath.Join(t.TempDir(), "strument")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = "."
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v: %s", err, out)
-	}
-
 	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
 	// the same pattern as writeTempUserConfig.
 	switch runtime.GOOS {
@@ -682,8 +656,7 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfgDir := filepath.Dir(userCfgPath)
-	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(userCfgPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cfg := "router = provider(adapter = \"openrouter\", base_url = \"" + srv.URL + "/v1\", api_key = \"test\")\n" +
@@ -697,7 +670,7 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command(bin, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-m", "hello")
+	cmd := exec.Command(builtBinary, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-m", "hello")
 	cmd.Dir = proj
 	cmd.Env = append(os.Environ(),
 		"XDG_CONFIG_HOME="+filepath.Join(root, "cfg"),
@@ -710,23 +683,98 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		cmd.Env = append(cmd.Env, "HOME="+filepath.Join(root, "cfg"))
 	}
-	out, err := cmd.CombinedOutput()
-	combined := string(out)
+	combined, runErr := cmd.CombinedOutput()
 
 	mu.Lock()
-	seen := slices.Clone(paths)
-	mu.Unlock()
+	defer mu.Unlock()
+	return string(combined), slices.Clone(seen), runErr
+}
 
-	// The load-bearing assertion: the endpoint saw the request. The regressed
-	// binary exited 0 having sent nothing, so no request at all is the bug
-	// whatever the process printed.
+// reject401 is a stub endpoint that refuses the key. 401 is a non-retryable
+// class, so a run against it ends on the first attempt rather than working
+// through the doubling retry ladder — an earlier version of these tests used a
+// closed port, whose refused connection *is* retryable, and sat out the whole
+// ladder (0.2s … 32s) for an answer it had after the first attempt. It cost 64
+// of the suite's 70 seconds.
+func reject401(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = io.WriteString(w, `{"error":{"message":"stub endpoint","type":"invalid_request_error"}}`)
+}
+
+// answerOK is a stub endpoint that streams one short, complete reply.
+func answerOK(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n"+
+		"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"+
+		"data: [DONE]\n\n")
+}
+
+// TestChatNoHistoryStillSends pins the call order in chatCmd.Run: cdr.Run is
+// unconditional, and only the transcript append is gated on the history
+// writer existing. The crash-recording commit nested Run inside
+// `if hist != nil`, which turned every `chat --no-history -m …` run into a
+// silent no-op that exited 0 — no request, no output, no error. Nothing
+// failed loudly: the process succeeded at doing nothing, which is why the
+// wire check that caught it (running a probe through the built binary) is a
+// standing rule. The endpoint records what reaches it, so the request
+// arriving is the evidence — stronger than a connection error, which only
+// says a socket was attempted.
+func TestChatNoHistoryStillSends(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a unix listener")
+	}
+	combined, seen, err := stubEndpoint(t, reject401)
+
 	if len(seen) == 0 {
 		t.Errorf("--no-history run sent no request (exit %v); output: %q", err, combined)
 	} else if !slices.Contains(seen, "/v1/chat/completions") {
 		t.Errorf("request did not reach /v1/chat/completions; paths seen: %v", seen)
 	}
-	// And the rejection must surface, rather than the run reporting success.
 	if !strings.Contains(combined, "401") {
 		t.Errorf("the endpoint's 401 was not reported; output: %q", combined)
+	}
+}
+
+// TestChatExitStatusFollowsTheOutcome: a scripted run that got no answer must
+// not report success. `strument -m …` used to exit 0 after a refused key —
+// the diagnostic went to stderr and the status said everything was fine, so a
+// script driving it could not tell a rejected request from an empty reply the
+// model meant.
+//
+// The passing case is here for the same reason the failing one is: an exit
+// status that is non-zero whatever happens says nothing. Both arms run the
+// same command against the same binary, and only the endpoint differs.
+func TestChatExitStatusFollowsTheOutcome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a unix listener")
+	}
+	for _, tc := range []struct {
+		name    string
+		handler http.HandlerFunc
+		wantErr bool
+	}{
+		{"a refused key fails the run", reject401, true},
+		{"a complete answer succeeds", answerOK, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			combined, seen, err := stubEndpoint(t, tc.handler)
+			if len(seen) == 0 {
+				t.Fatalf("the endpoint saw no request at all; output: %q", combined)
+			}
+			switch {
+			case tc.wantErr && err == nil:
+				t.Errorf("the run exited 0 after producing no answer; output: %q", combined)
+			case !tc.wantErr && err != nil:
+				t.Errorf("the run failed on a complete answer: %v; output: %q", err, combined)
+			}
+			if tc.wantErr {
+				var ee *exec.ExitError
+				if errors.As(err, &ee) && ee.ExitCode() != 1 {
+					t.Errorf("exit code = %d, want 1", ee.ExitCode())
+				}
+			}
+		})
 	}
 }

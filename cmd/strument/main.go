@@ -416,6 +416,22 @@ func (c *chatCmd) Run() error {
 	if hist != nil && !crashRecorded {
 		appendTurn(false, answer)
 	}
+	// A scripted run that got no answer must not exit 0. `strument -m …` used
+	// to report success after a refused key or a dead endpoint: the diagnostic
+	// went to stderr and the status said everything was fine, so a script
+	// driving it could not tell a rejected request from an empty reply the
+	// model meant. OutcomeFailed is the case where the send produced nothing —
+	// a non-retryable error, a retry ladder run out, or an empty response.
+	//
+	// Only that one. A truncated answer (OutcomeOutputExhausted) is still an
+	// answer, and the interrupt outcomes are the human's own doing.
+	//
+	// The error carries no detail because the detail was printed where it
+	// happened; this line exists to make main exit non-zero, and to say that
+	// the status is a consequence of the failure just above it.
+	if cdr.LastOutcome() == coder.OutcomeFailed {
+		return errors.New("the request failed; see the error above")
+	}
 	return nil
 }
 
