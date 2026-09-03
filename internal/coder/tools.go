@@ -121,7 +121,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if c.editFormat == "ask" {
 		return defs
 	}
-	defs = append(defs, editTools()...)
+	defs = append(defs, editTools(c.AnchoredEdits)...)
 	if c.SuggestShellCommands {
 		defs = append(defs, bashTool())
 	}
@@ -216,8 +216,8 @@ func readOnlyTools() []llm.ToolDef {
 // editTools change files directly — the change lands the moment the call
 // arrives, exactly like an ordinary edit, with git auto-commit and /undo as the
 // safety net.
-func editTools() []llm.ToolDef {
-	return []llm.ToolDef{
+func editTools(anchored bool) []llm.ToolDef {
+	defs := []llm.ToolDef{
 		{
 			Name: toolEdit,
 			Description: "Replace an exact span of text in a file. The edit applies immediately. " +
@@ -254,6 +254,39 @@ func editTools() []llm.ToolDef {
 			},
 		},
 	}
+
+	if !anchored {
+		return defs
+	}
+	// Anchored addressing replaces the quoted-span form rather than sitting
+	// beside it. Offering both would let the model pick the one that can be
+	// ambiguous, which is the failure this format exists to remove — and a
+	// schema that accepts two ways to say where is a schema that can disagree
+	// with itself.
+	for i := range defs {
+		if defs[i].Name != toolEdit {
+			continue
+		}
+		defs[i].Description = "Replace whole lines of a file, addressed by the anchors that " +
+			"read prints. The edit applies immediately. Make one call per change. " +
+			"Paths must be inside the project root or the platform's standard " +
+			"temporary directory (e.g. /tmp), by absolute path for temp."
+		defs[i].Parameters = map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
+				"anchor": strProp("The anchor of the first line to replace, exactly as read printed " +
+					"it: two dash-joined words, like copper-otter. It names one line, so you never " +
+					"need to include surrounding context to be unambiguous."),
+				"end_anchor": strProp("The anchor of the last line to replace, when replacing several " +
+					"lines. Omit to replace only the anchored line."),
+				"new_string": strProp("The lines to put in their place, with the indentation they " +
+					"should have in the file. An empty string deletes the range."),
+			},
+			"required": []any{"path", "anchor", "new_string"},
+		}
+	}
+	return defs
 }
 
 // bashTool runs a shell command, and is the tool that asks first. Everything
@@ -530,6 +563,11 @@ type plannedEdit struct {
 	search  string
 	replace string
 	create  bool
+	// anchor and endAnchor name a line range by identity. When anchor is set,
+	// search is unused: the range is the address, and there is nothing to
+	// match, which is what makes an anchored edit unambiguous by construction.
+	anchor    string
+	endAnchor string
 }
 
 // toolCommand is one bash call.
@@ -553,6 +591,10 @@ type editArgs struct {
 	OldString string `json:"old_string"`
 	NewString string `json:"new_string"`
 	Content   string `json:"content"`
+	// Anchor and EndAnchor address lines by identity instead of by quoting
+	// them, when the session runs with anchored edits. See anchors.go.
+	Anchor    string `json:"anchor"`
+	EndAnchor string `json:"end_anchor"`
 }
 
 // parseEditArgs decodes an edit tool call's arguments into a toolEdit.
@@ -570,6 +612,18 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 	case toolWrite:
 		return plannedEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
 	default: // toolEdit
+		if a.Anchor != "" {
+			if a.OldString != "" {
+				return plannedEdit{}, "Send either \"anchor\" or \"old_string\", not both: " +
+					"an anchor already names the lines, so a search would only be a second, " +
+					"possibly disagreeing, way to say where."
+			}
+			return plannedEdit{callID: tc.ID, path: a.Path, replace: a.NewString,
+				anchor: a.Anchor, endAnchor: a.EndAnchor}, ""
+		}
+		if a.EndAnchor != "" {
+			return plannedEdit{}, "\"end_anchor\" needs \"anchor\": it says where a range ends, not where it is."
+		}
 		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString, replace: a.NewString}, ""
 	}
 }
@@ -1019,7 +1073,26 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 
 		content, exists := read(e.path)
 		var newContent string
-		if e.create {
+		switch {
+		case e.anchor != "":
+			// Anchored: the identities name the range, so there is no search to
+			// match and no way for the edit to be ambiguous.
+			resolved, failure := c.resolveEdit(e, content)
+			if failure != "" {
+				results[e.callID] = failure
+				*matchFailure = true
+				c.Out.Warningf("Could not edit %s: %s", e.path,
+					strings.ToLower(strings.SplitN(failure, "\n", 2)[0]))
+				continue
+			}
+			newContent = resolved
+			c.editsExact++ // an address, not a guess
+			callVerb[e.callID] = "Applied the edit to"
+			if writeVerb[e.path] == "" {
+				writeVerb[e.path] = "Applied edit to"
+			}
+
+		case e.create:
 			// write puts down the whole file: create it fresh, or overwrite an
 			// existing one — never the old append-on-empty-search behavior.
 			newContent = e.replace
@@ -1034,7 +1107,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 					writeVerb[e.path] = "Created"
 				}
 			}
-		} else {
+
+		default:
 			// Ambiguity is a failure, not a coin flip.
 			//
 			// DoReplace takes the first occurrence and reports success, so an
@@ -1110,6 +1184,13 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			edited = append(edited, e.path)
 		}
 		applied[e.callID] = true
+		if e.anchor != "" && !c.DryRun {
+			// The digest, not "Applied.": the model's next edit to this file
+			// needs the identities this one produced, and without them it has
+			// to re-read — which is most of what anchors are for.
+			results[e.callID] = c.anchorDigest(e.path, pending[e.path])
+			continue
+		}
 		results[e.callID] = fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
 	}
 
@@ -1122,6 +1203,13 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
 			c.Out.Errorf("Exception while updating files:")
 			c.Out.Errorf("%s", err.Error())
+			// The batch rolled back, so any digest already handed out describes
+			// content that is not on disk. Drop those anchors: the next edit is
+			// then told to read again, which is true, instead of resolving
+			// against a version that never landed.
+			for _, rel := range writeOrder {
+				c.anchors.forget(rel)
+			}
 			// The batch rolled back, so every intended write must be reported as
 			// failed or the model will assume success. It is told what happened
 			// but this is deliberately not a reflection: a filesystem failure —

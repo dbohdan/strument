@@ -104,6 +104,20 @@ func (i *Inspector) runRead(tc llm.ToolCall) string {
 		fmt.Fprintf(&b, "\nLine %d is past the end of the file.\n", ft.Start)
 		return b.String()
 	}
+	// Anchored rows when the session asked for them, and the numbered format
+	// otherwise. Either way every line carries an address; the difference is
+	// whether that address survives an edit above it.
+	if i.AnchorRows != nil {
+		if rows := i.AnchorRows(ft.Path, ft.Start-1, len(ft.Lines)); rows != "" {
+			b.WriteString(rows)
+			if ft.Truncated {
+				next := ft.Start + len(ft.Lines)
+				fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
+					ft.Start, next-1, ft.Total, next)
+			}
+			return b.String()
+		}
+	}
 	// Line numbers give stable referents for talking about code, which is worth
 	// the tokens in a conversation that will discuss specific lines.
 	width := len(strconv.Itoa(ft.Start + len(ft.Lines) - 1))

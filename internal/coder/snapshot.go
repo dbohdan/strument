@@ -259,6 +259,7 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 	// about a version that no longer exists. Dropping them returns to
 	// fail-open rather than reporting the user's own undo as staleness.
 	c.shown.forget()
+	c.anchors.forgetAll()
 
 	for _, rel := range snap.order {
 		e := snap.entries[rel]

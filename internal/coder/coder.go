@@ -115,6 +115,12 @@ type Coder struct {
 	editsExact int
 	editsFuzzy int
 
+	// AnchoredEdits gives read a stable identity per line and lets edit address
+	// lines by it. See anchors.go and config.Config.AnchoredEdits.
+	AnchoredEdits bool
+	// anchors is the session's registry of those identities.
+	anchors *anchorRegistry
+
 	// shown records the version of each file the model was last shown, so an
 	// edit to a file that moved underneath is refused rather than applied to
 	// content the model never saw. See staleness.go.
@@ -353,6 +359,7 @@ func New(root string, model *config.Model) *Coder {
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
 		shown:                newShownFiles(),
+		anchors:              newAnchorRegistry(nil),
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},

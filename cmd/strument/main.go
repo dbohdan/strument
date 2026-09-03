@@ -156,6 +156,7 @@ func (c *chatCmd) Run() error {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	cdr.LoopDetection = !cfg.NoLoopDetection
+	cdr.AnchoredEdits = cfg.AnchoredEdits
 	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow

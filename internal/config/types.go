@@ -203,6 +203,19 @@ type Config struct {
 	// MaxSteps and the rest. `loop_detection = False` is the only thing that
 	// sets it.
 	NoLoopDetection bool
+	// AnchoredEdits gives read a stable identity per line and lets edit
+	// address lines by it instead of by quoting them back.
+	//
+	// It exists because ambiguity is most of what makes an edit fail: 13 of 16
+	// first-try failures across the model panel were "the text appears N
+	// times", and an anchor names one line, so that cannot happen
+	// (doc/experiments/2026-09-anchored-edit-m1.md). It costs about 4% more
+	// input on every read, which is what the anchor column adds over the line
+	// numbers read already prints.
+	//
+	// Off by default: the comparison that would justify a default is phase 1 of
+	// that trial, and it has not run.
+	AnchoredEdits bool
 
 	// ObservationViaRunCode turns on the code-observation force arm: the direct
 	// read-only tools are withheld from the schema and all file observation

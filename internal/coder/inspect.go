@@ -36,6 +36,13 @@ type Inspector struct {
 	// answered, so the caller can record the version the model was shown. nil
 	// when nobody is tracking — the REPL's own /symbol lookups, say.
 	Observe func(rel string)
+	// AnchorRows renders a read window as anchored rows, or "" to keep the
+	// numbered format. It takes only the window bounds and reads the file
+	// itself, because an anchor is an identity within a file rather than within
+	// a window: reading lines 40-60 twice must give those lines the same
+	// anchors, and reading the whole file afterwards must agree with both, so
+	// the registry has to see every line either way.
+	AnchorRows func(rel string, start, count int) string
 }
 
 // ToolReporter is the outcome line and nothing else — the narrow half of Output
@@ -89,7 +96,8 @@ func InspectorTools() []string {
 func (c *Coder) inspector() *Inspector {
 	return &Inspector{
 		Root: c.Root, Files: c.Files, RepoMap: c.RepoMap, Out: c.Out,
-		Observe: func(rel string) { c.shown.note(rel, c.fullPath(rel)) },
+		Observe:    func(rel string) { c.shown.note(rel, c.fullPath(rel)) },
+		AnchorRows: c.anchorRows,
 	}
 }
 

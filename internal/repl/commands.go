@@ -691,6 +691,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		r.coder.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	r.coder.LoopDetection = !cfg.NoLoopDetection
+	r.coder.AnchoredEdits = cfg.AnchoredEdits
 	r.coder.WebfetchAllow = cfg.WebfetchAllow
 	r.coder.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
 	// Re-applied by SetEditFormat on the next format switch; applied to the

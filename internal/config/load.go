@@ -65,6 +65,8 @@ type fileGlobals struct {
 	maxErrorReflectionsVal   int
 	hasLoopDetection         bool
 	loopDetectionVal         bool
+	hasAnchoredEdits         bool
+	anchoredEditsVal         bool
 	hasObservationViaRunCode bool
 	observationViaRunCodeVal bool
 	hasWebfetchAllow         bool
@@ -355,6 +357,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
+	if user.hasAnchoredEdits {
+		cfg.AnchoredEdits = user.anchoredEditsVal
+	}
 	if user.hasObservationViaRunCode {
 		cfg.ObservationViaRunCode = user.observationViaRunCodeVal
 	}
@@ -426,6 +431,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasLoopDetection {
 			cfg.NoLoopDetection = !project.loopDetectionVal
+		}
+		if project.hasAnchoredEdits {
+			cfg.AnchoredEdits = project.anchoredEditsVal
 		}
 		if project.hasSandbox {
 			cfg.Sandbox = project.sandboxVal
@@ -779,6 +787,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasLoopDetection = true
 		out.loopDetectionVal = bool(b)
+	}
+
+	if ae, ok := globals["anchored_edits"]; ok {
+		b, ok := ae.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `anchored_edits` must be a boolean, got %s", path, ae.Type())
+		}
+		out.hasAnchoredEdits = true
+		out.anchoredEditsVal = bool(b)
 	}
 
 	if ov, ok := globals["observation_via_run_code"]; ok {
