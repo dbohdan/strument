@@ -255,6 +255,11 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 	}
 	snap := c.undoStack[n-1]
 
+	// Undo rewrites files behind the harness's back, so every stamp is now
+	// about a version that no longer exists. Dropping them returns to
+	// fail-open rather than reporting the user's own undo as staleness.
+	c.shown.forget()
+
 	for _, rel := range snap.order {
 		e := snap.entries[rel]
 		full := c.fullPath(rel)

@@ -111,6 +111,11 @@ type Coder struct {
 	// untrusted ones are kept so the session can tell the *user* they exist.
 	Skills   []skill.Skill
 	Platform PlatformInfo
+	// shown records the version of each file the model was last shown, so an
+	// edit to a file that moved underneath is refused rather than applied to
+	// content the model never saw. See staleness.go.
+	shown *shownFiles
+
 	// Files is the workspace behind read/ls/glob/grep. It never consults git,
 	// so the tools behave the same in a plain directory.
 	Files *workspace.Workspace
@@ -343,6 +348,7 @@ func New(root string, model *config.Model) *Coder {
 		Prompts:              promptsForFormat(model.EditFormat),
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
+		shown:                newShownFiles(),
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},

@@ -1004,6 +1004,19 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			continue
 		}
 
+		// Staleness before matching. The two failures need different answers —
+		// a mismatch means look harder, a moved file means read again — and
+		// telling a model its text "was not found" when the ground shifted
+		// under it sends it hunting for a mistake it did not make. write is
+		// exempt: it puts down a whole file and claims nothing about what was
+		// there before.
+		if !e.create && c.shown.changed(e.path, c.fullPath(e.path)) {
+			results[e.callID] = toolStaleFailure(e.path)
+			*matchFailure = true
+			c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
+			continue
+		}
+
 		content, exists := read(e.path)
 		var newContent string
 		if e.create {
@@ -1101,6 +1114,13 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 				}
 			}
 			return nil
+		}
+		// The batch is on disk. Re-stamp what it wrote: the model's next edit
+		// builds on the version Strument just produced, and leaving the old
+		// stamp in place would make the harness's own write look like somebody
+		// else's.
+		for _, rel := range writeOrder {
+			c.shown.note(rel, c.fullPath(rel))
 		}
 	}
 	if c.DryRun {

@@ -32,6 +32,10 @@ type Inspector struct {
 	// Out receives the one-line outcome. Never nil; use DiscardReporter to
 	// throw it away.
 	Out ToolReporter
+	// Observe is called with the project-relative path of each file a read
+	// answered, so the caller can record the version the model was shown. nil
+	// when nobody is tracking — the REPL's own /symbol lookups, say.
+	Observe func(rel string)
 }
 
 // ToolReporter is the outcome line and nothing else — the narrow half of Output
@@ -83,7 +87,10 @@ func InspectorTools() []string {
 // inspector is the Coder's own view of itself as one. The observation tools are
 // methods on Inspector now, and these fields are the whole of what they read.
 func (c *Coder) inspector() *Inspector {
-	return &Inspector{Root: c.Root, Files: c.Files, RepoMap: c.RepoMap, Out: c.Out}
+	return &Inspector{
+		Root: c.Root, Files: c.Files, RepoMap: c.RepoMap, Out: c.Out,
+		Observe: func(rel string) { c.shown.note(rel, c.fullPath(rel)) },
+	}
 }
 
 // The Coder's observation methods delegate. They stay because the tool dispatch

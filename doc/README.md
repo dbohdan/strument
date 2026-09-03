@@ -94,7 +94,10 @@ inherited from aider.
   cherry-picked work left alone.
   Alongside that: atomic batch writes that roll back whole, path containment,
   and an edit that preserves the file's mode and follows a symlink instead of
-  replacing it.
+  replacing it. An edit to a file that changed on disk since the model read it
+  is refused rather than applied to content the model never saw — the check
+  fails open, so a file with no recorded read is editable exactly as before
+  (`coder/staleness.go`).
 
 ## Relationship to aider
 

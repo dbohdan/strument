@@ -87,6 +87,12 @@ func (i *Inspector) runRead(tc llm.ToolCall) string {
 		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err)
 	}
 	i.Out.Toolf("Read %s", readSummary(ft))
+	if i.Observe != nil {
+		// Recorded even for a windowed read: the model has seen part of this
+		// version of the file, and an edit it builds from that window is just
+		// as wrong if the file moved underneath.
+		i.Observe(ft.Path)
+	}
 
 	var b strings.Builder
 	if ft.Link != "" {
