@@ -2,6 +2,7 @@ package coder
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -155,15 +156,55 @@ func (r *anchorRegistry) known(rel string) bool {
 // (doc/experiments/2026-09-anchored-edit-phase0.md). Indentation stays in the
 // content: naming it in words costs more than the whitespace does, because any
 // run of whitespace is already a single token.
-func renderAnchored(ids []anchor.Anchor, lines []string) string {
+func renderAnchored(ids []anchor.Anchor, lines []string, indentColumn bool) string {
 	var b strings.Builder
 	for i, line := range lines {
 		b.WriteString(string(ids[i]))
 		b.WriteByte('\t')
-		b.WriteString(line)
+		if indentColumn {
+			run, rest := anchor.SplitIndent(line)
+			b.WriteString(anchor.EncodeIndent(run))
+			b.WriteByte('\t')
+			b.WriteString(rest)
+		} else {
+			b.WriteString(line)
+		}
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// parseRows turns the replacement the model sent into file lines.
+//
+// With the indent column each row is "indent-words<TAB>text" and the words are
+// validated: a name that does not parse is refused rather than guessed at,
+// which is the whole reason the column exists. Without it the rows are the
+// lines themselves.
+func (c *Coder) parseRows(replace string) (lines []string, failure string) {
+	if replace == "" {
+		return nil, ""
+	}
+	for i, row := range strings.Split(strings.TrimSuffix(replace, "\n"), "\n") {
+		if !c.IndentColumn {
+			lines = append(lines, row)
+			continue
+		}
+		words, text, found := strings.Cut(row, "\t")
+		if !found {
+			return nil, fmt.Sprintf("Row %d has no tab: with the indent column every "+
+				"replacement row is the indentation in words, a tab, then the text — "+
+				"as read prints it. Got %s.\n", i+1, quoteToolArg(row))
+		}
+		run, ok := anchor.ParseIndent(words)
+		if !ok {
+			return nil, fmt.Sprintf("Row %d: %s is not an indentation. Write it as read "+
+				"prints it: a count and a unit, like \"2 tabs\", \"1 tab 2 spaces\", or "+
+				"\"0 spaces\" for none. Singular and plural have to agree.\n",
+				i+1, quoteToolArg(words))
+		}
+		lines = append(lines, run+text)
+	}
+	return lines, ""
 }
 
 // anchorRows renders one read window as anchored rows, or "" when anchored
@@ -189,7 +230,7 @@ func (c *Coder) anchorRows(rel string, start, count int) string {
 		return ""
 	}
 	end := min(start+count, len(ids))
-	return renderAnchored(ids[start:end], all[start:end])
+	return renderAnchored(ids[start:end], all[start:end], c.IndentColumn)
 }
 
 // resolveEdit turns an anchored edit into the new file content.
@@ -242,15 +283,20 @@ func (c *Coder) resolveEdit(e plannedEdit, content string) (newContent, failure 
 			"so nothing was changed. Read it again.\n"
 	}
 
+	repl, failure := c.parseRows(e.replace)
+	if failure != "" {
+		return "", failure
+	}
+
 	var b strings.Builder
 	for _, l := range lines[:from] {
 		b.WriteString(l)
 		b.WriteByte('\n')
 	}
-	// An empty replacement deletes the range. The trailing newline is the
-	// caller's convention: every line of the file carries one.
-	if e.replace != "" {
-		b.WriteString(strings.TrimSuffix(e.replace, "\n"))
+	// No rows deletes the range. The trailing newline is the caller's
+	// convention: every line of the file carries one.
+	for _, l := range repl {
+		b.WriteString(l)
 		b.WriteByte('\n')
 	}
 	for _, l := range lines[to+1:] {

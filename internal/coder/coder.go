@@ -118,6 +118,10 @@ type Coder struct {
 	// AnchoredEdits gives read a stable identity per line and lets edit address
 	// lines by it. See anchors.go and config.Config.AnchoredEdits.
 	AnchoredEdits bool
+	// IndentColumn names each line's leading whitespace in its own column, so
+	// the model states indentation rather than retyping it. Needs
+	// AnchoredEdits. See config.Config.IndentColumn.
+	IndentColumn bool
 	// anchors is the session's registry of those identities.
 	anchors *anchorRegistry
 

@@ -157,6 +157,7 @@ func (c *chatCmd) Run() error {
 	}
 	cdr.LoopDetection = !cfg.NoLoopDetection
 	cdr.AnchoredEdits = cfg.AnchoredEdits
+	cdr.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
 	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow

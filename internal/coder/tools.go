@@ -121,7 +121,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if c.editFormat == "ask" {
 		return defs
 	}
-	defs = append(defs, editTools(c.AnchoredEdits)...)
+	defs = append(defs, editTools(c.AnchoredEdits, c.IndentColumn)...)
 	if c.SuggestShellCommands {
 		defs = append(defs, bashTool())
 	}
@@ -213,10 +213,26 @@ func readOnlyTools() []llm.ToolDef {
 	}
 }
 
+// newStringProp describes the replacement, whose grammar depends on whether the
+// indent column is in play. With it the model states indentation rather than
+// reproducing it, which is the point: it cannot get whitespace wrong in a way
+// that reaches the file, because a name that does not parse is refused.
+func newStringProp(indentColumn bool) map[string]any {
+	if !indentColumn {
+		return strProp("The lines to put in their place, with the indentation they " +
+			"should have in the file. An empty string deletes the range.")
+	}
+	return strProp("The lines to put in their place, in the same form read prints them: " +
+		"each line is its indentation in words, a tab, then the text. Write the " +
+		"indentation as a count and a unit — \"2 tabs\", \"1 tab 2 spaces\", or " +
+		"\"0 spaces\" for none — and never as actual spaces or tabs. " +
+		"An empty string deletes the range.")
+}
+
 // editTools change files directly — the change lands the moment the call
 // arrives, exactly like an ordinary edit, with git auto-commit and /undo as the
 // safety net.
-func editTools(anchored bool) []llm.ToolDef {
+func editTools(anchored, indentColumn bool) []llm.ToolDef {
 	defs := []llm.ToolDef{
 		{
 			Name: toolEdit,
@@ -280,8 +296,7 @@ func editTools(anchored bool) []llm.ToolDef {
 					"need to include surrounding context to be unambiguous."),
 				"end_anchor": strProp("The anchor of the last line to replace, when replacing several " +
 					"lines. Omit to replace only the anchored line."),
-				"new_string": strProp("The lines to put in their place, with the indentation they " +
-					"should have in the file. An empty string deletes the range."),
+				"new_string": newStringProp(indentColumn),
 			},
 			"required": []any{"path", "anchor", "new_string"},
 		}
@@ -1081,8 +1096,11 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			if failure != "" {
 				results[e.callID] = failure
 				*matchFailure = true
-				c.Out.Warningf("Could not edit %s: %s", e.path,
-					strings.ToLower(strings.SplitN(failure, "\n", 2)[0]))
+				// The first line verbatim. Lowercasing it mangled the quoted
+				// examples the message exists to show ("2 tabs" is not "2 TABS"
+				// nor a sentence fragment).
+				c.Out.Warningf("Could not edit %s. %s", e.path,
+					strings.SplitN(failure, "\n", 2)[0])
 				continue
 			}
 			newContent = resolved

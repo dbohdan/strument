@@ -216,6 +216,14 @@ type Config struct {
 	// Off by default: the comparison that would justify a default is phase 1 of
 	// that trial, and it has not run.
 	AnchoredEdits bool
+	// IndentColumn puts a line's leading whitespace in its own column, named in
+	// words, so the model states indentation rather than reproducing it.
+	//
+	// It needs AnchoredEdits: it is the safety net anchoring removes. Under a
+	// quoted-span edit the line matcher repairs whitespace drift; anchored
+	// editing has no matching, and phase 1 measured 30 of 72 outputs coming
+	// back misindented as a result.
+	IndentColumn bool
 
 	// ObservationViaRunCode turns on the code-observation force arm: the direct
 	// read-only tools are withheld from the schema and all file observation

@@ -104,7 +104,7 @@ func TestUnknownAnchorsDoNotResolve(t *testing.T) {
 func TestRenderAnchored(t *testing.T) {
 	r := testRegistry()
 	lines := []string{"func f() {", "\treturn nil", "}"}
-	got := renderAnchored(r.sync("f.go", lines), lines)
+	got := renderAnchored(r.sync("f.go", lines), lines, false)
 	for i, row := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
 		id, content, found := strings.Cut(row, "\t")
 		if !found {
@@ -283,5 +283,133 @@ func TestAnchorAndOldStringAreMutuallyExclusive(t *testing.T) {
 		Arguments: `{"path":"a.txt","end_anchor":"copper-otter","new_string":"y"}`,
 	}); msg == "" {
 		t.Error("an end_anchor with no anchor was accepted")
+	}
+}
+
+func indentColumnCoder(t *testing.T, dir string) *Coder {
+	t.Helper()
+	c := anchoredCoder(t, dir)
+	c.IndentColumn = true
+	return c
+}
+
+// The read row under arm E: anchor, indent in words, text with no leading
+// whitespace of its own.
+func TestIndentColumnReadRow(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"),
+		[]byte("func f() {\n\tif x {\n\t\treturn\n\t}\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := indentColumnCoder(t, dir)
+	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 5), "\n"), "\n")
+	want := []string{"0 spaces\tfunc f() {", "1 tab\tif x {", "2 tabs\treturn", "1 tab\t}", "0 spaces\t}"}
+	for i, row := range rows {
+		_, rest, _ := strings.Cut(row, "\t")
+		if rest != want[i] {
+			t.Errorf("row %d = %q, want %q", i, rest, want[i])
+		}
+	}
+}
+
+// The point of arm E: the model states indentation, so it lands exactly as
+// stated. This is the case phase 1 measured going wrong 30 times in 72.
+func TestIndentColumnPutsTheStatedIndentationOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte("func f() {\n\tif x {\n\t\treturn\n\t}\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := indentColumnCoder(t, dir)
+	c.AddFile("a.go")
+	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 5), "\n"), "\n")
+	id, _, _ := strings.Cut(rows[2], "\t") // the "return" line
+
+	results := map[string]string{}
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{
+		{callID: "c1", path: "a.go", anchor: id, replace: "2 tabs\treturn nil\n"},
+	}, results, &matchFailure)
+
+	if len(edited) != 1 {
+		t.Fatalf("edited = %v: %q", edited, results["c1"])
+	}
+	got, _ := os.ReadFile(path)
+	if want := "func f() {\n\tif x {\n\t\treturn nil\n\t}\n}\n"; string(got) != want {
+		t.Errorf("file = %q\nwant %q", got, want)
+	}
+}
+
+// An indentation the model cannot name correctly is refused rather than
+// written. This is the safety net anchoring removed, put back: under arm D the
+// bad whitespace went straight to disk.
+func TestMalformedIndentIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte("func f() {\n\treturn\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := indentColumnCoder(t, dir)
+	c.AddFile("a.go")
+	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 3), "\n"), "\n")
+	id, _, _ := strings.Cut(rows[1], "\t")
+
+	for name, replace := range map[string]string{
+		"no tab":         "\treturn nil\n",
+		"bad agreement":  "1 tabs\treturn nil\n",
+		"literal indent": "\t\treturn nil\n",
+		"unknown unit":   "2 indents\treturn nil\n",
+	} {
+		results := map[string]string{}
+		matchFailure := false
+		edited := c.applyToolEdits([]plannedEdit{
+			{callID: "c1", path: "a.go", anchor: id, replace: replace},
+		}, results, &matchFailure)
+		if len(edited) != 0 {
+			t.Errorf("%s: edited = %v, want it refused", name, edited)
+		}
+		if got, _ := os.ReadFile(path); string(got) != "func f() {\n\treturn\n}\n" {
+			t.Errorf("%s: the file changed: %q", name, got)
+		}
+		if !matchFailure {
+			t.Errorf("%s: the model must get a chance to restate it", name)
+		}
+	}
+}
+
+// The column is only offered alongside anchors, and the schema says so — a
+// model told to name indentation while the harness expects literal whitespace
+// would produce exactly the corruption this is meant to prevent.
+func TestIndentColumnSchemaDescribesTheGrammar(t *testing.T) {
+	plain := editTools(true, false)
+	col := editTools(true, true)
+	find := func(defs []llm.ToolDef) string {
+		for _, d := range defs {
+			if d.Name != toolEdit {
+				continue
+			}
+			props, ok := d.Parameters["properties"].(map[string]any)
+			if !ok {
+				t.Fatal("the edit schema has no properties map")
+			}
+			ns, ok := props["new_string"].(map[string]any)
+			if !ok {
+				t.Fatal("the edit schema has no new_string property")
+			}
+			desc, ok := ns["description"].(string)
+			if !ok {
+				t.Fatal("new_string has no description")
+			}
+			return desc
+		}
+		return ""
+	}
+	if strings.Contains(find(plain), "indentation in words") {
+		t.Error("the plain anchored schema describes a column it does not have")
+	}
+	for _, want := range []string{"indentation in words", "2 tabs", "0 spaces", "never as actual spaces"} {
+		if !strings.Contains(find(col), want) {
+			t.Errorf("the indent-column schema does not mention %q", want)
+		}
 	}
 }

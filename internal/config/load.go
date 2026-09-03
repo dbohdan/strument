@@ -67,6 +67,8 @@ type fileGlobals struct {
 	loopDetectionVal         bool
 	hasAnchoredEdits         bool
 	anchoredEditsVal         bool
+	hasIndentColumn          bool
+	indentColumnVal          bool
 	hasObservationViaRunCode bool
 	observationViaRunCodeVal bool
 	hasWebfetchAllow         bool
@@ -360,6 +362,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasAnchoredEdits {
 		cfg.AnchoredEdits = user.anchoredEditsVal
 	}
+	if user.hasIndentColumn {
+		cfg.IndentColumn = user.indentColumnVal
+	}
 	if user.hasObservationViaRunCode {
 		cfg.ObservationViaRunCode = user.observationViaRunCodeVal
 	}
@@ -434,6 +439,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasAnchoredEdits {
 			cfg.AnchoredEdits = project.anchoredEditsVal
+		}
+		if project.hasIndentColumn {
+			cfg.IndentColumn = project.indentColumnVal
 		}
 		if project.hasSandbox {
 			cfg.Sandbox = project.sandboxVal
@@ -796,6 +804,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasAnchoredEdits = true
 		out.anchoredEditsVal = bool(b)
+	}
+
+	if ic, ok := globals["indent_column"]; ok {
+		b, ok := ic.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `indent_column` must be a boolean, got %s", path, ic.Type())
+		}
+		out.hasIndentColumn = true
+		out.indentColumnVal = bool(b)
 	}
 
 	if ov, ok := globals["observation_via_run_code"]; ok {
