@@ -18,8 +18,19 @@ func prep(content string) (string, []string) {
 
 // perfectReplace slides a window of len(partLines) over wholeLines and
 // splices replaceLines at the first exact (whitespace-inclusive) match.
-func perfectReplace(wholeLines, partLines, replaceLines []string) (string, bool) {
+// perfectReplace requires the run of lines to occur exactly once.
+//
+// It used to take the first. That is the failure the caller's uniqueness check
+// was added to prevent — a harness reporting success on an underconstrained
+// transformation — and the check could not see this path: it counts occurrences
+// of the *raw* search text, which is zero precisely when the model's whitespace
+// differs, so a search matching three identical blocks arrived here counted as
+// "not ambiguous" and edited whichever came first. Measured doing exactly that
+// in doc/experiments/2026-09-anchored-edit-m1.md: two runs silently rewrote the
+// wrong function and were told they had succeeded.
+func perfectReplace(wholeLines, partLines, replaceLines []string) (string, bool, bool) {
 	n := len(partLines)
+	found := -1
 	for i := 0; i+n <= len(wholeLines); i++ {
 		matched := true
 		for k := range n {
@@ -28,26 +39,39 @@ func perfectReplace(wholeLines, partLines, replaceLines []string) (string, bool)
 				break
 			}
 		}
-		if matched {
-			var b strings.Builder
-			for _, l := range wholeLines[:i] {
-				b.WriteString(l)
-			}
-			for _, l := range replaceLines {
-				b.WriteString(l)
-			}
-			for _, l := range wholeLines[i+n:] {
-				b.WriteString(l)
-			}
-			return b.String(), true
+		if !matched {
+			continue
 		}
+		if found >= 0 {
+			return "", true, false // ambiguous
+		}
+		found = i
 	}
-	return "", false
+	if found < 0 {
+		return "", false, false
+	}
+	return spliceLines(wholeLines, found, n, replaceLines), false, true
 }
 
-func perfectOrWhitespace(wholeLines, partLines, replaceLines []string) (string, bool) {
-	if res, ok := perfectReplace(wholeLines, partLines, replaceLines); ok {
-		return res, true
+// spliceLines rebuilds the file with replaceLines substituted for the n lines
+// at i.
+func spliceLines(wholeLines []string, i, n int, replaceLines []string) string {
+	var b strings.Builder
+	for _, l := range wholeLines[:i] {
+		b.WriteString(l)
+	}
+	for _, l := range replaceLines {
+		b.WriteString(l)
+	}
+	for _, l := range wholeLines[i+n:] {
+		b.WriteString(l)
+	}
+	return b.String()
+}
+
+func perfectOrWhitespace(wholeLines, partLines, replaceLines []string) (res string, ambiguous, ok bool) {
+	if res, ambiguous, ok := perfectReplace(wholeLines, partLines, replaceLines); ok || ambiguous {
+		return res, ambiguous, ok
 	}
 	return replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines)
 }
@@ -56,29 +80,33 @@ func perfectOrWhitespace(wholeLines, partLines, replaceLines []string) (string, 
 // perfect match, uniform-leading-whitespace match, the two again without a
 // spurious leading blank line, then "..." elision. The upstream fuzzy step
 // is dead code and is not ported.
-func ReplaceMostSimilarChunk(whole, part, replace string) (string, bool) {
+func ReplaceMostSimilarChunk(whole, part, replace string) (res string, ambiguous, ok bool) {
 	whole, wholeLines := prep(whole)
 	part, partLines := prep(part)
 	replace, replaceLines := prep(replace)
 
-	if res, ok := perfectOrWhitespace(wholeLines, partLines, replaceLines); ok {
-		return res, true
+	// An ambiguous result stops the ladder rather than falling through to the
+	// next rung. Trying a looser matcher after a stricter one found several
+	// candidates can only find more, and answering from it would be the coin
+	// flip the ambiguity check exists to refuse.
+	if res, amb, ok := perfectOrWhitespace(wholeLines, partLines, replaceLines); ok || amb {
+		return res, amb, ok
 	}
 
 	// Drop a spurious leading blank line (issue #25) and retry.
 	if len(partLines) > 2 && strings.TrimSpace(partLines[0]) == "" {
-		if res, ok := perfectOrWhitespace(wholeLines, partLines[1:], replaceLines); ok {
-			return res, true
+		if res, amb, ok := perfectOrWhitespace(wholeLines, partLines[1:], replaceLines); ok || amb {
+			return res, amb, ok
 		}
 	}
 
 	// "..." elision. A malformed elision raises in Python and is treated as
 	// no-match by the caller; here it is simply not-ok.
 	if res, ok, err := tryDotDotDots(whole, part, replace); err == nil && ok {
-		return res, true
+		return res, false, true
 	}
 
-	return "", false
+	return "", false, false
 }
 
 // leadingWhitespaceLen is len(p) - len(p.lstrip()) counted in runes.
@@ -104,7 +132,7 @@ func outdent(s string, n int) string {
 
 // replacePartWithMissingLeadingWhitespace handles the model omitting or
 // truncating indentation uniformly across the block (ladder step 2).
-func replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines []string) (string, bool) {
+func replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines []string) (res string, ambiguous, ok bool) {
 	// Outdent part and replace by the minimum leading whitespace over all
 	// their non-blank lines.
 	var leading []int
@@ -148,33 +176,33 @@ func replacePartWithMissingLeadingWhitespace(wholeLines, partLines, replaceLines
 		replaceLines = out
 	}
 
+	// Every position, not the first: see perfectReplace. A search whose
+	// indentation is wrong matches every copy of a repeated block equally well,
+	// and picking one of them is a coin flip made on the model's behalf.
 	n := len(partLines)
+	found, foundLeading := -1, ""
 	for i := 0; i+n <= len(wholeLines); i++ {
 		addLeading, ok := matchButForLeadingWhitespace(wholeLines[i:i+n], partLines)
 		if !ok {
 			continue
 		}
-		reindented := make([]string, len(replaceLines))
-		for k, rline := range replaceLines {
-			if strings.TrimSpace(rline) != "" {
-				reindented[k] = addLeading + rline
-			} else {
-				reindented[k] = rline
-			}
+		if found >= 0 {
+			return "", true, false // ambiguous
 		}
-		var b strings.Builder
-		for _, l := range wholeLines[:i] {
-			b.WriteString(l)
-		}
-		for _, l := range reindented {
-			b.WriteString(l)
-		}
-		for _, l := range wholeLines[i+n:] {
-			b.WriteString(l)
-		}
-		return b.String(), true
+		found, foundLeading = i, addLeading
 	}
-	return "", false
+	if found < 0 {
+		return "", false, false
+	}
+	reindented := make([]string, len(replaceLines))
+	for k, rline := range replaceLines {
+		if strings.TrimSpace(rline) != "" {
+			reindented[k] = foundLeading + rline
+		} else {
+			reindented[k] = rline
+		}
+	}
+	return spliceLines(wholeLines, found, n, reindented), false, true
 }
 
 // matchButForLeadingWhitespace reports the single uniform indent prefix that
@@ -376,7 +404,10 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 		return strings.Replace(content, rawBefore, rawAfter, 1), MatchExact, true
 	}
 
-	newContent, ok := ReplaceMostSimilarChunk(content, beforeText, afterText)
+	newContent, ambiguous, ok := ReplaceMostSimilarChunk(content, beforeText, afterText)
+	if ambiguous {
+		return "", MatchAmbiguous, false
+	}
 	if !ok {
 		return "", MatchNone, false
 	}
@@ -448,6 +479,11 @@ const (
 	// MatchAppend: empty search text, so the replacement was appended or
 	// started a new file. Not a guess, just not a search either.
 	MatchAppend
+	// MatchAmbiguous: the line matcher found the run of lines in more than one
+	// place, so which one was meant is unknown and nothing was changed. Distinct
+	// from MatchNone because the model's next move differs: not "look harder for
+	// the text" but "say which of several identical places you mean".
+	MatchAmbiguous
 	// MatchLines: aider's line-oriented matcher found it — a perfect run of
 	// lines, or one differing only in leading whitespace, or one reached after
 	// dropping a spurious blank first line, or a "..." elision. This is the
@@ -461,6 +497,8 @@ func (m Match) String() string {
 		return "exact"
 	case MatchAppend:
 		return "append"
+	case MatchAmbiguous:
+		return "ambiguous"
 	case MatchLines:
 		return "lines"
 	default:

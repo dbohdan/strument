@@ -344,3 +344,30 @@ Phase 1 is therefore 3 arms rather than 4: 3 × 6 models × 4 fixtures × 3 reps
 in the body — these fixtures ran an order of magnitude cheaper than the $0.0068
 projected, because they are single-file tasks — the sampling estimate should be
 re-derived before arm D is built rather than carried over.
+
+### 2026-09-03 — M1 measured on harder fixtures; arm D confirmed, and a bug fixed
+
+[`2026-09-anchored-edit-m1.md`](2026-09-anchored-edit-m1.md). 72 runs, arm A
+only, $0.1905, plus $0.036 verifying the fix.
+
+M9's 100% first-try edit success was a property of its fixtures. On repeated
+code it is **86.0%**, and **13 of the 16 failures are ambiguity** — the failure
+mode an anchor eliminates by construction. Reading a 435-line file caused no
+failures at all; repetition caused all of them.
+
+Both sides of arm D's arithmetic are now measured rather than assumed. Lines
+read per run: **median 49**, not the 300 this document guessed. Retries arm D
+would avoid: 0.18 per run. Break-even is 620–678 lines per run tab-separated,
+279–304 with `║`. **Arm D is worth building, tab-separated**, by roughly 10×
+at the median rather than the 30× the one-retry figure in phase 0 implied.
+
+The trial also found a bug and it is fixed in the same breath: the ambiguity
+guard counted occurrences of the *raw* search text, which is zero when the
+model's indentation is wrong, so the edit fell through to a line matcher that
+took the first of three identical blocks and reported success. Two runs
+silently rewrote the wrong function. The fuzzy tier now requires uniqueness like
+the exact tier already did. Re-running the four runs that produced it: 2/4
+silently wrong before, 0/4 after.
+
+Remaining before arm D is built: nothing measured. The next step is
+construction, not another measurement.

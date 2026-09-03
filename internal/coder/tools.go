@@ -1056,8 +1056,15 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			if !ambiguous {
 				newContent, how, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
 			}
+			if how == editblock.MatchAmbiguous {
+				// The line matcher found the run in several places. The raw
+				// occurrence count above is 0 in this case — that is why it got
+				// this far — so the message has to come from the matcher's
+				// verdict rather than from counting the search text again.
+				ambiguous = true
+			}
 			if ambiguous || !ok || newContent == "" {
-				results[e.callID] = toolMatchFailure(e, content, fen)
+				results[e.callID] = toolMatchFailure(e, content, fen, ambiguous)
 				*matchFailure = true
 				// The model is told through the tool result, and will usually
 				// re-read and try again. The user has to be told separately, or
@@ -1066,6 +1073,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 				// and only this one was silent.
 				if n := editblock.CountOccurrences(content, e.search); n > 1 {
 					c.Out.Warningf("Could not edit %s: the text to replace appears %d times.", e.path, n)
+				} else if ambiguous {
+					c.Out.Warningf("Could not edit %s: the lines to replace occur in more than one place.", e.path)
 				} else {
 					c.Out.Warningf("Could not edit %s: the text to replace was not found.", e.path)
 				}
@@ -1174,12 +1183,25 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 
 // toolMatchFailure builds the tool result for an edit whose search didn't
 // match, including a did-you-mean when a near match exists.
-func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence) string {
+func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambiguous bool) string {
 	var b strings.Builder
 
 	// Ambiguity and absence are different problems with different fixes, and
 	// telling a model its text was "not found" when the file holds three copies
 	// sends it hunting for a typo it did not make.
+	//
+	// The count below sees only verbatim copies. When the model's indentation
+	// is off, the search text occurs zero times while the *lines* occur several
+	// — the matcher's verdict is the only thing that knows, so it is passed in.
+	if ambiguous && editblock.CountOccurrences(content, e.search) <= 1 {
+		fmt.Fprintf(&b, "The lines to replace occur in more than one place in %s, so the edit "+
+			"is ambiguous and nothing was changed.\n", quoteToolArg(e.path))
+		b.WriteString("The text you sent does not appear verbatim — the indentation differs — " +
+			"so it could not be pinned down that way either.\n")
+		b.WriteString("Include enough surrounding lines to pick out the one you mean, " +
+			"copying the indentation exactly as the file has it.\n")
+		return b.String()
+	}
 	if n := editblock.CountOccurrences(content, e.search); n > 1 {
 		fmt.Fprintf(&b, "The text to replace appears %d times in %s, so it is ambiguous "+
 			"and nothing was changed.\n", n, quoteToolArg(e.path))

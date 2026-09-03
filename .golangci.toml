@@ -154,6 +154,13 @@ paths = [
     # adjacent NOTICE. Kept in upstream style, like internal/readline; go vet
     # and go test still cover it.
     "internal/monty",
+    # Trial fixtures: input to the experiments in doc/experiments, and several
+    # of them hold the defect the model is asked to find. Holding them to the
+    # project's ruleset would mean fixing the very thing the fixture exists to
+    # present — an unused parameter that is the bug, a handler repeated three
+    # times so an edit has to disambiguate. They stay gofmt'd, so they remain
+    # realistic Go; the formatter exclusions below deliberately omit them.
+    "doc/experiments",
     # Verbatim copies of go-git's gitignore matcher (Apache 2.0); see the
     # adjacent NOTICE. Only these three files are vendored — read.go and its
     # test are Strument's own and stay linted.

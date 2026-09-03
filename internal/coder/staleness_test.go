@@ -246,3 +246,41 @@ func TestExactEditIsNotCountedAsFuzzy(t *testing.T) {
 		t.Errorf("exact=%d fuzzy=%d, want exact=1 fuzzy=0", c.editsExact, c.editsFuzzy)
 	}
 }
+
+// TestFuzzyAmbiguityIsRefused is the bug M1 caught, at the level it bit.
+// Three identical blocks; a search whose indentation is wrong matches all three
+// equally well, so the raw occurrence count is zero and the old ambiguity guard
+// could not see it. The line matcher took the first and reported success — two
+// runs in that trial silently rewrote the wrong function.
+func TestFuzzyAmbiguityIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	block := "\tif !ok {\n\t\treturn err\n\t}\n"
+	if err := os.WriteFile(path, []byte("A\n"+block+"B\n"+block+"C\n"+block), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := toolCoder(t, dir)
+	c.AddFile("a.txt")
+
+	results := map[string]string{}
+	matchFailure := false
+	// Two tabs where the file has one: matches all three blocks, verbatim none.
+	edited := c.applyToolEdits([]plannedEdit{
+		editCall("call_1", "\t\tif !ok {\n\t\t\treturn err\n\t\t}\n", "\t\tif !ok {\n\t\t\treturn wrapped\n\t\t}\n"),
+	}, results, &matchFailure)
+
+	if len(edited) != 0 {
+		t.Errorf("edited = %v: one of three identical blocks was picked on the model's behalf", edited)
+	}
+	if got, _ := os.ReadFile(path); strings.Contains(string(got), "wrapped") {
+		t.Error("a coin flip was written to disk and reported as success")
+	}
+	got := results["call_1"]
+	if !strings.Contains(got, "more than one place") {
+		t.Errorf("result = %q, want it to name the ambiguity rather than report 'not found'", got)
+	}
+	if !matchFailure {
+		t.Error("the model must get a chance to disambiguate")
+	}
+}

@@ -42,14 +42,14 @@ func TestReplacePartWithMissingVariedLeadingWhitespace(t *testing.T) {
 	part := "line2\n    line3\n"
 	replace := "new_line2\n    new_line3\n"
 	want := "\n    line1\n    new_line2\n        new_line3\n    line4\n"
-	got, ok := ReplaceMostSimilarChunk(whole, part, replace)
+	got, _, ok := ReplaceMostSimilarChunk(whole, part, replace)
 	if !ok || got != want {
 		t.Errorf("got %q, %v", got, ok)
 	}
 }
 
 func TestReplacePartWithMissingLeadingWhitespace(t *testing.T) {
-	got, ok := ReplaceMostSimilarChunk(
+	got, _, ok := ReplaceMostSimilarChunk(
 		"    line1\n    line2\n    line3\n",
 		"line1\nline2\n",
 		"new_line1\nnew_line2\n")
@@ -59,27 +59,59 @@ func TestReplacePartWithMissingLeadingWhitespace(t *testing.T) {
 	}
 }
 
-func TestReplaceMultipleMatches(t *testing.T) {
-	// Only the first occurrence is replaced.
-	got, ok := ReplaceMostSimilarChunk("line1\nline2\nline1\nline3\n", "line1\n", "new_line\n")
-	want := "new_line\nline2\nline1\nline3\n"
-	if !ok || got != want {
-		t.Errorf("got %q, %v", got, ok)
+// A deliberate divergence from aider, in both of the tests below. aider
+// replaces the first of several matching runs; Strument declines and asks the
+// model to say which it means.
+//
+// Strument already made that choice for the exact path — see the uniqueness
+// check in coder/tools.go and its comment about a harness "returning success on
+// an underconstrained transformation". These two tests pinned the *fuzzy* path
+// still doing what that comment forbids, and it is not a hypothetical:
+// doc/experiments/2026-09-anchored-edit-m1.md caught it rewriting the wrong one
+// of three identical HTTP handlers, twice, reporting success both times. The
+// model's search was under-specified; taking a guess on its behalf is what
+// turns that into a silent wrong write.
+func TestReplaceMultipleMatchesIsAmbiguous(t *testing.T) {
+	got, ambiguous, ok := ReplaceMostSimilarChunk(
+		"line1\nline2\nline1\nline3\n", "line1\n", "new_line\n")
+	if ok {
+		t.Errorf("replaced one of two identical runs: %q", got)
+	}
+	if !ambiguous {
+		t.Error("want ambiguous, so the caller can say which failure this is")
 	}
 }
 
-func TestReplaceMultipleMatchesMissingWhitespace(t *testing.T) {
-	got, ok := ReplaceMostSimilarChunk(
+func TestReplaceMultipleMatchesMissingWhitespaceIsAmbiguous(t *testing.T) {
+	// The indentation is wrong *and* the run occurs twice: the exact-occurrence
+	// count the caller checks is zero here, so this path is the only thing
+	// standing between the model and a coin flip.
+	got, ambiguous, ok := ReplaceMostSimilarChunk(
 		"    line1\n    line2\n    line1\n    line3\n",
 		"line1\n", "new_line\n")
-	want := "    new_line\n    line2\n    line1\n    line3\n"
-	if !ok || got != want {
-		t.Errorf("got %q, %v", got, ok)
+	if ok {
+		t.Errorf("replaced one of two whitespace-equivalent runs: %q", got)
+	}
+	if !ambiguous {
+		t.Error("want ambiguous")
+	}
+}
+
+// The single-match case still works, which is what makes the two above a
+// restriction rather than a removal.
+func TestReplaceSingleMatchMissingWhitespaceStillWorks(t *testing.T) {
+	got, ambiguous, ok := ReplaceMostSimilarChunk(
+		"    line1\n    line2\n    line3\n", "line1\n", "new_line\n")
+	if !ok || ambiguous {
+		t.Fatalf("a unique whitespace-equivalent run must still match: %q amb=%v", got, ambiguous)
+	}
+	if want := "    new_line\n    line2\n    line3\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
 func TestReplacePartWithJustSomeMissingLeadingWhitespace(t *testing.T) {
-	got, ok := ReplaceMostSimilarChunk(
+	got, _, ok := ReplaceMostSimilarChunk(
 		"    line1\n    line2\n    line3\n",
 		" line1\n line2\n",
 		" new_line1\n     new_line2\n")
@@ -92,7 +124,7 @@ func TestReplacePartWithJustSomeMissingLeadingWhitespace(t *testing.T) {
 func TestReplacePartWithMissingLeadingWhitespaceIncludingBlankLine(t *testing.T) {
 	// Issue #25: a blank line in the part must not defeat the uniform
 	// outdent.
-	got, ok := ReplaceMostSimilarChunk(
+	got, _, ok := ReplaceMostSimilarChunk(
 		"    line1\n    line2\n    line3\n",
 		"\n  line1\n  line2\n",
 		"  new_line1\n  new_line2\n")
@@ -106,12 +138,12 @@ func TestDotDotDots(t *testing.T) {
 	whole := "top\nmid\nbot\n"
 	part := "top\n...\nbot\n"
 	replace := "TOP\n...\nBOT\n"
-	got, ok := ReplaceMostSimilarChunk(whole, part, replace)
+	got, _, ok := ReplaceMostSimilarChunk(whole, part, replace)
 	if !ok || got != "TOP\nmid\nBOT\n" {
 		t.Errorf("got %q, %v", got, ok)
 	}
 	// Unpaired dots are a no-match, not a panic.
-	if _, ok := ReplaceMostSimilarChunk(whole, "top\n...\nbot\n", "TOP\nBOT\n"); ok {
+	if _, _, ok := ReplaceMostSimilarChunk(whole, "top\n...\nbot\n", "TOP\nBOT\n"); ok {
 		t.Error("unpaired dots must not match")
 	}
 }

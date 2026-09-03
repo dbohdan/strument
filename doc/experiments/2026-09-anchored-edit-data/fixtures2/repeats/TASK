@@ -1,0 +1,1 @@
+In handlers.go, GetOrder must return 410 Gone rather than 404 when the order is missing, because orders are archived rather than deleted. Change only GetOrder's not-found response to http.StatusGone with the message "archived". Leave GetUser and GetInvoice exactly as they are.

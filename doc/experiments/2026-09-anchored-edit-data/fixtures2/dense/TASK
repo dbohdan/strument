@@ -1,0 +1,1 @@
+In pipeline.go, RunNamed ignores its names argument: its error should say which stage failed by name, not by index. Change only RunNamed's fmt.Errorf to use names[i] instead of i, with the format "stage %s: %w". Leave Run and RunUntil unchanged.

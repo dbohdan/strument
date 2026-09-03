@@ -1,0 +1,1 @@
+In metrics.go, RegisterMetric42 should use the bucket set HighResBuckets rather than DefaultBuckets, because that metric needs finer resolution. Add `var HighResBuckets = []float64{0.01, 0.05, 0.1, 0.5}` next to DefaultBuckets, and change only RegisterMetric42 to use it. Every other RegisterMetricNN must keep DefaultBuckets.
