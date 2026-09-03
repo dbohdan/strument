@@ -150,6 +150,30 @@ func (s *sigREPL) sig1(v os.Signal) {
 	s.sig <- v
 }
 
+// awaitBetweenTurns blocks until no in-turn subscription is live — until the
+// REPL really is back at the human's prompt.
+//
+// Releasing a blocked send only lets the send return; the turn's teardown,
+// including the Notify stop that unsubscribes, happens after that. A test that
+// fires its "between turns" signal as soon as it releases the send is firing
+// into that gap, where sig1's guard still sees turn 1's subscription and puts
+// the value in the buffered channel. Turn 1's forwarder is on its way out and
+// may not take it, so it waits there for turn 2 to subscribe and drain it —
+// cancelling a send that must not be cancelled. That is the very artifact the
+// Notify comment above describes; it failed 5 runs in 8 under -cpu 1.
+//
+// A subscription that never clears is the leaked-forwarder regression this
+// test also guards against, so name it rather than timing out anonymously.
+func (s *sigREPL) awaitBetweenTurns(t *testing.T) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); s.hasSubscriber(); {
+		if time.Now().After(deadline) {
+			t.Fatal("an in-turn signal subscription is still live between turns: the turn's Notify stop did not unsubscribe")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // newTestREPL builds a REPL over in-memory pipes in non-interactive mode.
 func newTestREPL(t *testing.T, cl llm.ModelClient, input io.Reader) (*REPL, *coder.Coder, *syncBuffer) {
 	t.Helper()
@@ -1030,9 +1054,10 @@ func TestUserSignalBetweenTurnsDoesNothing(t *testing.T) {
 	go func() { done <- s.Run(context.Background()) }()
 
 	<-cl.firstStarted
-	close(cl.release) // the first send finishes normally; the REPL returns to its prompt
+	close(cl.release) // the first send finishes normally...
+	s.awaitBetweenTurns(t)
 
-	s.sig1(interruptSignal) // the human's turn: no in-turn handler is subscribed
+	s.sig1(interruptSignal) // ...and now it is the human's turn: nothing is subscribed
 	_, _ = io.WriteString(pw, "second\n")
 
 	<-cl.secondStarted
