@@ -98,9 +98,6 @@ var languageCases = []struct {
 func TestAllLanguages(t *testing.T) {
 	for _, c := range languageCases {
 		t.Run(c.lang, func(t *testing.T) {
-			if skipSlowGrammar(t, c.lang) {
-				return
-			}
 			fixture := filepath.Join("..", "..", "testdata", "transliterated", "repomap", "languages", c.lang, "test."+c.ext)
 			content, err := os.ReadFile(fixture)
 			if err != nil {

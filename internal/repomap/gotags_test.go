@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -264,6 +265,52 @@ func TestGoTagParityOnConstructs(t *testing.T) {
 	}
 }
 
+// newMakeTypeArg reports whether name occurs on line as the type argument of a
+// new(...) or make(...) call. It is the predicate for the second known cause of
+// parity divergence, and it is deliberately narrow: the name must follow the
+// opening paren directly, allowing only a package qualifier or a pointer star,
+// so the allowance covers `new(Config)`, `new(bytes.Buffer)` and
+// `make(http.Header)` and cannot quietly absorb a name that merely appears
+// somewhere on a line that happens to call new or make.
+func newMakeTypeArg(line, name string) bool {
+	re, err := regexp.Compile(`\b(?:new|make)\(\s*\*?(?:[\p{L}_][\p{L}\p{N}_]*\.)?` +
+		regexp.QuoteMeta(name) + `\b`)
+	if err != nil {
+		return false
+	}
+	return re.MatchString(line)
+}
+
+// TestNewMakeTypeArgIsNarrow pins the allowance above to the shape it is meant
+// to excuse. An allowance that matched a name anywhere on a line calling new or
+// make would let the parity test absorb real drift, which is the one thing it
+// exists to catch.
+func TestNewMakeTypeArgIsNarrow(t *testing.T) {
+	for _, tc := range []struct {
+		line, name string
+		want       bool
+	}{
+		{"buf := new(bytes.Buffer)", "Buffer", true},
+		{"result := new(Config)", "Config", true},
+		{"\tHeader:     make(http.Header),", "Header", true},
+		{"p := new(*Pair)", "Pair", true},
+
+		// The name is on a line that calls new, but is not its type argument.
+		{"foo := new(Config); bar(Other)", "Other", false},
+		// Not directly after the paren.
+		{"ch := make(chan Element)", "Element", false},
+		// new/make must be the whole word, not a suffix or prefix.
+		{"x := renew(Config)", "Config", false},
+		{"x := newThing(Config)", "Config", false},
+		// A different name on the line entirely.
+		{"result := new(Config)", "Result", false},
+	} {
+		if got := newMakeTypeArg(tc.line, tc.name); got != tc.want {
+			t.Errorf("newMakeTypeArg(%q, %q) = %v, want %v", tc.line, tc.name, got, tc.want)
+		}
+	}
+}
+
 // TestGoTagParityOverThisRepo is the in-distribution half: every Go file the
 // project has, which is also the corpus every measurement behind this change
 // was taken on.
@@ -306,7 +353,8 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 	}
 
 	rm := testMap(t, root)
-	var defsTotal, refsTotal, accountedFor int
+	var defsTotal, refsTotal int
+	var byBrackets, byNewMake, unexplained int
 	for _, abs := range files {
 		rel := rm.relFname(abs)
 		ts := treeSitterTags(t, rm, abs, rel)
@@ -326,8 +374,8 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 		refsTotal += len(wantRefs)
 
 		// go/parser must never invent a reference the grammar does not have.
-		// Divergence is allowed in exactly one direction, and only for the one
-		// cause characterized below.
+		// Divergence is allowed in exactly one direction, and only for the
+		// causes characterized below.
 		if len(extra) > 0 {
 			t.Errorf("%s: go/parser reported references tree-sitter does not: %v", rel, extra)
 		}
@@ -344,30 +392,51 @@ func TestGoTagParityOverThisRepo(t *testing.T) {
 				t.Errorf("%s: unaccountable missing reference %q", rel, m)
 				continue
 			}
-			// The single known cause: tree-sitter resolves `X[Y]` as a generic
-			// type in some parse states and as an index in others, from state
-			// rather than from meaning — so definitions[d.fname][d.ident] comes
-			// back as three type identifiers while list.buffer[pos] comes back
-			// as none. Every divergence must therefore sit on a line carrying a
-			// bracket. This is a characterization of the cause, not a
-			// line-number pin, so ordinary edits to these files cannot break it
+			// Two known causes, each characterized rather than pinned to a line
+			// number, so ordinary edits to these files cannot break the test
 			// while a divergence of any *other* kind fails immediately.
-			if !strings.Contains(srcLines[n-1], "[") {
-				t.Errorf("%s:%d: reference %q is missing on a line with no index expression, "+
-					"so it is not the known bracket ambiguity:\n\t%s",
-					rel, n, name, strings.TrimSpace(srcLines[n-1]))
-				continue
+			line := srcLines[n-1]
+			switch {
+			// Brackets: tree-sitter resolves `X[Y]` as a generic type in some
+			// parse states and as an index in others, from state rather than
+			// from meaning — so definitions[d.fname][d.ident] comes back as
+			// three type identifiers while list.buffer[pos] comes back as none.
+			case strings.Contains(line, "["):
+				byBrackets++
+				t.Logf("%s:%d %s — tree-sitter read the brackets as a generic type: %s",
+					rel, n, name, strings.TrimSpace(line))
+
+			// new/make: their first argument is a type, and the grammar stopped
+			// reporting it as an identifier reference in v0.44.0 (it worsened
+			// again at v0.51.0, which also dropped the qualified form). This is
+			// a fact about the grammar we do not use for Go — .go files go to
+			// goTags — so it costs nothing but this comparison.
+			case newMakeTypeArg(line, name):
+				byNewMake++
+				t.Logf("%s:%d %s — the type argument of new/make, which the grammar does not report: %s",
+					rel, n, name, strings.TrimSpace(line))
+
+			default:
+				unexplained++
+				t.Errorf("%s:%d: reference %q is missing for neither known cause "+
+					"— no bracket on the line, and not a new/make type argument:\n\t%s",
+					rel, n, name, strings.TrimSpace(line))
 			}
-			accountedFor++
-			t.Logf("%s:%d %s — tree-sitter read the brackets as a generic type: %s",
-				rel, n, name, strings.TrimSpace(srcLines[n-1]))
 		}
 	}
 
+	diverged := byBrackets + byNewMake + unexplained
 	t.Logf("%d files, %d definition tags (exact parity), %d reference tags",
 		len(files), defsTotal, refsTotal)
-	t.Logf("%d references diverge, %d of them accounted for — %.2f%% identical, 100%% explained",
-		accountedFor, accountedFor, 100*float64(refsTotal-accountedFor)/float64(refsTotal))
+	// Each cause counted separately, and unexplained counted at all: the
+	// previous version of this line passed accountedFor for both the "diverge"
+	// and the "accounted for" slot and hardcoded "100% explained", so it
+	// reported everything explained in the same run that five unexplained
+	// divergences failed the test. A summary that cannot say the bad thing is
+	// not a summary.
+	t.Logf("%d references diverge: %d brackets, %d new/make, %d unexplained — %.2f%% identical",
+		diverged, byBrackets, byNewMake, unexplained,
+		100*float64(refsTotal-diverged)/float64(refsTotal))
 }
 
 // TestGoTagsSurviveAMidEditFile is the reservation this extractor was weighed

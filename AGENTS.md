@@ -34,13 +34,10 @@ task lint             # golangci-lint — keep it at 0 issues
 task format           # gofmt/golangci-lint fmt; run before committing
 ```
 
-No test touches the network or opens a socket to the outside. A few sweeps are
-guarded by `testing.Short()` because their cost is dominated by one input
-rather than spread across the check: the Go tag-parity comparison over the
-whole repository, and the grammars in `internal/repomap`'s `slowGrammars` —
-Swift alone spends about 12.5 seconds building a 7.5 MB grammar blob inside
-the dependency, against 850 ms for the other thirty-four languages combined.
-Use `task test` while working and `task test:all` before you commit.
+No test touches the network or opens a socket to the outside. The Go tag-parity
+comparison over the whole repository is guarded by `testing.Short()`, being a
+sweep whose cost is not spread across the check. Use `task test` while working
+and `task test:all` before you commit.
 
 `task setup:reference` clones aider at the pinned commit into a gitignored
 `reference/` for comparison; the build never needs it.
