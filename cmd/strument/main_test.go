@@ -3,13 +3,16 @@ package main
 import (
 	"bytes"
 	"io"
-	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/alecthomas/kong"
@@ -622,20 +625,33 @@ func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
 // silent no-op that exited 0 — no request, no output, no error. Nothing
 // failed loudly: the process succeeded at doing nothing, which is why the
 // wire check that caught it (running a probe through the built binary) is a
-// standing rule. Here the binary is built and run against a config whose
-// endpoint is a closed port: the send must happen, so the run must fail with
-// a connection error rather than succeed silently.
+// standing rule. Here the binary is built and run against a stub endpoint
+// that records what reaches it: the request arriving is the evidence.
+//
+// The endpoint answers 401. That is deliberate on two counts. It is a
+// non-retryable class, so the run ends on the first attempt — an earlier
+// version of this test pointed the binary at a closed port, and a refused
+// connection is retryable, so the test sat through the whole doubling ladder
+// (0.2s … 32s) for an answer it already had after the first attempt. It cost
+// 64 of the suite's 70 seconds. And a server that logs the hit is stronger
+// evidence than a connection error anyway: it proves the request was sent,
+// not merely that a socket was attempted.
 func TestChatNoHistoryStillSends(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses a unix listener")
 	}
-	// A listener we immediately close gives a port where connect fails fast.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Skipf("no loopback listener available: %v", err)
-	}
-	addr := ln.Addr().String()
-	_ = ln.Close()
+
+	var mu sync.Mutex
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":{"message":"stub endpoint","type":"invalid_request_error"}}`)
+	}))
+	defer srv.Close()
 
 	root := t.TempDir()
 
@@ -670,7 +686,7 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := "router = provider(adapter = \"openrouter\", base_url = \"http://" + addr + "/v1\", api_key = \"test\")\n" +
+	cfg := "router = provider(adapter = \"openrouter\", base_url = \"" + srv.URL + "/v1\", api_key = \"test\")\n" +
 		"models = {\"m\": model(router, \"test/model\", context = 100000)}\n" +
 		"default = \"m\"\n"
 	if err := os.WriteFile(userCfgPath, []byte(cfg), 0o644); err != nil {
@@ -696,15 +712,21 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 	}
 	out, err := cmd.CombinedOutput()
 	combined := string(out)
-	// The run must fail — the endpoint is dead — and the failure must be a
-	// connection error, which proves a request was attempted. The regression
-	// produced exit 0 with empty output: success at doing nothing.
-	if !strings.Contains(combined, "connection refused") {
-		if err != nil {
-			t.Fatalf("--no-history run failed with an unexpected error: %v: %s", err, combined)
-		}
-		// The regressed binary exited 0 with empty output: success at doing
-		// nothing. Empty output after a dead endpoint is the same bug.
-		t.Errorf("--no-history run attempted no send (exit %v); output: %q", err, combined)
+
+	mu.Lock()
+	seen := slices.Clone(paths)
+	mu.Unlock()
+
+	// The load-bearing assertion: the endpoint saw the request. The regressed
+	// binary exited 0 having sent nothing, so no request at all is the bug
+	// whatever the process printed.
+	if len(seen) == 0 {
+		t.Errorf("--no-history run sent no request (exit %v); output: %q", err, combined)
+	} else if !slices.Contains(seen, "/v1/chat/completions") {
+		t.Errorf("request did not reach /v1/chat/completions; paths seen: %v", seen)
+	}
+	// And the rejection must surface, rather than the run reporting success.
+	if !strings.Contains(combined, "401") {
+		t.Errorf("the endpoint's 401 was not reported; output: %q", combined)
 	}
 }
