@@ -129,9 +129,12 @@ func TestDoReplaceMatchesASubstring(t *testing.T) {
 	const content = "Version 3B kept the script but asked the agent to add two seconds\n" +
 		"to every shot with dialogue as a crude fix for dialog clipping.\n"
 
-	got, ok := DoReplace("notes.md", content, true, "dialog clipping", "dialogue clipping", fence)
+	got, how, ok := DoReplace("notes.md", content, true, "dialog clipping", "dialogue clipping", fence)
 	if !ok {
 		t.Fatal("a substring inside a line must match")
+	}
+	if how != MatchExact {
+		t.Errorf("match = %v, want exact: the text occurred verbatim", how)
 	}
 	if !strings.Contains(got, "for dialogue clipping.") || strings.Contains(got, "for dialog clipping.") {
 		t.Errorf("substring not replaced:\n%q", got)
@@ -152,8 +155,8 @@ func TestDoReplaceDeclinesAnAmbiguousSubstring(t *testing.T) {
 	if n := CountOccurrences(content, "alpha"); n != 2 {
 		t.Errorf("CountOccurrences = %d, want 2", n)
 	}
-	if got, ok := DoReplace("f.txt", content, true, "alpha", "ALPHA", fence); ok {
-		t.Errorf("an ambiguous substring must not be replaced, got %q", got)
+	if got, how, ok := DoReplace("f.txt", content, true, "alpha", "ALPHA", fence); ok {
+		t.Errorf("an ambiguous substring must not be replaced, got %q (%v)", got, how)
 	}
 }
 
@@ -164,11 +167,40 @@ func TestDoReplaceStillMatchesWholeLines(t *testing.T) {
 	fence := Fence{Open: "```", Close: "```"}
 	const content = "func main() {\n    println(\"hi\")\n}\n"
 
-	got, ok := DoReplace("m.go", content, true, "    println(\"hi\")\n", "    println(\"bye\")\n", fence)
+	got, how, ok := DoReplace("m.go", content, true, "    println(\"hi\")\n", "    println(\"bye\")\n", fence)
 	if !ok {
 		t.Fatal("a whole-line search must still match")
 	}
+	if how != MatchExact {
+		t.Errorf("match = %v, want exact: this line does occur verbatim", how)
+	}
 	if !strings.Contains(got, "println(\"bye\")") {
 		t.Errorf("line not replaced:\n%q", got)
+	}
+}
+
+// TestDoReplaceReportsTheFuzzyTier is what the Match return exists for: the
+// caller must be able to tell an edit the model located itself from one the
+// line matcher located on its behalf. Here the search text has the wrong
+// indentation — four spaces where the file has a tab — so it occurs nowhere
+// verbatim and only the line matcher can place it.
+func TestDoReplaceReportsTheFuzzyTier(t *testing.T) {
+	fence := Fence{Open: "```", Close: "```"}
+	const content = "func main() {\n\tprintln(\"hi\")\n}\n"
+
+	got, how, ok := DoReplace("m.go", content, true,
+		"    println(\"hi\")\n", "    println(\"bye\")\n", fence)
+	if !ok {
+		t.Fatal("the whitespace-tolerant matcher must still place this line")
+	}
+	if how != MatchLines {
+		t.Errorf("match = %v, want lines: the search text occurs nowhere verbatim", how)
+	}
+	if !strings.Contains(got, "println(\"bye\")") {
+		t.Errorf("line not replaced:\n%q", got)
+	}
+	// And the file's own indentation survives the harness's guess.
+	if !strings.Contains(got, "\tprintln(\"bye\")") {
+		t.Errorf("the file's tab indentation was not preserved:\n%q", got)
 	}
 }

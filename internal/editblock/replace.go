@@ -331,7 +331,7 @@ func splitLinesNoEnds(s string) []string {
 // DoReplace ports do_replace: strip wrapping, then create/append/replace.
 // exists says whether the target file already exists;
 // content is its current text ("" for a new file).
-func DoReplace(fname string, content string, exists bool, beforeText, afterText string, fence Fence) (string, bool) {
+func DoReplace(fname string, content string, exists bool, beforeText, afterText string, fence Fence) (string, Match, bool) {
 	// The arguments as the model wrote them. StripQuotedWrapping below is
 	// aider's normalization for prose-parsed blocks: it drops a filename line
 	// and a fence, and — the part that matters here — appends a trailing
@@ -347,12 +347,12 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 		// New file.
 		content = ""
 	} else if !exists {
-		return "", false
+		return "", MatchNone, false
 	}
 
 	if strings.TrimSpace(beforeText) == "" {
 		// Append to existing file, or start a new file.
-		return content + afterText, true
+		return content + afterText, MatchAppend, true
 	}
 
 	// An exact substring, occurring once, is replaced as written.
@@ -373,14 +373,14 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 	// ambiguous substring here declines and asks for more context. A caller can
 	// tell the two failures apart with CountOccurrences.
 	if rawBefore != "" && strings.Count(content, rawBefore) == 1 {
-		return strings.Replace(content, rawBefore, rawAfter, 1), true
+		return strings.Replace(content, rawBefore, rawAfter, 1), MatchExact, true
 	}
 
 	newContent, ok := ReplaceMostSimilarChunk(content, beforeText, afterText)
 	if !ok {
-		return "", false
+		return "", MatchNone, false
 	}
-	return newContent, true
+	return newContent, MatchLines, true
 }
 
 // CountOccurrences reports how many times the search text appears verbatim in
@@ -430,4 +430,40 @@ func splitLines(s string) []string {
 // repo-relative forward-slashed paths, so path.Base fits).
 func pathBase(p string) string {
 	return path.Base(strings.ReplaceAll(p, "\\", "/"))
+}
+
+// Match names how DoReplace found the text it replaced. The distinction is
+// worth carrying because the strategies are not equally trustworthy: an exact
+// substring is the model saying what it meant, while everything below it is the
+// harness guessing which lines were intended after the model transcribed them
+// imperfectly. A caller that wants to report, count, or gate on that guessing
+// needs to know it happened.
+type Match int
+
+const (
+	// MatchNone: nothing matched and nothing was replaced.
+	MatchNone Match = iota
+	// MatchExact: the search text occurred verbatim, exactly once.
+	MatchExact
+	// MatchAppend: empty search text, so the replacement was appended or
+	// started a new file. Not a guess, just not a search either.
+	MatchAppend
+	// MatchLines: aider's line-oriented matcher found it — a perfect run of
+	// lines, or one differing only in leading whitespace, or one reached after
+	// dropping a spurious blank first line, or a "..." elision. This is the
+	// fuzzy tier: the harness decided which lines the model meant.
+	MatchLines
+)
+
+func (m Match) String() string {
+	switch m {
+	case MatchExact:
+		return "exact"
+	case MatchAppend:
+		return "append"
+	case MatchLines:
+		return "lines"
+	default:
+		return "none"
+	}
 }

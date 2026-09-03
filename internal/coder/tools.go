@@ -1051,9 +1051,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			// message below was written for this case and was, until now,
 			// reachable only by accident.
 			var ok bool
+			var how editblock.Match
 			ambiguous := editblock.CountOccurrences(content, e.search) > 1
 			if !ambiguous {
-				newContent, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
+				newContent, how, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
 			}
 			if ambiguous || !ok || newContent == "" {
 				results[e.callID] = toolMatchFailure(e, content, fen)
@@ -1069,6 +1070,19 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 					c.Out.Warningf("Could not edit %s: the text to replace was not found.", e.path)
 				}
 				continue
+			}
+			// An exact match is the model saying what it meant. Anything else is
+			// the line matcher deciding which lines it *probably* meant, after
+			// the text it sent did not occur in the file — a different whitespace
+			// run, a dropped blank line, a "..." elision. The edit still lands,
+			// but the harness picked the target, and in a loop whose whole claim
+			// is reviewability that is worth a line rather than silence.
+			if how == editblock.MatchLines {
+				c.editsFuzzy++
+				c.Out.Warningf("Matched %s loosely: the text sent did not occur in the file, "+
+					"so the line matcher chose the target. Check the diff.", e.path)
+			} else {
+				c.editsExact++
 			}
 			callVerb[e.callID] = "Applied the edit to"
 			if writeVerb[e.path] == "" {

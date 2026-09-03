@@ -924,13 +924,15 @@ func (c *Coder) flushTurnUsage() {
 	c.Out.Printf("%s", report)
 
 	c.record(Record{
-		Type:      "turn",
-		Outcome:   c.lastSendOutcome.String(),
-		Steps:     c.numSteps,
-		Sent:      c.messageTokensSent,
-		Received:  c.messageTokensReceived,
-		Cost:      c.messageCost,
-		CostKnown: c.costKnown,
+		Type:       "turn",
+		Outcome:    c.lastSendOutcome.String(),
+		Steps:      c.numSteps,
+		Sent:       c.messageTokensSent,
+		Received:   c.messageTokensReceived,
+		Cost:       c.messageCost,
+		CostKnown:  c.costKnown,
+		EditsExact: c.editsExact,
+		EditsFuzzy: c.editsFuzzy,
 	})
 
 	if c.RecordUsage != nil {

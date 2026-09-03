@@ -111,6 +111,10 @@ type Coder struct {
 	// untrusted ones are kept so the session can tell the *user* they exist.
 	Skills   []skill.Skill
 	Platform PlatformInfo
+	// editsExact and editsFuzzy tally how this turn's edits found their text.
+	editsExact int
+	editsFuzzy int
+
 	// shown records the version of each file the model was last shown, so an
 	// edit to a file that moved underneath is refused rather than applied to
 	// content the model never saw. See staleness.go.
@@ -499,6 +503,7 @@ func (c *Coder) initBeforeMessage() {
 	c.recordToolLines()
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
+	c.editsExact, c.editsFuzzy = 0, 0
 	// sessionAutoApprove is not reset here. That is the whole of the session
 	// scope; /reset and "/web reset" are what end it.
 	c.numReflections = 0
