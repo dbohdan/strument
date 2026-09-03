@@ -195,6 +195,19 @@ func (c *Coder) parseRows(replace string) (lines []string, failure string) {
 				"replacement row is the indentation in words, a tab, then the text — "+
 				"as read prints it. Got %s.\n", i+1, quoteToolArg(row))
 		}
+		// The text column carries no indentation of its own — read strips it into
+		// the column, so a well-formed row's text never begins with whitespace.
+		// Models state the indentation *and* retype it: phase 1's arm E caught
+		// "3 tabs\t\t\treturn nil", which is correct in the column and correct
+		// again in the text, and lands as six tabs. Accepting that is worse than
+		// having no column at all, because the model believes it has been
+		// explicit.
+		if text != "" && (text[0] == ' ' || text[0] == '\t') {
+			return nil, fmt.Sprintf("Row %d starts with whitespace after the tab. The "+
+				"indentation belongs in the column and nowhere else: you wrote %s and then "+
+				"indented the text as well, which would land as both. Send the text with no "+
+				"leading spaces or tabs.\n", i+1, quoteToolArg(words))
+		}
 		run, ok := anchor.ParseIndent(words)
 		if !ok {
 			return nil, fmt.Sprintf("Row %d: %s is not an indentation. Write it as read "+

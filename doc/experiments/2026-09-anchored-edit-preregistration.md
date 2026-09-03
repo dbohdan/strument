@@ -399,3 +399,29 @@ optimization but the *replacement* for the safety net anchoring removes. Anchors
 plus the indent column is the arm this trial should have contained. It is not
 scheduled: it would have to beat 72/72, on top of already-doubled traffic, and
 nothing measured so far suggests it can.
+
+### 2026-09-03 — phase 2: the indent column run, and both settings stay off
+
+[`2026-09-anchored-edit-phase2.md`](2026-09-anchored-edit-phase2.md). 144 runs
+across two iterations, $0.536.
+
+The arm phase 1 left un-run, run. Adding yoneda's indent column to anchors
+recovered most of what anchoring broke — formatting 42/72 → 65/72, the
+anchor-text-in-source failure gone entirely, first-try edit success still 100% —
+and confirmed the phase 1 reading that the column is the safety net anchoring
+removes rather than a token optimization.
+
+It surfaced a defect worth the run. Models named the indentation *and typed it
+as well*: `"3 tabs\t\t\treturn nil"` landed as six tabs, because the parser
+validated the name and concatenated it with text that already carried the
+indent. That is worse than no column, since the model believes it has been
+explicit. Refusing a text column that begins with whitespace — a rule yoneda's
+grammar implies and this implementation did not enforce — recovers 3 of the 5
+wrong outcomes and both non-parsing files.
+
+Even so: 70/72 against arm A's 72/72, at 5.50 steps against 4.58 and 56k input
+against 36k. And the 70/72 is fitted to its own test set, since the rule was
+written from these fixtures' failures. `anchored_edits` and `indent_column`
+both stay off.
+
+The trial is closed. Arm B ships; arms C, D and E do not.

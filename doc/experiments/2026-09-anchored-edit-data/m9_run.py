@@ -57,7 +57,8 @@ def one_run(binary, fixtures, out_root, model, fixture, rep, arm="A"):
 
     with open(os.path.join(run_dir, "cfg", "strument", "config.star"), "w") as f:
         f.write(CONFIG.format(slug=model,
-                extra="anchored_edits = True\n" if arm == "D" else ""))
+                extra={"D": "anchored_edits = True\n",
+                       "E": "anchored_edits = True\nindent_column = True\n"}.get(arm, "")))
 
     jsonl = os.path.join(run_dir, "log.jsonl")
     env = dict(os.environ)
@@ -119,7 +120,7 @@ def main():
     ap.add_argument("--seed", type=int, default=20260903)
     ap.add_argument("--limit", type=int, default=0, help="stop after N runs")
     ap.add_argument("--jobs", type=int, default=4, help="concurrent runs")
-    ap.add_argument("--arms", default="A", help="comma-separated: A (today), D (anchored)")
+    ap.add_argument("--arms", default="A", help="comma-separated: A (today), D (anchored), E (anchored + indent column)")
     args = ap.parse_args()
 
     if not os.environ.get("OPENROUTER_API_KEY"):

@@ -413,3 +413,46 @@ func TestIndentColumnSchemaDescribesTheGrammar(t *testing.T) {
 		}
 	}
 }
+
+// Stating the indentation and then typing it as well lands as both. Phase 1's
+// arm E measured models doing exactly that — "3 tabs\t\t\treturn nil" — and it
+// is worse than having no column, because the model believes it has been
+// explicit and the harness silently doubles it.
+func TestIndentColumnRejectsDoubledIndentation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.go")
+	const before = "func f() {\n\tif x {\n\t\treturn\n\t}\n}\n"
+	if err := os.WriteFile(path, []byte(before), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := indentColumnCoder(t, dir)
+	c.AddFile("a.go")
+	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 5), "\n"), "\n")
+	id, _, _ := strings.Cut(rows[2], "\t")
+
+	results := map[string]string{}
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{
+		{callID: "c1", path: "a.go", anchor: id, replace: "2 tabs\t\t\treturn nil\n"},
+	}, results, &matchFailure)
+
+	if len(edited) != 0 {
+		t.Errorf("edited = %v: the indentation was stated and typed, and would land twice", edited)
+	}
+	if got, _ := os.ReadFile(path); string(got) != before {
+		t.Errorf("file changed: %q", got)
+	}
+	if !strings.Contains(results["c1"], "belongs in the column") {
+		t.Errorf("result = %q, want it to say where indentation goes", results["c1"])
+	}
+	// And a correctly formed row still works, so this is a restriction, not a wall.
+	results, matchFailure = map[string]string{}, false
+	if edited := c.applyToolEdits([]plannedEdit{
+		{callID: "c2", path: "a.go", anchor: id, replace: "2 tabs\treturn nil\n"},
+	}, results, &matchFailure); len(edited) != 1 {
+		t.Fatalf("a well-formed row was refused: %q", results["c2"])
+	}
+	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "\t\treturn nil\n") {
+		t.Errorf("file = %q, want exactly two tabs", got)
+	}
+}
