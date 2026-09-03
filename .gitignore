@@ -14,6 +14,11 @@
 *.bak
 *.sw*
 
+# Test binaries: "go test" cleans up after itself, but "go test -c" and any
+# run with a profile flag (-cpuprofile, -memprofile, ...) leave one behind, in
+# the package directory, at tens of megabytes.
+*.test
+
 # Trial binaries and Python caches under doc/experiments: a trial builds one
 # binary per arm to compare them, and those are build output, not data. The
 # runner and its results.jsonl are what get committed.
