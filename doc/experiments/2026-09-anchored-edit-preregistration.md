@@ -371,3 +371,31 @@ silently wrong before, 0/4 after.
 
 Remaining before arm D is built: nothing measured. The next step is
 construction, not another measurement.
+
+### 2026-09-03 — phase 1 run; arm D built, measured, and left off by default
+
+[`2026-09-anchored-edit-phase1.md`](2026-09-anchored-edit-phase1.md). 144 runs,
+A against D, $0.4884.
+
+Arm D eliminated ambiguity completely — 182 edit calls, zero failures, against
+arm A's 20 in 119, and first-try edit success went 83.2% → 100%. It still lost:
+**64/72 tasks correct against arm A's 72/72**, 30 of 72 outputs misformatted, 2
+that do not parse, and two files with anchor text written into them.
+
+The cause is that anchoring removes the fuzzy whitespace tier by construction —
+there is no matching, so nothing repairs the indentation errors M9 measured
+models making — and replaces a loud recoverable failure with a silent wrong
+write. The token cost was also not what phase 0 measured: the format is +4.2%,
+but the behaviour it induces cost 2.2× input and 2.5× output, because anchored
+edits take more calls and more steps. A format's cost is what it makes the model
+do, not what its rows weigh.
+
+`anchored_edits` ships off. The trial is complete as designed and the answer is
+no.
+
+One arm is left un-run and it is the interesting one. M9 dropped the indent
+column for failing a token argument; phase 1 shows the column is not a token
+optimization but the *replacement* for the safety net anchoring removes. Anchors
+plus the indent column is the arm this trial should have contained. It is not
+scheduled: it would have to beat 72/72, on top of already-doubled traffic, and
+nothing measured so far suggests it can.

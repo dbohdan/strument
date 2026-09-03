@@ -39,11 +39,11 @@ CONFIG = """\
 router = provider(adapter = "openrouter", api_key = env("OPENROUTER_API_KEY"))
 models = {{"m": model(router, "{slug}", context = 200000)}}
 default = "m"
-"""
+{extra}"""
 
 
-def one_run(binary, fixtures, out_root, model, fixture, rep):
-    name = f"{model.replace('/', '_')}--{fixture}--{rep}"
+def one_run(binary, fixtures, out_root, model, fixture, rep, arm="A"):
+    name = f"{arm}--{model.replace('/', '_')}--{fixture}--{rep}"
     run_dir = os.path.join(out_root, name)
     if os.path.exists(os.path.join(run_dir, "result.json")):
         return json.load(open(os.path.join(run_dir, "result.json")))  # resume
@@ -56,7 +56,8 @@ def one_run(binary, fixtures, out_root, model, fixture, rep):
     before = {f: open(os.path.join(proj, f)).read() for f in os.listdir(proj)}
 
     with open(os.path.join(run_dir, "cfg", "strument", "config.star"), "w") as f:
-        f.write(CONFIG.format(slug=model))
+        f.write(CONFIG.format(slug=model,
+                extra="anchored_edits = True\n" if arm == "D" else ""))
 
     jsonl = os.path.join(run_dir, "log.jsonl")
     env = dict(os.environ)
@@ -73,7 +74,7 @@ def one_run(binary, fixtures, out_root, model, fixture, rep):
         cwd=proj, env=env, capture_output=True, timeout=300)
     elapsed = time.time() - t0
 
-    rec = {"model": model, "fixture": fixture, "rep": rep,
+    rec = {"arm": arm, "model": model, "fixture": fixture, "rep": rep,
            "exit": p.returncode, "elapsed": round(elapsed, 1),
            "edits_exact": 0, "edits_fuzzy": 0, "steps": 0,
            "sent": 0, "received": 0, "cost": 0.0, "outcome": "",
@@ -118,6 +119,7 @@ def main():
     ap.add_argument("--seed", type=int, default=20260903)
     ap.add_argument("--limit", type=int, default=0, help="stop after N runs")
     ap.add_argument("--jobs", type=int, default=4, help="concurrent runs")
+    ap.add_argument("--arms", default="A", help="comma-separated: A (today), D (anchored)")
     args = ap.parse_args()
 
     if not os.environ.get("OPENROUTER_API_KEY"):
@@ -125,7 +127,9 @@ def main():
 
     fixtures = sorted(os.listdir(args.fixtures))
     models = args.models.split(",")
-    jobs = [(m, f, r) for m in models for f in fixtures for r in range(args.reps)]
+    arms = args.arms.split(",")
+    jobs = [(a, m, f, r) for a in arms for m in models
+            for f in fixtures for r in range(args.reps)]
     # Shuffled: an unrandomized order confounds the run with the wall-clock
     # window it ran in, and providers drift across such a window.
     random.Random(args.seed).shuffle(jobs)
@@ -140,15 +144,15 @@ def main():
     results, spend, lock = [], 0.0, threading.Lock()
 
     def work(job):
-        m, f, r = job
+        a, m, f, r = job
         try:
-            return one_run(args.binary, args.fixtures, args.out, m, f, r)
+            return one_run(args.binary, args.fixtures, args.out, m, f, r, a)
         except subprocess.TimeoutExpired:
-            return {"model": m, "fixture": f, "rep": r, "exit": "timeout",
+            return {"arm": a, "model": m, "fixture": f, "rep": r, "exit": "timeout",
                     "edits_exact": 0, "edits_fuzzy": 0, "cost": 0.0,
                     "edit_calls": 0, "edit_failures": 0, "changed": []}
         except Exception as e:  # a crashed run must not take the sweep with it
-            return {"model": m, "fixture": f, "rep": r, "exit": f"error: {e}",
+            return {"arm": a, "model": m, "fixture": f, "rep": r, "exit": f"error: {e}",
                     "edits_exact": 0, "edits_fuzzy": 0, "cost": 0.0,
                     "edit_calls": 0, "edit_failures": 0, "changed": []}
 
@@ -159,7 +163,7 @@ def main():
             with lock:
                 results.append(rec)
                 spend += rec.get("cost") or 0.0
-                print(f"[{i}/{len(jobs)}] {rec['model']:32s} {rec['fixture']:9s} "
+                print(f"[{i}/{len(jobs)}] {rec.get('arm','A')} {rec['model']:32s} {rec['fixture']:9s} "
                       f"r{rec['rep']} exact={rec.get('edits_exact')} "
                       f"fuzzy={rec.get('edits_fuzzy')} calls={rec.get('edit_calls')} "
                       f"fail={rec.get('edit_failures')} ${rec.get('cost') or 0:.5f}  "
