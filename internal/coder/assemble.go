@@ -279,6 +279,14 @@ func (c *Coder) filesNoFullFilesText() string {
 		}
 		return prompts.FilesNoFullFilesViaCode
 	}
+	// The withheld case, which this function used to miss: the note offers a
+	// run_code call as an alternative to a run of lookups, and with the tool
+	// out of the schema that is prose promising a tool the model does not
+	// have. The {code_tools} bullet was already gated on this flag; this
+	// sentence was not, so the rule held in one place and not the other.
+	if !c.OfferCode {
+		return c.Prompts.FilesNoFullFilesNoCode
+	}
 	return c.Prompts.FilesNoFullFiles
 }
 

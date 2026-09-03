@@ -17,10 +17,13 @@ type Example struct {
 // Set is one edit format's prompt set: the CoderPrompts surface that the
 // message assembler consumes.
 type Set struct {
-	MainSystem                       string
-	SystemReminder                   string
-	ExampleMessages                  []Example
-	FilesNoFullFiles                 string
+	MainSystem       string
+	SystemReminder   string
+	ExampleMessages  []Example
+	FilesNoFullFiles string
+	// FilesNoFullFilesNoCode is the same note with the run_code clause
+	// removed, for a session whose schema withholds the tool.
+	FilesNoFullFilesNoCode           string
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
 	ReadOnlyFilesPrefix              string
@@ -264,12 +267,8 @@ var Tool = Set{
 	// request, and a model handed both read the flat denial as evidence that the
 	// reference block was not to be trusted. One session spent twelve steps
 	// hunting the project for the "real" file it thought the denial implied.
-	FilesNoFullFiles: "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
-		"what you need — or one run_code call that calls them, when you already " +
-		"know the several things you are looking for. You can edit any file in " +
-		"the project. If the user asks how something here works, read the code " +
-		"that implements it: what you remember about a project is not evidence " +
-		"about this one.",
+	FilesNoFullFiles:       toolNoPinsHead + runCodeClause + toolNoPinsTail,
+	FilesNoFullFilesNoCode: toolNoPinsHead + toolNoPinsTail,
 	// The empty-string sentinel disables the repo-map branch in assembly, like
 	// Ask. Its text was written for a harness where the model could not look:
 	// it told the model to name the files it needed and stop so the user could
@@ -348,13 +347,41 @@ var Ask = Set{
 	// "No files are pinned to this session" shipped for a few hours this
 	// morning and two reviewers independently identified it as
 	// 2026-08-readonly-honest.md's twelve-step file hunt, reintroduced.
-	FilesNoFullFiles: "Use read, grep, glob, and ls to look at the project, and answer from what " +
-		"you find there rather than from memory — or one run_code call that calls " +
-		"them, when you already know the several things you are looking for.",
+	FilesNoFullFiles:                 askNoPinsHead + runCodeClause + askNoPinsTail,
+	FilesNoFullFilesNoCode:           askNoPinsHead + askNoPinsTail,
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 }
+
+// runCodeClause is the half-sentence that offers a program as an alternative
+// to a run of direct lookups. It is spliced into the nothing-pinned notes
+// rather than written twice, so the offered text stays byte-identical to what
+// 2026-09-code-mode2.md measured and the withheld text is provably the same
+// sentence without it.
+//
+// Two hand-written variants would be two places to drift, which is the failure
+// this repository has recorded three times for absolute paths (see
+// internal/coder/apply.go) and once for the loop detector's strip.
+const runCodeClause = " — or one run_code call that calls them, when you " +
+	"already know the several things you are looking for"
+
+// The tool set's nothing-pinned note, either side of the clause.
+const (
+	toolNoPinsHead = "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
+		"what you need"
+	toolNoPinsTail = ". You can edit any file in " +
+		"the project. If the user asks how something here works, read the code " +
+		"that implements it: what you remember about a project is not evidence " +
+		"about this one."
+)
+
+// The ask set's, likewise.
+const (
+	askNoPinsHead = "Use read, grep, glob, and ls to look at the project, and answer from what " +
+		"you find there rather than from memory"
+	askNoPinsTail = "."
+)
 
 // CommitSystem is the commit-message system prompt, with the
 // {language_instruction} format slot intact.
