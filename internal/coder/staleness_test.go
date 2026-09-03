@@ -189,3 +189,60 @@ func TestUndoDropsTheStamps(t *testing.T) {
 		t.Error("stamps survived forget()")
 	}
 }
+
+// TestFuzzyEditIsCountedAndAnnounced is the positive control for M9. A count
+// that reads zero in a trial means nothing unless the counter can read one, so
+// this drives the whole applied-edit path with a search whose indentation does
+// not occur in the file: only the line matcher can place it.
+func TestFuzzyEditIsCountedAndAnnounced(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	// Tab-indented, as Go is.
+	if err := os.WriteFile(path, []byte("func main() {\n\tprintln(\"hi\")\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := toolCoder(t, dir)
+	c.AddFile("a.txt")
+
+	results := map[string]string{}
+	matchFailure := false
+	// Four spaces where the file has a tab: nowhere verbatim in the file.
+	edited := c.applyToolEdits([]plannedEdit{
+		editCall("call_1", "    println(\"hi\")\n", "    println(\"bye\")\n"),
+	}, results, &matchFailure)
+
+	if len(edited) != 1 {
+		t.Fatalf("edited = %v, want the line matcher to place it: %q", edited, results["call_1"])
+	}
+	if c.editsFuzzy != 1 || c.editsExact != 0 {
+		t.Errorf("exact=%d fuzzy=%d, want exact=0 fuzzy=1 — the counter cannot see the "+
+			"tier it exists to count", c.editsExact, c.editsFuzzy)
+	}
+	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "\tprintln(\"bye\")") {
+		t.Errorf("file = %q, want the edit applied with the file's own indentation", got)
+	}
+}
+
+// And the other side of the control: an exact match must not be counted as a
+// guess, or the metric reads high for the wrong reason.
+func TestExactEditIsNotCountedAsFuzzy(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(path, []byte("func main() {\n\tprintln(\"hi\")\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := toolCoder(t, dir)
+	c.AddFile("a.txt")
+
+	results := map[string]string{}
+	matchFailure := false
+	c.applyToolEdits([]plannedEdit{
+		editCall("call_1", "\tprintln(\"hi\")\n", "\tprintln(\"bye\")\n"),
+	}, results, &matchFailure)
+
+	if c.editsExact != 1 || c.editsFuzzy != 0 {
+		t.Errorf("exact=%d fuzzy=%d, want exact=1 fuzzy=0", c.editsExact, c.editsFuzzy)
+	}
+}

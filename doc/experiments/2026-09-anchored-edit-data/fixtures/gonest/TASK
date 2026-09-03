@@ -1,0 +1,1 @@
+In limits.go, Walk breaks out of the loop when the deadline passes, but the cleanup loop above that break sets visited[q] = false for unvisited paths, which is wrong: those paths were never marked, so the assignment is a no-op that costs a full pass. Delete that inner cleanup loop, keeping the break. Change nothing else.

@@ -318,3 +318,29 @@ panel. So:
 Arms, sampling and fixtures are otherwise unchanged, so the $2.54 estimate
 stands.
 
+
+### 2026-09-03 — M9 measured; arm C is dropped
+
+[`2026-09-anchored-edit-m9.md`](2026-09-anchored-edit-m9.md). 72 runs, arm A
+only, $0.1325.
+
+The line matcher placed 8 of 72 applied edits — 11.1% — and all 8 came from
+`openai/gpt-5.6-luna`, on the two tab-indented Go fixtures, never on the
+space-indented Python one. The other five models were 0 of 12 each. The
+mechanism is a uniform one-level indent shift: luna quotes the block one tab
+deeper than the file has it.
+
+All 72 tasks completed correctly, including all 8 fuzzy placements, and
+first-try edit success was 100% across the panel — *because* the fuzzy tier
+exists. Without it luna fails 8 edits in 12. So the whitespace fallbacks in
+`internal/editblock/replace.go` are load bearing and stay.
+
+That is also the case against arm C. The indent column would remove a failure
+class that currently costs nothing, at +17.7% input on every read forever.
+**Arm C is dropped. The ladder is A → B → D.**
+
+Phase 1 is therefore 3 arms rather than 4: 3 × 6 models × 4 fixtures × 3 reps =
+216 runs. On the per-run costs actually observed here rather than the estimates
+in the body — these fixtures ran an order of magnitude cheaper than the $0.0068
+projected, because they are single-file tasks — the sampling estimate should be
+re-derived before arm D is built rather than carried over.

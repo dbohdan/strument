@@ -1,0 +1,1 @@
+In route.go, Classify treats .yaml and .yml files as Unknown. Add them to the Data case of the switch, alongside .json. Change nothing else.
