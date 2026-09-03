@@ -14,6 +14,7 @@ import (
 	"maps"
 	"net/http"
 	"strings"
+	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/httpx"
@@ -38,6 +39,10 @@ const (
 type Client struct {
 	Provider  config.Provider
 	Transport http.RoundTripper
+
+	// StreamIdleTimeout bounds the gap between bytes on a started stream.
+	// Zero uses defaultStreamIdleTimeout. Tests set it small.
+	StreamIdleTimeout time.Duration
 }
 
 // New builds a client for a provider endpoint. A resolved provider proxy
@@ -206,8 +211,23 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 			return
 		}
 
-		for ev, err := range ParseSSE(resp.Body) {
+		// A started stream that goes silent used to hang here forever: there is
+		// no client timeout, no context deadline on a send, and a bare scan over
+		// the body. See idle.go.
+		idle := c.idleTimeout()
+		body := newIdleReader(resp.Body, idle)
+		defer body.Close()
+
+		for ev, err := range ParseSSE(body) {
 			if err != nil {
+				if body.Stalled() {
+					yield(llm.StreamEvent{}, &llm.StreamError{
+						Class: llm.ErrNetwork,
+						Message: fmt.Sprintf("the provider stopped sending for %s "+
+							"mid-response", idle),
+					})
+					return
+				}
 				if ctx.Err() != nil {
 					yield(llm.StreamEvent{}, ctx.Err())
 					return
@@ -219,7 +239,25 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 				return
 			}
 		}
+		// A closed body ends the scan without an error, so the stall has to be
+		// reported here as well as inside the loop: a stream cut off before
+		// [DONE] is a failure, not a short answer.
+		if body.Stalled() {
+			yield(llm.StreamEvent{}, &llm.StreamError{
+				Class:   llm.ErrNetwork,
+				Message: fmt.Sprintf("the provider stopped sending for %s mid-response", idle),
+			})
+		}
 	}
+}
+
+// idleTimeout is how long a started stream may go silent before it is failed.
+// Zero means the default; a provider can raise it for a slow endpoint.
+func (c *Client) idleTimeout() time.Duration {
+	if c.StreamIdleTimeout > 0 {
+		return c.StreamIdleTimeout
+	}
+	return defaultStreamIdleTimeout
 }
 
 // classifyHTTPError maps a non-200 response onto the error classes.
