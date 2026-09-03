@@ -511,23 +511,31 @@ func (r *runeBuffer) redraw(idxLine, tWidth int) []byte {
 		} else {
 			// Cursor after the last row: column is ppos on row 0, else where
 			// the last row's content ended. Explicit, since autowrap is off.
-			fmt.Fprintf(buf, "\033[%dG", r.lastRowColumn(tWidth))
+			fmt.Fprintf(buf, "\033[%dG", r.lastRowColumn())
 		}
 	}
 	buf.WriteString("\x1b[?7h\x1b[?25h") // restore autowrap, show cursor
 	return buf.Bytes()
 }
 
-// lastRowColumn returns the 1-based column the cursor occupies after the final
-// row of the current render — where redraw leaves the cursor when the buffer
-// index sits at the end of the buffer.
-func (r *runeBuffer) lastRowColumn(tWidth int) int {
-	sp := r.getSplitByLine(r.buf, 1)
+// columnAfter returns the 0-based column the cursor sits in once rs has been
+// drawn after the prompt. It reads the last row getSplitByLine produces, so a
+// prefix that ends exactly at the right edge answers 0 — the trailing empty row
+// — which is where the render actually leaves the cursor.
+func (r *runeBuffer) columnAfter(rs []rune) int {
+	sp := r.getSplitByLine(rs, 1)
 	col := runes.WidthAll(sp[len(sp)-1])
 	if len(sp) == 1 {
 		col += r.ppos
 	}
-	return col + 1
+	return col
+}
+
+// lastRowColumn returns the 1-based column the cursor occupies after the final
+// row of the current render — where redraw leaves the cursor when the buffer
+// index sits at the end of the buffer.
+func (r *runeBuffer) lastRowColumn() int {
+	return r.columnAfter(r.buf) + 1
 }
 
 func (r *runeBuffer) SetOffset(position cursorPosition) {
@@ -554,29 +562,42 @@ func (r *runeBuffer) append(s []rune) {
 	buf := bytes.NewBuffer(nil)
 	slen := len(s)
 	cfg := r.getConfig()
+	var content []rune
 	if cfg.EnableMask {
 		if slen > 1 && cfg.MaskRune != 0 {
 			// write a mask character for all runes except the last rune
-			buf.WriteString(strings.Repeat(string(cfg.MaskRune), slen-1))
+			content = append(content, []rune(strings.Repeat(string(cfg.MaskRune), slen-1))...)
 		}
 		// for the last rune, write \n or mask it otherwise.
 		if s[slen-1] == '\n' {
-			buf.WriteRune('\n')
+			content = append(content, '\n')
 		} else if cfg.MaskRune != 0 {
-			buf.WriteRune(cfg.MaskRune)
+			content = append(content, cfg.MaskRune)
 		}
 	} else {
 		for _, e := range cfg.Painter(s, slen) {
 			if e == '\t' {
-				buf.WriteString(strings.Repeat(" ", runes.TabWidth))
+				content = append(content, []rune(strings.Repeat(" ", runes.TabWidth))...)
 			} else {
-				buf.WriteRune(e)
+				content = append(content, e)
 			}
 		}
 	}
-	// The prompt_toolkit-style row-placed write means output never relies on
-	// autowrap, so the old " \b" line-edge fix (which existed only to clean up
-	// the terminal's phantom wrapped cell) has no work left to do.
+
+	// Place the rows here too, rather than letting the terminal autowrap. This
+	// is the fast path for typing at the end of the line, so it is where the
+	// right edge is normally crossed, and the row it leaves the cursor on has to
+	// be the row the cursor model believes in — the next refresh moves up by
+	// idxLine to find the top of the block. Autowrap parks the cursor on a
+	// phantom cell in the last column instead of on the next row, which is what
+	// the old " \b" here used to force it off; writeRows does the same job
+	// without a stray space, and by the same rule the redraw uses.
+	tWidth, _ := r.w.GetWidthHeight()
+	if tWidth <= 0 {
+		buf.WriteString(string(content))
+	} else {
+		writeRows(buf, tokenizeTerm(content), r.columnAfter(r.buf[:len(r.buf)-slen]), tWidth)
+	}
 	r.w.Write(buf.Bytes())
 }
 
@@ -643,17 +664,66 @@ func tokenizeTerm(rs []rune) []termToken {
 	return toks
 }
 
+// writeRows writes toks as explicit rows, starting from column cur and each row
+// ended by its own \e[K trim, breaking wherever getSplitByLine would break so
+// that the render and the cursor model agree on how many rows are on screen.
+// The caller either has autowrap disabled or, as here, never writes a rune into
+// the last column without following it with \r — so the terminal's own wrapping
+// is never what places a row.
+//
+// The trailing break is the subtle half. SplitByLine appends a trailing empty
+// row when the next cell would not fit (its nextWidth argument, which is 1 for
+// every caller that asks about the end of the buffer), because that is where the
+// next character will land. Without the matching \r\n the model counts one row
+// more than the render drew, and both symptoms follow from that single cell:
+// lastRowColumn puts the cursor in column 1 of a row that was never opened, so
+// it lands on the prompt, and the next redraw moves up one row too many and
+// repaints over the line above.
+func writeRows(buf *bytes.Buffer, toks []termToken, cur, tWidth int) {
+	var pending []termToken // escapes awaiting the next visible rune
+	flush := func() {
+		for _, t := range pending {
+			buf.WriteString(t.esc)
+		}
+		pending = pending[:0]
+	}
+	br := func() {
+		buf.WriteString("\x1b[0K\r\n")
+		cur = 0
+	}
+	for _, t := range toks {
+		if t.r == 0 {
+			pending = append(pending, t)
+			continue
+		}
+		if t.r == '\n' {
+			flush()
+			br()
+			continue
+		}
+		if cur+t.width > tWidth {
+			flush()
+			br()
+		}
+		flush()
+		buf.WriteRune(t.r)
+		cur += t.width
+	}
+	flush()
+	if cur+1 > tWidth {
+		br()
+	}
+}
+
 // writeContent writes the prompt and the painted, tab-expanded (optionally
 // masked) buffer as explicit rows, each ended by its own \e[K trim — the
 // borrow from prompt_toolkit's renderer. It rasterizes the line itself and
 // never trusts terminal autowrap: a character landing in the last column can
 // no longer leave the cursor on a phantom wrapped cell, which is what made an
-// occasional visible character get erased between frames. The row breaks are
-// the ones getSplitByLine computes for cursor math, so the render and the
-// cursor model can no longer disagree by a cell. Widths match SplitByLine:
-// the first row starts at r.ppos columns, \n always breaks, and a token breaks
-// when it would overflow. Only the \e[K after the last row is a *display*
-// trim; the per-row ones replace the old flat "\x1b[0K" (see #38). The caller
+// occasional visible character get erased between frames. writeRows owns the
+// row rule and starts the prompt at r.ppos columns. Only the \e[K after the
+// last row is a *display* trim; the per-row ones replace the old flat
+// "\x1b[0K" (see #38). The caller
 // must have autowrap disabled for the duration of the write — see redraw —
 // and positions the cursor explicitly afterwards. Shared by output (for
 // Print) and redraw.
@@ -693,35 +763,7 @@ func (r *runeBuffer) writeContent(buf *bytes.Buffer) {
 	toks = append(toks, termToken{esc: "\x1b[0K"})
 	toks = append(toks, tokenizeTerm(content)...)
 
-	cur := r.ppos
-	var pending []termToken // escapes awaiting the next visible rune
-	flush := func() {
-		for _, t := range pending {
-			buf.WriteString(t.esc)
-		}
-		pending = pending[:0]
-	}
-	for _, t := range toks {
-		if t.r == 0 {
-			pending = append(pending, t)
-			continue
-		}
-		if t.r == '\n' {
-			flush()
-			buf.WriteString("\x1b[0K\r\n")
-			cur = 0
-			continue
-		}
-		if cur+t.width > tWidth {
-			flush()
-			buf.WriteString("\x1b[0K\r\n")
-			cur = 0
-		}
-		flush()
-		buf.WriteRune(t.r)
-		cur += t.width
-	}
-	flush()
+	writeRows(buf, toks, r.ppos, tWidth)
 	buf.WriteString("\x1b[0K")
 }
 
