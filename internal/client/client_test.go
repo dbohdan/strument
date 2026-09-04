@@ -522,3 +522,41 @@ func TestBuildBodyNilToolParameters(t *testing.T) {
 		t.Errorf("parameters.type = %v, want \"object\"", params["type"])
 	}
 }
+
+// A provider that asks callers to identify themselves (opencode Go does, and
+// says a broad user agent is grounds for flagging) must not see Go's default
+// "Go-http-client/…". The version is included so a bad release can be told
+// apart from a good one in a provider's logs.
+func TestRequestsCarryAUserAgent(t *testing.T) {
+	t.Cleanup(func() { SetVersion("") })
+
+	SetVersion("1.2.3")
+	if got, want := sentUserAgent(t), "Strument/1.2.3 (+https://dbohdan.com/strument)"; got != want {
+		t.Errorf("User-Agent = %q, want %q", got, want)
+	}
+
+	// An unversioned build is still named, never anonymous.
+	SetVersion("")
+	if got := sentUserAgent(t); got != "Strument" {
+		t.Errorf("User-Agent = %q, want %q", got, "Strument")
+	}
+}
+
+// sentUserAgent drives one request and reports the User-Agent it carried.
+func sentUserAgent(t *testing.T) string {
+	t.Helper()
+	var got string
+	c := New(config.Provider{Adapter: config.AdapterOpenAI, APIKey: "k"})
+	c.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		got = r.Header.Get("User-Agent")
+		return respond(200, "text/event-stream", "data: [DONE]\n"), nil
+	})
+	for _, err := range c.Send(context.Background(), llm.Request{
+		Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return got
+}

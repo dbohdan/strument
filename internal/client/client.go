@@ -34,6 +34,23 @@ const (
 	appURL  = "https://dbohdan.com/strument"
 )
 
+// userAgent identifies Strument on every request. Without it Go sends
+// "Go-http-client/2.0", which is exactly the broad user agent some providers
+// ask callers not to send — opencode Go says so in as many words, and treats
+// it as grounds for flagging an account. Set once from main before any request
+// goes out; the zero value is still a real name, so a caller that forgets is
+// merely unversioned rather than anonymous.
+var userAgent = appName
+
+// SetVersion fixes the User-Agent for the process. Call it once at startup.
+func SetVersion(v string) {
+	if v == "" {
+		userAgent = appName
+		return
+	}
+	userAgent = appName + "/" + v + " (+" + appURL + ")"
+}
+
 // Client speaks to one endpoint. Transport may be overridden for tests —
 // the automated suite never opens a socket.
 type Client struct {
@@ -183,6 +200,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 			return
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("User-Agent", userAgent)
 		if c.Provider.APIKey != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+c.Provider.APIKey)
 		}

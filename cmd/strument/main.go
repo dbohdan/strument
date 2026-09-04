@@ -1201,6 +1201,10 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 }
 
 func main() {
+	// Before any request can go out: providers that ask callers to identify
+	// themselves get a name and a version rather than Go's default UA.
+	client.SetVersion(version)
+
 	var c cli
 	ctx := kong.Parse(&c,
 		kong.Name("strument"),
