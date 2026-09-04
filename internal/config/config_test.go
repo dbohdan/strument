@@ -793,3 +793,30 @@ func TestCheckAutoValidatesAfterTheProjectMerge(t *testing.T) {
 		t.Errorf("a project-supplied check should satisfy the user's check_auto: %v", err)
 	}
 }
+
+// The opencode adapter has to survive config load like any other, and keep
+// value semantics so two identical providers still group onto one client.
+func TestOpenCodeAdapterLoads(t *testing.T) {
+	src := `
+oc = provider("opencode", api_key = "k")
+models = {"mimo": model(oc, "mimo-v2.5", context = 1050000)}
+default = "mimo"
+`
+	cfg, err := Load(harness(t, src, "", nil))
+	if err != nil {
+		t.Fatalf("opencode provider should load: %v", err)
+	}
+	m := cfg.Models["mimo"]
+	if got := m.Provider.Adapter; got != AdapterOpenCode {
+		t.Errorf("adapter = %q, want %q", got, AdapterOpenCode)
+	}
+	// No base_url: the client supplies the Go subscription's endpoint.
+	if got := m.Provider.BaseURL; got != "" {
+		t.Errorf("base_url = %q, want it left to the adapter default", got)
+	}
+	// opencode's own config writes "opencode-go/mimo-v2.5"; the endpoint takes
+	// the bare id, so the slug must pass through untouched.
+	if got := m.Slug; got != "mimo-v2.5" {
+		t.Errorf("slug = %q, want it sent verbatim", got)
+	}
+}

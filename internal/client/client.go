@@ -7,6 +7,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,7 @@ import (
 	"maps"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"dbohdan.com/strument/internal/config"
@@ -25,6 +28,12 @@ import (
 const (
 	defaultOpenAIBase     = "https://api.openai.com/v1"
 	defaultOpenRouterBase = "https://openrouter.ai/api/v1"
+	// opencode Go splits its catalogue across three protocols: /messages for
+	// the MiniMax and Qwen3.6-3.8 models, /responses for Grok 4.6, GPT-5.6
+	// Luna and Muse Spark, and /chat/completions for the rest. Strument speaks
+	// only the last, so this adapter reaches the GLM, Kimi, DeepSeek, MiMo,
+	// LongCat, Hy and Omen models and not the other twelve.
+	defaultOpenCodeBase = "https://opencode.ai/zen/go/v1"
 )
 
 // OpenRouter app-attribution headers, so requests show as this app in the
@@ -77,11 +86,35 @@ func (c *Client) baseURL() string {
 	if c.Provider.BaseURL != "" {
 		return strings.TrimRight(c.Provider.BaseURL, "/")
 	}
-	if c.Provider.Adapter == config.AdapterOpenRouter {
+	switch c.Provider.Adapter {
+	case config.AdapterOpenRouter:
 		return defaultOpenRouterBase
+	case config.AdapterOpenCode:
+		return defaultOpenCodeBase
+	default:
+		return defaultOpenAIBase
 	}
-	return defaultOpenAIBase
 }
+
+// sessionID is one opaque id for the life of the process, sent to opencode Go
+// so it can group a session's requests and keep the prompt cache warm across
+// them. That is worth real money there rather than being a courtesy: their own
+// usage estimates are dominated by cached tokens (MiMo-V2.5: 830 input against
+// 71,500 cached per request), so a session that never gets a cache hit spends
+// its allowance many times faster.
+//
+// Random per process, and it identifies nothing about the machine or the user:
+// grouping is the whole of what it is for. It is computed once and only when an
+// opencode provider actually sends, so no other adapter's traffic carries one.
+var sessionID = sync.OnceValue(func() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand does not fail in practice; if it ever did, a
+		// less-unique id still groups this process's requests correctly.
+		return fmt.Sprintf("%016x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
+})
 
 // wireMessage is one message on the wire.
 type wireMessage struct {
@@ -203,6 +236,13 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		httpReq.Header.Set("User-Agent", userAgent)
 		if c.Provider.APIKey != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+c.Provider.APIKey)
+		}
+		if c.Provider.Adapter == config.AdapterOpenCode {
+			// opencode Go asks callers to send this so it can optimize prompt
+			// caching, and treats its absence as a reason to flag an account.
+			// Their docs write "x-opencode-session"; Go canonicalizes it and
+			// header names are case-insensitive (RFC 9110), so it matches.
+			httpReq.Header.Set("X-Opencode-Session", sessionID())
 		}
 		if c.Provider.Adapter == config.AdapterOpenRouter {
 			// OpenRouter's app-attribution headers. Its docs write

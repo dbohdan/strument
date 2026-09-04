@@ -560,3 +560,76 @@ func sentUserAgent(t *testing.T) string {
 	}
 	return got
 }
+
+// The opencode adapter's two obligations, and the boundary on both: the
+// session header goes to opencode and nowhere else, and its default endpoint
+// is the Go subscription's rather than OpenAI's.
+func TestOpenCodeSessionHeader(t *testing.T) {
+	for _, tc := range []struct {
+		adapter  string
+		wantSent bool
+	}{
+		{config.AdapterOpenCode, true},
+		{config.AdapterOpenAI, false},
+		{config.AdapterOpenRouter, false},
+	} {
+		req := sendOnce(t, config.Provider{Adapter: tc.adapter, APIKey: "k"})
+		got := req.Header.Get("X-Opencode-Session")
+		if tc.wantSent {
+			if len(got) != 32 {
+				t.Errorf("%s: x-opencode-session = %q, want 32 hex characters", tc.adapter, got)
+			}
+		} else if got != "" {
+			// A session id is not the sort of thing to send to an endpoint
+			// that never asked for one.
+			t.Errorf("%s: sent x-opencode-session = %q to a provider that did not ask", tc.adapter, got)
+		}
+	}
+}
+
+// One process, one session: the point of the header is that a run's requests
+// group together, so two sends must carry the same id.
+func TestOpenCodeSessionIsStableWithinTheProcess(t *testing.T) {
+	p := config.Provider{Adapter: config.AdapterOpenCode, APIKey: "k"}
+	first := sendOnce(t, p).Header.Get("X-Opencode-Session")
+	second := sendOnce(t, p).Header.Get("X-Opencode-Session")
+	if first != second {
+		t.Errorf("session id changed between requests: %q then %q — the cache would miss on every send", first, second)
+	}
+}
+
+func TestOpenCodeDefaultEndpoint(t *testing.T) {
+	for _, tc := range []struct{ adapter, want string }{
+		{config.AdapterOpenCode, "https://opencode.ai/zen/go/v1/chat/completions"},
+		{config.AdapterOpenRouter, "https://openrouter.ai/api/v1/chat/completions"},
+		{config.AdapterOpenAI, "https://api.openai.com/v1/chat/completions"},
+	} {
+		if got := sendOnce(t, config.Provider{Adapter: tc.adapter, APIKey: "k"}).URL.String(); got != tc.want {
+			t.Errorf("%s: posted to %s, want %s", tc.adapter, got, tc.want)
+		}
+	}
+	// An explicit base_url still wins, so a proxy in front of opencode works.
+	p := config.Provider{Adapter: config.AdapterOpenCode, BaseURL: "https://proxy.example/v1", APIKey: "k"}
+	if got, want := sendOnce(t, p).URL.String(), "https://proxy.example/v1/chat/completions"; got != want {
+		t.Errorf("base_url override: posted to %s, want %s", got, want)
+	}
+}
+
+// sendOnce drives one request through a stubbed transport and returns it.
+func sendOnce(t *testing.T, p config.Provider) *http.Request {
+	t.Helper()
+	var got *http.Request
+	c := New(p)
+	c.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		got = r
+		return respond(200, "text/event-stream", "data: [DONE]\n"), nil
+	})
+	for _, err := range c.Send(context.Background(), llm.Request{
+		Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")},
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return got
+}

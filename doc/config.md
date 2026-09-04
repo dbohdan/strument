@@ -954,11 +954,13 @@ positional second argument that changes meaning with the first is a trap.
 Describes one API endpoint and dialect. Returns a provider value to pass to
 `model()`.
 
-- **`adapter`** — `"openai"` or `"openrouter"`. Selects the request dialect
-  (e.g. how reasoning effort is serialized) and the default base URL.
-  `"anthropic"` is reserved and not yet supported.
+- **`adapter`** — `"openai"`, `"openrouter"` or `"opencode"`. Selects the
+  request dialect (e.g. how reasoning effort is serialized), the default base
+  URL, and the headers the endpoint asks for. All three speak OpenAI's
+  chat-completions format. `"anthropic"` is reserved and not yet supported.
 - **`base_url`** — endpoint override. Unset uses the adapter default
-  (`https://api.openai.com/v1` or `https://openrouter.ai/api/v1`).
+  (`https://api.openai.com/v1`, `https://openrouter.ai/api/v1` or
+  `https://opencode.ai/zen/go/v1`).
 - **`api_key`** — the bearer token. Keep it out of the file with `env()`
   (below): `api_key=env("OPENROUTER_API_KEY")`.
 - **`name`** — a label for the provider. It appears in the provider-qualified
@@ -971,6 +973,39 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
 - **`extra_params`** — a dict of extra request fields, merged into the JSON body
   beneath the keys Strument owns (`model`, `messages`, `stream`, … — those are
   rejected). Values must be JSON-serializable.
+
+#### opencode Go
+
+[opencode Go](https://opencode.ai/docs/go/) is a subscription that serves open
+coding models. The adapter needs nothing but a key:
+
+```python
+oc = provider("opencode", api_key = env("OPENCODE_API_KEY"))
+
+models = {
+    "mimo": model(oc, "mimo-v2.5", context = 1050000, cache = True),
+    "glm": model(oc, "glm-5.3-flash", context = 200000, cache = True),
+}
+default = "mimo"
+```
+
+Slugs are the bare model IDs from opencode's endpoint table — `mimo-v2.5`, not
+the `opencode-go/mimo-v2.5` that opencode's own config uses.
+
+**Not every Go model is reachable.** opencode splits its catalogue across three
+protocols, and Strument speaks only chat-completions:
+
+| protocol | models | works |
+| --- | --- | --- |
+| `/chat/completions` | GLM-5.3-Flash, GLM-5.3, GLM-5.2, GLM-5.1, Kimi K3, Kimi K2.7 Code, Kimi K2.6, LongCat-2.0, DeepSeek V4 Pro, DeepSeek V4 Flash, DeepSeek V4 Flash Vision Exp, MiMo-V2.5, MiMo-V2.5-Pro, Hy4 preview, Hy3, Omen Alpha | yes |
+| `/messages` (Anthropic) | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus | no |
+| `/responses` | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor | no |
+
+Requests to this adapter carry an `x-opencode-session` header: one random id per
+Strument process, which opencode uses to group a session and keep its prompt
+cache warm. That is worth money rather than being a courtesy — the subscription
+is metered in dollars, and most of a request's tokens are cached ones. Set
+`cache = True` on the model as well.
 
 ### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 

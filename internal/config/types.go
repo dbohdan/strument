@@ -12,9 +12,15 @@ import (
 )
 
 // Adapters recognized by provider(). "anthropic" is reserved (deferred).
+//
+// All three speak the OpenAI chat-completions wire format; they differ in the
+// default endpoint and in the headers the endpoint asks for. opencode Go also
+// serves models over /messages and /responses, which this adapter does not
+// reach — see doc/config.md.
 const (
 	AdapterOpenAI     = "openai"
 	AdapterOpenRouter = "openrouter"
+	AdapterOpenCode   = "opencode"
 )
 
 // Edit formats recognized by model(). Only one remains, and the parameter is
@@ -49,7 +55,7 @@ var reservedParamKeys = map[string]bool{
 
 // Provider is a pure carrier of endpoint + dialect; no behavior inheritance.
 type Provider struct {
-	Adapter     string // "openai" | "openrouter"
+	Adapter     string // "openai" | "openrouter" | "opencode"
 	BaseURL     string // "" => adapter default
 	APIKey      string
 	Name        string
