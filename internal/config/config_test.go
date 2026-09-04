@@ -538,11 +538,6 @@ p = provider("bedrock", api_key = "k")
 models = {"m": model(p, "s")}
 default = "m"
 `, "unknown adapter"},
-		{"reserved adapter", `
-p = provider("anthropic", api_key = "k")
-models = {"m": model(p, "s")}
-default = "m"
-`, "reserved"},
 		{"missing side alias", `
 p = provider("openai", api_key = "k")
 models = {"m": model(p, "s", side_model = "ghost")}
@@ -791,6 +786,30 @@ func TestCheckAutoValidatesAfterTheProjectMerge(t *testing.T) {
 	}
 	if _, err := Load(opts); err != nil {
 		t.Errorf("a project-supplied check should satisfy the user's check_auto: %v", err)
+	}
+}
+
+// Every adapter name provider() accepts must survive config load. "anthropic"
+// used to be rejected as reserved; the case that asserted so is gone from the
+// error table above, and this replaces it.
+func TestEveryAdapterLoads(t *testing.T) {
+	for _, adapter := range []string{
+		AdapterOpenAI, AdapterOpenRouter, AdapterOpenCode,
+		AdapterAnthropic, AdapterOpenCodeAnthropic,
+	} {
+		src := `
+p = provider("` + adapter + `", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+		cfg, err := Load(harness(t, src, "", nil))
+		if err != nil {
+			t.Errorf("adapter %q should load: %v", adapter, err)
+			continue
+		}
+		if got := cfg.Models["m"].Provider.Adapter; got != adapter {
+			t.Errorf("adapter = %q, want %q", got, adapter)
+		}
 	}
 }
 

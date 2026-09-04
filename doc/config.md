@@ -954,13 +954,21 @@ positional second argument that changes meaning with the first is a trap.
 Describes one API endpoint and dialect. Returns a provider value to pass to
 `model()`.
 
-- **`adapter`** — `"openai"`, `"openrouter"` or `"opencode"`. Selects the
-  request dialect (e.g. how reasoning effort is serialized), the default base
-  URL, and the headers the endpoint asks for. All three speak OpenAI's
-  chat-completions format. `"anthropic"` is reserved and not yet supported.
-- **`base_url`** — endpoint override. Unset uses the adapter default
-  (`https://api.openai.com/v1`, `https://openrouter.ai/api/v1` or
-  `https://opencode.ai/zen/go/v1`).
+- **`adapter`** — the wire dialect plus one destination's defaults:
+
+  | adapter | dialect | default base URL |
+  | --- | --- | --- |
+  | `"openai"` | chat-completions | `https://api.openai.com/v1` |
+  | `"openrouter"` | chat-completions | `https://openrouter.ai/api/v1` |
+  | `"opencode"` | chat-completions | `https://opencode.ai/zen/go/v1` |
+  | `"anthropic"` | Anthropic Messages | `https://api.anthropic.com/v1` |
+  | `"opencode-anthropic"` | Anthropic Messages | `https://opencode.ai/zen/go/v1` |
+
+  Dialect and destination are separate: `provider("anthropic", base_url=…)`
+  reaches any gateway that speaks Messages, including OpenRouter's
+  `https://openrouter.ai/api/v1`. opencode gets a name per dialect because it
+  serves several from one host and one key.
+- **`base_url`** — endpoint override. Unset uses the adapter default above.
 - **`api_key`** — the bearer token. Keep it out of the file with `env()`
   (below): `api_key=env("OPENROUTER_API_KEY")`.
 - **`name`** — a label for the provider. It appears in the provider-qualified
@@ -992,20 +1000,56 @@ default = "mimo"
 Slugs are the bare model IDs from opencode's endpoint table — `mimo-v2.5`, not
 the `opencode-go/mimo-v2.5` that opencode's own config uses.
 
-**Not every Go model is reachable.** opencode splits its catalogue across three
-protocols, and Strument speaks only chat-completions:
+**opencode splits its catalogue across three protocols**, and each needs its
+own provider — one key, bound once, passed to each:
 
-| protocol | models | works |
+```python
+key     = env("OPENCODE_API_KEY")
+oc      = provider("opencode", api_key = key)
+oc_msg  = provider("opencode-anthropic", api_key = key)
+
+models = {
+    "mimo": model(oc,     "mimo-v2.5",     context = 1050000, cache = True),
+    "qwen": model(oc_msg, "qwen3.8-flash", context = 262144,  cache = True),
+}
+```
+
+| protocol | adapter | models |
 | --- | --- | --- |
-| `/chat/completions` | GLM-5.3-Flash, GLM-5.3, GLM-5.2, GLM-5.1, Kimi K3, Kimi K2.7 Code, Kimi K2.6, LongCat-2.0, DeepSeek V4 Pro, DeepSeek V4 Flash, DeepSeek V4 Flash Vision Exp, MiMo-V2.5, MiMo-V2.5-Pro, Hy4 preview, Hy3, Omen Alpha | yes |
-| `/messages` (Anthropic) | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus | no |
-| `/responses` | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor | no |
+| `/chat/completions` | `opencode` | GLM-5.3-Flash, GLM-5.3, GLM-5.2, GLM-5.1, Kimi K3, Kimi K2.7 Code, Kimi K2.6, LongCat-2.0, DeepSeek V4 Pro, DeepSeek V4 Flash, DeepSeek V4 Flash Vision Exp, MiMo-V2.5, MiMo-V2.5-Pro, Hy4 preview, Hy3, Omen Alpha |
+| `/messages` | `opencode-anthropic` | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus |
+| `/responses` | *(none yet)* | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor |
+
+The protocol is not discoverable: `/zen/go/v1/models` lists ids and nothing
+else, and it serves models the documented table omits, so which adapter a slug
+needs comes from opencode's endpoint table rather than from Strument.
 
 Requests to this adapter carry an `x-opencode-session` header: one random id per
 Strument process, which opencode uses to group a session and keep its prompt
 cache warm. That is worth money rather than being a courtesy — the subscription
 is metered in dollars, and most of a request's tokens are cached ones. Set
 `cache = True` on the model as well.
+
+#### The Anthropic dialect
+
+`provider("anthropic", …)` speaks Anthropic's Messages API. It reaches
+Anthropic directly, and any gateway that serves the dialect:
+
+```python
+ant = provider("anthropic", base_url = "https://openrouter.ai/api/v1",
+               api_key = env("OPENROUTER_API_KEY"))
+models = {"haiku": model(ant, "anthropic/claude-haiku-4.5",
+                         context = 200000, max_output = 8192, cache = True)}
+```
+
+Two differences from chat-completions are worth knowing when configuring it:
+
+- **`max_output` matters more.** Anthropic requires `max_tokens` on every
+  request, so a model with no `max_output` gets a built-in default rather than
+  leaving the cap to the provider.
+- **Caching is the same setting** (`cache = True`) but a different mechanism:
+  the breakpoints Strument places become `cache_control` markers on the prompt
+  prefix, which is where this dialect's cache hits come from.
 
 ### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 

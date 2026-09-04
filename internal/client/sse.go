@@ -43,12 +43,13 @@ type sseChunk struct {
 	} `json:"error"`
 }
 
-// ParseSSE converts an OpenAI-dialect SSE stream into StreamEvents, in wire
-// order. This parser is the single source of dialect truth: the coder
-// consumes it live and `strumentrec distill` uses it to turn raw captures
-// into fixture rows.
-func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
-	return func(yield func(llm.StreamEvent, error) bool) {
+// scanSSEData yields the payload of each "data:" line, in wire order, and
+// stops at the "[DONE]" sentinel. Both dialects share it: the framing is
+// server-sent events either way, and only what the payloads mean differs.
+// Anthropic's stream also carries "event:" lines, which are redundant with the
+// "type" field inside each payload and are skipped here.
+func scanSSEData(r io.Reader) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
 		scan := bufio.NewScanner(r)
 		scan.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 		for scan.Scan() {
@@ -58,6 +59,28 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 			}
 			payload := strings.TrimSpace(line[len("data: "):])
 			if payload == "[DONE]" {
+				return
+			}
+			if !yield(payload, nil) {
+				return
+			}
+		}
+		// A read that fails partway is a cut-off stream, not a finished one.
+		if err := scan.Err(); err != nil {
+			yield("", &llm.StreamError{Class: llm.ErrNetwork, Message: err.Error()})
+		}
+	}
+}
+
+// ParseSSE converts an OpenAI-dialect SSE stream into StreamEvents, in wire
+// order. This parser is the single source of dialect truth: the coder
+// consumes it live and `strumentrec distill` uses it to turn raw captures
+// into fixture rows.
+func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		for payload, err := range scanSSEData(r) {
+			if err != nil {
+				yield(llm.StreamEvent{}, err)
 				return
 			}
 			var chunk sseChunk
@@ -119,9 +142,6 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 					return
 				}
 			}
-		}
-		if err := scan.Err(); err != nil {
-			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrNetwork, Message: err.Error()})
 		}
 	}
 }

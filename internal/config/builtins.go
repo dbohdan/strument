@@ -146,11 +146,11 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		return nil, err
 	}
 	switch adapter {
-	case AdapterOpenAI, AdapterOpenRouter, AdapterOpenCode:
-	case "anthropic":
-		return nil, errors.New("provider: adapter \"anthropic\" is reserved and not yet supported")
+	case AdapterOpenAI, AdapterOpenRouter, AdapterOpenCode,
+		AdapterAnthropic, AdapterOpenCodeAnthropic:
 	default:
-		return nil, fmt.Errorf("provider: unknown adapter %q (want \"openai\", \"openrouter\" or \"opencode\")", adapter)
+		return nil, fmt.Errorf("provider: unknown adapter %q (want one of "+
+			"\"openai\", \"openrouter\", \"opencode\", \"anthropic\", \"opencode-anthropic\")", adapter)
 	}
 	params, err := dictToParams("provider", extraParams)
 	if err != nil {

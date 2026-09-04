@@ -11,16 +11,24 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
-// Adapters recognized by provider(). "anthropic" is reserved (deferred).
+// Adapters recognized by provider(). Each names a wire dialect plus the
+// defaults of one destination.
 //
-// All three speak the OpenAI chat-completions wire format; they differ in the
-// default endpoint and in the headers the endpoint asks for. opencode Go also
-// serves models over /messages and /responses, which this adapter does not
-// reach — see doc/config.md.
+// openai, openrouter and opencode speak OpenAI chat-completions; anthropic and
+// opencode-anthropic speak Anthropic Messages. opencode Go also serves models
+// over /responses, which no adapter reaches yet — see doc/config.md.
 const (
 	AdapterOpenAI     = "openai"
 	AdapterOpenRouter = "openrouter"
 	AdapterOpenCode   = "opencode"
+
+	// AdapterAnthropic and AdapterOpenCodeAnthropic speak Anthropic Messages.
+	// Dialect and destination are separate choices — "anthropic" with a
+	// base_url reaches any gateway that speaks it — but opencode serves three
+	// dialects from one host and one key, so it gets a name per dialect rather
+	// than the destination being inferred from a URL.
+	AdapterAnthropic         = "anthropic"
+	AdapterOpenCodeAnthropic = "opencode-anthropic"
 )
 
 // Edit formats recognized by model(). Only one remains, and the parameter is
@@ -55,7 +63,7 @@ var reservedParamKeys = map[string]bool{
 
 // Provider is a pure carrier of endpoint + dialect; no behavior inheritance.
 type Provider struct {
-	Adapter     string // "openai" | "openrouter" | "opencode"
+	Adapter     string // "openai" | "openrouter" | "opencode" | "anthropic" | "opencode-anthropic"
 	BaseURL     string // "" => adapter default
 	APIKey      string
 	Name        string

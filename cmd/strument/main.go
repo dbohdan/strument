@@ -143,7 +143,7 @@ func (c *chatCmd) Run() error {
 		cdr.Recorder = jl
 		cdr.RecordSession(alias)
 	}
-	cdr.Client = client.New(model.Provider)
+	cdr.Client = client.ForProvider(model.Provider)
 	if cfg.MaxSteps > 0 {
 		cdr.MaxSteps = cfg.MaxSteps
 	}
@@ -171,7 +171,7 @@ func (c *chatCmd) Run() error {
 		// from the config it already carries.
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
-	cdr.Summarizer = coder.NewChatSummary(client.New(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
+	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
 	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
@@ -181,7 +181,7 @@ func (c *chatCmd) Run() error {
 	if repo != nil {
 		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
-		repo.Message = coder.CommitMessenger(client.New(side.Provider), side,
+		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
 			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
@@ -333,7 +333,7 @@ func (c *chatCmd) Run() error {
 	if c.Continue && hist != nil {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
-			write := coder.NotesWriter(client.New(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 			notes := write(transcript)
 			cdr.FlushSideUsage()
 			if notes != "" {
@@ -750,7 +750,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ResumeNote:  resumeNote,
 		SaveResume:  saveResumeFunc(cdr, cfg, projectRoot, keepState),
 		ApplyEgress: applyEgressConfig,
-		MakeClient:  func(m *config.Model) llm.ModelClient { return client.New(m.Provider) },
+		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root})
 		},
@@ -767,7 +767,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if side == nil {
 				return errors.New("no side model configured")
 			}
-			write := coder.NotesWriter(client.New(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
 			transcript := history.ReadTranscript(hist.Path())
 			if transcript == "" {
 				return errors.New("transcript is empty")

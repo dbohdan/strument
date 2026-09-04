@@ -488,6 +488,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 		Temperature:     c.Model.Temperature,
 		ReasoningEffort: c.Model.Reasoning,
 		ExtraParams:     c.Model.RequestExtraParams(),
+		MaxTokens:       c.Model.MaxOutput,
 	}
 	// Whatever tools this mode offers, offer them. The condition used to be
 	// editFormat == "tool", which meant ask mode sent none at all — and made

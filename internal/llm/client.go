@@ -15,6 +15,12 @@ type Request struct {
 	ExtraParams     map[string]any // fenced passthrough
 	Tools           []ToolDef      // function tools offered to the model; nil => none
 	ToolChoice      string         // "auto" | "none" | ""; "" => omit
+
+	// MaxTokens caps the response. Zero means "unset": the OpenAI dialect
+	// omits it and lets the provider decide, but Anthropic's Messages API
+	// requires the field, so that client substitutes a default rather than
+	// sending a request the endpoint will reject.
+	MaxTokens int
 }
 
 // ToolDef is a function tool offered to the model. Parameters is a JSON
