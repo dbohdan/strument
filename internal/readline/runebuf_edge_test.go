@@ -264,3 +264,39 @@ func TestTypingKeepsEveryCharacter(t *testing.T) {
 		}
 	}
 }
+
+// TestRedrawLeavesNoLeftovers is what the prompt-row \e[0K used to buy, and the
+// reason dropping it from redraw is safe: the trailing \e[J erases from the
+// cursor to the end of the display, which covers the rest of the last row as
+// well as every row below it. Everything before the cursor was just overwritten
+// by this frame, so no cell of a longer previous render can survive.
+//
+// The shrink is driven the way refresh drives it — idxLine captured before the
+// mutation, the second frame starting where the first one left the cursor — so
+// a frame that trimmed from the wrong place fails here.
+func TestRedrawLeavesNoLeftovers(t *testing.T) {
+	for _, tWidth := range []int{14, 20, 40} {
+		for _, long := range []int{tWidth / 2, tWidth - 2, tWidth, tWidth + 5, 3 * tWidth} {
+			for _, short := range []int{0, 1, tWidth / 3, tWidth - 3} {
+				if short >= long {
+					continue
+				}
+				line := []rune(strings.Repeat("z", long))
+				rb := newRedrawTestBuf(tWidth, "> ", line, len(line))
+
+				scr := newTermScreen(tWidth)
+				scr.apply(string(rb.redraw(rb.idxLine(tWidth), tWidth)))
+
+				idxLine := rb.idxLine(tWidth)
+				rb.buf, rb.idx = line[:short], short
+				scr.apply(string(rb.redraw(idxLine, tWidth)))
+
+				want := strings.TrimRight("> "+string(line[:short]), " ")
+				if got := scr.text(); got != want {
+					t.Fatalf("width %d, %d runes shrunk to %d: screen holds\n  %q\nwant\n  %q",
+						tWidth, long, short, got, want)
+				}
+			}
+		}
+	}
+}

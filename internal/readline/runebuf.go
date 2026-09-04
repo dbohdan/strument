@@ -575,7 +575,7 @@ func (r *runeBuffer) print() {
 
 func (r *runeBuffer) output() []byte {
 	buf := bytes.NewBuffer(nil)
-	r.writeContent(buf)
+	r.writeContentCleared(buf)
 	// cursor position
 	if len(r.buf) > r.idx {
 		buf.Write(r.getBackspaceSequence())
@@ -587,9 +587,30 @@ func (r *runeBuffer) output() []byte {
 // masked) buffer, clearing the first line's tail and adding the line-edge
 // space fix — everything the on-screen line shows except the final cursor
 // repositioning. Shared by output (for Print) and redraw.
+// writeContent writes the prompt and the painted buffer, and nothing else.
+// The prompt's row is *not* pre-cleared: redraw follows this with a trailing
+// \e[J, which erases from the cursor to the end of the display and so covers
+// every cell a longer previous render could have left — the rest of the last
+// row included. Clearing the prompt's row first would blank it and refill it
+// within the same frame, which is visible as flicker on a slow link and is
+// precisely what bestline's overwrite-then-trim order exists to avoid.
+// Callers with no trailing erase of their own want writeContentCleared.
 func (r *runeBuffer) writeContent(buf *bytes.Buffer) {
 	buf.WriteString(r.prompt())
-	buf.WriteString("\x1b[0K") // VT100 "Clear line from cursor right", see #38
+	r.writeBuffer(buf)
+}
+
+// writeContentCleared is writeContent for the print path, which has no
+// trailing \e[J: the first prompt of a session is drawn wherever the cursor
+// happens to be, and there may be text to its right that is not ours to keep
+// (see #38).
+func (r *runeBuffer) writeContentCleared(buf *bytes.Buffer) {
+	buf.WriteString(r.prompt())
+	buf.WriteString("\x1b[0K") // VT100 "Clear line from cursor right"
+	r.writeBuffer(buf)
+}
+
+func (r *runeBuffer) writeBuffer(buf *bytes.Buffer) {
 	cfg := r.getConfig()
 	if cfg.EnableMask && len(r.buf) > 0 {
 		if cfg.MaskRune != 0 {

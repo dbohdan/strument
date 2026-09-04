@@ -1,6 +1,7 @@
 package readline
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -76,5 +77,37 @@ func TestRedrawLeavesWrappingToTheTerminal(t *testing.T) {
 	}
 	if strings.Contains(out, "\r\n") {
 		t.Errorf("redraw must not place row breaks itself:\n%q", out)
+	}
+}
+
+// TestRedrawDoesNotPreClearItsRow is the flicker property at the byte level:
+// the hot editing path must overwrite cells and trim afterwards, never blank a
+// row and refill it inside one frame. On a fast local terminal the difference
+// is invisible; over SSH from a phone the pre-clear shows as the prompt's row
+// flashing empty on every keystroke.
+func TestRedrawDoesNotPreClearItsRow(t *testing.T) {
+	rb := newRedrawTestBuf(40, "> ", []rune("hello world"), 11)
+	out := string(rb.redraw(0, 40))
+
+	body := strings.Index(out, "hello world")
+	if body < 0 {
+		t.Fatalf("redraw drew no buffer text:\n%q", out)
+	}
+	if k := strings.Index(out, "\x1b[0K"); k >= 0 && k < body {
+		t.Errorf("redraw clears its row at %d, before writing the buffer at %d — the trailing \\x1b[J already covers every stale cell:\n%q", k, body, out)
+	}
+}
+
+// The print path has no trailing erase of its own: the first prompt of a
+// session is drawn wherever the cursor happens to be, so it must clear the rest
+// of its row itself.
+func TestPrintClearsItsOwnRow(t *testing.T) {
+	var out bytes.Buffer
+	rb := newRedrawTestBuf(20, "> ", nil, 0)
+	rb.getConfig().Stdout = &out
+	rb.Print()
+
+	if !strings.Contains(out.String(), "\x1b[0K") {
+		t.Errorf("Print emits no erase, so a stale tail on the prompt's row survives:\n%q", out.String())
 	}
 }
