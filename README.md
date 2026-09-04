@@ -458,12 +458,10 @@ Three components are forked and vendored, each with a `NOTICE` recording the cha
   [go-git](https://github.com/go-git/go-git) at `v6.0.0-alpha.5` (Apache 2.0).
 - The terminal line editor (`internal/readline/`) is a fork of
   [ergochat/readline](https://github.com/ergochat/readline) v0.1.3 (MIT).
-  Its redraw is flicker-free: a non-destructive single-write repaint after
+  Its redraw is a non-destructive single-write repaint after
   [bestline](https://github.com/jart/bestline) by Justine Tunney (2-clause
-  BSD), with the line broken into rows by the editor itself — terminal
-  autowrap disabled, cursor hidden mid-frame — as in
-  [Python Prompt Toolkit](https://github.com/prompt-toolkit/python-prompt-toolkit)
-  by Jonathan Slenders (3-clause BSD).
+  BSD): cells are overwritten in place and only the leftovers erased, and the
+  line is wrapped by the terminal rather than by the editor.
 - The `run_code` Python sandbox (`internal/monty/`) is a hard fork of
   [monty-go](https://github.com/fugue-labs/monty-go) at `v0.2.0` (MIT), the pure-Go
   wazero bindings for [Pydantic's Monty](https://github.com/pydantic/monty),

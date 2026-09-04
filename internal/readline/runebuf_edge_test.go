@@ -9,159 +9,28 @@ import (
 	"dbohdan.com/strument/internal/readline/internal/runes"
 )
 
-// termCursor replays the subset of escape sequences redraw emits and tracks
-// where they leave the cursor, in rows relative to the row the stream started
-// on. Autowrap is off for the duration of a frame (redraw sets \e[?7l), so a
-// rune landing in the last column does not advance the row — which is the whole
-// point of the checks below: only an explicit break moves the render down.
-type termCursor struct {
-	row, col int
-	// row the first visible rune was drawn on, i.e. where the prompt landed.
+// termScreen replays the escape sequences a frame emits onto a grid of cells,
+// with terminal autowrap ON — the mode the render actually runs under.
+//
+// The semantics below are not assumed, they were measured against tmux, because
+// the interesting state here is one no amount of reading the source predicts.
+// A rune written in the last column does NOT move the cursor to the next row:
+// it leaves it in a "wrap pending" state, still on the same row, and only the
+// *next* rune wraps. Two consequences the tests rely on:
+//
+//   - \e[A from a wrap-pending cursor moves up from the row it is still on, and
+//     tmux clamps it — the render believes it is a row lower than it is, so a
+//     frame that walks up by that count lands one row too high and repaints the
+//     prompt over the line above. That is the defect that " \b" exists to
+//     prevent, by spending a space to force the pending wrap through.
+//   - \e[K and \e[J erase from the cursor inclusive, so where the cursor sits
+//     when they are emitted decides whether they eat a character.
+type termScreen struct {
+	rows         [][]rune
+	row, col     int // col == width means a wrap is pending
+	width        int
 	firstDrawRow int
 	drew         bool
-}
-
-func (t *termCursor) apply(s string) {
-	rs := []rune(s)
-	for i := 0; i < len(rs); {
-		switch {
-		case rs[i] == '\033' && i+1 < len(rs) && rs[i+1] == '[':
-			j := i + 2
-			for j < len(rs) && (rs[j] < 0x40 || rs[j] > 0x7e) {
-				j++
-			}
-			if j >= len(rs) {
-				return
-			}
-			n, _ := strconv.Atoi(string(rs[i+2 : j]))
-			switch rs[j] {
-			case 'A':
-				t.row -= max(n, 1)
-			case 'B':
-				t.row += max(n, 1)
-			case 'G':
-				t.col = max(n, 1) - 1
-			}
-			i = j + 1
-		case rs[i] == '\r':
-			t.col = 0
-			i++
-		case rs[i] == '\n':
-			t.row++
-			i++
-		default:
-			if !t.drew {
-				t.firstDrawRow, t.drew = t.row, true
-			}
-			t.col += runes.Width(rs[i])
-			i++
-		}
-	}
-}
-
-// TestRedrawRowsMatchTheCursorModel pins the property the row-placed render was
-// introduced for and did not have: the rows redraw actually draws are the rows
-// getSplitByLine counts. They diverged for exactly one buffer length per width
-// — the one that fills the last column — because SplitByLine appends a trailing
-// empty row there (its "the next character starts a new line" marker) and
-// writeContent emitted no matching break.
-func TestRedrawRowsMatchTheCursorModel(t *testing.T) {
-	for _, tWidth := range []int{20, 40, 101} {
-		for _, prompt := range []string{"> ", "\x1b[32m> \x1b[0m", "much longer prompt: "} {
-			for n := 0; n <= 3*tWidth; n++ {
-				line := []rune(strings.Repeat("x", n))
-				rb := newRedrawTestBuf(tWidth, prompt, line, len(line))
-				out := string(rb.redraw(rb.idxLine(tWidth), tWidth))
-
-				if got, want := strings.Count(out, "\r\n"), rb.LineCount()-1; got != want {
-					t.Fatalf("width %d, prompt %q, %d runes: render drew %d row breaks, cursor model counts %d rows:\n%q",
-						tWidth, prompt, n, got, want, out)
-				}
-
-				// And the cursor must land where lastRowColumn says it does.
-				c := &termCursor{}
-				c.apply(out)
-				if got, want := c.col+1, rb.lastRowColumn(); got != want {
-					t.Fatalf("width %d, prompt %q, %d runes: frame leaves the cursor in column %d, lastRowColumn says %d:\n%q",
-						tWidth, prompt, n, got, want, out)
-				}
-			}
-		}
-	}
-}
-
-// TestTypingLeavesTheCursorWhereTheModelExpects walks the fast path — typing at
-// the end of the buffer never reaches redraw, it goes through append — and
-// checks after every keystroke that the row and column the terminal is left in
-// are the ones the cursor model would compute. This is the path that actually
-// crosses the right edge in normal use, and the one where the terminal's own
-// autowrap used to park the cursor on a phantom cell a row above where the
-// model believed it was.
-func TestTypingLeavesTheCursorWhereTheModelExpects(t *testing.T) {
-	for _, tWidth := range []int{20, 40, 101} {
-		var out bytes.Buffer
-		rb := newRedrawTestBuf(tWidth, "> ", nil, 0)
-		rb.getConfig().Stdout = &out
-
-		c := &termCursor{}
-		rb.Print()
-		c.apply(out.String())
-
-		for n := 1; n <= 3*tWidth; n++ {
-			out.Reset()
-			rb.WriteRune('x')
-			c.apply(out.String())
-
-			if got, want := c.row, rb.LineCount()-1; got != want {
-				t.Fatalf("width %d, %d runes typed: cursor is on row %d, model says row %d", tWidth, n, got, want)
-			}
-			if got, want := c.col+1, rb.lastRowColumn(); got != want {
-				t.Fatalf("width %d, %d runes typed: cursor is in column %d, model says %d", tWidth, n, got, want)
-			}
-		}
-	}
-}
-
-// TestRedrawKeepsThePromptAnchored is the user-visible half of the same defect:
-// a redraw moves up by the row the *previous* frame left the cursor on, so if
-// the render and the model disagree by a row the prompt gets repainted one row
-// too high and eats the output line above it. Backspacing across the right edge
-// was the way in.
-func TestRedrawKeepsThePromptAnchored(t *testing.T) {
-	const tWidth, prompt = 40, "> "
-
-	for n := 1; n <= 2*tWidth; n++ {
-		line := []rune(strings.Repeat("x", n))
-		rb := newRedrawTestBuf(tWidth, prompt, line, len(line))
-
-		first := &termCursor{}
-		first.apply(string(rb.redraw(rb.idxLine(tWidth), tWidth)))
-
-		// Exactly what refresh does for a Backspace: capture the cursor's row
-		// within the drawn block *before* the mutation, then redraw.
-		idxLine := rb.idxLine(tWidth)
-		rb.buf, rb.idx = line[:n-1], n-1
-
-		second := &termCursor{row: first.row, col: first.col}
-		second.apply(string(rb.redraw(idxLine, tWidth)))
-
-		if second.firstDrawRow != first.firstDrawRow {
-			t.Fatalf("%d runes: backspace repainted the prompt on row %d, but it was drawn on row %d — the redraw overwrites the line above",
-				n, second.firstDrawRow, first.firstDrawRow)
-		}
-	}
-}
-
-// termScreen replays a frame onto a grid of cells. termCursor above tracks only
-// where the cursor lands, which is blind to a whole class of defect: a frame can
-// leave the cursor in exactly the right place having erased content on the way.
-// Autowrap is off for a frame, so a rune written in the last column leaves the
-// cursor *on* that column instead of past it, and \e[K / \e[J erase from the
-// cursor inclusive — the combination that ate a character per full row.
-type termScreen struct {
-	rows     [][]rune
-	row, col int
-	width    int
 }
 
 func newTermScreen(width int) *termScreen {
@@ -176,6 +45,9 @@ func (s *termScreen) at(row int) []rune {
 }
 
 func (s *termScreen) eraseToEOL() {
+	if s.col >= s.width {
+		return // wrap pending: nothing of this row is to the right
+	}
 	r := s.at(s.row)
 	for c := s.col; c < s.width; c++ {
 		r[c] = ' '
@@ -198,8 +70,10 @@ func (s *termScreen) apply(str string) {
 			switch rs[j] {
 			case 'A':
 				s.row = max(s.row-max(n, 1), 0)
+				s.col = min(s.col, s.width-1)
 			case 'B':
 				s.row += max(n, 1)
+				s.col = min(s.col, s.width-1)
 			case 'G':
 				s.col = max(n, 1) - 1
 			case 'K':
@@ -216,18 +90,27 @@ func (s *termScreen) apply(str string) {
 			s.row++
 			s.at(s.row)
 			i++
+		case rs[i] == '\b':
+			s.col = max(s.col-1, 0)
+			i++
 		default:
-			s.at(s.row)[min(s.col, s.width-1)] = rs[i]
-			// Autowrap off: the cursor stops on the last column rather than
-			// moving past it, which is why an erase there is destructive.
-			s.col = min(s.col+runes.Width(rs[i]), s.width-1)
+			w := runes.Width(rs[i])
+			if s.col+w > s.width { // the pending wrap fires here, not earlier
+				s.row++
+				s.col = 0
+			}
+			if !s.drew {
+				s.firstDrawRow, s.drew = s.row, true
+			}
+			s.at(s.row)[s.col] = rs[i]
+			s.col += w
 			i++
 		}
 	}
 }
 
-// text reads the grid back as one string, undoing the row breaks the render
-// placed, so it can be compared against what was meant to be on screen.
+// text reads the grid back as one string, undoing the terminal's row breaks so
+// it can be compared against what was meant to be on screen.
 func (s *termScreen) text() string {
 	var b strings.Builder
 	for _, r := range s.rows {
@@ -236,10 +119,108 @@ func (s *termScreen) text() string {
 	return strings.TrimRight(b.String(), " ")
 }
 
-// TestRenderedRowsKeepEveryCharacter is the screen-level counterpart to
-// TestRedrawRowsMatchTheCursorModel: every rune of prompt and buffer must
-// actually be on the grid afterwards. It fails for every buffer that fills a
-// row exactly, which on a narrow terminal is most of them.
+// modelCursor is where the cursor model says the cursor is once the whole
+// buffer is drawn: the last row getSplitByLine produces, and the column its
+// content ends in. A buffer that fills the last column answers "row+1, column
+// 0" — the trailing empty row — which is the claim the render has to make true.
+func modelCursor(rb *runeBuffer) (row, col int) {
+	sp := rb.getSplitByLine(rb.buf, 1)
+	row = len(sp) - 1
+	col = runes.WidthAll(sp[row])
+	if row == 0 {
+		col += rb.ppos
+	}
+	return row, col
+}
+
+// TestRedrawLeavesTheCursorWhereTheModelExpects is the property the right-edge
+// bug violated. It matters because refresh captures idxLine *before* a mutation
+// and the next frame walks up by it: if the terminal and the model disagree
+// about which row the cursor is on, every later frame is drawn a row off.
+func TestRedrawLeavesTheCursorWhereTheModelExpects(t *testing.T) {
+	for _, tWidth := range []int{14, 20, 40} {
+		for _, prompt := range []string{"> ", "\x1b[32m> \x1b[0m", "much longer prompt: "} {
+			for n := 0; n <= 3*tWidth; n++ {
+				line := []rune(strings.Repeat("x", n))
+				rb := newRedrawTestBuf(tWidth, prompt, line, len(line))
+
+				scr := newTermScreen(tWidth)
+				scr.apply(string(rb.redraw(rb.idxLine(tWidth), tWidth)))
+
+				wantRow, wantCol := modelCursor(rb)
+				if scr.row != wantRow || scr.col != wantCol {
+					t.Fatalf("width %d, prompt %q, %d runes: frame leaves the cursor at (row %d, col %d), model says (row %d, col %d)",
+						tWidth, prompt, n, scr.row, scr.col, wantRow, wantCol)
+				}
+			}
+		}
+	}
+}
+
+// TestTypingLeavesTheCursorWhereTheModelExpects walks the fast path: typing at
+// the end of the buffer never reaches redraw, it goes through append. That is
+// where the right edge is normally crossed, so it is where a phantom wrapped
+// cell would be left behind.
+func TestTypingLeavesTheCursorWhereTheModelExpects(t *testing.T) {
+	for _, tWidth := range []int{14, 20, 40} {
+		var out bytes.Buffer
+		rb := newRedrawTestBuf(tWidth, "> ", nil, 0)
+		rb.getConfig().Stdout = &out
+
+		scr := newTermScreen(tWidth)
+		rb.Print()
+		scr.apply(out.String())
+
+		for n := 1; n <= 3*tWidth; n++ {
+			out.Reset()
+			rb.WriteRune('x')
+			scr.apply(out.String())
+
+			wantRow, wantCol := modelCursor(rb)
+			if scr.row != wantRow || scr.col != wantCol {
+				t.Fatalf("width %d, %d runes typed: cursor at (row %d, col %d), model says (row %d, col %d)",
+					tWidth, n, scr.row, scr.col, wantRow, wantCol)
+			}
+		}
+	}
+}
+
+// TestRedrawKeepsThePromptAnchored is the user-visible half of the same defect:
+// a redraw moves up by the row the *previous* frame left the cursor on, so if
+// the render and the model disagree by a row the prompt gets repainted one row
+// too high and eats the output line above it. Backspacing across the right edge
+// was the way in.
+func TestRedrawKeepsThePromptAnchored(t *testing.T) {
+	for _, tWidth := range []int{14, 20, 40} {
+		for n := 1; n <= 2*tWidth; n++ {
+			line := []rune(strings.Repeat("x", n))
+			rb := newRedrawTestBuf(tWidth, "> ", line, len(line))
+
+			first := newTermScreen(tWidth)
+			first.row = 1 // start below the top, so a frame drawn too high is visible
+			first.apply(string(rb.redraw(rb.idxLine(tWidth), tWidth)))
+
+			// Exactly what refresh does for a Backspace: capture the cursor's row
+			// within the drawn block *before* the mutation, then redraw.
+			idxLine := rb.idxLine(tWidth)
+			rb.buf, rb.idx = line[:n-1], n-1
+
+			second := newTermScreen(tWidth)
+			second.row, second.col = first.row, first.col
+			second.apply(string(rb.redraw(idxLine, tWidth)))
+
+			if second.firstDrawRow != first.firstDrawRow {
+				t.Fatalf("width %d, %d runes: backspace repainted the prompt on row %d, but it was drawn on row %d — the redraw overwrites the line above",
+					tWidth, n, second.firstDrawRow, first.firstDrawRow)
+			}
+		}
+	}
+}
+
+// TestRenderedRowsKeepEveryCharacter is the screen-level check: \e[K and \e[J
+// erase from the cursor inclusive, so a frame can leave the cursor in exactly
+// the right place having erased a character on the way there. The cursor checks
+// above are blind to that; this one reads the cells back.
 func TestRenderedRowsKeepEveryCharacter(t *testing.T) {
 	for _, tWidth := range []int{14, 18, 25, 40} {
 		for _, prompt := range []string{"> ", "\x1b[32m> \x1b[0m"} {
@@ -260,8 +241,7 @@ func TestRenderedRowsKeepEveryCharacter(t *testing.T) {
 	}
 }
 
-// And the same for the typing fast path, which goes through append rather than
-// redraw and places its own rows with the same helper.
+// And the same for the typing fast path.
 func TestTypingKeepsEveryCharacter(t *testing.T) {
 	for _, tWidth := range []int{14, 18, 25, 40} {
 		var out bytes.Buffer

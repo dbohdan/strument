@@ -56,28 +56,25 @@ func TestRedrawSingleLine(t *testing.T) {
 	}
 }
 
-// TestRedrawWrapsRowsItself locks in the prompt_toolkit-style render: the
-// frame is drawn with autowrap disabled and explicit row breaks, so a
-// character landing in the last column can never leave the cursor on a
-// phantom wrapped cell (the artifact that made a character flash as erased
-// between frames).
-func TestRedrawWrapsRowsItself(t *testing.T) {
-	// 45 runes at width 40 must break into two explicit rows.
+// TestRedrawLeavesWrappingToTheTerminal is the inverse of what the
+// prompt_toolkit-style render asserted, and the reason it was reverted: rows
+// must be the terminal's own autowrap, not explicit breaks. Hard breaks make
+// every row a separate logical line, which costs reflow on resize (the terminal
+// can no longer re-wrap the prompt, and never re-joins rows when the pane
+// widens) and breaks find-in-scrollback, since a search matches across a
+// wrapped line but not across a hard one.
+func TestRedrawLeavesWrappingToTheTerminal(t *testing.T) {
+	// 45 runes at width 40: the terminal wraps it, the render does not.
 	line := []rune("the quick brown fox jumps over the lazy dogs!")
 	rb := newRedrawTestBuf(40, "> ", line, len(line))
 	out := string(rb.redraw(rb.idxLine(40), 40))
 
-	if !strings.Contains(out, "\x1b[?7l") || !strings.Contains(out, "\x1b[?7h") {
-		t.Errorf("redraw must disable and restore autowrap around the frame:\n%q", out)
+	for _, esc := range []string{"\x1b[?7l", "\x1b[?7h"} {
+		if strings.Contains(out, esc) {
+			t.Errorf("redraw must leave autowrap alone (found %q) — the terminal owns the row rule:\n%q", esc, out)
+		}
 	}
-	if !strings.Contains(out, "\x1b[?25l") || !strings.Contains(out, "\x1b[?25h") {
-		t.Errorf("redraw must hide and restore the cursor around the frame:\n%q", out)
-	}
-	if strings.Count(out, "\r\n") != 1 {
-		t.Errorf("a line longer than the width must emit exactly one explicit row break, got %d:\n%q", strings.Count(out, "\r\n"), out)
-	}
-	// Cursor lands after the last drawn row ("y dogs!"), placed explicitly.
-	if !strings.Contains(out, "\x1b[8G") {
-		t.Errorf("redraw must place the final cursor column explicitly:\n%q", out)
+	if strings.Contains(out, "\r\n") {
+		t.Errorf("redraw must not place row breaks itself:\n%q", out)
 	}
 }
