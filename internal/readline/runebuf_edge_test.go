@@ -151,3 +151,136 @@ func TestRedrawKeepsThePromptAnchored(t *testing.T) {
 		}
 	}
 }
+
+// termScreen replays a frame onto a grid of cells. termCursor above tracks only
+// where the cursor lands, which is blind to a whole class of defect: a frame can
+// leave the cursor in exactly the right place having erased content on the way.
+// Autowrap is off for a frame, so a rune written in the last column leaves the
+// cursor *on* that column instead of past it, and \e[K / \e[J erase from the
+// cursor inclusive — the combination that ate a character per full row.
+type termScreen struct {
+	rows     [][]rune
+	row, col int
+	width    int
+}
+
+func newTermScreen(width int) *termScreen {
+	return &termScreen{width: width}
+}
+
+func (s *termScreen) at(row int) []rune {
+	for len(s.rows) <= row {
+		s.rows = append(s.rows, bytes.Runes(bytes.Repeat([]byte{' '}, s.width)))
+	}
+	return s.rows[row]
+}
+
+func (s *termScreen) eraseToEOL() {
+	r := s.at(s.row)
+	for c := s.col; c < s.width; c++ {
+		r[c] = ' '
+	}
+}
+
+func (s *termScreen) apply(str string) {
+	rs := []rune(str)
+	for i := 0; i < len(rs); {
+		switch {
+		case rs[i] == '\033' && i+1 < len(rs) && rs[i+1] == '[':
+			j := i + 2
+			for j < len(rs) && (rs[j] < 0x40 || rs[j] > 0x7e) {
+				j++
+			}
+			if j >= len(rs) {
+				return
+			}
+			n, _ := strconv.Atoi(strings.TrimLeft(string(rs[i+2:j]), "?"))
+			switch rs[j] {
+			case 'A':
+				s.row = max(s.row-max(n, 1), 0)
+			case 'B':
+				s.row += max(n, 1)
+			case 'G':
+				s.col = max(n, 1) - 1
+			case 'K':
+				s.eraseToEOL()
+			case 'J':
+				s.eraseToEOL()
+				s.rows = s.rows[:min(s.row+1, len(s.rows))]
+			}
+			i = j + 1
+		case rs[i] == '\r':
+			s.col = 0
+			i++
+		case rs[i] == '\n':
+			s.row++
+			s.at(s.row)
+			i++
+		default:
+			s.at(s.row)[min(s.col, s.width-1)] = rs[i]
+			// Autowrap off: the cursor stops on the last column rather than
+			// moving past it, which is why an erase there is destructive.
+			s.col = min(s.col+runes.Width(rs[i]), s.width-1)
+			i++
+		}
+	}
+}
+
+// text reads the grid back as one string, undoing the row breaks the render
+// placed, so it can be compared against what was meant to be on screen.
+func (s *termScreen) text() string {
+	var b strings.Builder
+	for _, r := range s.rows {
+		b.WriteString(string(r))
+	}
+	return strings.TrimRight(b.String(), " ")
+}
+
+// TestRenderedRowsKeepEveryCharacter is the screen-level counterpart to
+// TestRedrawRowsMatchTheCursorModel: every rune of prompt and buffer must
+// actually be on the grid afterwards. It fails for every buffer that fills a
+// row exactly, which on a narrow terminal is most of them.
+func TestRenderedRowsKeepEveryCharacter(t *testing.T) {
+	for _, tWidth := range []int{14, 18, 25, 40} {
+		for _, prompt := range []string{"> ", "\x1b[32m> \x1b[0m"} {
+			for n := 0; n <= 3*tWidth; n++ {
+				line := []rune(strings.Repeat("abcdefghij", 3*tWidth/10+1)[:n])
+				rb := newRedrawTestBuf(tWidth, prompt, line, len(line))
+
+				scr := newTermScreen(tWidth)
+				scr.apply(string(rb.redraw(rb.idxLine(tWidth), tWidth)))
+
+				want := strings.TrimRight("> "+string(line), " ")
+				if got := scr.text(); got != want {
+					t.Fatalf("width %d, prompt %q, %d runes: screen holds\n  %q\nwant\n  %q",
+						tWidth, prompt, n, got, want)
+				}
+			}
+		}
+	}
+}
+
+// And the same for the typing fast path, which goes through append rather than
+// redraw and places its own rows with the same helper.
+func TestTypingKeepsEveryCharacter(t *testing.T) {
+	for _, tWidth := range []int{14, 18, 25, 40} {
+		var out bytes.Buffer
+		rb := newRedrawTestBuf(tWidth, "> ", nil, 0)
+		rb.getConfig().Stdout = &out
+
+		scr := newTermScreen(tWidth)
+		rb.Print()
+		scr.apply(out.String())
+
+		for n := 1; n <= 3*tWidth; n++ {
+			out.Reset()
+			rb.WriteRune(rune('a' + (n-1)%26))
+			scr.apply(out.String())
+
+			want := strings.TrimRight("> "+string(rb.buf), " ")
+			if got := scr.text(); got != want {
+				t.Fatalf("width %d, %d runes typed: screen holds\n  %q\nwant\n  %q", tWidth, n, got, want)
+			}
+		}
+	}
+}

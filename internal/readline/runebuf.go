@@ -688,7 +688,16 @@ func writeRows(buf *bytes.Buffer, toks []termToken, cur, tWidth int) {
 		pending = pending[:0]
 	}
 	br := func() {
-		buf.WriteString("\x1b[0K\r\n")
+		// \e[0K erases from the cursor *inclusive*. Autowrap is off for the
+		// frame, so a row that fills the width leaves the cursor parked on its
+		// last column rather than past it, and the erase would delete the rune
+		// just written there — one character lost per full row, worst on the
+		// narrow terminals that produce the most rows. A full row has nothing
+		// to its right to trim, so the erase is only needed on a short one.
+		if cur < tWidth {
+			buf.WriteString("\x1b[0K")
+		}
+		buf.WriteString("\r\n")
 		cur = 0
 	}
 	for _, t := range toks {
