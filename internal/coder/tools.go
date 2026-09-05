@@ -242,13 +242,16 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 				"temporary directory (e.g. /tmp), by absolute path for temp.",
 			Parameters: map[string]any{
 				"type": "object",
-				"properties": map[string]any{
-					"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
-					"old_string": strProp("The exact existing text to replace, character for character, " +
+				// Ordered, and path first: see orderedProps. This tool's
+				// arguments are drawn as a streaming diff, which cannot start
+				// until the file is named.
+				"properties": orderedProps{
+					{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files.")},
+					{"old_string", strProp("The exact existing text to replace, character for character, " +
 						"including all whitespace, comments, and docstrings. It must match exactly once: " +
 						"include enough surrounding lines to pick out the one place you mean, and make " +
-						"a separate call for each place if you mean several."),
-					"new_string": strProp("The text to put in its place."),
+						"a separate call for each place if you mean several.")},
+					{"new_string", strProp("The text to put in its place.")},
 				},
 				"required": []any{"path", "old_string", "new_string"},
 			},
@@ -262,9 +265,12 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 				"temporary directory (e.g. /tmp), by absolute path for temp.",
 			Parameters: map[string]any{
 				"type": "object",
-				"properties": map[string]any{
-					"path":    strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred."),
-					"content": strProp("The complete contents of the file."),
+				// Ordered, and path first: see orderedProps. Alphabetically
+				// sorted, "content" led — and a whole file's worth of diff
+				// waited on the path that followed it.
+				"properties": orderedProps{
+					{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred.")},
+					{"content", strProp("The complete contents of the file.")},
 				},
 				"required": []any{"path", "content"},
 			},
@@ -289,14 +295,15 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 			"temporary directory (e.g. /tmp), by absolute path for temp."
 		defs[i].Parameters = map[string]any{
 			"type": "object",
-			"properties": map[string]any{
-				"path": strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
-				"anchor": strProp("The anchor of the first line to replace, exactly as read printed " +
+			// Ordered, and path first: see orderedProps.
+			"properties": orderedProps{
+				{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files.")},
+				{"anchor", strProp("The anchor of the first line to replace, exactly as read printed " +
 					"it: two dash-joined words, like copper-otter. It names one line, so you never " +
-					"need to include surrounding context to be unambiguous."),
-				"end_anchor": strProp("The anchor of the last line to replace, when replacing several " +
-					"lines. Omit to replace only the anchored line."),
-				"new_string": newStringProp(indentColumn),
+					"need to include surrounding context to be unambiguous.")},
+				{"end_anchor", strProp("The anchor of the last line to replace, when replacing several " +
+					"lines. Omit to replace only the anchored line.")},
+				{"new_string", newStringProp(indentColumn)},
 			},
 			"required": []any{"path", "anchor", "new_string"},
 		}

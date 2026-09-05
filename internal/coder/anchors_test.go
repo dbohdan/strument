@@ -388,15 +388,7 @@ func TestIndentColumnSchemaDescribesTheGrammar(t *testing.T) {
 			if d.Name != toolEdit {
 				continue
 			}
-			props, ok := d.Parameters["properties"].(map[string]any)
-			if !ok {
-				t.Fatal("the edit schema has no properties map")
-			}
-			ns, ok := props["new_string"].(map[string]any)
-			if !ok {
-				t.Fatal("the edit schema has no new_string property")
-			}
-			desc, ok := ns["description"].(string)
+			desc, ok := toolProp(t, d, "new_string")["description"].(string)
 			if !ok {
 				t.Fatal("new_string has no description")
 			}

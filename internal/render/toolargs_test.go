@@ -363,3 +363,77 @@ func TestToolDiffSetStillRendersEdits(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// liveWriter records what reached it before Flush was called, so a test can
+// assert *when* bytes arrive rather than only what they say at the end.
+type liveWriter struct {
+	all      bytes.Buffer
+	beforeAt int // bytes written by the time mark() was called
+}
+
+func (w *liveWriter) Write(p []byte) (int, error) { return w.all.Write(p) }
+func (w *liveWriter) mark()                       { w.beforeAt = w.all.Len() }
+func (w *liveWriter) live() string                { return w.all.String()[:w.beforeAt] }
+
+// TestToolDiffStreamsWhenPathComesFirst pins the property every other ordering
+// test here misses: those compare the finished output, which is identical in
+// both orders, so the difference this one measures — whether the user watches
+// the file appear or waits for it — was invisible to the suite.
+//
+// It is the difference a live session shows. A 663-line write from a local
+// Qwen3.6 arrived as {"content": …, "path": …} and printed nothing until the
+// call ended; the same write with the path first scrolls past as it is
+// written. Both are correct; only one of them streams.
+//
+// Two independent places resolve the header — the field transition in onArg
+// and the first emitLine — so removing either one leaves this test passing,
+// and a control has to remove both. That redundancy is why the check is worth
+// writing down rather than trusting to a reading of the code.
+func TestToolDiffStreamsWhenPathComesFirst(t *testing.T) {
+	body := `alpha\nbeta\ngamma\n`
+	cases := []struct {
+		name     string
+		args     string
+		wantLive bool
+	}{
+		{"path first", `{"path":"a.go","content":"` + body + `"}`, true},
+		{"path last", `{"content":"` + body + `","path":"a.go"}`, false},
+	}
+	const want = "a.go (whole file)\n+ alpha\n+ beta\n+ gamma\n"
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &liveWriter{}
+			d := NewToolDiff(w, false, Theme{}, "write")
+			for _, frag := range splitBytes(tc.args) {
+				d.Write(frag)
+			}
+			w.mark()
+			d.Flush()
+
+			// Whatever the order, the finished diff is the same. That is the
+			// invariant the buffering exists to hold, and it must keep
+			// holding — this test is about the timing, not instead of it.
+			if got := w.all.String(); got != want {
+				t.Fatalf("finished diff:\ngot:\n%q\nwant:\n%q", got, want)
+			}
+			live := w.live()
+			if tc.wantLive {
+				// Not "something arrived": the header and every complete line
+				// must be out before Flush, since Flush only ever has the
+				// trailing partial line left to do.
+				if live != want {
+					t.Errorf("streamed only %q before Flush, want the whole diff", live)
+				}
+				return
+			}
+			// The path-last case cannot stream, and saying so here is the
+			// point: it records the cost of the ordering rather than leaving
+			// it as an unexplained absence. A diff line has nowhere to go
+			// until the file it belongs to is named.
+			if live != "" {
+				t.Errorf("wrote %q before the path was known, want nothing", live)
+			}
+		})
+	}
+}
