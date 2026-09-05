@@ -108,10 +108,30 @@ it, and every one of these has a legitimate reason to be high or low.
 needs judgement, and a judgement in a scorer is an author grading their own
 work.
 
-## The known false positive
+## The known false positive, and why it is Strument's to fix
 
 A file pinned with `/add` has its contents in the prompt already, so editing it
-without a `read` call is correct behaviour and A1 will count it anyway. The tool
-detects what it can and reports the rest as *unresolved* rather than as blind,
-because a metric that hides its own uncertainty is worse than one that admits
-it. Sessions that pin heavily should be read with that in mind.
+without a `read` call is correct behaviour and A1 counts it anyway.
+
+I assumed this was a detection problem the tool could partly solve. It is not.
+The pin set does not appear in the log at all: a `session` record carries
+`version`, `model`, `root` and `edit_format`, and pinned contents are assembled
+into the request at send time (`coder/assemble.go`) without ever becoming
+recorded messages. A consumer of the JSONL cannot tell a pinned file from one
+the model never saw, because nothing distinguishes them.
+
+So the honest statement is not "the tool has a false positive it mitigates". It
+is: **A1 is unsound for any session that pins files, and no reader of the
+current log can repair that.** Sessions using `/add` should be read with A1
+discounted entirely rather than adjusted.
+
+The fix belongs upstream, and it is small. Pinned contents are re-read at every
+send, so the pin set is a per-turn fact: a `pinned` field on the `turn` record
+would let a consumer subtract exactly the paths that were in context. That is a
+new optional field rather than a change to an existing one, so it needs no
+`RecordVersion` bump under the rule in `coder/record.go`.
+
+Worth stating as a finding in its own right: this tool was built to audit
+sessions, and the first thing it established was that its input is missing a
+field it needs. That is a better argument for writing the consumer than any
+amount of reasoning about what the log ought to contain.
