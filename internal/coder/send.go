@@ -932,6 +932,7 @@ func (c *Coder) flushTurnUsage() {
 		Received:   c.messageTokensReceived,
 		Cost:       c.messageCost,
 		CostKnown:  c.costKnown,
+		Pinned:     c.pinnedRecordPaths(),
 		EditsExact: c.editsExact,
 		EditsFuzzy: c.editsFuzzy,
 	})
