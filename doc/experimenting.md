@@ -403,6 +403,55 @@ assertion runs, while breaking tells you it discriminates.
 
 ---
 
+### Three more shapes, from building a tool that counts unchecked output
+
+A day spent writing a transcript auditor produced three shapes §17 does not
+cover. All three are worse than the ones above, because in each case the check
+is *reported as verified* — the green is quoted as evidence rather than merely
+trusted.
+
+**A control that never applied.** The way to trust a check is to break the code
+and watch it go red (§1, §17). That control is itself a check, and it fails
+silently: a patch whose anchor no longer matches changes nothing, the suite
+stays green, and the green gets written up as "verified to discriminate". This
+happened three times in one project — a `sed` that missed after a rename, a
+`replace()` whose anchor a refactor had moved, a comprehension rebinding that
+Python's scoping made a no-op. *Tell:* the control reports success without
+reporting that it modified anything. *Fix:* make the sabotage assert its own
+application and refuse to report a result otherwise. A control that cannot say
+"I did nothing" is not a control:
+
+```python
+assert old in s, "ANCHOR MISSING -- control did not apply, result means nothing"
+```
+
+**A test rewritten to match new output instead of keeping its claim.** A guard
+named `test_summary_names_the_transcript` was written for a real defect: the
+report header printed a source filename instead of the transcript. A later
+refactor changed the output format, and the test was updated to assert that a
+`TOTAL` block existed — keeping its name, its green status and its place in the
+file while abandoning what it checked. It had been passing vacuously for three
+commits, including one whose message said the guard was verified. *Tell:* a test
+changed in the same commit as the output it checks, where the assertion got
+looser. *Fix:* when output changes, re-derive the assertion from the claim in
+the test's name, not from the new output.
+
+**Verification in one direction only.** A check that can confirm but not deny
+passes for the wrong reason and reads exactly like one that works. Three
+instances, all different on the surface: a live-pass scorer whose control proved
+it could recognise a no-op but never a success, so nine correct runs read as six
+failures; a false-positive fix verified only by the false positive vanishing,
+which "make the metric report nothing" satisfies perfectly; and a fixture set
+that could show a bug present but not absent. *Tell:* every case in the control
+has the same expected outcome. *Fix:* pair them. Every fix that makes something
+stop firing needs a companion asserting the thing that should still fire, and
+the pair is what makes either a measurement.
+
+That last one is cheap enough to make a habit at the point of asking rather
+than at the point of reviewing. A delegated fix specified as *"X must now report
+0, and Y must still report 1"* cannot be satisfied by silencing the metric; the
+same request without Y can.
+
 ## 18. A clean null has more than one cause, and they look alike
 
 §17 is about a check that cannot fail. This one is about a whole *experiment*
@@ -715,3 +764,10 @@ on purpose and watch the check go red (§1, §17), or hand the check to a model
 that does not share your expectation (§13). Both work because neither routes
 through your judgment. Resolving to be more careful does not; it was tried, for
 nine consecutive bugs.
+
+One caveat on the first of those, learned the hard way (§17): *did the
+sabotage apply?* A control whose patch silently matched nothing reports the
+same green as a check that works, and it is then quoted as proof. Make the
+break assert that it happened. And ask of any fix that makes something stop
+firing: *what still has to fire?* — because "report nothing" satisfies a
+one-sided check perfectly.
