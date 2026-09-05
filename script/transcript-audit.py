@@ -46,6 +46,7 @@ def read_sessions(path):
         if rtype == "session":
             # Start a fresh session (flush any in-progress one).
             session = {
+                "model": rec.get("model", ""),
                 "tool_calls": [],
                 "tool_results": {},
                 "edit_paths": [],
@@ -159,6 +160,59 @@ LOOK_SHAPED = ("read", "grep", "glob", "ls", "symbol")
 ACT_SHAPED = ("edit", "write")
 
 
+def rechecked_paths(session):
+    """Return edited paths that are looked at again after their last edit."""
+    calls = session["tool_calls"]
+    last_edit = {}
+    for i, tc in enumerate(calls):
+        if tc["name"] == "edit":
+            path = tc["args"].get("path", "")
+            if path:
+                last_edit[path] = i
+
+    rechecked = set()
+    for path, edit_index in last_edit.items():
+        for tc in calls[edit_index + 1:]:
+            if tc["name"] == "read" and tc["args"].get("path", "") == path:
+                rechecked.add(path)
+                break
+            if tc["name"] in ("check", "bash"):
+                rechecked.add(path)
+                break
+    return rechecked
+
+
+def unused_reads(session):
+    """Return successfully read paths with no later read and no edit or write."""
+    calls = session["tool_calls"]
+    results = session["tool_results"]
+    successful_reads = []
+    for i, tc in enumerate(calls):
+        if tc["name"] != "read":
+            continue
+        path = tc["args"].get("path", "")
+        if is_successful_read(results.get(tc["id"]), path):
+            successful_reads.append((i, path))
+
+    edited_or_written = {
+        tc["args"].get("path", "")
+        for tc in calls
+        if tc["name"] in ("edit", "write") and tc["args"].get("path", "")
+    }
+    unused = set()
+    for read_index, path in successful_reads:
+        if path in edited_or_written:
+            continue
+        used_again = any(
+            tc["name"] == "read"
+            and tc["args"].get("path", "") == path
+            for tc in calls[read_index + 1:]
+        )
+        if not used_again:
+            unused.add(path)
+    return unused
+
+
 def look_act_counts(session):
     """Return (looks, acts) — the tool-call counts A3's ratio is over."""
     looks = 0
@@ -172,41 +226,35 @@ def look_act_counts(session):
 
 
 def audit(paths):
-    """Print a per-file report of A1 (blind edits)."""
-    grand_total = 0
+    """Print one report block per session."""
     for path in paths:
-        file_total = 0
         for i, session in enumerate(read_sessions(path), 1):
             blind = count_blind_edits(session)
-            file_total += len(blind)
-            if blind:
-                print(f"{path}  session {i}: A1 = {len(blind)}")
-                for p in sorted(blind):
-                    print(f"  blind edit of {p}")
-            else:
-                print(f"{path}  session {i}: A1 = 0")
-
             distances = edit_distances(session)
-            if distances:
-                distance_values = [d for _, d in distances]
-                print(f"  A2: {len(distances)} edits, "
-                      f"median distance {statistics.median(distance_values)}, "
-                      f"max {max(distance_values)}")
-                for edit_path, d in sorted(
-                    distances, key=lambda pd: pd[1], reverse=True
-                ):
-                    if d >= 5:
-                        print(f"  distant edit: {edit_path} at distance {d}")
-
             looks, acts = look_act_counts(session)
-            if acts == 0:
-                print(f"  A3: {looks} look-shaped calls, no act-shaped calls")
+            edited = {p for _, p in session["edit_paths"] if p}
+            unrechecked = edited - rechecked_paths(session)
+            unused = unused_reads(session)
+
+            print(f"{path}  session {i}  model={session['model']}")
+            print(f"  A1 blind edits      {len(blind)}" +
+                  (f"   ({', '.join(sorted(blind))})" if blind else ""))
+            if distances:
+                values = [d for _, d in distances]
+                median = statistics.median(values)
+                print(f"  A2: edit distance    {len(distances)} edits, median distance "
+                      f"{median}, max {max(values)}")
             else:
-                print(f"  A3: look:act = {looks}:{acts} "
-                      f"= {looks / acts:.2f}")
-        grand_total += file_total
-        print(f"{path}  total A1 = {file_total}")
-    print(f"grand total A1 = {grand_total}")
+                print("  A2: edit distance    0 edits, median distance 0, max 0")
+            if acts == 0:
+                print(f"  A3 look:act         {looks} look-shaped calls, no act-shaped calls")
+            else:
+                print(f"  A3 look:act         {looks}:{acts} = {looks / acts:.2f}")
+            print(f"  A4 unrechecked      {len(unrechecked)}" +
+                  (f"   ({', '.join(sorted(unrechecked))})" if unrechecked else ""))
+            print(f"  A5 unused reads     {len(unused)}" +
+                  (f"   ({', '.join(sorted(unused))})" if unused else ""))
+            print(f"{path}  total A1 = {len(blind)}")
 
 
 if __name__ == "__main__":

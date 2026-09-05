@@ -68,8 +68,8 @@ transcript. Output produced and reported without being read: the thing this
 tool counts, in the tool. See `1f400da`, which commits them rather than tidying
 them away.
 
-**A5 justified itself before it existed.** A run that was supposed to implement
-A4 and A5 spent its whole budget reading — the spec, the script, the test, a
+**A3 caught a run that looked and never acted.** A run meant to implement A4
+and A5 spent its whole budget reading — the spec, the script, the test, a
 directory listing, a shell command, then all three fixture files it had no use
 for — and was killed having written nothing. Audited afterwards:
 
@@ -78,9 +78,26 @@ the run that failed:    7 look-shaped calls, no act-shaped calls
 the run that succeeded: look:act = 8:1 = 8.00
 ```
 
-A1 is 0 for both. Only the counterweight separates them, which is the argument
+A1 is 0 for both. Only a counterweight separates them, which is the argument
 for having one: a report with a single "did it verify" number would have scored
 the failed run perfectly.
+
+I first wrote this paragraph crediting A5, which did not exist yet — the lines
+above are both A3. The correction is left visible because the mistake is the
+one this document is about: a satisfying result banked without checking which
+instrument produced it.
+
+## The other limitation, found the same way
+
+A5 counts a path read and then never edited, written, or read again. That is
+not the same as *wasted*, and the fixtures contain the counterexample:
+`write-new-file` reads `calc.go` to learn the package name and then writes
+`greet.go` with it. The read was used; the path was not. A5 names it anyway.
+
+So the line is labelled "reads w/o follow-up" rather than "unused reads", and
+says so beneath itself when it fires. A read that informs work on a neighbour
+is the context-gathering the whole report is meant to encourage, and a counter
+that scolds it would push in exactly the wrong direction.
 
 ## What it deliberately does not do
 
