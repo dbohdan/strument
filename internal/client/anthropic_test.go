@@ -448,3 +448,57 @@ func TestAnthropicParameterlessToolGetsAnEmptySchema(t *testing.T) {
 		t.Errorf("input_schema = %#v, want an empty object schema", schema)
 	}
 }
+
+// Providers disagree about the type of the in-band cost: OpenRouter sends
+// 0.000942, opencode Go sends "0". A *float64 rejects the quoted form, and in
+// the SSE parser a failed unmarshal ends the turn — so a decorative field
+// would take the answer with it, after that answer was already on screen.
+func TestCostAcceptsEitherType(t *testing.T) {
+	for _, tc := range []struct {
+		json      string
+		wantKnown bool
+		want      float64
+	}{
+		{`0.000942`, true, 0.000942},
+		{`"0"`, true, 0},
+		{`"0.25"`, true, 0.25},
+		{`null`, false, 0},
+		{`"free"`, false, 0}, // unparseable is "unknown", not an error
+		{`{"nested":1}`, false, 0},
+	} {
+		var got flexFloat
+		if err := json.Unmarshal([]byte(tc.json), &got); err != nil {
+			t.Errorf("cost %s: err = %v, want it absorbed rather than raised", tc.json, err)
+			continue
+		}
+		if got.Known != tc.wantKnown || (tc.wantKnown && got.Value != tc.want) {
+			t.Errorf("cost %s = %+v, want known=%v value=%v", tc.json, got, tc.wantKnown, tc.want)
+		}
+		if p := got.ptr(); (p == nil) == tc.wantKnown {
+			t.Errorf("cost %s: ptr() nil = %v, want %v", tc.json, p == nil, !tc.wantKnown)
+		}
+	}
+}
+
+// And the whole way through the stream parser: a quoted cost in a usage chunk
+// must not end the turn.
+func TestQuotedCostDoesNotKillTheStream(t *testing.T) {
+	sse := "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":10}}}\n" +
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\"}}\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n" +
+		"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}," +
+		"\"usage\":{\"input_tokens\":10,\"output_tokens\":2,\"cost\":\"0\"}}\n" +
+		"data: [DONE]\n"
+
+	evs := antStream(t, sse)
+	if got := textOf(evs, llm.EventAnswer); got != "ok" {
+		t.Errorf("answer = %q, want it delivered despite the quoted cost", got)
+	}
+	u := usageOf(evs)
+	if u == nil || u.CompletionTokens != 2 {
+		t.Fatalf("usage = %+v, want it reported", u)
+	}
+	if u.Cost == nil || *u.Cost != 0 {
+		t.Errorf("cost = %v, want the quoted zero read as 0", u.Cost)
+	}
+}
