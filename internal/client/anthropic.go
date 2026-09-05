@@ -66,6 +66,8 @@ func ForProvider(p config.Provider) llm.ModelClient {
 	switch p.Adapter {
 	case config.AdapterAnthropic, config.AdapterOpenCodeAnthropic:
 		return NewAnthropic(p)
+	case config.AdapterResponses, config.AdapterOpenCodeResponses:
+		return NewResponses(p)
 	default:
 		return New(p)
 	}

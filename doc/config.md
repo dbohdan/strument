@@ -963,6 +963,8 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   | `"opencode"` | chat-completions | `https://opencode.ai/zen/go/v1` |
   | `"anthropic"` | Anthropic Messages | `https://api.anthropic.com/v1` |
   | `"opencode-anthropic"` | Anthropic Messages | `https://opencode.ai/zen/go/v1` |
+  | `"responses"` | OpenAI Responses | `https://api.openai.com/v1` |
+  | `"opencode-responses"` | OpenAI Responses | `https://opencode.ai/zen/go/v1` |
 
   Dialect and destination are separate: `provider("anthropic", base_url=…)`
   reaches any gateway that speaks Messages, including OpenRouter's
@@ -1007,10 +1009,12 @@ own provider — one key, bound once, passed to each:
 key     = env("OPENCODE_API_KEY")
 oc      = provider("opencode", api_key = key)
 oc_msg  = provider("opencode-anthropic", api_key = key)
+oc_resp = provider("opencode-responses", api_key = key)
 
 models = {
-    "mimo": model(oc,     "mimo-v2.5",     context = 1050000, cache = True),
-    "qwen": model(oc_msg, "qwen3.8-flash", context = 262144,  cache = True),
+    "mimo": model(oc,      "mimo-v2.5",     context = 1050000, cache = True),
+    "qwen": model(oc_msg,  "qwen3.8-flash", context = 262144,  cache = True),
+    "luna": model(oc_resp, "gpt-5.6-luna",  context = 272000,  cache = True),
 }
 ```
 
@@ -1018,7 +1022,7 @@ models = {
 | --- | --- | --- |
 | `/chat/completions` | `opencode` | GLM-5.3-Flash, GLM-5.3, GLM-5.2, GLM-5.1, Kimi K3, Kimi K2.7 Code, Kimi K2.6, LongCat-2.0, DeepSeek V4 Pro, DeepSeek V4 Flash, DeepSeek V4 Flash Vision Exp, MiMo-V2.5, MiMo-V2.5-Pro, Hy4 preview, Hy3, Omen Alpha |
 | `/messages` | `opencode-anthropic` | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus |
-| `/responses` | *(none yet)* | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor |
+| `/responses` | `opencode-responses` | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor |
 
 **Match the adapter to the model, and expect no help if you do not.** The
 protocol is not discoverable — `/zen/go/v1/models` lists ids and nothing else,
@@ -1068,6 +1072,35 @@ Two further differences from chat-completions matter when configuring a model:
 - **Caching is the same setting** (`cache = True`) but a different mechanism:
   the breakpoints Strument places become `cache_control` markers on the prompt
   prefix, which is where this dialect's cache hits come from.
+
+#### The Responses dialect
+
+`provider("responses", …)` speaks OpenAI's Responses API, which OpenAI, its
+gateways and opencode all serve:
+
+```python
+resp = provider("responses", base_url = "https://openrouter.ai/api/v1",
+                api_key = env("OPENROUTER_API_KEY"))
+models = {"luna": model(resp, "openai/gpt-5.6-luna",
+                        context = 272000, max_output = 8192, cache = True,
+                        reasoning = "high")}
+```
+
+**Set `reasoning` if you want to see any.** Reasoning is visible on this API
+only as a *summary*, and a summary is only produced when an effort is
+requested — the raw reasoning item carries an opaque encrypted blob. A model
+with no `reasoning` therefore streams no thinking here, which is the same
+"defer to the provider" the other dialects mean; the provider's own default is
+silence.
+
+Strument deliberately does not ask for a summary without also naming an
+effort, because some providers read that as *disabling* reasoning:
+`x-ai/grok-4.6` rejects such a request with "Reasoning is mandatory for this
+endpoint and cannot be disabled", where `openai/gpt-5.6-luna` accepts it.
+
+Conversations are never stored server-side (`store` is off). Strument holds
+the whole history and resends it, so server-side storage would be a second
+copy with its own lifetime that the user cannot see, edit or undo.
 
 ### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 

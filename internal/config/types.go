@@ -15,8 +15,9 @@ import (
 // defaults of one destination.
 //
 // openai, openrouter and opencode speak OpenAI chat-completions; anthropic and
-// opencode-anthropic speak Anthropic Messages. opencode Go also serves models
-// over /responses, which no adapter reaches yet — see doc/config.md.
+// opencode-anthropic speak Anthropic Messages; responses and
+// opencode-responses speak OpenAI's Responses API. opencode Go enforces which
+// of its models is on which — see doc/config.md.
 const (
 	AdapterOpenAI     = "openai"
 	AdapterOpenRouter = "openrouter"
@@ -29,6 +30,11 @@ const (
 	// than the destination being inferred from a URL.
 	AdapterAnthropic         = "anthropic"
 	AdapterOpenCodeAnthropic = "opencode-anthropic"
+
+	// AdapterResponses and AdapterOpenCodeResponses speak OpenAI's Responses
+	// API, the third of the protocols opencode Go serves.
+	AdapterResponses         = "responses"
+	AdapterOpenCodeResponses = "opencode-responses"
 )
 
 // Edit formats recognized by model(). Only one remains, and the parameter is
@@ -63,7 +69,8 @@ var reservedParamKeys = map[string]bool{
 
 // Provider is a pure carrier of endpoint + dialect; no behavior inheritance.
 type Provider struct {
-	Adapter     string // "openai" | "openrouter" | "opencode" | "anthropic" | "opencode-anthropic"
+	// One of the Adapter* constants above.
+	Adapter     string
 	BaseURL     string // "" => adapter default
 	APIKey      string
 	Name        string

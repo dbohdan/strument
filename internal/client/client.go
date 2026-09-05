@@ -340,12 +340,16 @@ func opencodeRoutingHint(adapter string, status int) string {
 	switch adapter {
 	case config.AdapterOpenCode:
 		return "\nIf the key is good, this model may be one opencode serves over " +
-			"/messages rather than /chat/completions — try the \"opencode-anthropic\" adapter. " +
-			"opencode's model table says which."
+			"/messages or /responses rather than /chat/completions — try the " +
+			"\"opencode-anthropic\" or \"opencode-responses\" adapter. opencode's model table says which."
 	case config.AdapterOpenCodeAnthropic:
 		return "\nIf the key is good, this model may be one opencode serves over " +
-			"/chat/completions rather than /messages — try the \"opencode\" adapter. " +
-			"opencode's model table says which."
+			"/chat/completions or /responses rather than /messages — try the " +
+			"\"opencode\" or \"opencode-responses\" adapter. opencode's model table says which."
+	case config.AdapterOpenCodeResponses:
+		return "\nIf the key is good, this model may be one opencode serves over " +
+			"/chat/completions or /messages rather than /responses — try the " +
+			"\"opencode\" or \"opencode-anthropic\" adapter. opencode's model table says which."
 	}
 	return ""
 }
