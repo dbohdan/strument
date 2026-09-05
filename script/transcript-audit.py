@@ -188,12 +188,15 @@ def audit(paths):
 
             distances = edit_distances(session)
             if distances:
+                distance_values = [d for _, d in distances]
                 print(f"  A2: {len(distances)} edits, "
-                      f"median distance {statistics.median(distances)}, "
-                      f"max {max(d for _, d in distances)}")
-                for path, d in sorted(distances, key=lambda pd: pd[1], reverse=True):
+                      f"median distance {statistics.median(distance_values)}, "
+                      f"max {max(distance_values)}")
+                for edit_path, d in sorted(
+                    distances, key=lambda pd: pd[1], reverse=True
+                ):
                     if d >= 5:
-                        print(f"  distant edit: {path} at distance {d}")
+                        print(f"  distant edit: {edit_path} at distance {d}")
 
             looks, acts = look_act_counts(session)
             if acts == 0:
