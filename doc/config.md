@@ -34,6 +34,7 @@ The loader reads these module-level variables after running your file:
 | `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
+| `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
 | `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
@@ -572,6 +573,35 @@ measured effect on what models say.
 **Search results are not fetchable without asking.** A URL from a result still
 goes through `webfetch`'s own per-origin prompt. What ranks for a query is
 something a stranger can influence, so the two permissions stay separate.
+
+### `shell`
+
+Whether the model is offered the `bash` tool at all.
+
+```python
+shell = True     # the default
+shell = False    # the model cannot run commands, and is not asked
+```
+
+`False` removes the tool from the schema rather than refusing the calls, and
+that distinction is the whole point. A tool the session will never allow is
+worse than an absent one: the model plans around a capability it does not have,
+spends a step discovering it cannot use it, and learns that a confirmation
+prompt is a formality. Withholding it means the model plans with the tools it
+actually has.
+
+Execution is gated too, so a path that does not go through the tool cannot slip
+past — the setting is a promise about the session, not a decoration on one
+schema.
+
+`--no-shell` does the same for a single run. It can only turn the shell off,
+never on: a project config that says `shell = False` is a standing decision,
+and a flag that silently re-enabled the shell would make it unreliable.
+
+Two uses. A session where you want edits reviewed but nothing executed — the
+review loop without the side effects. And testing: `script/opencode-live-pass.sh`
+uses it so a model cannot reach for `sed` and pass an edit check without ever
+calling the edit tool.
 
 ### `loop_detection`
 

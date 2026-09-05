@@ -839,3 +839,62 @@ default = "mimo"
 		t.Errorf("slug = %q, want it sent verbatim", got)
 	}
 }
+
+// `shell = False` is a standing decision about a project, so it has to survive
+// config load like any other global, and reject a non-boolean rather than
+// quietly meaning something.
+func TestShellSetting(t *testing.T) {
+	load := func(src string) (*Config, error) { return Load(harness(t, src, "", nil)) }
+	base := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+	cfg, err := load(base)
+	if err != nil {
+		t.Fatalf("baseline: %v", err)
+	}
+	if cfg.NoShell {
+		t.Error("shell is off by default; it must be on unless a config says otherwise")
+	}
+
+	cfg, err = load(base + "shell = False\n")
+	if err != nil {
+		t.Fatalf("shell = False: %v", err)
+	}
+	if !cfg.NoShell {
+		t.Error("`shell = False` did not disable the shell")
+	}
+
+	if cfg, err = load(base + "shell = True\n"); err != nil || cfg.NoShell {
+		t.Errorf("`shell = True` should be the default state: err=%v NoShell=%v", err, cfg.NoShell)
+	}
+
+	if _, err = load(base + `shell = "no"` + "\n"); err == nil ||
+		!strings.Contains(err.Error(), "`shell` must be a boolean") {
+		t.Errorf("a non-boolean shell should be rejected by name, got %v", err)
+	}
+}
+
+// A project config disabling the shell must win over a user config that leaves
+// it alone, the same way the other project-level globals do.
+func TestProjectShellOverridesUser(t *testing.T) {
+	user := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+	opts := harness(t, user, "shell = False\n", nil)
+	// A project config only speaks once it is trusted; without this the test
+	// would pass or fail for the wrong reason.
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !cfg.NoShell {
+		t.Error("a project config's `shell = False` was ignored")
+	}
+}

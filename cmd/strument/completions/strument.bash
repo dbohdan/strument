@@ -1,7 +1,7 @@
 # Bash completions for strument.
 
 _strument_commands="trust history config model-config tool shell version"
-_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --yes --yes-shell --version"
+_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --yes --yes-shell --version"
 _strument_config_commands="models default"
 _strument_tool_commands="read grep glob ls symbol"
 _strument_model_config_options="-s --source --provider-name --proxy"

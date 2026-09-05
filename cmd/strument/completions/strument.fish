@@ -35,6 +35,7 @@ complete -c strument -n __strument_chat_command -l no-color -d "Disable ANSI col
 complete -c strument -n __strument_chat_command -l dark-mode -d "Use colors suited to a dark terminal background"
 complete -c strument -n __strument_chat_command -l light-mode -d "Use colors suited to a light terminal background"
 complete -c strument -n __strument_chat_command -l no-auto-commits -d "Keep git integration but do not auto-commit edits"
+complete -c strument -n __strument_chat_command -l no-shell -d "Withhold the bash tool: the model cannot run commands and is not offered the choice"
 complete -c strument -n __strument_chat_command -l no-history -d "Do not write the session to the chat-history file"
 complete -c strument -n __strument_chat_command --long jsonl -d "Also record the session to this file as JSONL" -r
 complete -c strument -n __strument_chat_command --long dry-run -d "Report edits without writing files or committing"

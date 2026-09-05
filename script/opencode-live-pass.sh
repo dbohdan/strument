@@ -13,12 +13,15 @@
 # them. A model that reports success having changed nothing reads identically
 # to a real success in prose, and that is the failure worth catching.
 #
-# The model is *not* granted the shell. stdin is /dev/null, so a confirmation
-# prompt reads EOF and declines cleanly — the model is told the command was
-# refused and carries on, which is what a live probe measured. Granting it
-# would be worse than noisy: a model that fixes a file with sed passes the
-# check without ever exercising the edit tool, which is the failure this script
-# exists to catch. A timeout backs that up so no case can wedge the run.
+# The model is *not* granted the shell: --no-shell withholds the bash tool
+# rather than offering it and refusing the calls, so no step is spent on a
+# capability that was never available. Granting it would be worse than noisy —
+# a model that fixes a file with sed passes the check without ever exercising
+# the edit tool, which is the failure this script exists to catch.
+#
+# stdin is /dev/null as well, so any *other* confirmation prompt reads EOF and
+# declines rather than waiting for a keypress nobody is there to give, and a
+# timeout backs that up so no case can wedge the run.
 #
 # STRUMENT_LIVE_CONFIG=path points it at a different config — the same nine
 # cases against OpenRouter's openai/anthropic/responses endpoints, say, which
@@ -151,10 +154,10 @@ run_case() { # name, model, prompt, check-function
   rm -rf "$dir"; mkdir -p "$dir"; write_broken "$dir"
 
   printf '%-26s ' "$name"
-  # stdin from /dev/null: a confirmation prompt then reads EOF and declines
-  # rather than waiting for a keypress nobody is there to give.
+  # --no-shell: the bash tool is absent, not refused. stdin from /dev/null so
+  # any other prompt reads EOF and declines rather than waiting.
   ( cd "$dir" && XDG_CONFIG_HOME="$ROOT/cfg" $RUN "$STRUMENT" chat --model "$model" \
-      -m "$prompt" --no-git --no-history --no-color --yes steps < /dev/null ) > "$log" 2>&1
+      -m "$prompt" --no-git --no-history --no-color --no-shell --yes steps < /dev/null ) > "$log" 2>&1
   status=$?
   [ "$status" -eq 124 ] && echo "    (timed out after ${LIMIT}s)" >> "$log"
 

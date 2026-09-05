@@ -65,6 +65,8 @@ type fileGlobals struct {
 	maxErrorReflectionsVal   int
 	hasLoopDetection         bool
 	loopDetectionVal         bool
+	hasShell                 bool
+	shellVal                 bool
 	hasAnchoredEdits         bool
 	anchoredEditsVal         bool
 	hasIndentColumn          bool
@@ -359,6 +361,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
+	if user.hasShell {
+		cfg.NoShell = !user.shellVal
+	}
 	if user.hasAnchoredEdits {
 		cfg.AnchoredEdits = user.anchoredEditsVal
 	}
@@ -436,6 +441,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasLoopDetection {
 			cfg.NoLoopDetection = !project.loopDetectionVal
+		}
+		if project.hasShell {
+			cfg.NoShell = !project.shellVal
 		}
 		if project.hasAnchoredEdits {
 			cfg.AnchoredEdits = project.anchoredEditsVal
@@ -786,6 +794,15 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 			out.hasWebSearch = true
 			out.webSearchVal = &cp
 		}
+	}
+
+	if sh, ok := globals["shell"]; ok {
+		b, ok := sh.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `shell` must be a boolean, got %s", path, sh.Type())
+		}
+		out.hasShell = true
+		out.shellVal = bool(b)
 	}
 
 	if ld, ok := globals["loop_detection"]; ok {

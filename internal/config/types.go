@@ -224,6 +224,14 @@ type Config struct {
 	// MaxSteps and the rest. `loop_detection = False` is the only thing that
 	// sets it.
 	NoLoopDetection bool
+
+	// NoShell withholds the bash tool from the schema, rather than offering it
+	// and refusing the calls. A prompt whose answer never changes teaches that
+	// prompts are noise, and a tool the model may not use is worse than absent:
+	// it plans around a capability it does not have, then spends a step finding
+	// out. `shell = False` and --no-shell both set it. Execution stays gated
+	// too, so a path that does not go through the tool cannot slip past.
+	NoShell bool
 	// AnchoredEdits gives read a stable identity per line and lets edit
 	// address lines by it instead of by quoting them back.
 	//

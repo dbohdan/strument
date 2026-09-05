@@ -51,6 +51,7 @@ type chatCmd struct {
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                               name:"no-history"`
 	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                              name:"jsonl"                                                  placeholder:"FILE"`
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                name:"dry-run"`
+	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                             name:"no-shell"`
 	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, all. Repeatable; lists allowed." placeholder:"NAME[,NAME]"`
 	Files         []string `arg:""                                                                                                                  help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
@@ -156,6 +157,10 @@ func (c *chatCmd) Run() error {
 		cdr.MaxErrorReflections = cfg.MaxErrorReflections
 	}
 	cdr.LoopDetection = !cfg.NoLoopDetection
+	// The flag turns it off; it cannot turn it on. A config that says
+	// `shell = False` is a standing decision about this project, and a flag
+	// that silently re-enabled it would make that decision unreliable.
+	cdr.SuggestShellCommands = !cfg.NoShell && !c.NoShell
 	cdr.AnchoredEdits = cfg.AnchoredEdits
 	cdr.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
 	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
