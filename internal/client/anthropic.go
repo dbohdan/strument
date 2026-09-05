@@ -331,9 +331,12 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		httpReq.Header.Set("User-Agent", userAgent)
 		httpReq.Header.Set("Anthropic-Version", anthropicVersion)
 		if c.Provider.APIKey != "" {
-			// Anthropic's own API reads x-api-key; gateways that front the
-			// dialect read Authorization. Sending both costs nothing and means
-			// one adapter serves Anthropic, OpenRouter and opencode alike.
+			// Both, because the gateways genuinely disagree and each ignores
+			// the other's header. Measured: opencode's /messages rejects an
+			// Authorization-only request with 401 "Missing API key." and
+			// accepts x-api-key; OpenRouter's /messages accepts Authorization.
+			// anthropic-version is optional at opencode and required by
+			// Anthropic itself, so it goes on every request.
 			httpReq.Header.Set("X-Api-Key", c.Provider.APIKey)
 			httpReq.Header.Set("Authorization", "Bearer "+c.Provider.APIKey)
 		}
@@ -354,7 +357,7 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			yield(llm.StreamEvent{}, classifyHTTPError(resp))
+			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter))
 			return
 		}
 

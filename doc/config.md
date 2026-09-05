@@ -1020,9 +1020,22 @@ models = {
 | `/messages` | `opencode-anthropic` | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus |
 | `/responses` | *(none yet)* | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor |
 
-The protocol is not discoverable: `/zen/go/v1/models` lists ids and nothing
-else, and it serves models the documented table omits, so which adapter a slug
-needs comes from opencode's endpoint table rather than from Strument.
+**Match the adapter to the model, and expect no help if you do not.** The
+protocol is not discoverable — `/zen/go/v1/models` lists ids and nothing else,
+and serves models the documented table omits — so the adapter a slug needs
+comes from opencode's endpoint table.
+
+The split is enforced in both directions, and reported inconsistently.
+Measured against the live endpoint: `grok-4.6` on `/chat/completions` answers
+**401**, `gpt-5.6-luna` on the same endpoint answers **500**, and `mimo-v2.5`
+on `/messages` answers **500** — one mistake, three codes, none of which
+mentions endpoints, and a 401 reads as a bad key. Strument appends a line
+naming the other adapter when an opencode request fails that way.
+
+Do not rely on a model answering outside its documented endpoint even when it
+does. Seven of the eight `/messages` models happen to work on
+`/chat/completions` too; `minimax-m2.7`, same family and same key, returns a
+500. That is a gap in opencode's routing rather than a supported fallback.
 
 Requests to this adapter carry an `x-opencode-session` header: one random id per
 Strument process, which opencode uses to group a session and keep its prompt
@@ -1042,7 +1055,12 @@ models = {"haiku": model(ant, "anthropic/claude-haiku-4.5",
                          context = 200000, max_output = 8192, cache = True)}
 ```
 
-Two differences from chat-completions are worth knowing when configuring it:
+Authentication differs, and Strument sends both forms because the gateways
+disagree: opencode's `/messages` rejects an `Authorization`-only request with
+`401 Missing API key.` and wants `x-api-key`, while OpenRouter's accepts
+`Authorization`. Nothing needs configuring — `api_key` covers both.
+
+Two further differences from chat-completions matter when configuring a model:
 
 - **`max_output` matters more.** Anthropic requires `max_tokens` on every
   request, so a model with no `max_output` gets a built-in default rather than

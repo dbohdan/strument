@@ -502,3 +502,47 @@ func TestQuotedCostDoesNotKillTheStream(t *testing.T) {
 		t.Errorf("cost = %v, want the quoted zero read as 0", u.Cost)
 	}
 }
+
+// A slug on the wrong opencode adapter is a mistake the user cannot avoid by
+// reading: the model-to-protocol map is not in /v1/models, only in opencode's
+// documentation. It also fails in three different ways — measured, grok-4.6 on
+// /chat/completions is 401, gpt-5.6-luna is 500, mimo-v2.5 on /messages is 500
+// — and none of the messages mentions endpoints. A 401 in particular reads as
+// a bad key and sends the user to rotate one that was fine.
+func TestOpenCodeRoutingHint(t *testing.T) {
+	for _, tc := range []struct {
+		adapter  string
+		status   int
+		wantHint string
+	}{
+		{config.AdapterOpenCode, 401, "opencode-anthropic"},
+		{config.AdapterOpenCode, 500, "opencode-anthropic"},
+		{config.AdapterOpenCodeAnthropic, 401, `"opencode"`},
+		{config.AdapterOpenCodeAnthropic, 500, `"opencode"`},
+
+		// Not every failure is a routing mistake, and a hint on a rate limit
+		// or a bad request would be noise pointing at the wrong thing.
+		{config.AdapterOpenCode, 429, ""},
+		{config.AdapterOpenCode, 400, ""},
+		// And no other provider gets opencode's advice.
+		{config.AdapterOpenAI, 401, ""},
+		{config.AdapterAnthropic, 500, ""},
+		{config.AdapterOpenRouter, 401, ""},
+	} {
+		got := opencodeRoutingHint(tc.adapter, tc.status)
+		if tc.wantHint == "" {
+			if got != "" {
+				t.Errorf("%s %d: hint = %q, want none", tc.adapter, tc.status, got)
+			}
+			continue
+		}
+		if !strings.Contains(got, tc.wantHint) {
+			t.Errorf("%s %d: hint = %q, want it to name %s", tc.adapter, tc.status, got, tc.wantHint)
+		}
+		// It must not assert the cause: these codes are genuinely ambiguous.
+		if !strings.Contains(got, "may be") {
+			t.Errorf("%s %d: hint = %q, want it hedged — a 401 can still be a bad key",
+				tc.adapter, tc.status, got)
+		}
+	}
+}

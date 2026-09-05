@@ -265,7 +265,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			yield(llm.StreamEvent{}, classifyHTTPError(resp))
+			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter))
 			return
 		}
 
@@ -319,7 +319,38 @@ func (c *Client) idleTimeout() time.Duration {
 }
 
 // classifyHTTPError maps a non-200 response onto the error classes.
-func classifyHTTPError(resp *http.Response) *llm.StreamError {
+// opencodeRoutingHint is appended when an opencode request fails in one of the
+// ways a slug on the wrong adapter fails.
+//
+// opencode Go serves three protocols and enforces the split in both
+// directions, but says so inconsistently: measured against the live endpoint,
+// grok-4.6 on /chat/completions answers 401, gpt-5.6-luna on the same endpoint
+// answers 500, and mimo-v2.5 on /messages answers 500 — the same mistake, three
+// codes, none of which mentions endpoints. A 401 in particular reads as "your
+// key is wrong", which sends the user to rotate a key that was fine.
+//
+// The map from model to protocol is not discoverable — /v1/models lists ids
+// and nothing else — so this is a mistake a user cannot avoid by reading, and
+// the hint is worth more than its noise. It is phrased as a possibility
+// because these codes really are ambiguous: a 401 can still be a bad key.
+func opencodeRoutingHint(adapter string, status int) string {
+	if status != http.StatusUnauthorized && status < 500 {
+		return ""
+	}
+	switch adapter {
+	case config.AdapterOpenCode:
+		return "\nIf the key is good, this model may be one opencode serves over " +
+			"/messages rather than /chat/completions — try the \"opencode-anthropic\" adapter. " +
+			"opencode's model table says which."
+	case config.AdapterOpenCodeAnthropic:
+		return "\nIf the key is good, this model may be one opencode serves over " +
+			"/chat/completions rather than /messages — try the \"opencode\" adapter. " +
+			"opencode's model table says which."
+	}
+	return ""
+}
+
+func classifyHTTPError(resp *http.Response, adapter string) *llm.StreamError {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	msg := extractErrorMessage(body)
 	if msg == "" {
@@ -349,6 +380,7 @@ func classifyHTTPError(resp *http.Response) *llm.StreamError {
 			class = llm.ErrRequest
 		}
 	}
+	msg += opencodeRoutingHint(adapter, resp.StatusCode)
 	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg)}
 }
 
