@@ -226,7 +226,9 @@ def look_act_counts(session):
 
 
 def audit(paths):
-    """Print one report block per session."""
+    """Print one report block per session, then a total across all transcripts."""
+    totals = {"A1": 0, "A2_edits": 0, "A3_looks": 0, "A3_acts": 0,
+              "A4": 0, "A5": 0}
     for path in paths:
         for i, session in enumerate(read_sessions(path), 1):
             blind = count_blind_edits(session)
@@ -242,19 +244,37 @@ def audit(paths):
             if distances:
                 values = [d for _, d in distances]
                 median = statistics.median(values)
-                print(f"  A2: edit distance    {len(distances)} edits, median distance "
+                print(f"  A2 edit distance    {len(distances)} edits, median distance "
                       f"{median}, max {max(values)}")
             else:
-                print("  A2: edit distance    0 edits, median distance 0, max 0")
+                print("  A2 edit distance    0 edits, median distance 0, max 0")
             if acts == 0:
                 print(f"  A3 look:act         {looks} look-shaped calls, no act-shaped calls")
             else:
                 print(f"  A3 look:act         {looks}:{acts} = {looks / acts:.2f}")
             print(f"  A4 unrechecked      {len(unrechecked)}" +
                   (f"   ({', '.join(sorted(unrechecked))})" if unrechecked else ""))
-            print(f"  A5 unused reads     {len(unused)}" +
+            print(f"  A5 reads w/o follow-up  {len(unused)}" +
                   (f"   ({', '.join(sorted(unused))})" if unused else ""))
-            print(f"{path}  total A1 = {len(blind)}")
+            if unused:
+                print("    (a read can inform work on another file; not all of these are waste)")
+
+            totals["A1"] += len(blind)
+            totals["A2_edits"] += len(distances)
+            totals["A3_looks"] += looks
+            totals["A3_acts"] += acts
+            totals["A4"] += len(unrechecked)
+            totals["A5"] += len(unused)
+
+    print("\nTOTAL across all transcripts")
+    print(f"  A1 blind edits          {totals['A1']}")
+    print(f"  A2 edits                {totals['A2_edits']}")
+    if totals["A3_acts"] == 0:
+        print(f"  A3 look:act             {totals['A3_looks']} look-shaped calls, no act-shaped calls")
+    else:
+        print(f"  A3 look:act             {totals['A3_looks']}:{totals['A3_acts']} = {totals['A3_looks'] / totals['A3_acts']:.2f}")
+    print(f"  A4 unrechecked          {totals['A4']}")
+    print(f"  A5 reads w/o follow-up  {totals['A5']}")
 
 
 if __name__ == "__main__":

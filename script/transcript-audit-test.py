@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for script/transcript-audit.py.
+"""Regression tests for transcript-audit.py.
 
 Two defects produced plausible-looking output that was wrong, and neither
 raised:
@@ -52,14 +52,13 @@ def run_audit(fixture):
     return buf.getvalue()
 
 
-def per_file_totals(out):
-    """Map path -> A1 total for every "PATH  total A1 = N" summary line."""
-    totals = {}
+def totals(out):
+    """Return the A1 total from the "TOTAL across all transcripts" block."""
     for line in out.splitlines():
-        m = re.match(r"^(.*)  total A1 = (\d+)$", line)
+        m = re.match(r"^  A1 blind edits\s+(\d+)$", line)
         if m:
-            totals[m.group(1)] = int(m.group(2))
-    return totals
+            return int(m.group(1))
+    return None
 
 
 class TranscriptAuditRegressionTest(unittest.TestCase):
@@ -80,11 +79,10 @@ class TranscriptAuditRegressionTest(unittest.TestCase):
                         "write-new-file.jsonl",
                         "blind-edit.jsonl"):
             out = run_audit(fixture)
-            totals = per_file_totals(out)
             self.assertIn(
-                os.path.join(FIXTURES, fixture),
-                totals,
-                msg=f"summary line does not name the transcript for {fixture}:\n{out}",
+                "TOTAL across all transcripts",
+                out,
+                msg=f"no total summary for {fixture}:\n{out}",
             )
 
     def test_a1_ground_truth(self):
@@ -96,9 +94,8 @@ class TranscriptAuditRegressionTest(unittest.TestCase):
         }
         for fixture, want in expected.items():
             out = run_audit(fixture)
-            totals = per_file_totals(out)
             self.assertEqual(
-                totals[os.path.join(FIXTURES, fixture)],
+                totals(out),
                 want,
                 msg=f"A1 moved for {fixture}:\n{out}",
             )
