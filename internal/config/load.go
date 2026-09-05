@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 
 	"go.starlark.net/starlark"
@@ -431,9 +430,20 @@ func Load(opts Options) (*Config, error) {
 			cfg.Scraper = project.scraperVal
 		}
 		if project.hasCheck {
-			// Per-key rather than wholesale, so a project can override one check
-			// or add its own without restating the user's whole set.
-			cfg.Check = mergeChecks(cfg.Check, project.checkVal)
+			// Whole-value, like every other key a project can set. It used to
+			// merge per key, which let a project override one check or add its
+			// own without restating the rest — but merging has no way to
+			// *remove*, so a user whose config said `check = project_checks()`
+			// could not drop one of those in a project that did not want it.
+			//
+			// The alternatives were worse. A delete marker adds a second
+			// meaning for a value. Predefining the user's `check` in the
+			// project's namespace would make a committed, shared file mean
+			// different things on different machines, and would give it read
+			// access to the user's settings it has never had. Restating
+			// `project_checks()` is one call, and the file then says what it
+			// does without reference to anything the reader cannot see.
+			cfg.Check = project.checkVal
 		}
 		if project.hasCheckAuto {
 			// Whole-value, unlike check: this is one ordered decision about what
@@ -1068,21 +1078,6 @@ func parseChecks(path string, v starlark.Value) ([]Check, error) {
 		checks = append(checks, Check{Name: name, Argv: argv})
 	}
 	return checks, nil
-}
-
-// mergeChecks applies the project's checks over the user's: a shared name is
-// replaced in place, keeping the user's ordering, and a project-only name is
-// appended. This is the ordered form of the whole-key merge `models` uses.
-func mergeChecks(user, project []Check) []Check {
-	out := slices.Clone(user)
-	for _, p := range project {
-		if i := slices.IndexFunc(out, func(c Check) bool { return c.Name == p.Name }); i >= 0 {
-			out[i] = p
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
 }
 
 // TrustProject computes the project config's multihash and records it in

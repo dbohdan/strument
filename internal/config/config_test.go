@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -692,10 +693,15 @@ check = {
 	}
 }
 
-// TestCheckProjectMergesPerKey covers the override the top-level placement is
-// for: a project replaces one check and adds another without restating the
-// user's set, and the user's ordering survives.
-func TestCheckProjectMergesPerKey(t *testing.T) {
+// TestCheckProjectReplacesWholesale pins the semantics `check` shares with
+// every other key a project can set: the project's value wins entire.
+//
+// It used to merge per key, which read as a convenience and was one — until a
+// user config saying `check = project_checks()` met a project that wanted
+// fewer checks, not more. Merging can override a name and add a name; it has
+// no way to remove one, so there was no way to say "not that one" short of
+// changing the global config for every project.
+func TestCheckProjectReplacesWholesale(t *testing.T) {
 	user := userConfig + `
 check = {
     "lint": ["user-lint"],
@@ -717,15 +723,20 @@ check = {
 		t.Fatal(err)
 	}
 
-	want := []string{"lint", "test", "typecheck"}
+	// "lint" is gone: the user set it, the project did not restate it, and a
+	// project that does not name a check does not have it. That is the whole
+	// change, and it is what makes dropping one possible.
+	want := []string{"test", "typecheck"}
 	if got := cfg.CheckNames(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("CheckNames() = %v, want %v", got, want)
 	}
-	if got := strings.Join(cfg.Check[0].Argv, " "); got != "user-lint" {
-		t.Errorf("lint = %q, want the user's (untouched by the project)", got)
+	// Order is the project's declaration order, not a splice into the user's:
+	// with nothing inherited there is no other order it could be.
+	if got := strings.Join(cfg.Check[0].Argv, " "); got != "project-test -race" {
+		t.Errorf("first check = %q, want the project's first", got)
 	}
-	if got := strings.Join(cfg.Check[1].Argv, " "); got != "project-test -race" {
-		t.Errorf("test = %q, want the project's override in the user's slot", got)
+	if got := strings.Join(cfg.Check[1].Argv, " "); got != "project-tsc" {
+		t.Errorf("second check = %q, want the project's second", got)
 	}
 }
 
@@ -896,5 +907,55 @@ default = "m"
 	}
 	if !cfg.NoShell {
 		t.Error("a project config's `shell = False` was ignored")
+	}
+}
+
+// The idiom that replaces merging. A project that wants the standard checks
+// plus one of its own restates them by calling project_checks() itself — one
+// call, and the file then says what it does without reference to a user config
+// the reader cannot see.
+//
+// This is also the form the documentation used to get wrong. It showed
+// `check = dict(check, ...)` under a .strument.star heading, which fails with
+// "global variable check referenced before assignment": a project config has
+// never been able to see the user's `check`, so that example only ever worked
+// inside a single file.
+func TestProjectExtendsProjectChecks(t *testing.T) {
+	user := userConfig + "\ncheck = {\"lint\": [\"user-lint\"]}\n"
+	project := `check = dict(project_checks(), extra = ["echo", "hi"])`
+
+	opts := harness(t, user, project, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatalf("the documented extend idiom must load: %v", err)
+	}
+	names := cfg.CheckNames()
+	if !slices.Contains(names, "extra") {
+		t.Errorf("checks = %v, want the project's own check present", names)
+	}
+	if slices.Contains(names, "lint") {
+		t.Errorf("checks = %v, want the user's lint gone — the project did not restate it", names)
+	}
+}
+
+// And the form that does not work, held where it is so the documentation
+// cannot drift back to it: a project config cannot read the user's `check`.
+func TestProjectCannotReadTheUsersCheck(t *testing.T) {
+	user := userConfig + "\ncheck = {\"lint\": [\"user-lint\"]}\n"
+	project := `check = dict(check, extra = ["echo", "hi"])`
+
+	opts := harness(t, user, project, testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(opts)
+	if err == nil {
+		t.Fatal("a project referring to the user's check should fail, not silently inherit it")
+	}
+	if !strings.Contains(err.Error(), "check referenced before assignment") {
+		t.Errorf("err = %v, want it to name the unassigned global", err)
 	}
 }

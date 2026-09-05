@@ -163,20 +163,35 @@ Declared order matters. `check()` with no name runs every verification command i
 stops at the first failure, so put the fast ones first. `check("test")` runs
 just that one.
 
-A project's `.strument.star` merges into your `check` **per key**: it can
-replace one verification command or add its own without restating the rest.
+A project's `.strument.star` **replaces** your `check` entirely, like every
+other key a project can set. A project that names no checks and sets `check`
+has none.
 
 ```python
-# .strument.star — override just the test command, keep the user's lint.
+# .strument.star — this project's checks, and only these.
 check = {"test": ["go", "test", "-race", "./..."]}
 ```
 
-Because the key replaces rather than appends, extend a verification command by
-building the dict explicitly:
+To keep the standard ones and add to them, call `project_checks()` yourself.
+It is available in both configs and always resolves against the project that
+was opened:
 
 ```python
-check = dict(check, lint=["golangci-lint", "run", "--fast"])
+check = dict(project_checks(), lint = ["golangci-lint", "run", "--fast"])
 ```
+
+This used to merge per key, which was convenient until you wanted *fewer*
+checks: merging can override a name and add a name, but it has no way to
+remove one, so a user config saying `check = project_checks()` could not be
+narrowed by a project that wanted less. Replacing costs one call and can
+express both directions.
+
+A project config cannot read your `check` — it cannot read any of your
+settings. `check = dict(check, ...)` fails with "global variable check
+referenced before assignment", which is why the extend idiom names
+`project_checks()` rather than `check`. That isolation is deliberate: a
+`.strument.star` is committed and shared, and a file whose meaning depended on
+the reader's own config could not be reviewed by reading it.
 
 Unset, no `check` tool is offered and every command goes through `bash` and its
 confirmation prompt.
@@ -749,9 +764,9 @@ reset` returns to the config's list. Nothing is persisted, values are never
 displayed, and `/reload` discards session changes — the config is the source
 of truth. To make a `/env add` permanent, add the name to `env_allow`.
 
-A project's `.strument.star` **replaces** the user's `env_allow` whole-value,
-for the same reason it replaces `check_auto`: a merge of two lists could only
-widen, and the project needs to be able to narrow.
+A project's `.strument.star` **replaces** the user's `env_allow`, as it does
+every other key, and for the reason that made the rule uniform: a merge can
+only widen, and a project needs to be able to narrow.
 
 Two things are untouched by the allowlist. `/run` keeps the full environment,
 because you typed that command yourself. And the API keys Strument itself uses
