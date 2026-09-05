@@ -76,6 +76,11 @@ const (
 // sendUsage is the per-send accumulator; sendMessage owns it and a defer
 // finalizes it so a mid-send panic can't lose accounting.
 type sendUsage struct {
+	// modelTime is how long the provider had this send, summed over the
+	// stream attempts a retry may make. The turn's total accumulates
+	// separately on the Coder: an aside reports one send, a turn reports all
+	// of them, and neither should borrow the other's clock.
+	modelTime                                 time.Duration
 	prompt, completion, cacheWrite, cacheRead int
 	cost                                      float64
 	costKnown                                 bool
@@ -127,6 +132,19 @@ const (
 func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage, loops *loopDetector) (streamResult, error) {
 	finishReason := ""
 	usage.rejected = false
+
+	// The clock brackets exactly this loop, which is the whole of the time the
+	// provider owns: from the request going out to the last byte of the
+	// stream. Everything a turn does between sends — running tools, applying
+	// edits, asking the user — is outside it, so summing these across a turn
+	// gives model time rather than wall time.
+	started := c.Clock.Now()
+	defer func() {
+		elapsed := c.Clock.Now().Sub(started)
+		usage.modelTime += elapsed
+		c.messageModelTime += elapsed
+	}()
+
 	for ev, err := range c.Client.Send(ctx, req) {
 		if err != nil {
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
@@ -732,7 +750,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	c.totalTokensReceived += received
 	c.peakTokensSent = max(c.peakTokensSent, sent)
 
-	report := formatTokenLine(sent, u.cacheWrite, u.cacheRead, received)
+	report := formatTokenLine(sent, u.cacheWrite, u.cacheRead, received, u.modelTime)
 
 	cost := 0.0
 	known := false
@@ -793,14 +811,14 @@ func (c *Coder) flushSendUsage() {
 // — the token breakdown, the cost, and the estimated marker — for a whole turn.
 func (c *Coder) messageUsageReport(label, prefix string) string {
 	return usageReport(label, prefix, c.messageTokensSent, c.messageCacheWrite,
-		c.messageCacheRead, c.messageTokensReceived, c.messageCost, c.costKnown,
-		c.totalCost, c.messageEstimated)
+		c.messageCacheRead, c.messageTokensReceived, c.messageModelTime, c.messageCost,
+		c.costKnown, c.totalCost, c.messageEstimated)
 }
 
 func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int,
-	cost float64, costKnown bool, totalCost float64, estimated bool,
+	modelTime time.Duration, cost float64, costKnown bool, totalCost float64, estimated bool,
 ) string {
-	report := prefix + formatTokenLine(sent, cacheWrite, cacheRead, received)
+	report := prefix + formatTokenLine(sent, cacheWrite, cacheRead, received, modelTime)
 	if costKnown {
 		report += fmt.Sprintf(" Cost: $%s %s, $%s session.", formatCost(cost), label, formatCost(totalCost))
 	}
@@ -817,8 +835,12 @@ func (c *Coder) FlushSideUsage() {
 	if !c.sideUsageRecorded {
 		return
 	}
+	// No duration: a side request (session notes, a commit message) goes out
+	// on its own path that does not run through streamOnce's clock, so there
+	// is no measurement to report and a zero suppresses the rate rather than
+	// printing a wrong one.
 	report := usageReport("message", "", c.sideTokensSent, c.sideCacheWrite,
-		c.sideCacheRead, c.sideTokensReceived, c.sideCost, c.sideCostKnown,
+		c.sideCacheRead, c.sideTokensReceived, 0, c.sideCost, c.sideCostKnown,
 		c.totalCost, false)
 	c.sideCost = 0
 	c.sideCostKnown = false
@@ -891,7 +913,23 @@ func (c *Coder) RecordSideUsage(u llm.Usage) {
 // "330.3k sent, 127.8k cache write, 74.7k cache hit" — they read as separate
 // quantities, which is exactly the misreading that had the sent figure adding
 // the cache write to a prompt that already contained it.
-func formatTokenLine(sent, cacheWrite, cacheRead, received int) string {
+// The rate is received tokens over the time the provider had the request —
+// summed across the turn's sends, so tool runs, edits and confirmation prompts
+// between them are excluded. It is *not* decode speed: the wait for the first
+// token is part of it, because that wait is part of what the number is for.
+//
+// Measured before choosing, on one OpenRouter request with a large prompt: 42.9
+// t/s over the whole request against 138.0 over the gap between first and last
+// token, a factor of three. Decode speed is the flattering one and the one
+// people usually quote, and it is also undefined here for the turn shape this
+// harness produces most — a short reply and a tool call, where the content
+// arrives in a chunk or two and the gap is zero. A figure that divides by zero
+// on the common case is not a figure.
+//
+// Reasoning tokens are in `received` where a provider bills them there, so the
+// rate covers thinking as well as answering. That is the right side to err on:
+// the user waited for it.
+func formatTokenLine(sent, cacheWrite, cacheRead, received int, modelTime time.Duration) string {
 	var parts []string
 	if cacheWrite > 0 {
 		parts = append(parts, formatTokens(cacheWrite)+" cache write")
@@ -903,7 +941,26 @@ func formatTokenLine(sent, cacheWrite, cacheRead, received int) string {
 	if len(parts) > 0 {
 		line += " (" + strings.Join(parts, ", ") + ")"
 	}
-	return line + ", " + formatTokens(received) + " received."
+	line += ", " + formatTokens(received) + " received"
+	if rate := tokenRate(received, modelTime); rate != "" {
+		line += ", " + rate
+	}
+	return line + "."
+}
+
+// tokenRate renders the throughput, or "" when there is nothing honest to say:
+// no tokens, or a duration too short to divide by without inventing precision.
+// A fake clock in tests reports no elapsed time at all, which lands here.
+func tokenRate(received int, modelTime time.Duration) string {
+	const floor = 50 * time.Millisecond
+	if received <= 0 || modelTime < floor {
+		return ""
+	}
+	rate := float64(received) / modelTime.Seconds()
+	if rate < 10 {
+		return fmt.Sprintf("%.1f t/s", rate)
+	}
+	return fmt.Sprintf("%.0f t/s", rate)
 }
 
 // flushTurnUsage prints the turn's accounting, once, at its end.

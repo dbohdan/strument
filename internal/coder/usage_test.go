@@ -10,6 +10,7 @@ import (
 	"iter"
 	"strings"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -213,9 +214,9 @@ func TestTokenLineParenthesizesTheBreakdown(t *testing.T) {
 	} {
 		var got string
 		if tc.name == "both" {
-			got = formatTokenLine(14021, 14018, 1000, 5)
+			got = formatTokenLine(14021, 14018, 1000, 5, 0)
 		} else {
-			got = formatTokenLine(14021, 0, 0, 5)
+			got = formatTokenLine(14021, 0, 0, 5, 0)
 		}
 		if got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
@@ -318,5 +319,54 @@ func TestFlushSideUsageIsSilentWhenNothingSpent(t *testing.T) {
 
 	if len(out.lines) != 0 {
 		t.Errorf("expected no lines when nothing was spent, got:\n%s", strings.Join(out.lines, "\n"))
+	}
+}
+
+// The rate is received tokens over the time the provider had the request. What
+// it must never do is appear when there is nothing honest behind it: a fake
+// clock, an aborted stream, a side request whose path is not measured. Those
+// all arrive here as a zero or tiny duration.
+func TestTokenRate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		received int
+		d        time.Duration
+		want     string
+	}{
+		{"ordinary", 300, 6 * time.Second, "50 t/s"},
+		{"slow enough to want a decimal", 7, 2 * time.Second, "3.5 t/s"},
+		{"rounds rather than implying precision", 137, 3 * time.Second, "46 t/s"},
+
+		// Silence, not a number:
+		{"no tokens", 0, 5 * time.Second, ""},
+		{"unmeasured path", 300, 0, ""},
+		{"too short to divide", 300, 10 * time.Millisecond, ""},
+		{"negative is nonsense", -5, time.Second, ""},
+	} {
+		if got := tokenRate(tc.received, tc.d); got != tc.want {
+			t.Errorf("%s: tokenRate(%d, %s) = %q, want %q", tc.name, tc.received, tc.d, got, tc.want)
+		}
+	}
+}
+
+// And on the line itself: present when measured, absent when not, with the
+// rest of the line unchanged either way.
+func TestTokenLineCarriesTheRate(t *testing.T) {
+	// 53 over 1.75s is 30.3, away from any .5 boundary — 53 over 2s is 26.5,
+	// which Go rounds to even and makes the expected value a coin toss to
+	// write down.
+	withRate := formatTokenLine(5300, 0, 0, 53, 1750*time.Millisecond)
+	if want := "Tokens: 5.3k sent, 53 received, 30 t/s."; withRate != want {
+		t.Errorf("got  %q\nwant %q", withRate, want)
+	}
+	// The zero-duration form is what every existing caller and test relies on,
+	// so it has to be byte-identical to what it was before the rate existed.
+	if noRate := formatTokenLine(5300, 0, 0, 53, 0); noRate != "Tokens: 5.3k sent, 53 received." {
+		t.Errorf("unmeasured line changed shape: %q", noRate)
+	}
+	// A cache breakdown still reads as a breakdown, with the rate after it.
+	got := formatTokenLine(14021, 14018, 1000, 5, time.Second)
+	if !strings.Contains(got, "(14.0k cache write, 1.0k cache hit)") || !strings.HasSuffix(got, "5.0 t/s.") {
+		t.Errorf("cache breakdown and rate do not compose: %q", got)
 	}
 }

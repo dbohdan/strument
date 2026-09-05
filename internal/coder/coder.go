@@ -276,8 +276,13 @@ type Coder struct {
 	messageCacheWrite     int
 	messageEstimated      bool // any send in this turn fell back to an estimate
 	messageSends          int
-	totalTokensSent       int
-	totalTokensReceived   int
+	// messageModelTime is how long this turn spent waiting on the model:
+	// the sum of each send's request-to-last-byte, and nothing else. Tool
+	// execution, edits, confirmation prompts and the user's own thinking all
+	// happen between sends and are excluded by construction.
+	messageModelTime    time.Duration
+	totalTokensSent     int
+	totalTokensReceived int
 	// side* is the current session-notes request. It is separate from the
 	// turn totals because notes can be generated between turns.
 	sideCost           float64
@@ -538,6 +543,7 @@ func (c *Coder) initBeforeMessage() {
 	c.messageCacheWrite = 0
 	c.messageEstimated = false
 	c.messageSends = 0
+	c.messageModelTime = 0
 	if c.Repo != nil {
 		c.commitBeforeMessage = append(c.commitBeforeMessage, c.Repo.HeadSHA())
 	}
