@@ -125,13 +125,21 @@ is: **A1 is unsound for any session that pins files, and no reader of the
 current log can repair that.** Sessions using `/add` should be read with A1
 discounted entirely rather than adjusted.
 
-The fix belongs upstream, and it is small. Pinned contents are re-read at every
-send, so the pin set is a per-turn fact: a `pinned` field on the `turn` record
-would let a consumer subtract exactly the paths that were in context. That is a
-new optional field rather than a change to an existing one, so it needs no
-`RecordVersion` bump under the rule in `coder/record.go`.
+**This has since been fixed upstream.** `turn` records now carry a `pinned`
+field listing the paths whose contents were in context for that turn, and A1
+treats a pinned path as seen. `pinned-edit.jsonl` is a real session where a
+model edited a pinned file with no read at all: A1 reported 1 for it before the
+change and reports 0 after, while `blind-edit.jsonl` still reports 1.
+
+Those two fixtures only mean anything together. The cheapest way to make the
+false positive disappear is to make A1 report nothing, which satisfies the
+first fixture perfectly — so the second is what makes the first a measurement.
+Checked by trying exactly that cheat: `count_blind_edits` returning an empty
+list unconditionally fails two tests.
 
 Worth stating as a finding in its own right: this tool was built to audit
-sessions, and the first thing it established was that its input is missing a
-field it needs. That is a better argument for writing the consumer than any
-amount of reasoning about what the log ought to contain.
+sessions, and the first thing it established was that its input was missing a
+field it needed. Nothing in the format was wrong — it was complete for every
+use it had. The gap only became visible from outside, holding a question the
+format had never been asked. That is a better argument for writing the consumer
+than any amount of reasoning about what a log ought to contain.

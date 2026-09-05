@@ -116,6 +116,18 @@ class TranscriptAuditRegressionTest(unittest.TestCase):
                 msg=f"A1 moved for {fixture}:\n{out}",
             )
 
+    def test_a1_pinned_edit_is_not_blind(self):
+        # The model edited a pinned file with no read at all; the pin means
+        # the file was already in its context, so A1 must not count it.
+        out = run_audit("pinned-edit.jsonl")
+        self.assertEqual(totals(out), 0, msg=f"A1 moved for pinned-edit:\n{out}")
+
+    def test_a1_unpinned_blind_edit_still_reported(self):
+        # The counterpart to the pinning fix: without this, "never report
+        # anything" would also pass test_a1_pinned_edit_is_not_blind.
+        out = run_audit("blind-edit.jsonl")
+        self.assertEqual(totals(out), 1, msg=f"A1 moved for blind-edit:\n{out}")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,11 @@ Reads one or more JSONL session logs and counts, per session, whether the
 model looked before it acted.
 
 A1 — blind edits: edit calls on a path that no earlier successful read
-in the session returned.
+in the session returned.  A path is also considered seen if it appears in
+the "pinned" list of a turn record at or before the edit: pinned paths
+were in the model's context for that turn, so editing one is not blind.
+Turn records come after the messages of the turn they summarise, so a pin
+recorded in turn N covers the edits within turn N.
 
 A2 — edit distance: for each edit that is not blind, how many tool calls
 sit between the last successful read of its path and the edit.
@@ -52,6 +56,7 @@ def read_sessions(path):
                     "tool_results": {},
                     "edit_paths": [],
                     "read_results": {},      # path -> result text of most recent read
+                    "pinned": set(),         # paths pinned by turn records
                 }
             elif rtype == "message":
                 if session is None:
@@ -77,6 +82,10 @@ def read_sessions(path):
                     text = rec.get("text", "")
                     session["tool_results"][tc_id] = text
             elif rtype == "turn":
+                # The turn record follows the messages it summarises, so any
+                # paths it pins were in the model's context for the tool
+                # calls just gathered — treat them as seen for this session.
+                session["pinned"].update(rec.get("pinned", []))
                 # End of session — yield and reset.
                 if session is not None:
                     yield session
@@ -107,7 +116,9 @@ def count_blind_edits(session):
     results = session["tool_results"]
 
     # Walk tool calls in order.  For each read, record a success; for each
-    # edit, check whether the path has been successfully read *so far*.
+    # edit, check whether the path has been successfully read *so far*.  A
+    # path pinned by a turn record at or before the edit counts as seen: the
+    # full file contents were in the model's context already.
     read_successes = set()  # paths with at least one successful read so far
     blind = set()
 
@@ -116,6 +127,7 @@ def count_blind_edits(session):
     # Build id->call lookup for quick access.
     id_to_call = {tc["id"]: tc for tc in session["tool_calls"]}
 
+    pinned = session.get("pinned", set())
     for tc in session["tool_calls"]:
         name = tc["name"]
         args = tc["args"]
@@ -126,7 +138,7 @@ def count_blind_edits(session):
                 read_successes.add(path)
         elif name == "edit":
             path = args.get("path", "")
-            if path and path not in read_successes:
+            if path and path not in read_successes and path not in pinned:
                 blind.add(path)
 
     return blind
