@@ -55,6 +55,33 @@ last edit to it. The other half of the discipline: looking *after* acting.
 counterweight, and the reason this is a report rather than a score: A1 and A5
 push in opposite directions, so neither can be gamed without the other moving.
 
+## It caught its own construction, twice
+
+Neither of these was arranged, and both are better evidence than the reasoning
+above, because the reasoning is mine and these are not.
+
+**A2 and A3 arrived with two defects that print clean.** `statistics.median()`
+was called over a list of `(path, distance)` tuples — Python orders tuples, so
+no exception, just a median that is not a number — and a loop variable shadowed
+the filename, so the summary line named a Go source file instead of the
+transcript. Output produced and reported without being read: the thing this
+tool counts, in the tool. See `1f400da`, which commits them rather than tidying
+them away.
+
+**A5 justified itself before it existed.** A run that was supposed to implement
+A4 and A5 spent its whole budget reading — the spec, the script, the test, a
+directory listing, a shell command, then all three fixture files it had no use
+for — and was killed having written nothing. Audited afterwards:
+
+```
+the run that failed:    7 look-shaped calls, no act-shaped calls
+the run that succeeded: look:act = 8:1 = 8.00
+```
+
+A1 is 0 for both. Only the counterweight separates them, which is the argument
+for having one: a report with a single "did it verify" number would have scored
+the failed run perfectly.
+
 ## What it deliberately does not do
 
 **No score.** Five counters, printed. A single number would invite optimizing
