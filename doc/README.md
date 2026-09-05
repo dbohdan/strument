@@ -239,8 +239,11 @@ inherited from aider.
     0/36 calls on an exploration task built to need it (later trials moved
     it to 8/24; tool-call error attribution inside programs:
     [`2026-09-error-attribution.md`](experiments/2026-09-error-attribution.md)).
-- `script/` — release build, the grammar build-tag list, and
-  `setup-reference.sh`.
+- `script/` — release build, the grammar build-tag list,
+  `setup-reference.sh`, and live probes that need a key and a network:
+  `opencode-live-pass.sh` drives the real binary through opencode Go's three
+  dialects and scores from the files on disk, with an offline self-test that
+  refuses to spend if its own scorer cannot tell success from failure.
 - `testdata/` — distilled scenario fixtures and tests transliterated from
   aider's suite.
 - `reference/` — a gitignored clone of aider at commit `5dc9490`; a
