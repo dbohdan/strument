@@ -19,6 +19,28 @@ import (
 )
 
 // ProjectConfigName is the project-root dotfile, untrusted by default.
+//
+// A root dotfile and not .strument/config.star, though skills already live
+// under .strument/skills. The symmetry with the user config is only apparent:
+// that one sits inside a strument/ directory because XDG forbids bare files in
+// $XDG_CONFIG_HOME, and a project root has no such rule — the dot prefix is
+// the namespacing, as it is for .gitignore and .editorconfig. Nesting would
+// also put an executable, trust-gated file one level further from `ls -a`,
+// which is the first place someone looks before deciding to trust it. And
+// .strument/ is not an accumulating project directory: it holds skills alone,
+// beside the cross-tool .agents/skills, while session state lives outside the
+// repository in $XDG_STATE_HOME (see history.ProjectDir).
+//
+// Two things would reverse this, and either is enough. If .strument/ gains a
+// second member — project-scoped prompts, a checks file, per-project model
+// overrides — the root dotfile becomes the odd one out. Or if project skills
+// turn out to be common, so that the directory is what people actually meet.
+// The move costs a re-trust for everyone holding a .strument.star, because
+// TrustFiles keys the store by absolute path; that is cheap now, while almost
+// nobody has one, and stops being cheap later. There is a good argument for
+// moving it that has nothing to do with tidiness: TrustFiles treats a
+// repository's config and its skills as one trust decision, and things that
+// are one decision have a case for being one directory.
 const ProjectConfigName = ".strument.star"
 
 // Options configures Load. Zero values pick the real environment.
