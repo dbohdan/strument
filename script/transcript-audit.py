@@ -7,6 +7,11 @@ model looked before it acted.
 A1 — blind edits: edit calls on a path that no earlier successful read
 in the session returned.
 
+A2 — edit distance: for each edit that is not blind, how many tool calls
+sit between the last successful read of its path and the edit.
+
+A3 — look:act ratio: read-shaped calls over act-shaped ones, per session.
+
 Usage:
     script/transcript-audit.py FILE.jsonl [FILE.jsonl ...]
 """
@@ -14,6 +19,7 @@ Usage:
 import json
 import os
 import re
+import statistics
 import sys
 
 
@@ -124,6 +130,47 @@ def count_blind_edits(session):
     return blind
 
 
+def edit_distances(session):
+    """Return a (path, distance) pair for each non-blind edit.
+
+    Distance is the number of tool calls between the last successful read
+    of the path and the edit: an edit immediately after its read is 0.
+    Blind edits (no earlier successful read of the path) have no distance
+    and are left out — A1 owns them.
+    """
+    results = session["tool_results"]
+    last_read_index = {}  # path -> tool-call index of most recent successful read
+    distances = []
+
+    for i, tc in enumerate(session["tool_calls"]):
+        name = tc["name"]
+        path = tc["args"].get("path", "")
+        if name == "read":
+            if is_successful_read(results.get(tc["id"]), path):
+                last_read_index[path] = i
+        elif name == "edit":
+            if path in last_read_index:
+                distances.append((path, i - last_read_index[path] - 1))
+
+    return distances
+
+
+LOOK_SHAPED = ("read", "grep", "glob", "ls", "symbol")
+ACT_SHAPED = ("edit", "write")
+
+
+def look_act_counts(session):
+    """Return (looks, acts) — the tool-call counts A3's ratio is over."""
+    looks = 0
+    acts = 0
+    for tc in session["tool_calls"]:
+        if tc["name"] in LOOK_SHAPED:
+            looks += 1
+        elif tc["name"] in ACT_SHAPED:
+            acts += 1
+    return looks, acts
+
+
 def audit(paths):
     """Print a per-file report of A1 (blind edits)."""
     grand_total = 0
@@ -138,6 +185,22 @@ def audit(paths):
                     print(f"  blind edit of {p}")
             else:
                 print(f"{path}  session {i}: A1 = 0")
+
+            distances = edit_distances(session)
+            if distances:
+                print(f"  A2: {len(distances)} edits, "
+                      f"median distance {statistics.median(distances)}, "
+                      f"max {max(d for _, d in distances)}")
+                for path, d in sorted(distances, key=lambda pd: pd[1], reverse=True):
+                    if d >= 5:
+                        print(f"  distant edit: {path} at distance {d}")
+
+            looks, acts = look_act_counts(session)
+            if acts == 0:
+                print(f"  A3: {looks} look-shaped calls, no act-shaped calls")
+            else:
+                print(f"  A3: look:act = {looks}:{acts} "
+                      f"= {looks / acts:.2f}")
         grand_total += file_total
         print(f"{path}  total A1 = {file_total}")
     print(f"grand total A1 = {grand_total}")
