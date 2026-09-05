@@ -756,7 +756,9 @@ JSON-escaped string fragments, so raw rendering would show escaped JSON.
 `internal/render/toolargs.go` decodes them live: `ArgScanner` is a streaming
 JSON string-field extractor (escape- and UTF-8-boundary-safe) and `ToolDiff`
 turns the decoded fields into a red-green Git-style diff. `write` and `bash`
-stream line by line, since neither has a second side to compare against. An
+stream line by line, since neither has a second side to compare against —
+though `write` can only stream once the `path` field has arrived, which is why
+the schema advertises it first (see below). An
 `edit` is *buffered* and rendered in `Flush`: its two sides are diffed against
 each other with `editblock.LineOps`, so a one-line change inside twenty lines
 of matching context reads as a one-line change, with three lines of context
@@ -838,7 +840,26 @@ regression test in `toolargs_test.go`:
   changed.)
 - **`path` not first (Gemini, Qwen3.6).** An edit's diff lines are buffered
   until the `path`/header resolves, then the header leads. This still matters
-  for `write`, which streams.
+  for `write`, which streams — and there the buffering is not free: a 663-line
+  write with the path last prints nothing at all until the call ends.
+
+  Half of that turned out to be ours. `ToolDef.Parameters` was a
+  `map[string]any`, `encoding/json` sorts map keys, and so the schema we
+  advertised led with `content` for `write` and put `path` *last* for `edit`.
+  A model that fills arguments in schema order was doing what it was told.
+  `orderedProps` (`internal/coder/schemaorder.go`) marshals a properties
+  object in declared order, and the three tools rendered as a streaming diff
+  now name `path` first.
+
+  A live A/B across seven models
+  ([`2026-09-tool-arg-order.md`](experiments/2026-09-tool-arg-order.md)) puts
+  a number on it: first `write` calls naming `path` first went 25/56 → 44/56,
+  p=0.0004, with no cost anywhere in the counter-metrics. But the panel splits
+  three ways — models that follow the schema, models that put `path` first
+  whatever they are given, and GLM-5.3, which emitted the *same* order in
+  34 of 34 calls across both arms. So the schema is a nudge that makes the
+  fast path reachable more often; the buffering below is still what makes the
+  output correct.
 - **Interleaved calls (DeepSeek).** With two calls in one turn, fragments
   arrive interleaved; `ToolDiffSet` streams the first call live and buffers
   later ones, appending each whole in first-seen order. (Single-call sweep
