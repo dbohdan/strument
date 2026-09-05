@@ -39,20 +39,29 @@ import (
 
 var version = "0.0.0-dev"
 
+// Flag values are written <lowercase> in angle brackets, matching what /help
+// prints for slash commands — the notation is documented at the top of
+// internal/repl/commands.go and the vocabulary is shared: <file>, <dir>,
+// <name>, <alias>, <url>, <n>, <glob>, <text>. Kong would otherwise derive
+// STRING and INT from the Go type, which says less and reads as a different
+// program from the one the REPL is running.
+//
+// Enum flags are left alone: kong prints their default instead of a
+// placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                       short:"m"`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                       placeholder:"<text>"                                          short:"m"`
 	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."                                                    name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."                                                       short:"M"`
+	Model         string   `help:"Model alias from config; defaults to the config's default."                                                       placeholder:"<alias>"                                         short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                  name:"no-color"`
 	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                 name:"dark-mode"                                              xor:"palette"`
 	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                name:"light-mode"                                             xor:"palette"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                               name:"no-auto-commits"`
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                               name:"no-history"`
-	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                              name:"jsonl"                                                  placeholder:"FILE"`
+	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                              name:"jsonl"                                                  placeholder:"<file>"`
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                name:"dry-run"`
 	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                             name:"no-shell"`
-	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, all. Repeatable; lists allowed." placeholder:"NAME[,NAME]"`
+	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, all. Repeatable; lists allowed." placeholder:"<name>"`
 	Files         []string `arg:""                                                                                                                  help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
@@ -1055,9 +1064,9 @@ func (*historyCmd) Run() error {
 // looked up by hand. Output is copy-pastable Starlark on stdout — the user
 // reviews it and pastes it into their config.
 type modelConfigCmd struct {
-	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."    short:"s"`
-	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name emitted in the model() call." name:"provider-name"`
-	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"`
+	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."    placeholder:"<name>" short:"s"`
+	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name emitted in the model() call." name:"provider-name" placeholder:"<name>"`
+	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"                                               placeholder:"<url>"`
 	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
 }
 

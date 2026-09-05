@@ -778,3 +778,28 @@ func TestChatExitStatusFollowsTheOutcome(t *testing.T) {
 		})
 	}
 }
+
+// Flag placeholders are <lowercase> in angle brackets, the notation /help uses
+// for slash commands. Kong derives STRING or INT from the Go type when a flag
+// has no placeholder tag, so the drift is silent and one-directional: adding a
+// flag without a tag reintroduces the mix this replaced, and nothing else would
+// notice. Enum flags are exempt — kong prints their default rather than a
+// placeholder, which already shows the value's shape.
+func TestFlagPlaceholdersUseAngleBrackets(t *testing.T) {
+	cmds := [][]string{
+		{"chat"}, {"model-config"}, {"trust"}, {"history"},
+		{"tool", "read"}, {"tool", "grep"}, {"tool", "glob"},
+		{"tool", "ls"}, {"tool", "symbol"},
+	}
+	// --flag=VALUE where VALUE starts with an uppercase letter: kong's
+	// type-derived default, never something written by hand.
+	derived := regexp.MustCompile(`--[a-z][a-z-]*=([A-Z][A-Z]*)`)
+
+	for _, args := range cmds {
+		out, _ := exec.Command(builtBinary, append(args, "--help")...).CombinedOutput()
+		for _, m := range derived.FindAllStringSubmatch(string(out), -1) {
+			t.Errorf("strument %s --help renders %q; give the flag a placeholder like \"<name>\"",
+				strings.Join(args, " "), m[0])
+		}
+	}
+}

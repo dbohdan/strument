@@ -26,7 +26,7 @@ import (
 // the confirmation machinery a chat session provides, and putting them on a
 // command line is a different feature with a different risk profile.
 type toolCmd struct {
-	Root string `help:"Project root. Defaults to the git worktree root, or the working directory." type:"path"`
+	Root string `help:"Project root. Defaults to the git worktree root, or the working directory." placeholder:"<dir>" type:"path"`
 	JSON bool   `help:"Print {tool, arguments, result, bytes} instead of the bare result."         name:"json"`
 
 	Read   toolReadCmd   `cmd:"" help:"Read a window of a file, as the read tool returns it."`
@@ -127,8 +127,8 @@ func isCharDevice(f *os.File) bool {
 
 type toolReadCmd struct {
 	Path   string `arg:""                                                          help:"File to read, relative to the project root (absolute inside the project also works)."`
-	Offset int    `help:"First line to return (1-based). 0 starts at the top."`
-	Limit  int    `help:"How many lines to return. 0 uses the tool's own default."`
+	Offset int    `help:"First line to return (1-based). 0 starts at the top."     placeholder:"<n>"`
+	Limit  int    `help:"How many lines to return. 0 uses the tool's own default." placeholder:"<n>"`
 }
 
 func (t *toolReadCmd) Run(c *toolCmd) error {
@@ -137,11 +137,11 @@ func (t *toolReadCmd) Run(c *toolCmd) error {
 
 type toolGrepCmd struct {
 	Pattern    string `arg:""                                                                                           help:"A Go regular expression."`
-	Glob       string `help:"Only search paths matching this glob. Matched against the whole path, so use \"**/*.go\"."`
-	Path       string `help:"Only search under this directory."`
+	Glob       string `help:"Only search paths matching this glob. Matched against the whole path, so use \"**/*.go\"." placeholder:"<glob>"`
+	Path       string `help:"Only search under this directory."                                                         placeholder:"<dir>"`
 	Mode       string `default:"files"                                                                                  enum:"files,content,count"      help:"What to return: the files that match, the matching lines, or a per-file count."`
 	IgnoreCase bool   `help:"Match case-insensitively."                                                                 name:"ignore-case"`
-	Context    int    `help:"Lines to return either side of each match, like grep's -C."                                name:"context-lines"`
+	Context    int    `help:"Lines to return either side of each match, like grep's -C."                                name:"context-lines"            placeholder:"<n>"`
 }
 
 func (t *toolGrepCmd) Run(c *toolCmd) error {
