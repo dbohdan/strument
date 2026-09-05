@@ -78,12 +78,28 @@ class TranscriptAuditRegressionTest(unittest.TestCase):
         for fixture in ("read-then-edit.jsonl",
                         "write-new-file.jsonl",
                         "blind-edit.jsonl"):
+            transcript = os.path.join(FIXTURES, fixture)
             out = run_audit(fixture)
-            self.assertIn(
-                "TOTAL across all transcripts",
-                out,
-                msg=f"no total summary for {fixture}:\n{out}",
+            # Every session block header must name the transcript that was
+            # reported on.  The defect printed an edited source filename in
+            # that slot, so the transcript's name was simply absent from the
+            # line.
+            header_lines = [
+                line for line in out.splitlines()
+                if re.search(r"session \d+  model=", line)
+            ]
+            self.assertTrue(
+                header_lines,
+                msg=f"no session block header in audit output for "
+                    f"{fixture}:\n{out}",
             )
+            for line in header_lines:
+                self.assertIn(
+                    transcript,
+                    line,
+                    msg=f"session header for {fixture} does not name the "
+                        f"transcript file:\n{line}",
+                )
 
     def test_a1_ground_truth(self):
         # Ground truth from real sessions; these must not move.

@@ -34,52 +34,53 @@ def read_sessions(path):
                      that path (overwritten by each new read)
     """
     session = None
-    for line in open(path, encoding="utf-8", errors="replace"):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        rtype = rec.get("type")
-        if rtype == "session":
-            # Start a fresh session (flush any in-progress one).
-            session = {
-                "model": rec.get("model", ""),
-                "tool_calls": [],
-                "tool_results": {},
-                "edit_paths": [],
-                "read_results": {},      # path -> result text of most recent read
-            }
-        elif rtype == "message":
-            if session is None:
-                # Records before the first session marker — skip.
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
                 continue
-            role = rec.get("role")
-            if role == "assistant":
-                for tc in rec.get("tool_calls", []):
-                    try:
-                        args = json.loads(tc["arguments"])
-                    except (json.JSONDecodeError, KeyError):
-                        args = {}
-                    name = tc.get("name", "")
-                    tc_id = tc.get("id", "")
-                    session["tool_calls"].append(
-                        {"id": tc_id, "name": name, "args": args}
-                    )
-                    if name == "edit":
-                        path_arg = args.get("path", "")
-                        session["edit_paths"].append((tc_id, path_arg))
-            elif role == "tool":
-                tc_id = rec.get("tool_call_id", "")
-                text = rec.get("text", "")
-                session["tool_results"][tc_id] = text
-        elif rtype == "turn":
-            # End of session — yield and reset.
-            if session is not None:
-                yield session
-                session = None
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rtype = rec.get("type")
+            if rtype == "session":
+                # Start a fresh session (flush any in-progress one).
+                session = {
+                    "model": rec.get("model", ""),
+                    "tool_calls": [],
+                    "tool_results": {},
+                    "edit_paths": [],
+                    "read_results": {},      # path -> result text of most recent read
+                }
+            elif rtype == "message":
+                if session is None:
+                    # Records before the first session marker — skip.
+                    continue
+                role = rec.get("role")
+                if role == "assistant":
+                    for tc in rec.get("tool_calls", []):
+                        try:
+                            args = json.loads(tc["arguments"])
+                        except (json.JSONDecodeError, KeyError):
+                            args = {}
+                        name = tc.get("name", "")
+                        tc_id = tc.get("id", "")
+                        session["tool_calls"].append(
+                            {"id": tc_id, "name": name, "args": args}
+                        )
+                        if name == "edit":
+                            path_arg = args.get("path", "")
+                            session["edit_paths"].append((tc_id, path_arg))
+                elif role == "tool":
+                    tc_id = rec.get("tool_call_id", "")
+                    text = rec.get("text", "")
+                    session["tool_results"][tc_id] = text
+            elif rtype == "turn":
+                # End of session — yield and reset.
+                if session is not None:
+                    yield session
+                    session = None
 
     # Handle file ending without a "turn" record.
     if session is not None:
