@@ -24,7 +24,11 @@
 
 package coder
 
-import "dbohdan.com/strument/internal/llm"
+import (
+	"slices"
+
+	"dbohdan.com/strument/internal/llm"
+)
 
 // RecordVersion is the schema version carried by the session record. Consumers
 // live outside this repository, so a change to a field's meaning needs a number
@@ -70,6 +74,9 @@ type Record struct {
 	Received  int     `json:"received,omitempty"`
 	Cost      float64 `json:"cost,omitempty"`
 	CostKnown bool    `json:"cost_known,omitempty"`
+	// Pinned lets a consumer distinguish files the model could see from files
+	// it never saw when auditing whether a file was read before it was edited.
+	Pinned []string `json:"pinned,omitempty"`
 	// EditsExact and EditsFuzzy split the turn's applied edits by how the
 	// text was found: verbatim, or by the line matcher guessing which lines
 	// were meant. The split is the measurement behind whether that guessing
@@ -98,6 +105,20 @@ func (c *Coder) record(r Record) {
 		return
 	}
 	c.Recorder.Record(r)
+}
+
+func (c *Coder) pinnedRecordPaths() []string {
+	paths := make([]string, 0, len(c.absFnames)+len(c.absReadOnlyFnames))
+	seen := make(map[string]bool, cap(paths))
+	for _, abs := range append(append([]string{}, c.absFnames...), c.absReadOnlyFnames...) {
+		path := c.displayName(abs)
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	slices.Sort(paths)
+	return paths
 }
 
 // RecordSession writes the header record. Called once, by whoever built the

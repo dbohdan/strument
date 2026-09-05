@@ -5,6 +5,9 @@ package coder
 import (
 	"context"
 	"iter"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -75,8 +78,36 @@ func TestRecordIsATimeline(t *testing.T) {
 	}
 }
 
-// A tool call's arguments and its result are both in the log.
-//
+func TestRecordTurnListsPinnedFiles(t *testing.T) {
+	c := testCoder(t)
+	path := filepath.Join(c.Root, "pinned.txt")
+	if err := os.WriteFile(path, []byte("pinned\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.AddFile("pinned.txt")
+	rec := &capture{}
+	c.Recorder = rec
+	c.Client = &toolThenAnswer{}
+
+	c.runOne(context.Background(), "do the thing")
+
+	var turn *Record
+	for i := range rec.recs {
+		if rec.recs[i].Type == "turn" {
+			turn = &rec.recs[i]
+		}
+	}
+	if turn == nil {
+		t.Fatal("no turn record")
+	}
+	if len(turn.Pinned) == 0 {
+		t.Fatal("turn record has no pinned files")
+	}
+	if !slices.Equal(turn.Pinned, []string{"pinned.txt"}) {
+		t.Errorf("pinned = %v, want [pinned.txt]", turn.Pinned)
+	}
+}
+
 // This is the half the rendered stream cannot give a scorer. The terminal shows
 // "Listed . — 3 entries"; the arguments the model actually sent and the text it
 // actually got back appear nowhere. One of the eleven scorer bugs counted
