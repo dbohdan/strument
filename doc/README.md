@@ -635,19 +635,25 @@ process, so it was not `SIGTSTP` being ignored, and it does not reproduce here.
 Sending to the group is what the terminal driver does anyway, so the change is
 right regardless of the reason it helped.
 
-`SuspendProcess` also no longer blocks: a suspend that stops nothing used to
-turn into a hung harness, since the caller had already restored cooked mode and
-nothing was reading. It now reports whether the suspend happened and the Ctrl-Z
-branch says so, which costs a line of output instead of the session.
+The wait for `SIGCONT` is also **bounded** now. Unbounded, a suspend that
+stopped nothing turned into a hung harness, since the caller had already
+restored cooked mode and nothing was reading. Bounded, that case costs a pause.
 
-**How it decides is worth knowing, because the obvious way is wrong.** The first
-attempt armed a `SIGCONT` notification and waited for it. That measures nothing:
-a signal sent to one's own process group is delivered before the `kill` returns,
-so the stop *and* the resume are already over on the next line — the `SIGCONT`
-was spent getting there, and waiting for another can only time out. The capture
-of that version shows the suspend working and the harness then announcing it had
-not. It now compares wall-clock time across the `kill`: microseconds if nothing
-stopped, however long it took to type `fg` if something did.
+**What is deliberately absent is any attempt to report whether the suspend
+worked**, and the two failed attempts are worth recording so nobody adds a
+third. The first waited for a `SIGCONT` that cannot arrive: the one that ends
+the stop is spent resuming us, so the wait could only ever time out, and a
+capture showed it announcing failure after a suspend that had plainly worked.
+The second timed the `kill`, on the theory that a signal to one's own group is
+delivered before it returns — the next capture showed the complaint printed
+*before* the shell reported the job stopped, because Go routes the signal
+through its own runtime and the stop lands afterwards. Both shipped; both cried
+wolf.
+
+Whether it is about to be stopped is not a question this process can answer
+about itself from in here, and a false alarm on a working suspend is worse than
+silence on a broken one. Ctrl-Z that does nothing is now simply Ctrl-Z that does
+nothing — which is what it was before any of this, minus the hang.
 
 The first thing to ask about any recurrence is **whether `^Z` echoes**: an echo
 means the kernel took it and Strument's code never saw it, and its absence means

@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"sync"
@@ -16,51 +17,53 @@ const (
 	IsWindows = false
 )
 
-// suspendObserved is how much wall-clock time has to pass across the kill for
-// SuspendProcess to conclude that the process really was stopped.
+// suspendGrace bounds the wait for the SIGCONT that ends a suspension.
 //
-// The two outcomes are orders of magnitude apart, so the threshold does not
-// have to be judged finely. A signal that stops nothing returns in
-// microseconds; a stop that is resumed by hand lasts as long as it takes to
-// type `fg`, and even a scripted `kill -CONT` costs a process spawn. Twenty
-// milliseconds sits between the two with room on both sides.
-const suspendObserved = 20 * time.Millisecond
+// It exists to keep the ordering right in the ordinary case — the caller
+// restores raw mode when this returns, and doing that before the stop actually
+// lands would hand the shell a raw terminal — while making sure a suspend that
+// never happens costs a pause rather than the session.
+const suspendGrace = 250 * time.Millisecond
 
 // SuspendProcess suspends the foreground process group with SIGTSTP and returns
-// once the process is resumed. It reports whether the suspend took effect.
+// once the process is resumed, or after suspendGrace if it never stopped.
 //
-// Two things here are deliberate, and both came out of a session capture where
-// Ctrl-Z appeared to need pressing twice.
+// It signals the process *group* (pid 0) rather than just this process, which is
+// what the terminal driver does when it sees the suspend character. That is the
+// change that fixed a reported double Ctrl-Z: with a self-directed signal, the
+// first press cleared the line, put the terminal back into cooked mode and then
+// stopped nothing, leaving the harness blocked here while the user's typing was
+// echoed by the kernel — which looks exactly like a working prompt that has
+// quietly stopped accepting input. Why the self-directed form failed on that
+// machine was never established; the kernel-generated signal on the same
+// terminal stopped the process, and it does not reproduce elsewhere.
 //
-// It signals the process *group* (pid 0) rather than just this process, because
-// that is what the terminal driver does when it sees the suspend character, and
-// emulating a key ought to emulate what the key does. It was expected to also
-// keep a child alive past its tool call from running on while its parent was
-// stopped — but that could not be demonstrated: whenever such a child exists,
-// readline is not the thing reading the key, so the kernel has already signalled
-// the whole group. Treat this as fidelity to the terminal, not as a fix for an
-// observed bug.
+// The wait is bounded so that failure costs a pause instead of the session.
 //
-// And it does not wait for a SIGCONT to tell it the stop happened. That was the
-// first attempt and it was measuring the wrong thing: a signal sent to one's own
-// process group is delivered before the kill returns, so the stop *and* the
-// resume are both over by the time the next line runs — the SIGCONT has already
-// been spent getting us here, and waiting for another one can only time out. A
-// capture showed exactly that: the suspend worked, and the harness then
-// announced that it had not.
-//
-// Elapsed time across the kill measures the thing directly. It is also what
-// makes a failed suspend cheap: nothing blocks, so the caller restores raw mode
-// either way. The old version blocked on SIGCONT unconditionally, and a SIGTSTP
-// that stopped nothing turned into a hung harness — terminal back in cooked
-// mode, nothing reading stdin, the user's typing echoed by the kernel, which
-// looks exactly like a working prompt that has quietly stopped accepting input.
-func SuspendProcess() bool {
-	started := time.Now()
+// It deliberately does *not* try to report whether the suspend worked. Two
+// attempts at that both shipped and both cried wolf on a working suspend. The
+// first waited for a SIGCONT, which cannot arrive twice: the one that ends the
+// stop is spent resuming us. The second timed the kill, on the theory that a
+// self-group signal is delivered before it returns — a capture then showed the
+// complaint printed *before* the shell reported the job stopped, because Go
+// routes the signal through its own runtime and the stop lands afterwards.
+// Whether we are about to be stopped is not a question this process can answer
+// about itself from in here, and a false alarm on a suspend that worked is worse
+// than saying nothing about one that did not.
+func SuspendProcess() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGCONT)
+	defer stop()
+
 	if err := syscall.Kill(0, syscall.SIGTSTP); err != nil {
-		return false
+		return
 	}
-	return time.Since(started) >= suspendObserved
+
+	timer := time.NewTimer(suspendGrace)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }
 
 // getWidthHeight of the terminal using given file descriptor

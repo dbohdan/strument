@@ -12,13 +12,10 @@ const (
 	IsWindows = true
 )
 
-// SuspendProcess has nothing to do on Windows, which has no SIGTSTP. It
-// reports false — nothing was suspended — for the same reason the Unix version
-// reports anything at all: the caller says so rather than leaving a cleared
-// prompt and no explanation. The Ctrl-Z key is not routed here at all (see
-// operation.go's platform.IsWindows guard), so this is only for completeness.
-func SuspendProcess() bool {
-	return false
+// SuspendProcess has nothing to do on Windows, which has no SIGTSTP. The Ctrl-Z
+// key is not routed here either (see operation.go's platform.IsWindows guard),
+// so this exists only to keep the package building.
+func SuspendProcess() {
 }
 
 // GetScreenSize returns the width, height of the terminal or -1,-1
