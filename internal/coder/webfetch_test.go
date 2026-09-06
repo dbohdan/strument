@@ -285,15 +285,15 @@ func TestShellAlwaysStillDiesWithTheTurn(t *testing.T) {
 	c.Sandbox = SandboxState{Required: true, Active: true}
 
 	req := ConfirmRequest{Prompt: "Run shell command?", Command: "go test ./...", Group: "shell"}
-	if !c.confirmGrouped(req) {
+	if !c.ConfirmGrouped(req) {
 		t.Fatal(`"a" did not approve the command it was answered for`)
 	}
-	if c.confirmGrouped(req); len(ac.got) != 1 {
+	if c.ConfirmGrouped(req); len(ac.got) != 1 {
 		t.Fatalf("asked %d times in one turn, want 1 — the turn grant did not hold", len(ac.got))
 	}
 
 	c.initBeforeMessage()
-	c.confirmGrouped(req)
+	c.ConfirmGrouped(req)
 	if len(ac.got) != 2 {
 		t.Errorf("asked %d times, want 2 — a shell grant outlived its turn", len(ac.got))
 	}

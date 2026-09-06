@@ -225,7 +225,7 @@ Two inspection commands answer "what does my effective config say?" without edit
 and `strument config default` prints the value of `default`.
 Both read the merged user + trusted project config for the current project, so the answer matches what a chat session would use.
 
-`--yes NAME` answers one named prompt without asking, and takes `bash`, `webfetch`, `websearch`, `steps`, `context`, or `all`.
+`--yes NAME` answers one named prompt without asking, and takes `bash`, `webfetch`, `websearch`, `steps`, `context`, `add-output`, or `all`.
 It repeats and accepts lists, so `--yes bash --yes webfetch,websearch` and `--yes bash,webfetch,websearch` are the same thing.
 An unknown name is an error at startup rather than a permission that silently was not granted.
 

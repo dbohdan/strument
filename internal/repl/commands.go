@@ -773,11 +773,11 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 		return ""
 	}
 
-	res := r.Confirmer().Confirm(coder.ConfirmRequest{
+	if r.coder.ConfirmGrouped(coder.ConfirmRequest{
 		Prompt: "Add command output to the chat?",
+		Grant:  coder.GrantAddOutput,
 		Group:  "add-output",
-	})
-	if res.Yes {
+	}) {
 		// The result shape, so /run context reads like
 		// model-proposed shell output.
 		result := fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", args, exitCode, output)
@@ -854,11 +854,11 @@ func cmdCheck(ctx context.Context, r *REPL, args string) string {
 		return ""
 	}
 
-	res := r.Confirmer().Confirm(coder.ConfirmRequest{
+	if r.coder.ConfirmGrouped(coder.ConfirmRequest{
 		Prompt: "Add check output to the chat?",
+		Grant:  coder.GrantAddOutput,
 		Group:  "add-output",
-	})
-	if res.Yes {
+	}) {
 		r.coder.AppendContext(transcriptStr)
 		r.printf("Added the check output to the chat.")
 	}

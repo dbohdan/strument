@@ -73,7 +73,7 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 	// model picks where the bytes go; a search only ever reaches the instance
 	// the user configured.
 	asked := !c.turnAutoApprove["websearch"]
-	if !c.confirmGrouped(ConfirmRequest{
+	if !c.ConfirmGrouped(ConfirmRequest{
 		Prompt: "Search the web?",
 		Query:  s.query,
 		Group:  "websearch",

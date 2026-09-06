@@ -754,7 +754,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			}
 			results[tc.ID] = c.runCode(ctx, cc)
 		case toolAskUser:
-			// Not routed through confirmGrouped: a question is not a permission
+			// Not routed through ConfirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
 			results[tc.ID] = c.runAskUser(tc, &needsReflection)
 		case toolInterrupt:
@@ -979,7 +979,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
-	if !c.confirmGrouped(ConfirmRequest{
+	if !c.ConfirmGrouped(ConfirmRequest{
 		Prompt:  "Run shell command?",
 		Command: command,
 		Purpose: cmd.purpose,

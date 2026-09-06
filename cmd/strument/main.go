@@ -49,20 +49,20 @@ var version = "0.0.0-dev"
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                       placeholder:"<text>"                                          short:"m"`
-	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."                                                    name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."                                                       placeholder:"<alias>"                                         short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                  name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                 name:"dark-mode"                                              xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                name:"light-mode"                                             xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                               name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                               name:"no-history"`
-	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                              name:"jsonl"                                                  placeholder:"<file>"`
-	DryRun        bool     `help:"Report edits without writing files or committing."                                                                name:"dry-run"`
-	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                             name:"no-shell"`
-	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, all. Repeatable; lists allowed." placeholder:"<name>"`
-	Files         []string `arg:""                                                                                                                  help:"Files for the model to edit (they need not exist yet)." optional:""`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                   placeholder:"<text>"                                          short:"m"`
+	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."                                                                name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias from config; defaults to the config's default."                                                                   placeholder:"<alias>"                                         short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                            name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                              name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                             name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                            name:"light-mode"                                             xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                           name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                           name:"no-history"`
+	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                                          name:"jsonl"                                                  placeholder:"<file>"`
+	DryRun        bool     `help:"Report edits without writing files or committing."                                                                            name:"dry-run"`
+	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                                         name:"no-shell"`
+	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, add-output, all. Repeatable; lists allowed." placeholder:"<name>"`
+	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {

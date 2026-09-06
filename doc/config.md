@@ -838,6 +838,7 @@ permissions themselves:
 | `websearch` | Send the model's query to the configured backend |
 | `steps` | "Keep going?" at the step budget |
 | `context` | "Try to proceed anyway?" over the model's input limit |
+| `add-output` | "Add … to the chat?" after `/run`, `/check`, or `/consult` |
 | `all` | All of the above |
 
 It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
@@ -857,10 +858,14 @@ withholding had nowhere to go.
 resets each time the prompt is answered, so granting it makes `max_steps` an
 interval between checkpoints that no longer stop.
 
-A prompt with no name — "Add command output to the chat?", after `/run` or
-`/check` — is never answered by a flag. There is no name you could have typed
-for it, and both commands are ones you typed yourself, so a terminal is always
-there to ask on.
+`add-output` is a third kind again: neither a capability nor pacing, but a
+question about what *you* are putting in front of the model. It had no name
+until a piped session was watched answering it — this page used to say one was
+unnecessary, on the grounds that `/run` and `/check` are commands you type
+yourself and so a terminal is always there to ask on. A command typed into a
+pipe is still typed by you, and there the prompt declined itself with "there is
+no terminal to ask on, and no --yes name covers this prompt" while the `y` on
+the next line went to the model as a chat message.
 
 ### What `/reload` applies
 

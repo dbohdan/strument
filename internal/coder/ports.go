@@ -45,7 +45,7 @@ type Confirmer interface {
 // the prompt whenever AllowNever was set — and honored by nothing. Each caller
 // treated it as a plain decline: the URL check rejects the URL either way, the
 // command-output check reads only Yes, and the shell gate goes through
-// confirmGrouped, which never looked at it. The one caller that might have meant
+// ConfirmGrouped, which never looked at it. The one caller that might have meant
 // it left with the file-mention flow. A prompt advertising an option that does
 // nothing is worse than one without it, so the option is gone rather than
 // implemented — session-scoped silence on shell commands is the last thing this
@@ -59,11 +59,12 @@ type ConfirmResult struct {
 	Always bool
 }
 
-// The permission names --yes takes. Two kinds, deliberately in one flag: the
-// first three grant the model a capability, the last two answer a question the
-// harness asks about its own pacing. Both need a name for a session with no
-// terminal to answer on, and a name that says which prompt it covers beats a
-// flag that means "everything except the scary one".
+// The permission names --yes takes. Three kinds, deliberately in one flag: the
+// first three grant the model a capability, the next two answer a question the
+// harness asks about its own pacing, and the last answers a question about what
+// the user is putting in front of the model. All of them need a name for a
+// session with no terminal to answer on, and a name that says which prompt it
+// covers beats a flag that means "everything except the scary one".
 const (
 	GrantBash      = "bash"      // run a shell command the model wrote
 	GrantWebfetch  = "webfetch"  // fetch a URL the model chose
@@ -79,12 +80,24 @@ const (
 	// sent and the provider decides, which is what the prompt's own text says
 	// is probably fine.
 	GrantContext = "context"
+	// GrantAddOutput answers "Add … to the chat?" — /run's command output,
+	// /check's transcript, /consult's answer. The third kind: not a capability
+	// and not pacing, but a question about what the *user* is putting in front
+	// of the model.
+	//
+	// It exists because these three had no name at all, so a piped session
+	// answered them with "there is no terminal to ask on, and no --yes name
+	// covers this prompt" no matter what was passed — and the typed "y" then
+	// went to the model as a chat message. Found by running the real binary;
+	// no test could have, because a test that supplies its own confirmer never
+	// meets the terminal-less path.
+	GrantAddOutput = "add-output"
 	// GrantAll is every name above. A word someone types, never a default.
 	GrantAll = "all"
 )
 
 // GrantNames are the individual permissions, in the order help text lists them.
-var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantSteps, GrantContext}
+var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantSteps, GrantContext, GrantAddOutput}
 
 // ParseGrants turns --yes values into the set AutoConfirmer reads. Each value
 // may be a comma-separated list, and the flag may repeat, so

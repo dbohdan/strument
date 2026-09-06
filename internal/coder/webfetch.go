@@ -181,7 +181,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		group := "webfetch:" + org
 		granted := c.sessionAutoApprove[group]
 		asked = !granted
-		if !c.confirmGrouped(ConfirmRequest{
+		if !c.ConfirmGrouped(ConfirmRequest{
 			Prompt:       "Fetch this page?",
 			URL:          f.url,
 			Origin:       org,

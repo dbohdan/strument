@@ -549,7 +549,7 @@ func (c *Coder) initBeforeMessage() {
 	}
 }
 
-// confirmGrouped wraps c.Confirm with group-scoped auto-approve. If the user
+// ConfirmGrouped wraps c.Confirm with group-scoped auto-approve. If the user
 // answered "a" to a previous Confirm with the same Group, this one is approved
 // without prompting. The first "a" answer records the group and returns true.
 // req.GroupSession picks how long the record lasts — the session, or the turn.
@@ -559,7 +559,7 @@ func (c *Coder) initBeforeMessage() {
 // Both maps are read on every call regardless of scope. A group is only ever
 // written to one of them, so this cannot widen a grant; what it does is keep a
 // session grant honored by a request that forgot to set GroupSession.
-func (c *Coder) confirmGrouped(req ConfirmRequest) bool {
+func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
 	if req.Group != "" && (c.turnAutoApprove[req.Group] || c.sessionAutoApprove[req.Group]) {
 		return true
 	}
