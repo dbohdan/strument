@@ -250,6 +250,27 @@ Write the file **outside the project directory**: a log inside the tree is part 
 (In a 300-session trial, a search hit the log in 46 of them.)
 The JSONL output exists because parsing rendered terminal text was the main source of this project's measurement bugs in live trials.
 
+### If you rename a project directory
+
+Strument keeps a project's transcript, input history, cost ledger, resume state and undo stack outside your tree, under `$XDG_STATE_HOME/strument/projects/`, keyed by the project's path.
+Renaming the directory therefore starts a fresh one.
+
+You do not have to go looking for the old one.
+The next time you start Strument in the renamed directory it says so:
+
+```
+strument: this project also has 47 turns recorded under ~/src/proj, which no longer exists.
+  Merge it:  strument project adopt ~/src/proj
+  Or hide this:  strument project ignore ~/src/proj
+```
+
+`strument project adopt` prints what it will do to each file, asks, and merges: the transcript, input history and cost ledger are combined in time order, while `resume.json` and `undo.json` are single values where the newer of the two wins.
+It is safe to run **after** you have already had a session at the new path — that case is exactly what the merge rules are for.
+Nothing is deleted: the old state directory is kept as `<name>.adopted-<timestamp>`.
+
+`strument project list` shows every recorded project with its turn count, size and state directory, orphans first.
+That is the way out when the notice cannot help — Strument recognizes a renamed project by its repository's first commit, so a project with no repository, a history built by merging two unrelated ones, or two clones of the same repository that both moved are all listed rather than offered.
+
 ### Shell completions
 
 The `shell` subcommand prints a completion script for Bash or fish.

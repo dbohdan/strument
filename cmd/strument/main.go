@@ -235,9 +235,26 @@ func (c *chatCmd) Run() error {
 	// session left is still fine — that writes nothing, and refusing it would
 	// make the flag a bigger behavior change than its name suggests.
 	keepState := !c.NoHistory && rootErr == nil
+	// On every startup, not only when this project has no state yet. That is
+	// the load-bearing half, and a control confirms it: making the scan
+	// conditional on a missing state directory takes the hint from 1 to 0 in
+	// the case the feature exists for — a user who renamed a project, did not
+	// notice the history was gone, and had a session anyway. That session
+	// creates state at the new path, and a conditional scan would go quiet
+	// exactly then.
+	//
+	// It also runs before EnsureProjectDir, so nothing has been written when
+	// the hint prints. That ordering is a sequencing preference and not a
+	// behavioural one: the same control, moved, changes no output, because
+	// creating *this* project's directory does not touch the orphan whose path
+	// is gone. Said plainly because an earlier draft of this comment claimed
+	// otherwise.
+	if keepState {
+		hintAtRenamedProject(projectRoot)
+	}
 	stateDir := ""
 	if keepState {
-		dir, err := history.EnsureProjectDir(projectRoot)
+		dir, err := history.EnsureProjectDir(projectRoot, projectRootCommit(projectRoot))
 		if err != nil {
 			keepState = false
 		} else {
@@ -479,6 +496,61 @@ func historyRootFrom(dir string) string {
 	return filepath.Clean(dir)
 }
 
+// hintAtRenamedProject prints one line when this project's recorded history
+// appears to be sitting under a path that no longer exists.
+//
+// It only ever prints. The evidence — the recorded path is gone and the git
+// root commit matches — is portable and survives a rename, a move across
+// filesystems and a restore from backup, but it cannot tell two clones of one
+// repository apart, since they share a root commit. Adopting on that would
+// attach the wrong project's transcript, so a person types the command.
+//
+// This goes to stderr rather than through Output.Toolf: the Output does not
+// exist this early, and the scan has to run before the state directory is
+// created. The other startup notices — an untrusted project config, untrusted
+// skills — take the same route for the same reason.
+func hintAtRenamedProject(projectRoot string) {
+	orphan, ok, err := history.FindOrphan(projectRootCommit(projectRoot))
+	if err != nil || !ok {
+		return
+	}
+	if history.IsDismissed(projectRoot, orphan.Dir) {
+		return
+	}
+	dir, err := history.ProjectDir(projectRoot)
+	if err == nil && dir == orphan.Dir {
+		return
+	}
+	turns := "history"
+	if orphan.Turns == 1 {
+		turns = "1 turn"
+	} else if orphan.Turns > 1 {
+		turns = fmt.Sprintf("%d turns", orphan.Turns)
+	}
+	fmt.Fprintf(os.Stderr, "strument: this project also has %s recorded under %s, which no longer exists.\n",
+		turns, orphan.Root.Path)
+	fmt.Fprintf(os.Stderr, "  Merge it:  strument project adopt %s\n", orphan.Root.Path)
+	fmt.Fprintf(os.Stderr, "  Or hide this:  strument project ignore %s\n", orphan.Root.Path)
+}
+
+// projectRootCommit is the witness recorded in a project's state directory, so
+// a renamed directory can be recognized as the same project. "" for a project
+// with no repository, or one whose history has more than one root.
+//
+// It discovers the repository itself rather than reusing the session's, on
+// purpose: --no-git withholds git from the *session* while the project root is
+// still the worktree, exactly as historyRootFrom above already assumes. Reading
+// the witness from the session's repo would leave --no-git projects
+// unmatchable, which is a silent asymmetry between two flags that have nothing
+// to do with each other. Nothing is written to the repository either way.
+func projectRootCommit(projectRoot string) string {
+	g, err := gitrepo.Discover(projectRoot)
+	if err != nil {
+		return ""
+	}
+	return g.RootCommit()
+}
+
 // acquireProjectLock takes a non-blocking exclusive advisory lock on the
 // project's state directory, so two harness copies keyed to the same root
 // cannot write its transcript, cost ledger, or undo spill concurrently. The
@@ -487,6 +559,24 @@ func historyRootFrom(dir string) string {
 // exits without it. A false locked means another instance holds it; the error
 // is non-nil only for genuine failures (a missing directory is not one — the
 // caller has just created it).
+// lockStateDir takes the same lock as acquireProjectLock, but on a state
+// directory named directly rather than derived from a project root. Adopting
+// needs it: the source directory's project may not exist any more, so there is
+// no root to derive its lock path from.
+func lockStateDir(dir string) (*flock.Flock, bool, error) {
+	lk := flock.New(filepath.Join(dir, "lock"))
+	locked, err := lk.TryLock()
+	if err != nil {
+		_ = lk.Close()
+		return nil, false, err
+	}
+	if !locked {
+		_ = lk.Close()
+		return nil, false, nil
+	}
+	return lk, true, nil
+}
+
 func acquireProjectLock(projectRoot string) (*flock.Flock, bool, error) {
 	p, err := history.LockPath(projectRoot)
 	if err != nil {
@@ -1143,6 +1233,7 @@ type cli struct {
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider."       name:"model-config"`
+	Project     projectCmd       `cmd:""                         help:"Inspect the recorded projects, or adopt a renamed one's history."`
 	Tool        toolCmd          `cmd:""                         help:"Run one observation tool and print what a model would see."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Version     kong.VersionFlag `help:"Print version and exit."`

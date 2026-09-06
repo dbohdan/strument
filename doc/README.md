@@ -896,16 +896,73 @@ no external dependency is needed.
 
 Strument keeps one directory per project under
 `$XDG_STATE_HOME/strument/projects/<basename>-<hash8>/`, keyed by the SHA-256 of
-the project root's absolute path. It holds `root` (the path that hash was taken
-over, so a stale directory can be identified without recomputing hashes), the
-markdown `transcript.md`, and readline's `input.txt`. The directory is `0700`
-and its files `0600`: a transcript records whatever the model read out of the
-project, and the case that justified `--no-git` in the first place is a live
-configuration directory.
+the project root's absolute path. It holds `root` (the identity record; see
+below), the markdown `transcript.md`, and readline's `input.txt`. The directory
+is `0700` and its files `0600`: a transcript records whatever the model read out
+of the project, and the case that justified `--no-git` in the first place is a
+live configuration directory.
 
 The project, for this purpose, is the git worktree root wherever there is one
 and the working directory otherwise — **independent of `--no-git`**, which says
 how a turn is committed rather than which project you are in.
+
+Every file in here is declared in `internal/history/artifact.go` with a **merge
+policy**, and the path accessors go through that table rather than joining names
+onto `ProjectDir`'s result. That is not tidiness. A project directory can be
+merged into another one (below), and a file with no policy would be dropped
+silently on the first merge — the kind of loss nobody notices until they go
+looking for something a year old. `TestProjectDirHoldsOnlyRegisteredArtifacts`
+runs every writer in the package and then reads the directory back, so a new
+file that skipped the table fails the build rather than the user.
+
+### Surviving a rename
+
+Keying on the path means renaming a project directory orphans everything in it.
+aider avoided this by keeping history in the tree; that is not available here,
+because the transcript holds whatever the model read and `undo.json` holds
+verbatim copies of source, and either one inside the repo is one `git add -A`
+from a public remote.
+
+Instead `root` carries a **witness**: the repository's single root commit, from
+`gitrepo.RootCommit`. It survives a rename, a move across filesystems, a restore
+from backup and being carried to another machine, and it costs no syscalls on
+any platform. At startup Strument scans `projects/*/root` for a directory whose
+recorded path is gone and whose witness matches, and prints one line naming
+`strument project adopt`.
+
+It only ever prints. Every clone of a repository shares a root commit, so the
+evidence cannot tell two checkouts apart; adopting on it would attach the wrong
+project's transcript. A history with several root commits, or no repository at
+all, has no witness and is never matched — `strument project list` and an
+explicit adopt are the answer there. Two matching orphans decline for the same
+reason.
+
+The scan runs on **every** startup, not only when the current project has no
+state. That is the load-bearing part, and a control confirms it: the case this
+exists for is a user who renamed a project, did not notice, and had a session
+anyway, which creates state at the new path. It also runs before the state
+directory is created, so nothing is written before the notice — a sequencing
+preference rather than a behavioural one, since the same control moved changes
+no output.
+
+There is deliberately **no dev/inode fingerprint**, though it would identify a
+moved directory far more precisely than a shared root commit does. `st_dev` is
+assigned by mount order on any filesystem with an anonymous superblock — ZFS
+(`sget_fc(..., set_anon_super_fc)`), btrfs subvolumes, overlayfs, NFS, FUSE — so
+a persisted one is noise after a reboot. The durable substitutes are all
+per-platform and all partial: ZFS's `f_fsid` is stable but ext4's is
+`uuid_to_fsid(s_uuid)` and can be zero; macOS needs a hand-written
+`getattrlist(ATTR_VOL_UUID)`; Windows NTFS is well-behaved but FAT derives the
+file id from the directory entry, so a rename changes it *when the new name is
+longer*. Three implementations that still often answer "unknown" is too much to
+carry for a convenience.
+
+`strument project list` shows every recorded project, orphans first, with turn
+counts and sizes. `strument project adopt <old path>` prints its plan, asks, and
+merges per the policy table, keeping the source as `<name>.adopted-<timestamp>`
+because merging appends and recovery means going back to the copy. `strument
+project ignore <old path>` records a dismissal so the startup line stops: a
+notice with no way to answer it is one people learn to read past.
 
 Before adding anything here, three tests. A file belongs only if it is:
 

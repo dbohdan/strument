@@ -30,11 +30,7 @@ type CostEntry struct {
 
 // CostPath is the ledger for a project root.
 func CostPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "cost.jsonl"), nil
+	return artifactPath(projectRoot, artCost)
 }
 
 // AppendCost adds one turn to the ledger.

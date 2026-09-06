@@ -1,6 +1,6 @@
 # fish completions for strument.
 
-set -l strument_commands trust history config model-config tool shell version
+set -l strument_commands trust history config model-config project tool shell version
 set -l strument_chat_commands __strument_chat_command
 
 function __strument_no_subcommand
@@ -22,6 +22,7 @@ complete -c strument -n __strument_no_subcommand -a trust -d "Trust the project'
 complete -c strument -n __strument_no_subcommand -a history -d "Print the path to this project's chat-history file"
 complete -c strument -n __strument_no_subcommand -a config -d "Inspect the resolved config"
 complete -c strument -n __strument_no_subcommand -a model-config -d "Print copy-pastable model config fetched from a provider"
+complete -c strument -n __strument_no_subcommand -a project -d "Inspect the recorded projects, or adopt a renamed one's history"
 complete -c strument -n __strument_no_subcommand -a tool -d "Run one observation tool and print what a model would see"
 complete -c strument -n __strument_no_subcommand -a shell -d "Generate shell completions"
 complete -c strument -n __strument_no_subcommand -a version -d "Print version and exit"
@@ -51,6 +52,11 @@ complete -c strument -n "__fish_seen_subcommand_from model-config" -s s -l sourc
 complete -c strument -n "__fish_seen_subcommand_from model-config" -l provider-name -d "Provider variable name emitted in the model call" -r
 complete -c strument -n "__fish_seen_subcommand_from model-config" -l proxy -d "SOCKS5 proxy for the catalog fetch" -r
 complete -c strument -n "__fish_seen_subcommand_from model-config" -a "model"
+
+# project.
+complete -c strument -n "__fish_seen_subcommand_from project" -a "list adopt ignore"
+complete -c strument -n "__fish_seen_subcommand_from project list" -s a -l all -d "Include projects whose directory still exists"
+complete -c strument -n "__fish_seen_subcommand_from project adopt" -s y -l yes -d "Do not ask; for scripts"
 
 # tool.
 complete -c strument -n "__fish_seen_subcommand_from tool" -s r -l root -d "Project root" -r

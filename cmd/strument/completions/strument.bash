@@ -1,9 +1,11 @@
 # Bash completions for strument.
 
-_strument_commands="trust history config model-config tool shell version"
+_strument_commands="trust history config model-config project tool shell version"
 _strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --yes --yes-shell --version"
 _strument_config_commands="models default"
 _strument_tool_commands="read grep glob ls symbol"
+_strument_project_commands="list adopt ignore"
+_strument_project_options="-a --all -y --yes"
 _strument_model_config_options="-s --source --provider-name --proxy"
 _strument_tool_options="-r --root --json"
 
@@ -50,7 +52,7 @@ _strument_complete() {
         -r)
             [[ $command == tool ]] && expecting_value=1
             ;;
-        trust|history|config|model-config|tool|shell|version)
+        trust|history|config|model-config|project|tool|shell|version)
             [[ -z $command ]] && command=$word
             ;;
         read|grep|glob|ls|symbol)
@@ -94,6 +96,9 @@ _strument_complete() {
         else
             COMPREPLY=($(compgen -W "$_strument_tool_commands $_strument_tool_options" -- "$cur"))
         fi
+        ;;
+    project)
+        COMPREPLY=($(compgen -W "$_strument_project_commands $_strument_project_options" -- "$cur"))
         ;;
     shell)
         COMPREPLY=($(compgen -W "bash fish" -- "$cur"))

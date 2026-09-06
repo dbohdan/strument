@@ -184,6 +184,35 @@ func (r *Repo) HeadSHA() string {
 	return strings.TrimSpace(out)
 }
 
+// RootCommit returns the repository's single root commit — the one with no
+// parents — or "" when there is not exactly one.
+//
+// It is the only witness Strument has that two directories are the same project
+// after one of them was renamed: a root commit survives a rename, a move across
+// filesystems, a restore from backup, and being carried to another machine,
+// none of which a path or an inode does.
+//
+// "Not exactly one" is a deliberate refusal rather than a pick. A history built
+// by merging two unrelated repositories has several roots, and which one you get
+// depends on traversal order — so a project could witness itself differently on
+// two runs. An unborn branch has none. Both answer "" and fall back to being
+// listed rather than matched.
+//
+// It is a witness and not an identity: every clone of a repository shares it.
+// The caller pairs it with "the recorded path no longer exists", and even then
+// only offers.
+func (r *Repo) RootCommit() string {
+	out, err := r.git("rev-list", "--max-parents=0", "HEAD")
+	if err != nil {
+		return ""
+	}
+	roots := strings.Fields(out)
+	if len(roots) != 1 {
+		return ""
+	}
+	return roots[0]
+}
+
 // Commit stages fnames and commits them. attributed adds the
 // trailer (auto-commits of model edits); dirty commits stay unattributed.
 // ok=false means there was nothing to commit. GIT_AUTHOR_* and

@@ -574,3 +574,84 @@ func TestAttributeDirectCommitsNoMove(t *testing.T) {
 		t.Errorf("after reset: hashes=%v err=%v, want nil/nil", hashes, err)
 	}
 }
+
+// TestRootCommit covers the witness the project-adopt scan matches on: it is
+// the first commit, it does not move when later commits land, and it survives
+// the rename it exists for.
+func TestRootCommit(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := g.RootCommit()
+	if first == "" {
+		t.Fatal("a repo with one commit must have a root commit")
+	}
+	if head := g.HeadSHA(); first != head {
+		t.Errorf("with one commit the root is HEAD: root %q, head %q", first, head)
+	}
+
+	// A second commit moves HEAD and must not move the root.
+	if err := os.WriteFile(filepath.Join(root, "second.txt"), []byte("more\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", "second.txt")
+	run(t, root, "git", "commit", "-q", "-m", "second")
+	g2, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := g2.RootCommit(); got != first {
+		t.Errorf("root commit moved with HEAD: %q, want %q", got, first)
+	}
+	if g2.HeadSHA() == first {
+		t.Fatal("the test did not actually add a commit, so it proves nothing")
+	}
+
+	// The property the feature rests on: renaming the directory changes
+	// nothing. Same repository, same witness.
+	moved := filepath.Join(filepath.Dir(root), "renamed-"+filepath.Base(root))
+	if err := os.Rename(root, moved); err != nil {
+		t.Skipf("cannot rename the scratch repo: %v", err)
+	}
+	g3, err := gitrepo.Discover(moved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := g3.RootCommit(); got != first {
+		t.Errorf("root commit after rename = %q, want %q", got, first)
+	}
+}
+
+// TestRootCommitRefusesAmbiguity pins the refusal rather than the pick. A
+// history built from two unrelated repositories has two roots, and which one a
+// traversal yields is not something a project's identity should depend on.
+func TestRootCommitRefusesAmbiguity(t *testing.T) {
+	root := initRepo(t)
+
+	// An orphan branch is a second root; merging it gives HEAD two of them.
+	run(t, root, "git", "checkout", "-q", "--orphan", "other")
+	run(t, root, "git", "rm", "-q", "-rf", ".")
+	if err := os.WriteFile(filepath.Join(root, "other.txt"), []byte("other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", "other.txt")
+	run(t, root, "git", "commit", "-q", "-m", "other root")
+	run(t, root, "git", "checkout", "-q", "main")
+	run(t, root, "git", "merge", "-q", "--no-edit", "--allow-unrelated-histories", "other")
+
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Assert the fixture really produced two roots, so a "" answer means the
+	// refusal fired and not that the merge silently failed.
+	roots := strings.Fields(run(t, root, "git", "rev-list", "--max-parents=0", "HEAD"))
+	if len(roots) != 2 {
+		t.Fatalf("the fixture must have two root commits, got %d: %v", len(roots), roots)
+	}
+	if got := g.RootCommit(); got != "" {
+		t.Errorf("RootCommit() = %q with two roots, want \"\" — it must refuse, not pick", got)
+	}
+}

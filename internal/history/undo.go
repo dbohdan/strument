@@ -79,11 +79,7 @@ type UndoState struct {
 
 // UndoPath is the undo file for a project root.
 func UndoPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "undo.json"), nil
+	return artifactPath(projectRoot, artUndo)
 }
 
 // LoadUndo reads a project's undo state. A missing, unreadable, malformed, or

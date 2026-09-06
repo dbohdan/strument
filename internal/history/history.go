@@ -15,6 +15,7 @@ package history
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,12 @@ func stateDir() (string, error) {
 // deferred undo spill is a subtree of copied source per session. One directory
 // per project also makes "forget this project" an rm -rf and gives the mode
 // below one place to be right.
+//
+// Do not join a file name onto this result. Every file in here is declared in
+// artifact.go with a merge policy, because a project directory can be merged
+// into another one when a renamed project is adopted; a file created outside
+// that table has no policy and would be dropped silently on the first adopt.
+// Use the accessors, and add to the table to add a file.
 func ProjectDir(projectRoot string) (string, error) {
 	base, err := stateDir()
 	if err != nil {
@@ -73,13 +80,60 @@ const (
 	fileMode = 0o600
 )
 
+// Root is the identity record in a project state directory's `root` file.
+//
+// It began as one line holding the absolute path the directory's hash was taken
+// over, so a stale directory could be identified by reading it rather than by
+// recomputing SHA-256 over candidates. Adopting a renamed project is that
+// affordance finally being used, and it needs one thing the bare path cannot
+// give: a witness that two *different* paths are the same project.
+//
+// GitRootCommit is that witness. It survives everything a path or an inode does
+// not — a rename, a move across filesystems, a restore from backup, being
+// carried to another machine. What it is not is unique: every clone of a
+// repository shares one, which is why the caller pairs it with "the recorded
+// path is gone" and still only offers.
+//
+// There is deliberately no dev/inode here. They would identify a moved
+// directory more precisely, but st_dev is assigned by mount order on any
+// filesystem with an anonymous superblock (ZFS, btrfs subvolumes, overlayfs,
+// NFS, FUSE), so a persisted one is noise after a reboot — and a field nothing
+// is allowed to match on is a field that eventually gets matched on.
+type Root struct {
+	Path          string `json:"path"`
+	GitRootCommit string `json:"git_root_commit,omitempty"`
+}
+
+// ReadRoot reads a project directory's identity record.
+//
+// Directories written by an older Strument hold one bare line of path, so that
+// is still accepted: a user's existing projects must not become unrecognizable
+// on upgrade, which for this feature would mean the orphan scan going blind
+// exactly where it is most needed.
+func ReadRoot(stateDir string) (Root, error) {
+	data, err := os.ReadFile(filepath.Join(stateDir, artifacts[artRoot].name))
+	if err != nil {
+		return Root{}, err
+	}
+	trimmed := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(trimmed, "{") {
+		return Root{Path: trimmed}, nil
+	}
+	var r Root
+	if err := json.Unmarshal([]byte(trimmed), &r); err != nil {
+		return Root{}, err
+	}
+	return r, nil
+}
+
 // EnsureProjectDir creates the directory and records which project it belongs
 // to, returning the path.
 //
-// The root file is the affordance a flat <key>.<ext> layout had nowhere to put:
-// it holds the absolute path the hash was taken over, so a stale directory can
-// be identified by reading it instead of recomputing SHA-256 over candidates.
-func EnsureProjectDir(projectRoot string) (string, error) {
+// gitRootCommit is the repository's root commit, or "" for a project with no
+// repository or an ambiguous one — see gitrepo.RootCommit. A project without
+// one is still recorded and still listed; it just cannot be matched to a
+// renamed directory automatically.
+func EnsureProjectDir(projectRoot, gitRootCommit string) (string, error) {
 	dir, err := ProjectDir(projectRoot)
 	if err != nil {
 		return "", err
@@ -92,8 +146,18 @@ func EnsureProjectDir(projectRoot string) (string, error) {
 		return "", err
 	}
 	// Rewritten every session: cheap, and it self-heals if the directory is
-	// copied between machines or the file is lost.
-	if err := os.WriteFile(filepath.Join(dir, "root"), []byte(abs+"\n"), fileMode); err != nil {
+	// copied between machines or the file is lost. Rewriting is also what
+	// upgrades an older bare-path file to the JSON form, and what fills in a
+	// witness for a project that became a repository after its first session.
+	body, err := json.Marshal(Root{Path: abs, GitRootCommit: gitRootCommit})
+	if err != nil {
+		return "", err
+	}
+	p, err := artifactPath(projectRoot, artRoot)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(p, append(body, '\n'), fileMode); err != nil {
 		return "", err
 	}
 	return dir, nil
@@ -101,11 +165,7 @@ func EnsureProjectDir(projectRoot string) (string, error) {
 
 // DefaultPath is the chat-history file for a project root.
 func DefaultPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "transcript.md"), nil
+	return artifactPath(projectRoot, artTranscript)
 }
 
 // LockPath is the advisory-lock file for a project's state directory. Two
@@ -114,11 +174,7 @@ func DefaultPath(projectRoot string) (string, error) {
 // session. The file is created 0600 like the rest of the state, but its
 // contents are meaningless — only the open file description's lock counts.
 func LockPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "lock"), nil
+	return artifactPath(projectRoot, artLock)
 }
 
 // InputHistoryPath is the readline input-history file for a project root,
@@ -131,11 +187,7 @@ func LockPath(projectRoot string) (string, error) {
 // are now. Scoping costs the cross-project recall, which turned out to be the
 // rarer want by a wide margin.
 func InputHistoryPath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "input.txt"), nil
+	return artifactPath(projectRoot, artInput)
 }
 
 // Turn is one recorded exchange.

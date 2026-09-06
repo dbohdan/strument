@@ -83,25 +83,81 @@ func TestEnsureProjectDirWritesRoot(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	dir, err := EnsureProjectDir(project)
+	dir, err := EnsureProjectDir(project, "abc123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "root"))
+	got, err := ReadRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	abs, _ := filepath.Abs(project)
-	if strings.TrimSpace(string(got)) != abs {
-		t.Errorf("root file = %q, want %q", got, abs)
+	if got.Path != abs {
+		t.Errorf("root path = %q, want %q", got.Path, abs)
+	}
+	if got.GitRootCommit != "abc123" {
+		t.Errorf("root witness = %q, want the recorded root commit", got.GitRootCommit)
 	}
 	// Rewritten each session, so calling twice must not append or fail.
-	if _, err := EnsureProjectDir(project); err != nil {
+	raw, _ := os.ReadFile(filepath.Join(dir, "root"))
+	if _, err := EnsureProjectDir(project, "abc123"); err != nil {
 		t.Fatal(err)
 	}
-	got2, _ := os.ReadFile(filepath.Join(dir, "root"))
-	if string(got2) != string(got) {
-		t.Errorf("root file changed on the second call: %q then %q", got, got2)
+	raw2, _ := os.ReadFile(filepath.Join(dir, "root"))
+	if string(raw2) != string(raw) {
+		t.Errorf("root file changed on the second call: %q then %q", raw, raw2)
+	}
+}
+
+// A directory written by an older Strument holds one bare line of path. It must
+// still be readable, because the orphan scan that finds a renamed project reads
+// exactly this file — and a user upgrading has nothing but old-form files, which
+// is precisely when the scan is worth having.
+func TestReadRootAcceptsTheBarePathForm(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "root"), []byte("/home/d/src/proj\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadRoot(dir)
+	if err != nil {
+		t.Fatalf("the pre-JSON form must still parse: %v", err)
+	}
+	if got.Path != "/home/d/src/proj" {
+		t.Errorf("path = %q, want the bare line", got.Path)
+	}
+	if got.GitRootCommit != "" {
+		t.Errorf("witness = %q, want empty: an old file carries none", got.GitRootCommit)
+	}
+}
+
+// And a rewrite upgrades it in place, so a project stops being unmatchable as
+// soon as it is opened once.
+func TestEnsureProjectDirUpgradesABarePathFile(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+	dir, err := ProjectDir(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(project)
+	if err := os.WriteFile(filepath.Join(dir, "root"), []byte(abs+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureProjectDir(project, "deadbeef"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GitRootCommit != "deadbeef" {
+		t.Errorf("witness after upgrade = %q, want it filled in", got.GitRootCommit)
+	}
+	if got.Path != abs {
+		t.Errorf("path after upgrade = %q, want %q", got.Path, abs)
 	}
 }
 
@@ -112,7 +168,7 @@ func TestProjectStateIsOwnerOnly(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	dir, err := EnsureProjectDir(project)
+	dir, err := EnsureProjectDir(project, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +358,7 @@ func TestProjectLock(t *testing.T) {
 
 	// The harness creates the project directory (EnsureProjectDir) before taking
 	// the lock, so the lock file's parent always exists. Mirror that here.
-	if _, err := EnsureProjectDir(project); err != nil {
+	if _, err := EnsureProjectDir(project, ""); err != nil {
 		t.Fatal(err)
 	}
 	p, err := LockPath(project)
@@ -334,7 +390,7 @@ func TestProjectLockReleasedOnClose(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	if _, err := EnsureProjectDir(project); err != nil {
+	if _, err := EnsureProjectDir(project, ""); err != nil {
 		t.Fatal(err)
 	}
 	p, err := LockPath(project)

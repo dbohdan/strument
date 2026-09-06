@@ -52,11 +52,7 @@ type Resume struct {
 
 // ResumePath is the resume file for a project root.
 func ResumePath(projectRoot string) (string, error) {
-	dir, err := ProjectDir(projectRoot)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "resume.json"), nil
+	return artifactPath(projectRoot, artResume)
 }
 
 // LoadResume reads a project's resume file. A missing, unreadable, malformed,
