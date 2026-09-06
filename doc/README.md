@@ -292,6 +292,39 @@ The REPL has the same philosophy: `repl.Options` exposes seams
 `GetSize`) so the whole interactive loop runs under tests over pipes and a
 real pty.
 
+## Side calls: `/btw` and `/consult`
+
+Two commands send a request that is not a turn. `RunAside` (`aside.go`) sends
+one user message with no chat context, no file context, no system prompt and no
+tools; it streams like a turn, reports usage like a turn, and adds nothing to
+the conversation. `RunConsult` (`consult.go`) is the same call with two
+additions: the advisor may be a different model, and it may be shown some of the
+session.
+
+`ConsultScope` is that ladder — `none`, `files`, `chat` — set by
+`--consult-scope`. `files` sends the contents of every pinned file, the `/add`
+set included, which is the one place those contents still travel: a normal turn
+sends only their *names* and lets the model read them (`pinnedFilesNote`), and
+an advisor with no tools cannot follow a name. `chat` adds `ViewContext`'s
+render of the fold, so there is one renderer for "what is in this conversation"
+rather than two that drift.
+
+The advisor's client and model are swapped in for the call and restored after,
+which is what puts the cost row under the advisor's own slug and price. That is
+deliberate rather than incidental: a second opinion the ledger cannot see is
+what a server-side advisor tool would give you, and being able to read what the
+habit costs is most of the argument for having it in the harness at all.
+
+What reaches the chat is decided by the user, not by the command. `/consult`
+offers, the way `/run` and `/check` offer their output, and on yes the answer
+goes in through `AppendContext` with a provenance header naming the advisor.
+Not `llm.HarnessNote`: the `[strument]` marker means the harness is speaking,
+and this is material the user brought in. The label is the whole point of the
+command — `/model` puts a second model's reply in as an *assistant* turn, which
+the session then reads as its own memory — and whether it survives to the next
+turn is measured, not assumed:
+[`experiments/2026-09-consult.md`](experiments/2026-09-consult.md).
+
 ## The tool loop
 
 `edit_format` accepts one value, `"tool"`: everything the model does, it does
