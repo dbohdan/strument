@@ -65,6 +65,13 @@ type Options struct {
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
+	// ConsultScope is how much of the session /consult shows the advisor. The
+	// zero value is coder.ConsultNothing — the binary sets this from
+	// --consult-scope, whose default is where the shipped behaviour lives,
+	// because the ladder's order is what makes `scope >= ConsultFiles` read
+	// correctly and "none" is the bottom of it.
+	ConsultScope coder.ConsultScope
+
 	// ReloadConfig re-reads config.star for /reload, using the same options as
 	// the initial load. nil disables /reload.
 	ReloadConfig func() (*config.Config, error)

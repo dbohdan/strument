@@ -40,6 +40,7 @@ complete -c strument -n __strument_chat_command -l no-shell -d "Withhold the bas
 complete -c strument -n __strument_chat_command -l no-history -d "Do not write the session to the chat-history file"
 complete -c strument -n __strument_chat_command --long jsonl -d "Also record the session to this file as JSONL" -r
 complete -c strument -n __strument_chat_command --long dry-run -d "Report edits without writing files or committing"
+complete -c strument -n __strument_chat_command --long consult-scope -d "How much of the session /consult shows the advisor" -x -a "none files chat"
 complete -c strument -n __strument_chat_command --long yes -d "Answer yes to confirmations"
 complete -c strument -n __strument_chat_command --long yes-shell -d "Also auto-run model-suggested shell commands"
 complete -c strument -n __strument_chat_command --long version -d "Print version and exit"

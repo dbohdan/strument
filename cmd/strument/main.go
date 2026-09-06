@@ -62,6 +62,7 @@ type chatCmd struct {
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                            name:"dry-run"`
 	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                                         name:"no-shell"`
 	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, add-output, all. Repeatable; lists allowed." placeholder:"<name>"`
+	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"How much of the session /consult shows the advisor." name:"consult-scope"`
 	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
@@ -819,6 +820,15 @@ func (c *chatCmd) paletteTheme() render.Theme {
 	}
 }
 
+// consultScope maps the --consult-scope name onto the coder's ladder. An
+// unrecognized name cannot reach here — kong's enum has already refused it — so
+// it falls back to the bottom of the ladder rather than failing the session over
+// a flag that was validated a moment ago.
+func consultScope(name string) coder.ConsultScope {
+	scope, _ := coder.ParseConsultScope(name)
+	return scope
+}
+
 // terminalSize reports stdout's width and height for the horizontal rules,
 // falling back to 80x24 when stdout is not a terminal.
 func terminalSize() (int, int) {
@@ -848,6 +858,9 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		SaveResume:  saveResumeFunc(cdr, cfg, projectRoot, keepState),
 		ApplyEgress: applyEgressConfig,
 		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
+		// Kong's enum has already refused anything else, so the ok is never
+		// false here; the parse is where the name-to-scope mapping lives.
+		ConsultScope: consultScope(c.ConsultScope),
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef})
 		},

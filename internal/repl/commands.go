@@ -79,6 +79,7 @@ func init() {
 		{"check", "[<name>]", "Run a project check; optionally add its output to the chat.", cmdCheck},
 		{"clear", "", "Clear the conversation history.", cmdClear},
 		{"code", "[<request>]", "Return to editing (bare: stay in code mode).", cmdCode},
+		{"consult", "<alias> <question>", "Ask another model, and optionally add its answer to the chat.", cmdConsult},
 		{"context", "[<n>]", "Show the folded chat history as the model sees it (first n summaries).", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"drop", "[<file> ...]", "Unpin files (all if none given).", cmdDrop},
@@ -212,7 +213,9 @@ func (r *REPL) completer() readline.AutoCompleter {
 				readline.PcItem("drop", namesDrop),
 				readline.PcItem("reset"),
 			)
-		case "model":
+		case "consult", "model":
+			// The advisor is named from the same closed set /model switches
+			// between, so it completes the same way.
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
 		case "skill":
 			sub = append(sub, readline.PcItemDynamic(r.completeSkills))

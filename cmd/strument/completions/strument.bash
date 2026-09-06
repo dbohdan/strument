@@ -1,7 +1,7 @@
 # Bash completions for strument.
 
 _strument_commands="trust history config model-config project tool shell version"
-_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --yes --yes-shell --version"
+_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --consult-scope --yes --yes-shell --version"
 _strument_config_commands="models default"
 _strument_tool_commands="read grep glob ls symbol"
 _strument_project_commands="list adopt ignore"
@@ -43,7 +43,7 @@ _strument_complete() {
             continue
         fi
         case "$word" in
-        -M|--model|-m|--message|--jsonl|--provider-name|--proxy|--root|--offset|--limit|--glob|--path|--mode|--kind)
+        -M|--model|-m|--message|--jsonl|--consult-scope|--provider-name|--proxy|--root|--offset|--limit|--glob|--path|--mode|--kind)
             expecting_value=1
             ;;
         -s)
@@ -107,7 +107,9 @@ _strument_complete() {
         COMPREPLY=()
         ;;
     *)
-        if [[ $prev == --offset || $prev == --limit || $prev == --max-count ]]; then
+        if [[ $prev == --consult-scope ]]; then
+            COMPREPLY=($(compgen -W "none files chat" -- "$cur"))
+        elif [[ $prev == --offset || $prev == --limit || $prev == --max-count ]]; then
             COMPREPLY=()
         else
             COMPREPLY=($(compgen -W "$_strument_commands $_strument_chat_options" -- "$cur"))
