@@ -3,7 +3,6 @@
 package platform
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"sync"
@@ -17,12 +16,15 @@ const (
 	IsWindows = false
 )
 
-// suspendGrace is how long SuspendProcess waits to find out whether the
-// SIGTSTP it raised actually stopped the process. A self-directed signal is
-// delivered before the kill returns, so a stop that is going to happen has
-// happened; this only has to be long enough not to race the runtime's signal
-// goroutine.
-const suspendGrace = 250 * time.Millisecond
+// suspendObserved is how much wall-clock time has to pass across the kill for
+// SuspendProcess to conclude that the process really was stopped.
+//
+// The two outcomes are orders of magnitude apart, so the threshold does not
+// have to be judged finely. A signal that stops nothing returns in
+// microseconds; a stop that is resumed by hand lasts as long as it takes to
+// type `fg`, and even a scripted `kill -CONT` costs a process spawn. Twenty
+// milliseconds sits between the two with room on both sides.
+const suspendObserved = 20 * time.Millisecond
 
 // SuspendProcess suspends the foreground process group with SIGTSTP and returns
 // once the process is resumed. It reports whether the suspend took effect.
@@ -39,35 +41,26 @@ const suspendGrace = 250 * time.Millisecond
 // the whole group. Treat this as fidelity to the terminal, not as a fix for an
 // observed bug.
 //
-// And it does not wait forever. That half is a fix for something observed. The
-// previous version blocked on SIGCONT
-// unconditionally, so a SIGTSTP that failed to stop anything turned into a hung
-// harness: the terminal had already been put back into cooked mode by the
-// caller, nothing was reading stdin, and the user's typing was echoed by the
-// kernel — which looks exactly like a working prompt that has stopped
-// accepting input. A suspend that does not take should cost a line of output,
-// not the session.
+// And it does not wait for a SIGCONT to tell it the stop happened. That was the
+// first attempt and it was measuring the wrong thing: a signal sent to one's own
+// process group is delivered before the kill returns, so the stop *and* the
+// resume are both over by the time the next line runs — the SIGCONT has already
+// been spent getting us here, and waiting for another one can only time out. A
+// capture showed exactly that: the suspend worked, and the harness then
+// announced that it had not.
+//
+// Elapsed time across the kill measures the thing directly. It is also what
+// makes a failed suspend cheap: nothing blocks, so the caller restores raw mode
+// either way. The old version blocked on SIGCONT unconditionally, and a SIGTSTP
+// that stopped nothing turned into a hung harness — terminal back in cooked
+// mode, nothing reading stdin, the user's typing echoed by the kernel, which
+// looks exactly like a working prompt that has quietly stopped accepting input.
 func SuspendProcess() bool {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGCONT)
-	defer stop()
-
+	started := time.Now()
 	if err := syscall.Kill(0, syscall.SIGTSTP); err != nil {
 		return false
 	}
-
-	timer := time.NewTimer(suspendGrace)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return true
-	case <-timer.C:
-		// A stopped process runs no goroutines, so if we really were stopped
-		// the SIGCONT that woke us is already recorded by the time anything
-		// here runs — but the timer will also have expired during the stop,
-		// and a select picks at random among ready cases. Ask the context
-		// directly rather than trusting which case won.
-		return ctx.Err() != nil
-	}
+	return time.Since(started) >= suspendObserved
 }
 
 // getWidthHeight of the terminal using given file descriptor

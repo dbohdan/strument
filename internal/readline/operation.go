@@ -226,7 +226,12 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 					// The line has already been cleared, so without this the
 					// screen would show a blank prompt and nothing else — the
 					// shape a live capture showed being read as a hang.
-					o.t.Write([]byte("Ctrl-Z did not suspend Strument: the SIGTSTP was not delivered.\r\n" +
+					//
+					// It says what happened and not why. An earlier version
+					// blamed the signal for not being delivered, and the first
+					// capture of it firing was a case where the signal *had*
+					// been delivered and the suspend had worked.
+					o.t.Write([]byte("Ctrl-Z did not suspend Strument.\r\n" +
 						"The session is unaffected. Use your shell's job control, or /exit to leave.\r\n"))
 				}
 				o.Refresh()
