@@ -608,6 +608,29 @@ Both were observed. The note added on Continue names the decision and rules out
 both readings, and seven interrupts across three models then resumed, two of
 them mid-word.
 
+**Ctrl-Z takes two different paths for the same key**, and for the reason
+above. At the prompt readline holds the terminal raw with ISIG off, so `0x1a`
+arrives as a byte and is suspended by hand: `operation.go` clears the line,
+calls `terminal.SleepToResume` — leave raw mode, `SIGTSTP` to self, block on
+`SIGCONT`, re-enter raw mode — and refreshes. During a turn the terminal is back
+in cooked mode, so the kernel echoes `^Z` and raises the signal itself, and none
+of that code runs.
+
+Both are one keypress. A pty probe under an interactive bash counted one press
+at the prompt, with text typed, mid-word after a completion, in reverse search,
+after a slash command, mid-turn against a hanging endpoint, with colour on, and
+inside tmux with a shell in the pane — chasing a report of a double press that
+then stopped reproducing. It is written down because a keystroke handled two
+ways depending on who happens to be reading is where such a report would come
+from, and because the first thing to ask is **whether `^Z` echoes**: an echo
+means the kernel took it and Strument's code never saw it.
+
+The one way to make Ctrl-Z stop working entirely is not Strument's doing. When
+the process group is orphaned — no member has a parent in another process group
+in the same session, which is what `tmux new-session <command>` produces if it
+execs Strument directly instead of a shell — POSIX says a `SIGTSTP` delivered
+to it is discarded, and no number of presses will suspend it.
+
 **SIGUSR1 is the same interrupt without a keyboard.** It shares the Ctrl-C
 handler's subscription (the `Notify` seam delivers both to one channel) and
 calls the same `InterruptSend`, so the steer menu, `settleEdits`, and the
