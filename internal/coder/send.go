@@ -994,23 +994,38 @@ func (c *Coder) flushTurnUsage() {
 		EditsFuzzy: c.editsFuzzy,
 	})
 
-	if c.RecordUsage != nil {
-		u := TurnUsage{
-			Model:        c.Model.QualifiedSlug(),
-			TokensSent:   c.messageTokensSent,
-			TokensRecv:   c.messageTokensReceived,
-			CacheRead:    c.messageCacheRead,
-			CacheWrite:   c.messageCacheWrite,
-			Estimated:    c.messageEstimated,
-			Steps:        c.numSteps + 1,
-			FilesChanged: len(c.turnEditedFiles),
-		}
-		if c.costKnown {
-			cost := c.messageCost
-			u.Cost = &cost
-		}
-		c.RecordUsage(u)
+	c.reportUsage(c.numSteps+1, len(c.turnEditedFiles))
+}
+
+// reportUsage hands the message-scoped accounting to RecordUsage, when there is
+// one.
+//
+// Shared by a turn and by a side call — /btw and /consult — because a side call
+// spends money and a ledger that cannot see it is not a ledger. It used to be
+// inline in flushTurnUsage, which asides never reach: an aside printed its usage
+// line and left no row, so a session's spend on screen and its spend on disk
+// could disagree by however many questions had been asked beside the chat. A
+// side call arrives as a one-step row with no files changed, under whichever
+// model actually answered.
+func (c *Coder) reportUsage(steps, filesChanged int) {
+	if c.RecordUsage == nil {
+		return
 	}
+	u := TurnUsage{
+		Model:        c.Model.QualifiedSlug(),
+		TokensSent:   c.messageTokensSent,
+		TokensRecv:   c.messageTokensReceived,
+		CacheRead:    c.messageCacheRead,
+		CacheWrite:   c.messageCacheWrite,
+		Estimated:    c.messageEstimated,
+		Steps:        steps,
+		FilesChanged: filesChanged,
+	}
+	if c.costKnown {
+		cost := c.messageCost
+		u.Cost = &cost
+	}
+	c.RecordUsage(u)
 }
 
 // TurnUsage is one turn's accounting, handed to RecordUsage at turn end — the

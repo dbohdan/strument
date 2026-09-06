@@ -22,8 +22,15 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 	if strings.TrimSpace(question) == "" {
 		return ""
 	}
+	return c.runSide(ctx, question)
+}
 
-	messages := []llm.Message{llm.TextMessage("user", question)}
+// runSide is the side call itself, shared with RunConsult. It sends exactly the
+// prompt it is given as a single user message against whatever Client and Model
+// are in place, so a caller that wants a different advisor swaps those two and
+// this stays ignorant of the difference.
+func (c *Coder) runSide(ctx context.Context, prompt string) string {
+	messages := []llm.Message{llm.TextMessage("user", prompt)}
 	req := llm.Request{
 		Model:           c.Model.Slug,
 		Messages:        messages,
@@ -64,6 +71,7 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 	c.partialResponseContent = answer // for finalizeUsage's estimate fallback
 	c.finalizeUsage(usage)
 	c.flushSendUsage() // an aside has no tool calls to wait for
+	c.reportUsage(1, 0)
 
 	c.multiResponseContent = ""
 	c.partialResponseContent = ""
