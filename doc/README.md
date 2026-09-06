@@ -616,20 +616,38 @@ calls `terminal.SleepToResume` — leave raw mode, `SIGTSTP` to self, block on
 in cooked mode, so the kernel echoes `^Z` and raises the signal itself, and none
 of that code runs.
 
-Both are one keypress. A pty probe under an interactive bash counted one press
-at the prompt, with text typed, mid-word after a completion, in reverse search,
-after a slash command, mid-turn against a hanging endpoint, with colour on, and
-inside tmux with a shell in the pane — chasing a report of a double press that
-then stopped reproducing. It is written down because a keystroke handled two
-ways depending on who happens to be reading is where such a report would come
-from, and because the first thing to ask is **whether `^Z` echoes**: an echo
-means the kernel took it and Strument's code never saw it.
+**A report of Ctrl-Z needing two presses was real, and the split above is why.**
+A `script` capture settled it. `\e[1G\e[J` with nothing between is `runeBuffer`
+cleaning an empty prompt, and the only caller is the Ctrl-Z branch — so readline
+*did* take the first press. What followed was kernel echo (`<CR><LF>`, and `^Z`
+via ECHOCTL): the terminal had been put back to cooked by `SleepToResume`, the
+self-directed `SIGTSTP` had not stopped anything, and the process was blocked in
+`SuspendProcess` waiting for a `SIGCONT` that could not come. Typing looked
+normal because the kernel was echoing it; Enter did nothing because nobody was
+reading. The second press hit a cooked terminal and the kernel did the job. The
+clincher is what appears after `fg` — readline echoing back the text typed
+during the "hang", which had been sitting unread in the tty buffer.
 
-The one way to make Ctrl-Z stop working entirely is not Strument's doing. When
-the process group is orphaned — no member has a parent in another process group
-in the same session, which is what `tmux new-session <command>` produces if it
-execs Strument directly instead of a shell — POSIX says a `SIGTSTP` delivered
-to it is discarded, and no number of presses will suspend it.
+So the fix is that **`SuspendProcess` no longer waits indefinitely**: if the
+process is still running a moment after raising the signal, the raw mode is
+restored and the Ctrl-Z branch says the suspend did not take. A failed suspend
+should cost a line of output, not the session. It also signals the process group
+rather than itself, which is what the terminal driver does — fidelity to the
+key, not a fix for anything measured; the child-still-running case that change
+was expected to cover could not be reproduced, because whenever such a child
+exists the kernel has already signalled the whole group.
+
+Why the self-directed signal fails on the reporter's machine is still unknown —
+the kernel-generated one on the same terminal stops the process, so it is not
+`SIGTSTP` being ignored. The first thing to ask about any recurrence is
+**whether `^Z` echoes**: an echo means the kernel took it and Strument's code
+never saw it, and its absence means readline did.
+
+One way to stop Ctrl-Z entirely is not Strument's doing. When the process group
+is orphaned — no member has a parent in another process group in the same
+session, which is what `tmux new-session <command>` produces if it execs
+Strument directly instead of a shell — POSIX says a `SIGTSTP` delivered to it is
+discarded, and no number of presses will suspend it.
 
 **SIGUSR1 is the same interrupt without a keyboard.** It shares the Ctrl-C
 handler's subscription (the `Notify` seam delivers both to one channel) and

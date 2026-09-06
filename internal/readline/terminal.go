@@ -132,16 +132,25 @@ func newTerminal(cfg *Config) (*terminal, error) {
 	return t, nil
 }
 
-// SleepToResume will sleep myself, and return only if I'm resumed.
-func (t *terminal) SleepToResume() {
+// SleepToResume suspends the process and returns once it is resumed. It
+// reports whether the suspend actually happened; a false return means the
+// terminal has been put back the way it was and the caller should say so.
+//
+// The raw mode is dropped first and restored after, so the shell gets the
+// terminal in the state it expects while we are stopped. That ordering is also
+// why a failed suspend has to be reported rather than swallowed: between the
+// two calls the terminal is cooked and nothing is reading it, so a silent
+// failure is indistinguishable from a hang.
+func (t *terminal) SleepToResume() bool {
 	if !atomic.CompareAndSwapInt32(&t.sleeping, 0, 1) {
-		return
+		return false
 	}
 	defer atomic.StoreInt32(&t.sleeping, 0)
 
 	t.ExitRawMode()
-	platform.SuspendProcess()
+	suspended := platform.SuspendProcess()
 	t.EnterRawMode()
+	return suspended
 }
 
 func (t *terminal) EnterRawMode() (err error) {
