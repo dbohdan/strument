@@ -10,6 +10,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -115,7 +116,8 @@ func (c *Coder) attributeShellCommits(before string) {
 	}
 	c.lastCommitHash = hashes[0] // newest first
 	c.saveUndo()
-	c.Out.Toolf("Attributed %d commit(s) the command made directly with git.", len(hashes))
+	c.Out.Toolf("Attributed %s the command made directly with git.",
+		render.Plural(len(hashes), "commit", "commits"))
 }
 
 // committablePaths splits the turn's writes into what git can record and what

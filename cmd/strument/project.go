@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/history"
+	"dbohdan.com/strument/internal/render"
 )
 
 // projectCmd groups the commands for the per-project state directories under
@@ -69,17 +70,18 @@ func (c *projectListCmd) Run() error {
 			printProject(p)
 		}
 	} else if len(live) > 0 {
-		fmt.Printf("\n%d project(s) still at their recorded path; pass --all to list them.\n", len(live))
+		fmt.Printf("\n%s still at the recorded path; pass --all to list them.\n",
+			render.Plural(len(live), "project", "projects"))
 	}
 	return nil
 }
 
 func printProject(p history.Candidate) {
+	// "no turns" rather than "0 turns": zero reads as an answer here, where a
+	// measurement would read as one more number to compare.
 	turns := "no turns"
-	if p.Turns == 1 {
-		turns = "1 turn"
-	} else if p.Turns > 1 {
-		turns = fmt.Sprintf("%d turns", p.Turns)
+	if p.Turns > 0 {
+		turns = render.Plural(p.Turns, "turn", "turns")
 	}
 	last := "never used"
 	if !p.LastUsed.IsZero() {

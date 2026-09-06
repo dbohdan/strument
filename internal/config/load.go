@@ -331,8 +331,10 @@ func Load(opts Options) (*Config, error) {
 					return nil, err
 				}
 			} else {
-				warn("Ignoring untrusted project config %s.", projPath)
-				warn("Run `strument trust` to allow it. Re-trust after every edit.")
+				// One message, two lines: the fact and the remedy. Warn's
+				// implementation adds the harness prefix and indents what
+				// follows, so this must not carry either.
+				warn("ignoring the untrusted project config %s\n%s", projPath, TrustAdviceFor(1, false))
 			}
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return nil, err

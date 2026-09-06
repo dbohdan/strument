@@ -96,7 +96,7 @@ func (c *chatCmd) Run() error {
 		}
 	}
 
-	cfg, err := config.Load(config.Options{ProjectRoot: root})
+	cfg, err := config.Load(config.Options{ProjectRoot: root, Warn: warnNoticef})
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (c *chatCmd) Run() error {
 		return err
 	}
 	if msg := config.ApplyTimeZone(cfg.EnvSet); msg != "" {
-		fmt.Fprintln(os.Stderr, msg)
+		noticef("%s", msg)
 	}
 	// The project's state directory, and whatever the last session left in it.
 	// Resolved before the model, because a remembered alias participates in
@@ -131,7 +131,7 @@ func (c *chatCmd) Run() error {
 	if !ok && fromResume {
 		// An alias can be renamed out of the config between sessions. That is
 		// not the user's mistake here and must not stop them starting.
-		fmt.Fprintf(os.Stderr, "strument: remembered model %q is no longer in the config; using %q.\n", alias, cfg.Default)
+		noticef("remembered model %q is no longer in the config; using %q.", alias, cfg.Default)
 		alias, ok = cfg.Default, true
 		model = cfg.Models[alias]
 	}
@@ -224,7 +224,7 @@ func (c *chatCmd) Run() error {
 		// un-resolved names puts a genuine in-project file at "../../link/..." and
 		// rejects it — exactly the divergence from /add this fixes.
 		if !fileInProject(root, f) {
-			fmt.Fprintf(os.Stderr, "strument: skipping %s: outside the project root; pin it with /read-only instead.\n", f)
+			noticef("skipping %s: outside the project root; pin it with /read-only instead.", f)
 			continue
 		}
 		cdr.AddFile(f)
@@ -300,8 +300,8 @@ func (c *chatCmd) Run() error {
 			// session can do — the model cannot run a command at all — and a
 			// scripted run would otherwise meet a wall of refusals with nothing
 			// on screen to say why.
-			fmt.Fprintf(os.Stderr, "strument: a sandbox is required but unavailable (%v).\n", err)
-			fmt.Fprintln(os.Stderr, "strument: the model cannot run commands. /run still works, or set `sandbox = \"\"` in your config.")
+			noticeWith(fmt.Sprintf("a sandbox is required but unavailable (%v).", err),
+				"The model cannot run commands. /run still works, or set `sandbox = \"\"` in your config.")
 		} else {
 			cdr.Sandbox.Active = true
 			// What was enforced, not what was asked for. Granted drops the
@@ -349,7 +349,7 @@ func (c *chatCmd) Run() error {
 				st.Turns = append(st.Turns, t)
 			}
 			if err := history.SaveUndo(projectRoot, st); err != nil {
-				fmt.Fprintln(os.Stderr, "strument: could not save the undo record:", err)
+				noticef("could not save the undo record, so /undo will not cover this turn: %v", err)
 			}
 		}
 	}
@@ -425,7 +425,7 @@ func (c *chatCmd) Run() error {
 			Tools:          cdr.TurnToolLines(),
 			Crashed:        crashed,
 		}); err != nil {
-			fmt.Fprintln(os.Stderr, "strument: could not write chat history:", err)
+			noticef("could not write the chat history, so this turn is not in the transcript: %v", err)
 		}
 	}
 	// OnCrash records the turn even when it dies with a panic: a
@@ -522,15 +522,15 @@ func hintAtRenamedProject(projectRoot string) {
 		return
 	}
 	turns := "history"
-	if orphan.Turns == 1 {
-		turns = "1 turn"
-	} else if orphan.Turns > 1 {
-		turns = fmt.Sprintf("%d turns", orphan.Turns)
+	if orphan.Turns > 0 {
+		turns = render.Plural(orphan.Turns, "turn", "turns")
 	}
-	fmt.Fprintf(os.Stderr, "strument: this project also has %s recorded under %s, which no longer exists.\n",
-		turns, orphan.Root.Path)
-	fmt.Fprintf(os.Stderr, "  Merge it:  strument project adopt %s\n", orphan.Root.Path)
-	fmt.Fprintf(os.Stderr, "  Or hide this:  strument project ignore %s\n", orphan.Root.Path)
+	noticeWith(
+		fmt.Sprintf("this project also has %s recorded under %s, which no longer exists.",
+			turns, orphan.Root.Path),
+		"Merge it:      strument project adopt "+orphan.Root.Path,
+		"Or hide this:  strument project ignore "+orphan.Root.Path,
+	)
 }
 
 // projectRootCommit is the witness recorded in a project's state directory, so
@@ -713,19 +713,12 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 	case files == 0 && readOnly == 0:
 		return "", offered, notesRestored
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session.", plural(files, "pin", "pins")), offered, notesRestored
+		return fmt.Sprintf("Restored %s from your last session.", render.Plural(files, "pin", "pins")), offered, notesRestored
 	case files == 0:
-		return fmt.Sprintf("Restored %s from your last session, read-only.", plural(readOnly, "pin", "pins")), offered, notesRestored
+		return fmt.Sprintf("Restored %s from your last session, read-only.", render.Plural(readOnly, "pin", "pins")), offered, notesRestored
 	}
 	return fmt.Sprintf("Restored %s from your last session, %d of them read-only.",
-		plural(files+readOnly, "pin", "pins"), readOnly), offered, notesRestored
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %s", n, many)
+		render.Plural(files+readOnly, "pin", "pins"), readOnly), offered, notesRestored
 }
 
 // saveResumeFunc returns the callback the REPL calls after a command changes
@@ -856,7 +849,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ApplyEgress: applyEgressConfig,
 		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		ReloadConfig: func() (*config.Config, error) {
-			return config.Load(config.Options{ProjectRoot: cdr.Root})
+			return config.Load(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef})
 		},
 		Rediscover: func() []skill.Skill { return discoverSkills(cdr.Root) },
 		Notes:      func() string { return cdr.SessionNotes },
@@ -1032,7 +1025,7 @@ func (c *trustCmd) Run() error {
 	// user thinks they just trusted, and finding out later from its absence is
 	// the failure worth avoiding.
 	for _, d := range diags {
-		fmt.Fprintf(os.Stderr, "strument: skipping %s: %s\n", d.Path, d.Message)
+		noticef("skipping %s: %s", d.Path, d.Message)
 	}
 	if err := config.TrustFiles(paths, ""); err != nil {
 		return err
@@ -1049,7 +1042,7 @@ func (c *trustCmd) Run() error {
 	for _, p := range trusted {
 		fmt.Printf("Trusted %s\n", p)
 	}
-	fmt.Println("Re-run `strument trust` after every edit to any of them.")
+	fmt.Println(config.ReTrustReminder)
 	return nil
 }
 
@@ -1089,6 +1082,7 @@ func loadProjectConfig() (*config.Config, error) {
 	var missing []string
 	cfg, err := config.Load(config.Options{
 		ProjectRoot: root,
+		Warn:        warnNoticef,
 		LookupEnv: func(name string) (string, bool) {
 			if v, ok := os.LookupEnv(name); ok {
 				return v, true
@@ -1100,7 +1094,7 @@ func loadProjectConfig() (*config.Config, error) {
 		},
 	})
 	if len(missing) > 0 {
-		fmt.Fprintf(os.Stderr, "strument: not set, read as empty: %s\n", strings.Join(missing, ", "))
+		noticef("not set, read as empty: %s", strings.Join(missing, ", "))
 	}
 	return cfg, err
 }
@@ -1135,7 +1129,7 @@ func (*historyCmd) Run() error {
 	}
 	// Honor a config override when the config loads; otherwise fall back to
 	// the default path so "where is my history" always answers.
-	if cfg, err := config.Load(config.Options{ProjectRoot: root}); err == nil {
+	if cfg, err := config.Load(config.Options{ProjectRoot: root, Warn: warnNoticef}); err == nil {
 		if p, err := resolveHistoryPath(cfg, root); err == nil {
 			fmt.Println(p)
 			return nil
@@ -1219,10 +1213,10 @@ func (c *modelConfigCmd) Run() error {
 		fmt.Print(modelconfig.EmitStarlark(found, c.ProviderName))
 	}
 	for _, m := range missing {
-		fmt.Fprintf(os.Stderr, "strument: model %q not found on %s\n", m, c.Source)
+		noticef("model %q not found on %s.", m, c.Source)
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("%d model(s) not found", len(missing))
+		return fmt.Errorf("%s not found", render.Plural(len(missing), "model", "models"))
 	}
 	return nil
 }
@@ -1335,13 +1329,13 @@ func main() {
 func discoverSkills(root string) []skill.Skill {
 	tsPath, err := config.DefaultTrustStorePath()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "strument: cannot find the trust store, so no project skill is usable:", err)
+		noticef("cannot find the trust store, so no project skill is usable: %v", err)
 	}
 	var trust skill.Truster
 	if tsPath != "" {
 		ts, tsErr := config.OpenTrustStore(tsPath)
 		if tsErr != nil {
-			fmt.Fprintln(os.Stderr, "strument: cannot read the trust store, so no project skill is usable:", tsErr)
+			noticef("cannot read the trust store, so no project skill is usable: %v", tsErr)
 		} else {
 			// Typed nil is not nil through an interface, so the store is
 			// assigned only when there is one — Discover reads a nil Truster
@@ -1353,16 +1347,19 @@ func discoverSkills(root string) []skill.Skill {
 
 	skills, diags := skill.Discover(skill.Options{ProjectRoot: root, Trust: trust})
 	for _, d := range diags {
-		fmt.Fprintf(os.Stderr, "strument: skipping %s: %s\n", d.Path, d.Message)
+		noticef("skipping %s: %s", d.Path, d.Message)
 	}
 	if untrusted := skill.Untrusted(skills); len(untrusted) > 0 {
 		names := make([]string, 0, len(untrusted))
 		for _, s := range untrusted {
 			names = append(names, s.Name)
 		}
-		fmt.Fprintf(os.Stderr, "strument: ignoring %d untrusted project skill(s): %s\n",
-			len(names), strings.Join(names, ", "))
-		fmt.Fprintln(os.Stderr, "strument: run `strument trust` in this directory to allow them.")
+		noticeWith(
+			fmt.Sprintf("ignoring %s: %s",
+				render.Plural(len(names), "untrusted project skill", "untrusted project skills"),
+				strings.Join(names, ", ")),
+			config.TrustAdviceFor(len(names), false),
+		)
 	}
 	return skills
 }

@@ -20,6 +20,7 @@ import (
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/readline"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -72,34 +73,34 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> ...", "Pin the files this session is about (globs allowed)", cmdAdd},
-		{"ask", "[<question>]", "Ask about the code without editing (bare: stay in ask mode)", cmdAsk},
-		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context)", cmdBtw},
-		{"check", "[<name>]", "Run a project check; optionally add its output to the chat", cmdCheck},
-		{"clear", "", "Clear the conversation history", cmdClear},
-		{"code", "[<request>]", "Return to editing (bare: stay in code mode)", cmdCode},
-		{"context", "[<n>]", "Show the folded chat history as the model sees it (first n summaries)", cmdContext},
-		{"diff", "", "Show the diff of changes since the last message", cmdDiff},
-		{"drop", "[<file> ...]", "Unpin files (all if none given)", cmdDrop},
-		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change (this session) what environment variables model-run commands see", cmdEnv},
-		{"exit", "", "Exit Strument", cmdExit},
-		{"help", "", "Show this help", cmdHelp},
-		{"ls", "", "List the pinned files", cmdLs},
-		{"model", "[<alias>]", "Show or switch the active model", cmdModel},
-		{"notes", "[generate | drop]", "Show, regenerate, or discard the session notes", cmdNotes},
-		{"quit", "", "Exit Strument", cmdExit},
-		{"read-only", "<file> ...", "Pin files the model may read but never edit (may be outside the project)", cmdReadOnly},
-		{"reload", "", "Reload config.star (new models become available)", cmdReload},
-		{"reset", "", "Unpin everything, clear the history, and forget approved origins", cmdReset},
-		{"run", "<command>", "Run a shell command; optionally add its output to the chat", cmdRun},
-		{"sandbox", "", "Show whether writes are confined, and to where", cmdSandbox},
-		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat", cmdSkill},
-		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2)", cmdSquash},
-		{"submit", "<file>", "Send a file's contents as your message", cmdSubmit},
-		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser", cmdSymbol},
-		{"tokens", "", "Report approximate context window usage", cmdTokens},
-		{"undo", "", "Undo the last turn's edits", cmdUndo},
-		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page (or one #section of it); bare, show which origins webfetch may reach unasked", cmdWeb},
+		{"add", "<file> ...", "Pin the files this session is about (globs allowed).", cmdAdd},
+		{"ask", "[<question>]", "Ask about the code without editing (bare: stay in ask mode).", cmdAsk},
+		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context).", cmdBtw},
+		{"check", "[<name>]", "Run a project check; optionally add its output to the chat.", cmdCheck},
+		{"clear", "", "Clear the conversation history.", cmdClear},
+		{"code", "[<request>]", "Return to editing (bare: stay in code mode).", cmdCode},
+		{"context", "[<n>]", "Show the folded chat history as the model sees it (first n summaries).", cmdContext},
+		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
+		{"drop", "[<file> ...]", "Unpin files (all if none given).", cmdDrop},
+		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change (this session) what environment variables model-run commands see.", cmdEnv},
+		{"exit", "", "Exit Strument.", cmdExit},
+		{"help", "", "Show this help.", cmdHelp},
+		{"ls", "", "List the pinned files.", cmdLs},
+		{"model", "[<alias>]", "Show or switch the active model.", cmdModel},
+		{"notes", "[generate | drop]", "Show, regenerate, or discard the session notes.", cmdNotes},
+		{"quit", "", "Exit Strument.", cmdExit},
+		{"read-only", "<file> ...", "Pin files the model may read but never edit (may be outside the project).", cmdReadOnly},
+		{"reload", "", "Reload config.star (new models become available).", cmdReload},
+		{"reset", "", "Unpin everything, clear the history, and forget approved origins.", cmdReset},
+		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
+		{"sandbox", "", "Show whether writes are confined, and to where.", cmdSandbox},
+		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat.", cmdSkill},
+		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2).", cmdSquash},
+		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
+		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser.", cmdSymbol},
+		{"tokens", "", "Report approximate context window usage.", cmdTokens},
+		{"undo", "", "Undo the last turn's edits.", cmdUndo},
+		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page (or one #section of it); bare, show which origins webfetch may reach unasked.", cmdWeb},
 	}
 }
 
@@ -526,7 +527,7 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	msg := "Unpinned everything and cleared the chat history."
 	if forgotten > 0 {
 		msg += fmt.Sprintf(" Forgot %d %s approved for fetching.",
-			forgotten, pluralize(forgotten, "origin", "origins"))
+			forgotten, render.PluralWord(forgotten, "origin", "origins"))
 	}
 	r.printf("%s", msg)
 	r.saveResume()
@@ -886,15 +887,6 @@ func runUserCheck(ctx context.Context, r *REPL, ch config.Check) (int, string) {
 // execCommandContext is exec.CommandContext, seamable for testing.
 var execCommandContext = exec.CommandContext
 
-// pluralize picks the word for a count. The count is printed by the caller,
-// which keeps the two apart at the one place a sentence might want them apart.
-func pluralize(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
-}
-
 // cmdWeb fetches a URL and adds its content to the chat as a completed exchange
 // — the user-typed twin of the webfetch tool, and unconfirmed for the reason
 // /run is: the user typed it. It is also what a URL in a message used to
@@ -924,7 +916,7 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 		}
 		if n := r.coder.ForgetOrigins(); n > 0 {
 			r.printf("Forgot %d %s. webfetch will ask again.",
-				n, pluralize(n, "origin", "origins"))
+				n, render.PluralWord(n, "origin", "origins"))
 		} else {
 			r.printf("No origins were approved this session.")
 		}

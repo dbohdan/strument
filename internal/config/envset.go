@@ -71,7 +71,7 @@ func ApplyTimeZone(env map[string]string) string {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		return fmt.Sprintf(
-			"strument: env_set TZ %q is not a zone name (%v). Commands and git still get TZ, but "+
+			"env_set TZ %q is not a zone name (%v). Commands and git still get TZ, but "+
 				"Strument's own dates stay in this machine's zone. Use a database name like "+
 				"\"Europe/Kyiv\" or \"UTC\".", tz, err)
 	}

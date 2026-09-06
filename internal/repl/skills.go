@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/skill"
 )
@@ -48,7 +49,7 @@ func listSkills(r *REPL) string {
 		r.out.Errorf("Not trusted: %s (%s) will not be loaded.", s.Name, s.Path)
 	}
 	if len(untrusted) > 0 {
-		r.printf("Run `strument trust` in this directory, then /reload, to allow them.")
+		r.printf("%s", config.TrustAdviceFor(len(untrusted), true))
 	}
 	return ""
 }
@@ -71,7 +72,7 @@ func loadSkill(r *REPL, name string) string {
 	for _, s := range skill.Untrusted(r.coder.Skills) {
 		if s.Name == name {
 			r.out.Errorf("The skill %s is not trusted, so it will not be loaded.", s.Name)
-			r.printf("Run `strument trust` in this directory, then /reload.")
+			r.printf("%s", config.TrustAdviceFor(1, true))
 			return ""
 		}
 	}

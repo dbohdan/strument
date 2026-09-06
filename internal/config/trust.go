@@ -20,6 +20,37 @@ import (
 // it was written with, so a future default-hash migration invalidates
 // nothing.
 
+// ReTrustReminder is the standing condition on its own, for after a successful
+// `strument trust` — there the instruction has just been followed, and only the
+// thing that will catch someone out later is worth saying: the store records a
+// content hash, so editing a trusted file untrusts it.
+const ReTrustReminder = "Re-trust after every edit."
+
+// TrustAdviceFor is the one phrasing of "this is not trusted yet, here is what
+// to do", rendered for n untrusted files.
+//
+// It had five spellings across the tree — "Run `strument trust` to allow it.",
+// "…in this directory, then /reload.", "Re-run `strument trust` after every
+// edit to any of them.", and two more — which is five chances for four of them
+// to go stale. It lives here because this package owns the trust store and
+// because cmd/strument and internal/repl both have to say it.
+//
+// inSession adds the `/reload` step, which is not decoration: trusting from
+// another window updates the store, but a running session has already read the
+// config and discovered its skills, so nothing changes until it re-reads them.
+// A session that omitted it would send the user to run a command that appears
+// to do nothing.
+func TrustAdviceFor(n int, inSession bool) string {
+	it := "it"
+	if n != 1 {
+		it = "them"
+	}
+	if inSession {
+		return "Run `strument trust` in this directory, then /reload, to allow " + it + "."
+	}
+	return "Run `strument trust` in this directory to allow " + it + ". " + ReTrustReminder
+}
+
 // DefaultTrustHash is the multihash code used for new records.
 const DefaultTrustHash = multihash.SHA2_256
 
