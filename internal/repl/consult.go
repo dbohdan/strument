@@ -64,14 +64,19 @@ func cmdConsult(ctx context.Context, r *REPL, args string) string {
 		return "" // nothing came back; there is nothing to offer
 	}
 
-	// Through the coder rather than r.Confirmer() so that --yes add-output and
-	// an "a" answer both reach this prompt. Calling the REPL's confirmer
-	// directly, which is what /run and /check used to do, bypasses both: the
-	// grant was never consulted and the "a" was accepted and forgotten.
+	// Through the coder rather than r.Confirmer() so --yes add-output reaches
+	// this prompt; calling the REPL's confirmer directly, which is what /run and
+	// /check used to do, never consults the grant.
+	//
+	// No Group, and so no "a = all turn" on offer. There is no turn here to scope
+	// an answer to: /consult, /run and /check are typed at the prompt, between
+	// turns. The scope was borrowed from the model-caused prompts, where "this
+	// turn" bounds something real, and measured it reached until the user's next
+	// *message* and across all three commands — an "a" here silently added the
+	// next /run's output too. See ConfirmRequest.Group.
 	if r.coder.ConfirmGrouped(coder.ConfirmRequest{
 		Prompt: "Add the answer to the chat?",
 		Grant:  coder.GrantAddOutput,
-		Group:  "add-output",
 	}) {
 		r.coder.AppendContext(consultLabel(alias, m.QualifiedSlug(), question, answer))
 		r.printf("Added %s's answer to the chat.", alias)

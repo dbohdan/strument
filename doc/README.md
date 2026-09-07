@@ -557,6 +557,17 @@ Ten tools, in three natures:
   approval is exactly the mode where nobody is watching it happen.
   [`security.md`](security.md) is the threat model this rests on.
 
+- **Only a prompt raised inside a turn may offer `a`.** The record expires at
+  `initBeforeMessage`, so a turn is the unit it is scoped to, and a prompt
+  raised *between* turns grants until something unrelated happens to end it.
+  That is why bash, websearch and webfetch carry a `Group` and the add-output
+  prompts after `/run`, `/check` and `/consult` do not. They did, briefly, with
+  a group copied from the gates next door: measured, an `a` at one of them ran
+  until the user's next message and covered all three commands, so approving a
+  consult's answer silently added the following `/run`'s output. `--yes
+  add-output` is how you stop being asked, which puts the scope in a flag
+  instead of in an answer whose reach was invisible.
+
 - **Asking the user is a tool call, and a different channel from the gate.**
   `ask_user_question(questions)` lets the model pause mid-turn and collect a
   bounded decision it genuinely cannot proceed without — "which of these two

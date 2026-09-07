@@ -160,7 +160,19 @@ type ConfirmRequest struct {
 	// a boolean: it could say "this is the shell one" and nothing else, so a
 	// third gated tool had no way to be named without a third flag.
 	Grant string
-	Group string // ConfirmGroup key ("all"/"skip" scope)
+	// Group keys the "a = all turn" record. Empty means the prompt offers no
+	// "a" and every occurrence is asked about.
+	//
+	// Only a prompt raised *inside* a turn may set it, which in practice means a
+	// prompt the model caused: bash, websearch, webfetch. A turn is the unit the
+	// answer is scoped to, and initBeforeMessage is what ends it, so a prompt
+	// raised between turns is granting something with no end in sight. The
+	// add-output prompts after /run, /check and /consult learned this the
+	// expensive way — they carried a Group copied from the gates next door, and
+	// an "a" at one of them ran until the user's next *message* and covered all
+	// three commands, so an "a" at /consult silently added the following /run's
+	// output. They ask every time now.
+	Group string
 	// GroupSession makes an "a" answer last for the session rather than the
 	// turn. Only webfetch sets it, and the asymmetry with the shell gate is the
 	// point: an "a" on shell is licensed by the sandbox, which bounds what an

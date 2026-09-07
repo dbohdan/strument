@@ -779,7 +779,6 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 	if r.coder.ConfirmGrouped(coder.ConfirmRequest{
 		Prompt: "Add command output to the chat?",
 		Grant:  coder.GrantAddOutput,
-		Group:  "add-output",
 	}) {
 		// The result shape, so /run context reads like
 		// model-proposed shell output.
@@ -860,7 +859,6 @@ func cmdCheck(ctx context.Context, r *REPL, args string) string {
 	if r.coder.ConfirmGrouped(coder.ConfirmRequest{
 		Prompt: "Add check output to the chat?",
 		Grant:  coder.GrantAddOutput,
-		Group:  "add-output",
 	}) {
 		r.coder.AppendContext(transcriptStr)
 		r.printf("Added the check output to the chat.")

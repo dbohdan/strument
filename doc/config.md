@@ -867,6 +867,14 @@ pipe is still typed by you, and there the prompt declined itself with "there is
 no terminal to ask on, and no --yes name covers this prompt" while the `y` on
 the next line went to the model as a chat message.
 
+Those three prompts ask every time and offer no `a`. They used to, and the "all
+turn" it promised was not one: they are typed at your prompt, between turns, so
+the record had no turn to expire with and ran until your next *message* — and
+because all three share one group, an `a` at a `/consult` silently added the
+following `/run`'s output as well. `--yes add-output` is the way to stop being
+asked, and it says so in a flag rather than in an answer whose scope was
+invisible.
+
 ### What `/reload` applies
 
 `/reload` re-reads `config.star` into the running session. It applies the

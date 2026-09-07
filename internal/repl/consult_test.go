@@ -124,3 +124,51 @@ func TestConsultDeclinedAddsNothing(t *testing.T) {
 		t.Errorf("a declined answer still reached the next turn:\n%s", followUp)
 	}
 }
+
+// The add-output prompt asks every time, and this is the check that it does.
+//
+// It used to carry a Group, so an "a" recorded an auto-approval — and since
+// /consult, /run and /check share the group and none of them is a turn, that
+// record lasted until the user's next message and covered all three. Answering
+// "a" at a consult silently added the next /run's output to the chat.
+//
+// The rig is the input stream itself: if the second prompt were skipped, the
+// "n" below would not be consumed as an answer and would go to the model as a
+// message, leaving the output added. So the assertion discriminates in both
+// directions without needing to see the prompt, which readline writes straight
+// to the terminal where a scripted session cannot capture it.
+func TestAddOutputAsksEveryTime(t *testing.T) {
+	turn := func(text string) fixture.Turn {
+		return fixture.Turn{Events: []fixture.Event{
+			{Kind: "Answer", Text: text}, {Kind: "Finish", FinishReason: "stop"},
+		}}
+	}
+	stub := &fixture.StreamStub{Turns: []fixture.Turn{
+		turn("ADVICE-ONE"), turn("ADVICE-TWO"), turn("Ok."),
+	}}
+	// "a" is answered once at a /consult and once at a /run, because either is a
+	// place the record could have been written, and the command that writes it is
+	// not the only one it used to reach.
+	r, _, out := newTestREPL(t, stub, strings.NewReader(
+		"/consult other one\n"+
+			"a\n"+ // "all turn", if there were such a thing here
+			"/consult other two\n"+
+			"n\n"+
+			"/run echo hello\n"+
+			"a\n"+
+			"/run echo hello\n"+
+			"n\n"+
+			"/exit\n"))
+	defer r.Close()
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if n := strings.Count(got, "Added other's answer to the chat."); n != 1 {
+		t.Errorf("the answer was added %d times, want 1 (the second consult was declined):\n%s", n, got)
+	}
+	if n := strings.Count(got, "Added the command output to the chat."); n != 1 {
+		t.Errorf("the command output was added %d times, want 1 (the second /run was declined):\n%s", n, got)
+	}
+}
