@@ -305,7 +305,7 @@ input, or the reviewer is guessing at the half that matters.
 
 §13 scaled up: five models reviewing 17.6 KB of rendered prompts rather than
 two reviewing an 80-line scorer.
-[`experiments/2026-08-prompt-review.md`](experiments/2026-08-prompt-review.md)
+[`experiments/2026-08-prompt-review/README.md`](experiments/2026-08-prompt-review/README.md)
 has the run. It works, less well, and the reasons generalize.
 
 - **The ensemble is the instrument.** Five reviewers found nine defects; the
@@ -333,7 +333,7 @@ has the run. It works, less well, and the reasons generalize.
 ## 15. The renderer has two forms, and your scorer knows one
 
 The eleventh scorer bug, from
-[`experiments/2026-08-symbol-uptake.md`](experiments/2026-08-symbol-uptake.md),
+[`experiments/2026-08-symbol-uptake/README.md`](experiments/2026-08-symbol-uptake/README.md),
 because it generalizes past reasoning blocks.
 
 Strument prints reasoning two ways: a multi-line block that opens with the

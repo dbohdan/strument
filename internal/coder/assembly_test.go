@@ -397,7 +397,7 @@ func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
 // The {code_tools} slot tracks the schema, in both directions. The code-mode
 // trial found 0/36 uptake with the tool offered in the schema but absent from
 // the prompt's tool list, which models read as closed-world
-// (doc/experiments/2026-08-code-mode.md). The bullet is therefore filled from
+// (doc/experiments/2026-08-code-mode/README.md). The bullet is therefore filled from
 // the same condition that offers the tool. The reverse direction matters too:
 // a feature-reverted binary (the trial's arm A) must not name a tool the
 // schema withholds.

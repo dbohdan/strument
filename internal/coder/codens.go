@@ -8,7 +8,7 @@ import (
 )
 
 // CodeNamespace is how a run_code program reaches the tools: as bare names, as
-// a `tools` namespace, or both. Under trial — doc/experiments/2026-09-code-namespace.md.
+// a `tools` namespace, or both. Under trial — doc/experiments/2026-09-code-namespace/README.md.
 //
 // The target is a failure with a measured rate rather than an imagined one. Over
 // 530 programs from the code-result trial's saved sessions, 56 (10.6%) reached
@@ -177,7 +177,7 @@ var reachedForPython = regexp.MustCompile(
 
 // codeReachHint is what the hint arm appends to such a failure. It names the
 // tool that serves the need rather than restating the prohibition, which is the
-// shape doc/experiments/2026-08-symbol-uptake.md found moves behaviour.
+// shape doc/experiments/2026-08-symbol-uptake/README.md found moves behaviour.
 const codeReachHint = "\n\nThis interpreter has no filesystem of its own. " +
 	"glob(pattern=\"**/*.py\") walks the tree, ls(path=\".\") lists a directory, " +
 	"read(path=\"a.py\") opens a file, and the bash tool runs commands."

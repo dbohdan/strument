@@ -26,7 +26,7 @@ func prep(content string) (string, []string) {
 // of the *raw* search text, which is zero precisely when the model's whitespace
 // differs, so a search matching three identical blocks arrived here counted as
 // "not ambiguous" and edited whichever came first. Measured doing exactly that
-// in doc/experiments/2026-09-anchored-edit-m1.md: two runs silently rewrote the
+// in doc/experiments/2026-09-anchored-edit/m1.md: two runs silently rewrote the
 // wrong function and were told they had succeeded.
 func perfectReplace(wholeLines, partLines, replaceLines []string) (string, bool, bool) {
 	n := len(partLines)

@@ -81,7 +81,7 @@ func TestSymbolFindsNamedStructFieldsOnly(t *testing.T) {
 //
 // kind defaults to definition, so a model asking the natural first question of
 // a "who calls this" question gets an answer to a different one. GLM-5.3 did
-// exactly that in doc/experiments/2026-08-symbol-uptake.md: it called
+// exactly that in doc/experiments/2026-08-symbol-uptake/README.md: it called
 // kind=definition on settleEdits, got the single declaration site, and half the
 // time treated that as the tool's last word and went back to grep for the rest.
 // The miss path already pointed at the other kind; a confident short answer is

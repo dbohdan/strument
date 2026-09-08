@@ -273,7 +273,7 @@ func (i *Inspector) SymbolLookup(rawName, kind string) (text string, count int, 
 	// calls this" asked. kind defaults to definition, so a model asking the
 	// natural first question of a callers question gets an answer to a
 	// different one — GLM-5.3 did exactly that in
-	// doc/experiments/2026-08-symbol-uptake.md, and half the time took the
+	// doc/experiments/2026-08-symbol-uptake/README.md, and half the time took the
 	// one-site answer as the tool's last word and went back to grep. The miss
 	// path already offers the other kind; the *hit* path is where it was
 	// needed, because a confident short answer is the one nobody follows up.

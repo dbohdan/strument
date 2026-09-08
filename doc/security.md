@@ -306,7 +306,7 @@ model-run commands will follow it; Strument's git will not.
 The policy was developed on kernels without Landlock, where the enforcement
 tests skip — and a skip reads as a pass in a summary line. It was checked on a
 kernel that has it (ABI 8) before the feature shipped:
-[`doc/experiments/2026-08-landlock-live.md`](experiments/2026-08-landlock-live.md)
+[`doc/experiments/2026-08-landlock-live/README.md`](experiments/2026-08-landlock-live/README.md)
 records the run. Three claims on this page rest on it rather than on reading:
 that read-only `/` still permits execution, that a cross-directory rename is
 denied as EXDEV rather than EACCES, and that a nested rule cannot reduce

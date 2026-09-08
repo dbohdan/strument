@@ -153,7 +153,7 @@ func (r *anchorRegistry) known(rel string) bool {
 // A tab rather than yoneda's ║. The heavy bar is three tokens against a tab's
 // one, twice a row, and measured over this repository it was more than half the
 // format's whole overhead — for a character that carries no information
-// (doc/experiments/2026-09-anchored-edit-phase0.md). Indentation stays in the
+// (doc/experiments/2026-09-anchored-edit/phase0.md). Indentation stays in the
 // content: naming it in words costs more than the whitespace does, because any
 // run of whitespace is already a single token.
 func renderAnchored(ids []anchor.Anchor, lines []string, indentColumn bool) string {

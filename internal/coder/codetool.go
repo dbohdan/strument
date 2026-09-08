@@ -62,7 +62,7 @@ const maxBridgedCalls = 50
 // The order is the finding, not a style: the first version led with mechanism
 // ("Run a short Python program…") and prohibitions, and the bridge — the thing
 // that answers the measured 4-removable-round-trips problem — came last. The
-// symbol fix (doc/experiments/2026-08-symbol-uptake.md) established that the
+// symbol fix (doc/experiments/2026-08-symbol-uptake/README.md) established that the
 // description that moves uptake is the one that opens by mapping the felt need
 // ("I have several lookups to combine") to the tool; a spec sheet selects for
 // nobody. The negations are compressed to one sentence and paired with the
@@ -328,7 +328,7 @@ type bridgedCall struct {
 }
 
 // CodeResult selects what a run_code program hands back. It exists to be
-// measured: doc/experiments/2026-09-code-result.md is the trial, and until it
+// measured: doc/experiments/2026-09-code-result/README.md is the trial, and until it
 // reports, CodeResultLast is the shipped behaviour rather than the chosen one.
 type CodeResult int
 

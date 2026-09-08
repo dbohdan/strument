@@ -37,7 +37,7 @@ type Set struct {
 // by a fabricated assistant reply agreeing to it.
 //
 // Two things it must get right, both learned from live sessions
-// (doc/experiments/2026-08-readonly-honest.md):
+// (doc/experiments/2026-08-readonly-honest/README.md):
 //
 // Say where the contents come from, because a reference pinned from outside the
 // project cannot be found with glob, ls, or grep, and a model that goes looking
@@ -76,7 +76,7 @@ const lazyPrompt = "Implement requested changes completely.\n" +
 // describe it" is part of it: doc edits alone did not move (4/90 vs 6/90), but
 // nothing says which third of the clause carries the effect, and trimming a
 // measured string to ship an unmeasured one is not an improvement.
-// doc/experiments/2026-08-prompt-scope.md has the design and the four
+// doc/experiments/2026-08-prompt-scope/README.md has the design and the four
 // predictions it falsified.
 //
 // The last sentence is NOT part of that arm and is not measured. It answers a
@@ -88,7 +88,7 @@ const lazyPrompt = "Implement requested changes completely.\n" +
 // previously did.
 //
 // It was added after the measured sentence, not inside it, so the arm survives
-// intact. doc/experiments/2026-08-welfare-wording.md has both trials. Drive-by
+// intact. doc/experiments/2026-08-welfare-wording/README.md has both trials. Drive-by
 // edits stayed 0/150 in each arm against the original's 0/180 baseline, and
 // follow-through came out 86/150 against 78/150 -- a 5.3-point difference with
 // a 95% interval of [-5.9, +16.6] and p=0.42. So a regression larger than about
@@ -104,7 +104,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 	"something worth changing, say so instead.\n"
 
 // Two things here were found by a multi-model review of the rendered prompts
-// (doc/experiments/2026-08-prompt-review.md), and both were fossils.
+// (doc/experiments/2026-08-prompt-review/README.md), and both were fossils.
 //
 // "The user will request changes to the supplied code" dated from the harness
 // where /add put file contents in the prompt. Nothing is supplied now — the
@@ -134,7 +134,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // The tool list is the closed-world hazard the code-mode trial measured: the
 // sentence "these are the ones you will reach for most" reads as policy, and a
 // flash-class model treats the enumeration as exhaustive —
-// doc/experiments/2026-08-code-mode.md found 0/36 `run_code` calls with the tool
+// doc/experiments/2026-08-code-mode/README.md found 0/36 `run_code` calls with the tool
 // offered in the schema but absent from this list. So `run_code` gets a bullet
 // through the {code_tools} slot, filled at assembly time only when the tool is
 // actually offered (the same mechanism {platform} uses), so the prose can
@@ -425,7 +425,7 @@ const (
 // three of those carrying a BREAKING CHANGE marker for a break the commit did
 // not contain. The clause removed it (0 of 28) at no cost to the reason it was
 // widened for (11/26 against the unclaused arm's 12/27).
-// See doc/experiments/2026-08-commit-context.md.
+// See doc/experiments/2026-08-commit-context/README.md.
 const CommitSystem = "Write the Git commit message for the changes below. " +
 	"You are given the request that prompted them, the work that followed, and the diff.\n\n" +
 	"Earlier turns are background. Take the reason for this change from them if it is " +

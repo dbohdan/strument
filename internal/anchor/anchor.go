@@ -9,7 +9,7 @@
 // Every word here is common enough to be a single token in the tokenizers this
 // project's model panel uses, so an anchor costs about as much as the
 // right-aligned line number it replaces — measured at +0.55 tokens a line, 4.2%,
-// over the numbered format (doc/experiments/2026-09-anchored-edit-m1.md). A
+// over the numbered format (doc/experiments/2026-09-anchored-edit/m1.md). A
 // random id like `ve7` looks shorter and tokenizes worse.
 //
 // Why random rather than derived from the line's content: anchors must be

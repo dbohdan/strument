@@ -179,7 +179,7 @@ func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[sho
 // unchanged", which the model never said; the alternation that line existed for
 // is not something any provider requires.
 // Two things the note used to get wrong, both found by the prompt review in
-// doc/experiments/2026-08-prompt-review.md.
+// doc/experiments/2026-08-prompt-review/README.md.
 //
 // It said "the edits from that turn are gone", and a turn is not the unit —
 // nor is "that turn" a phrase the reader can resolve. /undo pops the snapshot

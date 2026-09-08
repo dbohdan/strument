@@ -129,7 +129,7 @@ without git, and it lands in the turn's commit.
 > called an edit.
 
 Pinning it is not enough on its own, and that is measured
-(`experiments/2026-08-agents-md.md`): compliance with a rule contrary to habit
+(`experiments/2026-08-agents-md/README.md`): compliance with a rule contrary to habit
 was 0/8 with no `AGENTS.md`, 2/8 with it merely pinned, and 6/8 once the prompt
 named it as the project's standing instructions.
 
@@ -273,27 +273,27 @@ the note says which side loses. No other harness states it.
 
 ## Where the evidence is
 
-- `experiments/2026-08-compaction-summary-prompt.md` — the prompt rewrite that
+- `experiments/2026-08-compaction/README.md` — the prompt rewrite that
   lost, and the scorer that nearly hid it.
-- `experiments/2026-08-agents-md.md` — naming `AGENTS.md` in the prompt.
-- `experiments/2026-08-session-notes.md` — notes across sessions: 8/8 vs 0/8 on
+- `experiments/2026-08-agents-md/README.md` — naming `AGENTS.md` in the prompt.
+- `experiments/2026-08-session-notes/README.md` — notes across sessions: 8/8 vs 0/8 on
   recovering a stated reason (p=0.0002), and 3/8 stale assertions when the tree
   moved behind them. The conflict rule in the header does not prevent that,
   because the failure is upstream of a conflict: the model never looked.
-- `experiments/2026-08-notes-header.md` — the follow-up that tried to fix that
+- `experiments/2026-08-notes-header/README.md` — the follow-up that tried to fix that
   with a stronger instruction, and could not: 8/24 vs 6/24, p=0.75. Its real
   finding is that reading is perfectly predictive — across 48 sessions, not one
   that opened the file asserted the stale name, and no wording reliably causes
   the opening. It also records that `--continue` can produce no notes and say
   nothing, in 3 to 5 sessions of 48.
-- `experiments/2026-08-transcript-depth.md` — how deep the transcript should
+- `experiments/2026-08-transcript-depth/README.md` — how deep the transcript should
   go. Tool lines shipped; reasoning did not, on a result that went against the
   argument made against it. Reasoning recovers what a check wanted 19/26
   against 2/26, and the rationale that check stated in the same breath 0/62 —
   it summarizes what it reads rather than transcribing it, so it improves
   recall of what the code already carries and not of what only the
   conversation had. The predicted confabulation did not appear, 0/26.
-- `experiments/2026-08-commit-context.md` — widening the commit-message
+- `experiments/2026-08-commit-context/README.md` — widening the commit-message
   model's view from this turn to a bounded tail of earlier ones. The reason for
   a change is settled before the change lands, so the narrow context recorded it
   2 times in 28 and the wide one 12 in 27. The wider view also leaks: models

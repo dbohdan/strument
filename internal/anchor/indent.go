@@ -19,7 +19,7 @@ import (
 // model sends four spaces where the file has a tab, and the harness fixes it.
 // Anchored editing has no matching at all, so that repair is gone while the
 // error is not: phase 1 measured 30 of 72 outputs coming back misindented
-// (doc/experiments/2026-09-anchored-edit-phase1.md). With the column the model
+// (doc/experiments/2026-09-anchored-edit/phase1.md). With the column the model
 // never types indentation; it names it, and a name that does not parse is
 // refused rather than written.
 //

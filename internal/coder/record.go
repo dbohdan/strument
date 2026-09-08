@@ -81,7 +81,7 @@ type Record struct {
 	// text was found: verbatim, or by the line matcher guessing which lines
 	// were meant. The split is the measurement behind whether that guessing
 	// still earns its keep — see
-	// doc/experiments/2026-09-anchored-edit-preregistration.md, M9.
+	// doc/experiments/2026-09-anchored-edit/preregistration.md, M9.
 	EditsExact int `json:"edits_exact,omitempty"`
 	EditsFuzzy int `json:"edits_fuzzy,omitempty"`
 }

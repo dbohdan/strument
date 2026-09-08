@@ -248,7 +248,7 @@ func andList(names []string) string {
 // the schema, so the prose and the schema cannot drift apart in either
 // direction: a prompt naming a tool the model does not have, or a schema tool
 // the prompt's cost list omits — the closed-world reading that produced the
-// 0/36 uptake in doc/experiments/2026-08-code-mode.md.
+// 0/36 uptake in doc/experiments/2026-08-code-mode/README.md.
 func (c *Coder) fmtSystemPrompt(prompt string) string {
 	var finalReminders []string
 	if c.Platform.Language != "" {
@@ -390,7 +390,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	//
 	// What did go is the fabricated assistant reply agreeing to it. Twelve live
 	// sessions across three models with the honest prefix and no reply are in
-	// doc/experiments/2026-08-readonly-honest.md: the contents were used as
+	// doc/experiments/2026-08-readonly-honest/README.md: the contents were used as
 	// readily as before, and the one case that had been going wrong — a request
 	// to edit the reference — stopped producing stalled turns.
 	if roContent := c.readOnlyFilesContent(); roContent != "" {
@@ -418,7 +418,7 @@ func (c *Coder) formatChatChunks() *chatChunks {
 //
 // It replaces the file *contents* that used to ride in a fabricated user turn
 // with the file *names* and an instruction to read them. Measured over 600
-// samples against three models (doc/experiments/2026-08-add-instruct.md): the
+// samples against three models (doc/experiments/2026-08-add-instruct/README.md): the
 // same task success, one extra step, and blind edits — a pinned file written
 // without ever reading it — from 383 across 230 runs down to zero across none.
 //

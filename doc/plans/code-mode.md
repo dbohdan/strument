@@ -2,7 +2,7 @@
 
 **Status: complete.** Parts 1–3 shipped (`fdadd01`, `328f01d`, `e958f85`); the
 Part 4 trial ran 36 runs and found **0/36 `code` uptake** — see
-[`doc/experiments/2026-08-code-mode.md`](../experiments/2026-08-code-mode.md),
+[`doc/experiments/2026-08-code-mode/README.md`](../experiments/2026-08-code-mode/README.md),
 which recommends against shipping it as a default tool. The tool stays in the
 tree with docs; the open question is an arithmetic-shaped fixture, which the
 trial did not measure. This file can be deleted once that is settled.
@@ -11,7 +11,7 @@ Post-completion, 2026-09-01: a live-session bug report on tool-call error
 reporting inside programs — flat one-liner, no line number — was fixed by
 resuming the snapshot with an exception (new `monty_resume_error` C-ABI
 export; the shim is now a hard fork, see `internal/monty/shim/`). Write-up:
-[`doc/experiments/2026-09-error-attribution.md`](../experiments/2026-09-error-attribution.md).
+[`doc/experiments/2026-09-error-attribution/README.md`](../experiments/2026-09-error-attribution/README.md).
 
 **You are implementing this in a fresh session.** Everything you need is below
 or named by path. Read Part 0 before writing any code.
@@ -23,14 +23,14 @@ or named by path. Read Part 0 before writing any code.
 Two measured facts from this repository's own experiments motivate it.
 
 **1. Models spend a lot of reasoning on arithmetic.**
-[`doc/experiments/2026-08-skill-uptake.md`](../experiments/2026-08-skill-uptake.md)
+[`doc/experiments/2026-08-skill-uptake/README.md`](../experiments/2026-08-skill-uptake/README.md)
 found ~2,300 tokens per run of reasoning spent joining numerals with operators —
 recomputing bar heights and coordinates by hand — about a quarter of all
 reasoning lines, and ~12,700 tokens in the worst single run. A skill did not
 reduce it. That work wants a calculator.
 
 **2. Models make runs of read-only tool calls that cost a model round trip
-each.** In `doc/experiments/2026-08-symbol-uptake-data/`, on a task that
+each.** In `doc/experiments/2026-08-symbol-uptake/data/`, on a task that
 required exploring this repository, runs averaged 5.3 observation calls with
 **4.0 removable round trips per run** (longest consecutive run: 14). Each of
 those is a full request that re-sends the context.
@@ -225,12 +225,12 @@ runs, so seventeen runs compared the control arm to itself and the clean-looking
 result meant nothing (`experimenting.md` §18).
 
 **Outcome: uptake was 0/36.**
-[`doc/experiments/2026-08-code-mode.md`](../experiments/2026-08-code-mode.md)
+[`doc/experiments/2026-08-code-mode/README.md`](../experiments/2026-08-code-mode/README.md)
 is the writeup; it recommends against shipping `code` as a default tool. What
 remains open is the arithmetic-shaped fixture, which this trial did not
 measure.
 
-Reuse the rig in `doc/experiments/2026-08-skill-uptake-data/`: `run.py` is a
+Reuse the rig in `doc/experiments/2026-08-skill-uptake/data/`: `run.py` is a
 shuffled, resumable runner and `report.py` summarises. Adapt, don't rewrite.
 
 **Arms** (three binaries, same tree):
@@ -290,7 +290,7 @@ a good model for the task shape.
       every model config routed through `socks5://localhost:1080` — without the
       proxy the requests 403.)*
 
-- [x] Write up as `doc/experiments/2026-08-code-mode.md` with a `-data/`
+- [x] Write up as `doc/experiments/2026-08-code-mode/README.md` with a `-data/`
       directory, following the shape of the two existing experiment writeups.
       **If uptake is low, say so plainly and recommend against shipping.** That
       is a successful trial, not a failed one.

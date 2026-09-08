@@ -67,7 +67,7 @@ func TestReplacePartWithMissingLeadingWhitespace(t *testing.T) {
 // check in coder/tools.go and its comment about a harness "returning success on
 // an underconstrained transformation". These two tests pinned the *fuzzy* path
 // still doing what that comment forbids, and it is not a hypothetical:
-// doc/experiments/2026-09-anchored-edit-m1.md caught it rewriting the wrong one
+// doc/experiments/2026-09-anchored-edit/m1.md caught it rewriting the wrong one
 // of three identical HTTP handlers, twice, reporting success both times. The
 // model's search was under-specified; taking a guess on its behalf is what
 // turns that into a silent wrong write.

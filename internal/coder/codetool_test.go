@@ -532,7 +532,7 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 // --- what a program hands back --------------------------------------------
 
 // The three CodeResult arms, pinned at the level the model sees. They exist to
-// be measured (doc/experiments/2026-09-code-result.md), and a trial whose arms
+// be measured (doc/experiments/2026-09-code-result/README.md), and a trial whose arms
 // do not actually differ measures nothing — so the difference is asserted here
 // rather than assumed from the flag having been passed.
 func TestCodeResultArmsDiffer(t *testing.T) {

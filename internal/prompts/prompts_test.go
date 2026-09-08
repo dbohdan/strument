@@ -55,7 +55,7 @@ func TestToolPromptShape(t *testing.T) {
 	// The reach clause is measured, not stylistic: without it three models
 	// updated a stale test 76 times in 90, with it 87 (CMH p=0.011). It is
 	// pinned so a tidy-up cannot quietly revert an experiment.
-	// See doc/experiments/2026-08-prompt-scope.md.
+	// See doc/experiments/2026-08-prompt-scope/README.md.
 	for _, want := range []string{
 		"Carry the change through everywhere it reaches",
 		"the tests that cover it",

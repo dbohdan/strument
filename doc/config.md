@@ -654,7 +654,7 @@ model makes anyway is answered with a pointer to the `run_code` route rather tha
 silently failing.
 
 This is the force arm of the code-uptake experiments
-(`doc/experiments/2026-09-code-mode2.md`): prompting moved `run_code` uptake from
+(`doc/experiments/2026-09-code-mode2/README.md`): prompting moved `run_code` uptake from
 0/36 to 8/24, and this setting tests the complementary condition — removing the
 competing tools instead of persuading the model to prefer the program. It is
 off by default and may change or be withdrawn based on those results.
@@ -676,7 +676,7 @@ appended to the prompt set's example block, so the model sees them as a
 worked exchange before the conversation starts. Empty means none.
 
 Experimental, like `observation_via_run_code`: it is the few-shot arm of the
-shell-parallelism trial (`doc/experiments/2026-09-shell-parallel.md`) — the
+shell-parallelism trial (`doc/experiments/2026-09-shell-parallel/README.md`) — the
 planning-side lever that trial's predecessor named, aimed at whether a worked
 example changes how models batch commands. It exists because prose in the
 system prompt moves *uptake* (the code-mode trials) but has not been shown to
@@ -1483,6 +1483,6 @@ rule forbids. The reachable set is derived from the observation tools'
 registration, so it cannot drift from it.
 
 Trials so far have not earned the tool a default slot:
-[`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md)
+[`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md)
 found models did not call `run_code` at all (0/36) on an exploration task built to
 need it, though a probe that named the tool got an immediate correct call.

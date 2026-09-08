@@ -199,7 +199,7 @@ inherited from aider.
     the point — see `frontmatter.go`), discovery across the project and the
     user's data directory, and the trust filter `Usable`, which every path
     putting skill text in front of a model goes through. Measured in
-    [`doc/experiments/2026-08-skill-uptake.md`](experiments/2026-08-skill-uptake.md):
+    [`doc/experiments/2026-08-skill-uptake/README.md`](experiments/2026-08-skill-uptake/README.md):
     six models loaded a relevant skill 54/54 times, never loaded it on a task
     it did not fit (0/36), and on-demand loading scored the same as having the
     text in context.
@@ -235,10 +235,10 @@ inherited from aider.
     read-only tools are reachable from inside a program through the bridge
     in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
     Uptake measured in
-    [`doc/experiments/2026-08-code-mode.md`](experiments/2026-08-code-mode.md):
+    [`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md):
     0/36 calls on an exploration task built to need it (later trials moved
     it to 8/24; tool-call error attribution inside programs:
-    [`2026-09-error-attribution.md`](experiments/2026-09-error-attribution.md)).
+    [`2026-09-error-attribution`](experiments/2026-09-error-attribution/)).
 - `script/` — release build, the grammar build-tag list,
   `setup-reference.sh`, and live probes that need a key and a network:
   `opencode-live-pass.sh` drives the real binary through opencode Go's three
@@ -323,7 +323,7 @@ and this is material the user brought in. The label is the whole point of the
 command — `/model` puts a second model's reply in as an *assistant* turn, which
 the session then reads as its own memory — and whether it survives to the next
 turn is measured, not assumed:
-[`experiments/2026-09-consult.md`](experiments/2026-09-consult.md).
+[`experiments/2026-09-consult/README.md`](experiments/2026-09-consult/README.md).
 
 ## The tool loop
 
@@ -410,11 +410,11 @@ Ten tools, in three natures:
   `read` call like everything else. This replaced a fabricated user turn
   carrying the contents and a fabricated assistant turn agreeing they were
   current, and it was measured before it was adopted
-  ([`doc/experiments/2026-08-add-instruct.md`](experiments/2026-08-add-instruct.md)):
+  ([`doc/experiments/2026-08-add-instruct/README.md`](experiments/2026-08-add-instruct/README.md)):
   across 600 samples and three models, identical task success, one extra step,
   and blind edits — a pinned file written without ever reading it — from 383
   across 230 runs to **zero across none**. The earlier
-  [characterization pass](experiments/2026-08-add-authority-characterization.md)
+  [characterization pass](experiments/2026-08-add-authority/README.md)
   is why it was tried at all: under the old design the model re-read a pinned
   file in 31% of runs anyway, usually before editing. It did not believe the
   block.
@@ -438,7 +438,7 @@ Ten tools, in three natures:
   followed by a fabricated assistant turn agreeing to use the files as
   references; that is gone, and the prefix now says plainly who pinned them and
   that an edit will be refused. Thirty-six live sessions
-  ([`doc/experiments/2026-08-readonly-honest.md`](experiments/2026-08-readonly-honest.md))
+  ([`doc/experiments/2026-08-readonly-honest/README.md`](experiments/2026-08-readonly-honest/README.md))
   say the agreement was buying nothing — an unfetchable reference was used just
   as readily without it — while "an edit is refused" in place of aider's "do not
   propose edits" stopped models from spending whole turns litigating a request
@@ -467,7 +467,7 @@ Ten tools, in three natures:
   standard temporary directory — the same grant `sandbox.tempDirs` gives
   model-run commands, so scratch files a model prepares for its build meet
   the same boundary through both routes (found from
-  [`2026-10-code-only.md`](experiments/2026-10-code-only.md), whose models
+  [`2026-10-code-only.md`](experiments/2026-10-code-only/README.md), whose models
   wanted exactly this). Temp writes are absolute-path only: a relative
   traversal that lands in temp is still refused, and the snapshot keeps them
   for /undo while the turn commit skips them — `git add` on an out-of-repo
@@ -492,7 +492,7 @@ Ten tools, in three natures:
   capture buffer is mutex-guarded, because the interpreter documents
   concurrent writes to stdout/stderr once background statements appear. The
   description carries the trial's PROSE paragraph
-  (doc/experiments/2026-09-shell-parallel.md): stating the rule — independent
+  (doc/experiments/2026-09-shell-parallel/README.md): stating the rule — independent
   commands go in one batched call, because each call asks the user — moved
   uptake to 9/9 across three models, where the bare mechanism mention left
   one of three models serial.
@@ -953,7 +953,7 @@ regression test in `toolargs_test.go`:
   now name `path` first.
 
   A live A/B across seven models
-  ([`2026-09-tool-arg-order.md`](experiments/2026-09-tool-arg-order.md)) puts
+  ([`2026-09-tool-arg-order.md`](experiments/2026-09-tool-arg-order/README.md)) puts
   a number on it: first `write` calls naming `path` first went 25/56 → 44/56,
   p=0.0004, with no cost anywhere in the counter-metrics. But the panel splits
   three ways — models that follow the schema, models that put `path` first

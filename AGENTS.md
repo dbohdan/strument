@@ -130,7 +130,7 @@ which matters more than it looks: in a sweep, wall-clock is what caps the sample
 you can afford to collect in one sitting.
 
 The reason this is a rule and not a preference: in
-[`doc/experiments/2026-08-prompt-scope.md`](doc/experiments/2026-08-prompt-scope.md)
+[`doc/experiments/2026-08-prompt-scope/README.md`](doc/experiments/2026-08-prompt-scope/README.md)
 Haiku was $3.93 of a $4.14 total, 95% of the spend for one stratum of four, and
 the sample size ended up set by the most expensive model rather than by the
 question being asked. Price the strata *before* designing the arms.
@@ -157,7 +157,7 @@ A live A/B is a different discipline from a live pass, and the trap is not the
 one you expect. **Randomize the order of the arms.** Running every baseline and
 then every treatment confounds the arm with the time it ran, and providers drift
 across that window: in
-[`doc/experiments/2026-08-prompt-scope.md`](doc/experiments/2026-08-prompt-scope.md)
+[`doc/experiments/2026-08-prompt-scope/README.md`](doc/experiments/2026-08-prompt-scope/README.md)
 the unrandomized design produced p=0.0009 on a prompt change, and shuffling the
 order — nothing else — moved the baseline from 65% to 84% while the treatment
 arm stayed put, taking the same comparison to p=0.15. In another cell the sign
@@ -170,6 +170,9 @@ summary and mean opposite things. Choose metrics that are counts rather than
 judgments, so you are not both author and judge. And report the counter-metric
 — the thing your change might break — as prominently as the effect you want,
 because that is what makes a result safe to act on.
+
+Past trials live one directory each under
+[`doc/experiments/`](doc/experiments/README.md), grouped by subject in its index.
 
 ## Conventions
 

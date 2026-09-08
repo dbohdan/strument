@@ -14,7 +14,7 @@ import (
 // The ladder exists because the right answer is not obvious and is measurable:
 // an advisor that has read nothing gives generic advice, and an advisor that has
 // read the whole transcript inherits the framing the user was trying to escape.
-// doc/experiments/2026-09-consult.md is the trial that settles the default;
+// doc/experiments/2026-09-consult/README.md is the trial that settles the default;
 // until it runs, ConsultFiles is a provisional choice, not a finding.
 type ConsultScope int
 
