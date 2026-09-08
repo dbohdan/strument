@@ -341,3 +341,95 @@ func TestCodeSummaryAfterFailure(t *testing.T) {
 		t.Errorf("the error text must still reach the model, got:\n%s", got)
 	}
 }
+
+// --- results the program did not keep -------------------------------------
+
+// TestCodeDiscardedResultsAreNamed covers the two field reports that motivated
+// the note, and — in the same table — the shapes it must stay quiet for.
+//
+// Both failures come from the same fact: only the final value reaches the
+// model. A loop of reads that keeps nothing returns the bare word "None" after
+// reading four files successfully, which one model read as "the files do not
+// exist" before going to look for them again. Two calls on two lines return the
+// second one's result and drop the first, which is quieter and worse: the
+// screen shows both searches happening, so neither the model nor the user can
+// see that half the evidence never arrived.
+//
+// The negative rows are the half that makes this a measurement. A program that
+// collects its results, one that prints them, and one that makes a single call
+// have lost nothing, and a note on those would be noise on every correct
+// program.
+func TestCodeDiscardedResultsAreNamed(t *testing.T) {
+	files := map[string]string{
+		"a.py": "import x  # NEEDLE\n",
+		"b.py": "import y  # NEEDLE\n",
+	}
+
+	for _, tc := range []struct {
+		name, code string
+		wantNote   bool
+	}{
+		{
+			name:     "loop keeps nothing",
+			code:     "for p in [\"a.py\", \"b.py\"]:\n    read(path=p)",
+			wantNote: true,
+		},
+		{
+			name:     "two bare calls, first dropped",
+			code:     "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")",
+			wantNote: true,
+		},
+		{
+			name:     "results collected",
+			code:     "hits = {}\nfor p in [\"a.py\", \"b.py\"]:\n    hits[p] = read(path=p)\nhits",
+			wantNote: false,
+		},
+		{
+			name:     "results printed",
+			code:     "for p in [\"a.py\", \"b.py\"]:\n    print(read(path=p))",
+			wantNote: false,
+		},
+		{
+			name:     "one call, returned",
+			code:     "read(path=\"a.py\")",
+			wantNote: false,
+		},
+		{
+			name:     "no calls at all",
+			code:     "x = 1",
+			wantNote: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := observeEnv(t, files)
+			got := c.runCode(context.Background(), codeCall{code: tc.code})
+			noted := strings.Contains(got, "comes back to you")
+			if noted != tc.wantNote {
+				t.Errorf("note present = %v, want %v:\n%s", noted, tc.wantNote, got)
+			}
+			// The value itself is never replaced by the note.
+			if tc.wantNote && strings.HasPrefix(tc.code, "grep") && !strings.Contains(got, "b.py") {
+				t.Errorf("the note swallowed the value it annotates:\n%s", got)
+			}
+		})
+	}
+}
+
+// The two notes say different things, because the two mistakes have different
+// repairs: one program kept nothing, the other kept all but one.
+func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.py": "x = 1  # NEEDLE\n", "b.py": "y = 2  # NEEDLE\n"})
+
+	none := c.runCode(context.Background(), codeCall{code: "for p in [\"a.py\", \"b.py\"]:\n    read(path=p)"})
+	if !strings.Contains(none, "returned none of their results") {
+		t.Errorf("a program that kept nothing must be told so:\n%s", none)
+	}
+	if !strings.Contains(none, "2 calls") {
+		t.Errorf("the note must say how many calls were made:\n%s", none)
+	}
+
+	last := c.runCode(context.Background(), codeCall{code: "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")"})
+	if !strings.Contains(last, "That is the last call's result") {
+		t.Errorf("a program that returned only its last call must be told so:\n%s", last)
+	}
+}

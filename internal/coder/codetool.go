@@ -152,10 +152,10 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// actual output dropped on the floor. Under the observation force arm
 	// print is the primary reporting channel, so this is not cosmetic.
 	var printed strings.Builder
-	var called []string
+	var log bridgeLog
 	result, err := runner.Execute(context.Background(), cc.code, nil,
-		append(c.codeOptions(&called), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
-	summary := codeCalledText(codeLines(cc.code), called)
+		append(c.codeOptions(&log), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
+	summary := codeCalledText(codeLines(cc.code), log.names)
 	if err != nil {
 		// The calls made before the failure still happened, and a program that
 		// aborted mid-way is precisely where the summary carries information
@@ -164,7 +164,18 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		return codeErrorText(err)
 	}
 	c.Out.Toolf("%s", summary)
-	return codeResultText(result, printed.String())
+	return codeResultText(result, printed.String(), &log)
+}
+
+// bridgeLog is what the bridge records about one program's calls: which tools
+// it reached for, how many calls it made in total, and what the last one
+// answered. The first feeds the outcome line on screen; the other two feed the
+// note in the result, which is the only place a discarded result can be
+// mentioned.
+type bridgeLog struct {
+	names []string // distinct tool names, in first-call order
+	calls int
+	last  any // what the last bridged call returned
 }
 
 // codeLines counts the program's lines, discounting the leading and trailing
@@ -190,9 +201,9 @@ func codeCalledText(n int, called []string) string {
 }
 
 // codeOptions assembles the Execute options: the resource limits, plus the
-// read-only bridge. called collects the tool names the program actually
-// invoked, for the outcome line.
-func (c *Coder) codeOptions(called *[]string) []monty.ExecuteOption {
+// read-only bridge. log collects what the program actually did, for the outcome
+// line and the result's note.
+func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	opts := make([]monty.ExecuteOption, 0, 2)
 	opts = append(opts, monty.WithLimits(codeLimits))
 
@@ -213,7 +224,7 @@ func (c *Coder) codeOptions(called *[]string) []monty.ExecuteOption {
 	for _, d := range codeFuncs {
 		funcs = append(funcs, monty.Func(d.name))
 	}
-	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, called), funcs...))
+	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
 	return opts
 }
 
@@ -228,7 +239,7 @@ func (c *Coder) codeOptions(called *[]string) []monty.ExecuteOption {
 // overreports: a comment naming read, a variable called ls, a call in a branch
 // that never runs. The interpreter pauses at every real call, so this side has
 // the truth without parsing anything.
-func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFunc {
+func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc {
 	isAllowed := make(map[string]bool, len(allowed)+len(codeFuncs))
 	for _, n := range allowed {
 		isAllowed[n] = true
@@ -241,7 +252,6 @@ func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFun
 	}
 
 	seen := map[string]bool{}
-	calls := 0
 	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
 		// Fail closed. This runs behind the registration check already — a
 		// name outside `allowed` is not registered with Monty at all and
@@ -254,10 +264,10 @@ func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFun
 		}
 		if !seen[call.Name] {
 			seen[call.Name] = true
-			*called = append(*called, call.Name)
+			log.names = append(log.names, call.Name)
 		}
-		calls++
-		if calls > maxBridgedCalls {
+		log.calls++
+		if log.calls > maxBridgedCalls {
 			return nil, fmt.Errorf("the program made more than %d tool calls", maxBridgedCalls)
 		}
 
@@ -271,7 +281,9 @@ func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFun
 		// call read as a separate action the model initiated — the confusion a
 		// live session reported.
 		if d := codeFuncByName(call.Name); d != nil {
-			return d.fn(c, call)
+			v, err := d.fn(c, call)
+			log.last = v
+			return v, err
 		}
 
 		// The call crosses the boundary as the same Inspector.Run a direct
@@ -290,6 +302,7 @@ func (c *Coder) bridgeCall(allowed []string, called *[]string) monty.ExternalFun
 		if msg, bad := bridgeToolFailure(out); bad {
 			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
 		}
+		log.last = out
 		return out, nil
 	}
 }
@@ -326,7 +339,7 @@ func bridgeToolFailure(out string) (string, bool) {
 // final value (often None in a print-driven program) reads as the tail. A
 // list or dict the model wants to read comes back as JSON rather than Go's
 // `%v` spacing, which a model would otherwise have to misread as Python.
-func codeResultText(result any, printed string) string {
+func codeResultText(result any, printed string, log *bridgeLog) string {
 	var b strings.Builder
 	if printed != "" {
 		b.WriteString(strings.TrimRight(printed, "\n"))
@@ -336,18 +349,81 @@ func codeResultText(result any, printed string) string {
 	}
 	switch result.(type) {
 	case nil:
+		// A print-driven program's None is the tail of its own output, not a
+		// value worth naming; with nothing printed either, None is all there is.
 		if printed == "" {
-			return "None"
+			b.WriteString("None")
 		}
-		return strings.TrimRight(b.String(), "\n")
 	case []any, map[string]any:
 		if data, err := json.Marshal(result); err == nil {
 			b.Write(data)
-			return b.String()
+		} else {
+			fmt.Fprintf(&b, "%v", result)
 		}
+	default:
+		fmt.Fprintf(&b, "%v", result)
 	}
-	fmt.Fprintf(&b, "%v", result)
+	if note := codeLostCallsNote(result, printed, log); note != "" {
+		// One blank line between the value and the note, whether or not the
+		// value already ended in a newline — grep's content mode does, and two
+		// blank lines read as a missing paragraph.
+		return strings.TrimRight(b.String(), "\n") + "\n\n" + note
+	}
 	return b.String()
+}
+
+// codeLostCallsNote says so when the program's value cannot account for the
+// calls the program made. Only the final value comes back, and a program whose
+// calls do not reach it looks, from the model's side, exactly like a program
+// whose calls found nothing.
+//
+// Both shapes were observed in the field, and they fail differently. A loop of
+// read(path=…) that keeps nothing returns the bare word "None" after four
+// successful reads, and the model read that as "the files do not exist" and
+// went looking for them again — loud, and wrong in a way that costs a round
+// trip. Two grep(…) statements on consecutive lines return the second one's
+// output and silently drop the first, so a model verifying two files has
+// verified one and neither it nor the user can tell; the screen shows both
+// searches happening. The second is the worse of the two for being quiet.
+//
+// The note is model-facing text and therefore a hypothesis about behaviour
+// rather than a style choice: whether it moves anything, and whether it pushes
+// models toward printing everything (the counter-metric — result size), is
+// measurable and not yet measured.
+func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
+	if log == nil || log.calls == 0 {
+		return ""
+	}
+	// Nothing came back at all: every result was discarded.
+	if result == nil && printed == "" {
+		return fmt.Sprintf("The program made %s and returned none of their results. "+
+			"Only the program's final value comes back to you, so end it with what you "+
+			"want to see, or print() as you go.",
+			render.Plural(log.calls, "call", "calls"))
+	}
+	// The value *is* the last call's output, verbatim, and there were earlier
+	// calls. Comparing against what the bridge actually returned is what keeps
+	// this from firing on a program that computed over its results: only a bare
+	// trailing call reproduces the string exactly.
+	if log.calls >= 2 && sameBridgedValue(result, log.last) {
+		return fmt.Sprintf("That is the last call's result. The program made %d, and the "+
+			"earlier ones stayed inside it — only the final value comes back to you. "+
+			"Collect what you need (a list or a dict) and end the program with that.",
+			log.calls)
+	}
+	return ""
+}
+
+// sameBridgedValue reports whether a program's value is one bridged call's
+// return, unchanged. Strings only: the observation tools answer with text, and
+// a code function's map is not a shape a program returns by accident.
+func sameBridgedValue(result, last any) bool {
+	rs, ok := result.(string)
+	if !ok {
+		return false
+	}
+	ls, ok := last.(string)
+	return ok && rs == ls
 }
 
 // codeErrorText renders an execution failure for the model. The traceback's
