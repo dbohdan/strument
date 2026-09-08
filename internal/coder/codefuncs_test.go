@@ -116,7 +116,7 @@ func TestCodeFuncNotADirectTool(t *testing.T) {
 // every registered function's name and signature must appear in the tool
 // description the model actually sees.
 func TestCodeFuncDocMatchesRegistry(t *testing.T) {
-	desc := codeTool(InspectorTools()).Description
+	desc := codeTool(InspectorTools(), CodeResultLast).Description
 	for _, d := range codeFuncs {
 		name := d.name + "("
 		if !strings.Contains(desc, name) {

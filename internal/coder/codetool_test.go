@@ -143,7 +143,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // the subset. A line that stops describing a real wall is a lie to the model;
 // each substring here corresponds to a probe in the tests below.
 func TestCodeDescriptionNamesTheLimits(t *testing.T) {
-	desc := codeTool(InspectorTools()).Description
+	desc := codeTool(InspectorTools(), CodeResultLast).Description
 	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -445,7 +445,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // from what a program can actually import.
 func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools()).Description
+	desc := codeTool(InspectorTools(), CodeResultLast).Description
 
 	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
 		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
@@ -501,10 +501,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 
 	// The description the model reads follows, in both directions.
-	if desc := codeTool(withMap.codeCallableTools()).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools()).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools(), CodeResultLast).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
@@ -526,5 +526,111 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 	if got := withMap.runCode(context.Background(), codeCall{code: `symbol(name="Target")`}); strings.Contains(got, "not defined") {
 		t.Errorf("symbol must be registered with a repo map, got:\n%s", got)
+	}
+}
+
+// --- what a program hands back --------------------------------------------
+
+// The three CodeResult arms, pinned at the level the model sees. They exist to
+// be measured (doc/experiments/2026-09-code-result.md), and a trial whose arms
+// do not actually differ measures nothing — so the difference is asserted here
+// rather than assumed from the flag having been passed.
+func TestCodeResultArmsDiffer(t *testing.T) {
+	files := map[string]string{"a.py": "x = 1  # NEEDLE\n", "b.py": "y = 2  # NEEDLE\n"}
+	twoCalls := "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")"
+
+	last, _ := observeEnv(t, files)
+	got := last.runCode(context.Background(), codeCall{code: twoCalls})
+	if strings.Contains(got, "a.py") {
+		t.Errorf("the default arm must return the last call only, got:\n%s", got)
+	}
+	if !strings.Contains(got, "That is the last call's result") {
+		t.Errorf("the default arm must say what it dropped, got:\n%s", got)
+	}
+
+	all, _ := observeEnv(t, files)
+	all.CodeResult = CodeResultAll
+	got = all.runCode(context.Background(), codeCall{code: twoCalls})
+	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
+		t.Errorf("the echoing arm must return every call's result, got:\n%s", got)
+	}
+	// Nothing was lost, so the note that says something was would contradict
+	// the contract this arm gave the model.
+	if strings.Contains(got, "last call's result") || strings.Contains(got, "returned none") {
+		t.Errorf("the echoing arm must not claim results were lost, got:\n%s", got)
+	}
+	// And the last result is not repeated once as an echo and again as the
+	// value — the largest thing in the reply, twice.
+	if n := strings.Count(got, "1 match in 1 file for NEEDLE matching b.py"); n != 1 {
+		t.Errorf("the last result appears %d times, want 1:\n%s", n, got)
+	}
+	// The calls come back as the program wrote them, not as wire JSON.
+	if !strings.Contains(got, `>>> grep(glob="a.py", pattern="NEEDLE")`) {
+		t.Errorf("the echo must render keywords, not JSON, got:\n%s", got)
+	}
+	// A program that keeps nothing is the case the note was written for, and
+	// the case where this arm must stay quiet: the results did come back. The
+	// check above cannot see this, because a program whose value is the last
+	// call's result never reaches the note at all.
+	got = all.runCode(context.Background(), codeCall{
+		code: "for g in [\"a.py\", \"b.py\"]:\n    grep(pattern=\"NEEDLE\", glob=g)"})
+	if strings.Contains(got, "returned none of their results") {
+		t.Errorf("the echoing arm handed back every result and must not say otherwise:\n%s", got)
+	}
+	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
+		t.Errorf("the echoing arm must return both results even when the program keeps none:\n%s", got)
+	}
+
+	main, _ := observeEnv(t, files)
+	main.CodeResult = CodeResultMain
+	got = main.runCode(context.Background(), codeCall{
+		code: "def main():\n    return [grep(pattern=\"NEEDLE\", glob=g) for g in [\"a.py\", \"b.py\"]]"})
+	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
+		t.Errorf("the main arm must return what main returned, got:\n%s", got)
+	}
+	// A program that defines no main fails loudly rather than handing back a
+	// quiet None, which is the whole argument for this arm.
+	got = main.runCode(context.Background(), codeCall{code: twoCalls})
+	if !strings.Contains(got, "'main' is not defined") {
+		t.Errorf("the main arm must fail loudly with no main defined, got:\n%s", got)
+	}
+}
+
+// Each arm's description states its own contract and shows an example obeying
+// it. An example that contradicts the paragraph above it is the loudest thing
+// in a tool description, and models copy examples.
+func TestCodeResultDescriptionsMatchTheirArm(t *testing.T) {
+	for _, tt := range []struct {
+		arm               CodeResult
+		contract, example string
+	}{
+		{CodeResultLast, "Only the program's last evaluated value", "\ncaps\n"},
+		{CodeResultAll, "Every call the program makes returns its result", "\ncaps\n"},
+		{CodeResultMain, "Define a function called main", "    return caps\n"},
+	} {
+		t.Run(tt.arm.String(), func(t *testing.T) {
+			desc := codeTool(InspectorTools(), tt.arm).Description
+			if !strings.Contains(desc, tt.contract) {
+				t.Errorf("arm %s does not state its contract (%q):\n%s", tt.arm, tt.contract, desc)
+			}
+			if !strings.Contains(desc, tt.example) {
+				t.Errorf("arm %s's example does not obey it (%q):\n%s", tt.arm, tt.example, desc)
+			}
+		})
+	}
+}
+
+func TestParseCodeResultRoundTrips(t *testing.T) {
+	for _, name := range CodeResultNames {
+		arm, ok := ParseCodeResult(name)
+		if !ok {
+			t.Fatalf("ParseCodeResult(%q) was not recognized", name)
+		}
+		if got := arm.String(); got != name {
+			t.Errorf("%q parsed to an arm that renders as %q", name, got)
+		}
+	}
+	if _, ok := ParseCodeResult("every"); ok {
+		t.Error("ParseCodeResult accepted a name that is not an arm")
 	}
 }

@@ -180,8 +180,7 @@ const ObservationViaRunCodeParagraph = "- run_code runs a short Python program. 
 	"reading, searching, and listing — goes through it: the " +
 	"program calls %s itself, and the results " +
 	"come back to the program, not to you, until it returns. Write one program " +
-	"for the several lookups you need, and return the combined answer as the " +
-	"program's final value. It changes nothing and needs no permission.\n"
+	"for the several lookups you need. It changes nothing and needs no permission.\n"
 
 // ObservationBullet is the tool prompt's read/grep/glob/ls paragraph, moved
 // here from toolMainSystem so the same slot can render the force arm's

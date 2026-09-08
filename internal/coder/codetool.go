@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -65,7 +67,7 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool(callable []string) llm.ToolDef {
+func codeTool(callable []string, arm CodeResult) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
@@ -74,15 +76,8 @@ func codeTool(callable []string) llm.ToolDef {
 		"The program can call the read-only tools directly — " +
 		"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)" +
 		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. Example:\n\n", maxBridgedCalls) +
-		"```python\n" +
-		"caps = {}\n" +
-		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
-		"caps\n" +
-		"```\n\n" +
-		"Only the program's last evaluated value comes back to you, so end it " +
-		"with what you want to see — two calls on two lines return the second " +
-		"one's result and drop the first. print() shows intermediate values.\n\n" +
+		codeExampleText(arm) +
+		codeContractText(arm) +
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
 		"math, re, datetime, json, itertools and collections all work. Not " +
@@ -117,6 +112,49 @@ func codeTool(callable []string) llm.ToolDef {
 			},
 			"required": []any{"code"},
 		},
+	}
+}
+
+// codeExampleText is the worked example, in the shape the arm's contract calls
+// for. An example that contradicts the paragraph above it would be the loudest
+// thing in the description, and models copy the example.
+func codeExampleText(arm CodeResult) string {
+	body := "caps = {}\n" +
+		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
+		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n"
+	switch arm {
+	case CodeResultMain:
+		body = "def main():\n" +
+			"    caps = {}\n" +
+			"    for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
+			"        caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
+			"    return caps\n"
+	default:
+		body += "caps\n"
+	}
+	return "```python\n" + body + "```\n\n"
+}
+
+// codeContractText is the one paragraph the CodeResult arms differ in: what the
+// model is told comes back. Kept apart from the rest of the description so the
+// arms differ in exactly this, which is what makes the trial a comparison of
+// the contract rather than of two rewritten descriptions.
+func codeContractText(arm CodeResult) string {
+	switch arm {
+	case CodeResultAll:
+		return "Every call the program makes returns its result to you, in order, " +
+			"followed by the program's final value. Compute over the results and " +
+			"end with a conclusion when you can; the raw results come back either " +
+			"way. print() shows anything else.\n\n"
+	case CodeResultMain:
+		return "Define a function called main and return what you want to see from " +
+			"it; the program is run and then main() is called, and its return value " +
+			"is what comes back. A program that returns nothing hands you None. " +
+			"print() shows intermediate values.\n\n"
+	default:
+		return "Only the program's last evaluated value comes back to you, so end it " +
+			"with what you want to see — two calls on two lines return the second " +
+			"one's result and drop the first. print() shows intermediate values.\n\n"
 	}
 }
 
@@ -166,8 +204,16 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// actual output dropped on the floor. Under the observation force arm
 	// print is the primary reporting channel, so this is not cosmetic.
 	var printed strings.Builder
-	var log bridgeLog
-	result, err := runner.Execute(context.Background(), cc.code, nil,
+	log := bridgeLog{keepEcho: c.CodeResult == CodeResultAll}
+	// The main() arm runs the program to define things and then calls main(),
+	// so the value comes from a return statement. A program that defines no
+	// main raises NameError, which is the whole point: the failure is loud
+	// rather than a quiet None.
+	source := cc.code
+	if c.CodeResult == CodeResultMain {
+		source += "\n\nmain()"
+	}
+	result, err := runner.Execute(context.Background(), source, nil,
 		append(c.codeOptions(&log), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
 	summary := codeCalledText(codeLines(cc.code), log.names)
 	if err != nil {
@@ -178,7 +224,26 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		return codeErrorText(err)
 	}
 	c.Out.Toolf("%s", summary)
-	return codeResultText(result, printed.String(), &log)
+	return truncateResult(codeEchoText(&log) + codeResultText(result, printed.String(), &log))
+}
+
+// codeArgsText renders a bridged call's arguments the way the model wrote them,
+// as keywords rather than as the JSON they crossed the boundary in. The echo is
+// meant to read as the program's own lines coming back.
+func codeArgsText(argsJSON string) string {
+	var m map[string]any
+	if json.Unmarshal([]byte(argsJSON), &m) != nil {
+		return strings.TrimSpace(argsJSON)
+	}
+	parts := make([]string, 0, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		v, err := json.Marshal(m[k])
+		if err != nil {
+			continue
+		}
+		parts = append(parts, k+"="+string(v))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // bridgeLog is what the bridge records about one program's calls: which tools
@@ -190,6 +255,91 @@ type bridgeLog struct {
 	names []string // distinct tool names, in first-call order
 	calls int
 	last  any // what the last bridged call returned
+	// keepEcho records every call for CodeResultAll. Off by default so the
+	// other arms do not accumulate results nobody will read.
+	keepEcho bool
+	// echo is one entry per call — name, arguments, result — kept only for
+	// CodeResultAll, which hands them all back. Under the other arms it stays
+	// nil rather than accumulating megabytes nobody reads.
+	echo []bridgedCall
+}
+
+// bridgedCall is one call a program made, as CodeResultAll reports it.
+type bridgedCall struct {
+	name   string
+	args   string
+	result any
+}
+
+// CodeResult selects what a run_code program hands back. It exists to be
+// measured: doc/experiments/2026-09-code-result.md is the trial, and until it
+// reports, CodeResultLast is the shipped behaviour rather than the chosen one.
+type CodeResult int
+
+const (
+	// CodeResultLast returns the program's final value, the way a Jupyter cell
+	// echoes its last expression.
+	CodeResultLast CodeResult = iota
+	// CodeResultAll returns every bridged call's result and then the final
+	// value, the way an interactive interpreter echoes each statement. The
+	// hypothesis it tests: a model writing read() reads it as a tool call, and
+	// everywhere else in this harness a tool call's result comes back.
+	CodeResultAll
+	// CodeResultMain runs the program and then calls main(), so the value comes
+	// from a return statement rather than from whatever was evaluated last.
+	CodeResultMain
+)
+
+func (r CodeResult) String() string {
+	switch r {
+	case CodeResultAll:
+		return "all"
+	case CodeResultMain:
+		return "main"
+	default:
+		return "last"
+	}
+}
+
+// ParseCodeResult reads an arm name, reporting whether it is one.
+func ParseCodeResult(name string) (CodeResult, bool) {
+	switch name {
+	case "last":
+		return CodeResultLast, true
+	case "all":
+		return CodeResultAll, true
+	case "main":
+		return CodeResultMain, true
+	}
+	return 0, false
+}
+
+// CodeResultNames lists the arms, for help text and errors.
+var CodeResultNames = []string{"last", "all", "main"}
+
+// codeEchoText renders every call a program made, the way an interactive
+// interpreter would have as the program ran. The arguments come along because
+// two greps differing only in their glob are otherwise two identical headings.
+func codeEchoText(log *bridgeLog) string {
+	if log == nil || len(log.echo) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range log.echo {
+		fmt.Fprintf(&b, ">>> %s(%s)\n", e.name, codeArgsText(e.args))
+		switch v := e.result.(type) {
+		case string:
+			b.WriteString(strings.TrimRight(v, "\n"))
+		default:
+			if data, err := json.Marshal(v); err == nil {
+				b.Write(data)
+			} else {
+				fmt.Fprintf(&b, "%v", v)
+			}
+		}
+		b.WriteString("\n\n")
+	}
+	return b.String()
 }
 
 // codeLines counts the program's lines, discounting the leading and trailing
@@ -325,6 +475,9 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 		if d := codeFuncByName(call.Name); d != nil {
 			v, err := d.fn(c, call)
 			log.last = v
+			if log.keepEcho && err == nil {
+				log.echo = append(log.echo, bridgedCall{name: call.Name, args: call.ArgsJSON(), result: v})
+			}
 			return v, err
 		}
 
@@ -345,6 +498,9 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
 		}
 		log.last = out
+		if log.keepEcho {
+			log.echo = append(log.echo, bridgedCall{name: call.Name, args: call.ArgsJSON(), result: out})
+		}
 		return out, nil
 	}
 }
@@ -382,6 +538,11 @@ func bridgeToolFailure(out string) (string, bool) {
 // list or dict the model wants to read comes back as JSON rather than Go's
 // `%v` spacing, which a model would otherwise have to misread as Python.
 func codeResultText(result any, printed string, log *bridgeLog) string {
+	// Under the echoing arm the last call's result has just been printed in
+	// full; repeating it as the value doubles the largest thing in the reply.
+	if log != nil && log.keepEcho && printed == "" && sameBridgedValue(result, log.last) {
+		return ""
+	}
 	var b strings.Builder
 	if printed != "" {
 		b.WriteString(strings.TrimRight(printed, "\n"))
@@ -434,6 +595,11 @@ func codeResultText(result any, printed string, log *bridgeLog) string {
 // measurable and not yet measured.
 func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 	if log == nil || log.calls == 0 {
+		return ""
+	}
+	// Nothing is lost when every call's result is handed back, and a note
+	// saying otherwise would contradict the contract the model was given.
+	if log.keepEcho {
 		return ""
 	}
 	// Nothing came back at all: every result was discarded.

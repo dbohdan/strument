@@ -63,6 +63,7 @@ type chatCmd struct {
 	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                                         name:"no-shell"`
 	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, add-output, all. Repeatable; lists allowed." placeholder:"<name>"`
 	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"How much of the session /consult shows the advisor." name:"consult-scope"`
+	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"What a run_code program hands back (under trial)."   name:"code-result"`
 	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
@@ -174,6 +175,8 @@ func (c *chatCmd) Run() error {
 	cdr.AnchoredEdits = cfg.AnchoredEdits
 	cdr.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
 	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
+	// Kong's enum has already refused anything else.
+	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow
 	// The project's named checks, which the check tool runs without asking:

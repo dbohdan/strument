@@ -66,6 +66,11 @@ type Coder struct {
 	// stays direct because the bridge cannot carry it.
 	ObservationViaRunCode bool
 
+	// CodeResult selects what a run_code program hands back: its final value
+	// (the shipped behaviour), every bridged call's result, or the value of a
+	// main() the program defines. Under trial; see codetool.go.
+	CodeResult CodeResult
+
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked
 	// whether to keep going. Configurable; the default (25) is set by New.
