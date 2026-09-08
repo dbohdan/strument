@@ -247,16 +247,8 @@ func recursiveDynamic(cb func(string) []string) *readline.PrefixCompleter {
 	return d
 }
 
-func (r *REPL) completeAddable(string) []string {
-	matches, _ := filepath.Glob(filepath.Join(r.coder.Root, "*"))
-	out := make([]string, 0, len(matches))
-	for _, m := range matches {
-		rel, err := filepath.Rel(r.coder.Root, m)
-		if err == nil {
-			out = append(out, rel)
-		}
-	}
-	return out
+func (r *REPL) completeAddable(line string) []string {
+	return r.completePathsFor(line, false)
 }
 
 func (r *REPL) completeAliases(string) []string {

@@ -176,6 +176,16 @@ func TestPathCompletionMultiSegmentDescends(t *testing.T) {
 		t.Errorf("/read-only docs/ = %q, want [spec.md]", got)
 	}
 
+	got = completionsFor(r.completer(), "/add docs")
+	if len(got) != 1 || got[0] != "/" {
+		t.Errorf("/add docs = %q, want [/]", got)
+	}
+
+	got = completionsFor(r.completer(), "/add docs/")
+	if len(got) != 1 || got[0] != "spec.md" {
+		t.Errorf("/add docs/ = %q, want [spec.md]", got)
+	}
+
 	got = completionsFor(r.completer(), "/read-only docs/s")
 	if len(got) != 1 || got[0] != "pec.md" {
 		t.Errorf("/read-only docs/s = %q, want [pec.md]", got)

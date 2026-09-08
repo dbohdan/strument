@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"dbohdan.com/strument/internal/readline"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // promptCompleter routes Tab completion: a line that starts with "/" goes to the
@@ -109,10 +110,8 @@ func (r *REPL) completePromptFiles() []string {
 }
 
 // completePaths completes /read-only and /submit arguments against the real
-// filesystem, absolute paths included. completeAddable cannot serve these
-// commands: it lists one level of the project root as root-relative names, so
-// /tmp/... could never appear — yet pinning outside-root material is /read-only's
-// documented purpose, and /submit's example use is a draft prompt in /tmp.
+// filesystem, absolute paths included. completePathsFor also serves /add with
+// outside paths filtered out, since editable files must stay inside the project.
 //
 // The dynamic callback receives the whole typed line, so the word being
 // completed is extracted here. Candidates are returned in the same terms the
@@ -125,6 +124,10 @@ func (r *REPL) completePromptFiles() []string {
 // both signals "descend" and lets the next Tab list into it. Dotfiles stay
 // hidden unless the typed word starts with one, as a shell does.
 func (r *REPL) completePaths(line string) []string {
+	return r.completePathsFor(line, true)
+}
+
+func (r *REPL) completePathsFor(line string, allowOutside bool) []string {
 	raw := lastCommandWord(line)
 	lookup := unescapeWord(raw)
 	trailingSlash := strings.HasSuffix(lookup, "/") || strings.HasSuffix(lookup, string(filepath.Separator))
@@ -160,9 +163,19 @@ func (r *REPL) completePaths(line string) []string {
 		// parts included) against each candidate and offers the suffix past
 		// it: the candidate must begin with what the user typed.
 		cand := escapePathWord(full)
+		if !allowOutside && absolute {
+			root, err := filepath.Abs(r.coder.Root)
+			if err != nil {
+				continue
+			}
+			rel, err := filepath.Rel(root, full)
+			if err != nil || workspace.EscapesRoot(rel) {
+				continue
+			}
+		}
 		if !absolute {
 			rel, err := filepath.Rel(r.coder.Root, full)
-			if err != nil {
+			if err != nil || (!allowOutside && workspace.EscapesRoot(rel)) {
 				continue
 			}
 			// Use the typed slash style: the user typed "/"-separated
