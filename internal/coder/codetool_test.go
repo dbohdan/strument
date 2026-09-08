@@ -143,7 +143,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // the subset. A line that stops describing a real wall is a lie to the model;
 // each substring here corresponds to a probe in the tests below.
 func TestCodeDescriptionNamesTheLimits(t *testing.T) {
-	desc := codeTool(InspectorTools(), CodeResultLast).Description
+	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat).Description
 	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -445,7 +445,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // from what a program can actually import.
 func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools(), CodeResultLast).Description
+	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat).Description
 
 	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
 		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
@@ -501,10 +501,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 
 	// The description the model reads follows, in both directions.
-	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast, CodeNSFlat).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools(), CodeResultLast).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools(), CodeResultLast, CodeNSFlat).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
@@ -609,7 +609,7 @@ func TestCodeResultDescriptionsMatchTheirArm(t *testing.T) {
 		{CodeResultMain, "Define a function called main", "    return caps\n"},
 	} {
 		t.Run(tt.arm.String(), func(t *testing.T) {
-			desc := codeTool(InspectorTools(), tt.arm).Description
+			desc := codeTool(InspectorTools(), tt.arm, CodeNSFlat).Description
 			if !strings.Contains(desc, tt.contract) {
 				t.Errorf("arm %s does not state its contract (%q):\n%s", tt.arm, tt.contract, desc)
 			}
@@ -657,5 +657,103 @@ func TestCodeMainArmDoesNotRunTwice(t *testing.T) {
 		code: "def main():\n    return read(path=\"a.py\")"})
 	if !strings.Contains(got, "NEEDLE") {
 		t.Errorf("a program that leaves main uncalled must still be run:\n%s", got)
+	}
+}
+
+// --- the tools namespace --------------------------------------------------
+
+// Each namespace arm has to differ where it claims to: in what a program can
+// call, in what the description tells the model to write, and — for the only
+// arm — in what stops working. Both directions, since a check that only looks
+// for tools.read passing would pass for an arm that changed nothing.
+func TestCodeNamespaceArms(t *testing.T) {
+	files := map[string]string{"a.py": "x = 1  # NEEDLE\n"}
+
+	for _, tc := range []struct {
+		ns                CodeNamespace
+		nsCallWorks       bool
+		bareCallWorks     bool
+		descSaysNamespace bool
+	}{
+		{CodeNSFlat, false, true, false},
+		{CodeNSBoth, true, true, true},
+		{CodeNSOnly, true, false, true},
+		{CodeNSHint, false, true, false},
+	} {
+		t.Run(tc.ns.String(), func(t *testing.T) {
+			c, _ := observeEnv(t, files)
+			c.CodeNamespace = tc.ns
+
+			nsGot := c.runCode(context.Background(), codeCall{code: `tools.read(path="a.py")`})
+			if got := strings.Contains(nsGot, "NEEDLE"); got != tc.nsCallWorks {
+				t.Errorf("tools.read worked = %v, want %v:\n%s", got, tc.nsCallWorks, nsGot)
+			}
+			bareGot := c.runCode(context.Background(), codeCall{code: `read(path="a.py")`})
+			if got := strings.Contains(bareGot, "NEEDLE"); got != tc.bareCallWorks {
+				t.Errorf("bare read worked = %v, want %v:\n%s", got, tc.bareCallWorks, bareGot)
+			}
+
+			desc := codeTool(InspectorTools(), CodeResultLast, tc.ns).Description
+			if got := strings.Contains(desc, "tools.read"); got != tc.descSaysNamespace {
+				t.Errorf("description names tools.read = %v, want %v", got, tc.descSaysNamespace)
+			}
+		})
+	}
+}
+
+// print(tools) is the whole of the introspection available: Monty has no dir(),
+// vars(), globals() or __dict__, all probed against the vendored wasm. If a
+// future Monty grows dir(), this is where to reconsider the design rather than
+// keep a __str__ nobody needs.
+func TestCodeNamespaceListsItself(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.CodeNamespace = CodeNSBoth
+
+	got := c.runCode(context.Background(), codeCall{code: "print(tools)"})
+	for _, want := range []string{"read(path", "grep(pattern", "glob(pattern", "ls(path"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("print(tools) does not list %q:\n%s", want, got)
+		}
+	}
+	if dir := c.runCode(context.Background(), codeCall{code: "dir()"}); !strings.Contains(dir, "not defined") {
+		t.Errorf("Monty now has dir(); the namespace design should be revisited:\n%s", dir)
+	}
+}
+
+// A prelude shifts every line in a traceback, and an error naming the wrong
+// line is worse than one naming none. The offset is subtracted back out.
+func TestCodeNamespaceTracebackNumbersTheModelsLines(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.CodeNamespace = CodeNSBoth
+
+	// The model wrote two lines; the failure is on its second.
+	got := c.runCode(context.Background(), codeCall{code: "x = 1\nboom"})
+	if !strings.Contains(got, "line 2,") {
+		t.Errorf("the traceback must number the model's own lines:\n%s", got)
+	}
+	if strings.Contains(got, "line 10,") || strings.Contains(got, "line 9,") {
+		t.Errorf("the prelude's offset leaked into the traceback:\n%s", got)
+	}
+}
+
+// The hint arm answers a reach for Python's filesystem with the tool that
+// serves it — and stays quiet on every other failure, or it is noise on the
+// common case.
+func TestCodeHintArmAnswersTheReachOnly(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.CodeNamespace = CodeNSHint
+
+	for _, code := range []string{"import os\nos.walk(\".\")", "open('a.py')", "import subprocess"} {
+		if got := c.runCode(context.Background(), codeCall{code: code}); !strings.Contains(got, "no filesystem of its own") {
+			t.Errorf("a reach for the filesystem got no pointer:\n%s\n%s", code, got)
+		}
+	}
+	if got := c.runCode(context.Background(), codeCall{code: "1 / 0"}); strings.Contains(got, "no filesystem of its own") {
+		t.Errorf("an unrelated failure got the filesystem pointer:\n%s", got)
+	}
+	// And the flat arm says nothing, or the arms do not differ.
+	c.CodeNamespace = CodeNSFlat
+	if got := c.runCode(context.Background(), codeCall{code: "import os\nos.walk(\".\")"}); strings.Contains(got, "no filesystem of its own") {
+		t.Errorf("the flat arm must not carry the hint:\n%s", got)
 	}
 }

@@ -71,6 +71,10 @@ type Coder struct {
 	// main() the program defines. Under trial; see codetool.go.
 	CodeResult CodeResult
 
+	// CodeNamespace selects how a run_code program reaches the tools. Under
+	// trial; see codens.go.
+	CodeNamespace CodeNamespace
+
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked
 	// whether to keep going. Configurable; the default (25) is set by New.

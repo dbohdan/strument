@@ -68,16 +68,15 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool(callable []string, arm CodeResult) llm.ToolDef {
+func codeTool(callable []string, arm CodeResult, ns CodeNamespace) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
 		"results combined, or needs arithmetic, counting, sorting, or date " +
 		"math.\n\n" +
-		"The program can call the read-only tools directly — " +
-		"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)" +
+		codeCallStyleText(ns) +
 		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. Example:\n\n", maxBridgedCalls) +
-		codeExampleText(arm) +
+		codeExampleText(arm, ns) +
 		codeContractText(arm) +
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
@@ -98,7 +97,7 @@ func codeTool(callable []string, arm CodeResult) llm.ToolDef {
 	// dispatches on.
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
-			strings.Join(callable, ", "))
+			strings.Join(nsQualified(callable, ns), ", "))
 	}
 	b.WriteString(codeFuncDoc())
 
@@ -119,21 +118,58 @@ func codeTool(callable []string, arm CodeResult) llm.ToolDef {
 // codeExampleText is the worked example, in the shape the arm's contract calls
 // for. An example that contradicts the paragraph above it would be the loudest
 // thing in the description, and models copy the example.
-func codeExampleText(arm CodeResult) string {
+func codeExampleText(arm CodeResult, ns CodeNamespace) string {
+	g := nsQualify("grep", ns)
 	body := "caps = {}\n" +
 		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n"
+		"    caps[name] = " + g + "(pattern=name + \" =\", glob=\"**/*.go\")\n"
 	switch arm {
 	case CodeResultMain:
 		body = "def main():\n" +
 			"    caps = {}\n" +
 			"    for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-			"        caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
+			"        caps[name] = " + g + "(pattern=name + \" =\", glob=\"**/*.go\")\n" +
 			"    return caps\n"
 	default:
 		body += "caps\n"
 	}
 	return "```python\n" + body + "```\n\n"
+}
+
+// nsQualify writes a tool name the way the arm's programs call it.
+func nsQualify(tool string, ns CodeNamespace) string {
+	if ns == CodeNSBoth || ns == CodeNSOnly {
+		return "tools." + tool
+	}
+	return tool
+}
+
+func nsQualified(tools []string, ns CodeNamespace) []string {
+	out := make([]string, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, nsQualify(t, ns))
+	}
+	return out
+}
+
+// codeCallStyleText is the sentence the CodeNamespace arms differ in: how a
+// program reaches the tools. Kept apart from the rest of the description for the
+// same reason the result contract is — so the arms differ in one paragraph and
+// its example, rather than in two rewritten descriptions.
+func codeCallStyleText(ns CodeNamespace) string {
+	switch ns {
+	case CodeNSBoth:
+		return "The tools live in a tools namespace the program can call directly — " +
+			"tools.grep(pattern=\"TODO\", glob=\"**/*.go\"), tools.read(path=\"a.go\", limit=20). " +
+			"print(tools) lists them with their arguments. The bare names work too"
+	case CodeNSOnly:
+		return "The tools live in a tools namespace the program calls through — " +
+			"tools.grep(pattern=\"TODO\", glob=\"**/*.go\"), tools.read(path=\"a.go\", limit=20). " +
+			"print(tools) lists them with their arguments. The bare names are not defined"
+	default:
+		return "The program can call the read-only tools directly — " +
+			"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)"
+	}
 }
 
 // codeContractText is the one paragraph the CodeResult arms differ in: what the
@@ -214,6 +250,10 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	if c.CodeResult == CodeResultMain && !callsMain(cc.code) {
 		source += "\n\nmain()"
 	}
+	// The namespace arms build `tools` ahead of the model's code, which shifts
+	// every traceback line; the offset is subtracted back out below.
+	prelude := codePrelude(c.CodeNamespace, c.codeCallableTools())
+	source = prelude + source
 	result, err := runner.Execute(context.Background(), source, nil,
 		append(c.codeOptions(&log), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
 	summary := codeCalledText(codeLines(cc.code), log.names)
@@ -222,7 +262,7 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		// aborted mid-way is precisely where the summary carries information
 		// the value cannot.
 		c.Out.Toolf("%s", summary)
-		return codeErrorText(err)
+		return c.codeFailureText(err, preludeLines(prelude))
 	}
 	c.Out.Toolf("%s", summary)
 	return truncateResult(codeEchoText(&log) + codeResultText(result, printed.String(), &log))
@@ -424,7 +464,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	// this side does not recognize is answered by the tool itself, exactly as
 	// a direct call with a wrong field would be.
 	for _, n := range names {
-		funcs = append(funcs, monty.Func(n))
+		funcs = append(funcs, monty.Func(c.CodeNamespace.wireName(n)))
 	}
 	// Code functions ride the same registration: positional calls map onto
 	// their parameter names the same way, and an unregistered one raises
@@ -461,6 +501,10 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 
 	seen := map[string]bool{}
 	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
+		// Under the tools-only arm the functions are registered with a prefix
+		// the program never types; the prelude binds tools.read to it. Strip it
+		// before anything else looks at the name.
+		call.Name = c.CodeNamespace.toolName(call.Name)
 		// Fail closed. This runs behind the registration check already — a
 		// name outside `allowed` is not registered with Monty at all and
 		// raises NameError inside the program — but the check lives here too
@@ -654,6 +698,17 @@ func sameBridgedValue(result, last any) bool {
 // leading file framing is dropped because it is constant — every program is
 // "script.py" from Monty's point of view — and the exception itself is what
 // the model needs.
+// codeFailureText renders a failed program for the model: the exception, with
+// the prelude's lines subtracted from the traceback, plus — under the hint arm —
+// a pointer to the tool that serves what the program reached for.
+func (c *Coder) codeFailureText(err error, offset int) string {
+	msg := renumberTraceback(codeErrorText(err), offset)
+	if c.CodeNamespace == CodeNSHint && reachedForPython.MatchString(msg) {
+		msg += codeReachHint
+	}
+	return msg
+}
+
 func codeErrorText(err error) string {
 	msg := err.Error()
 	msg = strings.TrimPrefix(msg, "monty: ")

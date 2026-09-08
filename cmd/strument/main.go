@@ -62,8 +62,9 @@ type chatCmd struct {
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                            name:"dry-run"`
 	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                                         name:"no-shell"`
 	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, add-output, all. Repeatable; lists allowed." placeholder:"<name>"`
-	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"How much of the session /consult shows the advisor." name:"consult-scope"`
-	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"What a run_code program hands back (under trial)."   name:"code-result"`
+	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"How much of the session /consult shows the advisor."     name:"consult-scope"`
+	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"What a run_code program hands back (under trial)."       name:"code-result"`
+	CodeNamespace string   `default:"flat"                                                                                                                      enum:"flat,both,only,hint"                                    help:"How a run_code program reaches the tools (under trial)." name:"code-namespace"`
 	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
@@ -177,6 +178,7 @@ func (c *chatCmd) Run() error {
 	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
 	// Kong's enum has already refused anything else.
 	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
+	cdr.CodeNamespace, _ = coder.ParseCodeNamespace(c.CodeNamespace)
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow
 	// The project's named checks, which the check tool runs without asking:
