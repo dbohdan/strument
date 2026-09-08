@@ -433,3 +433,39 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 		t.Errorf("a program that returned only its last call must be told so:\n%s", last)
 	}
 }
+
+// The description's module list is a claim about the vendored monty.wasm, and
+// it has been wrong: it named math/re/datetime/json only, while itertools and
+// collections work and os/sys/pathlib import but reach nothing — which is what
+// invites a model to probe os for a filesystem it will not find. Probed here
+// against the interpreter itself rather than asserted, so the list cannot drift
+// from what a program can actually import.
+func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	desc := codeTool().Description
+
+	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
+		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
+			t.Errorf("the description promises %q, which does not import: %s", m, got)
+		}
+		if !strings.Contains(desc, m) {
+			t.Errorf("module %q works and the description does not name it", m)
+		}
+	}
+	// The other direction: a module the description tells the model not to
+	// reach for must really be missing, or the advice is a lie that costs a
+	// retry. functools is representative of the batch that is absent.
+	if got := c.runCode(context.Background(), codeCall{code: "import functools\n1"}); !strings.Contains(got, "ModuleNotFoundError") {
+		t.Errorf("functools now imports; the description's list needs re-probing: %s", got)
+	}
+	// os/sys/pathlib import and reach nothing, and the description says exactly
+	// that rather than claiming they are unavailable.
+	if got := c.runCode(context.Background(), codeCall{code: "import os\n1"}); got != "1" {
+		t.Errorf("os no longer imports; the description's wording needs revisiting: %s", got)
+	}
+	for _, want := range []string{"os, sys and pathlib import but reach no filesystem", "bash tool"} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("the description must say %q:\n%s", want, desc)
+		}
+	}
+}

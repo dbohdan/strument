@@ -27,6 +27,14 @@ import (
 // empirical — probed against the vendored monty.wasm, not read off upstream's
 // docs — and each wall a model hits anyway returns Monty's own error text,
 // which names the construct.
+//
+// "Empirical" is a standard the list failed once. It named math/re/datetime/json
+// and said "other imports" were unavailable, while itertools and collections
+// worked unadvertised and os, sys and pathlib imported fine before failing at
+// the first attribute — which is exactly the green light that sent a model
+// probing os for a filesystem. TestCodeDescriptionMatchesTheModulesThatWork now
+// runs the imports it promises, in both directions, so the prose cannot drift
+// from the interpreter again without a red test.
 
 // codeLimits bounds a program's resources. Explicit, never zero: the plan's
 // point is that a runaway program terminates on a limit rather than hanging
@@ -72,11 +80,16 @@ func codeTool() llm.ToolDef {
 		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
 		"caps\n" +
 		"```\n\n" +
+		"Only the program's last evaluated value comes back to you, so end it " +
+		"with what you want to see — two calls on two lines return the second " +
+		"one's result and drop the first. print() shows intermediate values.\n\n" +
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
-		"math/re/datetime/json all work; the last value evaluated is returned, " +
-		"and print() shows intermediate values. Not available: with, match, " +
-		"del, eval/exec, open, filesystem or network access, other imports. " +
+		"math, re, datetime, json, itertools and collections all work. Not " +
+		"available: with, match, del, eval/exec, open, network access, and other " +
+		"imports — os, sys and pathlib import but reach no filesystem, so use " +
+		"glob(pattern=\"**/*.py\") to walk the tree and read() to open a file; " +
+		"the bash tool, not this one, runs commands. " +
 		"A missing construct raises an error naming it — simplify and rerun; a " +
 		"failed program costs one cheap retry.")
 
