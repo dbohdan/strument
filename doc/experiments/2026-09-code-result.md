@@ -144,6 +144,14 @@ out twice, which is exactly the shape that gets written up as a fact about the
 design. Fixed, and the arm re-run: it still costs the most, but now it is the
 design paying for it rather than a bug.
 
+## A limitation of this trial's own instrument
+
+Reasoning effort was set per model in the config rather than as a rule, so GLM
+ran at `"low"` and MiMo and DeepSeek ran at their defaults — and defaults are
+drifting toward maximum. The input-token and step columns above survive that,
+since reasoning lands in output; anything read off output tokens or latency does
+not. `experimenting.md` §5 now carries the rule this should have followed.
+
 ## Instrument faults worth carrying forward
 
 - The scorer matched any line *containing* `ANSWER:`, so a model quoting the

@@ -118,6 +118,37 @@ to measure before you count anything. A model that spends the budget thinking
 is not a null result, it is a broken instrument, and the two are indistinguishable
 in a summary table.
 
+### Set `reasoning="low"` on every model in a trial, and check it took
+
+That GLM-5.3 finding is not about GLM-5.3. **Pin reasoning low on every model in
+every arm** unless the reasoning is itself the thing being measured, and confirm
+each one obeyed rather than assuming the `model()` field was honored end to end.
+
+The default is the trap. GLM-5.3-Flash and Qwen3.8 both default to maximum
+effort, and benchmark pressure makes that more common over time, not less: a
+model tuned to score well on hard evaluations is tuned to think first, and
+whoever ships it has no reason to make brevity the default. Expect any model
+added to a panel from now on to reason at maximum until told otherwise.
+
+What it costs when you forget:
+
+- **Output that is not there.** Two models asked to review a scorer at a
+  20-token cap returned `content: null` with the whole budget spent in
+  `reasoning`, which reads through an SDK as an API failure and through a
+  scorer as "no answer".
+- **Cost metrics that are not comparable.** The 2026-09 code-result trial ran
+  GLM at `"low"` and MiMo and DeepSeek at their defaults, because the config
+  set it per model rather than as a rule. Its input-token and step columns
+  survive that; anything read off output tokens or latency does not, and the
+  write-up says so.
+- **Wall-clock, which caps the sample.** Reasoning at maximum is the difference
+  between a batch that finishes while you watch and one that finishes tomorrow,
+  and the sample size ends up set by patience.
+
+**Do:** put the reasoning setting in the shared config, not per model, so
+forgetting one is impossible; then read one transcript per model and confirm
+there is an answer under the thinking.
+
 ## 6. Choose a target the system cannot leak
 
 Two probes were scored. Recall of the *value* (`45`) came out 11/12 vs 9/12 —
@@ -752,6 +783,11 @@ did the runner actually finish or only stop reporting, and have I read three
 transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
+
+One from the 2026-09-08 code-result trial, cheap and easy to forget: *was
+reasoning pinned low on every model, and did each one obey?* (§5 — defaults are
+moving toward maximum, and a model spending its budget thinking looks exactly
+like an API failure.)
 
 Two more, from the 2026-09-01 shell-parallelism trial: *has the resume path
 been run on purpose, with a stub, before the batch?* (§20 — it only ever runs
