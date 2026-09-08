@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -210,7 +211,7 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// main raises NameError, which is the whole point: the failure is loud
 	// rather than a quiet None.
 	source := cc.code
-	if c.CodeResult == CodeResultMain {
+	if c.CodeResult == CodeResultMain && !callsMain(cc.code) {
 		source += "\n\nmain()"
 	}
 	result, err := runner.Execute(context.Background(), source, nil,
@@ -244,6 +245,21 @@ func codeArgsText(argsJSON string) string {
 		parts = append(parts, k+"="+string(v))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// mainCallRE matches a top-level call to main() on its own line.
+var mainCallRE = regexp.MustCompile(`(?m)^main\(\s*\)\s*$`)
+
+// callsMain reports whether the program already calls main() itself, so the
+// harness does not append a second call.
+//
+// Measured, not anticipated: 38 of 89 programs under this arm ended in main(),
+// having been told the program is run and then main() is called. Appending
+// unconditionally ran the whole program twice — every read repeated, every call
+// counted twice against the bridge cap, and the arm's token cost roughly
+// doubled, which would have been read as a fact about the design.
+func callsMain(code string) bool {
+	return mainCallRE.MatchString(code)
 }
 
 // bridgeLog is what the bridge records about one program's calls: which tools

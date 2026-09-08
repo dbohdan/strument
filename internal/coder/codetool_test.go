@@ -634,3 +634,28 @@ func TestParseCodeResultRoundTrips(t *testing.T) {
 		t.Error("ParseCodeResult accepted a name that is not an arm")
 	}
 }
+
+// The main arm appends main() only when the program has not called it already.
+// Told "the program is run and then main() is called", 38 of 89 programs in the
+// trial ended in main() anyway — and appending a second call ran everything
+// twice, which showed up as that arm costing more.
+func TestCodeMainArmDoesNotRunTwice(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.py": "x = 1  # NEEDLE\n"})
+	c.CodeResult = CodeResultMain
+	out := &captureOut{}
+	c.Out = out
+
+	c.runCode(context.Background(), codeCall{
+		code: "def main():\n    return read(path=\"a.py\")\n\nmain()"})
+	if n := strings.Count(strings.Join(out.lines, "\n"), "Read a.py"); n != 1 {
+		t.Errorf("a program that calls main() itself read the file %d times, want 1", n)
+	}
+
+	// And a program that does not call main still gets the appended call.
+	out.lines = nil
+	got := c.runCode(context.Background(), codeCall{
+		code: "def main():\n    return read(path=\"a.py\")"})
+	if !strings.Contains(got, "NEEDLE") {
+		t.Errorf("a program that leaves main uncalled must still be run:\n%s", got)
+	}
+}
