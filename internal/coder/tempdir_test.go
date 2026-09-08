@@ -10,7 +10,7 @@ import (
 // The edit tools may touch the platform's standard temporary directory, by
 // absolute path. The sandbox already grants model-run commands that ground
 // (sandbox.tempDirs); these tests pin the edit side meeting the same
-// boundary. Found from the 2026-10-code-only trial, where models preparing
+// boundary. Found from the 2026-09-code-only trial, where models preparing
 // scratch fixtures met one boundary through bash and the opposite one
 // through edit.
 

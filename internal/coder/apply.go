@@ -84,7 +84,7 @@ func (c *Coder) unsafePath(rel string) string {
 	// by absolute path only. The sandbox already grants temp writes to every
 	// model-run command, so the model that prepares a scratch file for its
 	// build met one boundary through bash and was refused the same ground
-	// through edit — the trial that found it (2026-10-code-only) had models
+	// through edit — the trial that found it (2026-09-code-only) had models
 	// wanting scripts and fixtures outside the tree they were exploring. The
 	// grant matches the sandbox's own tempDirs rule rather than inventing a
 	// second list.

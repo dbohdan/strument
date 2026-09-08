@@ -467,7 +467,7 @@ Ten tools, in three natures:
   standard temporary directory — the same grant `sandbox.tempDirs` gives
   model-run commands, so scratch files a model prepares for its build meet
   the same boundary through both routes (found from
-  [`2026-10-code-only.md`](experiments/2026-10-code-only/README.md), whose models
+  [`2026-09-code-only.md`](experiments/2026-09-code-only/README.md), whose models
   wanted exactly this). Temp writes are absolute-path only: a relative
   traversal that lands in temp is still refused, and the snapshot keeps them
   for /undo while the turn commit skips them — `git add` on an out-of-repo
