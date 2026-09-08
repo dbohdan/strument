@@ -127,9 +127,13 @@ func (r *REPL) completePromptFiles() []string {
 func (r *REPL) completePaths(line string) []string {
 	raw := lastCommandWord(line)
 	lookup := unescapeWord(raw)
+	trailingSlash := strings.HasSuffix(lookup, "/") || strings.HasSuffix(lookup, string(filepath.Separator))
 	absolute := filepath.IsAbs(lookup)
 	if !absolute {
 		lookup = filepath.Join(r.coder.Root, lookup)
+		if trailingSlash {
+			lookup += string(filepath.Separator)
+		}
 	}
 	dir, base := filepath.Split(lookup)
 	if dir == "" {
@@ -145,8 +149,9 @@ func (r *REPL) completePaths(line string) []string {
 		if strings.HasPrefix(name, ".") && !strings.HasPrefix(base, ".") {
 			continue
 		}
+		isDir := e.IsDir()
 		full := dir + name
-		if e.IsDir() {
+		if isDir {
 			full += "/"
 		}
 		// Re-express the entry in the terms the word was typed in — absolute
@@ -163,7 +168,11 @@ func (r *REPL) completePaths(line string) []string {
 			// Use the typed slash style: the user typed "/"-separated
 			// segments, and on Windows filepath.Rel answers with the OS
 			// separator, which would never prefix-match the typed word.
-			cand = escapePathWord(filepath.ToSlash(rel))
+			cand = filepath.ToSlash(rel)
+			if isDir {
+				cand += "/"
+			}
+			cand = escapePathWord(cand)
 			if strings.ContainsRune(cand, ' ') && !backslashEscapes {
 				// The space cannot be quoted here (no backslash escapes), so
 				// the inserted text would never re-parse to this path: offer
