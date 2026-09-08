@@ -784,6 +784,13 @@ transcripts?*
 Only then look at the p-value — and remember that a broken instrument's
 favourite output is `p = 1.0`.
 
+One from the 2026-09-08 namespace trial, before designing any arm: *when in a
+session does the failure happen?* A wrong reach that is 46% of first programs and
+10% of second ones is a habit executed before anything was read, and no change to
+a tool description can touch it — which four arms established the expensive way
+after the position table would have said it for free. Bin the phenomenon by
+position, or by step, before choosing the lever.
+
 One from the 2026-09-08 code-result trial, cheap and easy to forget: *was
 reasoning pinned low on every model, and did each one obey?* (§5 — defaults are
 moving toward maximum, and a model spending its budget thinking looks exactly
