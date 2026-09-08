@@ -12,6 +12,46 @@ prompts** sections of `CLAUDE.md`, which cover cost strata and arm
 randomization. This is about everything that goes wrong *after* you have a
 sound design.
 
+If you are preparing a run, start with the pre-run checklist and §12. The rest
+is the evidence and failure patterns behind those checks; use the section
+headings to investigate a surprising result or a broken run.
+
+## The pre-run checklist
+
+Before spending on a run, ask these questions in order:
+
+- **Did the mechanism fire?** Instrument it and confirm it in the pilot (§5).
+- **Did the model use the thing being tested?** A feature that can be declined
+  was offered, not applied (§18).
+- **Could the fixture produce the failure being measured?** Put the relevant
+  situation in the task, including the counter-arm (§18).
+- **Can the scorer distinguish no answer, wrong answer, provider failure, and
+  model output in the wrong format?** Save raw output and test the parser in
+  both directions (§§1–4, §15, §17).
+- **Do the arms differ in exactly the intended way?** Build the baseline from
+  `HEAD`, compare the artifacts, and refuse identical arms (§7).
+- **Does anything pass in the arm built to break it?** Apply a targeted
+  sabotage and assert that the sabotage itself applied (§17).
+- **Did the runner finish, or did it only stop reporting?** Wait on the specific
+  process and record worker failures (§19).
+- **Has the resume path been exercised deliberately?** Run it with a stub before
+  the batch needs it (§20).
+- **Did you read three transcripts, including an anomalous one?** A transcript
+  can settle what an aggregate cannot (§8).
+
+## Failure types and where to look
+
+| symptom or failure type | start with |
+| --- | --- |
+| Scorer or output-parsing failure | §§1–4, 15, 17 |
+| Model produces no usable answer, or spends the budget thinking | §5 |
+| Provider failure versus model output in the wrong format | §3, then inspect the raw output (§4) |
+| Answer can be recovered without the mechanism | §6 |
+| Arms contain an unintended difference or are identical | §§7, 16, 18 |
+| Treatment was not reached, or the fixture never contained the phenomenon | §18 |
+| Runner stopped reporting, timed out, or cannot resume | §§19–20 |
+| A bug report names the wrong subsystem | §21 |
+
 ---
 
 ## 1. Your instrument is made of the thing you are testing
@@ -70,6 +110,12 @@ interpreted. The rescore split them, and *that* is what exposed §1: a sudden
 This generalizes an older lesson: a provider returning `Empty response received
 from LLM` and a model emitting a tool call as inline text look identical in a
 summary and mean opposite things.
+
+**Tell:** do not classify either case from the summary row. Inspect the raw
+response and process status. A provider failure is recorded in the request or
+stream outcome, often with no usable model content; inline tool-call markup is
+model-produced content that bypassed the tool-call protocol. Keep them as
+separate categories in the scorer (§4).
 
 ## 4. Save the raw output. Rescore instead of re-running
 
@@ -247,6 +293,8 @@ its own first. Then the trial has one job and the revert has one target.
   results file to reach N lines — which is what this bullet used to advise —
   cannot tell a crash from a slow run, and §19 is the hour that cost. Capture
   the pid; a `pgrep -f` pattern will match the next run of the same script.
+  If a log watcher is unavoidable, match every terminal state as a secondary
+  signal; it must not replace waiting on the specific process.
 - **Type-check the runner before launching it** (§19). The error paths are the
   ones a one-off script never exercises until they decide whether the run
   survives.
@@ -434,7 +482,7 @@ assertion runs, while breaking tells you it discriminates.
 
 ---
 
-### Three more shapes, from building a tool that counts unchecked output
+### 17a. Three more shapes: checks that falsely report success
 
 A day spent writing a transcript auditor produced three shapes §17 does not
 cover. All three are worse than the ones above, because in each case the check
