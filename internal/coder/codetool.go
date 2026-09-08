@@ -65,7 +65,7 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool() llm.ToolDef {
+func codeTool(callable []string) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
@@ -93,15 +93,16 @@ func codeTool() llm.ToolDef {
 		"A missing construct raises an error naming it — simplify and rerun; a " +
 		"failed program costs one cheap retry.")
 
-	// The bridged names are enumerated from InspectorTools() itself, so the
-	// description and the dispatch cannot drift — the exact drift this
-	// repository has had three times elsewhere. The example above names two;
-	// the authoritative list rides behind it. The code functions (codefuncs.go)
-	// are run_code-only and ride in through codeFuncDoc, from the same
-	// registry the bridge dispatches on.
-	if names := InspectorTools(); len(names) > 0 {
+	// The bridged names come from the caller, which builds one list for the
+	// description, the Monty registration, and the bridge's allow check — so
+	// the three cannot drift, the exact drift this repository has had three
+	// times elsewhere. The example above names two; the authoritative list
+	// rides behind it. The code functions (codefuncs.go) are run_code-only and
+	// ride in through codeFuncDoc, from the same registry the bridge
+	// dispatches on.
+	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
-			strings.Join(names, ", "))
+			strings.Join(callable, ", "))
 	}
 	b.WriteString(codeFuncDoc())
 
@@ -213,6 +214,34 @@ func codeCalledText(n int, called []string) string {
 	return fmt.Sprintf("Ran %s of code calling %s.", size, strings.Join(called, ", "))
 }
 
+// codeCallableTools is the one list behind the run_code description, the Monty
+// registration, and the bridge's allow check.
+//
+// It is InspectorTools() minus symbol when there is no repo map, because that
+// is exactly the condition under which toolDefs offers the symbol tool: symbol
+// reads the tree-sitter layer the repo map is built from, and without it every
+// call answers "The language parser is not available".
+//
+// Naming it unconditionally was the mirror image of a bug this repository has
+// already reasoned about once. internal/prompts leaves symbol out of the
+// run_code bullet on purpose — "prose promising a conditional tool is the bug
+// this comment is about" — while the tool description, which is prose the model
+// reads just as surely, promised it in every session. The prompt was right and
+// the schema was wrong, which is the opposite of how that drift usually runs.
+func (c *Coder) codeCallableTools() []string {
+	names := InspectorTools()
+	if c.RepoMap != nil {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n != toolSymbol {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // codeOptions assembles the Execute options: the resource limits, plus the
 // read-only bridge. log collects what the program actually did, for the outcome
 // line and the result's note.
@@ -220,7 +249,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	opts := make([]monty.ExecuteOption, 0, 2)
 	opts = append(opts, monty.WithLimits(codeLimits))
 
-	names := InspectorTools()
+	names := c.codeCallableTools()
 	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs))
 	// Each tool takes its arguments as keywords; the params list is what lets
 	// Monty map a positional call's arguments onto those names. The schemas

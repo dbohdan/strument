@@ -144,8 +144,15 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // per the symbol fix, the description that moves uptake is the one that maps
 // a felt need to a tool, and the arithmetic clause is explicit because models
 // do not recognize their own mental arithmetic as costly.
-const CodeToolsBullet = "- run_code runs a short Python program, which can itself call read, grep, glob, " +
-	"and ls — the results come back to the program, not to you, until it returns. " +
+//
+// The tool list is a %s slot rather than four names written out, because symbol
+// is offered only where a repo map is. Naming it unconditionally would promise a
+// tool half the sessions do not have — the hazard this file's Ask comment calls
+// out — and leaving it out unconditionally hid a tool a program really can call
+// wherever grammars exist. Coder.codeCallableTools fills it from the same list
+// the schema and the bridge use.
+const CodeToolsBullet = "- run_code runs a short Python program, which can itself call %s" +
+	" — the results come back to the program, not to you, until it returns. " +
 	"It changes nothing and needs no permission. Reach for it when one answer " +
 	"needs several lookups combined — three greps you already know you need are " +
 	"one program, and each tool call you make separately costs the user a full " +
@@ -163,9 +170,15 @@ const CodeToolsBullet = "- run_code runs a short Python program, which can itsel
 // the prompt uses, and carries the two facts the mode leans on: results come
 // back to the program, and the program's final value is what the model
 // receives.
+//
+// The kinds it enumerates stop at listing, while the %s slot beside them may or
+// may not end in symbol. The asymmetry is deliberate and matches the Ask
+// prompt's: under-promising costs a model nothing, and naming symbol lookup as
+// something this session does would be false wherever there is no repo map —
+// which is exactly where the slot leaves symbol out.
 const ObservationViaRunCodeParagraph = "- run_code runs a short Python program. In this session all file observation — " +
-	"reading, searching, listing, and symbol lookup — goes through it: the " +
-	"program calls read, grep, glob, ls, and symbol itself, and the results " +
+	"reading, searching, and listing — goes through it: the " +
+	"program calls %s itself, and the results " +
 	"come back to the program, not to you, until it returns. Write one program " +
 	"for the several lookups you need, and return the combined answer as the " +
 	"program's final value. It changes nothing and needs no permission.\n"

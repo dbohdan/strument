@@ -214,12 +214,27 @@ func (c *Coder) platformText() string {
 // returns to the model.
 func (c *Coder) codeToolsText() string {
 	if c.ObservationViaRunCode {
-		return prompts.ObservationViaRunCodeParagraph
+		return fmt.Sprintf(prompts.ObservationViaRunCodeParagraph, andList(c.codeCallableTools()))
 	}
 	if !c.OfferCode {
 		return ""
 	}
-	return prompts.CodeToolsBullet
+	return fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools()))
+}
+
+// andList writes names as English prose: "read, grep, glob, and ls". The prompt
+// slots that take it are sentences, and a bare comma-joined list reads as a
+// fragment dropped into one.
+func andList(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
 }
 
 // fmtSystemPrompt substitutes the template slots.

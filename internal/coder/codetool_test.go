@@ -2,9 +2,12 @@ package coder
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"dbohdan.com/strument/internal/repomap"
 )
 
 // The run_code tool's tests. Monty's own behavior is pinned here at the level the
@@ -140,7 +143,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // the subset. A line that stops describing a real wall is a lie to the model;
 // each substring here corresponds to a probe in the tests below.
 func TestCodeDescriptionNamesTheLimits(t *testing.T) {
-	desc := codeTool().Description
+	desc := codeTool(InspectorTools()).Description
 	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -442,7 +445,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // from what a program can actually import.
 func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	desc := codeTool().Description
+	desc := codeTool(InspectorTools()).Description
 
 	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
 		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
@@ -467,5 +470,61 @@ func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must say %q:\n%s", want, desc)
 		}
+	}
+}
+
+// symbol is offered exactly where a repo map is, and everything that tells the
+// model about the run_code bridge must follow that condition — the schema's
+// callable list, the Monty registration behind it, and the prompt bullet.
+//
+// The asymmetry this fixes ran the unusual way round. internal/prompts leaves
+// symbol out of the run_code bullet deliberately, on the rule that prose must
+// not promise a conditional tool; the tool *description*, which is prose the
+// model reads just as surely, named it in every session including the ones
+// where every call would answer "The language parser is not available". So the
+// prompt was right and the schema was wrong.
+//
+// Both directions are asserted, because a check that only looks for symbol's
+// presence passes for a list that always includes it — which is the bug.
+func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
+	withMap, _ := observeEnv(t, map[string]string{"a.go": "package a\n\nfunc Target() {}\n"})
+	withMap.RepoMap = repomap.New(withMap.Root)
+	withMap.OfferCode = true
+	without, _ := observeEnv(t, map[string]string{"a.go": "package a\n\nfunc Target() {}\n"})
+	without.OfferCode = true
+
+	if got := withMap.codeCallableTools(); !slices.Contains(got, toolSymbol) {
+		t.Errorf("with a repo map the callable list must offer symbol, got %v", got)
+	}
+	if got := without.codeCallableTools(); slices.Contains(got, toolSymbol) {
+		t.Errorf("with no repo map the callable list must not offer symbol, got %v", got)
+	}
+
+	// The description the model reads follows, in both directions.
+	if desc := codeTool(withMap.codeCallableTools()).Description; !strings.Contains(desc, "ls, symbol") {
+		t.Errorf("the description must name symbol where it works:\n%s", desc)
+	}
+	if desc := codeTool(without.codeCallableTools()).Description; strings.Contains(desc, "symbol") {
+		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
+	}
+
+	// And the prompt bullet, which used to name four tools whatever the session
+	// had.
+	if got := withMap.codeToolsText(); !strings.Contains(got, "glob, ls, and symbol") {
+		t.Errorf("the bullet must name symbol where it works:\n%s", got)
+	}
+	if got := without.codeToolsText(); !strings.Contains(got, "glob, and ls") || strings.Contains(got, "symbol") {
+		t.Errorf("the bullet must stop at ls where symbol does not work:\n%s", got)
+	}
+
+	// Registration follows too: a program calling symbol without a repo map
+	// meets a NameError, the fail-closed path, rather than a tool that answers
+	// only to say it cannot.
+	got := without.runCode(context.Background(), codeCall{code: `symbol(name="Target")`})
+	if !strings.Contains(got, "not defined") {
+		t.Errorf("symbol must be unregistered without a repo map, got:\n%s", got)
+	}
+	if got := withMap.runCode(context.Background(), codeCall{code: `symbol(name="Target")`}); strings.Contains(got, "not defined") {
+		t.Errorf("symbol must be registered with a repo map, got:\n%s", got)
 	}
 }
