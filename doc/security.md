@@ -1,322 +1,182 @@
 # Security
 
-This document says what Strument's sandbox protects, what it does not, and why
-the line falls where it does. Read the second section even if you skip the
-rest: the most common mistake with a sandbox is believing it bought something
-it did not.
+This document describes what Strument’s sandbox protects, what it does not, and why. Start with [Integrity, not confidentiality](#integrity-not-confidentiality): the sandbox restricts filesystem writes, but it does not restrict reads or network access.
 
 
 ## The threat model
 
-Strument is a pair-programming tool with a human in the loop. Every turn ends
-in front of you, every shell command is confirmed, and every edit is a diff you
-can see and `/undo`. The sandbox is built for the failures that survive that
-arrangement:
+Strument is a pair-programming tool with a human in the loop. Shell commands requested by the model normally require confirmation, except for configured checks and commands covered by an existing permission grant. File-tool edits are shown as diffs and can be undone. The sandbox is intended to limit damage when those controls are not enough:
 
-- **Mistakes.** A model asked to clean a build directory writes `rm -rf $DIR/`
-  with `DIR` unset. You approved the command; it did not do what either of you
-  read it as doing.
-- **Prompt injection.** A README, an issue, a scraped page, or a dependency's
-  test output tells the model to do something you did not ask for. The
-  instruction arrives inside content you had every reason to let it read.
-- **The yes-reflex.** Confirmation prompts are a real gate exactly once. By the
-  fiftieth one they are a keystroke, and the prompt whose "no" costs a round
-  trip is the one that trains the reflex hardest. Strument's own comment on
-  `allowedToEdit` has made this argument against itself for a while.
+- **Mistakes.** A model asked to clean a build directory writes `rm -rf $DIR/` with `DIR` unset. You approved the command, but it did not do what you expected.
+- **Prompt injection.** A README, an issue, a scraped page, or a dependency's test output tells the model to do something you did not ask for. These instructions arrive in material the model needs to read for the task.
+- **The yes-reflex.** Repeated confirmation prompts can become automatic keystrokes rather than decisions. If refusing a command means another exchange with the model, accepting it becomes the easier habit.
 
-It is **not** built for a misaligned agent working patiently over hundreds of
-turns to escape. That adversary reads the policy, notices reads are open,
-notices `/run` exists, and works from there. Defending against it would mean a
-different tool: no open reads, no shared network, an approval surface that
-cannot be worn down. Strument would be worse at its job and still not be a
-jail.
+It is **not** intended to contain an agent deliberately attempting to escape the sandbox over many turns. Such an agent could use unrestricted reads to discover resources outside the filesystem write policy, including Unix sockets under `/run`. Defending against it would require a different design: restricted reads, restricted network access, and an approval process that cannot be worn down. Those restrictions would require compatibility trade-offs and would still need their own threat model.
 
-Saying which adversary a control is for is not a disclaimer. It is what makes
-the control checkable — you can ask whether a change helps against mistakes and
-injection, and get an answer.
+This threat model gives maintainers a basis for evaluating changes: does a proposed control reduce damage from mistakes or prompt injection during supervised use?
 
 
 ## Integrity, not confidentiality
 
 The sandbox protects **integrity, not confidentiality**.
 
-Writes are confined to a known set of paths. Reads are not confined at all.
-With the sandbox on, a command the model runs cannot modify your home
-directory, your dotfiles, your other repositories, your SSH keys, or anything
-in `/etc` — and it can read every one of them.
+Filesystem writes are confined to the paths allowed by the sandbox policy. Reads are not. Files outside the writable set—including, in a typical configuration, your dotfiles, other repositories, SSH keys, and files under `/etc`—remain protected from direct filesystem writes, but commands can still read them wherever your normal permissions allow.
 
-That is the whole guarantee, and both halves are deliberate.
+This distinction is deliberate. Confining writes limits filesystem damage from an approved command to the paths in the policy. A bad approval can still have effects outside the file tools’ undo coverage, including changes to writable caches, files under `/tmp`, or remote systems reached over the network.
 
-Confining writes is what makes the review loop safe to lean on. A bad approval
-costs you a `git diff` and an `/undo`, not an afternoon of finding out what
-else changed. That is the thing being bought: pressing Enter without much
-worry.
+Reads are unrestricted to preserve compatibility with ordinary development tools. Compilers read standard libraries, linters read configuration outside the project, and tests may use external fixtures. A restrictive read policy would need exceptions for these workflows. Under the current policy, any secret readable by a command is available to that command. Strument itself also holds credentials and connects to the model provider. Model-run commands normally receive only an allowlisted set of environment variables, but they can still send readable data over the network. The user’s `/run` command inherits the full environment.
 
-Confining reads is not attempted because it cannot be done here without
-breaking the tool. A compiler reads the standard library, a linter reads its
-own config, a test reads a fixture three directories up; a read policy tight
-enough to matter would deny one of those every session, and a read policy loose
-enough to work would deny nothing an attacker wants. And the process holds an
-API key and an open connection to a model provider, so a command that can run
-at all can exfiltrate — no filesystem rule changes that.
-
-**If a secret is readable by you, treat it as readable by the model.** If that
-is not acceptable for some file, the sandbox is not the control you need;
-filesystem permissions, a separate account, or a container is.
+**If a secret is readable by you, treat it as readable by the model.** If that is not acceptable for some file, the sandbox is not the control you need; use an execution environment that cannot read the file, such as a separate account or a container without access to it.
 
 
 ## What is confined
 
-Strument applies a [Landlock](https://landlock.io/) ruleset to **its own
-process**, once, at startup, before any model interaction. Landlock is
-inherited across `fork`/`exec` and cannot be undone, so everything the session
-later spawns is confined by the same policy — the `bash` tool, `check`
-commands, the `scraper` command, and every grandchild of those.
+Strument applies a [Landlock](https://landlock.io/) ruleset to **its own process** at startup, before any model interaction. Landlock is inherited across `fork`/`exec` and cannot be undone, so everything the session later spawns is confined by the same policy—the `bash` tool, `check` commands, the `scraper` command, and all their descendant processes.
 
-The policy is two lines wide:
+The policy has two main rules:
 
-- **Read and execute everywhere.** One rule covering `/`. Landlock's read
-  right on a directory permits executing files in it, so `/usr/bin`,
-  `~/.local/bin`, `~/go/bin`, `~/.cargo/bin` and everything else on your `PATH`
-  works with nothing enumerated and nothing to keep current.
-- **Write only under a derived list of paths** — the project, the session's
-  state directory, a temporary directory, this machine's toolchain caches, and
-  whatever `sandbox_write` adds.
+- **Read and execute everywhere.** The `RODirs("/")` rule used here grants read and execute access under `/`. That is why `/usr/bin`, `~/.local/bin`, `~/go/bin`, `~/.cargo/bin`, and other executables on your `PATH` remain usable, subject to normal filesystem permissions, without enumerating individual files or keeping the list current.
+- **Write only under a derived list of paths**—the project, the session's state directory, a temporary directory, the detected toolchain cache directories, and whatever `sandbox_write` adds.
 
 `/sandbox` in the REPL prints the effective list for the current session.
 [`doc/config.md`](config.md#language-support) documents where the cache paths
 come from, one ecosystem at a time.
 
-Three consequences of confining the process rather than each command, all of
-them accepted rather than hidden:
+The process-wide policy has three consequences:
 
-- **`/run` is confined too.** Landlock is monotonic — there is no call that
-  removes a ruleset — so a command you typed yourself runs under the same
-  policy as one the model caused. This is the clearest cost of the design.
-  `/run` keeps its other privileges (it inherits your full environment, and it
-  is exempt from `shell_timeout`), but it cannot write outside the list.
+- **`/run` is confined too.** Landlock is monotonic—there is no call that removes
+  a ruleset—so a command you typed yourself runs under the same filesystem
+  policy as one the model caused. This also limits commands you type yourself.
+  `/run` keeps its other privileges: it inherits your full environment and is
+  exempt from `shell_timeout`, but it cannot write outside the list.
 - **The network is not restricted.** Landlock can restrict TCP by port, but the
   harness itself needs to reach the model provider from inside the same
-  process, so a port policy would have to admit 443 — which is the port
-  anything would use anyway.
-- **Nothing enforces limits on CPU, memory, or processes.** A command that
-  spins or forks is bounded by `shell_timeout`, not by the sandbox.
+  process. A port policy would have to admit 443, which is also the port a
+  model-caused command would normally use.
+- **The sandbox imposes no CPU, memory, or process limits.** `shell_timeout`
+  limits how long model-run commands may run; it does not limit their resource
+  consumption while they run.
 
 
-## Deliberate holes
+## Exceptions and remaining risks
 
-Three places where the policy is looser than it could be. Each is a choice with
-a reason, and a reason is something you can disagree with. The first of them
-was also hiding a bug, which is the usual way: a documented hole is a place
-nobody looks twice.
+The writable paths and execution policies leave several risks. The sections below explain why these exceptions exist and what they permit.
 
-### `.git` is writable to the sandbox, and refused by the tools
+### The sandbox permits writes to `.git`; file tools refuse access
 
-Codex CLI grants its writable root and then makes `.git/` read-only inside it.
-Strument cannot: it commits your work at the end of a turn, and `/undo` reaches
-through git.
+Strument needs write access to `.git` to commit changes and implement `/undo`. Because the sandbox applies to Strument itself and all its subprocesses, commands it launches have the same access.
 
-So `.git/` stays writable *to the sandbox*. Landlock's rules are purely
-additive — a nested read-only rule inside a writable root grants reading and
-revokes nothing, which we verified on a real kernel rather than assumed — so
-there is no way to carve the hooks directory back out. It would need a
-per-command sandbox, which is the one place this design is weaker than that
-one.
+Landlock rules are additive: a read-only rule for a directory inside a writable root does not revoke write access. This behavior was verified on a real kernel. Protecting `.git/hooks` from subprocesses while retaining Strument’s own access would require a different sandbox arrangement, such as per-command confinement.
 
-What is refused, at the layer above, is every *tool* path into it. The `read`
-side always did; the edit side did not, and that was a bug rather than a
-choice — `git check-ignore` reports `.git/config` as not ignored, so nothing
-stopped a `write` call to it. Both paths now share one rule
-(`workspace.UnderGitDir`), matched at any depth, case-insensitively, and with
-trailing dots and spaces trimmed, because `.GIT/config` opens the real file on
-APFS and NTFS. Pinning a file does not unlock it: the edit path appends to the
-pinned list as it goes, so a list the model can grow must not be able to open
-the door.
+The `read` and edit tools refuse paths into `.git`. The read tool already enforced this restriction, but the edit tools did not, and that was a bug rather than a choice—`git check-ignore` reports `.git/config` as not ignored, so nothing stopped a `write` call to it. Both read and edit operations now use the same check (`workspace.UnderGitDir`), which checks for `.git` path components at any depth, case-insensitively, with trailing dots and spaces trimmed, because `.GIT/config` opens the real file on APFS and NTFS. Pinning a file does not bypass this check. The model can grow the pinned-file list through the edit path, so membership in that list cannot authorize access to `.git`.
 
-Since the tools began accepting absolute paths that resolve inside the project
-(small models habitually send them — Maple-Preview by DeepGrove was the first
-observed), the rule is stated in the same order the checks run: **normalize
-first, refuse second.** An absolute path is resolved against the root, and the
-git-directory check runs on the resolved form as well as the caller's
-spelling — so `/proj/.git/config` is refused for the same reason `.git/config`
-is, and a refusal never depends on which accent the path arrived in. The
-boundary evaluates the file the kernel would open, not the string the model
-typed; that is the same principle Landlock enforces one layer down, where the
-path grant is checked at access time on the real path.
+The path check applies after normalization. An absolute path is resolved against the root, and the git-directory check runs on the resolved form as well as the supplied path. Thus `/proj/.git/config` is refused for the same reason `.git/config` is, and the check applies to both relative and absolute paths. Landlock separately checks filesystem access at the kernel level.
 
-This section used to say the hooks directory "adds a path, not a capability",
-on the grounds that a model can already hide an exploit in the code it writes.
-That was wrong in a way worth recording. Code the model writes into the project
-runs the way model-caused commands run: sandboxed and under the [environment
-allowlist](#the-environment-which-is-a-separate-control), so it never sees
-`OPENROUTER_API_KEY`. Code reached through `.git/config` — `core.fsmonitor`,
-`core.pager`, `core.sshCommand`, an alias — runs inside *Strument's own* git,
-which is the one subprocess that deliberately keeps your whole environment.
-That is an escalation, not a shortcut, and it is invisible: `.git` is untracked,
-so the write never appears in `git show`, and the turn reports "nothing to
-commit" while it happens.
+Code the model writes into the project normally runs under the sandbox and environment allowlist, so it does not receive `OPENROUTER_API_KEY`. However, settings in `.git/config`—such as `core.fsmonitor`, `core.pager`, `core.sshCommand`, or aliases—can cause Strument’s own Git invocations to execute code. Those invocations retain the full environment. Modifying Git configuration can therefore give code access to credentials withheld from ordinary model-run commands. Because `.git` is untracked, these changes do not appear in `git show`, and a turn may report “nothing to commit.”
 
-The residual, stated plainly: closing the edit path removes the unprompted,
-unreviewed route, not the class. A `bash` command can still write `.git/config`
-— behind a confirmation prompt — and so can a test that `check_auto` runs
-without one, if the model wrote the test. Closing that needs either a
-per-command sandbox or an env-filtered git, and git needs your identity,
-credential helpers, and signing setup to work at all.
+Remaining risk: the file-tool restriction blocks direct edits through those tools, but it does not prevent other commands from writing `.git`. A `bash` command can still write `.git/config` behind a confirmation prompt, and so can a test that `check_auto` runs without one if the model wrote the test. Closing that route would require a per-command sandbox or a filtered environment for Strument’s Git process. The current implementation keeps the full environment for Git so the user's identity, credential helpers, and signing setup continue to work.
 
 ### Toolchain caches are writable
 
-Codex CLI and Claude Code grant the working directory and a temp directory, and
-leave you to discover the rest. Strument grants `~/.cache`, `GOMODCACHE`,
-`~/.cargo/registry`, `~/.m2` and a dozen more.
+Strument grants `~/.cache`, `GOMODCACHE`, `~/.cargo/registry`, `~/.m2`, and other toolchain cache directories.
 
-That is a real widening and it is chosen with eyes open. Strument's core loop is
-running your project's checks, and the first `go test` of a session writes
-`~/.cache/go-build`. A sandbox whose first act is to break the build is a
-sandbox you switch off within the hour, and a sandbox that is off protects
-nothing.
+These directories are writable because project checks use them. For example, `go test` writes to `~/.cache/go-build`. A sandbox that breaks the project's checks is likely to be disabled, leaving nothing to limit mistakes or prompt injection. The widening is deliberate, but it exposes cache contents to modification.
 
-What the widening exposes is caches — content a model can poison only to
-sabotage its own later builds. Executable directories are excluded from it
-specifically: where a toolchain keeps a cache and a `bin/` side by side, the
-contents are granted one subdirectory at a time, minus anything on your `PATH`.
-`~/go/pkg` is writable, `~/go/bin` is not.
+Cache poisoning can affect later builds, including builds of other projects or processes that share a cache; it is not limited to the model's next build in the current session. Executable directories are excluded: where a toolchain keeps a cache and a `bin/` directory side by side, the contents are granted one subdirectory at a time, excluding anything on your `PATH`. `~/go/pkg` is writable, while `~/go/bin` is not.
 
-The cost of that precision: a toolchain that has never run on this machine has
-no cache directory yet, so there is nothing to grant and its first run inside
-the sandbox fails on a write. Name the path in `sandbox_write` and it works
-from then on.
+Only existing cache directories can be granted access. If a toolchain has never run on the machine, its cache directory may not exist, and its first run inside the sandbox may fail when creating it. Create the directory before starting the session, or add its existing path to `sandbox_write`.
 
 ### `/tmp` is writable even when `TMPDIR` points elsewhere
 
-Enough tools have `/tmp` compiled in that denying it breaks builds for nothing.
-`/tmp` is mode 1777 — every process on the machine can already write there —
-and the integrity this policy protects is your own files.
+Enough tools have `/tmp` compiled in that denying it breaks builds for little
+benefit. `/tmp` is mode 1777: every local process can create files there, while
+the sticky bit limits removal and renaming of files owned by other users. A
+process running as you can still modify files you own there, so the sandbox does
+not provide integrity protection for a user's files under `/tmp`.
 
 
 ## What Landlock does not confine: the display server
 
 Landlock governs *filesystem* access rights. Connecting to a Unix domain socket
-is not one of them — a path grant is irrelevant either way — so **a
-model-caused command can reach your display server, sandbox or no sandbox.**
+is not one of them—a path grant is irrelevant either way—so **a model-caused
+command can reach your display server, sandbox or no sandbox.**
 
-Checked, not reasoned: `socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/wayland-0` from
-inside the sandbox on a Wayland laptop exits 0. The connection is made. That is
-the whole of what the probe shows — a real client still has to speak the
-protocol, and writing `test` into the socket accomplishes nothing — but "the
-sandbox does not close this channel" is the part a threat model has to say out
-loud.
+A live probe confirmed this:
 
-Two accidents of configuration are what actually decide this today, and neither
-was designed for it:
+On a Wayland laptop, `socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/wayland-0` exited with status 0 from inside the sandbox, confirming that it could connect. This probe did not test any Wayland capabilities: a client must still speak the protocol, and sending `test` does not perform a useful operation.
 
-- **X11 is closed, by the environment allowlist.** `DISPLAY` and `XAUTHORITY`
-  are not in it, so a model-caused command has no display to find. That matters
-  more than the Wayland case: X11's XTEST extension lets any client synthesize
-  input into any window, which is a general-purpose escape from every
-  restriction in this document. It is closed by a list that exists for
-  credential hygiene, not for this.
-- **Wayland is open, by the same allowlist.** `XDG_RUNTIME_DIR` *is* on it,
-  because tools resolve runtime and cache paths from the XDG variables — and it
-  is also the compositor's address. One directory, two unrelated uses, and the
-  legitimate one carries the other in with it.
+The environment allowlist affects how commands discover display servers, but it is not a display-access control:
 
-Wayland is a smaller prize than X11: its clients cannot snoop other clients'
-input or contents by design, so the reachable surface is closer to "can open a
-window" than "can drive your session". Not nothing, and not XTEST.
+- **X11 variables are absent from the model-run environment.** `DISPLAY` and
+  `XAUTHORITY` are not in the default allowlist, so ordinary X11 discovery
+  does not work for a model-run command. This reduces the common path but does
+  not make a known X11 endpoint inaccessible. X11's XTEST extension lets any
+  authenticated client synthesize input into any window, which can let it
+  control applications outside the sandbox.
+- **Wayland discovery is available through the same allowlist.** `XDG_RUNTIME_DIR`
+  is included because tools resolve runtime and cache paths from the XDG
+  variables. It also identifies the compositor's socket, so the legitimate use
+  makes that socket discoverable.
 
-Removing `XDG_RUNTIME_DIR` from the allowlist would close it, at the cost of
-breaking any check that needs a session bus. That trade has not been made — it
-is recorded here so that whoever wants it knows it is one line, and so that
-nobody reads the sections above as claiming a confinement they do not provide.
+Wayland clients cannot generally snoop other clients' input or contents by
+design. A client that connects can normally open a window and use the compositor's
+available protocols, but it does not have the broad input-injection and
+screen-observation capabilities of an authenticated X11 client.
 
-This was found because a model on someone else's machine, asked to do something
-that needed a GUI confirmation, went and found `xdotool`. Nothing about it was
-adversarial. It is worth knowing that the shortest path to a goal sometimes
-leaves the box the box was drawn around.
+Removing `XDG_RUNTIME_DIR` from the allowlist would close the usual discovery
+path, at the cost of breaking checks that need a session bus. Strument currently
+retains `XDG_RUNTIME_DIR` for compatibility. The filesystem sandbox does not
+isolate commands from the display server.
+
+This limitation came to attention when a model on another user’s machine found
+`xdotool` while trying to complete a task that required GUI confirmation. The
+behavior was not adversarial; it showed that an ordinary task could lead the
+model to use capabilities outside the filesystem sandbox.
 
 
-## When there is no sandbox
+## When the sandbox is unavailable or disabled
 
-`sandbox = "landlock"` on a kernel without Landlock does not proceed
-unsandboxed and does not merely warn. Strument starts, reading and editing and
-committing all work, and **everything the model can cause to execute refuses**
-with one line naming the setting. `/run` still works, because you typed it.
+If `sandbox = "landlock"` is configured but the kernel lacks Landlock support, Strument does not silently fall back to unsandboxed execution. Reading, file-tool editing, and Git commits still work, but model-run shell commands, checks, and scraper commands are refused with an error naming the setting. The user’s `/run` command remains available.
 
-The refused-versus-warned distinction is the point. A mode that says "no
-sandbox today" and runs the command anyway trains you to skip the line, and the
-one session where it mattered looks exactly like the fifty where it did not.
+A warning alone would allow execution without the requested protection and would be easy to overlook.
 
-`sandbox = ""` turns confinement off. That is the pre-sandbox behavior and a
-legitimate choice — it is the default off Linux, because Landlock is a Linux
-LSM and there is nothing to fall back to. What you give up is the whole
-integrity guarantee: with it off, an approved command has your full authority,
-and the confirmation prompt is the only thing between a mistake and your home
-directory.
+`sandbox = ""` turns confinement off. That is the pre-sandbox behavior and a legitimate choice—it is the default off Linux, because Landlock is a Linux LSM and there is nothing to fall back to. What you give up is filesystem write restrictions: with it off, an approved command has your full authority. Without confinement, commands run with your normal filesystem permissions. Confirmation prompts still apply, with the exceptions for configured checks and existing permission grants.
 
 
 ## Fetching a page
 
-`webfetch` asks before it fetches an origin you have not listed, and the prompt
-shows the whole URL. Two things about it are worth stating plainly.
+`webfetch` asks before it fetches an origin you have not listed, and the prompt shows the whole URL. Approval controls prompting, not network access or the trustworthiness of the response.
 
-**`webfetch_allow` is not a network boundary.** It says which fetches skip the
-prompt. It cannot say which hosts are reachable, because `bash` can `curl`
-anywhere and Landlock confines the filesystem rather than the network — a
-restriction here would be a line the tool beside it steps over. Codex's
-`allowed_domains` genuinely restricts because its search is a hosted service
-the model cannot route around; Strument is not in that position and does not
-imply it is.
+**`webfetch_allow` is not a network boundary.** It says which fetches skip the prompt. It cannot say which hosts are reachable, because `bash` can `curl` anywhere and Landlock confines the filesystem rather than the network.
 
-**A fetched page is untrusted input.** Whatever comes back enters the model's
-context and can carry instructions, which is the reason the "all this turn"
-answer is scoped to a single origin rather than the turn: approving a turn's
-worth of unseen pages is approving unseen content into your context. It is also
-why the prompt never shortens a URL. A long query string is exactly what a
-reader skims and exactly where a URL stops being the one they assumed.
+**A fetched page is untrusted input.** Whatever comes back enters the model's context and can carry instructions. That is why approval is scoped to a single origin rather than to all pages fetched during a turn: a turn-wide grant would also cover pages from unrelated origins the user had not reviewed. It is also why the prompt shows the full URL. URL query parameters can contain the part that distinguishes one resource from another, or instructions a reviewer should see.
 
-## The environment, which is a separate control
+## The environment allowlist
 
-Commands the model causes to run do not inherit your environment. They get an
-allowlist — see [`env_allow`](config.md#env_allow) — so a model-run `env`, or a
-test that prints its environment on failure, cannot carry `OPENROUTER_API_KEY`
-into a tool result and from there into the model's context and the transcript.
+Model-run commands receive an allowlisted subset of your environment rather than inheriting it in full; see [`env_allow`](config.md#env_allow).
 
-This is not part of the sandbox and does not depend on it. It answers a
-different question: the sandbox is about what a command can *change*, and the
-allowlist is about what it *carries*. It is also, by accident, the only thing
-keeping a model-caused command away from an X11 display — see [what Landlock
-does not confine](#what-landlock-does-not-confine-the-display-server).
+This is not part of the sandbox and does not depend on it. The sandbox restricts filesystem writes; the allowlist controls which environment variables a command receives. It is also, by accident, the main thing keeping a model-caused command from ordinary X11 discovery—see [what Landlock does not confine](#what-landlock-does-not-confine-the-display-server).
 
-`/run` is exempt from the allowlist for the same reason it is not exempt from
-the sandbox — the allowlist is a policy Strument chooses to apply, and Landlock
-is a property of the process.
+`/run` is exempt from the allowlist because the user typed the command. It is not exempt from the sandbox because the allowlist is a policy Strument chooses to apply, while Landlock is a property of the process.
 
-One consequence runs the other way, and is worth naming because it is the
-exception. Strument's *own* `git` invocations are not filtered — they inherit
-the whole environment, `OPENROUTER_API_KEY` included — since git needs your
-identity, your credential helpers, and your signing setup to work at all. That
-makes them the one subprocess where redirecting the binary would be worth
-someone's while, so the `git` on `PATH` is resolved once at startup, before any
-config is read. `env_set` can point `PATH` wherever it likes afterwards and
-model-run commands will follow it; Strument's git will not.
+Strument's *own* `git` invocations are not filtered: they inherit the whole environment, including `OPENROUTER_API_KEY`, since the current implementation keeps the user's identity, credential helpers, and signing setup available to git. Because these Git processes receive credentials, substituting a different `git` executable could expose them. The `git` on `PATH` is resolved once at startup, before any config is read. Later changes to `PATH` through `env_set` affect model-run commands, but Strument continues to use the Git executable resolved at startup.
 
 
 ## How this was verified
 
-The policy was developed on kernels without Landlock, where the enforcement
-tests skip — and a skip reads as a pass in a summary line. It was checked on a
-kernel that has it (ABI 8) before the feature shipped:
+During development, enforcement tests were skipped on kernels without Landlock. An overall passing test summary therefore did not establish that enforcement worked. It was checked on a kernel that has it (ABI 8) before the feature shipped:
 [`doc/experiments/2026-08-landlock-live/README.md`](experiments/2026-08-landlock-live/README.md)
-records the run. Three claims on this page rest on it rather than on reading:
-that read-only `/` still permits execution, that a cross-directory rename is
-denied as EXDEV rather than EACCES, and that a nested rule cannot reduce
-rights — which is why `.git/hooks` is a documented hole rather than a fixed
-one.
+records the run. The run verified three behaviors described on this page:
 
-`script/sandbox-trial.py` re-runs that trial. `--sandbox ""` is its control,
-and the point of it: with confinement off every ordinary-work check should go
-green and every denial check should go red. A run where those do not flip is
-measuring something other than the sandbox.
+- read-only `/` still permits execution;
+- a cross-directory rename is denied as EXDEV rather than EACCES; and
+- a nested rule cannot reduce rights.
+
+The last result is why `.git/hooks` remains a documented exception rather than a fixed one.
+
+`script/sandbox-trial.py` re-runs that trial. `--sandbox ""` is its control:
+with confinement off, ordinary-work checks should pass and denial checks should
+fail. If the denial checks do not change outcome when confinement is disabled, the trial has not isolated the sandbox’s effect.
 
 ## Reporting a problem
 
