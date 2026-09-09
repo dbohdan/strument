@@ -1,16 +1,16 @@
 # The digital experimenter's handbook
 
-Notes for running live experiments on Strument. Both senses of *digital* are
-meant: the experimenter is a program, and so is the thing being measured.
+Notes for language models and developers running live experiments on Strument.
+Both senses of *digital* are meant: the experimenter is a program, and so is
+the thing being measured.
 
-Everything here was paid for. Each item names the run that taught it, because a
-rule with the evidence attached survives a reader who disagrees with it, and a
-rule without one gets deleted by the next person in a hurry.
+These recommendations come from runs that cost time and API calls. The examples
+explain why each recommendation exists and where it applies.
 
 The companion reading is the **Which model to reach for** and **Comparing two
 prompts** sections of `CLAUDE.md`, which cover cost strata and arm
-randomization. This is about everything that goes wrong *after* you have a
-sound design.
+randomization. This handbook covers failures in fixtures, scorers, runners, and
+interpretation.
 
 If you are preparing a run, start with the pre-run checklist and §12. The rest
 is the evidence and failure patterns behind those checks; use the section
@@ -30,8 +30,9 @@ Before spending on a run, ask these questions in order:
   both directions (§§1–4, §15, §17).
 - **Do the arms differ in exactly the intended way?** Build the baseline from
   `HEAD`, compare the artifacts, and refuse identical arms (§7).
-- **Does anything pass in the arm built to break it?** Apply a targeted
-  sabotage and assert that the sabotage itself applied (§17).
+- **Do any relevant assertions still pass in the arm designed to make them
+  fail?** Apply a targeted sabotage and assert that the sabotage itself applied
+  (§17).
 - **Did the runner finish, or did it only stop reporting?** Wait on the specific
   process and record worker failures (§19).
 - **Has the resume path been exercised deliberately?** Run it with a stub before
@@ -56,8 +57,6 @@ Before spending on a run, ask these questions in order:
 
 ## 1. Your instrument is made of the thing you are testing
 
-**The single most expensive lesson so far.**
-
 The compaction trial scored answers by matching `^ *ANSWER:` against session
 output. `clearWaiting` (`internal/repl/output.go`) emits `\r\x1b[K`
 unconditionally — including when stdout is a pipe — so the escape lands at the
@@ -68,23 +67,21 @@ unconditionally — including when stdout is a pipe — so the escape lands at t
 ```
 
 Twelve of twenty-four sessions were scored as "never answered" when they had
-answered correctly. And this is the part that matters:
+answered correctly. Correcting the scorer changed the result:
 
 | | apparent result | after stripping ANSI |
 | --- | --- | --- |
 | recalled the reason | 5/12 vs 4/12, **p = 1.0** | 10/12 vs 5/12, **p = 0.089** |
 
-The broken scorer produced a *clean null*. A null result from a broken
-instrument is indistinguishable from a null result, and the action it invites —
-"no difference, ship the nicer-looking version" — is exactly the wrong one. The
-change would have gone in.
+The scoring error made the arms look equivalent. Without inspecting the
+transcripts, it would have been easy to treat that result as evidence that the
+replacement caused no regression.
 
 That escape leak had been found earlier the same day and filed as cosmetic. It
 was cosmetic for users and load-bearing for measurement.
 
-**Do:** strip ANSI before scoring anything. Treat every defect you have ever
-deferred as "cosmetic" as a candidate instrument fault, because cosmetic means
-"does not change meaning for a human", and your scorer is not one.
+**Do:** strip ANSI before scoring rendered terminal output. A display defect that
+is cosmetic for a human reader can still break a parser.
 
 ## 2. Score a marker you asked for, never a position you inferred
 
@@ -97,22 +94,25 @@ into the prompt — identically in both arms, so it cannot favour either — and
 match that.
 
 **Do:** make the thing you measure syntactically unmistakable, at the cost of
-slightly perturbing the task. A small identical perturbation in both arms is
-cheaper than an extraction heuristic that fails asymmetrically.
+slightly perturbing the task. An explicit answer marker changes the task
+slightly, but it is easier to validate than a position-based extraction rule.
+Use the same instruction in both arms.
 
 ## 3. "No answer" and "wrong answer" are different columns
 
-They mean opposite things — one is the instrument failing, the other is the
-system failing — and a single boolean lumps them into a number that cannot be
-interpreted. The rescore split them, and *that* is what exposed §1: a sudden
-`answered=0/6` for one model is not a finding about that model.
+“No answer” and “wrong answer” require different diagnoses. A missing answer
+may reflect a provider failure, exhausted output budget, protocol failure, or
+extraction bug. A wrong answer means usable output reached the scorer but did not
+satisfy the task. A single boolean hides these differences. The rescore split
+them, and *that* is what exposed §1: a sudden `answered=0/6` for one model needs
+investigation before it is interpreted as a model-performance result.
 
 This generalizes an older lesson: a provider returning `Empty response received
 from LLM` and a model emitting a tool call as inline text look identical in a
 summary and mean opposite things.
 
-**Tell:** do not classify either case from the summary row. Inspect the raw
-response and process status. A provider failure is recorded in the request or
+**Warning sign:** do not classify either case from the summary row. Inspect the
+raw response and process status. A provider failure is recorded in the request or
 stream outcome, often with no usable model content; inline tool-call markup is
 model-produced content that bypassed the tool-call protocol. Keep them as
 separate categories in the scorer (§4).
@@ -125,15 +125,15 @@ and about forty seconds**. Without that, discovering the bug would have meant
 paying for all twenty-four sessions again — which is exactly the moment where
 one is tempted to accept the null instead.
 
-**Do:** persist raw output per run, always. Strip it before committing the data
-(it is megabytes); keep the scored fields as the record.
+**Do:** persist each run’s raw output so it can be rescored. Keep the large raw
+transcripts outside the committed dataset; commit the scored fields.
 
 ## 5. Confirm the mechanism fires before measuring its effect
 
 The first fixture was a handful of four-line Go files. Twelve sessions ran, and
 compaction fired **zero times** — the settled history reached 383 tokens against
-a 1024-token budget. The metric was measuring nothing at all, and every number
-was noise about an event that never happened.
+a 1024-token budget. The runs could not measure compaction’s effect because
+compaction never occurred.
 
 The fix was a 46 KB fixture and a `context=16384` declaration, which puts
 `maxChatHistoryTokens` at its 1024 floor while staying far above any real prompt
@@ -141,7 +141,7 @@ so `checkTokens` never fires and never blocks on a confirmation.
 
 **Do:** instrument the *mechanism*, not only the outcome, and check it in the
 pilot. Here that meant counting `Summarizing chat history` lines. If the
-mechanism count is zero, no amount of n will help you.
+mechanism count is zero, increasing the sample size will not fix the design.
 
 The same rule caught a whole model producing nothing to measure. Verifying that
 an interrupted turn resumes needs a turn to interrupt *mid-answer*, and two
@@ -154,27 +154,25 @@ during its thinking. One curl settled it — same prompt, 900-token cap:
 | default (`"max"`) | 897 | **0** |
 | `"low"` | 0 | 4700 |
 
-At its default this model cannot be observed streaming an answer at all inside
-a short window, because within 900 tokens it has not started one. `reasoning`
-on the `model()` call fixes it, and the two runs after that resumed *mid-word*
-— cut at "their famous mathematica", picked up at "achievements".
+In these runs, the model did not begin its answer within the 900-token output
+budget at its default reasoning setting. `reasoning` on the `model()` call fixes
+it, and the two runs after that resumed *mid-word* — cut at "their famous
+mathematica", picked up at "achievements".
 
 **Do:** when a model is the instrument, check that it emits the thing you plan
-to measure before you count anything. A model that spends the budget thinking
-is not a null result, it is a broken instrument, and the two are indistinguishable
-in a summary table.
+to measure before you count anything. A run that spends its entire output budget
+on reasoning cannot test mid-answer interruption.
 
 ### Set `reasoning="low"` on every model in a trial, and check it took
 
 That GLM-5.3 finding is not about GLM-5.3. **Pin reasoning low on every model in
-every arm** unless the reasoning is itself the thing being measured, and confirm
-each one obeyed rather than assuming the `model()` field was honored end to end.
+every arm** unless the reasoning is itself the thing being measured, and verify
+that the setting took effect end to end rather than assuming that declaring it in
+`model()` was sufficient.
 
-The default is the trap. GLM-5.3-Flash and Qwen3.8 both default to maximum
-effort, and benchmark pressure makes that more common over time, not less: a
-model tuned to score well on hard evaluations is tuned to think first, and
-whoever ships it has no reason to make brevity the default. Expect any model
-added to a panel from now on to reason at maximum until told otherwise.
+GLM-5.3-Flash and Qwen3.8 both default to maximum effort. Defaults vary across
+models and may change, so set reasoning explicitly rather than assuming the
+default is suitable.
 
 What it costs when you forget:
 
@@ -184,9 +182,12 @@ What it costs when you forget:
   scorer as "no answer".
 - **Cost metrics that are not comparable.** The 2026-09 code-result trial ran
   GLM at `"low"` and MiMo and DeepSeek at their defaults, because the config
-  set it per model rather than as a rule. Its input-token and step columns
-  survive that; anything read off output tokens or latency does not, and the
-  write-up says so.
+  set it per model rather than as a rule. Its input-token and step columns remain
+  usable; whether conclusions based on output tokens or latency remain comparable
+  depends on the comparison being made, and the write-up says so.
+
+  > **Editorial note:** Clarify whether the limitation applies to cross-model
+  > comparisons, pooled arm comparisons, or all conclusions using those metrics.
 - **Wall-clock, which caps the sample.** Reasoning at maximum is the difference
   between a batch that finishes while you watch and one that finishes tomorrow,
   and the sample size ends up set by patience.
@@ -195,7 +196,7 @@ What it costs when you forget:
 forgetting one is impossible; then read one transcript per model and confirm
 there is an answer under the thinking.
 
-## 6. Choose a target the system cannot leak
+## 6. Choose a probe whose answer is available only through the mechanism
 
 Two probes were scored. Recall of the *value* (`45`) came out 11/12 vs 9/12 —
 useless, because 45 is sitting in the source and any model can read it back.
@@ -204,14 +205,14 @@ Recall of the *reason* ("the upstream load balancer idles connections out at
 conversation.
 
 **Do:** design the probe so the only path to the answer runs through the
-mechanism under test. If the answer is recoverable from the artifact, you are
-measuring the artifact.
+mechanism under test. If the model can recover the answer from the source files,
+the probe does not isolate conversational recall.
 
 ## 7. Rebuild the baseline as your branch moves
 
 The first run compared `HEAD` against a commit that differed in *two* ways: the
 summarizer change under test, and a history-rotation fix that had landed in
-between. That confounds.
+between. That introduced a second difference between the arms.
 
 The fix: a throwaway `git worktree` at `HEAD` with only the files under test
 reverted to their old contents, built there, worktree removed.
@@ -225,7 +226,8 @@ git worktree remove --force /tmp/wt
 
 **Do:** define the baseline as *HEAD minus the change*, not as *an older
 commit*. Then `cmp` the two binaries and refuse to spend if they are identical —
-a build that silently produced two copies of the same arm is a whole afternoon.
+a build that silently produced two copies of the same arm can waste the entire
+batch.
 
 ## 8. Read individual transcripts. Then read more of them
 
@@ -233,17 +235,16 @@ This is in `CLAUDE.md` already and it earned its place twice more in one day:
 
 - The three "failures" that were the parser (§2).
 - A per-model split so clean it looked like a real finding: base scored 6/6 on
-  MiMo and 0/6 on DeepSeek-v4-flash, in opposite directions per arm. That is a
-  textbook provider-disagreement result. It was entirely the §1 artifact.
+  MiMo and 0/6 on DeepSeek-v4-flash, in opposite directions per arm. It was
+  entirely the §1 artifact.
 
-**Do:** when a split reverses cleanly across models, suspect the scorer *before*
-you write the paragraph about how providers disagree. Real disagreement is
-usually messier than that. One transcript settles in a minute what a summary
-table makes mysterious.
+**Do:** inspect transcripts behind a clean per-model split before attributing it
+to provider differences. In this trial, the apparent disagreement came from the
+scorer. One transcript settles in a minute what a summary table makes mysterious.
 
 ## 9. Count confabulation separately from loss
 
-Compaction failures came in two shapes:
+Compaction failures came in two forms:
 
 > *"the poll interval value and the reasoning behind it were not established in
 > the context I have access to"*
@@ -252,8 +253,8 @@ Compaction failures came in two shapes:
 > and system load."*
 
 The first is honest loss. The second is an invented reason nobody gave, and it
-is far worse, because downstream nothing distinguishes it from a real answer —
-not the user, not the next turn, not a later summary that folds it in again.
+is far worse, because a later reader or summarizer may treat the invented reason
+as an established fact.
 
 **Do:** score these as different outcomes. A change that converts loss into
 confabulation is a regression even if the "recall" number improves.
@@ -262,12 +263,13 @@ confabulation is a regression even if the "recall" number improves.
 
 aider's summarize prompt is GPT-4-Turbo-era prose. The replacement was a clean
 structured list — what the user asked for, decisions with reasons, files
-changed, what is unfinished — and it read much better. It lost, 5/12 to 10/12,
-on the metric it was written for, and cost 17% more.
+changed, what is unfinished — and it read much better. In this trial, it recalled
+the reason in 5/12 runs, compared with 10/12 for the existing prompt, and cost
+17% more.
 
-Prior art that survived years of contact carries information that reading it
-cannot recover. Rewriting it is a hypothesis, not an improvement, and it owes a
-trial like any other.
+An established prompt may encode lessons that are not obvious from its wording.
+A clearer rewrite is a hypothesis about performance, not evidence of an
+improvement.
 
 ## 11. Land correctness and performance changes separately
 
@@ -276,8 +278,8 @@ turn plus a fake assistant `"Ok."`) with a content rewrite. The trial could only
 speak to the second, so the first had to be untangled from it by hand before
 anything could be reverted.
 
-**Do:** if part of a change is right regardless of the measurement, commit it on
-its own first. Then the trial has one job and the revert has one target.
+**Do:** commit a correctness change separately when its justification does not
+depend on the trial. That leaves one hypothesis to test and one change to revert.
 
 ## 12. Practical mechanics
 
@@ -291,19 +293,21 @@ its own first. Then the trial has one job and the revert has one target.
   its output**: `until ! kill -0 "$PID" 2>/dev/null; do sleep 20; done`, and
   check the log afterwards to learn whether it finished or died. Waiting for a
   results file to reach N lines — which is what this bullet used to advise —
-  cannot tell a crash from a slow run, and §19 is the hour that cost. Capture
-  the pid; a `pgrep -f` pattern will match the next run of the same script.
-  If a log watcher is unavoidable, match every terminal state as a secondary
-  signal; it must not replace waiting on the specific process.
+  cannot tell a crash from a slow run. Wait for the specific process to exit,
+  then inspect its status and logs to determine whether the batch completed
+  successfully. Capture the pid; a `pgrep -f` pattern will match the next run of
+  the same script. If a log watcher is unavoidable, match every terminal state
+  as a secondary signal; it must not replace waiting on the specific process.
 - **Type-check the runner before launching it** (§19). The error paths are the
   ones a one-off script never exercises until they decide whether the run
   survives.
-- **Four-way parallelism is about the ceiling.** Beyond that OpenRouter
-  rate-limiting produces hangs that look exactly like a deadlock in the harness.
+- **Start with no more than four concurrent runs.** Higher concurrency caused
+  OpenRouter rate-limiting problems in these trials. Hangs can look exactly like
+  a deadlock in the harness.
   That cost three runs and a concurrency investigation before five instances
   against a local stub came back clean and proved the harness innocent.
-- **`--yes NAME` in trials**, naming every prompt the run can raise, or one
-  will silently stall a session that was supposed to be unattended. Include
+- **`--yes NAME` in trials**, naming every prompt the run can raise, otherwise
+  an unanswered prompt may stall an unattended session. Include
   `steps` for anything long enough to reach the budget; `--yes all` is the
   blunt version when the run is disposable.
 - **Fix the random seed and shuffle the job list**, so a rerun is comparable and
@@ -311,15 +315,11 @@ its own first. Then the trial has one job and the revert has one target.
 
 ## 13. Have another model read the scorer
 
-The cheapest fix for §1, and it went unused for nine bugs.
+A scorer’s author can carry assumptions from the experiment into the
+implementation. A separate reviewer may challenge those assumptions, especially
+when asked for a concrete input that the scorer misclassifies.
 
-A scorer is written in the same breath as the belief it is meant to test, by
-whoever holds that belief. So it reaches for the string that was on screen a
-moment ago — which is exactly the string that is present for reasons other than
-the one being measured. The check inherits the expectation instead of testing
-it.
-
-A second model does not hold the belief. Given four checks from this project,
+Given four checks from this project,
 three of them broken and one sound, and told to name a concrete failing input
 or say it is sound:
 
@@ -328,8 +328,8 @@ or say it is sound:
 | MiMo-V2.5 | caught | caught | missed | correctly sound |
 | Gemini 3.7 Flash | caught | caught | caught | correctly sound |
 
-Three of three by union, no false alarm on the sound one, about two-tenths of a
-cent. **They also found a bug the author had already "fixed" and got wrong**:
+Together, the reviewers caught all three faulty checks, and neither flagged the
+sound one. **They also found a bug the author had already "fixed" and got wrong**:
 `"roma" in reply.lower()` had been patched to normalize `Rōma`, and both
 reviewers pointed out it still passes *"The capital of Italy is Roma, a
 beautiful city"* — an English sentence scoring as obedience to "answer in Latin
@@ -341,25 +341,27 @@ Two things make it work:
 - **Ask for a concrete failing input, quoted.** "Review this" gets
   "consider edge cases". *"Name an input where this returns the wrong answer,
   or say it is sound"* gets the input.
-- **Say that at least one is sound.** Otherwise flagging everything is a
-  winning strategy, and a reviewer that flags everything has told you nothing.
+- **Include a known-sound check in the review set and say that the set contains
+  one.** Otherwise flagging everything is a winning strategy, and a reviewer
+  that flags everything has told you nothing.
 
-The ceiling is real: a third of the faults in this file needed context that is
-not in the scorer — what the transcript actually prints, what the test binary
-actually names its cases. Hand over the scorer *and* a sample of its real
-input, or the reviewer is guessing at the half that matters.
+**Scorer review also has limits.** A third of the faults in this file needed
+context that is not in the scorer — what the transcript actually prints, what
+the test binary actually names its cases. Hand over the scorer *and* a sample of
+its real input, or the reviewer is guessing at the half that matters.
 
 ## 14. The same trick on a bigger artifact, and what it costs
 
-§13 scaled up: five models reviewing 17.6 KB of rendered prompts rather than
-two reviewing an 80-line scorer.
+A later trial extended this approach: five models reviewing 17.6 KB of rendered
+prompts rather than two reviewing an 80-line scorer.
 [`experiments/2026-08-prompt-review/README.md`](experiments/2026-08-prompt-review/README.md)
-has the run. It works, less well, and the reasons generalize.
+has the run. The reviewers found useful defects, but individual coverage was
+lower.
 
 - **The ensemble is the instrument.** Five reviewers found nine defects; the
   best single reviewer found five, and no one of them found both planted
   controls *and* both regressions. On the scorer, one reviewer was nearly
-  enough. Attention spreads across surface area.
+  enough. No single reviewer covered the larger artifact reliably.
 - **Do not rank by agreement.** All five caught a grammar bug in one sentence;
   one caught the false factual claim in the sentence above it, and that is the
   one that can cost something. Counting votes would have inverted the order.
@@ -392,16 +394,17 @@ the output **deleted the final answer of every run whose last aside was
 one-line**. Recall was deflated in both arms, unevenly, and the aggregate still
 looked plausible.
 
-Two things worth carrying:
+Two useful observations:
 
-- **When an aggregate disagrees with a transcript you have read, the transcript
-  wins.** A pilot had scored 3/3; the batch reported means near 0.8/3. That gap
-  was the whole signal, and it was visible before any statistics.
-- **The check that could not fail is the one that found it.** A count of runs
-  naming a nonexistent function returned 0/21 and 0/27 — while `Coder.send` sat
-  in a transcript I had quoted an hour earlier. §1 says break the check on
-  purpose and watch it go red; the corollary is that a check returning a clean
-  zero deserves the same suspicion as one returning a clean p=1.0.
+- **When a score conflicts with the transcript it describes, investigate the
+  discrepancy before trusting the aggregate.** A pilot had scored 3/3; the batch
+  reported means near 0.8/3. That gap was the whole signal, and it was visible
+  before any statistics.
+- **An unexpected zero exposed the extraction bug.** A count of runs naming a
+  nonexistent function returned 0/21 and 0/27 — while `Coder.send` sat in a
+  transcript I had quoted an hour earlier. §1 says break the check on purpose and
+  watch it go red; the corollary is that a check returning a clean zero deserves
+  the same suspicion as one returning a clean p=1.0.
 
 ## 16. Look for the measurement the confound cannot reach
 
@@ -409,9 +412,9 @@ Two changes shipped together — a tool's schema description and its output — 
 separating them looked like two more binaries and another 48 runs.
 
 It needed neither, because **a model chooses its first tool from the schema
-alone**. It has not seen any output yet. The first tool call is therefore a
-measurement of the description with the other factor held out *by construction*,
-and it was already sitting in transcripts that had been paid for:
+before seeing that tool’s output**. The first tool call is therefore a measurement
+of the description with the other factor held out *by construction*, and it was
+already sitting in transcripts that had been paid for:
 
 | | base | new | p |
 | --- | --- | --- | --- |
@@ -421,17 +424,15 @@ and it was already sitting in transcripts that had been paid for:
 The isolated effect was larger and better supported than the bundled one.
 
 Before designing arms to separate two factors, ask whether some **event in the
-run happens before one of them can act**. Ordering is a free instrument: a
-choice made at step one cannot depend on information that arrives at step two.
+run happens before one of them can act**. Event order can sometimes isolate an
+effect without additional runs: a choice made at step one cannot depend on
+information that arrives at step two.
 The same trick applies to anything with a first-move — which model was picked,
 which file was opened, whether a question was asked before any tool ran.
 
-And verify the set relation rather than inferring it from totals. "14 used it
-and 14 used it first, so they must be the same 14" is true here, and was checked
-by listing both sets, because the alternative reading — some other 14 — is the
-kind of thing that is obvious right up until it is wrong.
+The run IDs confirmed that every run using the tool selected it first.
 
-## 17. Three shapes of a check that cannot fail
+## 17. Three ways a check can pass without testing its claim
 
 §1 is about a scorer that reported the wrong answer. This one is about checks
 that report *no* answer — assertions that pass whether or not the code works,
@@ -439,24 +440,24 @@ so the only thing they measure is that they ran. Three turned up in a single
 day's work on the harness itself, and they were caught the same way each time:
 by breaking the code on purpose and watching the check stay green.
 
-They are worth listing by shape, because none of them looks wrong while you are
-writing it.
+They are worth listing by failure mode, because none of them looks wrong while
+you are writing it.
 
 **A tautology on the host that runs it.** A test asserted that a path uses the
 platform's separators as `got != filepath.FromSlash(got)`. On Unix `FromSlash`
 is the identity, so that compares a string to itself. It could only ever fail on
-Windows, and it was written and reviewed on Linux. *Tell:* the assertion is
-built from a function of the value being asserted about, rather than from an
-expectation written down independently.
+Windows, and it was written and reviewed on Linux. *Warning sign:* the
+assertion is built from a function of the value being asserted about, rather than
+from an expectation written down independently.
 
 **An assertion behind an early return.** A test checked that a lookup accepts
 the argument value `definition` by asserting the output does not contain
 `Unknown kind`. But the lookup checks for a language parser before it validates
 the argument, and the fixture had no parser — so every kind, valid or not,
 answered "the language parser is not available", and the test passed with
-`definition` deleted from the accepted set. *Tell:* asserting the *absence* of
-an error rather than the presence of the right answer. An absence is satisfied
-by every path that never gets far enough to produce it.
+`definition` deleted from the accepted set. *Warning sign:* asserting the
+*absence* of an error rather than the presence of the right answer. An absence is
+satisfied by every path that never gets far enough to produce it.
 
 **A comparison the defect does not change.** The same test, second attempt:
 with a parser wired up, it compared the two kinds' whole output and required
@@ -465,29 +466,33 @@ worded from the argument while the *results* come from what the argument was
 translated into — so a lookup that ignored the argument entirely still printed
 "referenced" above the definition's line. It passes now by asserting line
 numbers: `definition` finds line 3, `reference` finds line 5 and not line 3.
-*Tell:* the assertion is on prose the code assembles near the input, rather than
-on the part of the output the code path under test actually decides.
+*Warning sign:* the assertion is on prose the code assembles near the input,
+rather than on the part of the output the code path under test actually decides.
 
 **Do:** for every check you would be upset to lose, break the thing it guards
-and watch it go red. Not the whole feature — the specific line. Two of the three
-above survived a plausible-looking break and failed only on the second, more
-precise one — which is itself the finding: *how* you break it is part of the
-check.
+and watch it go red. Target the behavior the assertion is meant to protect,
+rather than breaking an unrelated part of the feature. Two of these checks stayed
+green after the first attempted mutation. A more targeted mutation was needed to
+expose the gap.
 
 Two practical notes from doing that. Make sure the broken version still
-**compiles** — a build failure is not a test failure, and `go test` will hand
-you a stale cached `ok` from the last good build if you read past the error.
-And prefer breaking the code to deleting the assertion: deleting tells you the
-assertion runs, while breaking tells you it discriminates.
+**compiles** — a build failure is not a test failure. And prefer breaking the code
+to deleting the assertion: deleting tells you the assertion runs, while breaking
+tells you it discriminates.
+
+> **Editorial note:** Verify the claim about `go test` returning a stale cached
+> `ok` after a build error before restoring or strengthening it. Also clarify what
+> procedure is meant by “deleting tells you the assertion runs”; deleting an
+> assertion alone does not demonstrate that the test reached it.
 
 ---
 
-### 17a. Three more shapes: checks that falsely report success
+### 17a. Three ways verification can falsely report success
 
-A day spent writing a transcript auditor produced three shapes §17 does not
-cover. All three are worse than the ones above, because in each case the check
-is *reported as verified* — the green is quoted as evidence rather than merely
-trusted.
+A day spent writing a transcript auditor produced three failure modes §17 does
+not cover. All three are worse than the ones above, because in each case the
+check is *reported as verified* — the green is quoted as evidence rather than
+merely trusted.
 
 **A control that never applied.** The way to trust a check is to break the code
 and watch it go red (§1, §17). That control is itself a check, and it fails
@@ -495,8 +500,8 @@ silently: a patch whose anchor no longer matches changes nothing, the suite
 stays green, and the green gets written up as "verified to discriminate". This
 happened three times in one project — a `sed` that missed after a rename, a
 `replace()` whose anchor a refactor had moved, a comprehension rebinding that
-Python's scoping made a no-op. *Tell:* the control reports success without
-reporting that it modified anything. *Fix:* make the sabotage assert its own
+Python's scoping made a no-op. *Warning sign:* the control reports success
+without reporting that it modified anything. *Fix:* make the sabotage assert its own
 application and refuse to report a result otherwise. A control that cannot say
 "I did nothing" is not a control:
 
@@ -510,8 +515,8 @@ report header printed a source filename instead of the transcript. A later
 refactor changed the output format, and the test was updated to assert that a
 `TOTAL` block existed — keeping its name, its green status and its place in the
 file while abandoning what it checked. It had been passing vacuously for three
-commits, including one whose message said the guard was verified. *Tell:* a test
-changed in the same commit as the output it checks, where the assertion got
+commits, including one whose message said the guard was verified. *Warning sign:*
+a test changed in the same commit as the output it checks, where the assertion got
 looser. *Fix:* when output changes, re-derive the assertion from the claim in
 the test's name, not from the new output.
 
@@ -521,7 +526,8 @@ instances, all different on the surface: a live-pass scorer whose control proved
 it could recognise a no-op but never a success, so nine correct runs read as six
 failures; a false-positive fix verified only by the false positive vanishing,
 which "make the metric report nothing" satisfies perfectly; and a fixture set
-that could show a bug present but not absent. *Tell:* every case in the control
+that demonstrated the bug but could not verify its absence. *Warning sign:*
+every case in the control
 has the same expected outcome. *Fix:* pair them. Every fix that makes something
 stop firing needs a companion asserting the thing that should still fire, and
 the pair is what makes either a measurement.
@@ -533,23 +539,23 @@ same request without Y can.
 
 ## 18. A clean null has more than one cause, and they look alike
 
-§17 is about a check that cannot fail. This one is about a whole *experiment*
-that cannot fail — a design where the arms come back identical and the reason
-is that nothing interesting ever happened in any of them. All three shapes
-below turned up in one afternoon, in a trial of whether `edit` should grow a
+§17 is about a check that cannot fail. A trial can also return identical results
+because neither arm encountered the behavior being tested. All three cases below
+turned up in one afternoon, in a trial of whether `edit` should grow a
 `replace_all` argument.
 
 The design was ordinary: three arms (first-match, unique-or-fail, unique +
 `replace_all`), six models, three rename fixtures, 54 runs, scoring by diff
 against an expected tree. Every arm came back 18/18 correct with zero
-unintended changes. That looks like a strong result. It is mostly an absence.
+unintended changes. Those scores alone do not establish the feature’s usefulness
+or safety.
 
 **The treatment was never applied.** `replace_all` existed in the third arm and
 the models used it *once in eighteen runs*. Five of six never touched it. So for
 seventeen runs the treatment arm was the control arm with a longer schema, and
 whatever the numbers said about it was a statement about `edit`, not about
-`replace_all`. *Tell:* the treatment is something the model may decline. A
-feature it can ignore is not a manipulation you have applied; it is one you have
+`replace_all`. *Warning sign:* the treatment is something the model may decline.
+A feature it can ignore is not a manipulation you have applied; it is one you have
 offered. Check that it is *reached* before spending — this is a different
 question from whether the arms differ, and the pilot answers it for the price of
 one run per arm.
@@ -562,8 +568,9 @@ in every arm, *including the unsafe one that silently edits the first match*.
 That is not the decoys clearing the design; it is the decoys never firing.
 Running the failure classifier over all 172 edit calls said why: zero failures
 of any kind, because the models supplied unique context exactly as the tool
-description asks. *Tell:* the counter-metric reads zero everywhere, the unsafe
-arm included. A hazard that does not fire for the arm built to trip on it has
+description asks. *Warning sign:* the counter-metric reads zero everywhere,
+the unsafe arm included. A hazard that does not fire for the arm built to trip on
+it has
 told you about your fixture, not about your design.
 
 **The arms were the same program.** Two of the three binaries had identical
@@ -573,8 +580,8 @@ rule from §7 — compare the built arms and refuse to spend if they are the
 same — which here meant running one probe edit through each binary and
 watching them answer differently. Without it the trial would have reported no
 difference between unique-or-fail and `replace_all` for the excellent reason
-that they were the same executable. *Tell:* two artifacts that should differ
-have the same checksum. Compare them; do not infer from the build having
+that they were the same executable. *Warning sign:* two artifacts that should
+differ have the same checksum. Compare them; do not infer from the build having
 succeeded.
 
 What survives all three is a real finding, but a narrower one than the table
@@ -594,7 +601,7 @@ like coordination pressure and is nothing of the kind: a patch would not
 collapse "make three changes to this file in a row". Counting only a return
 *across* another file gives 0 in every arm.
 
-*Tell:* a metric whose definition is one clause shorter than the phenomenon.
+*Warning sign:* a metric that omits a condition essential to the claim.
 "Returned to a file" is not "returned to a file after leaving it". Write the
 metric's definition next to the claim it supports and check that the words
 match; then check the metric can still fire, on a fixture where the phenomenon
@@ -627,25 +634,26 @@ three failures. Then the driver, having never answered the prompt it did not
 expect, fed the following message to it as the answer, and the last turn never
 ran at all.
 
-Every one of those is the same root: the fixture's shape was inherited from a
+Every one of those has the same root: the fixture was inherited from a
 neighbouring feature rather than derived from this one. The fix was to put two
 searches in one turn and *count the prompts* — one, not two — the only
 arrangement in which a turn-scoped grant is a thing that happens at all.
 
-*Tell:* write down the sentence the check is meant to prove, and find the line
+*Check:* write down the sentence the check is meant to prove, and find the line
 in the fixture that creates its subject. "An `a` covers the rest of the turn"
 has a subject — a second action in the same turn — and a fixture with one
 action per turn does not contain it. Copying a fixture from the feature next door is
-how the subject goes missing, because the neighbouring feature's shape encodes
-*its* scope, not yours.
+how the subject goes missing, because the neighbouring feature's structure
+encodes *its* scope, not yours.
 
-*Tell:* **an assertion that passes in the arm where the phenomenon cannot have
-occurred is mis-defined, whatever its name says.** This is stronger than
+*Warning sign:* **an assertion that passes in the arm where the phenomenon cannot
+have occurred is mis-defined, whatever its name says.** This is stronger than
 inspecting the definition, because it is mechanical: you already built the
 counter-arm to prove the rig can fail, so read *every* line of its output, not
-just the ones you expected to flip. The passes in a failing arm are the
-free finding. A check that survives the arm designed to kill it is measuring
-something other than what it is named after.
+just the ones you expected to flip. Unexpected passes in the counter-arm can
+reveal additional scoring errors. If an assertion about the targeted behavior
+passes in an arm where that behavior cannot occur, the assertion is measuring
+something else.
 
 ---
 
@@ -673,16 +681,16 @@ every job had been submitted up front, so all 234 kept running to completion
 with nobody reading their results. 233 of 234 output files were written. The
 progress counter froze at 163.
 
-That is the worst available shape for this to fail in: the counter stops while
-the machine keeps working, so it looks like a stall, and an estimate read off
-that counter — "about thirteen minutes left" — is not merely wrong, it is
-confidently wrong an hour later.
+This was particularly misleading because the jobs continued after result
+collection stopped: the counter stops while the machine keeps working, so it
+looks like a stall, and an estimate read off that counter — "about thirteen
+minutes left" — is not merely wrong, it is confidently wrong an hour later.
 
-**And the watcher could not tell.** It was `until grep -q "^wrote " log`, which
-matches only the success marker. A crash produces silence, and silence is
-indistinguishable from still-running. *Tell:* ask of any completion check, *if
-this process died right now, would anything fire?* If not, it is not a
-completion check.
+**The watcher detected success messages, not process exit.** It was `until grep -q
+"^wrote " log`, which matches only the success marker. A crash produces silence,
+and silence is indistinguishable from still-running. *Warning sign:* ask of any
+completion check, *if this process died right now, would anything fire?* If not,
+it is not a completion check.
 
 Three fixes, in order of how much they buy:
 
@@ -699,7 +707,7 @@ None of this is about statistics, and all of it is recoverable: because the raw
 output was on disk (§4), the fix was to repair the runner and re-run it, which
 reused 233 saved runs and re-executed one. Nothing was re-bought.
 
-### The bug was catchable without running anything
+### Static checking could have caught the bug before the trial
 
 `ty` (Astral's type checker — `pip install ty`, no dependencies, 0.3s over every
 Python file in this repository) reports it from the unannotated source:
@@ -718,11 +726,13 @@ that.
 So: **before a long run, type-check the runner.** The habit is narrow and the
 reason is specific — the bug was in an *exception handler*. In a script like
 this the happy path runs two hundred times and the error path runs once, in
-production, fifteen minutes in. No test you would actually write for a one-off
-reaches it, and a checker does not need it to execute. Test the happy path,
-type-check the error paths.
+production, fifteen minutes in. A happy-path smoke test would not reach it,
+and a checker does not need it to execute. Test the happy path, type-check the
+error paths.
 
-Do not chase zero. Over this repository's 32 Python files ty reports 30
+Review the diagnostics for real defects; the runner does not need a clean
+type-checking report before every exploratory trial. Over this repository's 32
+Python files ty reports 30
 diagnostics and one of them is a bug; the rest are things it cannot prove and
 you can — narrowing through `if None in (x1, y1): continue`, a variable
 assigned on every iteration of a loop it cannot show runs, a heterogeneous
@@ -730,11 +740,11 @@ config dict that would rather be a `TypedDict`. Read the list, take the real
 one, move on. Making it a gate would mean silencing twenty-nine things to catch
 the thirtieth.
 
-`ruff` is not the tool for this half of the job, which is worth saying because
-it is the one already on `PATH`. Over the same files its correctness rules
-(`E9,F,B`) find twenty-two issues and none would ever have bitten: unused
-imports, empty f-strings, `zip` without `strict=`, and four false `B023`s where
-the closure is called inside the iteration that binds it. Keep it for
+`ruff` is not the tool for this half of the job, although it is already on
+`PATH`. Over the same files its correctness rules
+(`E9,F,B`) find twenty-two issues and none identified the timeout-handler bug:
+unused imports, empty f-strings, `zip` without `strict=`, and four false `B023`s
+where the closure is called inside the iteration that binds it. Keep it for
 `ruff format`.
 
 ---
@@ -742,12 +752,15 @@ the closure is called inside the iteration that binds it. Keep it for
 ## 20. The resume path is the least-tested code and the last thing you wrote
 
 §19's runner died quietly; this one shipped a bug that did the opposite — it
-worked perfectly on the first invocation and fell over on the second. The
-2026-09 runner was adapted for the shell-parallelism trial, and the adaptation
-lost the `else` branch: fresh jobs assigned `text` from the subprocess,
-resumed jobs (output file already on disk) never assigned it, and the resume
-path raised `UnboundLocalError` at the scoring call. The smoke run never
-touched it, because a smoke run is one fresh job.
+worked perfectly on the first invocation and fell over on the second. The runner
+used in the 2026-09 shell-parallelism trial was adapted for that trial, and the
+adaptation lost the `else` branch: fresh jobs assigned `text` from
+the subprocess, resumed jobs (output file already on disk) never assigned it,
+and the resume path raised `UnboundLocalError` at the scoring call. The smoke run
+never touched it, because a smoke run is one fresh job.
+
+> **Editorial note:** Identify the specific runner or trial meant by this phrase
+> if that information is available.
 
 What made it expensive was the interaction with the human loop. The first
 invocation ran real jobs until it was interrupted, leaving thirteen partial
@@ -758,19 +771,19 @@ an all-resumed batch reports as. Two user-visible symptoms, one root cause,
 and the second one actively misleading: nothing happening looks like
 nothing happening, not like a bug.
 
-An hour went to diagnosing ghost hypotheses (per-character record emission in
-the log writer) before anyone ran the broken path on purpose. The tell was
-in the error text the whole time: `cannot access local variable 'text' where
-it is not associated with a value` names a code path, not a data problem,
-and code paths can be exercised without the API key.
+An hour went to diagnosing unrelated hypotheses (per-character record
+emission in the log writer) before anyone ran the broken path on purpose. The
+warning sign was in the error text the whole time: `cannot access local variable
+'text' where it is not associated with a value` names a code path, not a data
+problem, and code paths can be exercised without the API key.
 
 Three habits, in the order they would have saved the hour:
 
 - **Run the resume path before the trial, not during it.** One job's output
   file stubbed, `run_one` called, row printed — ten lines of driver, no model
-  calls. The rig is exercised at exactly one point by a smoke run, and that
-  point is the fresh path. The resume path only ever runs when something has
-  already gone wrong, which is the worst possible time to meet its bugs.
+  calls. A fresh-job smoke test exercises only the fresh path. The resume path
+  only ever runs when something has already gone wrong, which is the worst
+  possible time to meet its bugs.
 - **A guard belongs at the gate, not in the docs.** The runner now refuses to
   start when the previous batch ended in runner errors; before, resuming onto
   a half-dead batch silently mixed two runs' outputs. Any tool with a resume
@@ -778,8 +791,8 @@ Three habits, in the order they would have saved the hour:
 - **When an error names a variable, exercise the code, not the theory.** The
   instinct was to hunt the subsystem the symptom resembled (the log writer,
   given the prior trial's report). The error was a local variable in a file
-  that could be run in isolation. Re-read the traceback before re-reading the
-  system.
+  that could be run in isolation. Re-read the traceback before investigating
+  other subsystems.
 
 ---
 
@@ -796,8 +809,8 @@ The report's own method notes carried the refutation, unremarked: *"the
 first-pass scorer keyed on `The program failed` in the rendered text."* A
 scorer reading rendered text has no business reporting on the JSONL's
 structure — and the renderer *does* emit per-event, each chunk a potential
-line. The symptom was real; the address in the report was a guess that
-hardened into fact on its way into the file.
+line. The symptom was real; the subsystem named in the report was an inferred cause
+presented as an observed fact.
 
 Cost of treating the report as fact: an hour of archaeology aimed at the
 wrong subsystem, and one deleted report-finding (the "jsonlog bug") that
@@ -810,11 +823,11 @@ the symptom from a contaminant into a tripwire. When it fires, the file
 will be in hand.
 
 The rule is not "distrust bug reports" — it is that **a report asserts the
-symptom and guesses the address**. Reproduce at the stated address before
-changing anything there; if it does not reproduce, that is not a dead end,
-it is the finding. The next question is always the same: *who else reads
-this data?* The bug is usually in a reader nobody counted, because readers
- outnumber writers.
+symptom and infers the subsystem**. Reproduce at the stated location before
+changing anything there; if it does not reproduce, that is not a dead end, it is
+the finding. The next question is always the same: *who else reads this data?*
+Check the other readers of the data; in this case, the scorer and renderer
+explained the symptom.
 
 ---
 
@@ -822,43 +835,19 @@ this data?* The bug is usually in a reader nobody counted, because readers
 
 Most of what goes wrong is not statistics. It is the equipment.
 
-Before believing any result, ask in this order: *did the mechanism fire, did the
-model actually use the thing I am testing, could the fixture have caught the
-failure I am claiming it rules out, did the scorer see what I think it saw, do
-the two arms differ in exactly one thing, did anything pass in the arm built to
-break it, does the fixture even contain the situation I am claiming to measure,
-did the runner actually finish or only stop reporting, and have I read three
-transcripts?*
-Only then look at the p-value — and remember that a broken instrument's
-favourite output is `p = 1.0`.
+Use the pre-run checklist before spending. Confirm that the mechanism is reached,
+the fixture contains the relevant situation, and the scorer distinguishes the
+outcomes you care about. Test the scorer against both expected successes and
+expected failures, and verify that any sabotage actually changed the program.
 
-One from the 2026-09-08 namespace trial, before designing any arm: *when in a
-session does the failure happen?* A wrong reach that is 46% of first programs and
-10% of second ones is a habit executed before anything was read, and no change to
-a tool description can touch it — which four arms established the expensive way
-after the position table would have said it for free. Bin the phenomenon by
-position, or by step, before choosing the lever.
+Before interpreting a surprising aggregate, read the underlying transcripts.
+Before adding more runs, check that the runner completed and that its error and
+resume paths work.
 
-One from the 2026-09-08 code-result trial, cheap and easy to forget: *was
-reasoning pinned low on every model, and did each one obey?* (§5 — defaults are
-moving toward maximum, and a model spending its budget thinking looks exactly
-like an API failure.)
+When choosing a treatment, inspect where in the session the failure occurs. A
+change to information the model has not yet read cannot explain its earlier
+choices.
 
-Two more, from the 2026-09-01 shell-parallelism trial: *has the resume path
-been run on purpose, with a stub, before the batch?* (§20 — it only ever runs
-when something has already gone wrong) and *did the bug report's address
-reproduce, and if not, who else reads this data?* (§21 — the report asserts
-the symptom and guesses the address).
-
-And get the verdict out of the hands of whoever wants it to pass: break the code
-on purpose and watch the check go red (§1, §17), or hand the check to a model
-that does not share your expectation (§13). Both work because neither routes
-through your judgment. Resolving to be more careful does not; it was tried, for
-nine consecutive bugs.
-
-One caveat on the first of those, learned the hard way (§17): *did the
-sabotage apply?* A control whose patch silently matched nothing reports the
-same green as a check that works, and it is then quoted as proof. Make the
-break assert that it happened. And ask of any fix that makes something stop
-firing: *what still has to fire?* — because "report nothing" satisfies a
-one-sided check perfectly.
+Stronger checks are more useful than a resolution to be more careful. Require a
+concrete counterexample from a reviewer, or demonstrate that a targeted defect
+makes the relevant assertion fail.
