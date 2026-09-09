@@ -286,6 +286,20 @@ func TestContextCommandSendsNothingAndMutatesNothing(t *testing.T) {
 	}
 }
 
+func TestWithinTurnUsesTheRequestedModelName(t *testing.T) {
+	r, _, out := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader(""))
+	defer r.Close()
+	r.opts.IsTerminal = func() bool { return true }
+
+	r.withinTurn(context.Background(), "openrouter/advisor-model", func(context.Context) string {
+		return ""
+	})
+
+	if !strings.Contains(out.String(), "Waiting for openrouter/advisor-model") {
+		t.Errorf("waiting status used the active model instead of the requested model:\n%s", out.String())
+	}
+}
+
 func TestBannerAndPromptHeader(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows requires a real console for ANSI mode")

@@ -519,12 +519,12 @@ func (r *REPL) showInterruptHint() {
 	r.printf("Stopped. Your next message continues from here — the model keeps everything up to this point.")
 }
 
-// withinTurn runs fn with the in-turn scaffolding shared by a normal turn and a
-// one-off /btw: a cancelable context, cursor restore, the double-Ctrl-C chord
+// withinTurn runs fn with the in-turn scaffolding shared by a normal turn,
+// /btw, and /consult: a cancelable context, cursor restore, the double-Ctrl-C chord
 // (first cancels the send, the second within 2s exits), SIGUSR1 as the same
 // interrupt without the chord, and the "Waiting for <model>" cue. It returns
 // fn's result.
-func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) string {
+func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context.Context) string) string {
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -585,7 +585,7 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 	// interactively; the first stream event erases it.
 	if r.interactive() {
 		r.out.hideCursor()
-		r.out.startWaiting(r.coder.Model.QualifiedSlug())
+		r.out.startWaiting(modelName)
 	}
 	return fn(tctx)
 }
@@ -593,7 +593,7 @@ func (r *REPL) withinTurn(ctx context.Context, fn func(context.Context) string) 
 // runAside runs a /btw one-off question with the same in-turn scaffolding as a
 // normal turn, but records no history — the exchange is not part of the chat.
 func (r *REPL) runAside(ctx context.Context, question string) {
-	r.withinTurn(ctx, func(tctx context.Context) string {
+	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
 		return r.coder.RunAside(tctx, question)
 	})
 }
@@ -605,7 +605,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 	costBefore, _ := r.coder.SessionCost()
 
 	if r.opts.History == nil {
-		r.withinTurn(ctx, func(tctx context.Context) string {
+		r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
 			return r.coder.Run(tctx, message)
 		})
 		return
@@ -644,7 +644,7 @@ func (r *REPL) runTurn(ctx context.Context, message string) {
 		r.crashRecorded = false
 	}()
 
-	answer := r.withinTurn(ctx, func(tctx context.Context) string {
+	answer := r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
 		return r.coder.Run(tctx, message)
 	})
 	if !r.crashRecorded {

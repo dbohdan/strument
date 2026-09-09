@@ -57,7 +57,7 @@ func cmdConsult(ctx context.Context, r *REPL, args string) string {
 		client = r.opts.MakeClient(m)
 	}
 
-	answer := r.withinTurn(ctx, func(tctx context.Context) string {
+	answer := r.withinTurn(ctx, m.QualifiedSlug(), func(tctx context.Context) string {
 		return r.coder.RunConsult(tctx, client, m, question, r.opts.ConsultScope)
 	})
 	if strings.TrimSpace(answer) == "" {
