@@ -302,6 +302,33 @@ type Config struct {
 	// the allowlist to reach a model-run command, which is what keeps a value
 	// written in a config file from being handed to the model by accident.
 	EnvSet map[string]string
+
+	// Prompt as a whole-string replacement or literal injector. Each is a
+	// string setting that lands on the corresponding prompt, layered over the
+	// built-in on top of whatever format's set is active. Empty ("", the
+	// default) means the built-in wins. The prompt mechanism is two-tier:
+	//
+	//   - prompt_system_prefix is a Tier 0 literal injector: prepended verbatim
+	//     to the active system prompt, with no placeholder substitution. It is
+	//     how a user adds a standing directive without rewriting anything.
+	//   - prompt_code / prompt_ask are Tier 1 whole-string replacements of the
+	//     active mode's MainSystem. They share the built-ins' closed
+	//     placeholder set ({platform}, {language}, {final_reminders},
+	//     {code_tools}, {observation_tools}) and are validated at load.
+	//   - prompt_commit / prompt_read_only are the same Tier 1 replacement for
+	//     the commit-message system prompt and the read-only reference prefix.
+	//
+	// The prompt_ keys are project- and user-settable; the trust gate that
+	// guards .strument.star is what makes a project's prompt overrides the
+	// user's own decision. chat_language fills the {language}/{final_reminders}
+	// slots (what detectUserLanguage reads as its explicit branch) instead of
+	// relying on LANG-style environment variables.
+	PromptSystemPrefix string
+	PromptCode         string
+	PromptAsk          string
+	PromptCommit       string
+	PromptReadOnly     string
+	ChatLanguage       string
 }
 
 // ExampleMessage is one few-shot example: a role ("user" or "assistant") and

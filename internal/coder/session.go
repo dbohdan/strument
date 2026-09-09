@@ -10,7 +10,6 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/skill"
 )
 
@@ -136,6 +135,16 @@ func (c *Coder) SetModel(m *config.Model) {
 // EditFormat returns the active edit format.
 func (c *Coder) EditFormat() string { return c.editFormat }
 
+// SetChatLanguage replaces the env-var language detection that defaultPlatformInfo
+// ran at New with an explicitly configured code, re-deriving the platform's
+// language. It exists because `chat_language` is a config key, and config is
+// loaded after the Coder is built — so the language slot has to be recomputable
+// rather than fixed at construction.
+func (c *Coder) SetChatLanguage(code string) {
+	c.ChatLanguage = code
+	c.Platform.Language = detectUserLanguage(code)
+}
+
 // SetEditFormat switches the active edit format and its prompt set without
 // changing the model — the mechanism behind /ask and /code. An empty
 // format restores the model's default.
@@ -144,17 +153,11 @@ func (c *Coder) SetEditFormat(format string) {
 		format = c.Model.EditFormat
 	}
 	c.editFormat = format
-	c.Prompts = promptsForFormat(format)
-	// Config-provided examples (example_messages) ride on top of whatever
-	// format's set is active, so they are re-applied on every switch. They are
-	// experimental-arm input (the shell-parallelism trial's EX arm), not part
-	// of any built-in set — which is why they live on the Coder rather than in
-	// prompts.Set.
-	for _, ex := range c.Examples {
-		c.Prompts.ExampleMessages = append(c.Prompts.ExampleMessages, prompts.Example{
-			Role: ex.Role, Content: ex.Content,
-		})
-	}
+	// setPrompts rebuilds the active prompt set from the built-in and reapplies
+	// this session's prompt overrides and example_messages, so a format switch
+	// (/ask, /code) never carries the previous mode's custom prompt into the new
+	// one.
+	c.setPrompts()
 }
 
 // LastCommitHash is the short hash of the session's last auto-commit ("" if

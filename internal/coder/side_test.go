@@ -21,7 +21,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
 	out := &summaryOutput{}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock)
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock, "")
 
 	got := msg("", "diff text")
 
@@ -38,7 +38,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 
 func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
 	clock := &fastClock{}
-	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock)
+	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock, "")
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so the caller falls back", got)
@@ -188,7 +188,7 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 // takes, since that is where this was found.
 func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
 	stub := &emptyThenStub{blanks: 99}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{})
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{}, "")
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so gitrepo falls back", got)

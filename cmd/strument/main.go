@@ -181,6 +181,16 @@ func (c *chatCmd) Run() error {
 	cdr.CodeNamespace, _ = coder.ParseCodeNamespace(c.CodeNamespace)
 	cdr.Examples = cfg.ExampleMessages
 	cdr.WebfetchAllow = cfg.WebfetchAllow
+	cdr.SystemPromptPrefix = cfg.PromptSystemPrefix
+	cdr.PromptCode = cfg.PromptCode
+	cdr.PromptAsk = cfg.PromptAsk
+	cdr.PromptCommit = cfg.PromptCommit
+	cdr.PromptReadOnly = cfg.PromptReadOnly
+	// chat_language overrides the env-var detection that defaultPlatformInfo
+	// ran in New; re-deriving the platform's language is what makes the
+	// {language}/{final_reminders} slots and the commit messenger use the
+	// configured code.
+	cdr.SetChatLanguage(cfg.ChatLanguage)
 	// The project's named checks, which the check tool runs without asking:
 	// the model supplies only a name, so nothing it says can change what runs.
 	cdr.Check = cfg.Check
@@ -202,7 +212,7 @@ func (c *chatCmd) Run() error {
 		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock)
+			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits

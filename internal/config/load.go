@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"go.starlark.net/starlark"
@@ -118,6 +119,20 @@ type fileGlobals struct {
 
 	hasExampleMessages bool
 	exampleMessagesVal []ExampleMessage
+
+	hasPromptSystemPrefix bool
+	promptSystemPrefixVal string
+	hasPromptCode         bool
+	promptCodeVal         string
+	hasPromptAsk          bool
+	promptAskVal          string
+	hasPromptCommit       bool
+	promptCommitVal       string
+	hasPromptReadOnly     bool
+	promptReadOnlyVal     string
+
+	hasChatLanguage bool
+	chatLanguageVal string
 }
 
 // defaultSandbox is what `sandbox` means when a config does not say.
@@ -417,6 +432,24 @@ func Load(opts Options) (*Config, error) {
 	if user.hasExampleMessages {
 		cfg.ExampleMessages = user.exampleMessagesVal
 	}
+	if user.hasPromptSystemPrefix {
+		cfg.PromptSystemPrefix = user.promptSystemPrefixVal
+	}
+	if user.hasPromptCode {
+		cfg.PromptCode = user.promptCodeVal
+	}
+	if user.hasPromptAsk {
+		cfg.PromptAsk = user.promptAskVal
+	}
+	if user.hasPromptCommit {
+		cfg.PromptCommit = user.promptCommitVal
+	}
+	if user.hasPromptReadOnly {
+		cfg.PromptReadOnly = user.promptReadOnlyVal
+	}
+	if user.hasChatLanguage {
+		cfg.ChatLanguage = user.chatLanguageVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -518,6 +551,30 @@ func Load(opts Options) (*Config, error) {
 		// project's pair alongside the user's is worth more than either alone.
 		if project.hasExampleMessages {
 			cfg.ExampleMessages = append(cfg.ExampleMessages, project.exampleMessagesVal...)
+		}
+		// Whole-value, like env_allow: a project's prompt override is one
+		// decision about how the model reads this repository, and the trust gate
+		// is what makes it the user's own decision — a project must be able to
+		// narrow what the user's config widened. chat_language, by contrast, is
+		// a per-project preference empty unless set, so it follows env_set's
+		// rule: a project naming a language should not silently drop the user's.
+		if project.hasPromptSystemPrefix {
+			cfg.PromptSystemPrefix = project.promptSystemPrefixVal
+		}
+		if project.hasPromptCode {
+			cfg.PromptCode = project.promptCodeVal
+		}
+		if project.hasPromptAsk {
+			cfg.PromptAsk = project.promptAskVal
+		}
+		if project.hasPromptCommit {
+			cfg.PromptCommit = project.promptCommitVal
+		}
+		if project.hasPromptReadOnly {
+			cfg.PromptReadOnly = project.promptReadOnlyVal
+		}
+		if project.hasChatLanguage {
+			cfg.ChatLanguage = project.chatLanguageVal
 		}
 	}
 
@@ -643,6 +700,78 @@ func predeclaredGlobals(lookup func(string) (string, bool), root string) starlar
 
 // execConfig executes one Starlark file with the builtins predeclared and
 // extracts the required globals.
+// promptSlots is the closed placeholder set each Tier 1 prompt accepts. The
+// keys match what pyFormat fills at assembly time, kept closed so a config
+// cannot invent a slot the harness does not render — code is the source of
+// truth for what reaches a model, and a template that names a slot nobody
+// fills would be a silent lie.
+var promptSlots = map[string]map[string]bool{
+	"prompt_code": {
+		"platform": true, "language": true, "final_reminders": true,
+		"code_tools": true, "observation_tools": true,
+	},
+	"prompt_ask": {
+		"platform": true, "language": true, "final_reminders": true,
+		"code_tools": true, "observation_tools": true,
+	},
+	"prompt_commit": {"language_instruction": true},
+	// prompt_read_only and prompt_system_prefix are literal: no slots.
+	"prompt_read_only":     {},
+	"prompt_system_prefix": {},
+}
+
+// parsePromptString reads one prompt_* setting. All share the shape — a
+// string, optional, empty means unset — and all are validated against the
+// closed placeholder set so a typo is a load error that says so rather than a
+// slot that silently never fills.
+func parsePromptString(path, name string, v starlark.Value) (string, error) {
+	s, ok := starlark.AsString(v)
+	if !ok {
+		return "", fmt.Errorf("%s: `%s` must be a string, got %s", path, name, v.Type())
+	}
+	slots, ok := promptSlots[name]
+	if !ok {
+		return "", fmt.Errorf("%s: `%s` has no defined placeholder set", path, name)
+	}
+	if err := validatePromptSlots(path, name, s, slots); err != nil {
+		return "", err
+	}
+	return s, nil
+}
+
+// validatePromptSlots checks that every {placeholder} in a prompt string is a
+// member of the key's closed set. Literal braces must be doubled, as in the
+// templates pyFormat consumes, so an unbraced `{` that is not the start of a
+// known slot is a load error with the list of what would have been accepted.
+func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
+	for i := 0; i < len(s); {
+		if s[i] != '{' {
+			i++
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == '{' {
+			i += 2 // a doubled brace is a literal brace
+			continue
+		}
+		j := strings.Index(s[i:], "}")
+		if j < 0 {
+			return fmt.Errorf("%s: `%s` has an unmatched \"{\" — double literal braces as {{ and }}", path, name)
+		}
+		slot := s[i+1 : i+j]
+		if !allowed[slot] {
+			known := strings.Join(slices.Sorted(maps.Keys(allowed)), ", ")
+			want := "no placeholders"
+			if known != "" {
+				want = "the placeholders: " + known
+			}
+			return fmt.Errorf(
+				"%s: `%s` uses {%s}, which is not a %q slot — this key takes %s", path, name, slot, name, want)
+		}
+		i += j + 1
+	}
+	return nil
+}
+
 func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
 	thread := &starlark.Thread{Name: path}
 	predeclared := predeclaredGlobals(lookup, root)
@@ -1037,6 +1166,45 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 		}
 		out.hasExampleMessages = true
 		out.exampleMessagesVal = examples
+	}
+
+	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_ask", "prompt_commit", "prompt_read_only"} {
+		v, ok := globals[name]
+		if !ok {
+			continue
+		}
+		val, err := parsePromptString(path, name, v)
+		if err != nil {
+			return nil, err
+		}
+		switch name {
+		case "prompt_system_prefix":
+			out.hasPromptSystemPrefix = true
+			out.promptSystemPrefixVal = val
+		case "prompt_code":
+			out.hasPromptCode = true
+			out.promptCodeVal = val
+		case "prompt_ask":
+			out.hasPromptAsk = true
+			out.promptAskVal = val
+		case "prompt_commit":
+			out.hasPromptCommit = true
+			out.promptCommitVal = val
+		case "prompt_read_only":
+			out.hasPromptReadOnly = true
+			out.promptReadOnlyVal = val
+		}
+	}
+
+	if lv, ok := globals["chat_language"]; ok {
+		s, ok := starlark.AsString(lv)
+		if !ok {
+			return nil, fmt.Errorf("%s: `chat_language` must be a string language code, got %s", path, lv.Type())
+		}
+		// An empty string is an explicit "don't force a language", distinct from
+		// the key being absent (which leaves the env-var detection in charge).
+		out.hasChatLanguage = true
+		out.chatLanguageVal = strings.TrimSpace(s)
 	}
 
 	return out, nil

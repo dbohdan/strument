@@ -45,7 +45,19 @@ type Coder struct {
 	PrefillSupported     bool // continuation on finish_reason=length
 	ExamplesAsSysMsg     bool
 	SystemPromptPrefix   string
-	ChatLanguage         string
+	// PromptCode and PromptAsk are user replacements for the active mode's
+	// MainSystem (the `prompt_code` / `prompt_ask` config). Empty means "use the
+	// built-in". They live on the Coder rather than in the prompts.Set built-ins
+	// so a session does not mutate the shared Tool/Ask singletons. PromptCommit
+	// and PromptReadOnly are the same overrides for CommitSystem and the
+	// read-only reference prefix; PromptCommit is threaded to CommitMessenger,
+	// which owns its own prompt so it can run on a side model. All are applied
+	// by setPrompts, which SetEditFormat and New both funnel through.
+	PromptCode     string
+	PromptAsk      string
+	PromptCommit   string
+	PromptReadOnly string
+	ChatLanguage   string
 	// OfferCode, when false, withholds the run_code tool from the schema and
 	// empties the {code_tools} prompt slot. Default true, set in New; the
 	// false case is the feature-reverted arm of the code-mode trial and a
@@ -345,6 +357,46 @@ func promptsForFormat(format string) prompts.Set {
 	return prompts.Tool
 }
 
+// setPrompts selects the prompt set for the active format and applies this
+// session's user overrides (prompt_code/prompt_ask) onto it. The built-ins are
+// module-level singletons shared by every session, so an override is written to
+// a fresh copy rather than mutating prompts.Tool/Ask in place — a second Coder
+// in the same process must not inherit the first's custom prompt.
+func (c *Coder) setPrompts() {
+	c.Prompts = promptsForFormat(c.editFormat)
+	// A copy: see promptsForFormat's callers. The Set is a struct of strings, so
+	// the clone is cheap and gives us a per-session value to hand to the
+	// assembler without reaching into the shared built-in.
+	base := c.Prompts
+	switch c.editFormat {
+	case "tool":
+		if c.PromptCode != "" {
+			base.MainSystem = c.PromptCode
+		}
+		break
+	case "ask":
+		if c.PromptAsk != "" {
+			base.MainSystem = c.PromptAsk
+		}
+		break
+	}
+	if c.PromptReadOnly != "" {
+		base.ReadOnlyFilesPrefix = c.PromptReadOnly
+	}
+	c.Prompts = base
+
+	// Config-provided examples (example_messages) ride on top of whatever
+	// format's set is active. They are re-applied on every switch because a
+	// switch rebuilds the set from the built-in; they live on the Coder rather
+	// than in prompts.Set, as experimental-arm input (the shell-parallelism
+	// trial's EX arm).
+	for _, ex := range c.Examples {
+		c.Prompts.ExampleMessages = append(c.Prompts.ExampleMessages, prompts.Example{
+			Role: ex.Role, Content: ex.Content,
+		})
+	}
+}
+
 // PlatformInfo feeds the {platform} prompt slot deterministically
 // (injectable for fixtures).
 type PlatformInfo struct {
@@ -373,7 +425,6 @@ func New(root string, model *config.Model) *Coder {
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
-		Prompts:              promptsForFormat(model.EditFormat),
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
 		shown:                newShownFiles(),
@@ -382,6 +433,7 @@ func New(root string, model *config.Model) *Coder {
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},
 	}
+	c.setPrompts()
 	c.Platform = defaultPlatformInfo(c)
 	// The observation tools are contained to the project root, with the same
 	// exemption edits get: a file the user pinned is sanctioned wherever it

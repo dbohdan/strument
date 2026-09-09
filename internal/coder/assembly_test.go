@@ -473,3 +473,71 @@ func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
 		t.Error("the redirect fired with ObservationViaRunCode off")
 	}
 }
+
+// prompt_code and prompt_ask replace the active mode's MainSystem; the switch
+// must carry the replacement to the assembled system prompt, and a format
+// switch must not leak one mode's custom prompt into the other.
+func TestPromptCodeAndAskOverrideMainSystem(t *testing.T) {
+	c := testCoder(t)
+	c.PromptCode = "You are the code-format prompt.\n{final_reminders}\n"
+	c.setPrompts()
+
+	if got := c.fmtSystemPrompt(c.Prompts.MainSystem); !strings.Contains(got, "code-format prompt") {
+		t.Errorf("tool-mode system prompt is not the override:\n%s", got)
+	}
+	if strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "code-format prompt") {
+		t.Error("the built-in singleton was mutated, not the session copy")
+	}
+
+	// Switch to ask: the code replacement must not follow.
+	c.SetEditFormat("ask")
+	if got := c.fmtSystemPrompt(c.Prompts.MainSystem); strings.Contains(got, "code-format prompt") {
+		t.Errorf("the ask system prompt inherited code-mode's override:\n%s", got)
+	}
+}
+
+// prompt_read_only replaces the prefix that frames injected reference files.
+func TestPromptReadOnlyOverridesPrefix(t *testing.T) {
+	c := testCoder(t)
+	c.PromptReadOnly = "These are read-only reference files.\n"
+	c.setPrompts()
+
+	if got := c.Prompts.ReadOnlyFilesPrefix; got != "These are read-only reference files.\n" {
+		t.Errorf("ReadOnlyFilesPrefix = %q, want the override", got)
+	}
+}
+
+// chat_language refills the {language} and {final_reminders} slots, replacing
+// the env-derived language without touching anything else in the platform.
+func TestChatLanguageFillsSlots(t *testing.T) {
+	c := testCoder(t)
+	c.SetChatLanguage("fr")
+
+	if !strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "Reply in French.") {
+		t.Error("the configured language did not reach {final_reminders}")
+	}
+	if c.Platform.Language != "French" {
+		t.Errorf("Platform.Language = %q, want French", c.Platform.Language)
+	}
+}
+
+// prompt_system_prefix lands before the assembled system prompt via
+// SystemPromptPrefix, the Tier 0 literal injector with no placeholder
+// substitution.
+func TestPromptSystemPrefixPrepends(t *testing.T) {
+	c := testCoder(t)
+	c.SystemPromptPrefix = "Be terse."
+
+	all := formatAllSystem(c.formatChatChunks())
+	if !strings.HasPrefix(all, "Be terse.") {
+		t.Errorf("system prompt does not open with the prefix:\n%s", all)
+	}
+}
+
+func formatAllSystem(chunks *chatChunks) string {
+	var b strings.Builder
+	for _, m := range chunks.system {
+		b.WriteString(m.Text())
+	}
+	return b.String()
+}

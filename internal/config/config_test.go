@@ -959,3 +959,78 @@ func TestProjectCannotReadTheUsersCheck(t *testing.T) {
 		t.Errorf("err = %v, want it to name the unassigned global", err)
 	}
 }
+
+// The prompt_* settings parse as plain strings, and Tier 1 replacements are
+// validated against a closed placeholder set, so a typo is a load error that
+// names the key and the offending slot instead of a template that silently
+// never fills.
+func TestPromptSettingsParse(t *testing.T) {
+	src := userConfig + `
+prompt_system_prefix = "Be terse.\n\n"
+prompt_code = "You are a senior engineer.\n{platform}\n{language}\n"
+prompt_ask = "You analyse.\n{final_reminders}\n"
+prompt_commit = "Write a conventional commit for the diff.{language_instruction}"
+prompt_read_only = "Reference files follow."
+chat_language = "fr"
+`
+	cfg, err := Load(harness(t, src, "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PromptSystemPrefix != "Be terse.\n\n" {
+		t.Errorf("PromptSystemPrefix = %q", cfg.PromptSystemPrefix)
+	}
+	if !strings.Contains(cfg.PromptCode, "{platform}") || !strings.Contains(cfg.PromptCode, "{language}") {
+		t.Errorf("PromptCode = %q", cfg.PromptCode)
+	}
+	if !strings.Contains(cfg.PromptAsk, "{final_reminders}") {
+		t.Errorf("PromptAsk = %q", cfg.PromptAsk)
+	}
+	if !strings.Contains(cfg.PromptCommit, "{language_instruction}") {
+		t.Errorf("PromptCommit = %q", cfg.PromptCommit)
+	}
+	if cfg.PromptReadOnly != "Reference files follow." {
+		t.Errorf("PromptReadOnly = %q", cfg.PromptReadOnly)
+	}
+	if cfg.ChatLanguage != "fr" {
+		t.Errorf("ChatLanguage = %q", cfg.ChatLanguage)
+	}
+}
+
+func TestPromptRejectsUnknownPlaceholder(t *testing.T) {
+	src := userConfig + `prompt_code = "You are {not_a_slot}.\n"`
+	_, err := Load(harness(t, src, "", testEnv))
+	if err == nil {
+		t.Fatal("an unknown placeholder must fail the load")
+	}
+	if !strings.Contains(err.Error(), "not_a_slot") {
+		t.Errorf("err = %v, want it to name the offending slot", err)
+	}
+}
+
+// prompt_system_prefix and prompt_read_only take no placeholders at all; a
+// brace that is not doubled is refused, matching the pyFormat templates.
+func TestPromptLiteralRejectsAnyBrace(t *testing.T) {
+	// A single brace in a literal prompt is not the doubled-brace escape the
+	// pyFormat templates require, so it must be refused at load.
+	src := userConfig + "prompt_read_only = \"Reference {files} follow.\"\n"
+	_, err := Load(harness(t, src, "", testEnv))
+	if err == nil {
+		t.Fatal("a single brace in a literal prompt must fail the load")
+	}
+	if !strings.Contains(err.Error(), "files") {
+		t.Errorf("err = %v, want it to name the offending slot", err)
+	}
+}
+
+// chat_language is per-effort: an empty string means "don't force a language",
+// and unlike the prompt_* keys it is not validated against a placeholder set.
+func TestChatLanguageEmptyMeansUnset(t *testing.T) {
+	cfg, err := Load(harness(t, userConfig+"\nchat_language = \"\"\n", "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ChatLanguage != "" {
+		t.Errorf("ChatLanguage = %q, want empty", cfg.ChatLanguage)
+	}
+}

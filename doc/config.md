@@ -41,6 +41,11 @@ The loader reads these module-level variables after running your file:
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
+| `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
+| `prompt_code`, `prompt_ask` | string | Optional. Whole-string replacement for the coding / analysis system prompt. See below. |
+| `prompt_commit` | string | Optional. Whole-string replacement for the commit-message system prompt. See below. |
+| `prompt_read_only` | string | Optional. Whole-string replacement for the read-only reference prefix. See below. |
+| `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
 
 Anything else at the top level (helper `def`s, intermediate variables) is
 ignored by the loader, so factor freely.
@@ -721,6 +726,79 @@ Everything else about signing is Git's domain: which key `-S` uses is decided by
 `user.signingkey`. As with any `git commit`, a failure to sign makes the turn's
 commit fail; the edits stay in the working tree, where `/undo` still reaches
 them through the turn's snapshot.
+
+### `prompt_*` — customizing the system prompts
+
+These settings let you change how the model is framed, on top of the built-in
+prompts in `internal/prompts/`. There are two tiers, and which you reach for
+depends on how much you want to own.
+
+**Tier 0 — a standing directive.** `prompt_system_prefix` is prepended to the
+active system prompt (whatever mode and format) with no placeholder
+substitution. Use it for a rule that applies every turn and in every mode —
+"be terse", "never touch the CI config" — without rewriting anything else:
+
+```python
+prompt_system_prefix = "You work on the Acme codebase.\n\n"
+```
+
+**Tier 1 — whole-string replacement.** `prompt_code`, `prompt_ask`,
+`prompt_commit`, and `prompt_read_only` replace the corresponding built-in
+prompt entirely:
+
+| Key | Replaces |
+|---|---|
+| `prompt_code` | the coding-mode system prompt (`Tool.MainSystem`) |
+| `prompt_ask` | the analysis-mode system prompt (`Ask.MainSystem`) |
+| `prompt_commit` | the commit-message system prompt |
+| `prompt_read_only` | the prefix framing injected read-only reference files |
+
+Replacement is a deliberate act, and the review surface is the point: you are
+owning the whole string, not patching one paragraph. To tweak a paragraph
+instead, use `prompt_system_prefix`.
+
+Replacements are templates that may use the built-ins' **closed placeholder
+set** — the same `{...}` slots `pyFormat` fills at assembly time:
+
+- `prompt_code` / `prompt_ask`: `{platform}`, `{language}`, `{final_reminders}`,
+  `{code_tools}`, `{observation_tools}`.
+- `prompt_commit`: `{language_instruction}`.
+- `prompt_read_only`: none (literal).
+
+The set is closed on purpose: a slot the harness does not render would be prose
+that promises or references something that never arrives. An unknown `{...}` is
+refused at config load with a message naming the key and the offending slot, so
+a typo cannot silently produce a broken prompt. Literal braces must be doubled
+(`{{` / `}}`), exactly as in the built-in templates.
+
+```python
+prompt_code = """You are a senior engineer on Acme's Go services.
+Reply in {language}.
+{final_reminders}
+"""
+```
+
+**Which file wins.** Prompt overrides are whole-value like `env_allow`: a
+project's `.strument.star` replaces a user's setting for the same key, and the
+trust gate is what makes a project's prompt the user's own decision. A project
+that wants its own house style says so in the file the whole team reviews.
+
+### `chat_language`
+
+`chat_language` fills the `{language}` and `{final_reminders}` prompt slots
+with a language of your choice, replacing the default environment-variable
+detection (`LANG` and friends). It takes a language code and maps it through the
+same small set the environment detection uses (`fr` → "French", `zh` →
+"Chinese", …):
+
+```python
+chat_language = "fr"
+```
+
+An empty string (`""`) explicitly turns the configured language off, leaving the
+environment detection in charge — distinct from the key being absent, which also
+leaves the environment in charge. Because it feeds the prompt as normalized
+text, a code outside the known map is left as-is rather than refused.
 
 ### `env_allow`
 

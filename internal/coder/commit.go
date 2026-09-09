@@ -221,14 +221,21 @@ const commitMessageTimeout = 60 * time.Second
 // paid $0.00093. Nil is accepted for a caller that does not account.
 func CommitMessenger(
 	cl llm.ModelClient, model *config.Model, language string, record func(llm.Usage),
-	out Output, clock Clock,
+	out Output, clock Clock, prompt string,
 ) func(diffs, context string) string {
 	return func(diffs, chatContext string) string { //nolint:contextcheck // its own timeout; the turn's context is already done here.
 		languageInstruction := ""
 		if language != "" {
 			languageInstruction = "\n- Is written in " + language + "."
 		}
-		system := pyFormat(prompts.CommitSystem, map[string]string{
+		// prompt is the user's whole-string replacement for the commit system
+		// prompt (`prompt_commit`), or the built-in when empty. Both are
+		// pyFormat templates sharing the {language_instruction} slot.
+		p := prompts.CommitSystem
+		if prompt != "" {
+			p = prompt
+		}
+		system := pyFormat(p, map[string]string{
 			"language_instruction": languageInstruction,
 		})
 
