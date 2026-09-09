@@ -373,7 +373,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
 		dropUserTurn()
-		c.Out.Warningf("Empty response received from LLM. Check your provider account?")
+		c.Out.Warningf("The model returned an empty response.")
 		return OutcomeFailed, ""
 	}
 
@@ -420,7 +420,7 @@ func (c *Coder) noteInterrupt() {
 // the one thing a log must not be silent about.
 func (c *Coder) warnLoop(f *loopFinding) {
 	if f == nil {
-		c.Out.Warningf("The model's reply was repeating itself, so it was stopped.")
+		c.Out.Warningf("Stopped the model's reply because it was repeating itself.")
 		return
 	}
 	c.Out.Warningf("The model's %s was repeating itself (%q %d times), so it was stopped.",

@@ -132,7 +132,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 		}
 		for _, name := range names {
 			if !config.ValidEnvAllowName(name) {
-				r.out.Errorf("%q is not an environment variable name (names only; values come from the environment).", name)
+				r.out.Errorf("%q is not a valid environment variable name. Enter names only; values are read from the session environment.", name)
 				continue
 			}
 			if os.Getenv(name) == "" {
@@ -160,7 +160,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 			delete(r.envAdded, name)
 			r.envDropped[name] = true
 			if name == "PATH" {
-				r.out.Warningf("Most commands will stop working without PATH.")
+				r.out.Warningf("Removing PATH may prevent commands from finding the programs they need.")
 			}
 		}
 		r.rebuildEnvAllow()

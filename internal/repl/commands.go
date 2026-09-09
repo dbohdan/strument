@@ -73,35 +73,35 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> ...", "Pin the files this session is about (globs allowed).", cmdAdd},
-		{"ask", "[<question>]", "Ask about the code without editing (bare: stay in ask mode).", cmdAsk},
-		{"btw", "<question>", "Ask a one-off question outside the chat (not added to context).", cmdBtw},
+		{"add", "<file> ...", "Pin files for the model to inspect or edit (globs allowed).", cmdAdd},
+		{"ask", "[<question>]", "Ask about the code without editing. With no question, switch to ask mode.", cmdAsk},
+		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a project check; optionally add its output to the chat.", cmdCheck},
 		{"clear", "", "Clear the conversation history.", cmdClear},
-		{"code", "[<request>]", "Return to editing (bare: stay in code mode).", cmdCode},
+		{"code", "[<request>]", "Request code changes. With no request, switch to code mode.", cmdCode},
 		{"consult", "<alias> <question>", "Ask another model, and optionally add its answer to the chat.", cmdConsult},
-		{"context", "[<n>]", "Show the folded chat history as the model sees it (first n summaries).", cmdContext},
+		{"context", "[<n>]", "Show the chat history sent to the model. Limit summaries to the first n if specified.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"drop", "[<file> ...]", "Unpin files (all if none given).", cmdDrop},
-		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change (this session) what environment variables model-run commands see.", cmdEnv},
+		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this session.", cmdEnv},
 		{"exit", "", "Exit Strument.", cmdExit},
 		{"help", "", "Show this help.", cmdHelp},
 		{"ls", "", "List the pinned files.", cmdLs},
 		{"model", "[<alias>]", "Show or switch the active model.", cmdModel},
 		{"notes", "[generate | drop]", "Show, regenerate, or discard the session notes.", cmdNotes},
 		{"quit", "", "Exit Strument.", cmdExit},
-		{"read-only", "<file> ...", "Pin files the model may read but never edit (may be outside the project).", cmdReadOnly},
-		{"reload", "", "Reload config.star (new models become available).", cmdReload},
+		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
+		{"reload", "", "Reload the configuration without restarting.", cmdReload},
 		{"reset", "", "Unpin everything, clear the history, and forget approved origins.", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
-		{"sandbox", "", "Show whether writes are confined, and to where.", cmdSandbox},
+		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
 		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat.", cmdSkill},
 		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2).", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser.", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage.", cmdTokens},
 		{"undo", "", "Undo the last turn's edits.", cmdUndo},
-		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page (or one #section of it); bare, show which origins webfetch may reach unasked.", cmdWeb},
+		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page or #section. With no URL, list the origins webfetch can access without asking.", cmdWeb},
 	}
 }
 
@@ -145,7 +145,7 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 
 	cmd := findCommand(name)
 	if cmd == nil {
-		r.out.Errorf("Invalid command: /%s. Use /help to list commands.", name)
+		r.out.Errorf("Unknown command: /%s. Use /help to list commands.", name)
 		return "", false
 	}
 	out := cmd.run(ctx, r, args)
@@ -286,8 +286,8 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 		}
 		r.printf("  %-*s  %s", width+1, left, c.help)
 	}
-	r.printf("\nArguments: <required>, [optional], \"...\" repeats.")
-	r.printf("Quote a <file> argument that has spaces.")
+	r.printf("\nArguments: <required>, [optional]; ... means the argument can be repeated.")
+	r.printf("Put file paths containing spaces in quotes.")
 	r.printf("<command>, <question>, and <request> take the rest of the line.")
 	return ""
 }
@@ -314,7 +314,7 @@ func (r *REPL) switchFormat(target, args string) string {
 		if r.coder.EditFormat() == "ask" {
 			r.printf("Ask mode: the model will answer questions without editing files. Use /code to switch back.")
 		} else {
-			r.printf("Code mode: the model will edit files again.")
+			r.printf("Code mode: file-editing tools are enabled.")
 		}
 		return ""
 	}
@@ -495,7 +495,7 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 		}
 	}
 	if len(ro) > 0 {
-		r.printf("Pinned read-only (their contents are in the request; the model cannot edit them):")
+		r.printf("Pinned read-only (contents included in the request; edits through file tools are blocked):")
 		for _, f := range ro {
 			r.printf("  %s", f)
 		}
@@ -544,7 +544,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 	switch strings.TrimSpace(args) {
 	case "generate":
 		if r.opts.GenerateNotes == nil {
-			r.printf("Session notes are off for this session.")
+			r.printf("Session notes are disabled for this session.")
 			return ""
 		}
 		if err := r.opts.GenerateNotes(ctx); err != nil {
@@ -553,7 +553,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 		}
 	case "drop":
 		if r.opts.DropNotes == nil {
-			r.printf("Session notes are off for this session.")
+			r.printf("Session notes are disabled for this session.")
 			return ""
 		}
 		r.opts.DropNotes()
@@ -561,7 +561,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 	case "":
 		notes := r.opts.Notes
 		if notes == nil {
-			r.printf("Session notes are off for this session.")
+			r.printf("Session notes are disabled for this session.")
 			return ""
 		}
 		if strings.TrimSpace(notes()) == "" {
@@ -671,7 +671,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	if err != nil {
 		// Keep the running config; a half-loaded session is worse than a stale
 		// one.
-		r.out.Errorf("Config not reloaded (keeping the current one): %v", err)
+		r.out.Errorf("Could not reload the config; the current config is unchanged: %v", err)
 		return ""
 	}
 	r.opts.Config = cfg
@@ -722,8 +722,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// be discovered: Landlock is applied to the process at startup and its
 	// rules only ever add, so a session cannot widen or drop its own sandbox.
 	if wasActive := r.coder.Sandbox.Active; wasActive != (cfg.Sandbox != "") {
-		r.out.Warningf("The `sandbox` setting changed, which only a restart can apply. " +
-			"This session keeps the sandbox it started with.")
+		r.out.Warningf("The `sandbox` setting changed. Restart Strument to apply it; this session's sandbox is unchanged.")
 	}
 
 	// Re-resolve the active alias so edits to that model take effect; if it was
@@ -739,7 +738,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 			r.opts.RefreshCommitMessage(m)
 		}
 	} else {
-		r.out.Warningf("Active model %q is no longer in the config; keeping the running model.", r.opts.ModelAlias)
+		r.out.Warningf("Active model %q was removed from the config. This session will continue using it.", r.opts.ModelAlias)
 	}
 	r.printf("Config reloaded. Models: %s.", strings.Join(slices.Sorted(maps.Keys(cfg.Models)), ", "))
 	return ""
@@ -811,7 +810,7 @@ func cmdCheck(ctx context.Context, r *REPL, args string) string {
 			for _, ch := range r.coder.Check {
 				names = append(names, ch.Name)
 			}
-			r.out.Errorf("There is no check named %q. Configured checks: %s.", name, strings.Join(names, ", "))
+			r.out.Errorf("Unknown check %q. Configured checks: %s.", name, strings.Join(names, ", "))
 			return ""
 		}
 	} else {
@@ -840,7 +839,7 @@ func cmdCheck(ctx context.Context, r *REPL, args string) string {
 
 		if exitCode != 0 {
 			if len(checks) > 1 {
-				r.out.Warningf("Stopped here; later checks were not run.")
+				r.out.Warningf("Stopped after the failed check; remaining checks were not run.")
 				transcript.WriteString("\nStopped here; later checks were not run.\n")
 			}
 			break
@@ -926,16 +925,16 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 		return webDrop(r, strings.TrimSpace(rest))
 	}
 	if r.coder.Scrape == nil {
-		r.out.Errorf("Scraping is not available.")
+		r.out.Errorf("Fetching from the web is unavailable.")
 		return ""
 	}
-	r.printf("Scraping %s...", url)
+	r.printf("Fetching %s...", url)
 	// No outline from /web: the user typed a URL and wants the page. A fragment
 	// in what they typed still narrows it, which is what a fragment means
 	// everywhere else they paste one.
 	content, err := r.coder.Scrape(ctx, url, coder.ScrapeOptions{})
 	if err != nil {
-		r.out.Errorf("Unable to fetch %s: %v", url, err)
+		r.out.Errorf("Could not fetch %s: %v", url, err)
 		return ""
 	}
 	r.coder.AppendContext(content)
@@ -962,7 +961,7 @@ func webOrigins(r *REPL) string {
 		}
 	}
 	if len(session) > 0 {
-		r.printf(`Approved for this session ("/web reset" forgets them):`)
+		r.printf(`Approved for this session (use "/web reset" to revoke the approvals):`)
 		for _, org := range session {
 			r.printf("  %s", org)
 		}
@@ -1011,8 +1010,7 @@ func webDrop(r *REPL, entry string) string {
 	if len(dropped) == 0 {
 		for _, org := range origin.Origins(entry) {
 			if origin.Allowed(org, r.coder.WebfetchAllow) {
-				r.out.Warningf("%s is allowed by webfetch_allow in the config, "+
-					"which this cannot change. Remove the entry there.", entry)
+				r.out.Warningf("%s is allowed by webfetch_allow in the config. Remove the config entry to require approval.", entry)
 				return ""
 			}
 		}
@@ -1068,7 +1066,7 @@ func cmdSubmit(_ context.Context, r *REPL, args string) string {
 	if st.Size() > submitLimit {
 		// Refuse rather than truncate: a silently shortened prompt is worse
 		// than one the user has to split themselves.
-		r.out.Errorf("%s is %s, over the %s /submit limit.", paths[0], humanBytes(st.Size()), humanBytes(submitLimit))
+		r.out.Errorf("%s is %s; the /submit size limit is %s.", paths[0], humanBytes(st.Size()), humanBytes(submitLimit))
 		return ""
 	}
 

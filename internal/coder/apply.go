@@ -227,7 +227,7 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 	// Still refused, and not as a prompt: an ignored file is one the project
 	// declared out of scope, and the observation tools do not show it either.
 	if c.Repo != nil && c.Repo.GitIgnored(rel) {
-		c.Out.Warningf("Skipping edits to %s that matches gitignore spec.", rel)
+		c.Out.Warningf("Skipping edits to %s: it matches an ignore rule.", rel)
 		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
 
@@ -257,7 +257,7 @@ func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool)
 	if needDirtyCommit[rel] {
 		return // already queued by an earlier edit in this batch
 	}
-	c.Out.Toolf("Committing %s before applying edits.", rel)
+	c.Out.Toolf("Committing existing changes to %s before applying edits.", rel)
 	needDirtyCommit[rel] = true
 }
 
@@ -270,7 +270,7 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 	}
 	files := slices.Sorted(maps.Keys(need))
 	if _, _, _, err := c.Repo.Commit(files, "", "", false); err != nil {
-		c.Out.Errorf("Unable to commit dirty files: %v", err)
+		c.Out.Errorf("Could not commit existing changes: %v", err)
 	}
 }
 

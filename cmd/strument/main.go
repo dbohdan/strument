@@ -50,21 +50,21 @@ var version = "0.0.0-dev"
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                   placeholder:"<text>"                                          short:"m"`
-	Continue      bool     `help:"Generate fresh notes from the previous transcript on startup."                                                                name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias from config; defaults to the config's default."                                                                   placeholder:"<alias>"                                         short:"M"`
+	Continue      bool     `help:"Generate session notes from the previous transcript at startup."                                                                name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                  placeholder:"<alias>"                                         short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                            name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                              name:"no-color"`
 	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                             name:"dark-mode"                                              xor:"palette"`
 	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                            name:"light-mode"                                             xor:"palette"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                           name:"no-auto-commits"`
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                           name:"no-history"`
-	JSONL         string   `help:"Also record the session to this file as JSONL, one record per line."                                                          name:"jsonl"                                                  placeholder:"<file>"`
+	JSONL         string   `help:"Also write a JSONL session log to this file."                                                        name:"jsonl"                                                  placeholder:"<file>"`
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                            name:"dry-run"`
-	NoShell       bool     `help:"Withhold the bash tool: the model cannot run commands and is not offered the choice."                                         name:"no-shell"`
-	Yes           []string `help:"Answer a named prompt without asking: bash, webfetch, websearch, steps, context, add-output, all. Repeatable; lists allowed." placeholder:"<name>"`
-	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"How much of the session /consult shows the advisor."     name:"consult-scope"`
-	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"What a run_code program hands back (under trial)."       name:"code-result"`
-	CodeNamespace string   `default:"flat"                                                                                                                      enum:"flat,both,only,hint"                                    help:"How a run_code program reaches the tools (under trial)." name:"code-namespace"`
+	NoShell       bool     `help:"Disable the model's bash tool."                                                                                              name:"no-shell"`
+	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"Session context to include in /consult requests."         name:"consult-scope"`
+	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"Result format for run_code programs (experimental)."     name:"code-result"`
+	CodeNamespace string   `default:"flat"                                                                                                                      enum:"flat,both,only,hint"                                    help:"How run_code programs access tools (experimental)."      name:"code-namespace"`
 	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
@@ -365,7 +365,7 @@ func (c *chatCmd) Run() error {
 				st.Turns = append(st.Turns, t)
 			}
 			if err := history.SaveUndo(projectRoot, st); err != nil {
-				noticef("could not save the undo record, so /undo will not cover this turn: %v", err)
+				noticef("could not save the undo record; /undo will not be able to restore this turn's changes: %v", err)
 			}
 		}
 	}
@@ -544,8 +544,8 @@ func hintAtRenamedProject(projectRoot string) {
 	noticeWith(
 		fmt.Sprintf("this project also has %s recorded under %s, which no longer exists.",
 			turns, orphan.Root.Path),
-		"Merge it:      strument project adopt "+orphan.Root.Path,
-		"Or hide this:  strument project ignore "+orphan.Root.Path,
+		"Merge saved state: strument project adopt "+orphan.Root.Path,
+		"Dismiss this notice: strument project ignore "+orphan.Root.Path,
 	)
 }
 
@@ -1011,10 +1011,10 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// flag that would have answered *this* prompt rather than the nearest
 		// of two.
 		if req.Grant == "" {
-			fmt.Println("Declined: there is no terminal to ask on, and no --yes name covers this prompt.")
+			fmt.Println("Declined: this prompt requires an interactive terminal and cannot be approved with --yes.")
 			return coder.ConfirmResult{}
 		}
-		fmt.Printf("Declined: there is no terminal to ask on. Pass --yes %s to answer this without one.\n", req.Grant)
+		fmt.Printf("Declined: this prompt requires an interactive terminal. Pass --yes %s to approve it automatically.\n", req.Grant)
 		return coder.ConfirmResult{}
 	}
 
@@ -1034,7 +1034,7 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 }
 
 type trustCmd struct {
-	Path string `arg:"" help:"Project directory containing .strument.star or skills (default: cwd)." optional:""`
+	Path string `arg:"" help:"Project directory containing .strument.star or skills (default: current directory)." optional:""`
 }
 
 func (c *trustCmd) Run() error {
@@ -1186,7 +1186,7 @@ func (*historyCmd) Run() error {
 // reviews it and pastes it into their config.
 type modelConfigCmd struct {
 	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."    placeholder:"<name>" short:"s"`
-	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name emitted in the model() call." name:"provider-name" placeholder:"<name>"`
+	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name to use in the generated model() call." name:"provider-name" placeholder:"<name>"`
 	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"                                               placeholder:"<url>"`
 	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
 }
@@ -1263,9 +1263,9 @@ type cli struct {
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file and its skills."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
-	ModelConfig modelConfigCmd   `cmd:""                         help:"Print copy-pastable model() config fetched from a provider."       name:"model-config"`
-	Project     projectCmd       `cmd:""                         help:"Inspect the recorded projects, or adopt a renamed one's history."`
-	Tool        toolCmd          `cmd:""                         help:"Run one observation tool and print what a model would see."`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block." name:"model-config"`
+	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
+	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
 }

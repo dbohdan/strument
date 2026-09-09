@@ -706,7 +706,7 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 		switch outcome {
 		case OutcomeReflect:
 			if c.numReflections >= c.MaxErrorReflections {
-				c.Out.Warningf("Only %d reflections allowed, stopping.", c.MaxErrorReflections)
+				c.Out.Warningf("Error-recovery limit reached (%d rounds). Stopping here.", c.MaxErrorReflections)
 				return
 			}
 			c.numReflections++
@@ -978,7 +978,7 @@ func (c *Coder) runAutoCheck(ctx context.Context) (message string, keepGoing boo
 	}
 	c.editedSinceCheck = false
 	if c.autoChecks >= maxAutoCheck {
-		c.Out.Warningf("The automatic checks have run %d times without passing; stopping here.", maxAutoCheck)
+		c.Out.Warningf("Automatic checks still fail after %d runs. Stopping here.", maxAutoCheck)
 		return "", false
 	}
 	c.autoChecks++
@@ -1018,7 +1018,7 @@ func (c *Coder) confirmMoreSteps() bool {
 
 	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?", Grant: GrantSteps})
 	if !res.Yes {
-		c.Out.Printf("Stopping here. The work so far is applied; say what to do next.")
+		c.Out.Printf("Stopping here. Changes made so far remain in place. Send another message to continue.")
 		return false
 	}
 	c.numSteps = 0

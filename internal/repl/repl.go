@@ -516,7 +516,7 @@ func (r *REPL) showInterruptHint() {
 	if r.coder.LastOutcome() != coder.OutcomeInterrupted {
 		return
 	}
-	r.printf("Stopped. Your next message continues from here — the model keeps everything up to this point.")
+	r.printf("Stopped. Completed work and conversation context are retained. Send another message to continue.")
 }
 
 // withinTurn runs fn with the in-turn scaffolding shared by a normal turn,
@@ -565,7 +565,7 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 					r.opts.Exit(130)
 					return
 				}
-				fmt.Fprintln(r.opts.Stderr, "\n^C again to exit")
+				fmt.Fprintln(r.opts.Stderr, "\nPress Ctrl-C again to exit")
 				// The send, not the turn. Cancelling the turn context here
 				// left every later call in it seeing Canceled, so a turn could
 				// only ever end at a Ctrl-C even though the conversation had
@@ -737,10 +737,10 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// message could only pick between two, so it named the right flag by
 		// luck; now the prompt carries its own name and the advice is precise.
 		if req.Grant == "" {
-			r.out.Warningf("Declined: there is no terminal to ask on, and no --yes name covers this prompt.")
+			r.out.Warningf("Declined: this prompt requires an interactive terminal and cannot be approved with --yes.")
 			return coder.ConfirmResult{}
 		}
-		r.out.Warningf("Declined: there is no terminal to ask on. Pass --yes %s to answer this without one.", req.Grant)
+		r.out.Warningf("Declined: this prompt requires an interactive terminal. Pass --yes %s to approve it automatically.", req.Grant)
 		return coder.ConfirmResult{}
 	}
 

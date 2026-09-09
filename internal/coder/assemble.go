@@ -126,7 +126,7 @@ func (c *Coder) chooseFence() {
 		}
 	}
 	c.fence = fence{allFences[0].Open, allFences[0].Close}
-	c.Out.Warningf("Unable to find a fencing strategy! Falling back to: %s...%s", c.fence.open, c.fence.close)
+	c.Out.Warningf("Could not find suitable content delimiters. Falling back to %s...%s.", c.fence.open, c.fence.close)
 }
 
 // absFnamesContent reads chat files in order. A file that does not exist yet is

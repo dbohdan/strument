@@ -51,7 +51,7 @@ func (c *Coder) commitTurn(message string) {
 	if err != nil {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.
-		c.Out.Errorf("Unable to commit: %v", err)
+		c.Out.Errorf("Could not commit: %v", err)
 		return
 	}
 	if !ok {
@@ -102,7 +102,7 @@ func (c *Coder) attributeShellCommits(before string) {
 		// the command's outcome — a model that reads "attribution failed"
 		// reacts by retrying the commit, which would make a second, worse
 		// copy of the problem.
-		c.Out.Errorf("Unable to attribute the commits made by the command: %v", err)
+		c.Out.Errorf("Could not add model attribution to commits created by the command: %v", err)
 		return
 	}
 	if len(hashes) == 0 {
@@ -116,7 +116,7 @@ func (c *Coder) attributeShellCommits(before string) {
 	}
 	c.lastCommitHash = hashes[0] // newest first
 	c.saveUndo()
-	c.Out.Toolf("Attributed %s the command made directly with git.",
+	c.Out.Toolf("Added model attribution to %s created by the command.",
 		render.Plural(len(hashes), "commit", "commits"))
 }
 
@@ -152,7 +152,7 @@ func (c *Coder) committablePaths(paths []string) []string {
 		keep = append(keep, p)
 	}
 	if len(dropped) > 0 {
-		c.Out.Toolf("Not committing %s — outside the repository; /undo still covers them.",
+		c.Out.Toolf("Not committing %s: outside the repository. These changes can still be restored with /undo.",
 			strings.Join(dropped, ", "))
 	}
 	return keep
