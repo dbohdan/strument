@@ -6,7 +6,7 @@ Strument is an AI pair-programming tool for the terminal.
 It is designed for a human in the loop, the kind of developer who wants to see and steer technical and UX decisions.
 Work with Strument is divided into turns, each beginning with the human's instructions for the model and ending in a commit (or a snapshot for undo, outside Git).
 
-Strument started as an accurate ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
+Strument started as a ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
 See [`doc/`](doc/README.md) for the developer overview.
 
 
@@ -48,7 +48,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   Either your own [SearXNG](https://docs.searxng.org/) instance — your engines, no API key, nobody else in the loop — or the hosted [AnySearch](https://anysearch.com/), which needs nothing set up and works with or without a key.
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
-The terminal interface has stayed deliberately close to aider's with a similar green/blue palette (with `--dark-mode` and `--light-mode`).
+The terminal interface has stayed deliberately close to aider's, including the green/blue palette (with `--dark-mode` and `--light-mode`).
 Strument diverges where its programming loop is different.
 Reasoning is delimited with `‹thinking›` and `‹/›` because there are multiple reasoning blocks per turn and most reasoning is one line.
 Syntax highlighting and the inverted code-block background are omitted.
@@ -107,7 +107,15 @@ go install dbohdan.com/strument/cmd/strument@latest
 
 Strument needs a configuration file before it will start in chat mode.
 There is no model database, and nothing is assumed about which models you have.
-The following is the minimal config that works.
+A minimal config:
+
+```python
+openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
+
+models = {"mimo": model(openrouter, "xiaomi/mimo-v2.5", context=1050000)}
+default = "mimo"
+```
+
 Put it in `~/.config/strument/config.star`:
 
 ```python
@@ -125,18 +133,16 @@ cd ~/src/myproject
 strument
 ```
 
-`context` is in the minimal config because Strument needs it to warn you before a request overruns the context window and to summarize settled chat history.
+`context` is in the minimal config because Strument needs it to warn you before a request overruns the context window and to summarize older chat history as a session settles.
 A long session without `context` grows until the provider refuses the request.
 
 The cost fields are optional: OpenRouter reports the cost of each request in-band, so they can be omitted.
 A plain OpenAI-compatible endpoint may not report costs.
 In that case, `input_cost` and `output_cost` are what the turn's cost estimate comes from.
-The command `strument model-config <slug>` fetches all of this information from OpenRouter's catalog and prints a pastable `model` block.
-It works before you have a config.
-See [Configuration](#configuration).
+`strument model-config <slug>` fetches all of this from a provider's catalog; see [Configuration](#configuration).
 
 Strument counts your money by the turn.
-A turn can run up to twenty-five steps by default (or `max_steps`).
+A turn can run up to 25 steps by default (or `max_steps`).
 Start on a small request against a cheap model and watch the cost line before you turn it loose on something large.
 
 
@@ -155,7 +161,9 @@ Strument keeps the conversation and any completed work, then asks whether to con
 Press `Ctrl-C` twice within two seconds to exit Strument.
 In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
 
-`SIGUSR1` stops the current send the same way a single `Ctrl-C` does — same steering question, same prompt afterward — without counting toward the two-press exit chord. Sent between turns it does nothing. This is how a script or a remote assistant can stop a run it cannot reach the keyboard of:
+`SIGUSR1` stops the current send the same way a single `Ctrl-C` does, without counting toward the two-press exit chord.
+Sent between turns it does nothing.
+This is how a script or a remote assistant can stop a run whose keyboard it cannot reach:
 
 ```sh
 pkill -USR1 strument
@@ -198,14 +206,13 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/context [<n>]` | Show the folded chat history as the model sees it: the compaction summaries in order, then the live tail. `n` caps the number of summaries shown. |
 | `/skill [<name>]` | Show the skills this session found, or add one's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
 | `/symbol <name> [definition \| reference]` | Find where a name is defined or used from the language parser rather than from text. |
-
-The model also has a `run_code` tool — a short sandboxed Python program, callable from any mode. See [the `run_code` tool](doc/config.md#the-run_code-tool).
 | `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Outside-project paths are allowed. Files over 100 KiB are refused. (Large files aren't truncated.) |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands see an [allowlist](doc/config.md#env_allow). Bare `/web` shows which origins `webfetch` may reach unasked, and `/web drop`/`/web reset` take those back. |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this session, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
 | `/model [alias]`, `/reload` | Switch models mid-session; reload `config.star` without restarting ([what a reload applies](doc/config.md#what-reload-applies)). |
 
 `/help` lists all commands.
+The model also has a `run_code` tool — a short sandboxed Python program, callable from any mode. See [the `run_code` tool](doc/config.md#the-run_code-tool).
 
 For scripts and one-offs, `-m` runs a single turn and exits:
 
@@ -216,13 +223,12 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop to ask
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
-Such a run exits non-zero when the request produced no answer — a rejected key, an endpoint that stayed unreachable through the retries, an empty reply —
+Such a run exits non-zero when the request produced no answer (a rejected key, an endpoint that stayed unreachable through the retries, an empty reply),
 so a script can tell that apart from a model that simply had little to say.
 A truncated answer is still an answer and exits 0.
 
-Two inspection commands answer "what does my effective config say?" without editing the file.
 `strument config models` prints the keys of `models`, one per line (sorted, so scripts can rely on the order),
-and `strument config default` prints the value of `default`.
+and `strument config default` prints the value of `default`; both answer "what does my effective config say?" without editing the file.
 Both read the merged user + trusted project config for the current project, so the answer matches what a chat session would use.
 
 `--yes NAME` answers one named prompt without asking, and takes `bash`, `webfetch`, `websearch`, `steps`, `context`, `add-output`, or `all`.
@@ -269,7 +275,7 @@ It is safe to run **after** you have already had a session at the new path — t
 Nothing is deleted: the old state directory is kept as `<name>.adopted-<timestamp>`.
 
 `strument project list` shows every recorded project with its turn count, size and state directory, orphans first.
-That is the way out when the notice cannot help — Strument recognizes a renamed project by its repository's first commit, so a project with no repository, a history built by merging two unrelated ones, or two clones of the same repository that both moved are all listed rather than offered.
+That is the way out when the notice cannot help — Strument recognizes a renamed project by its repository's first commit, so a project with no repository, a history built by merging two unrelated ones, or two clones of the same repository that both moved appear only in the list, not in the notice.
 
 ### Shell completions
 
@@ -294,8 +300,7 @@ Strument is configured in Starlark, a small sandboxed dialect of Python.
 A config file is a short program that builds model objects and assigns values to the configuration variables.
 [`doc/config.md`](doc/config.md) is the reference for the settings and every built-in function specific to Strument.
 
-Here is a fuller example than the starter above.
-It demonstrates two providers, a factory for a repeated option, and aliases.
+A fuller config than the starter above:
 
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
@@ -374,7 +379,8 @@ When a turn used the cache, the usage line breaks down the figure in parentheses
 Those are parts of what was sent, not extra tokens beside it.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
-Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog and prints a copy-pastable `models` dictionary.
+Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog and prints a copy-pastable `model` block.
+It works before you have a config.
 It leaves the judgment calls (`reasoning`, `reasoning_tag`, `side_model`) as commented-out placeholders.
 The catalog is fetched on demand with caching.
 
@@ -412,7 +418,7 @@ On a network that can't reach a provider directly, a `proxy` on the `provider()`
 A top-level `proxy` is applied to all providers and every outbound HTTPS action Strument takes.
 
 A project-local `.strument.star` can extend or override any of this, once you have run `strument trust` in the directory.
-The same command trusts the project's skills, which are inert without it for the same reason.
+The same command trusts the project's skills, which are inert without it: an untrusted `SKILL.md` is just text the repository's author wrote.
 See [`doc/config.md`](doc/config.md) for details.
 
 
@@ -425,9 +431,9 @@ It means your checks, and every child process of theirs, can write only to your 
 `sandbox_write` in the config adds to them; `sandbox = ""` turns the sandbox off, which is the default on non-Linux platforms.
 
 The sandbox buys **integrity, not confidentiality**.
-While writes are confined, reads are not confined at all.
-A mistaken or injected command cannot edit your dotfiles or your other repositories, and it can read them all.
-The threat model is mistakes and prompt injection with you watching, not a misaligned agent working over hundreds of turns.
+Writes are confined; reads are not.
+A mistaken or injected command cannot edit your dotfiles or your other repositories, but it can read them all.
+The threat model is mistakes and prompt injection with you watching, rather than a misaligned agent working over hundreds of turns.
 [`doc/security.md`](doc/security.md) says what exactly is and is not confined, and where the policy is deliberately loose.
 
 
@@ -471,7 +477,7 @@ Nothing in the build needs it.
 Strument is derived from [aider](https://github.com/Aider-AI/aider) by Paul Gauthier and the aider contributors,
 licensed under the [Apache License 2.0](LICENSE), and carries the same license.
 
-Three components are forked and vendored, each with a `NOTICE` recording the changes:
+Four components are forked and vendored; three carry a `NOTICE` recording the changes:
 
 - The streaming markdown renderer (`internal/render/`) is ported from
   [streaming-markdown](https://github.com/thetarnav/streaming-markdown) by Damian Tarnawski (MIT).
