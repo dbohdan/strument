@@ -11,8 +11,10 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/llm"
 )
 
 func initScratchRepo(t *testing.T) string {
@@ -210,7 +212,7 @@ func TestSquashSession(t *testing.T) {
 	}
 }
 
-func TestModelSwitchUpdatesTrailer(t *testing.T) {
+func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
 	root := initScratchRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
@@ -219,14 +221,25 @@ func TestModelSwitchUpdatesTrailer(t *testing.T) {
 
 	small := testModel()
 	small.Slug = "vendor/small:nitro" // readable name drops prefix + :nitro
+	small.SideModel = &config.Model{Provider: small.Provider, Slug: "vendor/small-side"}
 	big := testModel()
 	big.Slug = "vendor/big-model"
 	big.DisplayName = "Big Model"
+	big.SideModel = &config.Model{Provider: big.Provider, Slug: "vendor/big-side"}
 
 	g.CommitTrailer = gitrepo.Trailer(small.ReadableName())
+	oldClient := &fixture.StreamStub{}
+	newClient := &fixture.StreamStub{
+		Turns: []fixture.Turn{{Events: []fixture.Event{{Kind: "Answer", Text: "feat: switched"}}}},
+	}
+	var commitModel string
+	newClient.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
+		commitModel = req.Model
+		return nil
+	}
 
 	cdr := coder.New(root, small)
-	cdr.Client = &fixture.StreamStub{}
+	cdr.Client = oldClient
 	cdr.Repo = g
 
 	cfg := testConfig(small)
@@ -238,6 +251,15 @@ func TestModelSwitchUpdatesTrailer(t *testing.T) {
 		Config:     cfg,
 		Git:        g,
 		ModelAlias: "test",
+		MakeClient: func(m *config.Model) llm.ModelClient {
+			if m == big.SideModel {
+				return newClient
+			}
+			return oldClient
+		},
+		RefreshCommitMessage: func(m *config.Model) {
+			g.Message = coder.CommitMessenger(newClient, m.SideModel, "", nil, cdr.Out, cdr.Clock, "")
+		},
 		Stdin:      strings.NewReader("/model big\n/exit\n"),
 		Stdout:     out,
 		Stderr:     out,
@@ -253,6 +275,10 @@ func TestModelSwitchUpdatesTrailer(t *testing.T) {
 	}
 	if want := gitrepo.Trailer("Big Model"); g.CommitTrailer != want {
 		t.Errorf("trailer after /model = %q, want %q", g.CommitTrailer, want)
+	}
+	g.Message("diff", "")
+	if commitModel != "vendor/big-side" {
+		t.Errorf("commit message model after /model = %q, want vendor/big-side", commitModel)
 	}
 }
 

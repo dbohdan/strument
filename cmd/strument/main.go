@@ -857,6 +857,14 @@ func terminalSize() (int, int) {
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer,
 	alias, projectRoot string, keepState bool, resumeNote string,
 ) error {
+	refreshCommitMessage := func(m *config.Model) {
+		if repo == nil {
+			return
+		}
+		side := m.SideModel
+		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
+			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit)
+	}
 	// Scoped to the project like the transcript, in the directory Run already
 	// created — and suppressed with it when the session leaves no trace.
 	var inputHistory string
@@ -864,15 +872,16 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		inputHistory, _ = history.InputHistoryPath(projectRoot)
 	}
 	r, err := repl.New(repl.Options{
-		Coder:       cdr,
-		Config:      cfg,
-		Git:         repo,
-		History:     hist,
-		ModelAlias:  alias,
-		ResumeNote:  resumeNote,
-		SaveResume:  saveResumeFunc(cdr, cfg, projectRoot, keepState),
-		ApplyEgress: applyEgressConfig,
-		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
+		Coder:                cdr,
+		Config:               cfg,
+		Git:                  repo,
+		History:              hist,
+		ModelAlias:           alias,
+		ResumeNote:           resumeNote,
+		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, keepState),
+		ApplyEgress:          applyEgressConfig,
+		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
+		RefreshCommitMessage: refreshCommitMessage,
 		// Kong's enum has already refused anything else, so the ok is never
 		// false here; the parse is where the name-to-scope mapping lives.
 		ConsultScope: consultScope(c.ConsultScope),

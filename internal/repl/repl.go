@@ -65,6 +65,10 @@ type Options struct {
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
+	// RefreshCommitMessage rebuilds the git commit-message generator when the
+	// active model changes. It is nil in sessions without git integration.
+	RefreshCommitMessage func(*config.Model)
+
 	// ConsultScope is how much of the session /consult shows the advisor. The
 	// zero value is coder.ConsultNothing — the binary sets this from
 	// --consult-scope, whose default is where the shipped behaviour lives,

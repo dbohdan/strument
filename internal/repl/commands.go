@@ -642,6 +642,9 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		r.coder.Client = r.opts.MakeClient(m)
 		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
 	}
+	if r.opts.RefreshCommitMessage != nil {
+		r.opts.RefreshCommitMessage(m)
+	}
 	r.opts.ModelAlias = args
 	r.saveResume()
 	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
@@ -731,6 +734,9 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		if r.opts.MakeClient != nil {
 			r.coder.Client = r.opts.MakeClient(m)
 			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
+		}
+		if r.opts.RefreshCommitMessage != nil {
+			r.opts.RefreshCommitMessage(m)
 		}
 	} else {
 		r.out.Warningf("Active model %q is no longer in the config; keeping the running model.", r.opts.ModelAlias)
