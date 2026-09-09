@@ -84,7 +84,7 @@ func TestEnvShowAddDropReset(t *testing.T) {
 
 	_, afterDrop, dropOut := runEnv(t, "/env drop STRUMENT_TEST_A PATH\n/exit\n")
 	// drop: honored without asking, and dropping PATH warns rather than asks.
-	if !strings.Contains(dropOut, "without PATH") {
+	if !strings.Contains(dropOut, "Removing PATH") {
 		t.Errorf("PATH warning missing:\n%s", dropOut)
 	}
 	if containsName(afterDrop.EnvAllow, "STRUMENT_TEST_A") {

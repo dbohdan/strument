@@ -510,7 +510,7 @@ func TestReloadSaysTheSandboxCannotChange(t *testing.T) {
 	}
 
 	cmdReload(context.Background(), r, "")
-	if !strings.Contains(out.String(), "only a restart can apply") {
+	if !strings.Contains(out.String(), "Restart Strument to apply it") {
 		t.Errorf("a changed sandbox setting was applied silently:\n%s", out.String())
 	}
 }

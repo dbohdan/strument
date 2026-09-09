@@ -29,8 +29,8 @@ func (s interruptedStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.St
 //
 // The capability was there long before the line was: the interrupted reply and
 // everything before it stay in the chat, so the next message continues from
-// that point. What the user saw was "^C again to exit" and a fresh prompt,
-// which reads as a kill. This pins the line, because the feature *is* the line
+// that point. What the user saw was "Press Ctrl-C again to exit" and a fresh
+// prompt, which reads as a kill. This pins the line, because the feature *is* the line
 // — without it the behaviour is unchanged and unusable.
 func TestInterruptedTurnSaysTheChatSurvived(t *testing.T) {
 	root := t.TempDir()
@@ -58,7 +58,7 @@ func TestInterruptedTurnSaysTheChatSurvived(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "Your next message continues from here") {
+	if !strings.Contains(got, "Completed work and conversation context are retained") {
 		t.Errorf("no interrupt hint after an interrupted turn:\n%s", got)
 	}
 	if cdr.LastOutcome() != coder.OutcomeInterrupted {
@@ -118,7 +118,7 @@ func (s plainAnswerStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.St
 // While a question is up readline holds the terminal in raw mode, ISIG is off,
 // and Ctrl-C arrives as a byte that readline turns into ErrInterrupt — so the
 // signal handler never runs. A live pty probe caught it: two Ctrl-C 50ms apart
-// during a turn produced one "^C again to exit" and no exit, silently
+// during a turn produced one "Press Ctrl-C again to exit" and no exit, silently
 // weakening a promise users hold.
 //
 // Now stubbed rather than real, so the window is a fact of the test rather

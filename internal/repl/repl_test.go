@@ -247,7 +247,7 @@ func TestScriptedSession(t *testing.T) {
 		//                                    their contents arrive as tool
 		//                                    results, landing in the history)
 		"Hello! Some bold and code here.", // rendered plain (no color)
-		"Invalid command: /nonsense.",
+		"Unknown command: /nonsense.",
 		"Unpinned everything.",
 	} {
 		if !strings.Contains(got, want) {
@@ -492,7 +492,7 @@ func TestReloadConfigErrorKeepsConfig(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "Config not reloaded") {
+	if !strings.Contains(got, "Could not reload the config") {
 		t.Errorf("error path not reported:\n%s", got)
 	}
 	if !strings.Contains(got, "Switched to model other") {
@@ -619,7 +619,7 @@ func TestCheckStopsAtFirstFailure(t *testing.T) {
 	if strings.Contains(got, "should not run") {
 		t.Errorf("later check should not run after a failure:\n%s", got)
 	}
-	if !strings.Contains(got, "Stopped here") {
+	if !strings.Contains(got, "Stopped after the failed check") {
 		t.Errorf("should say it stopped:\n%s", got)
 	}
 }
@@ -636,7 +636,7 @@ func TestCheckInvalidName(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := out.String()
-	if !strings.Contains(got, `There is no check named "nope"`) {
+	if !strings.Contains(got, `Unknown check "nope"`) {
 		t.Errorf("should report unknown check name:\n%s", got)
 	}
 	if !strings.Contains(got, "real") {
@@ -989,7 +989,7 @@ func TestTurnCtrlCChord(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("REPL did not stop after the turn")
 	}
-	if !strings.Contains(out.String(), "^C again to exit") {
+	if !strings.Contains(out.String(), "Press Ctrl-C again to exit") {
 		t.Errorf("missing chord hint:\n%s", out.String())
 	}
 }
@@ -1041,7 +1041,7 @@ func TestUserSignalInterruptsTheSend(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("REPL did not stop after the turn")
 	}
-	if !strings.Contains(out.String(), "Your next message continues from here") {
+	if !strings.Contains(out.String(), "Completed work and conversation context are retained") {
 		t.Errorf("no interrupt hint after a user-space interrupt:\n%s", out.String())
 	}
 }
@@ -1261,7 +1261,7 @@ func TestSubmitCommandRefusals(t *testing.T) {
 	for _, tc := range []struct{ args, want string }{
 		{"", "Usage: /submit"},
 		{"a.txt b.txt", "Usage: /submit"},
-		{"big.txt", "over the 100.0 KiB /submit limit"},
+		{"big.txt", "the /submit size limit is 100.0 KiB"},
 		{".", "is a directory"},
 		{"bin.dat", "not valid UTF-8"},
 		{"empty.txt", "is empty"},
