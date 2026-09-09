@@ -2,11 +2,12 @@
 
 Strument reads its configuration from a [Starlark] file, `config.star` (by
 default `$XDG_CONFIG_HOME/strument/config.star`, i.e.
-`~/.config/strument/config.star`). Starlark is a small, sandboxed dialect of
-Python — no imports, no I/O, deterministic — so a config file is a short program
-that builds provider and model objects and assigns them to a few top-level
-names. If you read Python you can read it already; for the specifics see the
-[language spec][Starlark] and Laurent Le Brun's [overview of Starlark][overview].
+`~/.config/strument/config.star`). Starlark is a small, sandboxed dialect
+of Python, so its syntax will be familiar if you know Python. Strument exposes a
+small set of configuration functions and values; a config file uses them to
+build provider and model objects and assigns them to a few top-level names. For
+the specifics see the [language spec][Starlark] and Laurent Le Brun's [overview
+of Starlark][overview].
 
 [Starlark]: https://starlark-lang.org/
 [overview]: https://laurent.le-brun.eu/blog/an-overview-of-starlark
@@ -24,14 +25,16 @@ The loader reads these module-level variables after running your file:
 | `models` | dict | Maps an **alias** (string) to a `model()`. Required, non-empty. |
 | `default` | string | The alias used when none is given on the command line. Required; must be a key of `models`. |
 | `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). See below. |
-| `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config` and URL scraping. |
+| `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config`, built-in scraping, and search. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `check` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
+| `shell_timeout` | non-negative integer | Optional. Maximum seconds for a model-caused command; `0` means unlimited. Default 120. See below. |
+| `env_set` | dict of string to string | Optional. Environment variables set in Strument's process and inherited by subprocesses. See below. |
 | `check_auto` | list of strings | Optional. Names of `check` entries Strument runs itself at the end of a turn that changed files. See below. |
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
-| `webfetch_allow` | list of strings | Optional. Origins (host, or host:port) the `webfetch` tool may fetch without asking. See below. |
+| `webfetch_allow` | list of strings | Optional. Host or host:port entries the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
@@ -47,17 +50,18 @@ The loader reads these module-level variables after running your file:
 | `prompt_read_only` | string | Optional. Whole-string replacement for the read-only reference prefix. See below. |
 | `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
 
-Anything else at the top level (helper `def`s, intermediate variables) is
-ignored by the loader, so factor freely.
+Other top-level names are not treated as settings. You can use them for helper
+functions and intermediate values.
 
 ### `scraper`
 
 When set, `scraper` is an argv list whose command replaces the built-in HTTP
 fetcher; `%s` in any element is substituted with the URL (if no element has
-`%s`, the URL is appended). Strument runs the command without a shell — so a
-hostile URL can't inject arguments — treats its stdout as HTML, and converts
-that to markdown exactly as it does a fetched page. It is the way to read
-JavaScript-rendered pages without bundling a browser: point it at a headless one.
+`%s`, the URL is appended). Strument runs the command without a shell, so shell
+metacharacters in the URL are not interpreted. It treats stdout as HTML and
+converts it to markdown exactly as it does a fetched page. This is the way to
+read JavaScript-rendered pages without bundling a browser: point it at a
+headless one.
 
 ```python
 scraper = ["chromium", "--headless=new", "--dump-dom", "%s"]
@@ -67,11 +71,12 @@ Unset, the built-in HTTP scraper is used (the default). The global `proxy` does
 **not** apply to a `scraper` command; the command handles its own networking.
 
 Both fetchers serve `/web` and the `webfetch` tool, and both honor a URL
-fragment: `…/page#section` returns that section rather than the whole page. A `scraper` command is a
-subprocess the model can cause, so it runs under the [environment
-allowlist](#env_allow) and, when the model is what asked for it, is refused
-where a required sandbox is not enforcing. The built-in fetcher spawns nothing
-and is not gated that way.
+fragment: `…/page#section` returns that section rather than the whole page. The
+external command is a subprocess that a model can cause to run, so it uses the
+[environment allowlist](#env_allow) and is blocked when a required sandbox is
+not enforcing. A user-requested fetch uses the same command but is not blocked by
+that model-execution check. The built-in fetcher spawns no subprocess and is not
+gated that way.
 
 ### `history_file`
 
@@ -88,12 +93,10 @@ projects/myproj-9428ba2d/
     cost.jsonl      one line per turn: tokens, cost, steps, files changed
 ```
 
-`strument history` prints the transcript's path, which is the point of the
-command — XDG makes it hard to guess. The `root` file answers the other
-direction: which project a directory belongs to, without recomputing hashes.
-The directory is `0700` and its files `0600`, because a transcript records
-whatever the model read out of the project, and Strument is meant to be usable
-on a live configuration directory.
+`strument history` prints the transcript's path. The `root` file records the
+project path associated with the state directory. The directory is created with
+mode `0700` and its files with mode `0600`, because transcripts may contain
+sensitive project data.
 
 The project, for this purpose, is the **git worktree root** wherever there is
 one, and the working directory otherwise. That holds from any subdirectory, and
@@ -119,10 +122,10 @@ schemes are supported.
 proxy = "socks5://127.0.0.1:1080"
 ```
 
-At the top level it is the default for every provider that doesn't set its own,
-and it also covers the two egress paths that belong to no provider:
-`strument model-config`'s catalog fetch and URL scraping. In other words, a
-top-level `proxy` covers every outbound HTTPS action Strument takes.
+At the top level it is the default for every provider that doesn't set its own.
+It also applies to `strument model-config`'s catalog fetch, the built-in URL
+scraper, and the configured search backend. An external `scraper` command does
+its own networking and does not use this proxy.
 
 A `proxy` on a `provider()` call overrides it for that provider, and
 `proxy="direct"` opts a provider out entirely — the case for a LAN-local model
@@ -142,9 +145,6 @@ file with `proxy=env("STRUMENT_PROXY")`, exactly as with `api_key`. The URL is
 resolved and validated at load, so a malformed one fails at startup rather than
 on the first request.
 
-A `scraper` command is the one exception: it does its own networking, and the
-global `proxy` does not reach it.
-
 ### `check`
 
 `check` names the commands that check your project — tests, a linter, a build.
@@ -157,12 +157,10 @@ check = {
 }
 ```
 
-The model reaches these through the `check` tool, and — unlike `bash`, which
-always asks — they run **without confirmation**. That is safe because the model
-supplies only a *name*: it calls `check("lint")` and never a command, so there
-is nothing for it to alter or append. Everything runnable is written by you, in
-this file. This is the observation half of the harness running freely while
-mutation stays gated.
+The model calls the `check` tool with a configured name, such as
+`check("lint")`. Strument runs the corresponding argv without a confirmation
+prompt; the model cannot supply extra arguments through this tool. Checks still
+execute project code, so a fixed argv does not make them safe to run blindly.
 
 Declared order matters. `check()` with no name runs every verification command in order and
 stops at the first failure, so put the fast ones first. `check("test")` runs
@@ -185,28 +183,19 @@ was opened:
 check = dict(project_checks(), lint = ["golangci-lint", "run", "--fast"])
 ```
 
-This used to merge per key, which was convenient until you wanted *fewer*
-checks: merging can override a name and add a name, but it has no way to
-remove one, so a user config saying `check = project_checks()` could not be
-narrowed by a project that wanted less. Replacing costs one call and can
-express both directions.
+A project's `check` dictionary replaces the user's dictionary. To include
+detected checks and add your own, use `dict(project_checks(), ...)`.
 
-A project config cannot read your `check` — it cannot read any of your
-settings. `check = dict(check, ...)` fails with "global variable check
-referenced before assignment", which is why the extend idiom names
-`project_checks()` rather than `check`. That isolation is deliberate: a
-`.strument.star` is committed and shared, and a file whose meaning depended on
-the reader's own config could not be reviewed by reading it.
+A project config cannot read your `check` or any other user setting.
+`check = dict(check, ...)` fails with "global variable check referenced before
+assignment", so use `project_checks()` when extending the detected checks.
 
 Unset, no `check` tool is offered and every command goes through `bash` and its
 confirmation prompt.
 
-Naming a verification command buys one more thing, and it is a property of
-`check` rather than of `bash`: a `bash` command that *is* one of these commands,
-**verbatim**, runs without the confirmation prompt. You wrote that command here,
-so the prompt would be asking you to re-approve your own decision — and a prompt
-that fires on every `go test ./...` is what teaches you to answer the ones that
-matter without reading them.
+An exact-match `bash` command also skips the confirmation prompt because the
+command is already approved through `check`. The command must match one of the
+configured argv entries verbatim.
 
 Verbatim is strict. The command must be a single simple command of bare words:
 no pipelines, `;`, `&&`, redirections, backgrounding, leading assignments, or
@@ -217,17 +206,11 @@ an extra question rather than a command you did not approve. On a match Strument
 runs the argv from this file, never the model's string, so what runs is
 certainly what was compared.
 
-## Language support
+### Language support
 
-Two features need to know which ecosystems Strument understands, and they need
-to agree. `project_checks()` decides what to *run*; the sandbox decides what a
-run is allowed to *write*. A project Strument offers to run checks for is a
-project whose checks have to work under the sandbox, so the list lives here
-once and both features read it.
-
-Two lists that almost match would be worse than either. The gap does not show
-up as a bug report — it shows up as one ecosystem failing for one person,
-months later, with nothing to connect it back to a decision anyone made.
+The table lists the ecosystems used by `project_checks()` and the writable
+toolchain paths used by the sandbox. The two features use the same list so that
+detected checks have the paths they need.
 
 | Ecosystem | Marker | Checks | Writable paths |
 | --- | --- | --- | --- |
@@ -266,19 +249,19 @@ where most of these default anyway — Go's build cache, pip, uv, Deno, Yarn 1,
 composer's cache and Crystal's shards all land there, so their variables above
 matter only when someone has moved them.
 
-Task runners have no last column because they have no cache of their own. They
-run whatever your project told them to, and that command's ecosystem supplies
-the paths. mise is in that row for its tasks — `[tasks.test]` or a `test` key
-under `[tasks]`, in any of the config files mise reads — and in the row below
-for the toolchains it installs.
+Task runners have no cache directories of their own. They run whatever your
+project told them to, and that command's ecosystem supplies the paths. mise is in
+that row for its tasks — `[tasks.test]` or a `test` key under `[tasks]`, in any
+of the config files mise reads — and in the row below for the toolchains it
+installs.
 
-Version managers are the mirror image: nothing to run, but their toolchains have
-to be writable or the first build after an install fails. **A `shims` directory
-is never granted**, whether or not it is on `PATH` when Strument starts. Both
-pyenv and mise resolve every command through one, so a writable `shims` would
-let a model-run command replace the interpreter that every later shell finds.
-What is granted is where the toolchains themselves live — `versions/`,
-`installs/`, `downloads/`.
+Version managers do not provide checks, but their toolchains have to be writable
+or the first build after an install fails. **A `shims` directory is never
+granted**, whether or not it is on `PATH` when Strument starts. Both pyenv and mise
+resolve every command through one, so a writable `shims` would let a model-run
+command replace the interpreter that every later shell finds. The writable paths
+are where the toolchains themselves live — `versions/`, `installs/`, and
+`downloads/`.
 
 **"Subdirectories of"** is not a shorthand. Several toolchains keep a cache and
 an executable directory side by side — `~/.cargo` holds `bin/` next to
@@ -287,9 +270,9 @@ an executable directory side by side — `~/.cargo` holds `bin/` next to
 executables, so their contents are granted one subdirectory at a time, minus
 anything on `PATH`. `~/go/pkg` is writable; `~/go/bin` is not.
 
-The cost of that is worth knowing: a toolchain that has never run once has no
-subdirectories to grant, so its first run inside the sandbox fails. Name the
-path you need and it works from then on.
+If the required cache subdirectories do not exist when Strument starts, they
+cannot be included in the sandbox's writable set. Create the directories and
+restart Strument, or add the existing path to `sandbox_write`.
 
 ### `project_checks()`
 
@@ -329,13 +312,10 @@ the node check reads the lockfile to pick its package manager. `uv run pytest`
 on a project that never installed uv would fail for a reason having nothing to
 do with your code.
 
-**These are not commands that cannot do harm.** Every one of them runs your
-project's own code: `npm test` runs whatever `package.json` says, `make test`
-runs your Makefile, `cargo test` compiles and runs your crate. No test runner is
-safe in that sense. What they are is commands whose effect is decided by your
-project's own committed configuration — which is why this is opt-in, and why it
-is worth glancing at what it detected the first time you use it on an unfamiliar
-repository. Every check's argv is printed when it runs.
+Checks execute project code: `npm test` runs whatever `package.json` says,
+`make test` runs your Makefile, and `cargo test` compiles and runs your crate.
+Review detected checks before using them in an unfamiliar repository. Every
+check's argv is printed when it runs.
 
 ### `check_auto`
 
@@ -349,10 +329,8 @@ check_auto = ["lint", "test"]
 The names must be keys of `check`; a name that isn't fails at load, so a typo
 can't leave you believing the project is checked when nothing runs.
 
-This exists because the model deciding *whether* and *which* to check is the
-part that goes wrong. A model can finish a change, run the tests, see them pass,
-and report success while a linter would have caught what it just wrote. Listing
-the checks here takes that judgement away from it.
+Use `check_auto` to run the same checks after every editing turn, regardless of
+which checks the model chooses to run itself.
 
 When a check fails, the output goes back to the model and it keeps working in
 the same turn. That repeats at most three times before Strument stops and hands
@@ -367,16 +345,17 @@ so the model can still check something mid-turn.
 
 ### `--continue` / `-c`
 
-When starting an interactive session, regenerate the session notes from the
-project's existing transcript and load them into context for the new session.
-Without it, a session starts clean — no notes in context, no model call, no
-cost. The notes live in memory for the session and are never persisted; the next
-`--continue` regenerates from a transcript that now includes the full prior
-session. `/notes generate` achieves the same thing mid-session at the user's
-request. The option does nothing when history is disabled, unavailable, or
-empty. Either path prints the same token/cost line a turn ends with, so the
-notes call is never an invisible charge.
+When starting an interactive session, `--continue` regenerates the session notes
+from the project's existing transcript and loads them into context. Without it,
+a session starts without notes and makes no model call for them.
 
+The notes live in memory for the session and are never persisted; the next
+`--continue` regenerates them from a transcript that includes the full prior
+session. `/notes generate` does the same thing mid-session at the user's
+request. The option does nothing when history is disabled, unavailable, or
+empty. Strument displays token usage and cost for the notes request.
+
+### `reasoning_display`
 
 How much of the model's thinking to show, in both the interactive REPL and
 `--message` script mode:
@@ -392,16 +371,9 @@ reasoning_display = 0        # the same as "off"
 it hid. Showing less makes the transcript incomplete, which is a thing to
 choose rather than to inherit.
 
-A number keeps the **first** lines. That is the useful half, not merely the one
-that streams: a thinking block usually ends by restating its conclusion, and the
-answer then says the same thing, while the opening — the approach weighed, the
-option rejected — appears nowhere else.
+A number keeps the **first** lines of the thinking block.
 
-The number is not sensitive, so do not agonize over it. Block lengths are
-bimodal in practice: most are a single sentence restating the tool call that
-follows, and the occasional one runs to dozens of lines. Anything from about 3
-to 15 behaves the same on both — one-liners untouched, the long one cut. Ten is
-a fine starting point.
+Start with 10 and adjust it to suit your preferred output length.
 
 **`"off"` hides the thinking; it does not stop the model producing it.**
 Reasoning tokens are billed whether or not they are shown. To stop paying for
@@ -427,10 +399,8 @@ files edited, and optionally cost) and prompts **"Keep going?"**. Answering yes
 resets the counter and buys another batch; answering no ends the turn with the
 work so far already applied and committed.
 
-This is a checkpoint, not a wall. It exists because a long turn should not run
-away unnoticed — the user should see what is happening and decide whether to
-continue. Setting it high is fine for deliberate long refactors; setting it low
-gives more frequent check-ins.
+The user can continue after the checkpoint. Set the value higher for deliberate
+long refactors or lower for more frequent check-ins.
 
 ### `max_error_reflections`
 
@@ -442,15 +412,14 @@ max_error_reflections = 3    # the default
 max_error_reflections = 5    # for models that need more retries
 ```
 
-An error reflection is the model reacting to a tool failure — an `old_string`
-that didn't match, a bad shell command — and trying again. It is distinct from
-a work step: the model is recovering, not progressing. Keeping the budget small
-means a model that is stuck in a fix-break cycle hands back to the human rather
-than burning the work-step budget on retries nobody asked for.
+An error reflection is the model reacting to a tool failure — for example, an
+`old_string` that did not match or a bad shell command — and trying again. Error
+reflections count against `max_error_reflections`; ordinary tool results count
+against `max_steps`.
 
 ### `webfetch_allow`
 
-Origins the `webfetch` tool may fetch without asking you first.
+Host or host:port entries the `webfetch` tool may fetch without asking you first.
 
 ```python
 webfetch_allow = [
@@ -460,69 +429,60 @@ webfetch_allow = [
 ]
 ```
 
-**An entry is an origin, not a URL** — no scheme, no path. A URL written here is
-refused at load rather than left to silently never match.
+**An entry is a host or host:port approval, not a URL** — it has no scheme or
+path. A URL written here is refused at load rather than left to never match.
 
-Matching is exact, and it includes the **port**. An entry without one covers
-only the defaults, 80 and 443; `localhost:3000` covers only that port. This is
-the setting's most useful property on localhost, where a dev server and
-whatever else happens to be listening have nothing to do with each other, and
-it is why `webfetch_allow = ["localhost"]` will not silently admit
-`localhost:8080`. Write `example.com:443` to insist on https, since a bare
-entry admits the plaintext port too.
+Matching is exact, and it includes the **port**. An entry without one covers the
+default ports, 80 and 443; `localhost:3000` covers only that port. This is useful
+on localhost, where a dev server and another service may use different ports, and
+it is why `webfetch_allow = ["localhost"]` does not admit `localhost:8080`. To
+restrict approval to the HTTPS default port, write `example.com:443`; the
+scheme is still determined by the fetched URL.
 
 Subdomains are not covered. `example.com` does not admit `docs.example.com`,
 and there is no wildcard. On `*.github.io`, `*.pages.dev`, and
 `*.s3.amazonaws.com` the subdomain is whoever signed up, so a rule that
-admitted them would hand an attacker the host you vouched for.
+admitted them would approve hosts you did not specify.
 
-**It says which fetches skip the prompt, not which are reachable.** Strument
-will not pretend this is a network boundary: `bash` can `curl` anywhere, and
-the sandbox confines the filesystem rather than the network. What the list
-buys is fewer questions about the hosts you read from every day. (If Strument
-ever gains network confinement, a restricting form of this setting becomes
-honest and can be added then.)
+This setting controls which fetches skip the prompt; it is not a network
+boundary. `bash` can `curl` anywhere, and the sandbox confines the filesystem
+rather than the network. Automatically approved fetches still print their
+purpose and URL.
 
-A trusted project config replaces the user's list rather than adding to it,
-like `env_allow` and for the same reason: this is one decision about which
-hosts stop being asked about, and merging two lists could only ever widen it.
+A trusted project config replaces the user's list rather than adding to it.
+This setting controls which hosts stop being asked about, so merging the lists
+would only widen the approval.
 
-#### Approving an origin without editing the config
+#### Approving a host without editing the config
 
-Answering `a` at a fetch prompt approves that origin **for the rest of the
-session** — not just the turn, which was too short a scope to be worth
-offering: a turn holds a fetch or two, so `a` saved one question and then asked
-again about the host you had just approved.
-
-That grant is deliberately less durable and less visible than a
-`webfetch_allow` line, which is a decision you made in a file you can read,
-diff, and commit. Because a session grant outlives the topic it was made for,
-`/web` is where you see and undo it:
+Answering `a` at a fetch prompt approves that host for the rest of the session.
+Use `/web` to inspect session grants and revoke them:
 
 | Command | What it does |
 | --- | --- |
 | `/web` | List what may be fetched unasked: the config's entries and this session's grants, kept apart |
-| `/web allow <origin>` | Approve an origin for the session without waiting to be asked |
-| `/web drop <origin>` | Withdraw one session grant |
+| `/web allow <host[:port]>` | Approve a host for the session without waiting to be asked |
+| `/web drop <host[:port]>` | Withdraw one session grant |
 | `/web reset` | Withdraw all of them |
 | `/reset` | Withdraws them too, along with the pins and the history |
 
 `/web allow` expands an entry exactly as the config does, so a bare host grants
-both default ports in both places. Nothing here writes to `config.star`: for an
-origin you reach for every day, the `webfetch_allow` line is still the thing to
-write, and `/web drop` will tell you so rather than pretend to remove one.
+both default ports. Nothing here writes to `config.star`; use
+`webfetch_allow` for a persistent approval.
 
-`/clear` leaves session grants alone. It leaves your pins alone too — it forgets
-what was *said*, and handing back a permission there would be the surprise.
+`/clear` clears conversation history but preserves pinned files and session
+grants.
 
-A fetch that skips the prompt — by either route — still prints the purpose and
-the whole URL, the same two lines the prompt would have shown minus the
-question. Approving an origin buys you fewer questions, not less to read.
+Automatically approved fetches still print their purpose and URL.
 
 ### `websearch`
 
 A search backend for the `websearch` tool. Unset by default, and the tool is not
-offered at all without it. Two backends, which are opposite trades:
+offered at all without it.
+
+SearXNG requires an instance configured for JSON responses. AnySearch is hosted
+and works without a key at a lower rate limit, but sends queries to a third
+party.
 
 ```python
 websearch = search("searxng", url="http://localhost:8888")   # yours to run
@@ -530,18 +490,14 @@ websearch = search("anysearch")                              # nothing to run
 websearch = search("anysearch", api_key=env("ANYSEARCH_API_KEY"))
 ```
 
-**SearXNG** is self-hosted: your instance, the engines and policy you already
-chose, no API key, and no third party in a position Strument would have to speak
-for. The cost is that you run it, and that it has to be set up to answer JSON at
-all (below).
+**SearXNG** is self-hosted: you choose the instance, engines, and policy, and
+no API key is required. The instance must be configured to return JSON.
 
-**AnySearch** is a hosted service: nothing to run, and `search("anysearch")` on
-its own is a complete configuration — it answers without a key at a lower rate
-limit, and better with one. The cost is the other side of the same coin: a third
-party sees every query your model makes.
+**AnySearch** is hosted. `search("anysearch")` works without a key at a lower
+rate limit and works better with one. Hosted search sends queries to a third
+party.
 
-Neither is the right answer for everyone, which is why the config names which.
-The rest of this section is SearXNG's, since AnySearch needs no setup.
+The rest of this section describes SearXNG, since AnySearch needs no setup.
 
 **Your instance must have JSON turned on.** SearXNG ships `formats: [html]`, so
 a fresh instance answers `403` until an admin opts in:
@@ -553,13 +509,10 @@ search:
     - json
 ```
 
-Eleven public instances were tried while building this and none served JSON.
-Three failures are worth knowing because each looks like something else, and
-`websearch` translates all three rather than passing them through: a **403** is
-the format not being enabled; a **429** is the limiter plugin, which many
-instances point at non-browser clients; and a **200 carrying HTML** is a bot
-check or login page in front of the instance, which a client that reads only the
-status will take for success.
+A **403** usually means that JSON is not enabled; a **429** can come from the
+limiter plugin; and a **200** response containing HTML may be a bot check or
+login page. `websearch` reports these failures rather than treating them as
+search results.
 
 `script/searxng-probe.py` checks an instance against everything the tool
 assumes, and prints what it observed:
@@ -574,21 +527,15 @@ instance on localhost or the LAN has no business being reached through a proxy
 you configured for external traffic.
 
 The model is asked before the first search of a turn, and an `a` answer covers
-the rest of that turn. That is the opposite of `webfetch`'s scope, for the
-opposite reason: there the model picks the destination, so the question is per
-origin and has to outlast a turn to be worth asking; here you pinned the
-destination, so only the query varies, and a turn holds many searches.
-`--yes websearch` covers it without covering anything else, which is the point
-of naming permissions one at a time: an unattended search need not come with an
-unattended shell. Every query is printed whether or not it was asked about.
+the rest of that turn. `webfetch` instead asks per origin because the model
+chooses the destination, while the search destination is fixed in the config.
+`--yes websearch` approves searches without approving the shell. Every query is
+printed whether or not it was asked about.
 
-**A degraded search says so.** SearXNG reports which of its engines failed, and
-on a real instance three of them being rate-limited, CAPTCHA'd, or timed out is
-an ordinary Tuesday. `websearch` passes that on, because otherwise a search that
-returns nothing is indistinguishable from a subject nobody has written about.
-With no results the report comes first, ahead of the emptiness, rather than as a
-footnote after it — a judgement about what matters most in that case, not a
-measured effect on what models say.
+**A degraded search is reported.** SearXNG reports which of its engines
+failed, and failures can occur during normal use. `websearch` includes that
+information when it returns no results, so an engine failure is not confused
+with a query for which nothing was found.
 
 **Search results are not fetchable without asking.** A URL from a result still
 goes through `webfetch`'s own per-origin prompt. What ranks for a query is
@@ -603,25 +550,16 @@ shell = True     # the default
 shell = False    # the model cannot run commands, and is not asked
 ```
 
-`False` removes the tool from the schema rather than refusing the calls, and
-that distinction is the whole point. A tool the session will never allow is
-worse than an absent one: the model plans around a capability it does not have,
-spends a step discovering it cannot use it, and learns that a confirmation
-prompt is a formality. Withholding it means the model plans with the tools it
-actually has.
-
-Execution is gated too, so a path that does not go through the tool cannot slip
-past — the setting is a promise about the session, not a decoration on one
-schema.
+Setting `shell = False` removes `bash` from the model's available tools and
+blocks model-caused shell execution. User commands such as `/run` remain
+available. Configured `check` commands and an external `scraper` remain separate
+execution paths.
 
 `--no-shell` does the same for a single run. It can only turn the shell off,
 never on: a project config that says `shell = False` is a standing decision,
 and a flag that silently re-enabled the shell would make it unreliable.
 
-Two uses. A session where you want edits reviewed but nothing executed — the
-review loop without the side effects. And testing: `script/opencode-live-pass.sh`
-uses it so a model cannot reach for `sed` and pass an edit check without ever
-calling the edit tool.
+Use this when you want edits reviewed without model-caused commands running.
 
 ### `loop_detection`
 
@@ -633,39 +571,34 @@ loop_detection = False    # off
 ```
 
 Some models — small ones especially — get stuck emitting one sentence over and
-over until the context fills. It does not resolve on its own the way a repeated
-*tool call* usually does, so Strument watches the streamed text and stops the
+over until the context fills. Strument watches the streamed text and stops the
 reply when a fifty-character window has recurred ten times at close spacing, or
 when one word has repeated thirty times running. The answer and the reasoning
 are watched separately; in practice it is nearly always the reasoning.
 
-Stopping looks like an interrupt without the Ctrl-C: the partial reply stays in
-the chat, Strument tells the model what repeated and to take another approach,
-and you are asked whether to stop, let it try again, or steer it with a message
+Generated tables or fixture data can trigger the detector. Disable it if ordinary
+model output produces false positives.
+
+Stopping leaves the partial reply in the chat. Strument tells the model what
+repeated and asks whether to stop, let it try again, or steer it with a message
 of your own.
 
 ### `observation_via_run_code`
 
 ```python
 observation_via_run_code = False    # the default
-observation_via_run_code = True     # force arm
+observation_via_run_code = True
 ```
 
 Experimental. With `True`, the direct read-only tools (`read`, `grep`, `glob`,
 `ls`, `symbol`) are withheld from the tool schema and all file observation goes
 through the `run_code` tool: the model writes a short Python program that calls
 those tools itself, and the results come back to the program. A direct call a
-model makes anyway is answered with a pointer to the `run_code` route rather than
-silently failing.
+model makes anyway is answered with a pointer to the `run_code` route.
 
-This is the force arm of the code-uptake experiments
-(`doc/experiments/2026-09-code-mode2/README.md`): prompting moved `run_code` uptake from
-0/36 to 8/24, and this setting tests the complementary condition — removing the
-competing tools instead of persuading the model to prefer the program. It is
-off by default and may change or be withdrawn based on those results.
-
-Turn it off if your model's ordinary output trips it — generated tables and
-fixture data are the plausible cases. Nothing else changes.
+This setting is the direct-tool-withholding arm of the code-uptake experiments
+(`doc/experiments/2026-09-code-mode2/README.md`). It is off by default and may
+change or be withdrawn based on those results.
 
 ### `example_messages`
 
@@ -680,13 +613,11 @@ Optional. A list of `[role, content]` pairs (`"user"` or `"assistant"`)
 appended to the prompt set's example block, so the model sees them as a
 worked exchange before the conversation starts. Empty means none.
 
-Experimental, like `observation_via_run_code`: it is the few-shot arm of the
-shell-parallelism trial (`doc/experiments/2026-09-shell-parallel/README.md`) — the
-planning-side lever that trial's predecessor named, aimed at whether a worked
-example changes how models batch commands. It exists because prose in the
-system prompt moves *uptake* (the code-mode trials) but has not been shown to
-move *granularity* (how much work one call plans). User and project configs
-append rather than replace: a project's examples appear alongside the user's.
+Experimental, like `observation_via_run_code`: this setting is used in the
+shell-parallelism trial (`doc/experiments/2026-09-shell-parallel/README.md`) to
+test whether worked examples change how models batch commands. User and project
+configs append rather than replace: a project's examples appear alongside the
+user's.
 
 ### `shell_timeout`
 
@@ -702,10 +633,8 @@ It applies to the `bash` tool and to `check` commands — everything the *model*
 can cause to run. **`/run` is exempt**: the user typed that command and may well
 have meant the twenty-minute build.
 
-When the deadline stops a command, the tool result says so in those words. That
-matters more than it looks: a command killed at the deadline and one that failed
-on its own are otherwise indistinguishable to the model, and the obvious next
-move after an unexplained failure is to start changing code.
+Timeout results explicitly say that the command exceeded its deadline, so the
+model can distinguish a timeout from a command failure.
 
 A timeout is not a resource limit. It bounds how long a runaway command wastes,
 not what it can do while running.
@@ -729,22 +658,20 @@ them through the turn's snapshot.
 
 ### `prompt_*` — customizing the system prompts
 
-These settings let you change how the model is framed, on top of the built-in
-prompts in `internal/prompts/`. There are two tiers, and which you reach for
-depends on how much you want to own.
+These settings let you change the instructions sent to the model, on top of
+the built-in prompts in `internal/prompts/`.
 
-**Tier 0 — a standing directive.** `prompt_system_prefix` is prepended to the
-active system prompt (whatever mode and format) with no placeholder
-substitution. Use it for a rule that applies every turn and in every mode —
-"be terse", "never touch the CI config" — without rewriting anything else:
+**Prepend instructions.** `prompt_system_prefix` is prepended to the active
+system prompt (whatever mode and format) with no placeholder substitution. Use
+it for a rule that applies every turn and in every mode — "be terse", "never
+touch the CI config" — without rewriting anything else:
 
 ```python
 prompt_system_prefix = "You work on the Acme codebase.\n\n"
 ```
 
-**Tier 1 — whole-string replacement.** `prompt_code`, `prompt_ask`,
-`prompt_commit`, and `prompt_read_only` replace the corresponding built-in
-prompt entirely:
+**Replace a built-in prompt.** `prompt_code`, `prompt_ask`, `prompt_commit`,
+and `prompt_read_only` replace the corresponding built-in prompt entirely:
 
 | Key | Replaces |
 |---|---|
@@ -753,9 +680,8 @@ prompt entirely:
 | `prompt_commit` | the commit-message system prompt |
 | `prompt_read_only` | the prefix framing injected read-only reference files |
 
-Replacement is a deliberate act, and the review surface is the point: you are
-owning the whole string, not patching one paragraph. To tweak a paragraph
-instead, use `prompt_system_prefix`.
+A replacement removes the corresponding built-in instructions. To add a rule
+without replacing a prompt, use `prompt_system_prefix`.
 
 Replacements are templates that may use the built-ins' **closed placeholder
 set** — the same `{...}` slots `pyFormat` fills at assembly time:
@@ -765,11 +691,8 @@ set** — the same `{...}` slots `pyFormat` fills at assembly time:
 - `prompt_commit`: `{language_instruction}`.
 - `prompt_read_only`: none (literal).
 
-The set is closed on purpose: a slot the harness does not render would be prose
-that promises or references something that never arrives. An unknown `{...}` is
-refused at config load with a message naming the key and the offending slot, so
-a typo cannot silently produce a broken prompt. Literal braces must be doubled
-(`{{` / `}}`), exactly as in the built-in templates.
+Only the placeholders listed below are supported. Unknown placeholders cause a
+configuration error. Double literal braces as `{{` and `}}`.
 
 ```python
 prompt_code = """You are a senior engineer on Acme's Go services.
@@ -795,10 +718,10 @@ same small set the environment detection uses (`fr` → "French", `zh` →
 chat_language = "fr"
 ```
 
-An empty string (`""`) explicitly turns the configured language off, leaving the
-environment detection in charge — distinct from the key being absent, which also
-leaves the environment in charge. Because it feeds the prompt as normalized
-text, a code outside the known map is left as-is rather than refused.
+An empty string (`""`) leaves environment detection in charge, as does omitting
+the setting. The two cases are distinct when a project config overrides a user
+config. Because it feeds the prompt as normalized text, a code outside the known
+map is left as-is rather than refused.
 
 ### `env_allow`
 
@@ -828,11 +751,8 @@ Matching is exact: `FOO_` does not admit `FOO_BAR`. The value always comes from
 the real environment at run time — a name containing `=` fails the load, so the
 config carries names only, never values.
 
-Adding a credential-shaped name is allowed and deliberate. There is no filter
-that rejects `HF_TOKEN` on shape: a hard one would just push you toward writing
-the token to a file, which is worse than passing it. What the allowlist buys is
-that exposure has to be *written down* — one line per variable, visible in the
-config and in a `.strument.star` you had to trust.
+Credential variables may be included explicitly. Add them only when the command
+needs them.
 
 For ad-hoc, session-scoped changes the REPL has `/env`: `/env` shows the
 effective allowlist by origin (defaults, config, session changes), `/env add`
@@ -842,9 +762,8 @@ reset` returns to the config's list. Nothing is persisted, values are never
 displayed, and `/reload` discards session changes — the config is the source
 of truth. To make a `/env add` permanent, add the name to `env_allow`.
 
-A project's `.strument.star` **replaces** the user's `env_allow`, as it does
-every other key, and for the reason that made the rule uniform: a merge can
-only widen, and a project needs to be able to narrow.
+A project's `.strument.star` **replaces** the user's `env_allow`. This lets a
+project narrow the variables passed to model-run commands.
 
 Two things are untouched by the allowlist. `/run` keeps the full environment,
 because you typed that command yourself. And the API keys Strument itself uses
@@ -860,9 +779,8 @@ Sets environment variables for the session:
 env_set = {"TZ": "Europe/Kyiv"}
 ```
 
-The classic case is a time zone. Commit in your own zone on a UTC server, or in
-UTC on a laptop that is not. `TZ` is the example, but anything works — `GOFLAGS`,
-`RUST_BACKTRACE`, a tool's cache directory.
+The classic case is a time zone. `TZ` is the example, but any variable works,
+such as `GOFLAGS`, `RUST_BACKTRACE`, or a tool's cache directory.
 
 The variables are set on Strument's own process at startup, so everything it
 starts inherits them: `git`, `/run`, and the model's commands. **`env_set` does
@@ -888,13 +806,10 @@ trust`, which is the same gate its `check` commands sit behind.
 
 #### `TZ`, and what it does reach
 
-Setting `TZ` is not by itself enough to move Strument's own clock, and for
-different reasons on different systems: Go reads `TZ` once on Unix, the first
-time anything formats a time, and never reads it at all on Windows. Strument
-therefore sets its zone directly rather than signalling it, so a `TZ` in
-`env_set` governs the date in the prompt and the timestamps on transcript turns
-on every platform. Files it writes for itself — the resume, undo, and cost
-records — stay in UTC, which is what they were always written in.
+Setting `TZ` does not by itself change the time zone Strument uses. Strument
+sets its zone directly, so a `TZ` in `env_set` governs the date in the prompt and
+the timestamps on transcript turns on every platform. Files it writes for
+itself — the resume, undo, and cost records — stay in UTC.
 
 Give a zone database name, like `Europe/Kyiv` or `UTC`. A POSIX string carrying
 its own rules (`EST5EDT4,M3.2.0/2`) is not one, and neither is a typo; either
@@ -924,34 +839,19 @@ It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
 at startup, naming the ones that would have worked — a permission that silently
 was not granted is one you find out about at the prompt it was meant to answer.
 
-The first three grant the model a capability. The last two do not: they answer a
-question the harness asks about its own pacing, and nothing new becomes possible
-when you say yes. They are in the same flag because both need an answer in a
-session with no terminal, and a name that says which prompt it covers beats a
-flag meaning "everything except the scary one" — which is what the `--yes` and
-`--yes-shell` pair this replaced actually meant, and why a third thing worth
-withholding had nowhere to go.
+The permissions fall into three categories: `bash`, `webfetch`, and `websearch`
+approve capabilities; `steps` and `context` answer continuation prompts; and
+`add-output` approves adding command output to the chat. In noninteractive use,
+these names identify which prompts are answered without granting unrelated
+capabilities.
 
 **`--yes steps` removes the step limit rather than raising it.** The budget
 resets each time the prompt is answered, so granting it makes `max_steps` an
 interval between checkpoints that no longer stop.
 
-`add-output` is a third kind again: neither a capability nor pacing, but a
-question about what *you* are putting in front of the model. It had no name
-until a piped session was watched answering it — this page used to say one was
-unnecessary, on the grounds that `/run` and `/check` are commands you type
-yourself and so a terminal is always there to ask on. A command typed into a
-pipe is still typed by you, and there the prompt declined itself with "there is
-no terminal to ask on, and no --yes name covers this prompt" while the `y` on
-the next line went to the model as a chat message.
-
-Those three prompts ask every time and offer no `a`. They used to, and the "all
-turn" it promised was not one: they are typed at your prompt, between turns, so
-the record had no turn to expire with and ran until your next *message* — and
-because all three share one group, an `a` at a `/consult` silently added the
-following `/run`'s output as well. `--yes add-output` is the way to stop being
-asked, and it says so in a flag rather than in an answer whose scope was
-invisible.
+The `add-output` prompt asks whether output from `/run`, `/check`, or `/consult`
+should be added to the chat. These prompts ask every time and do not offer `a`;
+use `--yes add-output` to answer them automatically.
 
 ### What `/reload` applies
 
@@ -967,17 +867,12 @@ Skills are not part of `config.star`, but they are read from disk at startup
 for the same reason the rest of this list is, and a reload has to re-read what
 it claims to. `/skill` shows the result.
 
-Two things a reload cannot change, and it says so rather than leaving you to
-find out: **`sandbox`**, because Landlock applies to the process at startup and
-its rules only ever add, so a session cannot widen or drop its own confinement;
-and **`env_set`**, above.
+Two things a reload cannot change are **`sandbox`**, because Landlock applies to
+the process at startup and the applied restrictions cannot be relaxed, and
+**`env_set`**, above.
 
-Rebuilding the egress backends is the part that used to be missing, and the
-failure was silent: a search going out through a global `proxy` that could not
-reach a localhost instance stayed broken through `proxy="direct"` plus a
-reload, because the port had been built once at startup and the reload only
-copied plain values. If a setting is worth reloading, the reload has to
-actually re-read it.
+`/reload` rebuilds the egress backends so changes to their proxies and settings
+take effect in the running session.
 
 ### `sandbox`
 
@@ -988,10 +883,8 @@ sandbox = "landlock"   # the default on Linux
 sandbox = ""           # off; the default everywhere else
 ```
 
-There is no boolean and no `"auto"`, because "sandboxed" is not one thing —
-naming the mechanism keeps the setting honest when there is a second one.
-Anything other than those two values fails the load rather than falling back,
-since the whole value of this setting is knowing whether you are confined.
+The accepted values are `"landlock"` and `""`. Any other value fails the load;
+Strument does not silently choose a different confinement mechanism.
 
 The default is the rule you would write yourself, and you can write it: the
 `platform` value is available, so `sandbox = "landlock" if platform.system ==
@@ -1020,14 +913,13 @@ process instead of each command.
 cannot be changed mid-session; edit the config and restart.
 
 **On a kernel without Landlock**, `sandbox = "landlock"` does not proceed
-unsandboxed. Strument starts, and reading, editing and committing work, but
-everything the model can cause to execute refuses with one line naming this
+unsandboxed. Strument starts, and reading, editing, and committing work, but
+everything the model can cause to execute is refused with one line naming this
 setting. `/run` still works. Off Linux, the setting must be `""` — there is no
 mechanism to fall back to.
 
-What this buys is integrity, not confidentiality: writes are confined, reads
-are not. [`doc/security.md`](security.md) is the full account, including the
-places the policy is deliberately loose.
+The sandbox confines writes, not reads; it is not a confidentiality boundary.
+[`doc/security.md`](security.md) describes the policy in detail.
 
 ### `sandbox_write`
 
@@ -1055,14 +947,13 @@ that works. In particular, do not grant a directory on your `PATH`: the derived
 set excludes those on purpose, since a writable `bin/` is a program that runs
 as you the next time you type its name.
 
-A project's `.strument.star` **replaces** the user's `sandbox_write`
-whole-value, like `env_allow` and for the same reason: merging could only
-widen, and a project needs to be able to narrow.
+A project's `.strument.star` **replaces** the user's `sandbox_write` value, so
+a project can narrow the paths it permits.
 
 ## Built-in functions
 
-Three functions are predeclared. Keyword-only parameters follow the `*`, as in
-Python.
+The built-in functions use Python-like signatures. Parameters after `*` are
+keyword-only.
 
 ### `search(backend, *, url=None, api_key=None, proxy=None)`
 
@@ -1082,8 +973,7 @@ unknown value is refused at load and names what would have worked.
   of a global `proxy`. `"direct"` matters most for a SearXNG instance on
   localhost; a hosted backend usually wants the global proxy.
 
-Both are keyword-only because they mean different things per backend, and a
-positional second argument that changes meaning with the first is a trap.
+These parameters are keyword-only.
 
 ### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
 
@@ -1107,8 +997,9 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   `https://openrouter.ai/api/v1`. opencode gets a name per dialect because it
   serves several from one host and one key.
 - **`base_url`** — endpoint override. Unset uses the adapter default above.
-- **`api_key`** — the bearer token. Keep it out of the file with `env()`
-  (below): `api_key=env("OPENROUTER_API_KEY")`.
+- **`api_key`** — the API credential. Authentication details depend on the
+  adapter. Keep it out of the file with `env()` (below):
+  `api_key=env("OPENROUTER_API_KEY")`.
 - **`name`** — a label for the provider. It appears in the provider-qualified
   slug Strument prints (`local/qwen/...`) and defaults to the adapter when unset,
   so name a provider when you run two of the same adapter.
@@ -1160,10 +1051,9 @@ models = {
 | `/messages` | `opencode-anthropic` | MiniMax M3, M2.7, M2.5; Qwen3.8 Max, Qwen3.8 Flash, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus |
 | `/responses` | `opencode-responses` | Grok 4.6, GPT 5.6 Luna, Muse Spark 1.3/1.2 Contributor |
 
-**Match the adapter to the model, and expect no help if you do not.** The
-protocol is not discoverable — `/zen/go/v1/models` lists ids and nothing else,
-and serves models the documented table omits — so the adapter a slug needs
-comes from opencode's endpoint table.
+Use the adapter documented for each opencode model. The protocol is not
+discoverable: `/zen/go/v1/models` lists ids and nothing else, and serves models
+the documented table omits.
 
 The split is enforced in both directions, and reported inconsistently.
 Measured against the live endpoint: `grok-4.6` on `/chat/completions` answers
@@ -1179,9 +1069,7 @@ does. Seven of the eight `/messages` models happen to work on
 
 Requests to this adapter carry an `x-opencode-session` header: one random id per
 Strument process, which opencode uses to group a session and keep its prompt
-cache warm. That is worth money rather than being a courtesy — the subscription
-is metered in dollars, and most of a request's tokens are cached ones. Set
-`cache = True` on the model as well.
+cache warm. Set `cache = True` on the model as well.
 
 #### The Anthropic dialect
 
@@ -1234,9 +1122,9 @@ effort, because some providers read that as *disabling* reasoning:
 `x-ai/grok-4.6` rejects such a request with "Reasoning is mandatory for this
 endpoint and cannot be disabled", where `openai/gpt-5.6-luna` accepts it.
 
-Conversations are never stored server-side (`store` is off). Strument holds
-the whole history and resends it, so server-side storage would be a second
-copy with its own lifetime that the user cannot see, edit or undo.
+Strument sends `store = false` on Responses requests. It holds the whole
+history and resends it; this setting requests that the provider not store the
+conversation for later API retrieval. Provider retention policies are separate.
 
 ### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
 
@@ -1258,10 +1146,8 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   — prose about the session rather than work on your code — which is where the
   name comes from, and why a cheaper and/or faster model usually belongs here.
 
-  It was called `weak_model` before, after aider. The name made a claim about
-  capability that stopped being true: the model most often put in this seat now
-  is a near-peer of a frontier one. A config still using `weak_model` gets an
-  error naming the new key.
+  The setting was previously called `weak_model`. A config still using
+  `weak_model` gets an error naming the new key.
 - **`reasoning`** — reasoning effort. OpenRouter accepts `"max"`, `"xhigh"`,
   `"high"`, `"medium"`, `"low"`, and `"minimal"` where the model supports
   them; other provider-specific values pass through. `"off"` disables reasoning
@@ -1307,9 +1193,8 @@ Reads an environment variable at load time — the one impure built-in.
 - **`default`** — returned when the variable is unset. Giving one is what makes
   the variable optional; omit it and an unset variable fails the load.
 
-It behaves like Starlark's own dictionary access, which is the shape you already
-know: `env("X")` is `d["x"]` and raises when the key is absent, while
-`env("X", default=v)` is `d.get("x", v)` and does not.
+Omitting `default` makes the variable required; supplying any default makes it
+optional.
 
 ```python
 api_key = env("OPENROUTER_API_KEY")                # required; errors if unset
@@ -1347,15 +1232,11 @@ internally:
 | `platform.release` | `"6.18.5"` | `uname` release; `""` without `uname` |
 | `platform.version` | `"#1 SMP ..."` | `uname` version; `""` without `uname` |
 
-Writing `platform.system == "linux"` and having it silently never match is the
-mistake the capitalization exists to prevent.
+Values are case-sensitive: compare `platform.system` with `"Linux"`, not
+`"linux"`.
 
-CPython's `platform()` and `processor()` are **absent** rather than
-approximated. The first is a composite string assembled differently on every OS
-with no faithful translation; the second is empty even in CPython on Linux and
-comes from places Go cannot portably reach. Referring to either is an error you
-see when you edit the config, which is better than a plausible wrong value you
-ship.
+CPython's `platform()` and `processor()` are **absent**. The listed attributes
+are available instead.
 
 The attributes are read-only, and `platform` is not a function — these are facts
 about the host, not a computation.
@@ -1445,23 +1326,21 @@ the catalog fetch itself must go through a proxy; otherwise it uses the global
 [`proxy`](#proxy).
 
 Strument maintains no model database. The catalog is fetched on demand and
-frozen into your own config, which is why nothing goes stale behind your back.
+catalog values are copied into your configuration; they are not updated
+automatically.
 
 ## Project-local config
 
-A `.strument.star` in the project root can add or override `models`, `default`,
-`history_file`, and `proxy`, with the project file winning. It is **inert until
-trusted**: run `strument trust` in the directory (a direnv-style content-hash
-gate), and re-run it after every edit. The same command also trusts the
-project's [skills](#skills).
+A `.strument.star` in the project root can override settings from the user
+config, with the project file winning according to each setting's merge rule.
+It is **inert until trusted**: run `strument trust` in the directory (a
+direnv-style content-hash gate), and re-run it after every edit. The same
+command also trusts the project's [skills](#skills).
 
 ## Skills
 
-A **skill** is a set of instructions for a particular kind of task, written in
-Markdown with a small YAML header. The model asks for one by name and gets it
-back; a skill about writing release notes is nothing until you ask for release
-notes, at which point it is the whole difference between a generic draft and
-yours.
+A **skill** is a named set of task-specific instructions stored in a Markdown
+file with YAML front matter. The model can request a skill by name.
 
 Strument reads the [Agent Skills][agent-skills] format:
 
@@ -1528,10 +1407,10 @@ The interpreter is [Monty](https://github.com/pydantic/monty), a restricted
 Python subset compiled to WebAssembly and run through `wazero` — pure Go, no
 cgo, vendored under `internal/monty/`.
 
-It is a **subset**, and the tool description names the walls rather than
-letting the model find them: no `with`, no `match`, no `eval`/`exec`, no
-`open`, no `os`/`pathlib` filesystem access, no network, no
-imports beyond `math`/`re`/`datetime`/`json`, no third-party libraries.
+It is a **subset**, and the tool description lists the interpreter's
+limitations: no `with`, no `match`, no `eval`/`exec`, no `open`, no
+`os`/`pathlib` filesystem access, no network, no imports beyond
+`math`/`re`/`datetime`/`json`, and no third-party libraries.
 Available: f-strings, `while`, `try/except`, comprehensions, generators,
 classes, `lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/
 `abs`, and all of `math`. There is no `%-formatting` and no `.format()`.
@@ -1540,9 +1419,9 @@ The program is sandboxed by construction: no filesystem, no network, and
 explicit resource limits (5 s, 32 MiB, recursion depth 100). A program that
 runs away terminates on a limit rather than hanging the turn.
 
-The tool never asks permission — it computes and reads, it does not touch
-anything — but it is announced like any other tool call. It is offered in ask
-mode too, because a discussion turn is exactly where a calculator belongs.
+The tool never asks permission. It can compute and read through the exposed
+tools, but cannot modify files or access the network. It is announced like any
+other tool call and is available in ask mode.
 
 ### The read-only bridge
 
@@ -1556,12 +1435,9 @@ action the model had initiated, when it was downstream of the program already
 on screen, and the turn's `Ran N lines of code calling …` summary already
 attributes the run. A program may issue at most 50 bridged calls.
 
-`bash`, `edit`, `write`, `commit`, and `check` are **deliberately unreachable**
-from inside a program. Those tools may ask you something, and a program calling
-them would turn "may I run this command?" into "may I run this program that
-will issue commands you cannot enumerate?" — the one thing the reviewable-loop
-rule forbids. The reachable set is derived from the observation tools'
-registration, so it cannot drift from it.
+Only the five read-only observation tools are callable from a `run_code`
+program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a
+program cannot initiate commands or modifications through the bridge.
 
 Trials so far have not earned the tool a default slot:
 [`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md)
