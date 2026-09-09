@@ -49,23 +49,23 @@ var version = "0.0.0-dev"
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                   placeholder:"<text>"                                          short:"m"`
-	Continue      bool     `help:"Generate session notes from the previous transcript at startup."                                                                name:"continue"                                               short:"c"`
-	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                  placeholder:"<alias>"                                         short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                            name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                              name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                             name:"dark-mode"                                              xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                            name:"light-mode"                                             xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                           name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                           name:"no-history"`
-	JSONL         string   `help:"Also write a JSONL session log to this file."                                                        name:"jsonl"                                                  placeholder:"<file>"`
-	DryRun        bool     `help:"Report edits without writing files or committing."                                                                            name:"dry-run"`
-	NoShell       bool     `help:"Disable the model's bash tool."                                                                                              name:"no-shell"`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
+	Continue      bool     `help:"Generate session notes from the previous transcript at startup."                                                                                            name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                             xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                                                         name:"no-history"`
+	JSONL         string   `help:"Also write a JSONL session log to this file."                                                                                                               name:"jsonl"                                                  placeholder:"<file>"`
+	DryRun        bool     `help:"Report edits without writing files or committing."                                                                                                          name:"dry-run"`
+	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
 	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	ConsultScope  string   `default:"files"                                                                                                                     enum:"none,files,chat"                                        help:"Session context to include in /consult requests."         name:"consult-scope"`
-	CodeResult    string   `default:"last"                                                                                                                      enum:"last,all,main"                                          help:"Result format for run_code programs (experimental)."     name:"code-result"`
-	CodeNamespace string   `default:"flat"                                                                                                                      enum:"flat,both,only,hint"                                    help:"How run_code programs access tools (experimental)."      name:"code-namespace"`
-	Files         []string `arg:""                                                                                                                              help:"Files for the model to edit (they need not exist yet)." optional:""`
+	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                        help:"Session context to include in /consult requests."    name:"consult-scope"`
+	CodeResult    string   `default:"last"                                                                                                                                                    enum:"last,all,main"                                          help:"Result format for run_code programs (experimental)." name:"code-result"`
+	CodeNamespace string   `default:"flat"                                                                                                                                                    enum:"flat,both,only,hint"                                    help:"How run_code programs access tools (experimental)."  name:"code-namespace"`
+	Files         []string `arg:""                                                                                                                                                            help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -1185,10 +1185,10 @@ func (*historyCmd) Run() error {
 // looked up by hand. Output is copy-pastable Starlark on stdout — the user
 // reviews it and pastes it into their config.
 type modelConfigCmd struct {
-	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."    placeholder:"<name>" short:"s"`
+	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."             placeholder:"<name>" short:"s"`
 	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name to use in the generated model() call." name:"provider-name" placeholder:"<name>"`
-	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"                                               placeholder:"<url>"`
-	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5." name:"model"`
+	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"                                                        placeholder:"<url>"`
+	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5."          name:"model"`
 }
 
 // openRouterKeyFromConfig returns the API key of an OpenRouter provider in the
@@ -1259,11 +1259,11 @@ func (c *modelConfigCmd) Run() error {
 }
 
 type cli struct {
-	Chat        chatCmd          `cmd:""                         default:"withargs"                                                       help:"Chat with a model about the given files (default command)."`
+	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                    help:"Chat with a model about the given files (default command)."`
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file and its skills."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
-	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block." name:"model-config"`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."  name:"model-config"`
 	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`

@@ -373,12 +373,10 @@ func (c *Coder) setPrompts() {
 		if c.PromptCode != "" {
 			base.MainSystem = c.PromptCode
 		}
-		break
 	case "ask":
 		if c.PromptAsk != "" {
 			base.MainSystem = c.PromptAsk
 		}
-		break
 	}
 	if c.PromptReadOnly != "" {
 		base.ReadOnlyFilesPrefix = c.PromptReadOnly
