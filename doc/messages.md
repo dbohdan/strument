@@ -60,6 +60,12 @@ Use the quoting convention appropriate to the item being shown.
 
 - **Backticks for commands, flags, and config keys**: `` `strument trust` ``,
   `` `check_auto` ``, `` `--no-shell` ``.
+  Some exceptions are allowed based on readability.
+  The following aren't quoted:
+    - REPL commands given without arguments (for example, `/add`, `/exit`).
+    - REPL commands in `/help`
+    - Commands intended to be copied to the end of the line
+      (e.g., `Merge saved state: strument project adopt ~/src/proj`)
 - **Double quotes for values shown as configuration source.** Preserve quotes
   required by the configuration syntax: `"full"`, `"off"`, and
   `{"test": ["go", "test"]}`.
