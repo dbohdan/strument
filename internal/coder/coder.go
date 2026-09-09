@@ -1011,7 +1011,7 @@ func (c *Coder) confirmMoreSteps() bool {
 	if files == 1 {
 		noun = "file"
 	}
-	c.Out.Printf("This turn has run %d steps and edited %d %s.", c.numSteps, files, noun)
+	c.Out.Printf("This turn has run %s and edited %d %s.", render.Plural(c.numSteps, "step", "steps"), files, noun)
 	if c.costKnown {
 		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
 	}

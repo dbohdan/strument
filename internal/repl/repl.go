@@ -737,10 +737,10 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// message could only pick between two, so it named the right flag by
 		// luck; now the prompt carries its own name and the advice is precise.
 		if req.Grant == "" {
-			r.out.Warningf("Declined: this prompt requires an interactive terminal and cannot be approved with --yes.")
+			r.out.Warningf("Declined: this prompt requires an interactive terminal and cannot be approved with `--yes`.")
 			return coder.ConfirmResult{}
 		}
-		r.out.Warningf("Declined: this prompt requires an interactive terminal. Pass --yes %s to approve it automatically.", req.Grant)
+		r.out.Warningf("Declined: this prompt requires an interactive terminal. Pass `--yes %s` to approve it automatically.", req.Grant)
 		return coder.ConfirmResult{}
 	}
 

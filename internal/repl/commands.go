@@ -565,7 +565,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 			return ""
 		}
 		if strings.TrimSpace(notes()) == "" {
-			r.printf(`No session notes. Use "/notes generate" to create them from the transcript.`)
+			r.printf("No session notes. Use `/notes generate` to create them from the transcript.")
 			return ""
 		}
 		r.printf("%s", strings.TrimRight(notes(), "\n"))
@@ -951,17 +951,17 @@ func webOrigins(r *REPL) string {
 	allow, session := r.coder.WebfetchAllow, r.coder.SessionOrigins()
 	if len(allow) == 0 && len(session) == 0 {
 		r.printf("webfetch asks before every origin. " +
-			`Answer "a" at a prompt, or "/web allow <origin>", to stop being asked for one.`)
+			"Answer `a` at a prompt, or `/web allow <origin>`, to stop being asked for one.")
 		return ""
 	}
 	if len(allow) > 0 {
-		r.printf("Allowed by webfetch_allow in the config (a bare host covers ports 80 and 443):")
+		r.printf("Allowed by `webfetch_allow` in the config (a bare host covers ports 80 and 443):")
 		for _, entry := range allow {
 			r.printf("  %s", entry)
 		}
 	}
 	if len(session) > 0 {
-		r.printf(`Approved for this session (use "/web reset" to revoke the approvals):`)
+		r.printf("Approved for this session (use `/web reset` to revoke the approvals):")
 		for _, org := range session {
 			r.printf("  %s", org)
 		}
@@ -1010,7 +1010,7 @@ func webDrop(r *REPL, entry string) string {
 	if len(dropped) == 0 {
 		for _, org := range origin.Origins(entry) {
 			if origin.Allowed(org, r.coder.WebfetchAllow) {
-				r.out.Warningf("%s is allowed by webfetch_allow in the config. Remove the config entry to require approval.", entry)
+				r.out.Warningf("%s is allowed by `webfetch_allow` in the config. Remove the config entry to require approval.", entry)
 				return ""
 			}
 		}
