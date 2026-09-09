@@ -95,8 +95,9 @@ Applied the edit to internal/poll/watch.go
 Renamed the constant and updated its two uses.
 
 Running the automatic checks.
-test $ go test ./...
-test passed
+‹check› test
+$ go test ./...
+passed
 Commit 6c1e0a4 refactor(poll): rename defaultTimeout to pollInterval
 
 Tokens: 12.4k sent, 1.8k received. Cost: $0.03 turn, $0.03 session. 4 steps, 2 files changed.
@@ -176,7 +177,7 @@ You can stop a long response and redirect the model without starting over:
 ‹thinking› I’ll inspect the authentication package first...
 Reading internal/auth/auth.go
 ^C
-^C again to exit
+Press Ctrl-C again to exit
 
 ‹question› You stopped the model. What now?
 1. Continue — Carry on from where it was cut off
@@ -264,8 +265,8 @@ When Strument recognizes a renamed project, it shows a notice at startup:
 
 ```
 strument: this project also has 47 turns recorded under ~/src/proj, which no longer exists.
-  Merge it:  strument project adopt ~/src/proj
-  Or hide this:  strument project ignore ~/src/proj
+  Merge saved state: strument project adopt ~/src/proj
+  Dismiss this notice: strument project ignore ~/src/proj
 ```
 
 `strument project adopt` previews the changes and asks for confirmation.
