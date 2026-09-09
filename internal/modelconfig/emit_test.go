@@ -7,14 +7,17 @@ import (
 
 func TestEmitStarlarkFull(t *testing.T) {
 	info := ModelInfo{
-		Slug:         "anthropic/claude-haiku-4.5",
-		DisplayName:  "Claude Haiku 4.5",
-		Context:      200000,
-		MaxOutput:    64000,
-		InputCost:    "1",
-		OutputCost:   "5",
-		CacheCapable: true,
-		Reasoning:    true,
+		Slug:              "anthropic/claude-haiku-4.5",
+		DisplayName:       "Claude Haiku 4.5",
+		Context:           200000,
+		MaxOutput:         64000,
+		InputCost:         "1",
+		OutputCost:        "5",
+		CacheCapable:      true,
+		Reasoning:         true,
+		ReasoningEfforts:  []string{"high", "low"},
+		ReasoningDefault:  "high",
+		ReasoningMetadata: true,
 	}
 	want := `models = {
     "claude-haiku-4.5": model(
@@ -26,9 +29,9 @@ func TestEmitStarlarkFull(t *testing.T) {
         input_cost=1,
         output_cost=5,
         cache=True,  # OpenRouter reports prompt caching for this model.
-        # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
+        # reasoning="high",  # Uncomment and set the effort: "high", "low", or "off".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # side_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 `
@@ -40,6 +43,23 @@ func TestEmitStarlarkFull(t *testing.T) {
 // TestEmitStarlarkPlain: no cache, no reasoning, unknown max output. A known
 // zero cost ("0") is still emitted; only unknown (empty) costs are omitted. The
 // alias is the slug core.
+func TestEmitStarlarkReasoningDefaultOff(t *testing.T) {
+	info := ModelInfo{
+		Slug:                    "vendor/reasoning",
+		Reasoning:               true,
+		ReasoningMetadata:       true,
+		ReasoningEffortsAny:     true,
+		ReasoningDefault:        "none",
+		ReasoningDefaultEnabled: new(false),
+	}
+	got := EmitStarlark([]ModelInfo{info}, "openrouter")
+	want := `        # reasoning="off",  # Uncomment and set the effort: "max", "xhigh", "high", "medium", "low", "minimal", or "off".
+`
+	if !strings.Contains(got, want) {
+		t.Errorf("reasoning comment = %q, want substring %q", got, want)
+	}
+}
+
 func TestEmitStarlarkPlain(t *testing.T) {
 	info := ModelInfo{
 		Slug:        "vendor/plain",
@@ -56,7 +76,7 @@ func TestEmitStarlarkPlain(t *testing.T) {
         context=32768,
         input_cost=0,
         output_cost=0,
-        # side_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 `

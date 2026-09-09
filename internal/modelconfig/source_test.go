@@ -3,6 +3,7 @@ package modelconfig
 import (
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,11 +20,13 @@ const cannedModels = `{"data":[
   {"id":"vendor/cacher","name":"Vendor: Cacher X","context_length":200000,
    "top_provider":{"max_completion_tokens":64000},
    "pricing":{"prompt":"0.000001","completion":"0.000005","input_cache_read":"0.0000001","input_cache_write":"0.00000125"},
-   "supported_parameters":["tools","reasoning"]},
+   "supported_parameters":["tools","reasoning"],
+   "reasoning":{"supported_efforts":["high","low"],"default_effort":"high","default_enabled":true,"mandatory":false}},
   {"id":"vendor/implicit","name":"Vendor: Implicit","context_length":128000,
    "top_provider":{"max_completion_tokens":16000},
    "pricing":{"prompt":"0.000002","completion":"0.000008","input_cache_read":"0.0000002","input_cache_write":null},
-   "supported_parameters":["reasoning"]},
+   "supported_parameters":["reasoning"],
+   "reasoning":{"supported_efforts":null,"default_effort":"none","default_enabled":false,"mandatory":false}},
   {"id":"vendor/plain","name":"Plain Local Model","context_length":32768,
    "top_provider":{"max_completion_tokens":null},
    "pricing":{"prompt":"0","completion":"0","input_cache_read":null},
@@ -187,10 +190,16 @@ func TestOpenRouterSourceLookup(t *testing.T) {
 	if !cacher.CacheCapable || !cacher.Reasoning {
 		t.Errorf("cacher cache/reasoning = %v/%v, want true/true", cacher.CacheCapable, cacher.Reasoning)
 	}
+	if !slices.Equal(cacher.ReasoningEfforts, []string{"high", "low"}) || cacher.ReasoningDefault != "high" || cacher.ReasoningDefaultEnabled == nil || !*cacher.ReasoningDefaultEnabled {
+		t.Errorf("cacher reasoning metadata = %+v, want high/low, high, enabled", cacher)
+	}
 
 	// Implicit cacher: null write price but a read price still means caching.
 	if !found[1].CacheCapable {
 		t.Error("implicit cacher (read price, null write) should be CacheCapable")
+	}
+	if found[1].ReasoningDefault != "none" || found[1].ReasoningDefaultEnabled == nil || *found[1].ReasoningDefaultEnabled || !found[1].ReasoningEffortsAny || found[1].ReasoningEffortsKnown {
+		t.Errorf("implicit reasoning metadata = %+v, want unrestricted disabled-by-default", found[1])
 	}
 
 	plain := found[2]

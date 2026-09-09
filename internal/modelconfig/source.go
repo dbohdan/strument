@@ -7,6 +7,7 @@
 package modelconfig
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -26,14 +27,21 @@ import (
 // (x1,000,000) for readability, as an exact decimal shift so no float round-trip
 // mangles the value (empty => unknown). config divides them back by 1e6 at load.
 type ModelInfo struct {
-	Slug         string `json:"slug"`
-	DisplayName  string `json:"display_name"`
-	Context      int    `json:"context"`
-	MaxOutput    int    `json:"max_output"` // 0 => unknown
-	InputCost    string `json:"input_cost"`
-	OutputCost   string `json:"output_cost"`
-	CacheCapable bool   `json:"cache_capable"`
-	Reasoning    bool   `json:"reasoning"`
+	Slug                    string   `json:"slug"`
+	DisplayName             string   `json:"display_name"`
+	Context                 int      `json:"context"`
+	MaxOutput               int      `json:"max_output"` // 0 => unknown
+	InputCost               string   `json:"input_cost"`
+	OutputCost              string   `json:"output_cost"`
+	CacheCapable            bool     `json:"cache_capable"`
+	Reasoning               bool     `json:"reasoning"`
+	ReasoningEfforts        []string `json:"reasoning_efforts,omitempty"`
+	ReasoningEffortsKnown   bool     `json:"reasoning_efforts_known,omitempty"`
+	ReasoningEffortsAny     bool     `json:"reasoning_efforts_any,omitempty"`
+	ReasoningDefault        string   `json:"reasoning_default,omitempty"`
+	ReasoningDefaultEnabled *bool    `json:"reasoning_default_enabled,omitempty"`
+	ReasoningMetadata       bool     `json:"reasoning_metadata,omitempty"`
+	ReasoningMandatory      bool     `json:"reasoning_mandatory,omitempty"`
 }
 
 // Source resolves exact model slugs to ModelInfo. Missing slugs are returned
@@ -230,6 +238,12 @@ type orModel struct {
 		InputCacheRead string `json:"input_cache_read"`
 	} `json:"pricing"`
 	SupportedParameters []string `json:"supported_parameters"`
+	Reasoning           *struct {
+		SupportedEfforts json.RawMessage `json:"supported_efforts"`
+		DefaultEffort    string          `json:"default_effort"`
+		DefaultEnabled   *bool           `json:"default_enabled"`
+		Mandatory        bool            `json:"mandatory"`
+	} `json:"reasoning"`
 }
 
 func toInfo(m orModel) ModelInfo {
@@ -249,7 +263,23 @@ func toInfo(m orModel) ModelInfo {
 	// prompt prefix is stable across turns for their automatic caching to key
 	// on.
 	info.CacheCapable = isPositivePrice(m.Pricing.InputCacheRead)
-	info.Reasoning = slices.Contains(m.SupportedParameters, "reasoning")
+	info.Reasoning = slices.Contains(m.SupportedParameters, "reasoning") || m.Reasoning != nil
+	if m.Reasoning != nil {
+		info.ReasoningMetadata = true
+		supported := bytes.TrimSpace(m.Reasoning.SupportedEfforts)
+		if len(supported) > 0 && !bytes.Equal(supported, []byte("null")) {
+			info.ReasoningEffortsKnown = true
+			if err := json.Unmarshal(supported, &info.ReasoningEfforts); err != nil {
+				info.ReasoningEfforts = nil
+				info.ReasoningEffortsKnown = false
+			}
+		} else if bytes.Equal(supported, []byte("null")) {
+			info.ReasoningEffortsAny = true
+		}
+		info.ReasoningDefault = m.Reasoning.DefaultEffort
+		info.ReasoningDefaultEnabled = m.Reasoning.DefaultEnabled
+		info.ReasoningMandatory = m.Reasoning.Mandatory
+	}
 	return info
 }
 

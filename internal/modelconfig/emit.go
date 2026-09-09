@@ -2,6 +2,7 @@ package modelconfig
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/config"
@@ -41,6 +42,47 @@ func uniqueAlias(base string, used map[string]bool) string {
 	return alias
 }
 
+var defaultReasoningEfforts = []string{"max", "xhigh", "high", "medium", "low", "minimal"}
+
+func quotedList(values []string) string {
+	quoted := make([]string, len(values))
+	for i, value := range values {
+		quoted[i] = fmt.Sprintf("%q", value)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func reasoningEfforts(info ModelInfo) []string {
+	efforts := info.ReasoningEfforts
+	if info.ReasoningMetadata {
+		switch {
+		case info.ReasoningEffortsAny:
+			efforts = defaultReasoningEfforts
+		case info.ReasoningEffortsKnown:
+			// Use the catalog's exact list, including an empty list.
+		case len(efforts) > 0:
+			// A manually constructed ModelInfo can carry the list without the
+			// source parser's presence marker.
+		default:
+			return nil
+		}
+	}
+	if len(efforts) == 0 && !info.ReasoningMetadata {
+		efforts = []string{"low", "medium", "high"}
+	}
+	out := make([]string, 0, len(efforts)+1)
+	for _, effort := range efforts {
+		if effort == "none" || effort == "off" {
+			continue
+		}
+		if effort == "" || slices.Contains(out, effort) {
+			continue
+		}
+		out = append(out, effort)
+	}
+	return out
+}
+
 func emitEntry(info ModelInfo, providerName, alias string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "    %q: model(\n", alias)
@@ -65,10 +107,34 @@ func emitEntry(info ModelInfo, providerName, alias string) string {
 		b.WriteString("        cache=True,  # OpenRouter reports prompt caching for this model.\n")
 	}
 	if info.Reasoning {
-		b.WriteString("        # reasoning=\"low\",  # Uncomment and set the effort: \"low\", \"medium\", or \"high\".\n")
+		efforts := reasoningEfforts(info)
+		defaultEffort := info.ReasoningDefault
+		if !info.ReasoningMandatory && info.ReasoningMetadata && info.ReasoningDefaultEnabled != nil && !*info.ReasoningDefaultEnabled {
+			defaultEffort = "off"
+		} else if !info.ReasoningMandatory && defaultEffort == "none" {
+			defaultEffort = "off"
+		}
+		if defaultEffort == "" {
+			if info.ReasoningMetadata {
+				defaultEffort = "default"
+			} else {
+				defaultEffort = "low"
+				if !slices.Contains(efforts, defaultEffort) {
+					defaultEffort = efforts[len(efforts)-1]
+				}
+			}
+		}
+		effortComment := "the provider default; OpenRouter reports no selectable efforts"
+		if len(efforts) > 0 {
+			effortComment = quotedList(efforts)
+		}
+		if info.ReasoningMetadata && !info.ReasoningMandatory {
+			effortComment += ", or \"off\""
+		}
+		fmt.Fprintf(&b, "        # reasoning=%q,  # Uncomment and set the effort: %s.\n", defaultEffort, effortComment)
 		b.WriteString("        # reasoning_tag=\"think\",  # Uncomment if the model emits reasoning in inline tags.\n")
 	}
-	b.WriteString("        # side_model=\"...\",  # Uncomment to use a cheaper model for summaries and commits.\n")
+	b.WriteString("        # side_model=\"...\",  # Uncomment to use a different model for summaries and commits.\n")
 	b.WriteString("    ),\n")
 	return b.String()
 }

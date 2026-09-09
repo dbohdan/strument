@@ -1178,15 +1178,18 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   session notes, and compaction summaries. An alias string or an inline
   `model()`; unset means the main model does its own. These are *side requests*
   — prose about the session rather than work on your code — which is where the
-  name comes from, and why a cheaper model usually belongs here.
+  name comes from, and why a cheaper and/or faster model usually belongs here.
 
   It was called `weak_model` before, after aider. The name made a claim about
   capability that stopped being true: the model most often put in this seat now
   is a near-peer of a frontier one. A config still using `weak_model` gets an
   error naming the new key.
-- **`reasoning`** — reasoning effort: `"low"`, `"medium"`, or `"high"` (other
-  values pass through). `"off"` disables reasoning where the provider allows it;
-  `""` or `"default"` leaves it to the model.
+- **`reasoning`** — reasoning effort. OpenRouter accepts `"max"`, `"xhigh"`,
+  `"high"`, `"medium"`, `"low"`, and `"minimal"` where the model supports
+  them; other provider-specific values pass through. `"off"` disables reasoning
+  where the provider allows it; `""` or `"default"` leaves it to the model.
+  `strument model-config` lists the effort values OpenRouter reports for each
+  model and uses its reported default when one is available.
 - **`reasoning_tag`** — the name of an inline tag (e.g. `"think"`) the model
   wraps its reasoning in; its contents are stripped from the answer body.
 - **`temperature`** — a float, or `None` to omit the field.
@@ -1338,7 +1341,7 @@ models = {
         cache=True,  # OpenRouter reports prompt caching for this model.
         # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # side_model="...",  # Uncomment to use a cheaper model for summaries and commits.
+        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 ```
