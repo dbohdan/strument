@@ -441,7 +441,7 @@ func TestAutoCheckIsBounded(t *testing.T) {
 	if rounds != maxAutoCheck {
 		t.Errorf("auto-check rounds = %d, want %d", rounds, maxAutoCheck)
 	}
-	if !strings.Contains(strings.Join(out.lines, "\n"), "without passing") {
+	if !strings.Contains(strings.Join(out.lines, "\n"), "Automatic checks still fail") {
 		t.Error("the user should be told why it stopped")
 	}
 }
