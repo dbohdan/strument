@@ -92,6 +92,20 @@ to leave the reader holding it: the marker announces the `ask_user_question`
 protocol, and `Coder.afterInterrupt` deliberately reuses that protocol. The
 style guide now states the exception and the reason.
 
+**`*Tell:*` was relabelled `*Warning sign:*` at all thirteen sites, then put
+back at eleven.** The concern behind the rename was reasonable — a reader whose
+English is second-hand may know *tell* only as a verb. But the two words mean
+opposite things about who put the sign there. A warning sign is posted
+deliberately, by someone who wanted you to see it; a tell is involuntary, and
+the handbook is about faults that are *not* announcing themselves. The fix is a
+gloss rather than a substitution: the front matter now explains all three
+margin labels in a sentence each, which serves that reader better than a
+blander word would have, and the marker keeps its meaning.
+
+Two of the thirteen were imperatives rather than symptoms and never should have
+worn the label. They are `*Check:*` now, joining §18's, and a third site the
+patch added is a plain `**Do:**`.
+
 The rest of the patch stands, and the navigation layer is the improvement it
 was meant to be.
 
@@ -101,9 +115,8 @@ The review agreed that the handbook's strongest material should remain intact:
 
 - §1's evidence-led structure, especially the ANSI example and the line that
   cosmetic output was load-bearing for measurement;
-- the repeated pattern of symptom followed by a mechanical test — all thirteen
-  of its markers were relabelled from `*Tell:*` to `*Warning sign:*`, which is
-  plainer for a first-time reader and changes nothing about the pattern;
+- the repeated pattern of symptom followed by a mechanical test, and its
+  `*Tell:*` marker (see below);
 - the distinction between honest loss and confabulation in §9;
 - the §18 → §19 → §20 transitions, which give the failure taxonomy its clearest
   existing spine;

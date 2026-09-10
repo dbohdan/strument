@@ -18,6 +18,13 @@ If you are preparing a run, start with the pre-run checklist and §12. The rest
 is the evidence and failure patterns behind those checks; use the section
 headings to investigate a surprising result or a broken run.
 
+Three labels recur in the margins of those sections. **Do:** is what to do
+differently next time. **Check:** is a question to put to your own rig.
+**Tell:** is the noun from card play — an involuntary sign that gives the hand
+away. It marks the shape a fault takes while it is still passing for a result,
+which is the opposite of a warning: nobody put it there for you, and the
+experiment will not point at it.
+
 ## The pre-run checklist
 
 Before spending on a run, ask these questions in order:
@@ -112,7 +119,7 @@ This generalizes an older lesson: a provider returning `Empty response received
 from LLM` and a model emitting a tool call as inline text look identical in a
 summary and mean opposite things.
 
-**Warning sign:** do not classify either case from the summary row. Inspect the
+**Do:** never classify either case from the summary row. Inspect the
 raw response and process status. A provider failure is recorded in the request or
 stream outcome, often with no usable model content; inline tool-call markup is
 model-produced content that bypassed the tool-call protocol. Keep them as
@@ -446,7 +453,7 @@ you are writing it.
 **A tautology on the host that runs it.** A test asserted that a path uses the
 platform's separators as `got != filepath.FromSlash(got)`. On Unix `FromSlash`
 is the identity, so that compares a string to itself. It could only ever fail on
-Windows, and it was written and reviewed on Linux. *Warning sign:* the
+Windows, and it was written and reviewed on Linux. *Tell:* the
 assertion is built from a function of the value being asserted about, rather than
 from an expectation written down independently.
 
@@ -455,7 +462,7 @@ the argument value `definition` by asserting the output does not contain
 `Unknown kind`. But the lookup checks for a language parser before it validates
 the argument, and the fixture had no parser — so every kind, valid or not,
 answered "the language parser is not available", and the test passed with
-`definition` deleted from the accepted set. *Warning sign:* asserting the
+`definition` deleted from the accepted set. *Tell:* asserting the
 *absence* of an error rather than the presence of the right answer. An absence is
 satisfied by every path that never gets far enough to produce it.
 
@@ -466,7 +473,7 @@ worded from the argument while the *results* come from what the argument was
 translated into — so a lookup that ignored the argument entirely still printed
 "referenced" above the definition's line. It passes now by asserting line
 numbers: `definition` finds line 3, `reference` finds line 5 and not line 3.
-*Warning sign:* the assertion is on prose the code assembles near the input,
+*Tell:* the assertion is on prose the code assembles near the input,
 rather than on the part of the output the code path under test actually decides.
 
 **Do:** for every check you would be upset to lose, break the thing it guards
@@ -507,7 +514,7 @@ silently: a patch whose anchor no longer matches changes nothing, the suite
 stays green, and the green gets written up as "verified to discriminate". This
 happened three times in one project — a `sed` that missed after a rename, a
 `replace()` whose anchor a refactor had moved, a comprehension rebinding that
-Python's scoping made a no-op. *Warning sign:* the control reports success
+Python's scoping made a no-op. *Tell:* the control reports success
 without reporting that it modified anything. *Fix:* make the sabotage assert its own
 application and refuse to report a result otherwise. A control that cannot say
 "I did nothing" is not a control:
@@ -522,7 +529,7 @@ report header printed a source filename instead of the transcript. A later
 refactor changed the output format, and the test was updated to assert that a
 `TOTAL` block existed — keeping its name, its green status and its place in the
 file while abandoning what it checked. It had been passing vacuously for three
-commits, including one whose message said the guard was verified. *Warning sign:*
+commits, including one whose message said the guard was verified. *Tell:*
 a test changed in the same commit as the output it checks, where the assertion got
 looser. *Fix:* when output changes, re-derive the assertion from the claim in
 the test's name, not from the new output.
@@ -533,7 +540,7 @@ instances, all different on the surface: a live-pass scorer whose control proved
 it could recognise a no-op but never a success, so nine correct runs read as six
 failures; a false-positive fix verified only by the false positive vanishing,
 which "make the metric report nothing" satisfies perfectly; and a fixture set
-that demonstrated the bug but could not verify its absence. *Warning sign:*
+that demonstrated the bug but could not verify its absence. *Tell:*
 every case in the control
 has the same expected outcome. *Fix:* pair them. Every fix that makes something
 stop firing needs a companion asserting the thing that should still fire, and
@@ -561,7 +568,7 @@ or safety.
 the models used it *once in eighteen runs*. Five of six never touched it. So for
 seventeen runs the treatment arm was the control arm with a longer schema, and
 whatever the numbers said about it was a statement about `edit`, not about
-`replace_all`. *Warning sign:* the treatment is something the model may decline.
+`replace_all`. *Tell:* the treatment is something the model may decline.
 A feature it can ignore is not a manipulation you have applied; it is one you have
 offered. Check that it is *reached* before spending — this is a different
 question from whether the arms differ, and the pilot answers it for the price of
@@ -575,7 +582,7 @@ in every arm, *including the unsafe one that silently edits the first match*.
 That is not the decoys clearing the design; it is the decoys never firing.
 Running the failure classifier over all 172 edit calls said why: zero failures
 of any kind, because the models supplied unique context exactly as the tool
-description asks. *Warning sign:* the counter-metric reads zero everywhere,
+description asks. *Tell:* the counter-metric reads zero everywhere,
 the unsafe arm included. A hazard that does not fire for the arm built to trip on
 it has
 told you about your fixture, not about your design.
@@ -587,7 +594,7 @@ rule from §7 — compare the built arms and refuse to spend if they are the
 same — which here meant running one probe edit through each binary and
 watching them answer differently. Without it the trial would have reported no
 difference between unique-or-fail and `replace_all` for the excellent reason
-that they were the same executable. *Warning sign:* two artifacts that should
+that they were the same executable. *Tell:* two artifacts that should
 differ have the same checksum. Compare them; do not infer from the build having
 succeeded.
 
@@ -608,7 +615,7 @@ like coordination pressure and is nothing of the kind: a patch would not
 collapse "make three changes to this file in a row". Counting only a return
 *across* another file gives 0 in every arm.
 
-*Warning sign:* a metric that omits a condition essential to the claim.
+*Tell:* a metric that omits a condition essential to the claim.
 "Returned to a file" is not "returned to a file after leaving it". Write the
 metric's definition next to the claim it supports and check that the words
 match; then check the metric can still fire, on a fixture where the phenomenon
@@ -653,7 +660,7 @@ action per turn does not contain it. Copying a fixture from the feature next doo
 how the subject goes missing, because the neighbouring feature's structure
 encodes *its* scope, not yours.
 
-*Warning sign:* **an assertion that passes in the arm where the phenomenon cannot
+*Tell:* **an assertion that passes in the arm where the phenomenon cannot
 have occurred is mis-defined, whatever its name says.** This is stronger than
 inspecting the definition, because it is mechanical: you already built the
 counter-arm to prove the rig can fail, so read *every* line of its output, not
@@ -695,7 +702,7 @@ minutes left" — is not merely wrong, it is confidently wrong an hour later.
 
 **The watcher detected success messages, not process exit.** It was `until grep -q
 "^wrote " log`, which matches only the success marker. A crash produces silence,
-and silence is indistinguishable from still-running. *Warning sign:* ask of any
+and silence is indistinguishable from still-running. *Check:* ask of any
 completion check, *if this process died right now, would anything fire?* If not,
 it is not a completion check.
 
