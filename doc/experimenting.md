@@ -840,6 +840,44 @@ the finding. The next question is always the same: *who else reads this data?*
 Check the other readers of the data; in this case, the scorer and renderer
 explained the symptom.
 
+### The sharper version: a report that reproduces can still misname the cause
+
+A second instance, and a better one, because this report did everything right
+and was still wrong in the one place that decides what you change.
+
+A model was asked to diagnose a `did-you-mean` that had not fired on a failed
+`edit`. It reconstructed the failure-time inputs from the session's JSONL,
+swept the threshold, found `FindSimilarLines` scoring **0.143** against a
+threshold of 0.6, and noted that 13 of the 14 search lines were in the file
+modulo indentation. Every one of those numbers reproduces. It then named the
+cause — a fixed-window aligner comparing line *i* to line *i*, defeated by the
+lines the model had omitted — and proposed replacing it with the
+SequenceMatcher alignment "the package already contains" in the replace path.
+
+Both halves of that sentence are backwards. `lineRatio` **is**
+`newSequenceMatcher(a, b).ratio()`: the did-you-mean path was the one with the
+alignment, and it handled the omitted lines fine. The replace path's whitespace
+tolerance is a uniform outdent, not the per-line normalization being credited
+to it. The actual fault was that `lineRatio` compares lines verbatim, and the
+model's block was one tab too shallow. Priced by holding everything else fixed:
+
+| | best ratio |
+| --- | --- |
+| as shipped | 0.143 |
+| leading whitespace stripped for scoring, same fixed window | **0.929** |
+| …and the window allowed to grow past `len(search)` | 0.929 |
+
+The proposed rewrite would have worked, and the third row is what it was worth:
+nothing. A `TrimLeft` in the scoring key was the whole fix.
+
+*Tell:* a report whose evidence is reproducible and whose mechanism is a story.
+The numbers came from running the code; the cause came from reading it. Those
+are different epistemic acts and a report presents them in one voice. **Re-derive
+the mechanism by changing one thing and re-measuring**, which is cheap once
+someone has handed you a reproduction — and note that a correct prediction of
+the *fix's effect* (this report called 13/14 ≈ 0.93, and 0.929 is what it is) is
+not evidence for the mechanism offered alongside it.
+
 ---
 
 ## The short version

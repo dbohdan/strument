@@ -236,3 +236,80 @@ func TestDoReplaceReportsTheFuzzyTier(t *testing.T) {
 		t.Errorf("the file's tab indentation was not preserved:\n%q", got)
 	}
 }
+
+// TestFindSimilarLinesSeesPastIndentation is the CatchUp regression
+// (2026-09-10). A model rewrote a bracket-balance block from memory: it
+// dropped the enclosing `case` line and the `if c == …` guard, and put the
+// rest one tab too shallow. Thirteen of its fourteen lines were in the file
+// modulo indentation and three were there verbatim, so a verbatim comparison
+// scored 0.143 against a threshold of 0.6 and the did-you-mean stayed silent —
+// leaving the model to spend a `read` on what the failure could have told it.
+//
+// The block below is that region. The counter-arm is the point: the same
+// search against a file that does not contain the phenomenon must stay silent,
+// or this is measuring nothing.
+func TestFindSimilarLinesSeesPastIndentation(t *testing.T) {
+	const content = "package web\n" +
+		"\n" +
+		"func trimTrailingPunct(url string) string {\n" +
+		"\tfor url != \"\" {\n" +
+		"\t\tc := url[len(url)-1]\n" +
+		"\t\tswitch c {\n" +
+		"\t\tcase '.', ',', ')', ']', '}':\n" +
+		"\t\t\tif c == ')' || c == ']' || c == '}' {\n" +
+		"\t\t\t\topen := byte('(')\n" +
+		"\t\t\t\tswitch c {\n" +
+		"\t\t\t\tcase ']':\n" +
+		"\t\t\t\t\topen = '['\n" +
+		"\t\t\t\tcase '}':\n" +
+		"\t\t\t\t\topen = '{'\n" +
+		"\t\t\t\t}\n" +
+		"\t\t\t\tif strings.Count(url, string(open)) < 1 {\n" +
+		"\t\t\t\t\treturn url\n" +
+		"\t\t\t\t}\n" +
+		"\t\t\t}\n" +
+		"\t\t\turl = url[:len(url)-1]\n" +
+		"\t\tdefault:\n" +
+		"\t\t\treturn url\n" +
+		"\t\t}\n" +
+		"\t}\n" +
+		"\treturn url\n" +
+		"}\n"
+
+	// One tab shallower than the file, and missing the two lines that wrap it.
+	const search = "\t\tcase ')', ']', '}':\n" +
+		"\t\t\topen := byte('(')\n" +
+		"\t\t\tswitch c {\n" +
+		"\t\t\tcase ']':\n" +
+		"\t\t\t\topen = '['\n" +
+		"\t\t\tcase '}':\n" +
+		"\t\t\t\topen = '{'\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif strings.Count(url, string(open)) < 1 {\n" +
+		"\t\t\t\treturn url\n" +
+		"\t\t\t}\n" +
+		"\t\t\turl = url[:len(url)-1]\n"
+
+	got := FindSimilarLines(search, content, 0.6)
+	if got == "" {
+		t.Fatal("did-you-mean stayed silent on a block that differs only by indentation and two wrapper lines")
+	}
+	// It has to show the two lines the model did not know were there; those
+	// are the whole reason the edit failed.
+	for _, want := range []string{"case '.', ',', ')', ']', '}':", "if c == ')' || c == ']' || c == '}' {"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("did-you-mean omits the line the model was missing: %q\ngot:\n%s", want, got)
+		}
+	}
+	// The file's real indentation is what the model needs to copy, so it must
+	// survive into the suggestion rather than being normalized away with it.
+	if !strings.Contains(got, "\t\t\t\topen := byte('(')") {
+		t.Errorf("suggestion lost the file's indentation:\n%s", got)
+	}
+
+	// Counter-arm: a file that cannot contain the phenomenon.
+	const other = "package main\n\nfunc main() {\n\tprintln(\"hi\")\n}\n"
+	if s := FindSimilarLines(search, other, 0.6); s != "" {
+		t.Errorf("fired on a file with no such block:\n%s", s)
+	}
+}
