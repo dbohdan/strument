@@ -399,12 +399,16 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		}
 	}
 
-	// A system message, like the compaction summary and the context-exhausted
-	// note. The notes are the harness's artifact: not something the user said,
-	// and not something this model said either — a different model usually wrote
-	// them, and a different model again is reading them now. The read-only block
-	// above is a user message for historical reasons its own comment records;
-	// that is the precedent not to follow.
+	// A system message, and the only harness artifact that is one: the
+	// compaction summary and the context-exhausted note are marked user turns
+	// (llm.HarnessNote), because they arrive mid-conversation and the system
+	// role belongs to the prefix. Notes are different on both counts. They are
+	// the harness's artifact — not something the user said, and not something
+	// this model said either, since a different model usually wrote them and a
+	// different model again is reading them now — and they land in the prefix,
+	// before the conversation, where the system role is the honest one. The
+	// read-only block above is a user message for historical reasons its own
+	// comment records; that is the precedent not to follow.
 	if notes := strings.TrimSpace(c.SessionNotes); notes != "" {
 		chunks.notes = []llm.Message{llm.TextMessage(llm.RoleSystem,
 			prompts.SessionNotesPrefix(c.SessionNotesDate)+"\n"+notes+"\n")}

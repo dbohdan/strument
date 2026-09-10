@@ -3,8 +3,8 @@
 This is the house style for text people read: startup notices, messages during a
 turn, `--help`, `/help`, and command output.
 
-Model-facing text—tool results, tool descriptions, and refusals returned as tool
-output—is outside this guide’s scope. It needs consistent formatting and is
+Model-facing text — tool results, tool descriptions, and refusals returned as tool
+output — is outside this guide’s scope. It needs consistent formatting and is
 evaluated through live trials; `internal/coder/tools.go` alone contains about
 150 such strings. Treat changes to those strings as prompt changes, with trials
 documented in `doc/experiments/`.
@@ -54,18 +54,18 @@ strument: ignoring 1 untrusted project skill: release-notes
   Run `strument trust` in this directory to allow it.
 ```
 
-## Quoting
+## Quote by kind, not by mood
 
-Use the quoting convention appropriate to the item being shown.
+The kind of thing decides the quoting, so the same kind looks the same
+everywhere.
 
 - **Backticks for commands, flags, and config keys**: `` `strument trust` ``,
-  `` `check_auto` ``, `` `--no-shell` ``.
-  Some exceptions are allowed based on readability.
-  The following aren't quoted:
-    - REPL commands given without arguments (for example, `/add`, `/exit`).
-    - REPL commands in `/help`
-    - Commands intended to be copied to the end of the line
-      (e.g., `Merge saved state: strument project adopt ~/src/proj`)
+  `` `check_auto` ``, `` `--no-shell` ``. Three things stay bare, because
+  backticks would cost more than they explain:
+    - REPL commands written without arguments (for example, `/add`, `/exit`);
+    - REPL commands in the `/help` table, which is already a table of them;
+    - a command placed at the end of a line to be copied out, as in
+      `Merge saved state: strument project adopt ~/src/proj`.
 - **Double quotes for values shown as configuration source.** Preserve quotes
   required by the configuration syntax: `"full"`, `"off"`, and
   `{"test": ["go", "test"]}`.
@@ -74,6 +74,12 @@ Use the quoting convention appropriate to the item being shown.
   visible.
 - **Bare for paths.** A path is visually distinct already, and quoting it makes
   it worse to copy out of a terminal.
+
+The second rule is why this is *by kind* rather than one quote character
+everywhere. An earlier draft said "backticks for anything you can type, never
+double quotes in prose we wrote"; applied to `internal/config` it would have
+rendered `reasoning_display must be "full"` as a value that no longer parses
+where the reader has to put it.
 
 ## Periods
 
@@ -146,12 +152,19 @@ and `›` rather than `<` and `>`. This keeps them distinct from the
 `‹check›`, `‹shell›`, `‹question›`, `‹webfetch›`, `‹websearch›`, `‹skill›`.
 Multiline blocks use `‹/›`; single-line blocks need no closing marker.
 
-The README's interruption example uses `‹question›` before “You stopped the
-model. What now?”, which appears to be harness-authored. The absolute
-provenance rule needs verification; do not infer a new exception from the
-example.
+Both forms introduce text Strument did not write. Strument's own prose never
+wears one — with a single exception, which is worth knowing because it looks
+like a violation and is not.
 
-Both forms introduce model-supplied text, not Strument's own prose.
+`‹question›` marks a question in the `ask_user_question` shape, not model
+authorship. `internal/repl/repl.go` draws it for every `AskRequest`, and one
+`AskRequest` is the harness's own: the interrupt asks "You stopped the model.
+What now?" (`Coder.afterInterrupt`), deliberately reusing the ask protocol
+rather than inventing a second one — the same line the port's documentation
+draws when it exempts that prompt from `--yes`. So the marker's promise is
+"answer this the way you answer the model's questions", and the README's
+interruption example is correct as printed. If a second marker ever needs this
+treatment, say so here; do not generalize from this one.
 
 ## One phrasing per concept
 

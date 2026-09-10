@@ -9,12 +9,14 @@ listing is chronological and this index is where the subject grouping lives.
 
 **Statuses:** **trial** is a comparative live run; **characterization** is an
 exploratory live pass; **bug report** records a live finding without a
-comparative experiment; **design** is not yet run; **data only** has results but
+comparative experiment; **review** is models reading an artifact rather than
+running against one; **design** is not yet run; **data only** has results but
 no write-up.
 
-Two trials are data without a write-up, and are listed as such rather than
-tidied away: an unwritten result is still evidence, and knowing it exists is the
-point of an index.
+Two directories have no `README.md` and are listed as such rather than tidied
+away — `2026-08-containment`, which is data only, and `2026-09-anchored-edit`,
+whose phase documents stand in for one. An unwritten result is still evidence,
+and knowing it exists is the point of an index.
 
 Read [`../experimenting.md`](../experimenting.md) before running one. It collects
 what has gone wrong with the *equipment* — broken scorers, fixtures that could
@@ -102,3 +104,9 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **design** — [2026-09-consult](2026-09-consult/) | Does `/consult`'s source label survive to the next turn, and how much session context should the advisor see? The plan separates attribution from scope and is not yet run. |
+
+## The documents themselves
+
+| experiment | question → result → decision |
+| --- | --- |
+| **review** — [2026-09-handbook-review](2026-09-handbook-review/) | Is [`experimenting.md`](../experimenting.md) usable as a pre-run reference, not only as an essay? Two independent reviewers scored it around 8/10 as an essay and 4–5/10 as a reference, agreeing that the operational checks were buried at the end. Add a front checklist and a symptom index; keep the incident narratives and the evidence attached to each rule. |

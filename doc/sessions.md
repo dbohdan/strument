@@ -10,9 +10,12 @@ person re-proposes.
 Strument does not restore past conversations as chat history. Within a session,
 it compacts older messages at turn boundaries. To resume work across sessions,
 it can generate about 300 words of notes from the durable transcript, either at
-startup with `--continue` or during a session with `/notes generate`. These notes
-live in memory and appear in the system-prompt prefix, with a warning that they
-may be incomplete or outdated.
+startup with `--continue` or during a session with `/notes generate`. Those
+notes live in memory rather than on disk, and go into the request as a
+**system** message ahead of the conversation, under a header saying they may be
+incomplete, that the project may have changed since, and that **where they
+disagree with the files, the files are right**. Every other harness surveyed
+persists a JSONL transcript and replays it verbatim.
 
 ## Compaction fires at a turn boundary
 

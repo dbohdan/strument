@@ -150,7 +150,7 @@ Try a small request with an inexpensive model and check the reported cost before
 
 Type what you want changed.
 The model works until it finishes or reaches the step limit.
-At the limit—25 steps by default—Strument reports the number of edits and the cost so far, then asks whether to continue.
+At the limit — 25 steps by default — Strument reports the number of edits and the cost so far, then asks whether to continue.
 
 Strument prints a status line for each tool call.
 Shell commands ask for permission first, which you can grant for that command or for all commands in a turn.
@@ -224,7 +224,7 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop to ask
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
-The process exits with a nonzero status if the request produces no answer—for example, because authentication fails, the endpoint remains unreachable after retries, or the model returns an empty reply.
+The process exits with a nonzero status if the request produces no answer — for example, because authentication fails, the endpoint remains unreachable after retries, or the model returns an empty reply.
 A nonempty answer, even if truncated, exits with status 0.
 
 `strument config models` prints the keys of `models`, one per line (sorted, so scripts can rely on the order),

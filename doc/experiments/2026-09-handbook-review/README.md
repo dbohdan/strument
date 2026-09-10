@@ -59,8 +59,41 @@ The handbook now has:
 - runner guidance that makes waiting on the specific process primary and log
   matching only a secondary fallback.
 
-The patch deliberately leaves the numbered incident narratives, examples,
-transitions, and conclusions in place.
+The patch deliberately leaves the numbered incident narratives, examples, and
+transitions in place.
+
+## What the patch got wrong, and the follow-up
+
+A later review of the patch itself found three defects worth recording, since
+the failure mode is the interesting part.
+
+**Three editorial notes shipped inside the document.** The patch left
+`> **Editorial note:** …` blocks in §5, §17 and §20, each asking a reader to
+verify a claim the patch had removed or blurred. A note addressed to the author
+is not a note to the reader. All three were answerable: §5's from the
+code-result write-up's own limitation section, §20's from this archive
+(`2026-09-code-mode2/data/run.py` is the runner the shell-parallelism trial
+adapted), and §17's by running the experiment — `go test` does **not** hand back
+a stale cached `ok` after a build error, but a cached `ok` for a *different*
+package prints above the error, which is the real hazard and now what §17 says.
+
+**Rewriting the introduction removed the argument the introduction was
+making.** "Everything here was paid for. Each item names the run that taught
+it, because a rule with the evidence attached survives a reader who disagrees
+with it" became a general statement that the examples explain the
+recommendations — and then several rules lost their numbers, the conclusion
+included. The restored opening carries an operational form of the same rule: if
+you shorten a section, keep the number.
+
+**A fourth note reached `doc/messages.md` as prose**, observing that
+`‹question›` precedes harness-authored text and asking for the provenance rule
+to be verified. It was right that the rule as stated had an exception and wrong
+to leave the reader holding it: the marker announces the `ask_user_question`
+protocol, and `Coder.afterInterrupt` deliberately reuses that protocol. The
+style guide now states the exception and the reason.
+
+The rest of the patch stands, and the navigation layer is the improvement it
+was meant to be.
 
 ## What was preserved
 
@@ -68,7 +101,9 @@ The review agreed that the handbook's strongest material should remain intact:
 
 - §1's evidence-led structure, especially the ANSI example and the line that
   cosmetic output was load-bearing for measurement;
-- the repeated `*Tell:*` pattern of symptom followed by a mechanical test;
+- the repeated pattern of symptom followed by a mechanical test — all thirteen
+  of its markers were relabelled from `*Tell:*` to `*Warning sign:*`, which is
+  plainer for a first-time reader and changes nothing about the pattern;
 - the distinction between honest loss and confabulation in §9;
 - the §18 → §19 → §20 transitions, which give the failure taxonomy its clearest
   existing spine;

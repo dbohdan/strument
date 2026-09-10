@@ -84,9 +84,12 @@ func (s *ChatSummary) tooBig(msgs []llm.Message, maxTokens int) bool {
 // caller can warn and leave history intact.
 //
 // It used to append an assistant "Ok." here, to keep the slot a clean
-// user/assistant pair — necessary only because the summary itself was a user
-// message. The summary is a system message now, which needs no partner, so the
-// fabricated agreement goes with it.
+// user/assistant pair. That was cargo from aider, where the summary was
+// injected as a *plain* user turn written in the user's voice and the "Ok."
+// was the model agreeing to something the user never said. The summary is
+// still a user-role message (see summarizeAll), but a marked harness note
+// rather than an impersonation, and a note needs no answer — so the fabricated
+// agreement went with the impersonation.
 func (s *ChatSummary) summarize(msgs []llm.Message, maxTokens int) ([]llm.Message, error) {
 	out, err := s.summarizeReal(msgs, maxTokens, 0)
 	if err != nil {

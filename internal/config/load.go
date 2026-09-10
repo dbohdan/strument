@@ -764,8 +764,12 @@ func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
 			if known != "" {
 				want = "the placeholders: " + known
 			}
+			// Both mentions of the key are backticked: doc/messages.md's rule is
+			// that a config key is a name you type bare, and one message
+			// spelling the same key two ways is the drift that page exists to
+			// stop.
 			return fmt.Errorf(
-				"%s: `%s` uses {%s}, which is not a %q slot — this key takes %s", path, name, slot, name, want)
+				"%s: `%s` uses {%s}, which is not one of its slots — `%s` takes %s", path, name, slot, name, want)
 		}
 		i += j + 1
 	}

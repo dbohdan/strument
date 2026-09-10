@@ -4,8 +4,10 @@ Notes for language models and developers running live experiments on Strument.
 Both senses of *digital* are meant: the experimenter is a program, and so is
 the thing being measured.
 
-These recommendations come from runs that cost time and API calls. The examples
-explain why each recommendation exists and where it applies.
+Everything here was paid for. Each item names the run that taught it, because a
+rule with its evidence attached survives a reader who disagrees with it and a
+rule without one gets deleted by the next person in a hurry. If you shorten a
+section, keep the number: the count is the part that is hard to argue with.
 
 The companion reading is the **Which model to reach for** and **Comparing two
 prompts** sections of `CLAUDE.md`, which cover cost strata and arm
@@ -93,10 +95,9 @@ The fix was to put `Put your whole answer on one line beginning with ANSWER:`
 into the prompt — identically in both arms, so it cannot favour either — and
 match that.
 
-**Do:** make the thing you measure syntactically unmistakable, at the cost of
-slightly perturbing the task. An explicit answer marker changes the task
-slightly, but it is easier to validate than a position-based extraction rule.
-Use the same instruction in both arms.
+**Do:** make the thing you measure syntactically unmistakable. An explicit
+answer marker perturbs the task slightly and is far easier to validate than a
+position-based extraction rule. Use the same instruction in both arms.
 
 ## 3. "No answer" and "wrong answer" are different columns
 
@@ -182,12 +183,11 @@ What it costs when you forget:
   scorer as "no answer".
 - **Cost metrics that are not comparable.** The 2026-09 code-result trial ran
   GLM at `"low"` and MiMo and DeepSeek at their defaults, because the config
-  set it per model rather than as a rule. Its input-token and step columns remain
-  usable; whether conclusions based on output tokens or latency remain comparable
-  depends on the comparison being made, and the write-up says so.
-
-  > **Editorial note:** Clarify whether the limitation applies to cross-model
-  > comparisons, pooled arm comparisons, or all conclusions using those metrics.
+  set it per model rather than as a rule. Reasoning lands in output, so the
+  input-token and step columns survive it and every conclusion drawn from
+  output tokens or latency does not — pooled across arms as much as compared
+  across models, since the arms pool the same three models. The write-up says
+  so under its own heading.
 - **Wall-clock, which caps the sample.** Reasoning at maximum is the difference
   between a batch that finishes while you watch and one that finishes tomorrow,
   and the sample size ends up set by patience.
@@ -475,15 +475,22 @@ rather than breaking an unrelated part of the feature. Two of these checks staye
 green after the first attempted mutation. A more targeted mutation was needed to
 expose the gap.
 
-Two practical notes from doing that. Make sure the broken version still
-**compiles** — a build failure is not a test failure. And prefer breaking the code
-to deleting the assertion: deleting tells you the assertion runs, while breaking
-tells you it discriminates.
+Two practical notes from doing that.
 
-> **Editorial note:** Verify the claim about `go test` returning a stale cached
-> `ok` after a build error before restoring or strengthening it. Also clarify what
-> procedure is meant by “deleting tells you the assertion runs”; deleting an
-> assertion alone does not demonstrate that the test reached it.
+Make sure the broken version still **compiles** — a build failure is not a test
+failure. An earlier draft of this section said `go test` hands you a stale
+cached `ok` after a build error, which does not reproduce: the package that
+failed to build reports `FAIL [build failed]` and the exit status is 1. What
+*does* happen, on a two-package fixture built for this, is that the other
+package's `ok tmpmod/a (cached)` prints **above** the build error, so output
+skimmed rather than read still shows a green line. Read the exit status, not
+the lines.
+
+And prefer breaking the code to deleting the assertion. Deleting is the weaker
+move because a deleted assertion cannot report anything at all: if the test
+still passes you have learned nothing about whether it reached that line, only
+that nothing else in the test failed. Breaking the code leaves the assertion in
+place to discriminate, and a green result then tells you it does not.
 
 ---
 
@@ -752,15 +759,12 @@ where the closure is called inside the iteration that binds it. Keep it for
 ## 20. The resume path is the least-tested code and the last thing you wrote
 
 §19's runner died quietly; this one shipped a bug that did the opposite — it
-worked perfectly on the first invocation and fell over on the second. The runner
-used in the 2026-09 shell-parallelism trial was adapted for that trial, and the
+worked perfectly on the first invocation and fell over on the second. The
+shell-parallelism trial adapted `2026-09-code-mode2/data/run.py`, and the
 adaptation lost the `else` branch: fresh jobs assigned `text` from
 the subprocess, resumed jobs (output file already on disk) never assigned it,
 and the resume path raised `UnboundLocalError` at the scoring call. The smoke run
 never touched it, because a smoke run is one fresh job.
-
-> **Editorial note:** Identify the specific runner or trial meant by this phrase
-> if that information is available.
 
 What made it expensive was the interaction with the human loop. The first
 invocation ran real jobs until it was interrupted, leaving thirteen partial
@@ -840,14 +844,25 @@ the fixture contains the relevant situation, and the scorer distinguishes the
 outcomes you care about. Test the scorer against both expected successes and
 expected failures, and verify that any sabotage actually changed the program.
 
+Only then look at the p-value — and remember that a broken instrument's
+favourite output is `p = 1.0`.
+
 Before interpreting a surprising aggregate, read the underlying transcripts.
 Before adding more runs, check that the runner completed and that its error and
-resume paths work.
+resume paths work. Before a batch, check that reasoning is pinned low on every
+model *and that each one obeyed* (§5): a model spending its budget thinking
+looks exactly like an API failure.
 
 When choosing a treatment, inspect where in the session the failure occurs. A
 change to information the model has not yet read cannot explain its earlier
-choices.
+choices. The 2026-09 namespace trial paid for four arms to learn that a wrong
+reach is 46% of first programs and 10% of second ones — a table binning the
+phenomenon by position would have said it before any arm was built.
 
-Stronger checks are more useful than a resolution to be more careful. Require a
-concrete counterexample from a reviewer, or demonstrate that a targeted defect
-makes the relevant assertion fail.
+Stronger checks are more useful than a resolution to be more careful — that was
+tried, for nine consecutive bugs. Require a concrete counterexample from a
+reviewer (§13), or demonstrate that a targeted defect makes the relevant
+assertion fail (§17). Both work because neither routes through the judgment of
+whoever wants the result to pass. And ask of any fix that makes something stop
+firing: *what still has to fire?* — because "report nothing" satisfies a
+one-sided check perfectly.
