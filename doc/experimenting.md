@@ -86,8 +86,8 @@ The scoring error made the arms look equivalent. Without inspecting the
 transcripts, it would have been easy to treat that result as evidence that the
 replacement caused no regression.
 
-That escape leak had been found earlier the same day and filed as cosmetic. It
-was cosmetic for users and load-bearing for measurement.
+That escape leak had been found earlier in the same session and filed as
+cosmetic. It was cosmetic for users and load-bearing for measurement.
 
 **Do:** strip ANSI before scoring rendered terminal output. A display defect that
 is cosmetic for a human reader can still break a parser.
@@ -238,7 +238,7 @@ batch.
 
 ## 8. Read individual transcripts. Then read more of them
 
-This is in `CLAUDE.md` already and it earned its place twice more in one day:
+This is in `CLAUDE.md` already and it earned its place twice more in one session:
 
 - The three "failures" that were the parser (§2).
 - A per-model split so clean it looked like a real finding: base scored 6/6 on
@@ -409,9 +409,9 @@ Two useful observations:
   before any statistics.
 - **An unexpected zero exposed the extraction bug.** A count of runs naming a
   nonexistent function returned 0/21 and 0/27 — while `Coder.send` sat in a
-  transcript I had quoted an hour earlier. §1 says break the check on purpose and
-  watch it go red; the corollary is that a check returning a clean zero deserves
-  the same suspicion as one returning a clean p=1.0.
+  transcript I had quoted earlier in the same session. §1 says break the check
+  on purpose and watch it go red; the corollary is that a check returning a
+  clean zero deserves the same suspicion as one returning a clean p=1.0.
 
 ## 16. Look for the measurement the confound cannot reach
 
@@ -443,8 +443,8 @@ The run IDs confirmed that every run using the tool selected it first.
 
 §1 is about a scorer that reported the wrong answer. This one is about checks
 that report *no* answer — assertions that pass whether or not the code works,
-so the only thing they measure is that they ran. Three turned up in a single
-day's work on the harness itself, and they were caught the same way each time:
+so the only thing they measure is that they ran. Three turned up in one
+session's work on the harness itself, and they were caught the same way each time:
 by breaking the code on purpose and watching the check stay green.
 
 They are worth listing by failure mode, because none of them looks wrong while
@@ -503,7 +503,7 @@ place to discriminate, and a green result then tells you it does not.
 
 ### 17a. Three ways verification can falsely report success
 
-A day spent writing a transcript auditor produced three failure modes §17 does
+One session spent writing a transcript auditor produced three failure modes §17 does
 not cover. All three are worse than the ones above, because in each case the
 check is *reported as verified* — the green is quoted as evidence rather than
 merely trusted.
@@ -555,7 +555,7 @@ same request without Y can.
 
 §17 is about a check that cannot fail. A trial can also return identical results
 because neither arm encountered the behavior being tested. All three cases below
-turned up in one afternoon, in a trial of whether `edit` should grow a
+turned up in one session, in a trial of whether `edit` should grow a
 `replace_all` argument.
 
 The design was ordinary: three arms (first-match, unique-or-fail, unique +
@@ -811,7 +811,7 @@ Three habits, in the order they would have saved the hour:
 
 The code-only trial's report said jsonlog mangled tool results into one
 character per record — `"T"`, `"h"`, `"e"` — with the rendered transcript
-fine. That is a specific, checkable claim, and it was wrong: an hour of
+fine. That is a specific, checkable claim, and it was wrong:
 reading the writer found it per-message by construction, and a test driving
 it with one-character SSE deltas (the worst legal stream) pinned the
 invariant in fifteen lines. No reproduction could be built.
@@ -823,7 +823,7 @@ structure — and the renderer *does* emit per-event, each chunk a potential
 line. The symptom was real; the subsystem named in the report was an inferred cause
 presented as an observed fact.
 
-Cost of treating the report as fact: an hour of archaeology aimed at the
+Cost of treating the report as fact: a session of archaeology aimed at the
 wrong subsystem, and one deleted report-finding (the "jsonlog bug") that
 would otherwise have been "fixed" — i.e. changed on the strength of
 unreproducible evidence. What the episode bought instead: a regression test
@@ -877,6 +877,30 @@ the mechanism by changing one thing and re-measuring**, which is cheap once
 someone has handed you a reproduction — and note that a correct prediction of
 the *fix's effect* (this report called 13/14 ≈ 0.93, and 0.929 is what it is) is
 not evidence for the mechanism offered alongside it.
+
+### The same fault, in this document
+
+Worth admitting here, because it is the cheapest possible demonstration.
+
+Until 2026-09-10 several sections of this handbook said things like "three
+turned up in one afternoon" and "a day spent writing a transcript auditor."
+Nothing measured those. They are genre furniture: the prose that teaches this
+kind of lesson is written by people whose natural unit of work is the afternoon,
+and writing in a register imports its units along with its cadence. The claims
+that *were* measured — a 234-run batch reported healthy for an hour, a watcher
+firing for a job whose timestamps put it four hours back — sat in the same
+paragraphs in the same voice, which is exactly the mixing the section above
+complains about.
+
+They now read "one session," which is not a vaguer word but a more exact one.
+"One afternoon" was always a proxy for *one continuous stretch of work under one
+head of context*, and this project has a name for that, a boundary for it, and a
+transcript of it. The measured hours stayed.
+
+**Do:** when you write up a run, mark which of your numbers came off a clock or
+a counter and which came off your memory of the work. The second kind is not
+forbidden — it carries real information about clustering — but it should not
+wear the same clothes as the first.
 
 ---
 
