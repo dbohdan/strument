@@ -373,7 +373,20 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
 		dropUserTurn()
-		c.Out.Warningf("The model returned an empty response.")
+		// "Empty" is the wrong word when the model filled its whole budget and
+		// the reply went out through the wrong channel; see reasoningLeak.
+		switch marker, leaked := reasoningLeak(answer, c.partialReasoningContent, len(c.partialToolCalls)); {
+		case leaked:
+			c.Out.Warningf("The model wrote a tool call (%s) into its reasoning instead of calling the tool, "+
+				"so nothing ran and the turn is lost.", marker)
+			c.Out.Warningf("  This is the inference server's tool-call or reasoning parser, not the model's " +
+				"competence. With llama.cpp, check the chat template's thinking option — a template that " +
+				"opens `<think>` for the model leaves it to close it before acting.")
+		case strings.TrimSpace(c.partialReasoningContent) != "":
+			c.Out.Warningf("The model returned reasoning but no answer and no tool call.")
+		default:
+			c.Out.Warningf("The model returned an empty response.")
+		}
 		return OutcomeFailed, ""
 	}
 
