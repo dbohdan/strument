@@ -4,7 +4,7 @@
 // on this project so far, and the largest cluster is one shape: a check reading
 // rendered terminal output and picking the wrong region of it. An ANSI escape
 // landing at the start of an answer line turned a real effect into a clean
-// p=1.0 null (doc/experimenting.md#instrument-made-of-the-system). A reasoning
+// p=1.0 null (doc/experimenting.md#instrument-is-the-system). A reasoning
 // renderer with two block
 // forms deleted the final answer of every run whose last aside was the one-line
 // kind (#renderer-has-two-forms). "Committed " was counted in a transcript it

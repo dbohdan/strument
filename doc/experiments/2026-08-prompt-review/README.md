@@ -8,7 +8,7 @@ that had never reached a model in the tool format's entire life.
 
 This is the second time an outside model has been pointed at an artifact its
 author was too close to. The first
-([`2026-08-experimenting.md`](../../experimenting.md) [`let-another-model-read-the-scorer`](../../experimenting.md#let-another-model-read-the-scorer)) was a scorer review,
+([`2026-08-experimenting.md`](../../experimenting.md) [`model-reviews-the-scorer`](../../experimenting.md#model-reviews-the-scorer)) was a scorer review,
 and it caught 3/3 planted bugs with no false positives. This one had a bigger
 artifact and a worse hit rate, and the reasons are the useful part.
 
@@ -32,7 +32,7 @@ concrete consequence, the shortest session in which it bites, and what would
 have to be true for the finding to be wrong. It says explicitly that not
 everything is broken, that several strings are surviving arms of randomized
 trials, and that "this section is fine" is a useful sentence — the
-anti-padding clause [`let-another-model-read-the-scorer`](../../experimenting.md#let-another-model-read-the-scorer) says a review prompt needs.
+anti-padding clause [`model-reviews-the-scorer`](../../experimenting.md#model-reviews-the-scorer) says a review prompt needs.
 
 **Positive controls.** Two real defects in the artifact, identified before the
 run, to bound what the exercise is worth:
@@ -202,7 +202,7 @@ is also why nothing in this section was acted on.
 
 ## What this says about the method
 
-**It works, and less well than the scorer review did.** [`let-another-model-read-the-scorer`](../../experimenting.md#let-another-model-read-the-scorer)'s scorer review
+**It works, and less well than the scorer review did.** [`model-reviews-the-scorer`](../../experimenting.md#model-reviews-the-scorer)'s scorer review
 caught 3/3 planted bugs. This caught K1 at 3/5 and K2 at 3/5, and no single
 reviewer caught both plus the two regressions. The difference is size: a scorer
 is 80 lines with one job, and 17.6 KB of prompt has a lot of surface for

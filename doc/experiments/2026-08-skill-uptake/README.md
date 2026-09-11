@@ -7,7 +7,7 @@ skill improves the work, or whether models reach for one when nobody tells them
 to.
 
 The second question is the one that decides whether the feature earns its keep,
-and it is the hazard [[`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)](../../experimenting.md) opens with: *"The treatment was
+and it is the hazard [[`clean-null`](../../experimenting.md#clean-null)](../../experimenting.md) opens with: *"The treatment was
 never applied."* A skill is a feature the model may decline — `replace_all`
 existed in an arm and was used once in eighteen runs, so seventeen of those runs
 compared the control arm to itself. This trial was built to detect that rather
@@ -47,7 +47,7 @@ search and prints the evidence.
 Why that matters: **in arm B the model sees the skill's description in the tool
 schema whether or not it loads the body.** So "B beat A" could be a description
 effect. The palette appears only in the body, so R1 is the measurement the
-confound cannot reach ([[`measurement-the-confound-cannot-reach`](../../experimenting.md#measurement-the-confound-cannot-reach)](../../experimenting.md)). Confirmed on the wire, not
+confound cannot reach ([[`confound-cannot-reach`](../../experimenting.md#confound-cannot-reach)](../../experimenting.md)). Confirmed on the wire, not
 assumed — see the rig checks.
 
 **Fixtures.** Three working-but-ugly charts (grouped bar, 3-series line,
@@ -262,5 +262,5 @@ task is not about) is untested.
 **Worth a trial next:** whether a calculator tool cuts the arithmetic above.
 The observation is solid — the token counts are real and uniform across arms —
 but this trial did not manipulate it, so it says nothing about whether a
-calculator would be *reached for*, which [`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes) says is the question to settle
+calculator would be *reached for*, which [`clean-null`](../../experimenting.md#clean-null) says is the question to settle
 first and cheaply.

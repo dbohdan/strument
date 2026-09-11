@@ -55,7 +55,7 @@ whether this earns its place.
 - [ ] Read [`internal/coder/tools.go`](../../internal/coder/tools.go) lines
       1–120 (tool constants, `toolDefs`) and the dispatch `switch` around line
       540.
-- [ ] Skim [`doc/experimenting.md`](../experimenting.md) on [`check-that-cannot-fail`](../experimenting.md#check-that-cannot-fail), [`clean-null-has-many-causes`](../experimenting.md#clean-null-has-many-causes), [`runner-dies-quietly`](../experimenting.md#runner-dies-quietly). You will
+- [ ] Skim [`doc/experimenting.md`](../experimenting.md) on [`check-that-cannot-fail`](../experimenting.md#check-that-cannot-fail), [`clean-null`](../experimenting.md#clean-null), [`runner-dies-quietly`](../experimenting.md#runner-dies-quietly). You will
       need them in Part 4. They are short.
 
 **The one design rule you must not break.** Strument is a *reviewable loop*:
@@ -222,7 +222,7 @@ individually; the forbidden-tools test is the one carrying a security claim.)*
 Do not skip to "does it improve answers". **The first question is whether models
 use it at all.** A previous feature (`replace_all`) was used once in eighteen
 runs, so seventeen runs compared the control arm to itself and the clean-looking
-result meant nothing (`experimenting.md` [`clean-null-has-many-causes`](../experimenting.md#clean-null-has-many-causes)).
+result meant nothing (`experimenting.md` [`clean-null`](../experimenting.md#clean-null)).
 
 **Outcome: uptake was 0/36.**
 [`doc/experiments/2026-08-code-mode/README.md`](../experiments/2026-08-code-mode/README.md)

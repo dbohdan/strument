@@ -61,7 +61,7 @@ glm-5.3-flash — the usual six, two reps per arm, shuffled (seed `20260830`).
 
 **The primary metric is zero everywhere, and that is the result.** The feature
 was offered 24 times (arms B and C) and taken 0 times. Per model, per arm, per
-rep — nothing. This is the `replace_all` shape from [[`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)](../../experimenting.md):
+rep — nothing. This is the `replace_all` shape from [[`clean-null`](../../experimenting.md#clean-null)](../../experimenting.md):
 a feature the model may decline was offered, not applied, and the round-trip
 numbers across arms are the same number wearing different labels (7.8 vs 7.8).
 No amount of additional arms would have extracted an effect from a treatment

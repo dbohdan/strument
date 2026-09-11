@@ -13,7 +13,7 @@ label and the scope are open questions, and they are separable.
 ## What this trial cannot answer
 
 **Whether anyone reaches for `/consult` at all.** It is typed by a human, so
-there is no uptake to measure the way `replace_all`'s was — see [`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes) of
+there is no uptake to measure the way `replace_all`'s was — see [`clean-null`](../../experimenting.md#clean-null) of
 [`../../experimenting.md`](../../experimenting.md), where a feature the model could
 decline was offered rather than applied in seventeen runs of eighteen. That cuts
 both ways: the treatment here is always applied, so the trial cannot come
@@ -34,7 +34,7 @@ material on the turn after the consult.
 
 The same-model row is what earns the design its second factor. In the
 different-model cells a model could infer foreign authorship from style alone,
-which is [`probe-only-through-the-mechanism`](../../experimenting.md#probe-only-through-the-mechanism) — the answer would be recoverable without the mechanism under test.
+which is [`probe-isolates-mechanism`](../../experimenting.md#probe-isolates-mechanism) — the answer would be recoverable without the mechanism under test.
 Holding the advisor identical to the executor removes the stylistic tell. If D
 works and C fails, the *label* is carrying it. If B works and D does not, it was
 style all along and the label is decoration.
@@ -88,7 +88,7 @@ that exists in the repository, scored by exact match on an `ANSWER:` line.
 
 **Level 0 must score near zero.** That is the control that has to fire: if it
 does not, the question was answerable from general knowledge and the fixture is
-measuring the artifact rather than the mechanism ([`probe-only-through-the-mechanism`](../../experimenting.md#probe-only-through-the-mechanism)). [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)'s corollary applies in
+measuring the artifact rather than the mechanism ([`probe-isolates-mechanism`](../../experimenting.md#probe-isolates-mechanism)). [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)'s corollary applies in
 reverse here — a clean zero is as suspicious as a clean `p = 1.0`, so read
 transcripts at level 0 rather than trusting the number.
 
@@ -144,12 +144,12 @@ Three things are specific to this feature.
    answer a prompt, hence (2).
 
 The standing rules apply unchanged: score from JSONL rather than rendered
-terminal output ([`instrument-made-of-the-system`](../../experimenting.md#instrument-made-of-the-system), [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)); fixed seed and a shuffled job list, so the arm is not
+terminal output ([`instrument-is-the-system`](../../experimenting.md#instrument-is-the-system), [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)); fixed seed and a shuffled job list, so the arm is not
 confounded with the hour it ran; persist raw output and rescore rather than
-re-run ([`keep-the-raw-output`](../../experimenting.md#keep-the-raw-output)); `ty` over the runner and the resume path exercised with a stub
-before the batch ([`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly), [`resume-path-runs-last`](../../experimenting.md#resume-path-runs-last)); wait on the pid, not on a log marker; and hand the
+re-run ([`keep-raw-output`](../../experimenting.md#keep-raw-output)); `ty` over the runner and the resume path exercised with a stub
+before the batch ([`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly), [`resume-path`](../../experimenting.md#resume-path)); wait on the pid, not on a log marker; and hand the
 scorer to a second model, asking for a concrete failing input and saying that at
-least one check is sound ([`let-another-model-read-the-scorer`](../../experimenting.md#let-another-model-read-the-scorer)).
+least one check is sound ([`model-reviews-the-scorer`](../../experimenting.md#model-reviews-the-scorer)).
 
 ## Sequencing
 

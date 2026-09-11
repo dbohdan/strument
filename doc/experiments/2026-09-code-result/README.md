@@ -28,7 +28,7 @@ result comes back.
 ## Arms
 
 One binary, one `--code-result` flag, so "the arms were the same program"
-([`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)) cannot happen. Each arm carries its own contract paragraph *and* its own
+([`clean-null`](../../experimenting.md#clean-null)) cannot happen. Each arm carries its own contract paragraph *and* its own
 worked example, since an example contradicting the paragraph above it is the
 loudest thing in a tool description.
 
@@ -95,7 +95,7 @@ known-lossy programs and clears five sound ones. That self-check caught a second
 miss: keying on the last line missed a `try`/`except` loop ending in `pass`.
 The rule is about *binding*, not about the tail.
 
-**The fixture had to be able to contain the phenomenon** ([`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)). The trial's
+**The fixture had to be able to contain the phenomenon** ([`clean-null`](../../experimenting.md#clean-null)). The trial's
 tasks are analysis — "which function ignores its argument" — where a model wants
 the text in front of it and reaches for `print()` unprompted. The field cases
 were *verification*: did my edit land, do these paths exist, where the model
