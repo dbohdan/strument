@@ -55,7 +55,7 @@ whether this earns its place.
 - [ ] Read [`internal/coder/tools.go`](../../internal/coder/tools.go) lines
       1–120 (tool constants, `toolDefs`) and the dispatch `switch` around line
       540.
-- [ ] Skim [`doc/experimenting.md`](../experimenting.md) §17, §18, §19. You will
+- [ ] Skim [`doc/experimenting.md`](../experimenting.md) on [`check-that-cannot-fail`](../experimenting.md#check-that-cannot-fail), [`clean-null-has-many-causes`](../experimenting.md#clean-null-has-many-causes), [`runner-dies-quietly`](../experimenting.md#runner-dies-quietly). You will
       need them in Part 4. They are short.
 
 **The one design rule you must not break.** Strument is a *reviewable loop*:
@@ -207,7 +207,7 @@ monty FunctionCall{Name, Args}
 - [x] The bridged-call cap fires.
 - [x] Bridged calls are announced.
 
-**Break-on-purpose before you believe any of these** (`experimenting.md` §17):
+**Break-on-purpose before you believe any of these** (`experimenting.md` [`check-that-cannot-fail`](../experimenting.md#check-that-cannot-fail)):
 break the thing each test guards and watch it go red. A test that passes with
 the feature broken is measuring nothing. Note which breaks you tried.
 *(Tried: registered all ten tools instead of the five read-only ones —
@@ -222,7 +222,7 @@ individually; the forbidden-tools test is the one carrying a security claim.)*
 Do not skip to "does it improve answers". **The first question is whether models
 use it at all.** A previous feature (`replace_all`) was used once in eighteen
 runs, so seventeen runs compared the control arm to itself and the clean-looking
-result meant nothing (`experimenting.md` §18).
+result meant nothing (`experimenting.md` [`clean-null-has-many-causes`](../experimenting.md#clean-null-has-many-causes)).
 
 **Outcome: uptake was 0/36.**
 [`doc/experiments/2026-08-code-mode/README.md`](../experiments/2026-08-code-mode/README.md)
@@ -267,12 +267,12 @@ a good model for the task shape.
       *(seed 20260830, shuffled across all 36 jobs.)*
 - [x] `ty check` the runner before launching it (`pip install ty`). A
       `TypeError` in an exception handler once killed a 234-run trial's
-      bookkeeping while the work carried on — §19.
+      bookkeeping while the work carried on — [`runner-dies-quietly`](../experimenting.md#runner-dies-quietly).
 - [x] Wait on the runner's **PID**, not a success marker in its log:
       `until ! kill -0 "$PID"; do sleep 20; done`. A log grep cannot tell a
       crash from a slow run.
       *(Used several times; three runs killed by the operator's own shell
-      timeout were caught this way and re-run. §19 confirmed from both sides.)*
+      timeout were caught this way and re-run. [`runner-dies-quietly`](../experimenting.md#runner-dies-quietly) confirmed from both sides.)*
 - [x] Read **at least ten transcripts** before believing any aggregate. Report
       what they say, including anything that contradicts the table.
       *(Twelve read against the table; they found two scorer false negatives

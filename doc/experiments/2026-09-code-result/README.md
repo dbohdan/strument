@@ -28,7 +28,7 @@ result comes back.
 ## Arms
 
 One binary, one `--code-result` flag, so "the arms were the same program"
-(§18) cannot happen. Each arm carries its own contract paragraph *and* its own
+([`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)) cannot happen. Each arm carries its own contract paragraph *and* its own
 worked example, since an example contradicting the paragraph above it is the
 loudest thing in a tool description.
 
@@ -89,13 +89,13 @@ Two things had to be got right before that table meant anything.
 
 **The first classifier counted call *sites*.** A loop with one `read(` scored as
 one call, which is exactly the field's own failure shape, and it reported a
-clean zero — §15's warning that a clean zero deserves the same suspicion as a
+clean zero — [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)'s warning that a clean zero deserves the same suspicion as a
 clean p=1.0. It now asserts, before reporting, that it detects three
 known-lossy programs and clears five sound ones. That self-check caught a second
 miss: keying on the last line missed a `try`/`except` loop ending in `pass`.
 The rule is about *binding*, not about the tail.
 
-**The fixture had to be able to contain the phenomenon** (§18). The trial's
+**The fixture had to be able to contain the phenomenon** ([`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)). The trial's
 tasks are analysis — "which function ignores its argument" — where a model wants
 the text in front of it and reaches for `print()` unprompted. The field cases
 were *verification*: did my edit land, do these paths exist, where the model
@@ -150,7 +150,7 @@ Reasoning effort was set per model in the config rather than as a rule, so GLM
 ran at `"low"` and MiMo and DeepSeek ran at their defaults — and defaults are
 drifting toward maximum. The input-token and step columns above survive that,
 since reasoning lands in output; anything read off output tokens or latency does
-not. `experimenting.md` §5 now carries the rule this should have followed.
+not. `experimenting.md` [`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire) now carries the rule this should have followed.
 
 ## Instrument faults worth carrying forward
 
@@ -159,13 +159,13 @@ not. `experimenting.md` §5 now carries the rule this should have followed.
   marker, checked in both directions on crafted inputs.
 - `setsid nohup … & echo $!` captures **setsid's** pid, not the program's.
   setsid exits immediately, so a `kill -0` watcher declared a 54-run batch
-  finished at 12/54 while it was still running. §19 says capture the specific
+  finished at 12/54 while it was still running. [`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly) says capture the specific
   pid; a wrapper defeats that just as thoroughly as a `pgrep` pattern.
 - Asking a model to review the scorer while the batch was running produced 429s
   and slowed the batch. Four-way parallelism is the ceiling for everything
   together, not per script.
 - Two models returned reasoning and no content at a 20-token cap, which reads as
-  an API failure and is §5's broken instrument.
+  an API failure and is [`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire)'s broken instrument.
 
 ## Recommendation
 

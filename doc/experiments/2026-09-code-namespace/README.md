@@ -64,7 +64,7 @@ description and its worked example:
 moment of the mistake rather than at the moment of the description.
 
 3 models, 3 tasks, 4 reps, shuffled with a fixed seed, all at `reasoning="low"`
-per §5. 144 runs, about $0.20.
+per [`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire). 144 runs, about $0.20.
 
 ## Results
 

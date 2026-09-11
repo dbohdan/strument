@@ -61,7 +61,7 @@ glm-5.3-flash — the usual six, two reps per arm, shuffled (seed `20260830`).
 
 **The primary metric is zero everywhere, and that is the result.** The feature
 was offered 24 times (arms B and C) and taken 0 times. Per model, per arm, per
-rep — nothing. This is the `replace_all` shape from [§18](../../experimenting.md):
+rep — nothing. This is the `replace_all` shape from [[`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)](../../experimenting.md):
 a feature the model may decline was offered, not applied, and the round-trip
 numbers across arms are the same number wearing different labels (7.8 vs 7.8).
 No amount of additional arms would have extracted an effect from a treatment
@@ -123,12 +123,12 @@ Four things, all caught, each one a handbook section confirmed:
   `for` loop over arms hit the 2-minute shell timeout and SIGTERM took the
   in-flight Strument processes with it; the JSONL turn records read
   `outcome: "Interrupted"` at identical timestamps. Re-run cleanly, all three
-  succeeded. This is the §19 tell from the other side — a runner that dies
+  succeeded. This is the [`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly) tell from the other side — a runner that dies
   quietly looks like a slow run — and the reason the runner is resumable.
 - **The pre-registered scorer had two false negatives**, found by reading
   transcripts against the table: it misses `60_000` (three runs answered with
   the underscore form) and `**ANSWER:**` (markdown bold around the marker).
-  Both directions are the same bug as §15's two reasoning forms: the renderer
+  Both directions are the same bug as [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)'s two reasoning forms: the renderer
   has more shapes than the scorer. `results.json` records the lenient re-score
   per row; the direction of every correction was upward, so the trial's null
   is not an artifact of it.

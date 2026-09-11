@@ -13,7 +13,7 @@ label and the scope are open questions, and they are separable.
 ## What this trial cannot answer
 
 **Whether anyone reaches for `/consult` at all.** It is typed by a human, so
-there is no uptake to measure the way `replace_all`'s was — see §18 of
+there is no uptake to measure the way `replace_all`'s was — see [`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes) of
 [`../../experimenting.md`](../../experimenting.md), where a feature the model could
 decline was offered rather than applied in seventeen runs of eighteen. That cuts
 both ways: the treatment here is always applied, so the trial cannot come
@@ -34,7 +34,7 @@ material on the turn after the consult.
 
 The same-model row is what earns the design its second factor. In the
 different-model cells a model could infer foreign authorship from style alone,
-which is §6 — the answer would be recoverable without the mechanism under test.
+which is [`probe-only-through-the-mechanism`](../../experimenting.md#probe-only-through-the-mechanism) — the answer would be recoverable without the mechanism under test.
 Holding the advisor identical to the executor removes the stylistic tell. If D
 works and C fails, the *label* is carrying it. If B works and D does not, it was
 style all along and the label is decoration.
@@ -46,7 +46,7 @@ A probe turn, identical in all arms:
 > Before acting on that: on one line beginning with `SOURCE:`, say who wrote the
 > suggestion above — you, or another model (name it).
 
-Scored by regex on `^SOURCE:`, per §2 — a marker asked for, not a position
+Scored by regex on `^SOURCE:`, per [`marker-not-position`](../../experimenting.md#marker-not-position) — a marker asked for, not a position
 inferred. **A and C are the control that must fail.** If every arm answers
 correctly the probe leaks and the numbers mean nothing.
 
@@ -64,7 +64,7 @@ does not.
 - **Counter-metric, reported as prominently:** contradiction rate on the
   **correct** claims. Should stay flat.
 
-The pair is the point. §17's "verification in one direction only": without the
+The pair is the point. [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail)'s "verification in one direction only": without the
 second number, "the label makes the model dismiss whatever the advisor says"
 satisfies the first metric perfectly.
 
@@ -88,7 +88,7 @@ that exists in the repository, scored by exact match on an `ANSWER:` line.
 
 **Level 0 must score near zero.** That is the control that has to fire: if it
 does not, the question was answerable from general knowledge and the fixture is
-measuring the artifact rather than the mechanism (§6). §15's corollary applies in
+measuring the artifact rather than the mechanism ([`probe-only-through-the-mechanism`](../../experimenting.md#probe-only-through-the-mechanism)). [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)'s corollary applies in
 reverse here — a clean zero is as suspicious as a clean `p = 1.0`, so read
 transcripts at level 0 rather than trusting the number.
 
@@ -101,7 +101,7 @@ six-line `poll.go` with `pollInterval = 45`, asked for the exact value:
 | `files` | "45 — pollInterval is declared as the constant 45 in poll.go" |
 
 Two runs against GLM-5.3, about $0.0006. That is the mechanism confirmed in both
-directions before any sample is bought (§5), and it is what the wire check below
+directions before any sample is bought ([`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire)), and it is what the wire check below
 is for at scale.
 
 ### Counter-metric: echo rate
@@ -128,7 +128,7 @@ Three things are specific to this feature.
 1. **Verify the scope on the wire before spending.** Dump the request body per
    level and assert the pinned file's content is present at 1 and 2 and absent at
    0 — the `wire-check.jsonl` step from `2026-09-tool-arg-order`. A scope flag
-   that silently does nothing is §17's control-that-never-applied, and it would
+   that silently does nothing is [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail)'s control-that-never-applied, and it would
    read as "level 1 did not help". The `ANSWER:`-probe above is the behavioural
    version of the same check and both are worth having.
 2. **`--yes add-output` in every arm.** `/consult`'s confirmation is a prompt,
@@ -144,12 +144,12 @@ Three things are specific to this feature.
    answer a prompt, hence (2).
 
 The standing rules apply unchanged: score from JSONL rather than rendered
-terminal output (§1, §15); fixed seed and a shuffled job list, so the arm is not
+terminal output ([`instrument-made-of-the-system`](../../experimenting.md#instrument-made-of-the-system), [`renderer-has-two-forms`](../../experimenting.md#renderer-has-two-forms)); fixed seed and a shuffled job list, so the arm is not
 confounded with the hour it ran; persist raw output and rescore rather than
-re-run (§4); `ty` over the runner and the resume path exercised with a stub
-before the batch (§19, §20); wait on the pid, not on a log marker; and hand the
+re-run ([`keep-the-raw-output`](../../experimenting.md#keep-the-raw-output)); `ty` over the runner and the resume path exercised with a stub
+before the batch ([`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly), [`resume-path-runs-last`](../../experimenting.md#resume-path-runs-last)); wait on the pid, not on a log marker; and hand the
 scorer to a second model, asking for a concrete failing input and saying that at
-least one check is sound (§13).
+least one check is sound ([`let-another-model-read-the-scorer`](../../experimenting.md#let-another-model-read-the-scorer)).
 
 ## Sequencing
 

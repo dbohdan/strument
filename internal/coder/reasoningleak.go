@@ -35,10 +35,10 @@ var toolCallOpeners = []string{
 // close it before acting. Emit the tool call a token early and the server files
 // the action as a thought, correctly, by its own rules.
 //
-// doc/experimenting.md §3 is the general form: "no answer" and "wrong answer"
-// are different columns, and a provider failure and a model whose tool call
-// went out as text mean opposite things. This is the harness's own instance of
-// it, in a user-facing message rather than in a scorer.
+// doc/experimenting.md#no-answer-vs-wrong-answer is the general form: "no
+// answer" and "wrong answer" are different columns, and a provider failure and
+// a model whose tool call went out as text mean opposite things. This is the
+// harness's own instance of it, in a user-facing message, not in a scorer.
 func reasoningLeak(answer, reasoning string, toolCalls int) (marker string, leaked bool) {
 	if answer != "" || toolCalls > 0 || strings.TrimSpace(reasoning) == "" {
 		return "", false

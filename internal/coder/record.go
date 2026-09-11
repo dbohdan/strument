@@ -4,9 +4,11 @@
 // on this project so far, and the largest cluster is one shape: a check reading
 // rendered terminal output and picking the wrong region of it. An ANSI escape
 // landing at the start of an answer line turned a real effect into a clean
-// p=1.0 null (doc/experimenting.md §1). A reasoning renderer with two block
+// p=1.0 null (doc/experimenting.md#instrument-made-of-the-system). A reasoning
+// renderer with two block
 // forms deleted the final answer of every run whose last aside was the one-line
-// kind (§15). "Committed " was counted in a transcript it never reaches,
+// kind (#renderer-has-two-forms). "Committed " was counted in a transcript it
+// never reaches,
 // because tool *results* are not printed at all. None of those are mistakes
 // about the code under test; they are mistakes about where the text was.
 //
@@ -19,7 +21,7 @@
 // the human reviews, and `--jsonl` is a second sink beside it rather than a
 // mode: an experiment that wants to check what the user *saw* can still read
 // the rendered stream, which matters because moving all measurement off the
-// rendered path would retire a canary. §1's bug was found because it broke a
+// rendered path would retire a canary. The ANSI bug was found because it broke a
 // scorer.
 
 package coder

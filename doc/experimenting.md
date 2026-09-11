@@ -14,9 +14,16 @@ prompts** sections of `CLAUDE.md`, which cover cost strata and arm
 randomization. This handbook covers failures in fixtures, scorers, runners, and
 interpretation.
 
-If you are preparing a run, start with the pre-run checklist and §12. The rest
-is the evidence and failure patterns behind those checks; use the section
-headings to investigate a surprising result or a broken run.
+If you are preparing a run, start with [the pre-run checklist](#pre-run-checklist)
+and [practical mechanics](#practical-mechanics). The rest is the evidence and
+failure patterns behind those checks; use the section headings to investigate a
+surprising result or a broken run.
+
+Sections are numbered for reading order and **cited by label**, the way a LaTeX
+`\ref` cites a `\label`: `runner-dies-quietly` keeps pointing at the right
+section after the section moves, and says what it points at, which `§19` did
+neither. `internal/fixture/handbooklabel_test.go` fails the build if a citation
+anywhere in the tree names a label this file does not define.
 
 Three labels recur in the margins of those sections. **Do:** is what to do
 differently next time. **Check:** is a question to put to your own rig.
@@ -25,44 +32,50 @@ away. It marks the shape a fault takes while it is still passing for a result,
 which is the opposite of a warning: nobody put it there for you, and the
 experiment will not point at it.
 
+<a id="pre-run-checklist"></a>
+
 ## The pre-run checklist
 
 Before spending on a run, ask these questions in order:
 
-- **Did the mechanism fire?** Instrument it and confirm it in the pilot (§5).
+- **Did the mechanism fire?** Instrument it and confirm it in the pilot ([the mechanism must fire](#mechanism-must-fire)).
 - **Did the model use the thing being tested?** A feature that can be declined
-  was offered, not applied (§18).
+  was offered, not applied ([a clean null has many causes](#clean-null-has-many-causes)).
 - **Could the fixture produce the failure being measured?** Put the relevant
-  situation in the task, including the counter-arm (§18).
+  situation in the task, including the counter-arm ([a fixture that cannot contain it](#fixture-cannot-contain-it)).
 - **Can the scorer distinguish no answer, wrong answer, provider failure, and
   model output in the wrong format?** Save raw output and test the parser in
-  both directions (§§1–4, §15, §17).
+  both directions ([your instrument is made of the system](#instrument-made-of-the-system), [no answer vs wrong answer](#no-answer-vs-wrong-answer), [the renderer has two forms](#renderer-has-two-forms)).
 - **Do the arms differ in exactly the intended way?** Build the baseline from
-  `HEAD`, compare the artifacts, and refuse identical arms (§7).
+  `HEAD`, compare the artifacts, and refuse identical arms ([baseline is HEAD minus the change](#baseline-is-head-minus-the-change)).
 - **Do any relevant assertions still pass in the arm designed to make them
   fail?** Apply a targeted sabotage and assert that the sabotage itself applied
-  (§17).
+  ([a check that cannot fail](#check-that-cannot-fail)).
 - **Did the runner finish, or did it only stop reporting?** Wait on the specific
-  process and record worker failures (§19).
+  process and record worker failures ([a runner that dies quietly](#runner-dies-quietly)).
 - **Has the resume path been exercised deliberately?** Run it with a stub before
-  the batch needs it (§20).
+  the batch needs it ([the resume path runs last](#resume-path-runs-last)).
 - **Did you read three transcripts, including an anomalous one?** A transcript
-  can settle what an aggregate cannot (§8).
+  can settle what an aggregate cannot ([read the transcripts](#read-the-transcripts)).
+
+<a id="failure-index"></a>
 
 ## Failure types and where to look
 
 | symptom or failure type | start with |
 | --- | --- |
-| Scorer or output-parsing failure | §§1–4, 15, 17 |
-| Model produces no usable answer, or spends the budget thinking | §5 |
-| Provider failure versus model output in the wrong format | §3, then inspect the raw output (§4) |
-| Answer can be recovered without the mechanism | §6 |
-| Arms contain an unintended difference or are identical | §§7, 16, 18 |
-| Treatment was not reached, or the fixture never contained the phenomenon | §18 |
-| Runner stopped reporting, timed out, or cannot resume | §§19–20 |
-| A bug report names the wrong subsystem | §21 |
+| Scorer or output-parsing failure | [your instrument is made of the system](#instrument-made-of-the-system), [score a marker, not a position](#marker-not-position), [keep the raw output](#keep-the-raw-output), [the renderer has two forms](#renderer-has-two-forms), [a check that cannot fail](#check-that-cannot-fail) |
+| Model produces no usable answer, or spends the budget thinking | [the mechanism must fire](#mechanism-must-fire), [pin reasoning low](#pin-reasoning-low) |
+| Provider failure versus model output in the wrong format | [no answer vs wrong answer](#no-answer-vs-wrong-answer), then [keep the raw output](#keep-the-raw-output) |
+| Answer can be recovered without the mechanism | [a probe only the mechanism answers](#probe-only-through-the-mechanism) |
+| Arms contain an unintended difference or are identical | [baseline is HEAD minus the change](#baseline-is-head-minus-the-change), [the measurement the confound cannot reach](#measurement-the-confound-cannot-reach), [a clean null has many causes](#clean-null-has-many-causes) |
+| Treatment was not reached, or the fixture never contained the phenomenon | [a clean null has many causes](#clean-null-has-many-causes), [a fixture that cannot contain it](#fixture-cannot-contain-it) |
+| Runner stopped reporting, timed out, or cannot resume | [a runner that dies quietly](#runner-dies-quietly), [the resume path runs last](#resume-path-runs-last) |
+| A bug report names the wrong subsystem | [a report infers the subsystem](#report-infers-the-subsystem) |
 
 ---
+
+<a id="instrument-made-of-the-system"></a>
 
 ## 1. Your instrument is made of the thing you are testing
 
@@ -92,6 +105,8 @@ cosmetic. It was cosmetic for users and load-bearing for measurement.
 **Do:** strip ANSI before scoring rendered terminal output. A display defect that
 is cosmetic for a human reader can still break a parser.
 
+<a id="marker-not-position"></a>
+
 ## 2. Score a marker you asked for, never a position you inferred
 
 The first version located the final answer by splitting output on `Tokens:` and
@@ -106,13 +121,15 @@ match that.
 answer marker perturbs the task slightly and is far easier to validate than a
 position-based extraction rule. Use the same instruction in both arms.
 
+<a id="no-answer-vs-wrong-answer"></a>
+
 ## 3. "No answer" and "wrong answer" are different columns
 
 “No answer” and “wrong answer” require different diagnoses. A missing answer
 may reflect a provider failure, exhausted output budget, protocol failure, or
 extraction bug. A wrong answer means usable output reached the scorer but did not
 satisfy the task. A single boolean hides these differences. The rescore split
-them, and *that* is what exposed §1: a sudden `answered=0/6` for one model needs
+them, and *that* is what exposed [the broken scorer above](#instrument-made-of-the-system): a sudden `answered=0/6` for one model needs
 investigation before it is interpreted as a model-performance result.
 
 This generalizes an older lesson: a provider returning `Empty response received
@@ -123,7 +140,9 @@ summary and mean opposite things.
 raw response and process status. A provider failure is recorded in the request or
 stream outcome, often with no usable model content; inline tool-call markup is
 model-produced content that bypassed the tool-call protocol. Keep them as
-separate categories in the scorer (§4).
+separate categories in the scorer ([keep the raw output](#keep-the-raw-output)).
+
+<a id="keep-the-raw-output"></a>
 
 ## 4. Save the raw output. Rescore instead of re-running
 
@@ -135,6 +154,8 @@ one is tempted to accept the null instead.
 
 **Do:** persist each run’s raw output so it can be rescored. Keep the large raw
 transcripts outside the committed dataset; commit the scored fields.
+
+<a id="mechanism-must-fire"></a>
 
 ## 5. Confirm the mechanism fires before measuring its effect
 
@@ -171,6 +192,8 @@ mathematica", picked up at "achievements".
 to measure before you count anything. A run that spends its entire output budget
 on reasoning cannot test mid-answer interruption.
 
+<a id="pin-reasoning-low"></a>
+
 ### Set `reasoning="low"` on every model in a trial, and check it took
 
 That GLM-5.3 finding is not about GLM-5.3. **Pin reasoning low on every model in
@@ -203,6 +226,8 @@ What it costs when you forget:
 forgetting one is impossible; then read one transcript per model and confirm
 there is an answer under the thinking.
 
+<a id="probe-only-through-the-mechanism"></a>
+
 ## 6. Choose a probe whose answer is available only through the mechanism
 
 Two probes were scored. Recall of the *value* (`45`) came out 11/12 vs 9/12 —
@@ -214,6 +239,8 @@ conversation.
 **Do:** design the probe so the only path to the answer runs through the
 mechanism under test. If the model can recover the answer from the source files,
 the probe does not isolate conversational recall.
+
+<a id="baseline-is-head-minus-the-change"></a>
 
 ## 7. Rebuild the baseline as your branch moves
 
@@ -236,18 +263,22 @@ commit*. Then `cmp` the two binaries and refuse to spend if they are identical �
 a build that silently produced two copies of the same arm can waste the entire
 batch.
 
+<a id="read-the-transcripts"></a>
+
 ## 8. Read individual transcripts. Then read more of them
 
 This is in `CLAUDE.md` already and it earned its place twice more in one session:
 
-- The three "failures" that were the parser (§2).
+- The three "failures" that were the parser ([score a marker, not a position](#marker-not-position)).
 - A per-model split so clean it looked like a real finding: base scored 6/6 on
   MiMo and 0/6 on DeepSeek-v4-flash, in opposite directions per arm. It was
-  entirely the §1 artifact.
+  entirely the [ANSI-escape](#instrument-made-of-the-system) artifact.
 
 **Do:** inspect transcripts behind a clean per-model split before attributing it
 to provider differences. In this trial, the apparent disagreement came from the
 scorer. One transcript settles in a minute what a summary table makes mysterious.
+
+<a id="loss-vs-confabulation"></a>
 
 ## 9. Count confabulation separately from loss
 
@@ -266,6 +297,8 @@ as an established fact.
 **Do:** score these as different outcomes. A change that converts loss into
 confabulation is a regression even if the "recall" number improves.
 
+<a id="battle-tested-beats-better-reading"></a>
+
 ## 10. Battle-tested beats better-reading
 
 aider's summarize prompt is GPT-4-Turbo-era prose. The replacement was a clean
@@ -278,6 +311,8 @@ An established prompt may encode lessons that are not obvious from its wording.
 A clearer rewrite is a hypothesis about performance, not evidence of an
 improvement.
 
+<a id="separate-correctness-from-performance"></a>
+
 ## 11. Land correctness and performance changes separately
 
 The compaction work bundled an honesty fix (the summary was a fabricated user
@@ -287,6 +322,8 @@ anything could be reverted.
 
 **Do:** commit a correctness change separately when its justification does not
 depend on the trial. That leaves one hypothesis to test and one change to revert.
+
+<a id="practical-mechanics"></a>
 
 ## 12. Practical mechanics
 
@@ -305,7 +342,7 @@ depend on the trial. That leaves one hypothesis to test and one change to revert
   successfully. Capture the pid; a `pgrep -f` pattern will match the next run of
   the same script. If a log watcher is unavoidable, match every terminal state
   as a secondary signal; it must not replace waiting on the specific process.
-- **Type-check the runner before launching it** (§19). The error paths are the
+- **Type-check the runner before launching it** ([type-check the runner](#type-check-the-runner)). The error paths are the
   ones a one-off script never exercises until they decide whether the run
   survives.
 - **Start with no more than four concurrent runs.** Higher concurrency caused
@@ -319,6 +356,8 @@ depend on the trial. That leaves one hypothesis to test and one change to revert
   blunt version when the run is disposable.
 - **Fix the random seed and shuffle the job list**, so a rerun is comparable and
   the arm is not confounded with the hour it ran.
+
+<a id="let-another-model-read-the-scorer"></a>
 
 ## 13. Have another model read the scorer
 
@@ -357,6 +396,8 @@ context that is not in the scorer — what the transcript actually prints, what
 the test binary actually names its cases. Hand over the scorer *and* a sample of
 its real input, or the reviewer is guessing at the half that matters.
 
+<a id="ensemble-on-a-bigger-artifact"></a>
+
 ## 14. The same trick on a bigger artifact, and what it costs
 
 A later trial extended this approach: five models reviewing 17.6 KB of rendered
@@ -387,6 +428,8 @@ lower.
   default-to-cheap rule in [`README.md`](README.md) survives contact with a task
   that looks like it wants deliberation.
 
+<a id="renderer-has-two-forms"></a>
+
 ## 15. The renderer has two forms, and your scorer knows one
 
 The eleventh scorer bug, from
@@ -409,9 +452,11 @@ Two useful observations:
   before any statistics.
 - **An unexpected zero exposed the extraction bug.** A count of runs naming a
   nonexistent function returned 0/21 and 0/27 — while `Coder.send` sat in a
-  transcript I had quoted earlier in the same session. §1 says break the check
+  transcript I had quoted earlier in the same session. [The broken-scorer rule](#instrument-made-of-the-system) says break the check
   on purpose and watch it go red; the corollary is that a check returning a
   clean zero deserves the same suspicion as one returning a clean p=1.0.
+
+<a id="measurement-the-confound-cannot-reach"></a>
 
 ## 16. Look for the measurement the confound cannot reach
 
@@ -439,10 +484,13 @@ which file was opened, whether a question was asked before any tool ran.
 
 The run IDs confirmed that every run using the tool selected it first.
 
+<a id="check-that-cannot-fail"></a>
+
 ## 17. Three ways a check can pass without testing its claim
 
-§1 is about a scorer that reported the wrong answer. This one is about checks
-that report *no* answer — assertions that pass whether or not the code works,
+[Your instrument is made of the system](#instrument-made-of-the-system) is about a
+scorer that reported the wrong answer. This one is about checks that report *no*
+answer — assertions that pass whether or not the code works,
 so the only thing they measure is that they ran. Three turned up in one
 session's work on the harness itself, and they were caught the same way each time:
 by breaking the code on purpose and watching the check stay green.
@@ -501,15 +549,17 @@ place to discriminate, and a green result then tells you it does not.
 
 ---
 
+<a id="false-green-quoted-as-proof"></a>
+
 ### 17a. Three ways verification can falsely report success
 
-One session spent writing a transcript auditor produced three failure modes §17 does
-not cover. All three are worse than the ones above, because in each case the
+One session spent writing a transcript auditor produced three failure modes
+beyond [the ways a check can pass without testing its claim](#check-that-cannot-fail). All three are worse than the ones above, because in each case the
 check is *reported as verified* — the green is quoted as evidence rather than
 merely trusted.
 
 **A control that never applied.** The way to trust a check is to break the code
-and watch it go red (§1, §17). That control is itself a check, and it fails
+and watch it go red ([your instrument is made of the system](#instrument-made-of-the-system), [a check that cannot fail](#check-that-cannot-fail)). That control is itself a check, and it fails
 silently: a patch whose anchor no longer matches changes nothing, the suite
 stays green, and the green gets written up as "verified to discriminate". This
 happened three times in one project — a `sed` that missed after a rename, a
@@ -551,10 +601,13 @@ than at the point of reviewing. A delegated fix specified as *"X must now report
 0, and Y must still report 1"* cannot be satisfied by silencing the metric; the
 same request without Y can.
 
+<a id="clean-null-has-many-causes"></a>
+
 ## 18. A clean null has more than one cause, and they look alike
 
-§17 is about a check that cannot fail. A trial can also return identical results
-because neither arm encountered the behavior being tested. All three cases below
+Above, [a check that cannot fail](#check-that-cannot-fail). Here, a *trial* that
+cannot: it returns identical results because neither arm ever encountered the
+behavior being tested. All three cases below
 turned up in one session, in a trial of whether `edit` should grow a
 `replace_all` argument.
 
@@ -590,7 +643,7 @@ told you about your fixture, not about your design.
 **The arms were the same program.** Two of the three binaries had identical
 sizes, because a `cd` in one shell invocation persisted into the next and the
 control arm was built from the treatment's source tree. Caught by the standing
-rule from §7 — compare the built arms and refuse to spend if they are the
+rule from [baseline is HEAD minus the change](#baseline-is-head-minus-the-change) — compare the built arms and refuse to spend if they are the
 same — which here meant running one probe edit through each binary and
 watching them answer differently. Without it the trial would have reported no
 difference between unique-or-fail and `replace_all` for the excellent reason
@@ -603,6 +656,8 @@ suggests: models rarely reach for `replace_all` (1/18), which is an argument
 against adding it that does not depend on the risk ever being measured. The
 trial cannot say whether `replace_all` is dangerous, because it never got used
 enough to be. Say that, rather than letting 18/18 stand as a safety result.
+
+<a id="metric-counts-the-wrong-thing"></a>
 
 ### The mirror image: a metric that counts the wrong thing
 
@@ -621,6 +676,8 @@ metric's definition next to the claim it supports and check that the words
 match; then check the metric can still fire, on a fixture where the phenomenon
 genuinely occurs, or you have traded a wrong number for a silent one.
 
+<a id="counter-arm-finds-it"></a>
+
 #### The counter-arm is what finds this
 
 The fault recurred the day after this section was written, which is the best
@@ -631,6 +688,8 @@ to break it — a binary whose grant expires with the turn, where turn two *was*
 prompted. The prompt draws the same marker and the same URL, so the assertion
 was reading the question and calling it the announcement. Adding one clause —
 and the question is *not* on screen — made it fail there, correctly.
+
+<a id="fixture-cannot-contain-it"></a>
 
 #### A fixture that cannot contain the phenomenon
 
@@ -671,10 +730,13 @@ something else.
 
 ---
 
+<a id="runner-dies-quietly"></a>
+
 ## 19. A runner that dies quietly looks exactly like one that is slow
 
-§18 is about an experiment that cannot fail. This one is about the harness
-around it, and it cost an hour of a 234-run trial being reported as healthy
+[A clean null has many causes](#clean-null-has-many-causes) is about an experiment
+that cannot fail; this one is about the harness around it, and it cost an hour of a
+234-run trial being reported as healthy
 while its bookkeeping was dead.
 
 One run hit the timeout. The handler was:
@@ -718,8 +780,10 @@ Three fixes, in order of how much they buy:
   `grep -Eq "^wrote |Traceback|Error"`.
 
 None of this is about statistics, and all of it is recoverable: because the raw
-output was on disk (§4), the fix was to repair the runner and re-run it, which
+output was on disk ([keep the raw output](#keep-the-raw-output)), the fix was to repair the runner and re-run it, which
 reused 233 saved runs and re-executed one. Nothing was re-bought.
+
+<a id="type-check-the-runner"></a>
 
 ### Static checking could have caught the bug before the trial
 
@@ -763,10 +827,13 @@ where the closure is called inside the iteration that binds it. Keep it for
 
 ---
 
+<a id="resume-path-runs-last"></a>
+
 ## 20. The resume path is the least-tested code and the last thing you wrote
 
-§19's runner died quietly; this one shipped a bug that did the opposite — it
-worked perfectly on the first invocation and fell over on the second. The
+[A runner that dies quietly](#runner-dies-quietly) fails without saying so; this one
+shipped the opposite bug — it worked perfectly on the first invocation and fell
+over on the second. The
 shell-parallelism trial adapted `2026-09-code-mode2/data/run.py`, and the
 adaptation lost the `else` branch: fresh jobs assigned `text` from
 the subprocess, resumed jobs (output file already on disk) never assigned it,
@@ -807,6 +874,8 @@ Three habits, in the order they would have saved the hour:
 
 ---
 
+<a id="report-infers-the-subsystem"></a>
+
 ## 21. A bug report is a hypothesis about location, not a fact about it
 
 The code-only trial's report said jsonlog mangled tool results into one
@@ -839,6 +908,8 @@ changing anything there; if it does not reproduce, that is not a dead end, it is
 the finding. The next question is always the same: *who else reads this data?*
 Check the other readers of the data; in this case, the scorer and renderer
 explained the symptom.
+
+<a id="report-reproduces-but-misnames"></a>
 
 ### The sharper version: a report that reproduces can still misname the cause
 
@@ -878,6 +949,8 @@ someone has handed you a reproduction — and note that a correct prediction of
 the *fix's effect* (this report called 13/14 ≈ 0.93, and 0.929 is what it is) is
 not evidence for the mechanism offered alongside it.
 
+<a id="durations-measured-vs-narrated"></a>
+
 ### The same fault, in this document
 
 Worth admitting here, because it is the cheapest possible demonstration.
@@ -904,6 +977,8 @@ wear the same clothes as the first.
 
 ---
 
+<a id="short-version"></a>
+
 ## The short version
 
 Most of what goes wrong is not statistics. It is the equipment.
@@ -919,7 +994,7 @@ favourite output is `p = 1.0`.
 Before interpreting a surprising aggregate, read the underlying transcripts.
 Before adding more runs, check that the runner completed and that its error and
 resume paths work. Before a batch, check that reasoning is pinned low on every
-model *and that each one obeyed* (§5): a model spending its budget thinking
+model *and that each one obeyed* ([pin reasoning low](#pin-reasoning-low)): a model spending its budget thinking
 looks exactly like an API failure.
 
 When choosing a treatment, inspect where in the session the failure occurs. A
@@ -930,8 +1005,8 @@ phenomenon by position would have said it before any arm was built.
 
 Stronger checks are more useful than a resolution to be more careful — that was
 tried, for nine consecutive bugs. Require a concrete counterexample from a
-reviewer (§13), or demonstrate that a targeted defect makes the relevant
-assertion fail (§17). Both work because neither routes through the judgment of
+reviewer ([let another model read the scorer](#let-another-model-read-the-scorer)), or demonstrate that a targeted defect makes the relevant
+assertion fail ([a check that cannot fail](#check-that-cannot-fail)). Both work because neither routes through the judgment of
 whoever wants the result to pass. And ask of any fix that makes something stop
 firing: *what still has to fire?* — because "report nothing" satisfies a
 one-sided check perfectly.

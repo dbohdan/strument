@@ -30,10 +30,10 @@ pre-run questions were buried at the end, and the handbook does not tell a new
 reader which sections are mandatory before launch and which are supporting
 history.
 
-It separately called out the unnumbered block beneath §17, the scattered
-failure taxonomy, the missing raw-output diagnostic in §3, and the mild ambiguity
+It separately called out the unnumbered block beneath [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail), the scattered
+failure taxonomy, the missing raw-output diagnostic in [`no-answer-vs-wrong-answer`](../../experimenting.md#no-answer-vs-wrong-answer), and the mild ambiguity
 between PID-watching and log-marker watching. Its proposed priorities were to
-move the checklist to the front, make the §17 addition scannable, add a failure
+move the checklist to the front, make the [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail) addition scannable, add a failure
 index and model/provider diagnostic, and clarify the runner guidance. The source
 review is [`glm-review.md`](glm-review.md); the consultation prompt is
 [`glm-prompt.md`](glm-prompt.md).
@@ -52,7 +52,7 @@ The handbook now has:
   runner completion, resume behavior, and transcript inspection;
 - a **failure types and where to look** table routing common symptoms to the
   relevant sections;
-- a practical §3 diagnostic that says to inspect raw responses and process
+- a practical [`no-answer-vs-wrong-answer`](../../experimenting.md#no-answer-vs-wrong-answer) diagnostic that says to inspect raw responses and process
   status rather than classify provider failures or inline tool-call output from
   summary rows;
 - an explicit `17a` heading for the additional false-success check shapes;
@@ -68,14 +68,14 @@ A later review of the patch itself found three defects worth recording, since
 the failure mode is the interesting part.
 
 **Three editorial notes shipped inside the document.** The patch left
-`> **Editorial note:** …` blocks in §5, §17 and §20, each asking a reader to
+`> **Editorial note:** …` blocks in [`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire), [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail) and [`resume-path-runs-last`](../../experimenting.md#resume-path-runs-last), each asking a reader to
 verify a claim the patch had removed or blurred. A note addressed to the author
-is not a note to the reader. All three were answerable: §5's from the
-code-result write-up's own limitation section, §20's from this archive
+is not a note to the reader. All three were answerable: [`mechanism-must-fire`](../../experimenting.md#mechanism-must-fire)'s from the
+code-result write-up's own limitation section, [`resume-path-runs-last`](../../experimenting.md#resume-path-runs-last)'s from this archive
 (`2026-09-code-mode2/data/run.py` is the runner the shell-parallelism trial
-adapted), and §17's by running the experiment — `go test` does **not** hand back
+adapted), and [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail)'s by running the experiment — `go test` does **not** hand back
 a stale cached `ok` after a build error, but a cached `ok` for a *different*
-package prints above the error, which is the real hazard and now what §17 says.
+package prints above the error, which is the real hazard and now what [`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail) says.
 
 **Rewriting the introduction removed the argument the introduction was
 making.** "Everything here was paid for. Each item names the run that taught
@@ -103,7 +103,7 @@ margin labels in a sentence each, which serves that reader better than a
 blander word would have, and the marker keeps its meaning.
 
 Two of the thirteen were imperatives rather than symptoms and never should have
-worn the label. They are `*Check:*` now, joining §18's, and a third site the
+worn the label. They are `*Check:*` now, joining [`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes)'s, and a third site the
 patch added is a plain `**Do:**`.
 
 The rest of the patch stands, and the navigation layer is the improvement it
@@ -113,12 +113,12 @@ was meant to be.
 
 The review agreed that the handbook's strongest material should remain intact:
 
-- §1's evidence-led structure, especially the ANSI example and the line that
+- [`instrument-made-of-the-system`](../../experimenting.md#instrument-made-of-the-system)'s evidence-led structure, especially the ANSI example and the line that
   cosmetic output was load-bearing for measurement;
 - the repeated pattern of symptom followed by a mechanical test, and its
   `*Tell:*` marker (see below);
-- the distinction between honest loss and confabulation in §9;
-- the §18 → §19 → §20 transitions, which give the failure taxonomy its clearest
+- the distinction between honest loss and confabulation in [`loss-vs-confabulation`](../../experimenting.md#loss-vs-confabulation);
+- the [`clean-null-has-many-causes`](../../experimenting.md#clean-null-has-many-causes) → [`runner-dies-quietly`](../../experimenting.md#runner-dies-quietly) → [`resume-path-runs-last`](../../experimenting.md#resume-path-runs-last) transitions, which give the failure taxonomy its clearest
   existing spine;
 - the evidence attached to each rule rather than unsupported general advice;
 - the final conclusion that resolving to be more careful is not a substitute for
