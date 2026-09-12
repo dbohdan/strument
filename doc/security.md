@@ -1,6 +1,6 @@
 # Security
 
-This document describes what Strument’s sandbox protects, what it does not, and
+This document describes what Strument's sandbox protects, what it does not, and
 why. Start with [Integrity, not
 confidentiality](#integrity-not-confidentiality): the sandbox restricts
 filesystem writes, but it does not restrict reads or network access.
@@ -49,7 +49,7 @@ read them wherever your normal permissions allow.
 
 This distinction is deliberate. Confining writes limits filesystem damage from
 an approved command to the paths in the policy. A bad approval can still have
-effects outside the file tools’ undo coverage, including changes to writable
+effects outside the file tools' undo coverage, including changes to writable
 caches, files under `/tmp`, or remote systems reached over the network.
 
 Reads are unrestricted to preserve compatibility with ordinary development
@@ -59,7 +59,7 @@ would need exceptions for these workflows. Under the current policy, any secret
 readable by a command is available to that command. Strument itself also holds
 credentials and connects to the model provider. Model-run commands normally
 receive only an allowlisted set of environment variables, but they can still
-send readable data over the network. The user’s `/run` command inherits the
+send readable data over the network. The user's `/run` command inherits the
 full environment.
 
 **If a secret is readable by you, treat it as readable by the model.** If that
@@ -121,7 +121,7 @@ commands it launches have the same access.
 
 Landlock rules are additive: a read-only rule for a directory inside a writable
 root does not revoke write access. This behavior was verified on a real kernel.
-Protecting `.git/hooks` from subprocesses while retaining Strument’s own access
+Protecting `.git/hooks` from subprocesses while retaining Strument's own access
 would require a different sandbox arrangement, such as per-command confinement.
 
 The `read` and edit tools refuse paths into `.git`. The read tool already
@@ -144,7 +144,7 @@ Landlock separately checks filesystem access at the kernel level.
 Code the model writes into the project normally runs under the sandbox and
 environment allowlist, so it does not receive `OPENROUTER_API_KEY`. However,
 settings in `.git/config` — such as `core.fsmonitor`, `core.pager`,
-`core.sshCommand`, or aliases — can cause Strument’s own Git invocations to
+`core.sshCommand`, or aliases — can cause Strument's own Git invocations to
 execute code. Those invocations retain the full environment. Modifying Git
 configuration can therefore give code access to credentials withheld from
 ordinary model-run commands. Because `.git` is untracked, these changes do not
@@ -155,7 +155,7 @@ tools, but it does not prevent other commands from writing `.git`. A `bash`
 command can still write `.git/config` behind a confirmation prompt, and so can
 a test that `check_auto` runs without one if the model wrote the test. Closing
 that route would require a per-command sandbox or a filtered environment for
-Strument’s Git process. The current implementation keeps the full environment
+Strument's Git process. The current implementation keeps the full environment
 for Git so the user's identity, credential helpers, and signing setup continue
 to work.
 
@@ -229,7 +229,7 @@ path, at the cost of breaking checks that need a session bus. Strument
 currently retains `XDG_RUNTIME_DIR` for compatibility. The filesystem sandbox
 does not isolate commands from the display server.
 
-This limitation came to attention when a model on another user’s machine found
+This limitation came to attention when a model on another user's machine found
 `xdotool` while trying to complete a task that required GUI confirmation. The
 behavior was not adversarial; it showed that an ordinary task could lead the
 model to use capabilities outside the filesystem sandbox.
@@ -241,7 +241,7 @@ If `sandbox = "landlock"` is configured but the kernel lacks Landlock support,
 Strument does not silently fall back to unsandboxed execution. Reading,
 file-tool editing, and Git commits still work, but model-run shell commands,
 checks, and scraper commands are refused with an error naming the setting. The
-user’s `/run` command remains available.
+user's `/run` command remains available.
 
 A warning alone would allow execution without the requested protection and
 would be easy to overlook.
@@ -317,7 +317,7 @@ a fixed one.
 `script/sandbox-trial.py` re-runs that trial. `--sandbox ""` is its control:
 with confinement off, ordinary-work checks should pass and denial checks should
 fail. If the denial checks do not change outcome when confinement is disabled,
-the trial has not isolated the sandbox’s effect.
+the trial has not isolated the sandbox's effect.
 
 ## Reporting a problem
 

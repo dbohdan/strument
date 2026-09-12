@@ -4,7 +4,7 @@ This is the house style for text people read: startup notices, messages during a
 turn, `--help`, `/help`, and command output.
 
 Model-facing text — tool results, tool descriptions, and refusals returned as tool
-output — is outside this guide’s scope. It needs consistent formatting and is
+output — is outside this guide's scope. It needs consistent formatting and is
 evaluated through live trials; `internal/coder/tools.go` alone contains about
 150 such strings. Treat changes to those strings as prompt changes, with trials
 documented in `doc/experiments/`.

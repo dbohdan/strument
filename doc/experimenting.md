@@ -152,7 +152,7 @@ and about forty seconds**. Without that, discovering the bug would have meant
 paying for all twenty-four sessions again — which is exactly the moment where
 one is tempted to accept the null instead.
 
-**Do:** persist each run’s raw output so it can be rescored. Keep the large raw
+**Do:** persist each run's raw output so it can be rescored. Keep the large raw
 transcripts outside the committed dataset; commit the scored fields.
 
 <a id="mechanism-must-fire"></a>
@@ -161,7 +161,7 @@ transcripts outside the committed dataset; commit the scored fields.
 
 The first fixture was a handful of four-line Go files. Twelve sessions ran, and
 compaction fired **zero times** — the settled history reached 383 tokens against
-a 1024-token budget. The runs could not measure compaction’s effect because
+a 1024-token budget. The runs could not measure compaction's effect because
 compaction never occurred.
 
 The fix was a 46 KB fixture and a `context=16384` declaration, which puts
@@ -361,7 +361,7 @@ depend on the trial. That leaves one hypothesis to test and one change to revert
 
 ## 13. Have another model read the scorer
 
-A scorer’s author can carry assumptions from the experiment into the
+A scorer's author can carry assumptions from the experiment into the
 implementation. A separate reviewer may challenge those assumptions, especially
 when asked for a concrete input that the scorer misclassifies.
 
@@ -464,7 +464,7 @@ Two changes shipped together — a tool's schema description and its output — 
 separating them looked like two more binaries and another 48 runs.
 
 It needed neither, because **a model chooses its first tool from the schema
-before seeing that tool’s output**. The first tool call is therefore a measurement
+before seeing that tool's output**. The first tool call is therefore a measurement
 of the description with the other factor held out *by construction*, and it was
 already sitting in transcripts that had been paid for:
 
@@ -614,7 +614,7 @@ turned up in one session, in a trial of whether `edit` should grow a
 The design was ordinary: three arms (first-match, unique-or-fail, unique +
 `replace_all`), six models, three rename fixtures, 54 runs, scoring by diff
 against an expected tree. Every arm came back 18/18 correct with zero
-unintended changes. Those scores alone do not establish the feature’s usefulness
+unintended changes. Those scores alone do not establish the feature's usefulness
 or safety.
 
 **The treatment was never applied.** `replace_all` existed in the third arm and
