@@ -137,16 +137,9 @@ func TestTwoProjectConfigsNamesAnAbsoluteDirectory(t *testing.T) {
 	write(t, dir, ProjectConfigPaths[0], "# a\n")
 	write(t, dir, ProjectConfigPaths[1], "# b\n")
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(cwd) })
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
+	t.Chdir(dir)
 
-	_, err = FindProjectConfig(".")
+	_, err := FindProjectConfig(".")
 	if err == nil {
 		t.Fatal("expected a refusal")
 	}
