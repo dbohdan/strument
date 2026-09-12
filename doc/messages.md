@@ -81,6 +81,23 @@ double quotes in prose we wrote"; applied to `internal/config` it would have
 rendered `reasoning_display must be "full"` as a value that no longer parses
 where the reader has to put it.
 
+## Directories end in a slash
+
+`.strument/skills/`, `~/.cache/`, `/tmp/`. A file path ends at its name.
+
+The slash is the only thing that tells a reader which kind of path they are
+looking at without going and checking, and it earns its keep in the lists where
+that question is the point. `/sandbox` prints the writable set, and *can this
+write one file or a whole tree?* is the security question that list exists to
+answer.
+
+`displayPath` (`internal/repl/sandbox.go`) is the rule in code, and it carries
+the one exception worth keeping: it stats the path and adds the slash only for a
+directory that is really there. A `sandbox_write` entry that does not exist is
+echoed as the user typed it, because calling something a directory is a claim,
+and this is the one place we would be making it about a path nobody has looked
+at.
+
 ## Periods
 
 `Read poll/poll.go (12 lines)` is a label. It takes no period.

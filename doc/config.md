@@ -1342,7 +1342,7 @@ Write it in whichever of two places suits the project:
 | path | for |
 | --- | --- |
 | `.strument.star` | a project whose whole Strument presence is a config |
-| `.strument/config.star` | a project that already has `.strument/skills` and would rather keep them together |
+| `.strument/config.star` | a project that already has `.strument/skills/` and would rather keep them together |
 
 Neither is the migration target for the other, and neither takes precedence: a
 project that has written **both** is refused at startup, naming both paths,

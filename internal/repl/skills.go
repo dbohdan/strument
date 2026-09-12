@@ -30,7 +30,7 @@ func listSkills(r *REPL) string {
 	usable := skill.Usable(r.coder.Skills)
 	untrusted := skill.Untrusted(r.coder.Skills)
 	if len(usable) == 0 && len(untrusted) == 0 {
-		r.printf("No skills found. Put a SKILL.md in a directory under .strument/skills " +
+		r.printf("No skills found. Put a SKILL.md in a directory under .strument/skills/ " +
 			"in this project, or under ~/.local/share/strument/skills for every project.")
 		return ""
 	}

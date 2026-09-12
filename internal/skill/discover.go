@@ -135,7 +135,7 @@ func DataDir() (string, error) {
 // DefaultRoots is where skills are looked for, in precedence order: project
 // before global, and Strument's own directory before the shared one.
 //
-// .agents/skills is a cross-tool location several harnesses read, so a skill
+// .agents/skills/ is a cross-tool location several harnesses read, so a skill
 // dropped there works in more than one of them. It is not Strument's
 // directory, which is why no XDG question arises for it.
 //

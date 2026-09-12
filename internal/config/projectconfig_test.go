@@ -128,3 +128,38 @@ func TestFindProjectConfigIgnoresADirectory(t *testing.T) {
 		t.Errorf("found %q, want the dotfile %q", got, dotfile)
 	}
 }
+
+// doc/messages.md asks that a directory path end in a slash, and that the
+// project root be reported as an absolute path: `strument trust .` reporting a
+// conflict against "." leaves the reader to work out which project it meant.
+func TestTwoProjectConfigsNamesAnAbsoluteDirectory(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, ProjectConfigPaths[0], "# a\n")
+	write(t, dir, ProjectConfigPaths[1], "# b\n")
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = FindProjectConfig(".")
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	msg := err.Error()
+	if strings.HasPrefix(msg, ". has") {
+		t.Errorf("reported the conflict against %q rather than a real directory:\n%s", ".", msg)
+	}
+	// The path it names must end in a slash and not be the bare relative arg.
+	first, _, _ := strings.Cut(msg, " has both")
+	if !strings.HasSuffix(first, "/") {
+		t.Errorf("directory %q does not end in a slash", first)
+	}
+	if !filepath.IsAbs(filepath.FromSlash(strings.TrimSuffix(first, "/"))) {
+		t.Errorf("directory %q is not absolute", first)
+	}
+}

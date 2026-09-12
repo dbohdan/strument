@@ -1045,6 +1045,11 @@ func (c *trustCmd) Run() error {
 			return err
 		}
 	}
+	// Absolute, with the trailing slash doc/messages.md asks of a directory:
+	// `strument trust .` should not report back about ".".
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
 	absPath, err := config.TrustProject(root, "")
 	if err != nil {
 		return err
@@ -1070,8 +1075,9 @@ func (c *trustCmd) Run() error {
 	trusted = append(trusted, paths...)
 
 	if len(trusted) == 0 {
-		return fmt.Errorf("nothing to trust in %s: no %s or %s, and no skills under .strument/skills or .agents/skills",
-			root, config.ProjectConfigPaths[0], config.ProjectConfigPaths[1])
+		return fmt.Errorf("nothing to trust in %s: no %s or %s, and no skills under .strument/skills/ or .agents/skills/",
+			strings.TrimRight(filepath.ToSlash(root), "/")+"/",
+			config.ProjectConfigPaths[0], config.ProjectConfigPaths[1])
 	}
 	// Named one per line rather than counted. The whole risk here is a cloned
 	// repository carrying skills nobody noticed, so what was just granted has

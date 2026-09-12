@@ -25,7 +25,7 @@ import (
 // dot prefix is the namespacing, as it is for .gitignore and .editorconfig, and
 // one visible file is the shortest path from `ls -a` to deciding whether to
 // trust it. .strument/config.star suits a project that has grown skills under
-// .strument/skills and would rather keep the two together. That pairing is
+// .strument/skills/ and would rather keep the two together. That pairing is
 // something TrustFiles already believes in — it treats a repository's config and
 // its skills as one trust decision, and things that are one decision have a case
 // for being one directory.
@@ -109,13 +109,16 @@ func readProjectConfig(path string) ([]byte, error) {
 // and by `strument trust` so the two cannot drift on what a conflict is.
 func twoProjectConfigs(projectRoot string) error {
 	// The absolute path, because `strument trust .` would otherwise report the
-	// conflict against "." and leave the reader to work out which project.
+	// conflict against "." and leave the reader to work out which project. With
+	// the trailing slash doc/messages.md asks of a directory — and no stat, the
+	// way displayPath needs one: a project root is known to be a directory.
 	if abs, err := filepath.Abs(projectRoot); err == nil {
 		projectRoot = abs
 	}
+	projectRoot = strings.TrimRight(filepath.ToSlash(projectRoot), "/") + "/"
 	return fmt.Errorf("%s has both %s and %s, so neither was loaded\n"+
 		"  Keep one: the dotfile if a config is all this project needs,\n"+
-		"  %s if it already has %s/skills.\n"+
+		"  %s if it already has %s/skills/.\n"+
 		"  Trust is recorded per path, so run `strument trust` again after moving the contents",
 		projectRoot, ProjectConfigPaths[0], ProjectConfigPaths[1],
 		ProjectConfigPaths[1], ProjectConfigDir)
