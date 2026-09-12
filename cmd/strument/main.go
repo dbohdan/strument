@@ -1034,7 +1034,7 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 }
 
 type trustCmd struct {
-	Path string `arg:"" help:"Project directory containing .strument.star or skills (default: current directory)." optional:""`
+	Path string `arg:"" help:"Project directory containing a Strument config or skills (default: current directory)." optional:""`
 }
 
 func (c *trustCmd) Run() error {
@@ -1070,8 +1070,8 @@ func (c *trustCmd) Run() error {
 	trusted = append(trusted, paths...)
 
 	if len(trusted) == 0 {
-		return fmt.Errorf("nothing to trust in %s: no %s and no skills under .strument/skills or .agents/skills",
-			root, config.ProjectConfigName)
+		return fmt.Errorf("nothing to trust in %s: no %s or %s, and no skills under .strument/skills or .agents/skills",
+			root, config.ProjectConfigPaths[0], config.ProjectConfigPaths[1])
 	}
 	// Named one per line rather than counted. The whole risk here is a cloned
 	// repository carrying skills nobody noticed, so what was just granted has
@@ -1260,7 +1260,7 @@ func (c *modelConfigCmd) Run() error {
 
 type cli struct {
 	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                    help:"Chat with a model about the given files (default command)."`
-	Trust       trustCmd         `cmd:""                         help:"Trust the project's .strument.star config file and its skills."`
+	Trust       trustCmd         `cmd:""                         help:"Trust the project's config file and its skills."`
 	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."  name:"model-config"`

@@ -18,7 +18,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   Pure Go without cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
 - [Starlark](https://starlark-lang.org/) configuration.
   One `config.star` file replaces YAML, `.env` files, and a JSON model database.
-  Project-local `.strument.star` files are supported.
+  Project-local config is supported as either `.strument.star` or `.strument/config.star`.
   They are loaded only after you authorize them by running `strument trust` in the project directory.
   Trust is recorded by content hash, following the [direnv](https://direnv.net/) model.
 - [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
@@ -431,7 +431,7 @@ A top-level `proxy` is applied to all providers and every outbound HTTPS connect
 `proxy="direct"` disables the top-level `proxy` for that provider.
 `search()` calls work the same way.
 
-A project-local `.strument.star` can override any of these settings, once you have run `strument trust` in the directory.
+A project-local config can override any of these settings, once you have run `strument trust` in the directory.
 The same command trusts the project's skills.
 Project skills are not loaded until you trust them.
 See [`doc/config.md`](doc/config.md) for details.

@@ -1331,11 +1331,30 @@ automatically.
 
 ## Project-local config
 
-A `.strument.star` in the project root can override settings from the user
-config, with the project file winning according to each setting's merge rule.
-It is **inert until trusted**: run `strument trust` in the directory (a
-direnv-style content-hash gate), and re-run it after every edit. The same
-command also trusts the project's [skills](#skills).
+A project config can override settings from the user config, with the project
+file winning according to each setting's merge rule. It is **inert until
+trusted**: run `strument trust` in the directory (a direnv-style content-hash
+gate), and re-run it after every edit. The same command also trusts the
+project's [skills](#skills).
+
+Write it in whichever of two places suits the project:
+
+| path | for |
+| --- | --- |
+| `.strument.star` | a project whose whole Strument presence is a config |
+| `.strument/config.star` | a project that already has `.strument/skills` and would rather keep them together |
+
+Neither is the migration target for the other, and neither takes precedence: a
+project that has written **both** is refused at startup, naming both paths,
+rather than being asked to guess which one you meant. A precedence rule would
+make a config that is being ignored look exactly like one that is being
+honoured — and it would let a file *added* to a repository silently change which
+config is live.
+
+Trust is recorded per absolute path, so moving a config between the two forms
+needs a fresh `strument trust`. A config file still cannot `load()` a sibling:
+the directory form buys colocation with skills, not splitting a config across
+files.
 
 ## Skills
 

@@ -18,30 +18,108 @@ import (
 	"dbohdan.com/strument/internal/origin"
 )
 
-// ProjectConfigName is the project-root dotfile, untrusted by default.
+// A project config may be a root dotfile or a file inside .strument/, and the
+// choice is about how much Strument the project already has in it.
 //
-// A root dotfile and not .strument/config.star, though skills already live
-// under .strument/skills. The symmetry with the user config is only apparent:
-// that one sits inside a strument/ directory because XDG forbids bare files in
-// $XDG_CONFIG_HOME, and a project root has no such rule — the dot prefix is
-// the namespacing, as it is for .gitignore and .editorconfig. Nesting would
-// also put an executable, trust-gated file one level further from `ls -a`,
-// which is the first place someone looks before deciding to trust it. And
-// .strument/ is not an accumulating project directory: it holds skills alone,
-// beside the cross-tool .agents/skills, while session state lives outside the
-// repository in $XDG_STATE_HOME (see history.ProjectDir).
+// .strument.star suits a project whose whole Strument presence is a config: the
+// dot prefix is the namespacing, as it is for .gitignore and .editorconfig, and
+// one visible file is the shortest path from `ls -a` to deciding whether to
+// trust it. .strument/config.star suits a project that has grown skills under
+// .strument/skills and would rather keep the two together. That pairing is
+// something TrustFiles already believes in — it treats a repository's config and
+// its skills as one trust decision, and things that are one decision have a case
+// for being one directory.
 //
-// Two things would reverse this, and either is enough. If .strument/ gains a
-// second member — project-scoped prompts, a checks file, per-project model
-// overrides — the root dotfile becomes the odd one out. Or if project skills
-// turn out to be common, so that the directory is what people actually meet.
-// The move costs a re-trust for everyone holding a .strument.star, because
-// TrustFiles keys the store by absolute path; that is cheap now, while almost
-// nobody has one, and stops being cheap later. There is a good argument for
-// moving it that has nothing to do with tidiness: TrustFiles treats a
-// repository's config and its skills as one trust decision, and things that
-// are one decision have a case for being one directory.
-const ProjectConfigName = ".strument.star"
+// Neither is the migration target for the other. An earlier version of this
+// comment argued for the dotfile and predicted its own reversal once .strument/
+// gained a second member, which framed the question as "which one wins". That
+// was the wrong question: the two forms answer to different projects, and
+// supporting both costs one rule — see FindProjectConfig, which refuses to
+// choose when a project has written both.
+const (
+	// ProjectConfigName is the root dotfile.
+	ProjectConfigName = ".strument.star"
+	// ProjectConfigDir is the project directory that also holds skills.
+	ProjectConfigDir = ".strument"
+	// ProjectConfigInDir is the config file inside ProjectConfigDir.
+	ProjectConfigInDir = "config.star"
+)
+
+// ProjectConfigPaths names both forms, project-root-relative, for help text and
+// errors. Order is discovery order and means nothing else: there is no
+// precedence between them.
+var ProjectConfigPaths = []string{
+	ProjectConfigName,
+	ProjectConfigDir + "/" + ProjectConfigInDir,
+}
+
+// FindProjectConfig returns the project's config path, "" if it has none, and
+// an error if it has written both.
+//
+// Refusing is the point. A precedence rule would make a config that is being
+// ignored look exactly like one that is being honoured, which is the shape that
+// generates a long tail of "why is my config not applying" — and, less
+// obviously, it would let a file *added* to a repository silently change which
+// config is live. The codebase already refuses this class of guess: an edit
+// whose search text matches several places is not applied to the first one,
+// because answering from an ambiguous match is a coin flip.
+//
+// This is a harder failure than the untrusted-config path next door, which warns
+// and continues. The difference is that ignoring an untrusted config has a
+// well-defined meaning and picking between two configs does not. A project
+// config can change what a turn does — its checks, its prompts, its environment
+// — so running under the wrong one is a correctness problem, not a convenience
+// one, and the remedy is deleting a file.
+func FindProjectConfig(projectRoot string) (string, error) {
+	if projectRoot == "" {
+		return "", nil
+	}
+	found := ""
+	for _, name := range ProjectConfigPaths {
+		p := filepath.Join(projectRoot, filepath.FromSlash(name))
+		fi, err := os.Stat(p)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		case err != nil:
+			return "", err
+		case !fi.Mode().IsRegular():
+			// A directory named config.star is not a config, and should not
+			// make an otherwise unambiguous project ambiguous.
+			continue
+		}
+		if found != "" {
+			return "", twoProjectConfigs(projectRoot)
+		}
+		found = p
+	}
+	return found, nil
+}
+
+// readProjectConfig reads the path FindProjectConfig chose, treating "" — the
+// project has no config — as the absent case the caller already handles.
+func readProjectConfig(path string) ([]byte, error) {
+	if path == "" {
+		return nil, os.ErrNotExist
+	}
+	return os.ReadFile(path)
+}
+
+// twoProjectConfigs is the one phrasing of this refusal, shared by the load path
+// and by `strument trust` so the two cannot drift on what a conflict is.
+func twoProjectConfigs(projectRoot string) error {
+	// The absolute path, because `strument trust .` would otherwise report the
+	// conflict against "." and leave the reader to work out which project.
+	if abs, err := filepath.Abs(projectRoot); err == nil {
+		projectRoot = abs
+	}
+	return fmt.Errorf("%s has both %s and %s, so neither was loaded\n"+
+		"  Keep one: the dotfile if a config is all this project needs,\n"+
+		"  %s if it already has %s/skills.\n"+
+		"  Trust is recorded per path, so run `strument trust` again after moving the contents",
+		projectRoot, ProjectConfigPaths[0], ProjectConfigPaths[1],
+		ProjectConfigPaths[1], ProjectConfigDir)
+}
 
 // Options configures Load. Zero values pick the real environment.
 type Options struct {
@@ -325,8 +403,13 @@ func Load(opts Options) (*Config, error) {
 	// 2-3. Project config — inert unless trusted.
 	var project *fileGlobals
 	if opts.ProjectRoot != "" {
-		projPath := filepath.Join(opts.ProjectRoot, ProjectConfigName)
-		if projSrc, err := os.ReadFile(projPath); err == nil {
+		projPath, err := FindProjectConfig(opts.ProjectRoot)
+		if err != nil {
+			return nil, err
+		}
+		// FindProjectConfig has already stat'd, so a read error here is a real
+		// one — a permission change or a race — and is not the absent case.
+		if projSrc, err := readProjectConfig(projPath); err == nil && projPath != "" {
 			absPath, err := filepath.Abs(projPath)
 			if err != nil {
 				return nil, err
@@ -1261,10 +1344,13 @@ func parseChecks(path string, v starlark.Value) ([]Check, error) {
 // be a failure, and stopped being one when a project could carry skills and no
 // config.star: `strument trust` is a command about a project, not about one
 // file, so having nothing of one kind to trust is not a reason to refuse.
+// A project carrying both config forms is refused here for the same reason the
+// load path refuses it: trusting one of two candidates would grant authority to
+// a file that may not be the one that runs.
 func TrustProject(projectRoot, trustStorePath string) (string, error) {
-	projPath := filepath.Join(projectRoot, ProjectConfigName)
-	if _, err := os.Stat(projPath); errors.Is(err, os.ErrNotExist) {
-		return "", nil
+	projPath, err := FindProjectConfig(projectRoot)
+	if err != nil || projPath == "" {
+		return "", err
 	}
 	if err := TrustFiles([]string{projPath}, trustStorePath); err != nil {
 		return "", err

@@ -976,7 +976,7 @@ surrounding context than others), so batching stays unnecessary.
 ## Configuration
 
 A single user `config.star` (`$XDG_CONFIG_HOME/strument/config.star`)
-declares providers and models; a project-local `.strument.star` can extend
+declares providers and models; a trusted project config can extend
 it but is **inert until trusted** (`strument trust`, content-hash gated,
 direnv-style). The `README.md` has a worked example covering providers,
 model factories, `with_extra_params`, and aliases;
@@ -1067,7 +1067,7 @@ notice with no way to answer it is one people learn to read past.
 
 Before adding anything here, three tests. A file belongs only if it is:
 
-1. **Per-project.** Global things stay global. The `.strument.star` trust store
+1. **Per-project.** Global things stay global. The project-config trust store
    is the sharp case: one file to audit and one file to revoke is a security
    property, and scattering trust records across project directories would turn
    an audit into a `find`.
@@ -1076,9 +1076,9 @@ Before adding anything here, three tests. A file belongs only if it is:
    `model-config` catalog already goes. A persisted tag cache and a scraped-page
    cache both fail here.
 3. **Not config, and not adjudicated from outside.** Instructions that shape how
-   the model works belong *in* the project, versioned and reviewable, on the
-   same terms as `.strument.star` — not in a hidden directory that silently
-   changes behavior.
+   the model works belong *in* the project, versioned and reviewable, and gated
+   by the same trust decision a project config is — never somewhere that changes
+   behavior without one.
 
 A fourth question is worth asking even when all three pass: **does the data
 already exist somewhere authoritative?** Strument stamps its own commits with a
