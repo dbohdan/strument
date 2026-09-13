@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -170,5 +171,57 @@ func TestAddOutputAsksEveryTime(t *testing.T) {
 	}
 	if n := strings.Count(got, "Added the command output to the chat."); n != 1 {
 		t.Errorf("the command output was added %d times, want 1 (the second /run was declined):\n%s", n, got)
+	}
+}
+
+// `scope` is a subcommand word, not a --scope flag: the question is
+// rest-of-line prose, and a flag parser would have to guess whether `--scope`
+// inside a question is a flag or part of the question.
+func TestConsultScopeShowsAndSets(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
+	r.opts.ConsultScope = coder.ConsultFiles
+
+	cmdConsult(context.Background(), r, "scope")
+	if !strings.Contains(out.String(), "Consult scope: files") {
+		t.Errorf("bare scope did not report the current value:\n%s", out.String())
+	}
+	if r.opts.ConsultScope != coder.ConsultFiles {
+		t.Error("reporting the scope changed it")
+	}
+
+	cmdConsult(context.Background(), r, "scope chat")
+	if r.opts.ConsultScope != coder.ConsultChat {
+		t.Errorf("scope = %v, want chat", r.opts.ConsultScope)
+	}
+}
+
+func TestConsultScopeRejectsAnUnknownName(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
+	r.opts.ConsultScope = coder.ConsultFiles
+
+	cmdConsult(context.Background(), r, "scope everything")
+	if r.opts.ConsultScope != coder.ConsultFiles {
+		t.Error("an unknown scope name changed the setting")
+	}
+	got := out.String()
+	if !strings.Contains(got, "Unknown consult scope") {
+		t.Errorf("want the refusal:\n%s", got)
+	}
+	// The closed set, so the reader does not have to go and find it.
+	for _, name := range coder.ConsultScopeNames {
+		if !strings.Contains(got, name) {
+			t.Errorf("the refusal omits the valid scope %q:\n%s", name, got)
+		}
+	}
+}
+
+// The counter-arm: `scope` must not eat a normal consultation. A question is
+// still a question, and an advisor alias is still looked up.
+func TestConsultStillConsults(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
+
+	cmdConsult(context.Background(), r, "nosuchalias what about scope")
+	if !strings.Contains(out.String(), "Unknown model alias") {
+		t.Errorf("a normal consultation was not attempted:\n%s", out.String())
 	}
 }

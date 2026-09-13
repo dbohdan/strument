@@ -110,17 +110,27 @@ func TestCommandsAreSorted(t *testing.T) {
 // this test is where that will surface.
 func TestRestOfLineArgsComeLast(t *testing.T) {
 	for _, c := range commands {
-		tokens := strings.Fields(c.args)
-		for i, tok := range tokens {
-			name := strings.Trim(tok, "[]<>")
-			if !slices.Contains(restOfLine, name) || !strings.Contains(tok, "<") {
-				continue
-			}
-			if i != len(tokens)-1 {
-				t.Errorf("/%s %q: <%s> takes the rest of the line, so nothing can follow it", c.name, c.args, name)
-			}
-			if strings.Contains(c.args, "...") {
-				t.Errorf("/%s %q: <%s> takes the rest of the line, so it cannot repeat", c.name, c.args, name)
+		// Per alternative, not per line. `a | b` is two forms of the same
+		// command, and "nothing can follow it" is a claim about the form the
+		// user types, so /consult's `<alias> <question> | scope [<name>]` is
+		// sound: nothing follows <question> in the alternative that has it.
+		// Checking the whole string instead would forbid a rest-of-line
+		// argument in any command that has a second form, which is a rule about
+		// the notation rather than about what the parser can do.
+		for alt := range strings.SplitSeq(c.args, "|") {
+			tokens := strings.Fields(alt)
+			for i, tok := range tokens {
+				name := strings.Trim(tok, "[]<>")
+				if !slices.Contains(restOfLine, name) || !strings.Contains(tok, "<") {
+					continue
+				}
+				if i != len(tokens)-1 {
+					t.Errorf("/%s %q: <%s> takes the rest of the line, so nothing can follow it in %q",
+						c.name, c.args, name, strings.TrimSpace(alt))
+				}
+				if strings.Contains(alt, "...") {
+					t.Errorf("/%s %q: <%s> takes the rest of the line, so it cannot repeat", c.name, c.args, name)
+				}
 			}
 		}
 	}

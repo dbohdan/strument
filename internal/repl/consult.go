@@ -32,6 +32,21 @@ func cmdConsult(ctx context.Context, r *REPL, args string) string {
 	alias, question, _ := strings.Cut(args, " ")
 	alias = strings.TrimSpace(alias)
 	question = strings.TrimSpace(question)
+
+	// `scope` as a subcommand word rather than a --scope flag, because the
+	// question is rest-of-line prose: a flag parser here would have to decide
+	// whether `--scope` inside a question is a flag or part of what the user is
+	// asking, and every answer to that is wrong some of the time. The precedent
+	// is one-sided anyway — aider, Codex CLI, OpenCode and Kimi Code parse no
+	// flags in any command, and Strument's own /env and /notes already switch on
+	// a first word.
+	//
+	// An alias literally named "scope" would be shadowed. Accepted: the cost is
+	// renaming an alias, and the alternative is a flag syntax for one setting.
+	if alias == "scope" {
+		return r.consultScopeCmd(question)
+	}
+
 	if alias == "" || question == "" {
 		r.out.Errorf("%s", usage("consult"))
 		return ""
@@ -96,4 +111,34 @@ func consultLabel(alias, slug, question, answer string) string {
 		"The user asked %s (%s) for a second opinion. The answer below was written by that model, not by you.\n\n"+
 			"The question:\n%s\n\n%s's answer:\n%s",
 		alias, slug, question, alias, strings.TrimRight(answer, "\n"))
+}
+
+// consultScopeCmd shows or sets how much of the session an advisor is shown.
+//
+// Session state, not config: the flag sets the session's starting value and this
+// changes it from there, the same relationship /model has with --model.
+func (r *REPL) consultScopeCmd(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		r.printf("Consult scope: %s (of %s).",
+			r.opts.ConsultScope, strings.Join(coder.ConsultScopeNames, ", "))
+		switch r.opts.ConsultScope {
+		case coder.ConsultNothing:
+			r.printf("  The advisor sees the question alone.")
+		case coder.ConsultFiles:
+			r.printf("  The advisor sees the pinned files and the question.")
+		case coder.ConsultChat:
+			r.printf("  The advisor sees the conversation, the pinned files, and the question.")
+		}
+		return ""
+	}
+	scope, ok := coder.ParseConsultScope(name)
+	if !ok {
+		r.out.Errorf("Unknown consult scope %q (scopes: %s).",
+			name, strings.Join(coder.ConsultScopeNames, ", "))
+		return ""
+	}
+	r.opts.ConsultScope = scope
+	r.printf("Consult scope: %s.", scope)
+	return ""
 }
