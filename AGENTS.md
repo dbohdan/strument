@@ -32,7 +32,15 @@ task test:all         # go test ./... — everything, and what CI runs
 go vet ./...
 task lint             # golangci-lint — keep it at 0 issues
 task format           # gofmt/golangci-lint fmt; run before committing
+task check            # build + format + lint + test:all, one exit status
 ```
+
+Use `task check` as the gate rather than assembling the four yourself. The
+reason is specific: a hand-built `golangci-lint run … | tail -1; echo OK`
+pipeline printed `* modernize: 1` and then `OK`, because `tail -1` keeps only
+the summary line and `echo` cannot fail. One such line was read as a pass and
+pushed. `task check` has one exit status and nothing to misread — it returns
+201 on a lint finding that `go build`, `go vet` and `go test` all let through.
 
 No test touches the network or opens a socket to the outside. The Go tag-parity
 comparison over the whole repository is guarded by `testing.Short()`, being a
@@ -180,8 +188,7 @@ Past trials live one directory each under
   `docs:`, `test:`, …), imperative mood, one logical change per commit.
 - **Comments**: match the surrounding density and idiom; explain *why*, not
   *what*. Describe divergences from aider and the reasons for them.
-- **Verify before you commit**: build, `task test:all`, and `task lint` all
-  green. For anything with a runtime surface, exercise it, don't just test it.
+- **Verify before you commit**: `task check` green, in one run. For anything with a runtime surface, exercise it, don't just test it.
 - **Never commit secrets** — API keys go in the environment
   (`OPENROUTER_API_KEY`), never in files, docs, or commits.
 - **Keep bulk disposable artifacts out of the repository.** The project
