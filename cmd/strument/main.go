@@ -1278,7 +1278,7 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 	// proxy).
 	if len(cfg.Scraper) > 0 {
 		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
-			return coder.FilterEnv(nil, cdr.EnvAllow)
+			return cdr.EnvAllow
 		})
 		// A subprocess the model can cause, so webfetch is gated by the sandbox
 		// like bash and check. The built-in fetcher below spawns nothing.

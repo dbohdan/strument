@@ -117,15 +117,15 @@ func TestCommandScraper(t *testing.T) {
 		return []string{os.Args[0], "-test.run=TestScrapeHelperProcess", "--", mode, "%s"}
 	}
 
-	scrapeEnv := func() []string {
-		// What production passes: the filtered environment. The helper also
-		// needs its own gate variable, which is exactly what a real command
-		// would need passed through env_allow — so this doubles as the
-		// observation that cmd.Env is really the environment used. Passing the
-		// closure (not a snapshot) is also the production shape: /env changes
-		// take effect on the next fetch.
-		return append(FilterEnv(nil, []string{"GO_WANT_HELPER_PROCESS"}), "GO_WANT_HELPER_PROCESS=1")
-	}
+	// The helper needs its own gate variable, and the only way to get one to the
+	// command is the way a real user would: set it in the environment and name it
+	// in env_allow. That makes this the observation that the allowlist is really
+	// what reaches cmd.Env — under the old contract the test handed over a
+	// finished NAME=VALUE pair and never exercised the filter at all. Passing the
+	// closure rather than a snapshot is the production shape: /env changes take
+	// effect on the next fetch.
+	t.Setenv("GO_WANT_HELPER_PROCESS", "1")
+	scrapeEnv := func() []string { return []string{"GO_WANT_HELPER_PROCESS"} }
 	out, err := NewCommandScraper(helper("ok"), 10*time.Second, scrapeEnv)(context.Background(), "https://example.com/page", ScrapeOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -177,5 +177,48 @@ func TestScrapeHelperProcess(_ *testing.T) {
 		os.Exit(3)
 	}
 	fmt.Printf("<html><body><h1>Rendered</h1><p>URL was %s</p></body></html>\n", url)
+	os.Exit(0)
+}
+
+// The scraper filters its own environment, so a caller cannot construct one
+// that inherits Strument's. exec.Cmd reads a nil Env as "inherit everything",
+// which is where OPENROUTER_API_KEY lives.
+func TestCommandScraperFiltersEvenWithNoAllowlist(t *testing.T) {
+	t.Setenv("GO_WANT_HELPER_PROCESS", "1")
+	t.Setenv("STRUMENT_SCRAPE_SECRET", "do-not-leak")
+
+	// nil envAllow: the shape a future caller gets by passing nothing.
+	out, err := NewCommandScraper(
+		[]string{os.Args[0], "-test.run=TestScrapeEnvHelperProcess", "--", "%s"},
+		10*time.Second, nil,
+	)(context.Background(), "https://example.com/", ScrapeOptions{})
+	// The helper cannot run without its gate variable, so the fetch fails —
+	// which is the point: a filtered environment breaks the command loudly
+	// rather than leaking quietly.
+	if err == nil && strings.Contains(out, "do-not-leak") {
+		t.Fatal("the scraper passed an unfiltered environment to the command")
+	}
+
+	// And with the secret named in env_allow it does arrive, so the check above
+	// is about filtering rather than about the variable never being passable.
+	out, err = NewCommandScraper(
+		[]string{os.Args[0], "-test.run=TestScrapeEnvHelperProcess", "--", "%s"},
+		10*time.Second,
+		func() []string { return []string{"GO_WANT_HELPER_PROCESS", "STRUMENT_SCRAPE_SECRET"} },
+	)(context.Background(), "https://example.com/", ScrapeOptions{})
+	if err != nil {
+		t.Fatalf("allowed variable did not reach the command: %v", err)
+	}
+	if !strings.Contains(out, "do-not-leak") {
+		t.Errorf("STRUMENT_SCRAPE_SECRET was in env_allow but did not reach the command:\n%s", out)
+	}
+}
+
+// TestScrapeEnvHelperProcess echoes the secret it was given, if any.
+func TestScrapeEnvHelperProcess(_ *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+	fmt.Printf("<h1>%s</h1>", os.Getenv("STRUMENT_SCRAPE_SECRET"))
 	os.Exit(0)
 }

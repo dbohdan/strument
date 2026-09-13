@@ -113,6 +113,34 @@ func (r *REPL) saveResume() {
 	}
 }
 
+// useModel switches everything that follows from the active model. All of it,
+// every time: the coder's model, the commit trailer that names it, the client
+// and the summarizer built from its provider, and the commit-message function
+// bound to its side model.
+//
+// One function because there are two callers — /model and /reload's re-resolve
+// — and they carried byte-identical copies of these five steps. Nothing had gone
+// wrong yet, which is the only reason this is a refactor and not a bug report:
+// the next person to add a sixth step would have added it to /model, where a
+// model switch obviously happens, and left /reload half-switching a session in
+// a way nothing would have reported.
+//
+// The alias is not set here. /reload re-resolves the alias it already has,
+// while /model is changing which alias is active, so that is the one thing the
+// two callers genuinely do differently.
+func (r *REPL) useModel(m *config.Model) {
+	r.coder.SetModel(m)
+	r.refreshTrailer(m)
+	if r.opts.MakeClient != nil {
+		r.coder.Client = r.opts.MakeClient(m)
+		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel,
+			r.coder.Tokens, r.coder.Out, r.coder.Clock)
+	}
+	if r.opts.RefreshCommitMessage != nil {
+		r.opts.RefreshCommitMessage(m)
+	}
+}
+
 // usage renders one command's line from the same table /help prints, so the
 // syntax a command quotes back at a bad invocation cannot drift from the syntax
 // the help screen documents. It used to be spelled out twice per command, and
@@ -655,15 +683,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		r.out.Errorf("Unknown model alias %q (aliases: %s).", args, strings.Join(aliases, ", "))
 		return ""
 	}
-	r.coder.SetModel(m)
-	r.refreshTrailer(m)
-	if r.opts.MakeClient != nil {
-		r.coder.Client = r.opts.MakeClient(m)
-		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
-	}
-	if r.opts.RefreshCommitMessage != nil {
-		r.opts.RefreshCommitMessage(m)
-	}
+	r.useModel(m)
 	r.opts.ModelAlias = args
 	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
 	return ""
@@ -738,15 +758,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// Re-resolve the active alias so edits to that model take effect; if it was
 	// removed, keep the running model rather than stranding the session.
 	if m, ok := cfg.Models[r.opts.ModelAlias]; ok {
-		r.coder.SetModel(m)
-		r.refreshTrailer(m)
-		if r.opts.MakeClient != nil {
-			r.coder.Client = r.opts.MakeClient(m)
-			r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel, r.coder.Tokens, r.coder.Out, r.coder.Clock)
-		}
-		if r.opts.RefreshCommitMessage != nil {
-			r.opts.RefreshCommitMessage(m)
-		}
+		r.useModel(m)
 	} else {
 		r.out.Warningf("Active model %q was removed from the config. This session will continue using it.", r.opts.ModelAlias)
 	}

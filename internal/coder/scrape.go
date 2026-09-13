@@ -353,10 +353,20 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 // Strument a single static binary and lets the user bring their own browser. The
 // command runs without a shell, so a hostile URL cannot inject arguments; the
 // global proxy does not apply here — the command manages its own networking.
-// env supplies the environment per fetch: the caller passes the
-// allowlist-filtered set, because the scraped page's contents reach the model's
-// context — as a closure, so /env changes apply without rebuilding the scraper.
-func NewCommandScraper(argv []string, timeout time.Duration, env func() []string) Scraper {
+//
+// envAllow yields the session's `env_allow` names, read per fetch so /env
+// changes apply without rebuilding the scraper. It is the *allowlist*, not the
+// environment: filtering happens here, in one place, so there is no way to
+// construct a scraper that hands the command Strument's whole environment.
+//
+// This used to take the finished environment and apply it only `if env != nil`,
+// which made the unsafe outcome the default for a caller who passed nothing —
+// exec.Cmd reads a nil Env as "inherit everything", including
+// OPENROUTER_API_KEY. FilterEnv's own comment argues exactly that point and
+// guards against it by never returning nil; the caller-side nil check opted
+// back out of that guarantee one level up. Every caller happened to be correct,
+// which is the kind of safety that lasts until someone adds a caller.
+func NewCommandScraper(argv []string, timeout time.Duration, envAllow func() []string) Scraper {
 	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {
 		if len(argv) == 0 {
 			return "", errors.New("scraper command is empty")
@@ -371,9 +381,14 @@ func NewCommandScraper(argv []string, timeout time.Duration, env func() []string
 		// The command comes from the operator's config, and the URL is a single
 		// argv element (never shell-interpreted), so this is not attacker-run.
 		cmd := exec.CommandContext(runCtx, args[0], args[1:]...) //nolint:gosec
-		if env != nil {
-			cmd.Env = env()
+		// Unconditional. A nil envAllow means "no extra names", not "no filter":
+		// FilterEnv never returns nil, so the worst case is a command with the
+		// base allowlist, which is a broken scraper rather than a leaked key.
+		var extra []string
+		if envAllow != nil {
+			extra = envAllow()
 		}
+		cmd.Env = FilterEnv(nil, extra)
 
 		stdout := &boundedBuffer{max: scrapeMaxBytes}
 		stderr := &boundedBuffer{max: 4096}
