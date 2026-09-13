@@ -147,11 +147,35 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 		r.out.Errorf("Unknown command: /%s. Use /help to list commands.", name)
 		return "", false
 	}
+	// Persisted here rather than by each command, because a command could
+	// forget and one did. /drop with no arguments unpinned everything in memory
+	// and returned before its own saveResume call, so the pin came back on every
+	// restart — a stubborn pin no amount of dropping would shift, since a turn
+	// does not save resume state either. The early return was the whole bug, and
+	// the sibling commands were only correct by not having one after a mutation.
+	//
+	// Comparing before and after beats a per-command flag: nothing to annotate, a
+	// new command cannot forget, and a command that changed nothing — /help, /ls,
+	// a usage error — still writes nothing, so this does not churn the file or its
+	// timestamp on every keystroke.
+	before := r.resumeState()
 	out := cmd.run(ctx, r, args)
+	if r.resumeState() != before {
+		r.saveResume()
+	}
 	if out == quitSentinel {
 		return "", true
 	}
 	return out, false
+}
+
+// resumeState is everything the resume file takes from live session state, in
+// one comparable value. AutoPinned is absent on purpose: saveResumeFunc re-reads
+// it from disk, so it is not something a command can change.
+func (r *REPL) resumeState() string {
+	return strings.Join(r.coder.ChatFiles(), "\x00") + "\x01" +
+		strings.Join(r.coder.ReadOnlyFiles(), "\x00") + "\x01" +
+		r.opts.ModelAlias
 }
 
 // completer offers command names and, under the file commands, chat or
@@ -434,7 +458,6 @@ func cmdAdd(_ context.Context, r *REPL, args string) string {
 		r.coder.AddFile(rel)
 		r.printf("Pinned %s.", r.coder.DisplayPath(rel))
 	}
-	r.saveResume()
 	return ""
 }
 
@@ -447,7 +470,6 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 		r.coder.AddReadOnlyFile(rel)
 		r.printf("Pinned %s read-only.", r.coder.DisplayPath(rel))
 	}
-	r.saveResume()
 	return ""
 }
 
@@ -476,7 +498,6 @@ func cmdDrop(_ context.Context, r *REPL, args string) string {
 			r.out.Warningf("No pinned file matched %q.", pat)
 		}
 	}
-	r.saveResume()
 	return ""
 }
 
@@ -524,7 +545,6 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 			forgotten, render.PluralWord(forgotten, "origin", "origins"))
 	}
 	r.printf("%s", msg)
-	r.saveResume()
 	return ""
 }
 
@@ -645,7 +665,6 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 		r.opts.RefreshCommitMessage(m)
 	}
 	r.opts.ModelAlias = args
-	r.saveResume()
 	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
 	return ""
 }
