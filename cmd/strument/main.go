@@ -157,45 +157,14 @@ func (c *chatCmd) Run() error {
 		cdr.RecordSession(alias)
 	}
 	cdr.Client = client.ForProvider(model.Provider)
-	if cfg.MaxSteps > 0 {
-		cdr.MaxSteps = cfg.MaxSteps
-	}
-	if cfg.ShellTimeout != 0 {
-		// Seconds in the config, a Duration in the coder; -1 carries "no limit"
-		// through as a negative duration, which shellTimeout reads as such.
-		cdr.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
-	}
-	if cfg.MaxErrorReflections > 0 {
-		cdr.MaxErrorReflections = cfg.MaxErrorReflections
-	}
-	cdr.LoopDetection = !cfg.NoLoopDetection
-	// The flag turns it off; it cannot turn it on. A config that says
-	// `shell = False` is a standing decision about this project, and a flag
-	// that silently re-enabled it would make that decision unreliable.
-	cdr.SuggestShellCommands = !cfg.NoShell && !c.NoShell
-	cdr.AnchoredEdits = cfg.AnchoredEdits
-	cdr.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
-	cdr.ObservationViaRunCode = cfg.ObservationViaRunCode
-	// Kong's enum has already refused anything else.
+	// Every config-to-coder assignment lives in ApplyConfig, which /reload also
+	// calls. Adding one here instead is the bug that made three reloads look
+	// like they had worked; internal/repl's reload test guards against it.
+	cdr.ShellWithheld = c.NoShell
+	coder.ApplyConfig(cdr, cfg)
+	// Kong's enum has already refused anything else. Trial arms, not config.
 	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
 	cdr.CodeNamespace, _ = coder.ParseCodeNamespace(c.CodeNamespace)
-	cdr.Examples = cfg.ExampleMessages
-	cdr.WebfetchAllow = cfg.WebfetchAllow
-	cdr.SystemPromptPrefix = cfg.PromptSystemPrefix
-	cdr.PromptCode = cfg.PromptCode
-	cdr.PromptAsk = cfg.PromptAsk
-	cdr.PromptCommit = cfg.PromptCommit
-	cdr.PromptReadOnly = cfg.PromptReadOnly
-	// chat_language overrides the env-var detection that defaultPlatformInfo
-	// ran in New; re-deriving the platform's language is what makes the
-	// {language}/{final_reminders} slots and the commit messenger use the
-	// configured code.
-	cdr.SetChatLanguage(cfg.ChatLanguage)
-	// The project's named checks, which the check tool runs without asking:
-	// the model supplies only a name, so nothing it says can change what runs.
-	cdr.Check = cfg.Check
-	cdr.CheckAuto = cfg.CheckAuto
-	cdr.EnvAllow = cfg.EnvAllow
 	if std, ok := cdr.Out.(*coder.StdOutput); ok {
 		// Script mode's output; the REPL swaps in its own and reads the setting
 		// from the config it already carries.

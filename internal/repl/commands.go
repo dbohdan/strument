@@ -12,13 +12,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/origin"
-	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
@@ -680,31 +678,23 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// deliberate re-read.
 	r.envAdded = map[string]bool{}
 	r.envDropped = map[string]bool{}
+	// Everything that is a plain config value, through the one function startup
+	// uses. This list used to live here in parallel with chatCmd.Run's, and the
+	// two drifted three times — a check that reloaded to no effect, egress ports
+	// left alone, and the five prompt_* keys that were never added at all.
+	coder.ApplyConfig(r.coder, cfg)
+	// After ApplyConfig, which sets EnvAllow from the config: the merge with
+	// this session's /env additions has to be the last word, and a reload
+	// deliberately discards those anyway (above).
 	r.rebuildEnvAllow()
-	r.coder.MaxSteps = 25
-	if cfg.MaxSteps > 0 {
-		r.coder.MaxSteps = cfg.MaxSteps
+	// Two settings that are not Coder fields and so cannot live in ApplyConfig,
+	// and were missed for exactly that reason: both were applied once at startup
+	// by whoever owned the object, and nothing re-applied them. Editing either
+	// and reloading did nothing at all.
+	r.out.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
+	if r.opts.Git != nil {
+		r.opts.Git.Sign = cfg.GitSign
 	}
-	r.coder.MaxErrorReflections = 3
-	if cfg.MaxErrorReflections > 0 {
-		r.coder.MaxErrorReflections = cfg.MaxErrorReflections
-	}
-	r.coder.LoopDetection = !cfg.NoLoopDetection
-	r.coder.AnchoredEdits = cfg.AnchoredEdits
-	r.coder.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
-	r.coder.WebfetchAllow = cfg.WebfetchAllow
-	r.coder.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
-	// Re-applied by SetEditFormat on the next format switch; applied to the
-	// current set here so a reload takes effect mid-session.
-	r.coder.Examples = cfg.ExampleMessages
-	for _, ex := range cfg.ExampleMessages {
-		r.coder.Prompts.ExampleMessages = append(r.coder.Prompts.ExampleMessages,
-			prompts.Example{Role: ex.Role, Content: ex.Content})
-	}
-	// The named checks and what runs after an edit: both are plain values, and
-	// both were missing here, so editing a check and reloading did nothing.
-	r.coder.Check = cfg.Check
-	r.coder.CheckAuto = cfg.CheckAuto
 	// The ports have to be rebuilt rather than copied, because a proxy lives
 	// inside a transport inside a closure. Leaving them alone is what made a
 	// reload look like it had worked when it had not.

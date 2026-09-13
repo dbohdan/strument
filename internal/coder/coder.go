@@ -41,10 +41,14 @@ type Coder struct {
 	DryRun               bool
 	AutoCommits          bool
 	SuggestShellCommands bool // false gates execution too
-	Stream               bool
-	PrefillSupported     bool // continuation on finish_reason=length
-	ExamplesAsSysMsg     bool
-	SystemPromptPrefix   string
+	// ShellWithheld records --no-shell. The flag can turn the bash tool off and
+	// cannot turn it on, so ApplyConfig has to remember it: a /reload must not
+	// undo a decision made on the command line.
+	ShellWithheld      bool
+	Stream             bool
+	PrefillSupported   bool // continuation on finish_reason=length
+	ExamplesAsSysMsg   bool
+	SystemPromptPrefix string
 	// PromptCode and PromptAsk are user replacements for the active mode's
 	// MainSystem (the `prompt_code` / `prompt_ask` config). Empty means "use the
 	// built-in". They live on the Coder rather than in the prompts.Set built-ins
@@ -362,6 +366,14 @@ func promptsForFormat(format string) prompts.Set {
 // module-level singletons shared by every session, so an override is written to
 // a fresh copy rather than mutating prompts.Tool/Ask in place — a second Coder
 // in the same process must not inherit the first's custom prompt.
+// Defaults for settings a config may omit. Named because ApplyConfig restores
+// them when a reloaded config stops saying, and a constructor that disagreed
+// with that would make the first reload change behaviour on its own.
+const (
+	defaultMaxSteps            = 25
+	defaultMaxErrorReflections = 3
+)
+
 func (c *Coder) setPrompts() {
 	c.Prompts = promptsForFormat(c.editFormat)
 	// A copy: see promptsForFormat's callers. The Set is a struct of strings, so
@@ -416,8 +428,8 @@ func New(root string, model *config.Model) *Coder {
 		Stream:               true,
 		PrefillSupported:     true,
 		OfferCode:            true,
-		MaxSteps:             25,
-		MaxErrorReflections:  3,
+		MaxSteps:             defaultMaxSteps,
+		MaxErrorReflections:  defaultMaxErrorReflections,
 		LoopDetection:        true,
 		toolLoops:            newToolLoopWatcher(),
 		Tokens:               RuneCounter{},
