@@ -138,8 +138,14 @@ func inspectConfig(path string, src []byte, lookup func(string) (string, bool), 
 // proxy can hold a secret the file does not literally contain —
 // provider(api_key = env("...")) always does. Rather than trying to name every
 // field that might carry one, anything that came out of the environment is
-// replaced by the call that produced it wherever it appears. What the summary
+// replaced by the variable it came from wherever it appears. What the summary
 // prints then cannot contain a value the user did not already have.
+//
+// The substitute is shell-style ${NAME}, which is nobody's config syntax on
+// purpose. An earlier draft wrote env(NAME), and that is not Starlark — the
+// file would have to say env("NAME"), quoted — nor is it POSIX shell. A
+// placeholder that looks like source the reader could paste back, and isn't,
+// is worse than one that plainly reads as substitution.
 //
 // Values shorter than four characters are left alone. A TZ of "UTC" or a
 // PAGER of "cat" is not a secret, and substituting every occurrence of a
@@ -154,7 +160,7 @@ func redactor(env map[string]string) func(string) string {
 		if len(env[n]) < 4 {
 			continue
 		}
-		pairs = append(pairs, env[n], "env("+n+")")
+		pairs = append(pairs, env[n], "${"+n+"}")
 	}
 	if len(pairs) == 0 {
 		return func(s string) string { return s }

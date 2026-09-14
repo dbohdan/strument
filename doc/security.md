@@ -324,8 +324,9 @@ listing bounds nothing.
 from the same author. There is no way to trust one and not the other.
 
 What the command shows you never contains a value it read from the environment:
-anything `env()` returned appears as the call rather than the value, `env_set`
-shows variable names only, and an `api_key` is not shown at all. The trust store
+anything `env()` returned appears as `${NAME}` rather than as the value,
+`env_set` shows variable names only, and an `api_key` is not shown at all. The
+trust store
 itself holds only paths and hashes — no config content — which is why the
 summary describes what a file grants instead of diffing it against the version
 you approved before.

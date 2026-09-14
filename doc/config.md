@@ -1432,8 +1432,10 @@ approved. A run where everything is unchanged says so and asks nothing, so
 re-running after editing one file in a project full of skills is cheap.
 
 No value that came from `env()` is printed — a proxy built out of a variable
-shows as `socks5://env(PROXY_HOST):1080` — and `env_set` shows variable names
-without their values. An `api_key` is never shown at all.
+shows as `socks5://${PROXY_HOST}:1080` — and `env_set` shows variable names
+without their values. An `api_key` is never shown at all. The `${NAME}` spelling
+is shell-style on purpose: it is not the Starlark the file contains, so there is
+nothing to mistake it for.
 
 A variable that is not set is read as empty here, and named on stderr, so a
 config written for another machine can still be summarised. A session is
