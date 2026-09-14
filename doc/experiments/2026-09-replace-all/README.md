@@ -1,6 +1,8 @@
 # Is `replace_all` reached, now?
 
-**Result: 20/20 uptake, 20/20 correct, and the ambiguity it exists to avoid
+**Result: reached and correct — 20/20 in the pilot, though a later five-model
+run on the unreduced file puts real uptake nearer 2/5 (see the update below).
+The ambiguity it exists to avoid
 fired once in 20 runs instead of three times in one session. The 2026-08
 finding that models do not reach for `replace_all` (1/18) does not hold for
 GLM-5.3-Flash on this task shape. Safety is still unmeasured: the fixture had
@@ -105,6 +107,32 @@ replacement is visible, and needs to check the decoys actually fire.
 **One model, one task shape.** GLM-5.3-Flash on a YAML matrix. The 2026-08
 result covered six models, and the divergence may be the model, the year, or
 the shape.
+
+### Update: 20/20 overstates it, and the fixture is why
+
+Five later runs on the *unreduced* file — the field report's own `ci.yml`, with
+five models: GLM-5.3-Flash twice, MiMo-V2.5, Poolside Laguna S 2.1, and a
+locally served Qwen3.8 — used `replace_all` in **2 of 5**, not 20/20. The local
+run reported no cost at all, which is the right answer rather than a gap: a
+local endpoint returns none, and the turn record omits the field instead of
+writing a zero, per `llm.Money`'s rule about never fabricating an unknown.
+
+The pilot's fixture is the explanation. It was cut down to the matrix alone, so
+editing the `version:` line was the only obvious route and every model took it.
+The real file offers a second: replace the whole matrix entry as a block, which
+is unique by construction and needs no `replace_all`. Three of the five did
+exactly that. Both routes are correct and both avoid the failure.
+
+So the pilot's fixture distorted *both* numbers, in opposite directions — it
+could not measure safety, having no decoys, and it inflated uptake by removing
+the alternative. The honest reading is that `replace_all` is reached often
+enough to earn its schema entry, not that it is what models reach for.
+
+What the five runs do show cleanly is the thing worth having: **zero ambiguity
+failures, zero failed edits and zero verbatim retries across all five**, against
+three failures and one verbatim retry in the session that prompted the work. The
+feature and the message together removed the failure mode; which of the two did
+it, per model, this cannot say.
 
 ## What shipped
 
