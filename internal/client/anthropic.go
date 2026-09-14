@@ -105,17 +105,14 @@ type antTool struct {
 // antBlock is one block of message content. Only one of the payloads is set,
 // selected by Type: "text", "tool_use" or "tool_result".
 type antBlock struct {
-	Type      string          `json:"type"`
-	Text      string          `json:"text,omitempty"`
-	ID        string          `json:"id,omitempty"`          // tool_use
-	Name      string          `json:"name,omitempty"`        // tool_use
-	Input     json.RawMessage `json:"input,omitempty"`       // tool_use
-	ToolUseID string          `json:"tool_use_id,omitempty"` // tool_result
-	// Content is any because this API takes either a string or a block list
-	// for a tool_result, and a tool that answers with an image needs the
-	// second form.
-	Content      any               `json:"content,omitempty"` // tool_result
-	Source       *antImageSource   `json:"source,omitempty"`  // image
+	Type         string            `json:"type"`
+	Text         string            `json:"text,omitempty"`
+	ID           string            `json:"id,omitempty"`          // tool_use
+	Name         string            `json:"name,omitempty"`        // tool_use
+	Input        json.RawMessage   `json:"input,omitempty"`       // tool_use
+	ToolUseID    string            `json:"tool_use_id,omitempty"` // tool_result
+	Content      string            `json:"content,omitempty"`     // tool_result
+	Source       *antImageSource   `json:"source,omitempty"`      // image
 	CacheControl *llm.CacheControl `json:"cache_control,omitempty"`
 }
 
@@ -138,7 +135,7 @@ func (c *AnthropicClient) BuildBody(req llm.Request) map[string]any {
 	body := map[string]any{}
 	maps.Copy(body, req.ExtraParams) // fenced passthrough, same rule as OpenAI's
 
-	system, msgs := splitSystem(req.Messages)
+	system, msgs := splitSystem(rehomeToolImages(req.Messages))
 
 	body["model"] = req.Model
 	body["messages"] = msgs
@@ -213,7 +210,7 @@ func splitSystem(in []llm.Message) ([]antBlock, []antMessage) {
 			appendUser(antBlock{
 				Type:      "tool_result",
 				ToolUseID: m.ToolCallID,
-				Content:   toolResultContent(m.Content),
+				Content:   m.Text(),
 			})
 		case llm.RoleAssistant:
 			blocks := contentBlocks(m.Content)
@@ -558,19 +555,4 @@ func finishReasonFromAnthropic(stop string) string {
 	default:
 		return stop
 	}
-}
-
-// toolResultContent renders a tool result for this API: the plain string when
-// it is only text, so every request that worked before is unchanged, and a
-// block list when the tool answered with an image.
-//
-// Anthropic is the only one of the three dialects that takes an image inside a
-// tool_result. The others re-home it into a following user message — see
-// rehomeToolImages in client.go — which is a difference in the APIs rather than
-// a choice, and the reason this function has no counterpart there.
-func toolResultContent(c llm.Content) any {
-	if len(c.Images()) == 0 {
-		return c.String()
-	}
-	return contentBlocks(c)
 }

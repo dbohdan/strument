@@ -134,20 +134,26 @@ func toolImageRequest() llm.Request {
 	}
 }
 
-// Anthropic takes an image inside a tool_result. The other two cannot, so the
-// image has to move rather than disappear.
-func TestToolResultImageOnAnthropic(t *testing.T) {
+// Every dialect re-homes, Anthropic included. Its API documents image blocks
+// inside a tool_result and this test used to assert that shape -- until the
+// live pass got HTTP 400 ("Param Incorrect: `text` is not set") from
+// OpenRouter's Messages endpoint for exactly it, while the re-homed form was
+// accepted and read. A test that encodes what the documentation says and not
+// what the wire accepts is the thing this repository keeps finding.
+func TestToolResultImageIsRehomedOnAnthropic(t *testing.T) {
 	c := NewAnthropic(config.Provider{Adapter: config.AdapterAnthropic})
 	got := marshal(t, c.BuildBody(toolImageRequest())["messages"])
-	if !strings.Contains(got, `"type":"tool_result"`) {
-		t.Fatalf("no tool_result in:\n%s", got)
+	// The tool_result's own content must be a string. Matching on "content":[
+	// alone would match the enclosing user message's block array instead, which
+	// is what the first version of this assertion did.
+	if !strings.Contains(got, `"type":"tool_result","tool_use_id":"c1","content":"`) {
+		t.Errorf("the tool_result content is not a plain string, which the wire refuses:\n%s", got)
 	}
 	if !strings.Contains(got, `"type":"image","source":{"type":"base64"`) {
-		t.Errorf("the image did not ride inside the tool result:\n%s", got)
+		t.Errorf("the image was dropped rather than re-homed:\n%s", got)
 	}
-	// One message, not a re-homed extra turn: this dialect needs no workaround.
-	if strings.Count(got, `"role":"user"`) != 2 {
-		t.Errorf("expected the original user turn plus the tool result, got:\n%s", got)
+	if !strings.Contains(got, "images from the tool results above") {
+		t.Errorf("no carrier text for the re-homed image:\n%s", got)
 	}
 }
 

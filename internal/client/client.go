@@ -144,11 +144,24 @@ type wireImageURL struct {
 // rehomeToolImages moves images out of tool-result messages and into a user
 // message that follows them.
 //
-// Anthropic takes an image inside a tool_result; neither the chat-completions
-// dialect nor the Responses API does — their tool messages are text. So the
-// result keeps text naming what it found, and the image arrives immediately
-// after, in the one role that can carry it. Pi does the same thing for the same
-// reason, which is some comfort that there is no better way.
+// All three dialects, and that uniformity is a measured correction rather than
+// a simplification. Anthropic's API documents image blocks inside a
+// tool_result, so this started with a dialect-specific branch that put them
+// there — and the live pass found it was the one path that did not work. Sent
+// through OpenRouter's Messages endpoint on 2026-09-14 it returned HTTP 400,
+// "Param Incorrect: `text` is not set", while a plain user-message image on the
+// same endpoint and model was accepted and read correctly. Re-homing the same
+// image into the user turn that answers the tool call was accepted and read
+// correctly too.
+//
+// So the special case was both the most complex path and the only broken one.
+// The re-homed form says the same thing — the model sees the image immediately
+// after the result that produced it — and now says it the same way everywhere.
+// Pi re-homes for the dialects that need it, which is some comfort that there
+// is no better shape.
+//
+// Untested, and worth knowing before the branch is reinstated: whether
+// Anthropic's own endpoint accepts what OpenRouter's translator refused.
 //
 // Consecutive tool results are re-homed into one following user message rather
 // than one each, so a turn that reads three images does not interleave three
