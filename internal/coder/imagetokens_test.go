@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,4 +72,28 @@ func TestTokensReportShowsAttachments(t *testing.T) {
 	if strings.Contains(got, "       0  attachments") {
 		t.Errorf("the attachments row is zero with an image in the chat:\n%s", got)
 	}
+}
+
+// A staged attachment is in no message yet, so every count that walks the
+// conversation misses it -- and staged-and-still-deciding is exactly when the
+// user asks. The report read "0 attachments" with a 640x480 image attached
+// until the binary was driven by hand.
+func TestTokensReportCountsStagedAttachments(t *testing.T) {
+	c := testCoder(t)
+	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 640, 480)
+	if _, err := c.AttachFile("shot.png"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := c.TokensReport()
+	for line := range strings.SplitSeq(got, "\n") {
+		if !strings.Contains(line, "attachments") {
+			continue
+		}
+		if strings.Contains(line, "  0  ") {
+			t.Errorf("a staged 640x480 image counted as zero:\n%s", got)
+		}
+		return
+	}
+	t.Errorf("no attachments row:\n%s", got)
 }

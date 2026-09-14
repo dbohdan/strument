@@ -271,7 +271,7 @@ func (c *Coder) TokensReport() string {
 		// Images are not text and have no tokenizer here, so they are
 		// estimated from their dimensions and shown apart rather than summed
 		// into a row of counted text. See imagetokens.go.
-		{"attachments (estimated)", c.countImages(chunks.allMessages())},
+		{"attachments (estimated)", c.countImages(chunks.allMessages()) + c.countPending()},
 	}
 
 	var b strings.Builder

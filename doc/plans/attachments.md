@@ -1,8 +1,18 @@
 # Plan: file attachments that are not `/submit`-compatible text
 
-**Status: in progress.** Parts are listed in dependency order; each is
-shippable on its own. Delete this file once Part 5 is done and the live pass in
-Verification has run, the way `code-mode.md` says to.
+**Status: Parts 0-5 shipped; the live pass has not run.** Everything below is
+implemented and `task check` is green. What remains is the pass described under
+Verification, which is the only thing that can tell "working" from "silently
+ignored" on this feature -- no unit test can, because a dropped image block
+produces a plausible answer rather than an error. Delete this file once that
+has run and its findings are written up.
+
+Driving the binary by hand after the unit tests were green found two defects
+neither the tests nor the types could: `/tokens` reported `0 attachments` with
+an image staged, because staged attachments are in no message until the turn
+consumes them; and the "cannot see images" warning had no subject when
+`display_name` was unset. Both are fixed. Both are the argument for the live
+pass rather than against it.
 
 ---
 

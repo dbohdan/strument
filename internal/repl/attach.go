@@ -96,9 +96,12 @@ func (r *REPL) warnIfModelCannotSee() {
 	if m != nil && m.Accepts(llm.BlockImage) {
 		return
 	}
-	name := "this model"
+	name := "This model"
 	if m != nil {
-		name = m.DisplayName
+		// ReadableName, not DisplayName: display_name is optional, and an
+		// unset one left the sentence starting mid-air with " does not accept
+		// images". Found by driving the binary, not by a test.
+		name = m.ReadableName()
 	}
 	r.out.Warningf("%s does not accept images, so it will be told the image is there but unavailable.", name)
 	r.printf("  Switch with /model, or set input_modalities = [\"text\", \"image\"] if it does accept them.")

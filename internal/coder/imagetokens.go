@@ -78,3 +78,22 @@ func (c *Coder) countImages(msgs []llm.Message) int {
 	}
 	return n
 }
+
+// countPending estimates the images staged by /attach but not yet sent.
+//
+// They are not in any message until the next turn consumes them, so every
+// count that walks the conversation misses them -- and the moment the user
+// wants the number is exactly while they are staged and still deciding. A row
+// reading zero with a 640x480 image attached is the report failing at the one
+// question it was added to answer. Found by driving the binary.
+func (c *Coder) countPending() int {
+	adapter := ""
+	if c.Model != nil {
+		adapter = c.Model.Provider.Adapter
+	}
+	n := 0
+	for _, img := range c.pendingAttachments {
+		n += imageTokens(img, adapter)
+	}
+	return n
+}
