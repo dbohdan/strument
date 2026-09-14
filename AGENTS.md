@@ -177,11 +177,12 @@ space (`/tmp/harness/`, never the project directory — see the artifacts rule
 below; a stray `git clone` into the repo once cost a cleanup commit).
 **Record the commit you read**, and the date, in whatever you write up: these
 are fast-moving repositories, and a claim about one is a dated observation
-rather than a fact. The panel survey behind the attachments plan
-([`doc/plans/attachments.md`](doc/plans/attachments.md)) is the worked example
-— it found three different answers to "what happens to an image when the
-context is compacted", and two of them were things no amount of reasoning
-would have produced.
+rather than a fact. The panel survey behind image attachments is the worked
+example — it found three different answers to "what happens to an image when
+the context is compacted", two of which no amount of reasoning would have
+produced, and it is what settled the design that
+[`doc/experiments/2026-09-image-dialects`](doc/experiments/2026-09-image-dialects/)
+then tested against live providers.
 
 ### Before you run one: the handbook
 

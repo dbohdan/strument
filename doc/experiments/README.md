@@ -99,6 +99,12 @@ with current project state.
 | **trial** — [2026-08-landlock-live](2026-08-landlock-live/) | Does the Landlock sandbox enforce its policy on a real Landlock kernel without breaking ordinary work? Yes: all checks passed after scorer corrections, denied writes were contained, and ordinary tests and commits worked. Keep the policy and report the actually granted paths, not merely the requested ones. |
 | **data only** — [2026-08-containment](2026-08-containment/) | Does the containment probe hold? Results and the runner are in `data/`, but there is no write-up yet. Treat it as recorded evidence, not as a summarized conclusion. |
 
+## Wire dialects
+
+| experiment | question → result → decision |
+| --- | --- |
+| **trial** — [2026-09-image-dialects](2026-09-image-dialects/) | Does an image survive each of the three wire dialects, on both routes? One of three was broken, and it was the one with the dialect-specific special case: an image inside an Anthropic `tool_result` returns HTTP 400, while the same image re-homed into the following user turn is accepted. Delete the branch — 0/2 to 2/2 with no other cell moving. The capability declaration is separately shown to be load-bearing: declaring a text-only model as image-capable fails the request outright. |
+
 ## Designed, not yet run
 
 | experiment | question → result → decision |
