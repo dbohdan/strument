@@ -1034,3 +1034,72 @@ func TestChatLanguageEmptyMeansUnset(t *testing.T) {
 		t.Errorf("ChatLanguage = %q, want empty", cfg.ChatLanguage)
 	}
 }
+
+// Options.OnMissingEnv is the leniency `strument config models` and `strument
+// trust` need: they read a config's shape without making a request, so a key
+// they cannot see should not stop them. It must not reach past a default.
+//
+// It used to. The leniency was expressed as a LookupEnv that claimed every
+// variable was set to "", which is upstream of env()'s default and therefore
+// silently replaced it. Two symptoms, and the second is the one that matters:
+// a variable with a default was reported as missing, and — because "" won —
+// every reader showed the empty string where a session would use the default.
+func TestOnMissingEnvDoesNotReachPastADefault(t *testing.T) {
+	const src = `
+p = provider("openai", api_key = env("NO_KEY_HERE", default = "from-the-default"))
+models = {"m": model(p, "slug")}
+default = "m"
+proxy = env("NO_PROXY_HERE", default = "socks5://from-the-default:1080")
+`
+	var reported []string
+	opts := harness(t, src, "", nil)
+	opts.OnMissingEnv = func(name string) { reported = append(reported, name) }
+
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatalf("a config whose every env() has a default failed to load: %v", err)
+	}
+	if len(reported) != 0 {
+		t.Errorf("variables with defaults were reported missing: %v", reported)
+	}
+	if got := cfg.Models["m"].Provider.APIKey; got != "from-the-default" {
+		t.Errorf("api_key = %q, want the default; the leniency overrode it", got)
+	}
+	if cfg.Proxy != "socks5://from-the-default:1080" {
+		t.Errorf("proxy = %q, want the default", cfg.Proxy)
+	}
+}
+
+// The other half: with no default there is nothing to fall back to, so the
+// variable really is missing. It reads as empty and is reported, rather than
+// failing the load the way a session's strict Load still does.
+func TestOnMissingEnvReportsWhatHasNoDefault(t *testing.T) {
+	const src = `
+p = provider("openai", api_key = env("ABSENT_KEY_XYZ"))
+models = {"m": model(p, "slug")}
+default = "m"
+`
+	var reported []string
+	opts := harness(t, src, "", nil)
+	opts.OnMissingEnv = func(name string) { reported = append(reported, name) }
+
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatalf("OnMissingEnv did not make the load lenient: %v", err)
+	}
+	if !slices.Contains(reported, "ABSENT_KEY_XYZ") {
+		t.Errorf("reported = %v, want ABSENT_KEY_XYZ", reported)
+	}
+	if got := cfg.Models["m"].Provider.APIKey; got != "" {
+		t.Errorf("api_key = %q, want the empty substitution", got)
+	}
+
+	// The counter-arm, and the behaviour a session depends on: without the
+	// hook, the same config is an error. A config that cannot resolve a
+	// variable it did not make optional has to be fixed before anything talks
+	// to a provider.
+	strict := harness(t, src, "", nil)
+	if _, err := Load(strict); err == nil {
+		t.Error("a missing env() with no default loaded cleanly without OnMissingEnv")
+	}
+}

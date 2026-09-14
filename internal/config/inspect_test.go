@@ -196,6 +196,45 @@ func TestInspectHidesEnvironmentValues(t *testing.T) {
 	}
 }
 
+// A variable with a default is not missing, and the summary must show what the
+// session will actually use.
+//
+// The bug: leniency was expressed as a lookup claiming every variable was set
+// to "", so env() never reached its default. `strument config models` named a
+// variable nobody had to set, and — the half that mattered — `strument trust`
+// reported "no proxy: requests go direct" for a config that sets a proxy. A
+// security summary that under-reports what a file does is the one kind of
+// wrong it must not be.
+func TestInspectUsesDefaultsForUnsetVariables(t *testing.T) {
+	insp := inspect(t, `proxy = env("NOT_SET_ANYWHERE_XYZ", default = "socks5://from-the-default:1080")`+"\n", nil)
+	if len(insp.MissingEnv) != 0 {
+		t.Errorf("a variable with a default was reported as missing: %v", insp.MissingEnv)
+	}
+	if len(insp.Capabilities) != 1 {
+		t.Fatalf("capabilities = %v", keys(insp.Capabilities))
+	}
+	if !strings.Contains(insp.Capabilities[0].Detail, "socks5://from-the-default:1080") {
+		t.Errorf("the summary does not show the default the session would use: %q",
+			insp.Capabilities[0].Detail)
+	}
+
+	// An empty default is still a default: it is the spelling doc/config.md
+	// recommends for "optional", and it is what was in the report that found
+	// this.
+	insp = inspect(t, `proxy = env("NOT_SET_ANYWHERE_XYZ", default = "")`+"\n", nil)
+	if len(insp.MissingEnv) != 0 {
+		t.Errorf(`env(..., default = "") was reported as missing: %v`, insp.MissingEnv)
+	}
+
+	// And a variable that *is* set beats its default, or the fix would have
+	// replaced one wrong answer with another.
+	insp = inspect(t, `proxy = env("SET_FOR_THIS_TEST_XYZ", default = "socks5://unused:1")`+"\n",
+		map[string]string{"SET_FOR_THIS_TEST_XYZ": "socks5://from-the-environment:2"})
+	if len(insp.Capabilities) != 1 || strings.Contains(insp.Capabilities[0].Detail, "unused") {
+		t.Errorf("the default won over a variable that is set: %v", insp.Capabilities)
+	}
+}
+
 // A config written for someone else's machine is still summarisable, and the
 // names of what could not be read are part of the summary: a reader who cannot
 // see a value should at least know which one they are not seeing.

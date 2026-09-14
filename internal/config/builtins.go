@@ -365,7 +365,7 @@ func optFloat(name string, v starlark.Value) (*float64, error) {
 // Absence is the presence of the keyword, not the value: default=None means
 // optional and None, distinct from omitting it. UnpackArgs leaves def nil in
 // the second case only, which is the whole mechanism.
-func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
+func builtinEnv(env envResolver) *starlark.Builtin {
 	return starlark.NewBuiltin("env", func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var name string
 		var def starlark.Value
@@ -375,15 +375,21 @@ func builtinEnv(lookup func(string) (string, bool)) *starlark.Builtin {
 		); err != nil {
 			return nil, err
 		}
-		if val, ok := lookup(name); ok {
+		if val, ok := env.lookup(name); ok {
 			return starlark.String(val), nil
 		}
-		if def == nil {
-			return nil, fmt.Errorf(
-				"env: environment variable %q is not set; pass a default to make it optional, "+
-					"e.g. env(%q, default=\"\")", name, name)
+		// The default first, and the leniency only after it. The two used to be
+		// the same mechanism, and that was the bug: see envResolver.onMissing.
+		if def != nil {
+			return def, nil
 		}
-		return def, nil
+		if env.onMissing != nil {
+			env.onMissing(name)
+			return starlark.String(""), nil
+		}
+		return nil, fmt.Errorf(
+			"env: environment variable %q is not set; pass a default to make it optional, "+
+				"e.g. env(%q, default=\"\")", name, name)
 	})
 }
 

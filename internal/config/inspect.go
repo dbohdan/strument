@@ -45,9 +45,12 @@ type ProjectInspection struct {
 	// detail. Named rather than omitted: a key nobody can see is a key nobody
 	// classified.
 	Preferences []string
-	// MissingEnv are the env() variables the file read that are not set. They
-	// were read as empty rather than failing the inspection, so a config
-	// written for someone else's machine can still be summarised.
+	// MissingEnv are the env() variables the file read that are not set *and*
+	// gave no default. They were read as empty rather than failing the
+	// inspection, so a config written for someone else's machine can still be
+	// summarised. A variable with a default is not listed: nothing about it is
+	// unknown, and reporting it was a bug that also made the summary show the
+	// empty string where a session would use the default.
 	MissingEnv []string
 }
 
@@ -81,26 +84,34 @@ func InspectProjectConfig(projectRoot string) (*ProjectInspection, error) {
 		return nil, err
 	}
 
-	// A missing variable reads as empty instead of failing the load, the way
-	// `strument config` does it: a config written on another machine should
-	// still be summarisable here, and the names go in the report so the reader
-	// knows which of its values they are not seeing.
+	// A variable that is not set and has no default reads as empty instead of
+	// failing the load, the way `strument config` does it: a config written on
+	// another machine should still be summarisable here, and the names go in
+	// the report so the reader knows which of its values they are not seeing.
+	// One that *has* a default is not missing at all and is not reported —
+	// envResolver says why that distinction needed a type.
 	//
-	// The resolved values are kept for the redaction pass below.
+	// The resolved values are kept for the redaction pass below. Only values
+	// that came from the environment: a default is written in the file, so
+	// showing it reveals nothing the reader could not read there.
 	seen := map[string]string{}
 	var missing []string
-	lookup := func(name string) (string, bool) {
-		if v, ok := os.LookupEnv(name); ok {
-			seen[name] = v
-			return v, true
-		}
-		if !slices.Contains(missing, name) {
-			missing = append(missing, name)
-		}
-		return "", true
+	env := envResolver{
+		lookup: func(name string) (string, bool) {
+			v, ok := os.LookupEnv(name)
+			if ok {
+				seen[name] = v
+			}
+			return v, ok
+		},
+		onMissing: func(name string) {
+			if !slices.Contains(missing, name) {
+				missing = append(missing, name)
+			}
+		},
 	}
 
-	g, err := inspectConfig(path, src, lookup, projectRoot)
+	g, err := inspectConfig(path, src, env, projectRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -125,8 +136,8 @@ func InspectProjectConfig(projectRoot string) (*ProjectInspection, error) {
 // parameter on execConfig so the limit cannot be applied to the load path by
 // accident: a *trusted* config that legitimately loops for a long time is the
 // user's own file and must not be cut off.
-func inspectConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
-	return execConfigThread(path, src, lookup, root, func(t *starlark.Thread) {
+func inspectConfig(path string, src []byte, env envResolver, root string) (*fileGlobals, error) {
+	return execConfigThread(path, src, env, root, func(t *starlark.Thread) {
 		t.SetMaxExecutionSteps(inspectSteps)
 	})
 }

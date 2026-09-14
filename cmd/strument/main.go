@@ -1542,15 +1542,20 @@ func remindToTrust(path string) {
 // loadProjectConfig loads the effective config for the current project. It
 // mirrors historyRoot so the answer is the one the chat session would act on,
 // not the one from a different directory that happens to hold a config file.
-// A missing env() variable yields "" here instead of failing the load. These
-// subcommands read the config's *shape* — which aliases exist, which is the
-// default — and never make a request, so a key they cannot see costs them
-// nothing. Failing instead has a cost that is easy to miss: the bash
-// completion calls `config models` on every Tab and discards stderr, so a
+// An env() variable that is unset and has no default yields "" here instead of
+// failing the load. These subcommands read the config's *shape* — which aliases
+// exist, which is the default — and never make a request, so a key they cannot
+// see costs them nothing. Failing instead has a cost that is easy to miss: the
+// bash completion calls `config models` on every Tab and discards stderr, so a
 // config whose key lives in a per-project direnv made alias completion do
 // nothing at all, silently, outside that project. The substitution is
 // announced on stderr, where the human who typed the command sees it and the
 // completion script does not.
+//
+// Through Options.OnMissingEnv rather than a LookupEnv that claims everything
+// is set to "". That is what this used to do, and it meant a variable with a
+// default never reached it: `strument config models` reported "" where a
+// session would use the default, and named a variable nobody needed to set.
 func loadProjectConfig() (*config.Config, error) {
 	root, err := historyRoot()
 	if err != nil {
@@ -1560,14 +1565,10 @@ func loadProjectConfig() (*config.Config, error) {
 	cfg, err := config.Load(config.Options{
 		ProjectRoot: root,
 		Warn:        warnNoticef,
-		LookupEnv: func(name string) (string, bool) {
-			if v, ok := os.LookupEnv(name); ok {
-				return v, true
-			}
+		OnMissingEnv: func(name string) {
 			if !slices.Contains(missing, name) {
 				missing = append(missing, name)
 			}
-			return "", true
 		},
 	})
 	if len(missing) > 0 {

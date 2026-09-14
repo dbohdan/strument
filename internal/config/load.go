@@ -131,6 +131,33 @@ type Options struct {
 	TrustStorePath string                           // "" => DefaultTrustStorePath()
 	LookupEnv      func(string) (string, bool)      // nil => os.LookupEnv
 	Warn           func(format string, args ...any) // nil => stderr
+	// OnMissingEnv, when non-nil, makes an env() naming an unset variable
+	// *with no default* read as "" instead of failing the load, and reports
+	// each such name here. A session leaves it nil, because a config that
+	// cannot resolve a variable it did not make optional is one the user has
+	// to fix before anything talks to a provider. The readers — `strument
+	// config models`, `strument trust` — set it, because they inspect a
+	// config's shape without making a request, and refusing to describe
+	// someone else's config on a machine that lacks their keys helps nobody.
+	OnMissingEnv func(name string)
+}
+
+// envResolver is how a config file's env() calls are answered: where values
+// come from, and what becomes of a variable that is not set.
+type envResolver struct {
+	// lookup is the environment. Never nil once Load has filled it in.
+	lookup func(string) (string, bool)
+	// onMissing is Options.OnMissingEnv, and is consulted only after the
+	// default.
+	//
+	// That order is the whole point of this type. The lenient readers used to
+	// express themselves as a LookupEnv that claimed every variable was set, to
+	// "", which meant env("X", default="y") never reached its default: both
+	// `strument config models` and `strument trust` reported "" where a session
+	// would use "y", and listed a variable that was never in doubt as missing.
+	// A lookup cannot fix this on its own, because only env() knows whether a
+	// default was given.
+	onMissing func(string)
 }
 
 // DefaultUserConfigPath resolves the user config location via
@@ -384,6 +411,7 @@ func Load(opts Options) (*Config, error) {
 	if lookup == nil {
 		lookup = os.LookupEnv
 	}
+	env := envResolver{lookup: lookup, onMissing: opts.OnMissingEnv}
 
 	userPath := opts.UserConfigPath
 	if userPath == "" {
@@ -401,7 +429,7 @@ func Load(opts Options) (*Config, error) {
 		}
 		return nil, err
 	}
-	user, err := execConfig(userPath, userSrc, lookup, opts.ProjectRoot)
+	user, err := execConfig(userPath, userSrc, env, opts.ProjectRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +459,7 @@ func Load(opts Options) (*Config, error) {
 				return nil, err
 			}
 			if ts.IsTrusted(absPath, projSrc) {
-				if project, err = execConfig(projPath, projSrc, lookup, opts.ProjectRoot); err != nil {
+				if project, err = execConfig(projPath, projSrc, env, opts.ProjectRoot); err != nil {
 					return nil, err
 				}
 			} else {
@@ -781,12 +809,12 @@ func Load(opts Options) (*Config, error) {
 // predeclaredGlobals is everything a config file can reach without defining it.
 // Factored out of execConfig so the set has one definition and a test can
 // evaluate an expression against exactly what a real config sees.
-func predeclaredGlobals(lookup func(string) (string, bool), root string) starlark.StringDict {
+func predeclaredGlobals(env envResolver, root string) starlark.StringDict {
 	return starlark.StringDict{
 		"provider": starlark.NewBuiltin("provider", builtinProvider),
 		"model":    starlark.NewBuiltin("model", builtinModel),
 		"search":   starlark.NewBuiltin("search", builtinSearch),
-		"env":      builtinEnv(lookup),
+		"env":      builtinEnv(env),
 		// The project's root, not the config file's directory, in both configs:
 		// a user-level `check = project_checks()` should adapt to whatever
 		// project the session opened.
@@ -875,21 +903,21 @@ func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
 	return nil
 }
 
-func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
-	return execConfigThread(path, src, lookup, root, nil)
+func execConfig(path string, src []byte, env envResolver, root string) (*fileGlobals, error) {
+	return execConfigThread(path, src, env, root, nil)
 }
 
 // execConfigThread is execConfig with a hook that can constrain the Starlark
 // thread before the file runs. Only the inspection pass uses it, and inspect.go
 // says why the limit it sets belongs there rather than on the load path.
-func execConfigThread(path string, src []byte, lookup func(string) (string, bool), root string,
+func execConfigThread(path string, src []byte, env envResolver, root string,
 	setup func(*starlark.Thread),
 ) (*fileGlobals, error) {
 	thread := &starlark.Thread{Name: path}
 	if setup != nil {
 		setup(thread)
 	}
-	predeclared := predeclaredGlobals(lookup, root)
+	predeclared := predeclaredGlobals(env, root)
 	fileOpts := &syntax.FileOptions{
 		Set:             true,
 		While:           false,

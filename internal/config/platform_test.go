@@ -17,7 +17,7 @@ func evalConfigExpr(t *testing.T, src string) (starlark.Value, error) {
 	thread := &starlark.Thread{Name: "test"}
 	opts := &syntax.FileOptions{Set: true, TopLevelControl: true}
 	globals, err := starlark.ExecFileOptions(opts, thread, "config.star", src,
-		predeclaredGlobals(func(string) (string, bool) { return "", false }, t.TempDir()))
+		predeclaredGlobals(envResolver{lookup: func(string) (string, bool) { return "", false }}, t.TempDir()))
 	if err != nil {
 		return nil, err
 	}

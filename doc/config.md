@@ -1257,6 +1257,12 @@ makes the variable optional and yields `None`, which omitting the keyword does
 not. Note that `provider()` wants a string for `api_key`, so an optional key
 wants `default=""` rather than `default=None`.
 
+"Fails the load" is a session. The commands that only read a config —
+`strument config models`, `strument config default`, `strument trust` — read a
+required variable that is unset as empty and name it on stderr instead, so they
+still work on a machine that does not have your keys. A variable with a
+`default` is not affected either way: it resolves to the default everywhere.
+
 ## Built-in values
 
 ### `platform`
@@ -1438,10 +1444,12 @@ without their values. An `api_key` is never shown at all. The `${NAME}` spelling
 is shell-style on purpose: it is not the Starlark the file contains, so there is
 nothing to mistake it for.
 
-A variable that is not set is read as empty here, and named on stderr, so a
-config written for another machine can still be summarised. A session is
-stricter: an `env()` with no `default` and no value is an error there, so
-trusting a config is not a promise that it will load.
+A variable that is not set **and has no `default`** is read as empty here, and
+named on stderr, so a config written for another machine can still be
+summarised. One that has a `default` resolves to it, exactly as it would in a
+session, and is not mentioned. A session is stricter about the first case: an
+`env()` with no `default` and no value is an error there, so trusting a config
+is not a promise that it will load.
 
 A config that does not load is **not** trusted, and the project's skills still
 are. The refusal is not only about the summary being empty: a project config is
