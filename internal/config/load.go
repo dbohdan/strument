@@ -195,6 +195,9 @@ type fileGlobals struct {
 	hasEnvAllow bool
 	envAllowVal []string
 
+	hasAutoApprove bool
+	autoApproveVal []string
+
 	hasEnvSet bool
 	envSetVal map[string]string
 
@@ -512,6 +515,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
+	if user.hasAutoApprove {
+		cfg.AutoApprove = user.autoApproveVal
+	}
 	if user.hasEnvSet {
 		cfg.EnvSet = user.envSetVal
 	}
@@ -622,6 +628,13 @@ func Load(opts Options) (*Config, error) {
 		// could only ever widen.
 		if project.hasEnvAllow {
 			cfg.EnvAllow = project.envAllowVal
+		}
+		// Whole-value like env_allow. A trusted project may set which prompts
+		// stop being asked about, because trust here is content-hashed: an
+		// edited config is untrusted until `strument trust` runs again, so a
+		// repository cannot widen this behind the user's back.
+		if project.hasAutoApprove {
+			cfg.AutoApprove = project.autoApproveVal
 		}
 		// Per-entry, unlike env_allow, and for the opposite reason: env_allow is
 		// one decision about what the model may see, which a project must be
@@ -1160,6 +1173,32 @@ func execConfig(path string, src []byte, lookup func(string) (string, bool), roo
 			return nil, fmt.Errorf(
 				"%s: `git_sign` must be a boolean or a key-id string, got %s", path, gs.Type())
 		}
+	}
+
+	if aa, ok := globals["auto_approve"]; ok {
+		list, ok := aa.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `auto_approve` must be a list of prompt names, got %s", path, aa.Type())
+		}
+		names := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			str, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `auto_approve`[%d] must be a string, got %s",
+					path, i, list.Index(i).Type())
+			}
+			names = append(names, str)
+		}
+		// Validated here rather than carried as strings, so a misspelling is a
+		// load error naming what would have worked instead of a permission
+		// that silently never applies -- which reads exactly like the prompt
+		// being asked for a reason.
+		if _, err := ParseGrants("auto_approve", names); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		out.hasAutoApprove = true
+		out.autoApproveVal = names
 	}
 
 	if ea, ok := globals["env_allow"]; ok {

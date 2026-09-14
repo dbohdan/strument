@@ -67,6 +67,20 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	c.Check = cfg.Check
 	c.CheckAuto = cfg.CheckAuto
 	c.EnvAllow = cfg.EnvAllow
+	// The config half of the standing approvals, replaced wholesale so an
+	// edited auto_approve takes on /reload. --yes and /yes live in their own
+	// halves and survive it; see grants.go.
+	// Created here when absent rather than skipped. A nil check that quietly
+	// did nothing is what hid the assignment-order bug this had on its first
+	// run: the config half went to a nil Grants and never arrived, and the
+	// session reported only what --yes had granted.
+	if c.Grants == nil {
+		c.Grants = NewGrants(nil)
+	}
+	// An invalid name cannot reach here -- Load rejects it -- so an error means
+	// the two vocabularies have drifted, and an empty set is the safe reading.
+	granted, _ := config.ParseGrants("auto_approve", cfg.AutoApprove)
+	c.Grants.SetConfig(granted)
 
 	// The prompt layer last, and through setPrompts rather than by hand.
 	// setPrompts rebuilds the active set from the built-in before layering the

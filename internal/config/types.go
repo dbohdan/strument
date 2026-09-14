@@ -312,6 +312,10 @@ type Config struct {
 	// default allowlist. See coder/envallow.go. Empty means defaults only.
 	// Matching is exact; prefixes are not expanded.
 	EnvAllow []string
+
+	// AutoApprove names the confirmation prompts answered without asking, the
+	// standing form of --yes. Validated at load against GrantNames.
+	AutoApprove []string
 	// EnvSet overrides environment variables for the whole session, from the
 	// `env_set` setting. Applied to Strument's own process at startup, so every
 	// subprocess inherits it: git, /run, and — for names env_allow also passes —

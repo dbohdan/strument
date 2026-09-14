@@ -120,7 +120,7 @@ func TestUndoWithoutGitSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	cdr.Confirm = coder.AutoConfirmer{Granted: map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}, Fallback: r.Confirmer()}
+	cdr.Confirm = coder.AutoConfirmer{Granted: coder.StaticGrants(map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}), Fallback: r.Confirmer()}
 
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -182,7 +182,7 @@ func TestSquashSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	cdr.Confirm = coder.AutoConfirmer{Granted: map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}, Fallback: r.Confirmer()}
+	cdr.Confirm = coder.AutoConfirmer{Granted: coder.StaticGrants(map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}), Fallback: r.Confirmer()}
 
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -320,7 +320,7 @@ func TestDiffAndUndoSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	cdr.Confirm = coder.AutoConfirmer{Granted: map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}, Fallback: r.Confirmer()}
+	cdr.Confirm = coder.AutoConfirmer{Granted: coder.StaticGrants(map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}), Fallback: r.Confirmer()}
 
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)

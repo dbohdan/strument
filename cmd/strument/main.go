@@ -161,6 +161,10 @@ func (c *chatCmd) Run() error {
 	// calls. Adding one here instead is the bug that made three reloads look
 	// like they had worked; internal/repl's reload test guards against it.
 	cdr.ShellWithheld = c.NoShell
+	// Before ApplyConfig, which fills in the config half. The first version of
+	// this set it *after*, so auto_approve was written to a nil Grants and
+	// silently dropped -- found by running the binary, not by a test.
+	cdr.Grants = coder.NewGrants(grants)
 	coder.ApplyConfig(cdr, cfg)
 	// Kong's enum has already refused anything else. Trial arms, not config.
 	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
@@ -171,7 +175,7 @@ func (c *chatCmd) Run() error {
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
 	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
-	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: terminalConfirmer{}}
+	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
 	if model.RepoMap {
@@ -901,11 +905,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 	// Route confirms through readline; a --yes name answers first. The asker
 	// has no auto variant: --yes answers permission prompts, and a question is
 	// the model asking for information it cannot proceed without.
-	grants, err := coder.ParseGrants(c.Yes)
-	if err != nil {
-		return err
-	}
-	cdr.Confirm = coder.AutoConfirmer{Granted: grants, Fallback: r.Confirmer()}
+	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: r.Confirmer()}
 	cdr.Asker = r.Asker()
 	return r.Run(context.Background())
 }

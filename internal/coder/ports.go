@@ -4,11 +4,11 @@ package coder
 
 import (
 	"context"
-	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/config"
 )
 
 // TokenCounter estimates token counts. Consumers treat counts as
@@ -59,73 +59,26 @@ type ConfirmResult struct {
 	Always bool
 }
 
-// The permission names --yes takes. Three kinds, deliberately in one flag: the
-// first three grant the model a capability, the next two answer a question the
-// harness asks about its own pacing, and the last answers a question about what
-// the user is putting in front of the model. All of them need a name for a
-// session with no terminal to answer on, and a name that says which prompt it
-// covers beats a flag that means "everything except the scary one".
+// The permission names --yes takes are defined in internal/config, which
+// validates auto_approve at load and cannot import this package. They are
+// re-exported here because every call site reads better as coder.GrantBash,
+// and because one definition cannot drift from the other.
 const (
-	GrantBash      = "bash"      // run a shell command the model wrote
-	GrantWebfetch  = "webfetch"  // fetch a URL the model chose
-	GrantWebsearch = "websearch" // send the model's query to the configured backend
-	// GrantSteps answers "Keep going?" at the step budget. Not a capability:
-	// the model gains nothing it did not have, the turn simply continues. Worth
-	// knowing before typing it that the budget resets each time it is answered,
-	// so granting this is granting an unbounded number of steps — max_steps
-	// stops being a limit and becomes an interval.
-	GrantSteps = "steps"
-	// GrantContext answers "Try to proceed anyway?" when the estimated request
-	// exceeds the model's input limit. Also not a capability: the request is
-	// sent and the provider decides, which is what the prompt's own text says
-	// is probably fine.
-	GrantContext = "context"
-	// GrantAddOutput answers "Add … to the chat?" — /run's command output,
-	// /check's transcript, /consult's answer. The third kind: not a capability
-	// and not pacing, but a question about what the *user* is putting in front
-	// of the model.
-	//
-	// It exists because these three had no name at all, so a piped session
-	// answered them with "there is no terminal to ask on, and no --yes name
-	// covers this prompt" no matter what was passed — and the typed "y" then
-	// went to the model as a chat message. Found by running the real binary;
-	// no test could have, because a test that supplies its own confirmer never
-	// meets the terminal-less path.
-	GrantAddOutput = "add-output"
-	// GrantAll is every name above. A word someone types, never a default.
-	GrantAll = "all"
+	GrantBash      = config.GrantBash
+	GrantWebfetch  = config.GrantWebfetch
+	GrantWebsearch = config.GrantWebsearch
+	GrantSteps     = config.GrantSteps
+	GrantContext   = config.GrantContext
+	GrantAddOutput = config.GrantAddOutput
+	GrantAll       = config.GrantAll
 )
 
 // GrantNames are the individual permissions, in the order help text lists them.
-var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantSteps, GrantContext, GrantAddOutput}
+var GrantNames = config.GrantNames
 
-// ParseGrants turns --yes values into the set AutoConfirmer reads. Each value
-// may be a comma-separated list, and the flag may repeat, so
-// "--yes bash --yes webfetch,websearch" and "--yes bash,webfetch,websearch"
-// are the same thing. An unknown name is an error naming what would have
-// worked, rather than a silent no-op that looks like a permission was granted.
+// ParseGrants turns --yes values into the set AutoConfirmer reads.
 func ParseGrants(values []string) (map[string]bool, error) {
-	out := map[string]bool{}
-	for _, v := range values {
-		for name := range strings.SplitSeq(v, ",") {
-			name = strings.ToLower(strings.TrimSpace(name))
-			if name == "" {
-				continue
-			}
-			if name == GrantAll {
-				for _, g := range GrantNames {
-					out[g] = true
-				}
-				continue
-			}
-			if !slices.Contains(GrantNames, name) {
-				return nil, fmt.Errorf("--yes %s: unknown name (want %s, or %q for all of them)",
-					name, strings.Join(GrantNames, ", "), GrantAll)
-			}
-			out[name] = true
-		}
-	}
-	return out, nil
+	return config.ParseGrants("--yes", values)
 }
 
 // ConfirmRequest mirrors aider's confirm_ask surface.
@@ -254,11 +207,16 @@ func ParseAskAnswer(req AskRequest, input string) []string {
 // the whole change — the flag pair it replaced meant "yes to everything except
 // the shell", a shape that could not name a third thing worth withholding.
 type AutoConfirmer struct {
-	// Granted holds the names from --yes. A prompt is answered only when its
-	// own Grant is in here — there is no blanket yes, because a blanket yes is
-	// what "--yes, except the dangerous one" was, and that shape cannot say
-	// which one without naming it in the flag itself.
-	Granted map[string]bool
+	// Granted reports the names answered automatically. A prompt is answered
+	// only when its own Grant is in there — there is no blanket yes, because a
+	// blanket yes is what "--yes, except the dangerous one" was, and that shape
+	// cannot say which one without naming it in the flag itself.
+	//
+	// A function rather than a map because the set changes mid-session: /yes
+	// adds and drops, and /reload re-reads auto_approve. A map captured at
+	// construction would leave the confirmer answering from a set nobody can
+	// see and nothing can change. Use StaticGrants for a set that is fixed.
+	Granted func() map[string]bool
 	// Fallback handles prompts the flags don't answer; nil declines.
 	Fallback Confirmer
 }
@@ -267,7 +225,7 @@ func (a AutoConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 	// An unnamed prompt is never answered by a flag. That is deliberate rather
 	// than an oversight: a prompt with no Grant has no name a user could have
 	// typed, so answering it would be answering something they never asked for.
-	if req.Grant != "" && a.Granted[req.Grant] {
+	if req.Grant != "" && a.Granted != nil && a.Granted()[req.Grant] {
 		return ConfirmResult{Yes: true}
 	}
 	if a.Fallback != nil {

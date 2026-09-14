@@ -115,8 +115,12 @@ type Coder struct {
 	// Ports.
 	Client     llm.ModelClient
 	Summarizer *ChatSummary // nil => chat-history summarization disabled
-	Tokens     TokenCounter
-	Confirm    Confirmer
+	// Grants are the prompts answered without asking, from --yes, from
+	// auto_approve, and from /yes. See grants.go for why the sources are kept
+	// apart rather than merged.
+	Grants  *Grants
+	Tokens  TokenCounter
+	Confirm Confirmer
 	// Asker answers ask_user_question calls. nil (script mode, tests) means
 	// no interactive terminal: the call is answered with an error result
 	// rather than hanging, the same convention as a nil Repo.

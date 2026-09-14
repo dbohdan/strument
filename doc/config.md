@@ -42,6 +42,7 @@ The loader reads these module-level variables after running your file:
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
+| `auto_approve` | list of strings | Optional. Confirmation prompts answered without asking, the standing form of `--yes`. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
@@ -722,6 +723,38 @@ An empty string (`""`) leaves environment detection in charge, as does omitting
 the setting. The two cases are distinct when a project config overrides a user
 config. Because it feeds the prompt as normalized text, a code outside the known
 map is left as-is rather than refused.
+
+### `auto_approve`
+
+The standing form of `--yes`: confirmation prompts answered without asking, for
+every session in this config's scope.
+
+```python
+auto_approve = ["websearch"]
+```
+
+The names are the ones `--yes` takes — `bash`, `webfetch`, `websearch`,
+`steps`, `context`, `add-output`, and `all` for every one of them. A name the
+harness does not know is an **error at load**, naming what would have worked,
+rather than a permission that silently never applies: on screen those are
+indistinguishable from the prompt being asked for a good reason.
+
+`--yes` and `auto_approve` **union**. The flag is "also this, now"; the config
+is a standing preference, and neither is the other's ceiling. `/yes` shows what
+is granted and where each grant came from, and changes it for the session;
+`/reload` re-reads `auto_approve` and leaves `--yes` alone.
+
+A **trusted project config** may set it, on the same whole-value rule as
+`env_allow`. That is safe because trust here is content-hashed: editing a
+project config makes it untrusted until `strument trust` runs again, so a
+repository cannot widen its own approvals behind your back. Trusting a project
+is still one decision covering its config *and* its skills, so read what you are
+trusting.
+
+Worth knowing before granting `steps`: the step budget resets each time the
+prompt is answered, so this turns `max_steps` from a limit into an interval.
+And `bash` is the one that lets the model run shell commands it wrote without
+asking — the others are narrower.
 
 ### `env_allow`
 

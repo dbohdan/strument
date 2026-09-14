@@ -356,6 +356,13 @@ func (r *REPL) announce() {
 	// changes what the session can do at all, so main announces that one in
 	// every mode — a scripted run would otherwise meet a wall of refusals with
 	// nothing on screen to explain them.
+	// A standing approval is invisible until the turn it silently answers, and
+	// the sandbox line next door exists for the same reason: the user has to
+	// know what a careless "yes" can cost before typing. Omitted when nothing
+	// is granted, since an absent permission needs no line.
+	if line := yesBanner(r.coder.Grants); line != "" {
+		r.printf("%s", line)
+	}
 	switch sb := r.coder.Sandbox; {
 	case sb.Active:
 		r.printf("Sandbox: on, writes confined to %d paths (/sandbox to list them)", len(sb.Writable))

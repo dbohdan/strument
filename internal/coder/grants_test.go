@@ -66,7 +66,7 @@ func TestAutoConfirmerAnswersOnlyWhatWasNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	declining := &countingConfirmer{}
-	ac := AutoConfirmer{Granted: granted, Fallback: declining}
+	ac := AutoConfirmer{Granted: StaticGrants(granted), Fallback: declining}
 
 	if !ac.Confirm(ConfirmRequest{Prompt: "Search the web?", Grant: GrantWebsearch}).Yes {
 		t.Error("the named permission was not granted")
@@ -90,7 +90,7 @@ func TestUnnamedPromptsAreNeverAutoAnswered(t *testing.T) {
 		t.Fatal(err)
 	}
 	declining := &countingConfirmer{}
-	ac := AutoConfirmer{Granted: granted, Fallback: declining}
+	ac := AutoConfirmer{Granted: StaticGrants(granted), Fallback: declining}
 	if ac.Confirm(ConfirmRequest{Prompt: "Add command output to the chat?", Group: "add-output"}).Yes {
 		t.Error("an unnamed prompt was answered by --yes all")
 	}

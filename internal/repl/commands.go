@@ -102,6 +102,7 @@ func init() {
 		{"tokens", "", "Report approximate context window usage.", cmdTokens},
 		{"undo", "", "Undo the last turn's edits.", cmdUndo},
 		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page or #section. With no URL, list the origins webfetch can access without asking.", cmdWeb},
+		{"yes", "[add <name> ... | drop <name> ... | reset]", "Show or change which confirmation prompts are answered without asking.", cmdYes},
 	}
 }
 
