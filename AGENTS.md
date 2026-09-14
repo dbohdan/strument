@@ -150,6 +150,39 @@ any price answers nothing. Reach past the default deliberately: to check
 something specific to a vendor, or when a result hinges on capability and you
 want a frontier model to confirm it.
 
+### Which harnesses to compare against
+
+When a design question is "what does everyone else do here?", check the same
+six every time, so the answer is a survey rather than whichever repository came
+to mind:
+
+| harness | repository |
+|---|---|
+| OpenCode | `sst/opencode` |
+| Pi | `earendil-works/pi` |
+| Codex | `openai/codex` |
+| Kimi Code | `MoonshotAI/kimi-code` |
+| DeepSeek Harness | `deepseek-ai/deepseek-harness` |
+| Claude Code | closed source; docs only |
+
+A fixed panel for the same reason as the fixed model default: a survey you
+assemble per question is a survey whose membership argues for its conclusion.
+Five are open source and disagree with each other usefully — two TypeScript,
+one Rust, one plugin-everything, one that ships a single binary — and the sixth
+is worth reading the docs of even though you cannot read the source. Add a
+seventh when it earns a place, rather than swapping one out per question.
+
+**Read the source, not the docs or a blog post**, and shallow-clone into scratch
+space (`/tmp/harness/`, never the project directory — see the artifacts rule
+below; a stray `git clone` into the repo once cost a cleanup commit).
+**Record the commit you read**, and the date, in whatever you write up: these
+are fast-moving repositories, and a claim about one is a dated observation
+rather than a fact. The panel survey behind the attachments plan
+([`doc/plans/attachments.md`](doc/plans/attachments.md)) is the worked example
+— it found three different answers to "what happens to an image when the
+context is compacted", and two of them were things no amount of reasoning
+would have produced.
+
 ### Before you run one: the handbook
 
 [`doc/experimenting.md`](doc/experimenting.md) collects what has actually gone
