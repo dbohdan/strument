@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
@@ -98,13 +99,31 @@ type Model struct {
 	Cache        bool // enable prompt-cache breakpoints (1h TTL)
 	Context      int  // input window tokens; 0 => unknown
 	MaxOutput    int
-	InputCost    *llm.Money // per-token USD (config declares per-million); nil => unknown (never fabricate cost)
-	OutputCost   *llm.Money
-	ExtraParams  map[string]any
+	// InputModalities names the content kinds this model accepts besides text,
+	// using the same strings as the llm.Block* kinds so a projection can look a
+	// block up directly. Empty means text only, which is the safe default: a
+	// model that can see images but is not declared to gets a text label, while
+	// the reverse would be a request the provider rejects.
+	InputModalities []string
+	InputCost       *llm.Money // per-token USD (config declares per-million); nil => unknown (never fabricate cost)
+	OutputCost      *llm.Money
+	ExtraParams     map[string]any
 
 	// sideRef holds an unresolved string alias or inline model between
 	// construction and resolution.
 	sideRef any
+}
+
+// Accepts reports whether this model takes content blocks of the given kind.
+//
+// Text is unconditional. There is no model that does not take text, and making
+// it depend on the declaration would let a config with
+// input_modalities = ["image"] produce a model nothing can be said to.
+func (m *Model) Accepts(kind string) bool {
+	if kind == llm.BlockText {
+		return true
+	}
+	return slices.Contains(m.InputModalities, kind)
 }
 
 // SlugCore reduces a model slug to its core name: everything after the last

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
@@ -192,6 +193,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var contextTokens, maxOutput int
 	var inputCost, outputCost starlark.Value
 	var extraParams *starlark.Dict
+	var inputModalities *starlark.List
 	var retiredWeakModel starlark.Value
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"provider", &providerV,
@@ -210,7 +212,13 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"input_cost?", &inputCost,
 		"output_cost?", &outputCost,
 		"extra_params?", &extraParams,
+		"input_modalities?", &inputModalities,
 	); err != nil {
+		return nil, err
+	}
+
+	modalities, err := parseModalities(inputModalities)
+	if err != nil {
 		return nil, err
 	}
 
@@ -251,6 +259,8 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		Cache:        cache,
 		Context:      contextTokens,
 		MaxOutput:    maxOutput,
+
+		InputModalities: modalities,
 	}
 
 	switch w := sideModel.(type) {
@@ -264,7 +274,6 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		return nil, fmt.Errorf("model: side_model must be a model value or alias string, got %s", sideModel.Type())
 	}
 
-	var err error
 	if m.Temperature, err = optFloat("temperature", temperature); err != nil {
 		return nil, err
 	}
@@ -455,4 +464,52 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 		APIKey: apiKey,
 		Proxy:  proxy,
 	}}, nil
+}
+
+// knownModalities is what input_modalities may name. The strings are the
+// llm.Block* kinds on purpose: the send-path projection looks a content block
+// up by its own Type, so a modality that did not match a kind name would be a
+// declaration nothing consults. modalityNamesMatchBlockKinds in
+// builtins_test.go holds the two lists together.
+var knownModalities = map[string]bool{
+	llm.BlockText:  true,
+	llm.BlockImage: true,
+}
+
+// KnownModality reports whether Strument understands an input modality name.
+// Exported for the model-config generator, which filters what a provider
+// reports down to what this harness can actually carry: OpenRouter lists
+// "file", "audio" and "video" too, and emitting one of those would produce a
+// config that fails to load.
+func KnownModality(name string) bool { return knownModalities[name] }
+
+// parseModalities converts the input_modalities argument, rejecting a name
+// Strument does not understand.
+//
+// Rejecting rather than ignoring, because the failure it prevents is silent in
+// both directions: a typo like "images" would leave the model text-only while
+// the config says otherwise, and the user would see a model that "cannot see
+// images" with nothing to read that explains why.
+func parseModalities(list *starlark.List) ([]string, error) {
+	if list == nil {
+		return nil, nil
+	}
+	out := make([]string, 0, list.Len())
+	for i := range list.Len() {
+		name, ok := starlark.AsString(list.Index(i))
+		if !ok {
+			return nil, fmt.Errorf("model: input_modalities[%d] must be a string, got %s",
+				i, list.Index(i).Type())
+		}
+		if !knownModalities[name] {
+			return nil, fmt.Errorf(
+				"model: unknown input modality %q; Strument understands %q and %q",
+				name, llm.BlockText, llm.BlockImage)
+		}
+		if slices.Contains(out, name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out, nil
 }

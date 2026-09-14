@@ -103,6 +103,13 @@ func emitEntry(info ModelInfo, providerName, alias string) string {
 	if info.OutputCost != "" {
 		fmt.Fprintf(&b, "        output_cost=%s,\n", info.OutputCost)
 	}
+	if len(info.InputModalities) > 0 {
+		quoted := make([]string, len(info.InputModalities))
+		for i, name := range info.InputModalities {
+			quoted[i] = fmt.Sprintf("%q", name)
+		}
+		fmt.Fprintf(&b, "        input_modalities=[%s],\n", strings.Join(quoted, ", "))
+	}
 	if info.CacheCapable {
 		b.WriteString("        cache=True,  # OpenRouter reports prompt caching for this model.\n")
 	}

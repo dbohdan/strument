@@ -237,6 +237,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	chunks := c.formatMessages()
 	messages := chunks.allMessages()
+	// Before the token check, not after: the projection changes what is
+	// actually sent, and a count taken on the unprojected messages would be
+	// counting something no provider will ever see.
+	messages = projectForModel(messages, c.Model)
 
 	if !c.checkTokens(messages) {
 		if appendedUser {

@@ -1126,7 +1126,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1174,6 +1174,21 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   it is unset — there is nothing to warn about a limit you have not stated — so
   set it on every model you use for real work.
 - **`max_output`** — the maximum output tokens.
+- **`input_modalities`** — the kinds of content this model accepts, as a list.
+  The only values are `"text"` and `"image"`; anything else is an error at load
+  rather than a setting that quietly does nothing. Unset means text only, which
+  is the safe default in both directions: a model that can see images but is not
+  declared to still works, with images replaced by a line of text saying what
+  was there, while the reverse would be a request the provider rejects.
+
+  It is a *declaration*, not a switch — it says what the model can take, and
+  Strument sends accordingly. What it changes is what happens to an image
+  already in the conversation when you `/model` to something that cannot see
+  one: rather than the session becoming unsendable, each image becomes a note
+  naming the file and telling the model to say it could not see it.
+
+  `strument model-config` fills this in from what the provider reports. On
+  2026-09-14 OpenRouter listed image input for 274 of 445 models.
 - **`input_cost`, `output_cost`** — price in **US dollars per million tokens**
   (e.g. `input_cost=3`), used as a *fallback estimate*. The per-turn cost line
   prefers the cost the provider reports for each request and falls back to these

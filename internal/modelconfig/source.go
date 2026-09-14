@@ -18,8 +18,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/config"
 )
 
 // ModelInfo is the provider-neutral metadata the emitter renders. Cost fields
@@ -42,6 +45,10 @@ type ModelInfo struct {
 	ReasoningDefaultEnabled *bool    `json:"reasoning_default_enabled,omitempty"`
 	ReasoningMetadata       bool     `json:"reasoning_metadata,omitempty"`
 	ReasoningMandatory      bool     `json:"reasoning_mandatory,omitempty"`
+	// InputModalities is what the provider says the model takes, narrowed to
+	// the kinds Strument can carry. Text alone is left empty: it is the
+	// default, and emitting it would put a line in every model in the file.
+	InputModalities []string `json:"input_modalities,omitempty"`
 }
 
 // Source resolves exact model slugs to ModelInfo. Missing slugs are returned
@@ -237,6 +244,9 @@ type orModel struct {
 		Completion     string `json:"completion"`
 		InputCacheRead string `json:"input_cache_read"`
 	} `json:"pricing"`
+	Architecture struct {
+		InputModalities []string `json:"input_modalities"`
+	} `json:"architecture"`
 	SupportedParameters []string `json:"supported_parameters"`
 	Reasoning           *struct {
 		SupportedEfforts json.RawMessage `json:"supported_efforts"`
@@ -262,6 +272,8 @@ func toInfo(m orModel) ModelInfo {
 	// a read price, and cache=True still earns its keep there, because the
 	// prompt prefix is stable across turns for their automatic caching to key
 	// on.
+	info.InputModalities = carriableModalities(m.Architecture.InputModalities)
+	// A non-zero cache-READ price is the universal "this provider caches" tell.
 	info.CacheCapable = isPositivePrice(m.Pricing.InputCacheRead)
 	info.Reasoning = slices.Contains(m.SupportedParameters, "reasoning") || m.Reasoning != nil
 	if m.Reasoning != nil {
@@ -347,4 +359,24 @@ func allDigits(s string) bool {
 func isPositivePrice(s string) bool {
 	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	return err == nil && f > 0
+}
+
+// carriableModalities narrows what a provider reports to what Strument can put
+// on the wire, and returns nothing at all for a text-only model.
+//
+// Observed against OpenRouter's /models on 2026-09-14: 445 models, all listing
+// "text", 274 "image", 170 "file", 80 "video", 46 "audio". Only the first two
+// mean anything here, so the rest are dropped rather than passed through into a
+// config that would then fail to load.
+func carriableModalities(reported []string) []string {
+	var out []string
+	for _, name := range reported {
+		if config.KnownModality(name) && !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	if len(out) <= 1 {
+		return nil // text only, which is the default
+	}
+	return out
 }
