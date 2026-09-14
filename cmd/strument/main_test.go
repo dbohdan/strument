@@ -552,9 +552,9 @@ func TestTrustWithoutAConfig(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
 	root := t.TempDir()
-	path := writeSkill(t, root, "release-notes")
+	path := writeSkill(t, root, "changelog")
 
-	if err := (&trustCmd{Path: root}).Run(); err != nil {
+	if err := (&trustCmd{Path: root, Yes: true}).Run(); err != nil {
 		t.Fatalf("trust with skills and no config: %v", err)
 	}
 
@@ -589,9 +589,109 @@ func TestTrustWithoutAConfig(t *testing.T) {
 // silently succeeding would tell them a grant happened that did not.
 func TestTrustWithNothingToTrust(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	if err := (&trustCmd{Path: t.TempDir()}).Run(); err == nil {
+	if err := (&trustCmd{Path: t.TempDir(), Yes: true}).Run(); err == nil {
 		t.Errorf("trust succeeded with nothing to trust")
 	}
+}
+
+// Fail closed: `strument trust` in a script used to grant silently. It now
+// refuses unless --yes says the script meant it, and the refusal has to carry a
+// non-zero status, because the next line of a setup script is usually the thing
+// the trust was for.
+//
+// `go test` gives the test binary /dev/null for stdin, which is a character
+// device and not a terminal — the distinction this branch turns on, and the one
+// that made an earlier draft print a question into a pipe and read EOF.
+func TestTrustRefusesWithoutATerminal(t *testing.T) {
+	if stdinIsTerminal() {
+		t.Skip("this test needs a non-terminal stdin, which go test normally provides")
+	}
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	root := t.TempDir()
+	writeSkill(t, root, "deploy")
+
+	err := (&trustCmd{Path: root}).Run()
+	if err == nil {
+		t.Fatal("trust succeeded with no terminal to ask on and no --yes")
+	}
+	if !strings.Contains(err.Error(), "--yes") {
+		t.Errorf("the refusal does not say how to answer it: %v", err)
+	}
+	if trustStoreExists(t) {
+		t.Error("a refused trust still wrote to the store")
+	}
+}
+
+// Declining at the prompt records nothing, and exits 0: a person who typed "n"
+// knows what happened.
+func TestTrustDeclinedRecordsNothing(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	writeSkill(t, root, "review-diff")
+
+	if err := (&trustCmd{Path: root, confirm: func() bool { return false }}).Run(); err != nil {
+		t.Fatalf("declining should not be an error: %v", err)
+	}
+	if trustStoreExists(t) {
+		t.Error("a declined trust wrote to the store")
+	}
+
+	// The counter-arm: the same command with the same seam answering yes must
+	// write, or the check above is reporting on a command that never writes.
+	if err := (&trustCmd{Path: root, confirm: func() bool { return true }}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !trustStoreExists(t) {
+		t.Error("an accepted trust wrote nothing")
+	}
+}
+
+// Re-running in a project where nothing has been edited asks nothing. The trust
+// store holds a content hash, so "has this changed since you approved it" is
+// answerable without holding any content — and it is the only question the
+// prompt exists to put.
+func TestTrustDoesNotAskWhenNothingChanged(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	path := writeSkill(t, root, "changelog")
+
+	if err := (&trustCmd{Path: root, Yes: true}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	asked := false
+	if err := (&trustCmd{Path: root, confirm: func() bool { asked = true; return true }}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if asked {
+		t.Error("re-running with nothing changed asked the user to approve it again")
+	}
+
+	// And editing one file brings the question back, or the silence above is
+	// silence about everything.
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(src, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&trustCmd{Path: root, confirm: func() bool { asked = true; return true }}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !asked {
+		t.Error("an edited skill was re-trusted without asking")
+	}
+}
+
+func trustStoreExists(t *testing.T) bool {
+	t.Helper()
+	path, err := config.DefaultTrustStorePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = os.Stat(path)
+	return err == nil
 }
 
 // TestDiscoverSkillsGatesOnTrust is the wiring check: what main hands the coder
@@ -610,7 +710,7 @@ func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
 	if len(before) != 1 || before[0].Trusted {
 		t.Fatalf("before trusting: %d skills, trusted=%v", len(before), len(before) > 0 && before[0].Trusted)
 	}
-	if err := (&trustCmd{Path: root}).Run(); err != nil {
+	if err := (&trustCmd{Path: root, Yes: true}).Run(); err != nil {
 		t.Fatal(err)
 	}
 	after := discoverSkills(root)

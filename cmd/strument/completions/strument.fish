@@ -18,7 +18,7 @@ end
 complete -c strument -f
 
 # Top-level commands.
-complete -c strument -n __strument_no_subcommand -a trust -d "Trust the project's .strument.star config file"
+complete -c strument -n __strument_no_subcommand -a trust -d "Trust the project's config file and its skills"
 complete -c strument -n __strument_no_subcommand -a history -d "Print the path to this project's chat-history file"
 complete -c strument -n __strument_no_subcommand -a config -d "Inspect the resolved config"
 complete -c strument -n __strument_no_subcommand -a model-config -d "Print copy-pastable model config fetched from a provider"
@@ -60,6 +60,7 @@ complete -c strument -n "__fish_seen_subcommand_from model-config" -a "model"
 complete -c strument -n "__fish_seen_subcommand_from project" -a "list adopt ignore"
 complete -c strument -n "__fish_seen_subcommand_from project list" -s a -l all -d "Include projects whose directory still exists"
 complete -c strument -n "__fish_seen_subcommand_from project adopt" -s y -l yes -d "Do not ask; for scripts"
+complete -c strument -n "__fish_seen_subcommand_from trust" -s y -l yes -d "Do not ask; for scripts"
 
 # tool.
 complete -c strument -n "__fish_seen_subcommand_from tool" -s r -l root -d "Project root" -r

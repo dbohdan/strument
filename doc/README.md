@@ -187,7 +187,12 @@ inherited from aider.
     never opens a socket.
   - `config/` — the Starlark configuration surface (`provider()`,
     `model()`, `env()`) and the direnv-style trust gate for project
-    configs.
+    configs. `inspect.go` is the other side of that gate: it runs an
+    *untrusted* config in the same sandboxed Starlark and reports what
+    trusting it would grant, which is what `strument trust` shows the user
+    before recording anything. Its classification of every project-settable
+    key is held to the merge block in `load.go` by a guard test in
+    `internal/fixture`.
   - `repomap/` — the parse layer. Tree-sitter tag extraction (pure-Go
     grammars via gotreesitter) feeds two things: `Tags`, behind both the
     `symbol` tool and the `/symbol` command, and `ParseStatus` for the

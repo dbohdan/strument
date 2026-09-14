@@ -1404,6 +1404,41 @@ needs a fresh `strument trust`. A config file still cannot `load()` a sibling:
 the directory form buys colocation with skills, not splitting a config across
 files.
 
+### What `strument trust` shows you
+
+Before it records anything, `strument trust` reads the config and prints what
+trusting it would allow — the keys that reach outside the conversation or change
+what runs, each with its specifics, and the remaining preferences by name:
+
+```
+/home/you/proj/.strument.star (new) grants:
+  models         defines 2 aliases: big (llm.corp.internal:8443), fast (openrouter)
+  shell          the model may run shell commands
+  env_allow      model-run commands see: PATH, HOME, AWS_PROFILE
+  auto_approve   stops asking before: websearch, bash
+  sandbox        "": the sandbox is off
+  and sets 3 preferences: default, max_steps, chat_language
+
+1 project skill to trust. A skill is instructions the model follows:
+  /home/you/proj/.strument/skills/deploy/SKILL.md (new)
+    deploy — Ship the current branch to production.
+    allowed-tools: bash, read (advisory; Strument grants nothing from it)
+
+Trust these? (y/N)
+```
+
+Each file is marked `new`, `changed`, or `unchanged` against what you last
+approved. A run where everything is unchanged says so and asks nothing, so
+re-running after editing one file in a project full of skills is cheap.
+
+No value that came from `env()` is printed — a proxy built out of a variable
+shows as `socks5://env(PROXY_HOST):1080` — and `env_set` shows variable names
+without their values. An `api_key` is never shown at all.
+
+`--yes` (`-y`) skips the question and keeps the summary, so a script still
+leaves a record of what it granted. **Without a terminal and without `--yes`,
+the command refuses** and exits non-zero rather than trusting unattended.
+
 ## Skills
 
 A **skill** is a named set of task-specific instructions stored in a Markdown
@@ -1455,9 +1490,14 @@ strument trust    # in the project directory
 ```
 
 One command covers the config and every skill in the project: they come from
-the same author, so they are one decision. It names each file it trusted. Trust
-is over content, so **re-run it after every edit** — an edited skill is not the
-skill you approved.
+the same author, so they are one decision. It shows each skill's declared name
+and description, asks, and then names each file it trusted — see [What
+`strument trust` shows you](#what-strument-trust-shows-you). Trust is over
+content, so **re-run it after every edit** — an edited skill is not the skill
+you approved.
+
+A skill's `description` is the only part of it that can be summarised; the body
+is prose your model will follow, and no listing can stand in for reading it.
 
 `/skill` lists what the session found, marking anything untrusted and saying
 how to allow it; `/skill <name>` puts one in the chat yourself. `/reload`

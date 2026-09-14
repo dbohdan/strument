@@ -876,7 +876,19 @@ func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
 }
 
 func execConfig(path string, src []byte, lookup func(string) (string, bool), root string) (*fileGlobals, error) {
+	return execConfigThread(path, src, lookup, root, nil)
+}
+
+// execConfigThread is execConfig with a hook that can constrain the Starlark
+// thread before the file runs. Only the inspection pass uses it, and inspect.go
+// says why the limit it sets belongs there rather than on the load path.
+func execConfigThread(path string, src []byte, lookup func(string) (string, bool), root string,
+	setup func(*starlark.Thread),
+) (*fileGlobals, error) {
 	thread := &starlark.Thread{Name: path}
+	if setup != nil {
+		setup(thread)
+	}
 	predeclared := predeclaredGlobals(lookup, root)
 	fileOpts := &syntax.FileOptions{
 		Set:             true,

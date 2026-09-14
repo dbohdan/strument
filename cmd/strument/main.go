@@ -1003,7 +1003,26 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 }
 
 type trustCmd struct {
-	Path string `arg:"" help:"Project directory containing a Strument config or skills (default: current directory)." optional:""`
+	Path string `arg:""                          help:"Project directory containing a Strument config or skills (default: current directory)." optional:""`
+	Yes  bool   `help:"Do not ask; for scripts." short:"y"`
+
+	// confirm is the test seam for the prompt. Unexported, so kong does not see
+	// it as a flag.
+	confirm func() bool
+}
+
+// trustItem is one file this command would record, with what the store already
+// knows about it.
+type trustItem struct {
+	path    string // absolute
+	content []byte
+	// state is "new", "changed", or "unchanged". The trust store holds a
+	// content hash and no content, so this is as much of a diff as there can
+	// be — and it is the part worth having: it says whether the user is
+	// looking at something they have approved before.
+	state string
+	// skill is set for a project skill, nil for the config.
+	skill *skill.Skill
 }
 
 func (c *trustCmd) Run() error {
@@ -1019,43 +1038,299 @@ func (c *trustCmd) Run() error {
 	if abs, err := filepath.Abs(root); err == nil {
 		root = abs
 	}
-	absPath, err := config.TrustProject(root, "")
+
+	tsPath, err := config.DefaultTrustStorePath()
 	if err != nil {
 		return err
 	}
-	var trusted []string
-	if absPath != "" {
-		trusted = append(trusted, absPath)
+	ts, err := config.OpenTrustStore(tsPath)
+	if err != nil {
+		return err
 	}
 
 	// The project's skills, whether or not they are currently trusted:
 	// re-running after an edit is what re-trusts an edited one, so this is not
 	// conditional on the current state.
-	paths, diags := skill.TrustablePaths(root)
+	skills, diags := skill.Trustable(root)
 	// Said before anything is trusted. A skill that cannot be read is one the
 	// user thinks they just trusted, and finding out later from its absence is
 	// the failure worth avoiding.
 	for _, d := range diags {
 		noticef("skipping %s: %s", d.Path, d.Message)
 	}
-	if err := config.TrustFiles(paths, ""); err != nil {
+
+	cfgPath, err := config.FindProjectConfig(root)
+	if err != nil {
 		return err
 	}
-	trusted = append(trusted, paths...)
+	var items []trustItem
+	if cfgPath != "" {
+		item, err := newTrustItem(ts, cfgPath, nil)
+		if err != nil {
+			return err
+		}
+		items = append(items, item)
+	}
+	for i := range skills {
+		item, err := newTrustItem(ts, skills[i].Path, &skills[i])
+		if err != nil {
+			return err
+		}
+		items = append(items, item)
+	}
 
-	if len(trusted) == 0 {
+	if len(items) == 0 {
 		return fmt.Errorf("nothing to trust in %s: no %s or %s, and no skills under .strument/skills/ or .agents/skills/",
 			strings.TrimRight(filepath.ToSlash(root), "/")+"/",
 			config.ProjectConfigPaths[0], config.ProjectConfigPaths[1])
 	}
+
+	// Nothing here has changed since the user last approved it, so there is
+	// nothing to approve. Re-running after editing one file in a project full
+	// of skills is then cheap and silent about the rest.
+	if !slices.ContainsFunc(items, func(it trustItem) bool { return it.state != trustUnchanged }) {
+		for _, it := range items {
+			fmt.Printf("Already trusted %s\n", it.path)
+		}
+		return nil
+	}
+
+	// What the config would be allowed to do, read out of the file itself. A
+	// config that does not execute is reported as the error it is rather than
+	// trusted with an empty summary: the whole value of this step is that the
+	// user sees what the file grants, and a file nobody could parse grants
+	// nothing anyone can describe.
+	if cfgPath != "" {
+		insp, err := config.InspectProjectConfig(root)
+		if err != nil {
+			return err
+		}
+		printInspection(insp, stateOf(items, cfgPath))
+	}
+	printSkills(items)
+
+	switch {
+	case c.Yes:
+		// The question is skipped; the disclosure above is not. A scripted
+		// trust still leaves a record of what it granted.
+	case c.confirm != nil:
+		if !c.confirm() {
+			fmt.Println("Nothing was trusted.")
+			return nil
+		}
+	case stdinIsTerminal():
+		if !confirmTrust() {
+			// Declining at a prompt exits 0, unlike the no-terminal case
+			// below: a person who typed "n" knows what happened and does not
+			// need a status to find out.
+			fmt.Println("Nothing was trusted.")
+			return nil
+		}
+	default:
+		// Fail closed. This used to trust silently, which made `strument trust`
+		// in a setup script a grant nobody read. A script that means it says so.
+		return fmt.Errorf("refusing to trust %s without confirmation: there is no terminal to ask on. Pass `--yes` to trust it unattended",
+			strings.TrimRight(filepath.ToSlash(root), "/")+"/")
+	}
+
+	// Recorded only now. The old order trusted the config before it had even
+	// looked at the skills, so a failure partway through left half a decision
+	// applied.
+	if _, err := config.TrustProject(root, ""); err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(skills))
+	for _, s := range skills {
+		paths = append(paths, s.Path)
+	}
+	if err := config.TrustFiles(paths, ""); err != nil {
+		return err
+	}
+
 	// Named one per line rather than counted. The whole risk here is a cloned
 	// repository carrying skills nobody noticed, so what was just granted has
 	// to be legible rather than summarised.
-	for _, p := range trusted {
-		fmt.Printf("Trusted %s\n", p)
+	fmt.Println()
+	for _, it := range items {
+		fmt.Printf("Trusted %s\n", it.path)
 	}
 	fmt.Println(config.ReTrustReminder)
 	return nil
+}
+
+// The three states a trustable file can be in relative to the store.
+const (
+	trustNew       = "new"
+	trustChanged   = "changed"
+	trustUnchanged = "unchanged"
+)
+
+func newTrustItem(ts *config.TrustStore, path string, sk *skill.Skill) (trustItem, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return trustItem{}, err
+	}
+	content, err := os.ReadFile(abs)
+	if err != nil {
+		return trustItem{}, err
+	}
+	state := trustNew
+	switch {
+	case ts.IsTrusted(abs, content):
+		state = trustUnchanged
+	case ts.Recorded(abs):
+		state = trustChanged
+	}
+	return trustItem{path: abs, content: content, state: state, skill: sk}, nil
+}
+
+func stateOf(items []trustItem, path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, it := range items {
+		if it.path == abs {
+			return it.state
+		}
+	}
+	return trustNew
+}
+
+// printInspection says what trusting this config would allow, one key per line.
+//
+// Keys rather than a diff against the previously trusted content, and
+// internal/config/inspect.go carries the reasoning: a diff would mean the trust
+// store held whole config files, and that store is a plaintext state file no
+// one expects to hold their project's text.
+func printInspection(insp *config.ProjectInspection, state string) {
+	if insp == nil {
+		return
+	}
+	path := promptField(insp.Path, maxPromptField)
+	if insp.Empty() {
+		fmt.Printf("\n%s (%s) changes no settings.\n", path, state)
+		return
+	}
+	fmt.Printf("\n%s (%s) grants:\n", path, state)
+	width := 0
+	for _, c := range insp.Capabilities {
+		width = max(width, len(c.Key))
+	}
+	for _, c := range insp.Capabilities {
+		// The key is ours; the detail quotes the file, so it is bounded and
+		// stripped before it reaches the terminal.
+		fmt.Printf("  %-*s  %s\n", width, c.Key, promptField(c.Detail, maxPromptDetail))
+	}
+	if len(insp.Preferences) > 0 {
+		// Named without detail rather than omitted: a key the summary cannot
+		// show is a key nobody classified, and silence is what this whole
+		// command exists to replace.
+		fmt.Printf("  and sets %s: %s\n",
+			render.Plural(len(insp.Preferences), "preference", "preferences"),
+			strings.Join(insp.Preferences, ", "))
+	}
+	if len(insp.MissingEnv) > 0 {
+		noticef("not set, read as empty while reading the config: %s", strings.Join(insp.MissingEnv, ", "))
+	}
+}
+
+// maxSkillsListed bounds the skill listing, and maxSkillDescription bounds one
+// description.
+//
+// Both are here because this is a security prompt whose text comes from the
+// repository being judged. A skill with a ten-kilobyte description, or a
+// directory with two hundred skills in it, would push the config summary off
+// the screen above the question — and the reader would answer a prompt whose
+// first half they never saw.
+const (
+	maxSkillsListed = 20
+	// maxPromptField bounds one quoted field, maxPromptDetail one rendered
+	// capability — longer because it is a sentence naming several things.
+	maxPromptField  = 100
+	maxPromptDetail = 300
+)
+
+func printSkills(items []trustItem) {
+	var skills []trustItem
+	for _, it := range items {
+		if it.skill != nil {
+			skills = append(skills, it)
+		}
+	}
+	if len(skills) == 0 {
+		return
+	}
+	fmt.Printf("\n%s to trust. A skill is instructions the model follows:\n",
+		render.Plural(len(skills), "project skill", "project skills"))
+	for i, it := range skills {
+		if i == maxSkillsListed {
+			fmt.Printf("  … and %d more\n", len(skills)-maxSkillsListed)
+			break
+		}
+		fmt.Printf("  %s (%s)\n", promptField(it.path, maxPromptField), it.state)
+		name := promptField(it.skill.Name, maxPromptField)
+		if name == "" {
+			name = "(unnamed)"
+		}
+		desc := promptField(it.skill.Description, maxPromptField)
+		if desc == "" {
+			desc = "(no description)"
+		}
+		fmt.Printf("    %s — %s\n", name, desc)
+		if at := promptField(it.skill.AllowedTools, maxPromptField); at != "" {
+			// Shown with the qualifier attached, because the field looks like a
+			// permission and is not one: internal/skill/frontmatter.go explains
+			// why a markdown file is never the authority on what this harness
+			// may do.
+			fmt.Printf("    allowed-tools: %s (advisory; Strument grants nothing from it)\n", at)
+		}
+	}
+}
+
+// promptField renders one piece of text quoted from an untrusted file.
+//
+// Three things happen and each closes a different hole. Whitespace is collapsed
+// so a newline in a description cannot break the prompt's layout. Escape
+// sequences are stripped, because this text is going to a terminal that obeys
+// them and the cursor could otherwise be moved back over lines the user has
+// already read — the review surface this whole command exists to provide.
+// And the result is bounded, so a skill with a ten-kilobyte description cannot
+// push the config summary off the screen above the question.
+//
+// internal/repl and internal/coder each have a plainer `oneLine` for listing a
+// skill. This is deliberately not that one: those flatten text for a listing,
+// this makes a security prompt safe to read.
+func promptField(s string, limit int) string {
+	s = render.Sanitize(strings.Join(strings.Fields(s), " "))
+	r := []rune(s)
+	if len(r) > limit {
+		return string(r[:limit]) + "…"
+	}
+	return s
+}
+
+// stdinIsTerminal reports whether there is really someone at the keyboard.
+//
+// Stricter than isCharDevice, which every other prompt in this command tree
+// uses: /dev/null is a character device, so `strument trust < /dev/null` looked
+// interactive, printed a question, read EOF, and declined. Declining is the
+// safe answer, but it exits 0 — and this is the one prompt whose *status* a
+// script reads, because a setup script's next line is usually the thing the
+// trust was for. So it asks the question the kernel can answer exactly.
+func stdinIsTerminal() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
+
+func confirmTrust() bool {
+	fmt.Print("\nTrust these? (y/N) ")
+	line, err := stdinReader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	// Defaulting to no, unlike the in-session shell prompt: that one asks about
+	// a command the user just read the model produce, while this one asks about
+	// a file somebody else wrote.
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes"
 }
 
 // configCmd inspects the resolved configuration for the current project:

@@ -375,6 +375,21 @@ func Untrusted(skills []Skill) []Skill {
 // trust` should record, whether or not they are currently trusted. Re-running
 // after an edit is what re-trusts an edited skill.
 func TrustablePaths(projectRoot string) ([]string, []Diagnostic) {
+	skills, diags := Trustable(projectRoot)
+	paths := make([]string, 0, len(skills))
+	for _, s := range skills {
+		paths = append(paths, s.Path)
+	}
+	return paths, diags
+}
+
+// Trustable is TrustablePaths with the skills themselves, for the caller that
+// has to show the user what it is about to trust: `strument trust` names each
+// skill and quotes its description, which is the only thing about a skill that
+// can be summarised at all. The body cannot be — it is prose the model will
+// follow — so the summary says what the file declares itself to be and stops
+// there.
+func Trustable(projectRoot string) ([]Skill, []Diagnostic) {
 	roots, _ := DefaultRoots(projectRoot)
 	var project []Root
 	for _, r := range roots {
@@ -382,10 +397,5 @@ func TrustablePaths(projectRoot string) ([]string, []Diagnostic) {
 			project = append(project, r)
 		}
 	}
-	skills, diags := Discover(Options{ProjectRoot: projectRoot, Roots: project})
-	paths := make([]string, 0, len(skills))
-	for _, s := range skills {
-		paths = append(paths, s.Path)
-	}
-	return paths, diags
+	return Discover(Options{ProjectRoot: projectRoot, Roots: project})
 }

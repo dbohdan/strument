@@ -6,6 +6,7 @@ _strument_config_commands="models default"
 _strument_tool_commands="read grep glob ls symbol"
 _strument_project_commands="list adopt ignore"
 _strument_project_options="-a --all -y --yes"
+_strument_trust_options="-y --yes"
 _strument_model_config_options="-s --source --provider-name --proxy"
 _strument_tool_options="-r --root --json"
 
@@ -103,7 +104,10 @@ _strument_complete() {
     shell)
         COMPREPLY=($(compgen -W "bash fish" -- "$cur"))
         ;;
-    trust|history|version)
+    trust)
+        COMPREPLY=($(compgen -W "$_strument_trust_options" -- "$cur"))
+        ;;
+    history|version)
         COMPREPLY=()
         ;;
     *)

@@ -298,6 +298,43 @@ affect model-run commands, but Strument continues to use the Git executable
 resolved at startup.
 
 
+## Trusting a project
+
+A project's config and its skills are inert until `strument trust` records them,
+keyed by a hash of their content: editing a trusted file untrusts it. See
+[`doc/config.md`](config.md#project-local-config).
+
+The command asks before it records, and prints what it is about to allow: the
+config keys that reach outside the conversation or change what runs (`shell`,
+`sandbox`, `env_allow`, `env_set`, `auto_approve`, `check`, `proxy`, the
+`prompt_*` overrides, and `models` — a redefined alias sends the conversation to
+whatever `base_url` the file names, with a key from your own environment), each
+with its specifics; the remaining preferences by name; and each project skill's
+declared name and description. Every file is marked `new`, `changed`, or
+`unchanged` against what you last approved, so a re-run in an unedited project
+asks nothing.
+
+Two limits worth stating plainly.
+
+**The summary is not a review of the skill bodies.** A skill is prose your model
+will follow, and its `description` is what the file claims about itself. The
+listing bounds nothing.
+
+**Trust is one decision covering the config and the skills**, because they come
+from the same author. There is no way to trust one and not the other.
+
+What the command shows you never contains a value it read from the environment:
+anything `env()` returned appears as the call rather than the value, `env_set`
+shows variable names only, and an `api_key` is not shown at all. The trust store
+itself holds only paths and hashes — no config content — which is why the
+summary describes what a file grants instead of diffing it against the version
+you approved before.
+
+Without a terminal, `strument trust` refuses rather than trusting silently;
+`--yes` is how a script says it meant it, and the summary still prints so the
+log records what was granted.
+
+
 ## How this was verified
 
 During development, enforcement tests were skipped on kernels without Landlock.

@@ -130,6 +130,15 @@ func (ts *TrustStore) IsTrusted(absPath string, content []byte) bool {
 	return string(current) == string(recorded)
 }
 
+// Recorded reports whether the store holds a record for absPath at all,
+// whatever its content. It is the difference between a file nobody has trusted
+// and one whose trusted content has since been edited — the same file, two
+// different things to tell the user before trusting it again.
+func (ts *TrustStore) Recorded(absPath string) bool {
+	_, ok := ts.records[absPath]
+	return ok
+}
+
 // Trust records (absPath, multihash(content)) under the current default
 // hash and persists the store.
 func (ts *TrustStore) Trust(absPath string, content []byte) error {

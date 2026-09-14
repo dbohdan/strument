@@ -20,6 +20,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   One `config.star` file replaces YAML, `.env` files, and a JSON model database.
   Project-local config is supported as either `.strument.star` or `.strument/config.star`.
   They are loaded only after you authorize them by running `strument trust` in the project directory.
+  That command prints what the config would be allowed to do — which hosts, which commands, which variables — and asks before recording anything.
   Trust is recorded by content hash, following the [direnv](https://direnv.net/) model.
 - [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
   `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
@@ -435,6 +436,7 @@ A top-level `proxy` is applied to all providers and every outbound HTTPS connect
 `search()` calls work the same way.
 
 A project-local config can override any of these settings, once you have run `strument trust` in the directory.
+`strument trust` shows you what the config grants and what skills it found, then asks; `--yes` skips the question for scripts, and without a terminal it refuses rather than trusting silently.
 The same command trusts the project's skills.
 Project skills are not loaded until you trust them.
 See [`doc/config.md`](doc/config.md) for details.
