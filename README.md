@@ -244,7 +244,9 @@ Both read the merged user + trusted project config for the current project, so t
 They take `--user` (the default) or `--project`; without an existing project config, `--project` picks `.strument/config.star` in a project that already has a `.strument/` directory and `.strument.star` otherwise.
 Editing a project config untrusts it, so `config --project edit` says when a re-run of `strument trust` is needed.
 `strument history path` and `strument history edit` do the same for the project's transcript.
-All four open the file with `$VISUAL`, then `$EDITOR`, then `vi`; the value is a command, so `EDITOR="code --wait"` works.
+All four open the file with `$VISUAL`, then `$EDITOR`, then a platform default: `vi` on Unix, and on Windows the first of `edit` (Microsoft Edit) and `notepad` that is installed.
+The variable holds a command rather than a program name, so `EDITOR="code --wait"` works, and a path with spaces can be quoted.
+Windows has no editor every installation has, so set `EDITOR` if you reach a Windows machine over SSH and it has no `edit`: `notepad` would try to open a window you cannot see.
 
 The option `--yes <name>` removes confirmation from the named prompt: `bash`, `webfetch`, `websearch`, `steps`, `context`, `add-output`, or `all`.
 The option can be repeated and accepts comma-separated lists, so `--yes bash --yes webfetch,websearch` and `--yes bash,webfetch,websearch` mean the same thing.

@@ -1401,7 +1401,7 @@ type configCmd struct {
 	Models  configModelsCmd  `cmd:"" help:"Print the config's model aliases, one per line."`
 	Default configDefaultCmd `cmd:"" help:"Print the config's default model alias."`
 	Path    configPathCmd    `cmd:"" help:"Print the path to a config file, whether or not it exists."`
-	Edit    configEditCmd    `cmd:"" help:"Open a config file in your editor ($VISUAL, $EDITOR, or vi)."`
+	Edit    configEditCmd    `cmd:"" help:"Open a config file in $VISUAL, $EDITOR, or your platform's default editor."`
 }
 
 // scopedFile is the file the scope flags name. The same function answers for
@@ -1603,7 +1603,7 @@ func runConfigSets(kind string) error {
 // noun cannot name.
 type historyCmd struct {
 	Path historyPathCmd `cmd:"" help:"Print the path to this project's chat-history file."`
-	Edit historyEditCmd `cmd:"" help:"Open this project's chat-history file in your editor ($VISUAL, $EDITOR, or vi)."`
+	Edit historyEditCmd `cmd:"" help:"Open this project's chat-history file in $VISUAL, $EDITOR, or your platform's default editor."`
 }
 
 // historyPath resolves the transcript for the current project.

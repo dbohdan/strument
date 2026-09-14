@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -63,11 +64,88 @@ func TestEditorArgv(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := editorArgv("/f", func(k string) string { return tc.env[k] })
+			// Unix with vi present, so the fallback rows above are about the
+			// variables rather than about what happens to be installed here.
+			got := editorArgvFor("/f", func(k string) string { return tc.env[k] }, found("vi"), "linux")
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("editorArgv = %q, want %q\n%s", got, tc.want, tc.reason)
 			}
 		})
+	}
+}
+
+// found builds a PATH lookup that succeeds for exactly these names. The
+// platform branch below turns on which editors exist, and a test that asked the
+// host would be testing the host.
+func found(names ...string) func(string) (string, error) {
+	return func(name string) (string, error) {
+		if slices.Contains(names, name) {
+			return "/usr/bin/" + name, nil
+		}
+		return "", exec.ErrNotFound
+	}
+}
+
+// What runs when neither variable is set.
+//
+// Windows has no editor everyone has: EDIT.COM is long gone and Microsoft Edit
+// ships only with recent Windows 11, so the answer is a probe rather than an
+// assertion — and a console editor is preferred to a graphical one, because
+// somebody reaching this over SSH has a terminal and no desktop.
+func TestEditorFallbackPerPlatform(t *testing.T) {
+	none := func(k string) string { _ = k; return "" }
+	tests := []struct {
+		name    string
+		goos    string
+		present []string
+		want    string
+	}{
+		{
+			name: "unix: vi, which POSIX requires",
+			goos: "linux", present: []string{"vi", "notepad"}, want: "vi",
+		},
+		{
+			name: "windows: a console editor when there is one",
+			goos: "windows", present: []string{"edit", "notepad"}, want: "edit",
+		},
+		{
+			name: "windows: notepad when there is not",
+			goos: "windows", present: []string{"notepad"}, want: "notepad",
+		},
+		{
+			// Nothing to run, so the error runEditor produces has to name
+			// something. The last candidate is the one every Windows has, which
+			// makes the message the most useful of the bad options.
+			name: "windows: nothing found still names a program",
+			goos: "windows", present: nil, want: "notepad",
+		},
+		{
+			name: "unix: nothing found still names a program",
+			goos: "linux", present: nil, want: "vi",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := editorArgvFor("/f", none, found(tc.present...), tc.goos)
+			if !slices.Equal(got, []string{tc.want, "/f"}) {
+				t.Errorf("fallback on %s with %q installed = %q, want %s",
+					tc.goos, tc.present, got, tc.want)
+			}
+		})
+	}
+
+	// The counter-arm: an editor the user named wins over any of this. The
+	// probe must never override a choice that was actually made, including one
+	// naming a program that is not on PATH — plenty of editors are launched
+	// through a wrapper the check would not find.
+	got := editorArgvFor("/f", func(k string) string {
+		if k == "EDITOR" {
+			return "my-editor"
+		}
+		return ""
+	}, found(), "windows")
+	if !slices.Equal(got, []string{"my-editor", "/f"}) {
+		t.Errorf("$EDITOR lost to the platform fallback: %q", got)
 	}
 }
 
