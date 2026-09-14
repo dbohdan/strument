@@ -583,7 +583,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	// The schemas count: they go out with this request like everything else,
 	// and leaving them out made the guard cheerful about a prompt 1.3k tokens
 	// closer to the limit than it reported.
-	inputTokens := c.countMessages(messages) + c.countTools()
+	inputTokens := c.countMessages(messages) + c.countTools() + c.countImages(messages)
 	if inputTokens < maxInput {
 		return true
 	}

@@ -268,6 +268,10 @@ func (c *Coder) TokensReport() string {
 		// in the system prompt and their contents arrive as tool results, which
 		// land in the history like any other tool result.
 		{"chat history", c.countMessages(chunks.done) + c.countMessages(chunks.cur)},
+		// Images are not text and have no tokenizer here, so they are
+		// estimated from their dimensions and shown apart rather than summed
+		// into a row of counted text. See imagetokens.go.
+		{"attachments (estimated)", c.countImages(chunks.allMessages())},
 	}
 
 	var b strings.Builder

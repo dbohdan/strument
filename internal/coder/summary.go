@@ -55,6 +55,19 @@ func (s *ChatSummary) count(m llm.Message) int {
 	for _, tc := range m.ToolCalls {
 		n += s.tokens.Count(tc.Name) + s.tokens.Count(tc.Arguments)
 	}
+	// Images for the same reason, one undercount further along: m.Text()
+	// renders an image as its label, so a history of screenshots looked like a
+	// history of short filenames and the budget never decided to compact it.
+	// The adapter here is the side model's rather than the main model's, which
+	// is the wrong one by a few percent and the right order of magnitude --
+	// this number decides when to compact, not what anything costs.
+	adapter := ""
+	if s.side != nil {
+		adapter = s.side.Provider.Adapter
+	}
+	for _, img := range m.Content.Images() {
+		n += imageTokens(img, adapter)
+	}
 	return n
 }
 
