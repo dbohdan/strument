@@ -145,7 +145,9 @@ func readOnlyTools() []llm.ToolDef {
 			Name: toolRead,
 			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
 				"use offset and limit to page through a long one. Absolute paths under the platform's " +
-				"standard temporary directory are also allowed.",
+				"standard temporary directory are also allowed. Images (PNG, JPEG, GIF, WebP) come " +
+				"back as pictures you can look at rather than as text, and offset and limit do not " +
+				"apply to them.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -665,7 +667,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	var edits []plannedEdit
 	var commands []toolCommand
 	var commit *commitArgs
-	results := map[string]string{} // call id -> result text
+	results := toolResults{}
 	needsReflection := false
 	interrupted := false
 
@@ -681,7 +683,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		case toolEdit, toolWrite:
 			e, msg := parseEditArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
@@ -690,7 +692,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		case toolBash:
 			cmd, msg := parseCommandArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
@@ -699,7 +701,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		case toolCommit:
 			ca, msg := parseCommitArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
@@ -709,8 +711,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				// second commit here has nothing of its own to close. Two
 				// commits are two steps, which the loop already gives for free
 				// once these results re-send.
-				results[tc.ID] = "One commit per step. This call closed nothing: " +
-					"make the next chunk of edits, then commit that."
+				results.setText(tc.ID, "One commit per step. This call closed nothing: "+
+					"make the next chunk of edits, then commit that.")
 				needsReflection = true
 				continue
 			}
@@ -718,52 +720,53 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			commit = &parsed
 			c.toolLoops.observeMutation()
 		case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
-			results[tc.ID] = c.runObservationRedirect(tc)
+			text, images := c.runObservationRedirect(tc)
+			results.setImages(tc.ID, text, images)
 		case toolCheck:
-			results[tc.ID] = c.runCheckTool(ctx, tc)
+			results.setText(tc.ID, c.runCheckTool(ctx, tc))
 		case toolWebfetch:
 			f, msg := parseFetchArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
-			results[tc.ID] = c.runWebfetch(ctx, f)
+			results.setText(tc.ID, c.runWebfetch(ctx, f))
 		case toolWebsearch:
 			q, msg := parseSearchArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
-			results[tc.ID] = c.runWebsearch(ctx, q)
+			results.setText(tc.ID, c.runWebsearch(ctx, q))
 		case toolSkill:
 			s, msg := parseSkillArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
-			results[tc.ID] = c.runSkill(ctx, s)
+			results.setText(tc.ID, c.runSkill(ctx, s))
 		case toolRunCode:
 			cc, msg := parseCodeArgs(tc)
 			if msg != "" {
-				results[tc.ID] = msg
+				results.setText(tc.ID, msg)
 				needsReflection = true
 				continue
 			}
-			results[tc.ID] = c.runCode(ctx, cc)
+			results.setText(tc.ID, c.runCode(ctx, cc))
 		case toolAskUser:
 			// Not routed through ConfirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
-			results[tc.ID] = c.runAskUser(tc, &needsReflection)
+			results.setText(tc.ID, c.runAskUser(tc, &needsReflection))
 		case toolInterrupt:
 			// Answer every call so the wire stays well-formed, but record the
 			// interrupt: the turn ends after the results are appended.
-			results[tc.ID] = "The turn has ended."
+			results.setText(tc.ID, "The turn has ended.")
 			interrupted = true
 		default:
-			results[tc.ID] = fmt.Sprintf("Unknown tool %q.", tc.Name)
+			results.setText(tc.ID, fmt.Sprintf("Unknown tool %q.", tc.Name))
 		}
 	}
 
@@ -786,10 +789,10 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			// Stopped before this one started. Running it anyway would fail
 			// instantly against the cancelled context and read, to the model,
 			// as the command itself failing.
-			results[cmd.callID] = "Not run: the user stopped the turn before this command started."
+			results.setText(cmd.callID, "Not run: the user stopped the turn before this command started.")
 			continue
 		}
-		results[cmd.callID] = c.runShellTool(ctx, cmd)
+		results.setText(cmd.callID, c.runShellTool(ctx, cmd))
 	}
 
 	// The commit closes the work, so it runs after both the edits and the
@@ -797,7 +800,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// that wants to gate a commit on a result has to see that result first,
 	// which is a second step by construction.
 	if commit != nil {
-		results[commit.callID] = c.runCommitTool(*commit)
+		results.setText(commit.callID, c.runCommitTool(*commit))
 	}
 
 	// Append one tool result per call, in call order, then re-send on them.
@@ -863,16 +866,21 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 // instruction that arrives exactly when the model is trying to observe.
 // argsJSON is passed through so the bridged example can quote the model's own
 // arguments back at it.
-func (c *Coder) runObservationRedirect(tc llm.ToolCall) string {
+func (c *Coder) runObservationRedirect(tc llm.ToolCall) (string, []llm.ImageSource) {
 	if !c.ObservationViaRunCode {
-		return c.inspector().Run(tc.Name, tc.Arguments)
+		// read is the one observation tool whose answer can carry something
+		// that is not text, so it does not go through the text-shaped Run.
+		if tc.Name == toolRead {
+			return c.runRead(tc)
+		}
+		return c.inspector().Run(tc.Name, tc.Arguments), nil
 	}
 	return fmt.Sprintf("%q is not offered directly in this session: all file observation "+
 		"goes through the run_code tool. Call run_code with a program that calls %s(%s) — for "+
 		"example:\n\n```python\n%s\n```\n\nThe result of the call comes back to the "+
 		"program; return what you need from the program's final value.",
 		tc.Name, tc.Name, quoteToolArg(strings.TrimSpace(tc.Arguments)),
-		observationExample(tc.Name))
+		observationExample(tc.Name)), nil
 }
 
 // observationExample renders one bridged call for the redirect text, in the
@@ -1023,15 +1031,66 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output)
 }
 
+// toolResult is one tool call's answer: text, plus any images the tool
+// produced. Only read returns images today.
+//
+// One value rather than a text map beside an image map keyed the same way.
+// Parallel maps whose keys have to agree are the shape this codebase keeps
+// removing: the failure is a call id present in one and missing from the other,
+// which drops an image with nothing to notice it. Here there is nothing to keep
+// in step.
+type toolResult struct {
+	Text   string
+	Images []llm.ImageSource
+}
+
+// toolResults collects one turn's answers by call id.
+type toolResults map[string]toolResult
+
+// setText records a text-only answer, which is all but one tool.
+func (r toolResults) setText(id, text string) { r[id] = toolResult{Text: text} }
+
+// setImages records an answer that carries images alongside its text.
+func (r toolResults) setImages(id, text string, images []llm.ImageSource) {
+	r[id] = toolResult{Text: text, Images: images}
+}
+
+// appendText adds to an answer already recorded, keeping its images.
+func (r toolResults) appendText(id, text string) {
+	got := r[id]
+	got.Text += text
+	r[id] = got
+}
+
 // appendToolResults appends a RoleTool message per captured call, in the
 // order the model produced them, so every tool_call_id is answered.
-func (c *Coder) appendToolResults(results map[string]string) {
+//
+// A result carrying images becomes block content. Anthropic takes image blocks
+// inside a tool_result directly; the other two dialects do not, and their
+// clients re-home the images into a following user message rather than dropping
+// them — see toolResultMessages in the client package.
+func (c *Coder) appendToolResults(results toolResults) {
 	for _, tc := range c.partialToolCalls {
-		text, ok := results[tc.ID]
+		got, ok := results[tc.ID]
 		if !ok {
-			text = "The call produced no result." // defensive; every branch above sets one
+			got.Text = "The call produced no result." // defensive; every branch above sets one
 		}
-		c.curMessages = append(c.curMessages, llm.ToolResult(tc.ID, text))
+		if len(got.Images) == 0 {
+			c.curMessages = append(c.curMessages, llm.ToolResult(tc.ID, got.Text))
+			continue
+		}
+		blocks := make([]llm.ContentBlock, 0, len(got.Images)+1)
+		if got.Text != "" {
+			blocks = append(blocks, llm.TextBlock(got.Text))
+		}
+		for _, img := range got.Images {
+			blocks = append(blocks, llm.ImageBlock(img))
+		}
+		c.curMessages = append(c.curMessages, llm.Message{
+			Role:       llm.RoleTool,
+			Content:    llm.BlocksContent(blocks...),
+			ToolCallID: tc.ID,
+		})
 	}
 }
 
@@ -1040,7 +1099,7 @@ func (c *Coder) appendToolResults(results map[string]string) {
 // results, and returns the edited relative paths. A search that doesn't match
 // sets *matchFailure and records a focused error (with a did-you-mean) for
 // that call.
-func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, matchFailure *bool) []string {
+func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFailure *bool) []string {
 	if len(edits) == 0 {
 		return nil
 	}
@@ -1072,11 +1131,11 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		e.path = c.normalizeToolPath(e.path)
 		if reason := c.unsafePath(e.path); reason != "" {
 			c.Out.Errorf("Skipping edit to %s: %s", quoteToolArg(e.path), reason)
-			results[e.callID] = fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), reason)
+			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), reason))
 			continue
 		}
 		if ok, why := c.allowedToEdit(e.path, needDirtyCommit); !ok {
-			results[e.callID] = fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why)
+			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why))
 			continue
 		}
 
@@ -1087,7 +1146,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		// exempt: it puts down a whole file and claims nothing about what was
 		// there before.
 		if !e.create && c.shown.changed(e.path, c.fullPath(e.path)) {
-			results[e.callID] = toolStaleFailure(e.path)
+			results.setText(e.callID, toolStaleFailure(e.path))
 			*matchFailure = true
 			c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
 			continue
@@ -1101,7 +1160,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			// match and no way for the edit to be ambiguous.
 			resolved, failure := c.resolveEdit(e, content)
 			if failure != "" {
-				results[e.callID] = failure
+				results.setText(e.callID, failure)
 				*matchFailure = true
 				// The first line verbatim. Lowercasing it mangled the quoted
 				// examples the message exists to show ("2 tabs" is not "2 TABS"
@@ -1163,7 +1222,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 				ambiguous = true
 			}
 			if ambiguous || !ok || newContent == "" {
-				results[e.callID] = toolMatchFailure(e, content, fen, ambiguous)
+				results.setText(e.callID, toolMatchFailure(e, content, fen, ambiguous))
 				*matchFailure = true
 				// The model is told through the tool result, and will usually
 				// re-read and try again. The user has to be told separately, or
@@ -1213,10 +1272,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			// The digest, not "Applied.": the model's next edit to this file
 			// needs the identities this one produced, and without them it has
 			// to re-read — which is most of what anchors are for.
-			results[e.callID] = c.anchorDigest(e.path, pending[e.path])
+			results.setText(e.callID, c.anchorDigest(e.path, pending[e.path]))
 			continue
 		}
-		results[e.callID] = fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
+		results.setText(e.callID, fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path)))
 	}
 
 	c.dirtyCommit(needDirtyCommit)
@@ -1244,9 +1303,9 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 			// helps nobody. The loop continues and the model decides.
 			for _, e := range edits {
 				if applied[e.callID] {
-					results[e.callID] = fmt.Sprintf(
+					results.setText(e.callID, fmt.Sprintf(
 						"The write failed and the whole batch was rolled back, so %s is unchanged: %v",
-						quoteToolArg(e.path), err)
+						quoteToolArg(e.path), err))
 				}
 			}
 			return nil
@@ -1263,7 +1322,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		// Nothing reached the disk, and the model must not be told otherwise.
 		for _, e := range edits {
 			if applied[e.callID] {
-				results[e.callID] = fmt.Sprintf("Did not write %s: this session is --dry-run.", quoteToolArg(e.path))
+				results.setText(e.callID, fmt.Sprintf("Did not write %s: this session is --dry-run.", quoteToolArg(e.path)))
 			}
 		}
 	}
@@ -1288,7 +1347,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results map[string]string, m
 		}
 		c.Out.Warningf("%s", note)
 		if id := lastCall[p]; id != "" {
-			results[id] += "\n\n" + note
+			results.appendText(id, "\n\n"+note)
 		}
 	}
 	return edited

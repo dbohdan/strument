@@ -158,7 +158,7 @@ func TestAnchoredEditIsUnambiguousAmongIdenticalBlocks(t *testing.T) {
 		t.Fatal("identical lines share an anchor, so this proves nothing")
 	}
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{{
 		callID: "call_1", path: "h.go", anchor: second, endAnchor: third,
@@ -166,7 +166,7 @@ func TestAnchoredEditIsUnambiguousAmongIdenticalBlocks(t *testing.T) {
 	}}, results, &matchFailure)
 
 	if len(edited) != 1 {
-		t.Fatalf("edited = %v, want the anchored edit applied: %q", edited, results["call_1"])
+		t.Fatalf("edited = %v, want the anchored edit applied: %q", edited, results["call_1"].Text)
 	}
 	got, _ := os.ReadFile(path)
 	if n := strings.Count(string(got), "fmt.Errorf"); n != 1 {
@@ -177,8 +177,8 @@ func TestAnchoredEditIsUnambiguousAmongIdenticalBlocks(t *testing.T) {
 	if !strings.HasPrefix(string(got), "A\n\tif !ok {\n\t\treturn err\n\t}\n") {
 		t.Errorf("the first block was disturbed:\n%s", got)
 	}
-	if !strings.Contains(results["call_1"], "New anchors") {
-		t.Errorf("result = %q, want the digest so the next edit need not re-read", results["call_1"])
+	if !strings.Contains(results["call_1"].Text, "New anchors") {
+		t.Errorf("result = %q, want the digest so the next edit need not re-read", results["call_1"].Text)
 	}
 }
 
@@ -201,7 +201,7 @@ func TestStaleAnchorIsRefusedNotGuessed(t *testing.T) {
 	}
 	c.anchorRows("a.txt", 0, 3) // a fresh read re-mints the changed line
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		{callID: "call_1", path: "a.txt", anchor: twoAnchor, replace: "second\n"},
@@ -214,8 +214,8 @@ func TestStaleAnchorIsRefusedNotGuessed(t *testing.T) {
 		t.Errorf("the rewritten line was overwritten via a retired anchor:\n%s", got)
 	}
 	for _, want := range []string{"does not name a line", "Read it again"} {
-		if !strings.Contains(results["call_1"], want) {
-			t.Errorf("result = %q, want %q", results["call_1"], want)
+		if !strings.Contains(results["call_1"].Text, want) {
+			t.Errorf("result = %q, want %q", results["call_1"].Text, want)
 		}
 	}
 }
@@ -235,7 +235,7 @@ func TestTwoAnchoredEditsComposeWithoutAReread(t *testing.T) {
 	first, _, _ := strings.Cut(rows[0], "\t")
 	last, _, _ := strings.Cut(rows[3], "\t")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	// One batch, two calls. The first inserts a line, which shifts every line
 	// below it — the case where a line number would have gone stale.
@@ -245,7 +245,7 @@ func TestTwoAnchoredEditsComposeWithoutAReread(t *testing.T) {
 	}, results, &matchFailure)
 
 	if len(edited) != 1 {
-		t.Fatalf("edited = %v: %q / %q", edited, results["call_1"], results["call_2"])
+		t.Fatalf("edited = %v: %q / %q", edited, results["call_1"].Text, results["call_2"].Text)
 	}
 	want := "ALPHA\nextra\nbeta\ngamma\nDELTA\n"
 	if got, _ := os.ReadFile(path); string(got) != want {
@@ -325,14 +325,14 @@ func TestIndentColumnPutsTheStatedIndentationOnDisk(t *testing.T) {
 	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 5), "\n"), "\n")
 	id, _, _ := strings.Cut(rows[2], "\t") // the "return" line
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		{callID: "c1", path: "a.go", anchor: id, replace: "2 tabs\treturn nil\n"},
 	}, results, &matchFailure)
 
 	if len(edited) != 1 {
-		t.Fatalf("edited = %v: %q", edited, results["c1"])
+		t.Fatalf("edited = %v: %q", edited, results["c1"].Text)
 	}
 	got, _ := os.ReadFile(path)
 	if want := "func f() {\n\tif x {\n\t\treturn nil\n\t}\n}\n"; string(got) != want {
@@ -360,7 +360,7 @@ func TestMalformedIndentIsRefused(t *testing.T) {
 		"literal indent": "\t\treturn nil\n",
 		"unknown unit":   "2 indents\treturn nil\n",
 	} {
-		results := map[string]string{}
+		results := toolResults{}
 		matchFailure := false
 		edited := c.applyToolEdits([]plannedEdit{
 			{callID: "c1", path: "a.go", anchor: id, replace: replace},
@@ -422,7 +422,7 @@ func TestIndentColumnRejectsDoubledIndentation(t *testing.T) {
 	rows := strings.Split(strings.TrimRight(c.anchorRows("a.go", 0, 5), "\n"), "\n")
 	id, _, _ := strings.Cut(rows[2], "\t")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		{callID: "c1", path: "a.go", anchor: id, replace: "2 tabs\t\t\treturn nil\n"},
@@ -434,15 +434,15 @@ func TestIndentColumnRejectsDoubledIndentation(t *testing.T) {
 	if got, _ := os.ReadFile(path); string(got) != before {
 		t.Errorf("file changed: %q", got)
 	}
-	if !strings.Contains(results["c1"], "belongs in the column") {
-		t.Errorf("result = %q, want it to say where indentation goes", results["c1"])
+	if !strings.Contains(results["c1"].Text, "belongs in the column") {
+		t.Errorf("result = %q, want it to say where indentation goes", results["c1"].Text)
 	}
 	// And a correctly formed row still works, so this is a restriction, not a wall.
-	results, matchFailure = map[string]string{}, false
+	results, matchFailure = toolResults{}, false
 	if edited := c.applyToolEdits([]plannedEdit{
 		{callID: "c2", path: "a.go", anchor: id, replace: "2 tabs\treturn nil\n"},
 	}, results, &matchFailure); len(edited) != 1 {
-		t.Fatalf("a well-formed row was refused: %q", results["c2"])
+		t.Fatalf("a well-formed row was refused: %q", results["c2"].Text)
 	}
 	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "\t\treturn nil\n") {
 		t.Errorf("file = %q, want exactly two tabs", got)

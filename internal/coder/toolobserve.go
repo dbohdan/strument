@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,22 +70,29 @@ func decodeArgs(tc llm.ToolCall, dst any) string {
 }
 
 // runRead answers a read call with a numbered window of the file.
-func (i *Inspector) runRead(tc llm.ToolCall) string {
+func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	var a struct {
 		Path   string `json:"path"`
 		Offset int    `json:"offset"`
 		Limit  int    `json:"limit"`
 	}
 	if msg := decodeArgs(tc, &a); msg != "" {
-		return msg
+		return msg, nil
 	}
 	if strings.TrimSpace(a.Path) == "" {
-		return "The required \"path\" argument was missing."
+		return "The required \"path\" argument was missing.", nil
+	}
+
+	// An image answers as an image, before the text path refuses it for not
+	// being UTF-8. The offset and limit arguments are windows into lines and
+	// mean nothing here, so they are ignored rather than half-honoured.
+	if text, images, ok := i.readImage(a.Path); ok {
+		return text, images
 	}
 
 	ft, err := i.Files.Read(a.Path, a.Offset, a.Limit)
 	if err != nil {
-		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err)
+		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
 	}
 	i.Out.Toolf("Read %s", readSummary(ft))
 	if i.Observe != nil {
@@ -102,7 +110,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) string {
 	}
 	if len(ft.Lines) == 0 {
 		fmt.Fprintf(&b, "\nLine %d is past the end of the file.\n", ft.Start)
-		return b.String()
+		return b.String(), nil
 	}
 	// Anchored rows when the session asked for them, and the numbered format
 	// otherwise. Either way every line carries an address; the difference is
@@ -115,7 +123,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) string {
 				fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
 					ft.Start, next-1, ft.Total, next)
 			}
-			return b.String()
+			return b.String(), nil
 		}
 	}
 	// Line numbers give stable referents for talking about code, which is worth
@@ -129,7 +137,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) string {
 		fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
 			ft.Start, next-1, ft.Total, next)
 	}
-	return b.String()
+	return b.String(), nil
 }
 
 // readSummary is the one-line outcome shown to the user.
@@ -561,4 +569,33 @@ func truncateResult(s string) string {
 		return s
 	}
 	return s[:maxToolOutputBytes] + "\n\n(Output was cut short here; it exceeded the size one tool result may carry.)\n"
+}
+
+// readImage answers a read of an image file, reporting false when the path is
+// not one so the caller falls through to the text path.
+//
+// Gated by workspace.ReadImage, which applies containment and the ignore rules:
+// here the model chose the path, which is the difference from /attach, where
+// the user typed it.
+func (i *Inspector) readImage(path string) (string, []llm.ImageSource, bool) {
+	info, data, ok, err := i.Files.ReadImage(path)
+	if err != nil {
+		// A real failure — missing, ignored, outside the project, too large —
+		// belongs to the text path, which reports it in the words the model is
+		// used to reading for every other file.
+		return "", nil, false
+	}
+	if !ok {
+		return "", nil, false
+	}
+	src := llm.ImageSource{
+		MediaType: info.MediaType,
+		Data:      base64.StdEncoding.EncodeToString(data),
+		Label:     path,
+		Width:     info.Width,
+		Height:    info.Height,
+	}
+	i.Out.Toolf("Read %s", src.String())
+	return quoteToolArg(path) + " is an image; it is attached below.",
+		[]llm.ImageSource{src}, true
 }

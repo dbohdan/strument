@@ -42,7 +42,7 @@ func TestUnreadFileIsStillEditable(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.AddFile("a.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits(
 		[]plannedEdit{editCall("call_1", "world", "mars")},
@@ -75,7 +75,7 @@ func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
 	// have applied cleanly and told the model it succeeded.
 	touchLater(t, path, "a totally different hello world, rewritten\n")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits(
 		[]plannedEdit{editCall("call_1", "world", "mars")},
@@ -92,7 +92,7 @@ func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
 	}
 	// The message must name the cause. "Not found" would send the model
 	// hunting for a typo it did not make — and here the text *was* found.
-	got := results["call_1"]
+	got := results["call_1"].Text
 	for _, want := range []string{"changed on disk", "Read it again"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("result = %q, want it to mention %q", got, want)
@@ -117,7 +117,7 @@ func TestOurOwnWriteRefreshesTheStamp(t *testing.T) {
 	c.AddFile("a.txt")
 	c.shown.note("a.txt", path)
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	if edited := c.applyToolEdits(
 		[]plannedEdit{editCall("call_1", "one", "ONE")},
@@ -125,7 +125,7 @@ func TestOurOwnWriteRefreshesTheStamp(t *testing.T) {
 		t.Fatalf("first edit: edited = %v, want it applied", edited)
 	}
 
-	results = map[string]string{}
+	results = toolResults{}
 	matchFailure = false
 	edited := c.applyToolEdits(
 		[]plannedEdit{editCall("call_2", "three", "THREE")},
@@ -133,7 +133,7 @@ func TestOurOwnWriteRefreshesTheStamp(t *testing.T) {
 
 	if len(edited) != 1 {
 		t.Fatalf("second edit: edited = %v, want it applied — the harness's own "+
-			"write must not read as a change by somebody else: %q", edited, results["call_2"])
+			"write must not read as a change by somebody else: %q", edited, results["call_2"].Text)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "ONE two THREE\n" {
 		t.Errorf("file = %q, want both edits applied", got)
@@ -155,14 +155,14 @@ func TestWriteIsNotGatedOnStaleness(t *testing.T) {
 	c.shown.note("a.txt", path)
 	touchLater(t, path, "changed by somebody else entirely\n")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits(
 		[]plannedEdit{wholeFileWrite("call_1", "a.txt", "written fresh\n")},
 		results, &matchFailure)
 
 	if len(edited) != 1 {
-		t.Fatalf("edited = %v, want write to go through: %q", edited, results["call_1"])
+		t.Fatalf("edited = %v, want write to go through: %q", edited, results["call_1"].Text)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "written fresh\n" {
 		t.Errorf("file = %q, want the write applied", got)
@@ -205,7 +205,7 @@ func TestFuzzyEditIsCountedAndAnnounced(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.AddFile("a.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	// Four spaces where the file has a tab: nowhere verbatim in the file.
 	edited := c.applyToolEdits([]plannedEdit{
@@ -213,7 +213,7 @@ func TestFuzzyEditIsCountedAndAnnounced(t *testing.T) {
 	}, results, &matchFailure)
 
 	if len(edited) != 1 {
-		t.Fatalf("edited = %v, want the line matcher to place it: %q", edited, results["call_1"])
+		t.Fatalf("edited = %v, want the line matcher to place it: %q", edited, results["call_1"].Text)
 	}
 	if c.editsFuzzy != 1 || c.editsExact != 0 {
 		t.Errorf("exact=%d fuzzy=%d, want exact=0 fuzzy=1 — the counter cannot see the "+
@@ -236,7 +236,7 @@ func TestExactEditIsNotCountedAsFuzzy(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.AddFile("a.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	c.applyToolEdits([]plannedEdit{
 		editCall("call_1", "\tprintln(\"hi\")\n", "\tprintln(\"bye\")\n"),
@@ -263,7 +263,7 @@ func TestFuzzyAmbiguityIsRefused(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.AddFile("a.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	// Two tabs where the file has one: matches all three blocks, verbatim none.
 	edited := c.applyToolEdits([]plannedEdit{
@@ -276,7 +276,7 @@ func TestFuzzyAmbiguityIsRefused(t *testing.T) {
 	if got, _ := os.ReadFile(path); strings.Contains(string(got), "wrapped") {
 		t.Error("a coin flip was written to disk and reported as success")
 	}
-	got := results["call_1"]
+	got := results["call_1"].Text
 	if !strings.Contains(got, "more than one place") {
 		t.Errorf("result = %q, want it to name the ambiguity rather than report 'not found'", got)
 	}

@@ -15,7 +15,7 @@ import (
 // records snapshots.
 func applyBatch(t *testing.T, c *Coder, edits ...plannedEdit) {
 	t.Helper()
-	results := map[string]string{}
+	results := toolResults{}
 	fail := false
 	c.applyToolEdits(edits, results, &fail)
 }
@@ -354,7 +354,7 @@ func TestParseWarningOnRegression(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.Out = out
 
-	results := map[string]string{}
+	results := toolResults{}
 	fail := false
 	c.applyToolEdits([]plannedEdit{
 		{callID: "1", path: "a.go", search: "func F() int { return 1 }\n", replace: "func F() int { return 1\n"},
@@ -363,8 +363,8 @@ func TestParseWarningOnRegression(t *testing.T) {
 	if got := read(t, dir, "a.go"); !strings.Contains(got, "return 1\n") {
 		t.Errorf("the edit did not apply: %q", got)
 	}
-	if !strings.Contains(results["1"], "no longer does") {
-		t.Errorf("the model was not told:\n%s", results["1"])
+	if !strings.Contains(results["1"].Text, "no longer does") {
+		t.Errorf("the model was not told:\n%s", results["1"].Text)
 	}
 	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "no longer does") {
 		t.Errorf("the user was not told:\n%s", joined)
@@ -380,14 +380,14 @@ func TestNoParseWarningWhenAlreadyBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	results := map[string]string{}
+	results := toolResults{}
 	fail := false
 	c.applyToolEdits([]plannedEdit{
 		{callID: "1", path: "a.go", search: "func F() int { return 1\n", replace: "func F() int { return 2\n"},
 	}, results, &fail)
 
-	if strings.Contains(results["1"], "no longer does") {
-		t.Errorf("warned about a file that was already broken:\n%s", results["1"])
+	if strings.Contains(results["1"].Text, "no longer does") {
+		t.Errorf("warned about a file that was already broken:\n%s", results["1"].Text)
 	}
 }
 
@@ -399,14 +399,14 @@ func TestNoParseWarningWithoutAGrammar(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	results := map[string]string{}
+	results := toolResults{}
 	fail := false
 	c.applyToolEdits([]plannedEdit{
 		{callID: "1", path: "notes.txt", search: "one\n", replace: "}}} not code {{{\n"},
 	}, results, &fail)
 
-	if strings.Contains(results["1"], "no longer does") {
-		t.Errorf("warned about a file no grammar covers:\n%s", results["1"])
+	if strings.Contains(results["1"].Text, "no longer does") {
+		t.Errorf("warned about a file no grammar covers:\n%s", results["1"].Text)
 	}
 }
 

@@ -141,6 +141,78 @@ type wireImageURL struct {
 	URL string `json:"url"`
 }
 
+// rehomeToolImages moves images out of tool-result messages and into a user
+// message that follows them.
+//
+// Anthropic takes an image inside a tool_result; neither the chat-completions
+// dialect nor the Responses API does — their tool messages are text. So the
+// result keeps text naming what it found, and the image arrives immediately
+// after, in the one role that can carry it. Pi does the same thing for the same
+// reason, which is some comfort that there is no better way.
+//
+// Consecutive tool results are re-homed into one following user message rather
+// than one each, so a turn that reads three images does not interleave three
+// extra turns through the conversation.
+//
+// The caller's slice is returned untouched when no tool result carries an
+// image, which is every request that does not use the read tool on a picture.
+func rehomeToolImages(msgs []llm.Message) []llm.Message {
+	carries := false
+	for _, m := range msgs {
+		if m.Role == llm.RoleTool && len(m.Content.Images()) > 0 {
+			carries = true
+			break
+		}
+	}
+	if !carries {
+		return msgs
+	}
+
+	out := make([]llm.Message, 0, len(msgs)+1)
+	var pending []llm.ContentBlock
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		blocks := append([]llm.ContentBlock{
+			llm.TextBlock(llm.HarnessMarker + " images from the tool results above."),
+		}, pending...)
+		out = append(out, llm.Message{Role: llm.RoleUser, Content: llm.BlocksContent(blocks...)})
+		pending = nil
+	}
+
+	for _, m := range msgs {
+		if m.Role != llm.RoleTool {
+			flush()
+			out = append(out, m)
+			continue
+		}
+		images := m.Content.Images()
+		if len(images) == 0 {
+			out = append(out, m)
+			continue
+		}
+		var text strings.Builder
+		for _, b := range m.Content.Blocks {
+			if b.Type == llm.BlockText {
+				text.WriteString(b.Text)
+			}
+		}
+		result := text.String()
+		if result == "" {
+			// A tool result is answering a call the model made, so it cannot be
+			// empty: the pairing by id is what makes the turn well formed.
+			result = "The image is attached after this result."
+		}
+		out = append(out, llm.ToolResult(m.ToolCallID, result))
+		for _, img := range images {
+			pending = append(pending, llm.ImageBlock(img))
+		}
+	}
+	flush()
+	return out
+}
+
 // wireContent renders llm.Content in the chat-completions dialect.
 //
 // Each client shapes its own dialect rather than marshalling llm.Content
@@ -204,8 +276,9 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 	// load, and writing ours afterwards keeps ownership regardless.
 	maps.Copy(body, req.ExtraParams)
 
-	msgs := make([]wireMessage, len(req.Messages))
-	for i, m := range req.Messages {
+	reqMessages := rehomeToolImages(req.Messages)
+	msgs := make([]wireMessage, len(reqMessages))
+	for i, m := range reqMessages {
 		wm := wireMessage{Role: m.Role, Content: wireContent(m.Content), ToolCallID: m.ToolCallID}
 		for _, tc := range m.ToolCalls {
 			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{

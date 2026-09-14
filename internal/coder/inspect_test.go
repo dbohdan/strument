@@ -52,7 +52,7 @@ func (c *Coder) runObservation(name, args string) string {
 	tc := call(name, args)
 	switch name {
 	case toolRead:
-		return c.runRead(tc)
+		return readTool(c, tc)
 	case toolGrep:
 		return c.runGrep(tc)
 	case toolGlob:

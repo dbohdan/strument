@@ -69,7 +69,11 @@ func (i *Inspector) Run(name, argsJSON string) string {
 	tc := llm.ToolCall{Name: name, Arguments: argsJSON}
 	switch name {
 	case toolRead:
-		return i.runRead(tc)
+		// Text only here. Run backs the run_code bridge, whose results are
+		// strings a Python program computes over; an image block has nowhere
+		// to go. The program's route to bytes is read_bin.
+		text, _ := i.runRead(tc)
+		return text
 	case toolGrep:
 		return i.runGrep(tc)
 	case toolGlob:
@@ -104,7 +108,10 @@ func (c *Coder) inspector() *Inspector {
 // The Coder's observation methods delegate. They stay because the tool dispatch
 // and the REPL call them by these names, and because a Coder is the thing that
 // has an Out to report through.
-func (c *Coder) runRead(tc llm.ToolCall) string   { return c.inspector().runRead(tc) }
+func (c *Coder) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
+	return c.inspector().runRead(tc)
+}
+
 func (c *Coder) runGrep(tc llm.ToolCall) string   { return c.inspector().runGrep(tc) }
 func (c *Coder) runGlob(tc llm.ToolCall) string   { return c.inspector().runGlob(tc) }
 func (c *Coder) runLS(tc llm.ToolCall) string     { return c.inspector().runLS(tc) }

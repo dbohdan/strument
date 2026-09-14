@@ -107,7 +107,7 @@ func TestCodeFuncNotADirectTool(t *testing.T) {
 	if got := c.inspector().Run("read_bin", `{"path":"x"}`); !strings.Contains(got, "Unknown tool") {
 		t.Errorf("read_bin must not be a direct tool, got: %q", got)
 	}
-	if got := c.runObservationRedirect(call("read_bin", `{"path":"x"}`)); !strings.Contains(got, "Unknown tool") {
+	if got, _ := c.runObservationRedirect(call("read_bin", `{"path":"x"}`)); !strings.Contains(got, "Unknown tool") {
 		t.Errorf("the redirect path must not recognize read_bin either, got: %q", got)
 	}
 }

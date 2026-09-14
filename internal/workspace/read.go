@@ -144,34 +144,9 @@ type FileBytes struct {
 // observation surface is text-shaped, and this returns data a program computes
 // over rather than prose a model reads.
 func (w *Workspace) ReadBytes(rel string, offset, limit int64) (FileBytes, error) {
-	raw := rel
-	full, rel, reason := w.contain(raw)
-	if reason != "" {
-		return FileBytes{}, errors.New(reason)
-	}
-	if rel == "" {
-		return FileBytes{}, errors.New("no path given")
-	}
-	// Same temp-directory exception as Read, and for the same reason: a
-	// project itself may live under /tmp, so the original spelling must be
-	// absolute before the exception applies.
-	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
-	if !absolute || !UnderTempDir(full) {
-		if err := w.refuseIgnored(rel, full); err != nil {
-			return FileBytes{}, err
-		}
-	}
-
-	info, err := os.Stat(full)
+	full, rel, info, err := w.openable(rel, w.Limits.fileBytes())
 	if err != nil {
 		return FileBytes{}, err
-	}
-	if info.IsDir() {
-		return FileBytes{}, fmt.Errorf("%s is a directory", rel)
-	}
-	if info.Size() > w.Limits.fileBytes() {
-		return FileBytes{}, fmt.Errorf("%s is %s, larger than the %s read limit",
-			rel, HumanBytes(info.Size()), HumanBytes(w.Limits.fileBytes()))
 	}
 
 	if offset < 0 {
@@ -244,4 +219,77 @@ func HumanBytes(n int64) string {
 	default:
 		return fmt.Sprintf("%d B", n)
 	}
+}
+
+// openable runs the checks every whole-file read shares — containment, the
+// ignore rules, that the path is a file, and a size ceiling — and returns the
+// absolute path, the project-relative one, and the stat.
+//
+// Extracted rather than copied because the checks are a gate, and a gate with
+// two implementations is a gate with one hole in it. ReadImage is the second
+// caller and the reason this exists.
+func (w *Workspace) openable(rel string, maxBytes int64) (string, string, os.FileInfo, error) {
+	raw := rel
+	full, rel, reason := w.contain(raw)
+	if reason != "" {
+		return "", "", nil, errors.New(reason)
+	}
+	if rel == "" {
+		return "", "", nil, errors.New("no path given")
+	}
+	// Same temp-directory exception as Read, and for the same reason: a
+	// project itself may live under /tmp, so the original spelling must be
+	// absolute before the exception applies.
+	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
+	if !absolute || !UnderTempDir(full) {
+		if err := w.refuseIgnored(rel, full); err != nil {
+			return "", "", nil, err
+		}
+	}
+
+	info, err := os.Stat(full)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if info.IsDir() {
+		return "", "", nil, fmt.Errorf("%s is a directory", rel)
+	}
+	if info.Size() > maxBytes {
+		return "", "", nil, fmt.Errorf("%s is %s, larger than the %s read limit",
+			rel, HumanBytes(info.Size()), HumanBytes(maxBytes))
+	}
+	return full, rel, info, nil
+}
+
+// maxImageBytes caps an image the read tool will hand back. The same ceiling
+// /attach uses, and for the same reason: providers reject larger ones, and a
+// local refusal names the file and the limit where a provider error names
+// neither.
+const maxImageBytes = 5 << 20
+
+// ReadImage returns an image file whole, with the media type and dimensions
+// sniffed from its content.
+//
+// Unlike AttachFile, this path is gated: the model chooses the argument, so the
+// ignore rules and containment apply exactly as they do to read and grep. That
+// is the whole difference between the two routes into an image — who named the
+// file.
+//
+// A non-image is not an error here, only a "false": the read tool calls this
+// first and falls through to the text path, so "this is not an image" has to be
+// cheap and unremarkable rather than something to report.
+func (w *Workspace) ReadImage(rel string) (ImageInfo, []byte, bool, error) {
+	full, _, _, err := w.openable(rel, maxImageBytes)
+	if err != nil {
+		return ImageInfo{}, nil, false, err
+	}
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return ImageInfo{}, nil, false, err
+	}
+	info, reason := SniffImage(data)
+	if reason != "" {
+		return ImageInfo{}, nil, false, nil
+	}
+	return info, data, true, nil
 }

@@ -64,7 +64,7 @@ func TestApplyRollbackReturnsEmptyEdited(t *testing.T) {
 	c.AddFile("a.txt")
 	c.AddFile("blocker/b.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", "a.txt", "rewritten a\n"),
@@ -78,8 +78,8 @@ func TestApplyRollbackReturnsEmptyEdited(t *testing.T) {
 		t.Error("a filesystem failure must be reported, not reflected: it is not something the model can fix")
 	}
 	for _, id := range []string{"call_1", "call_2"} {
-		if !strings.Contains(results[id], "rolled back") {
-			t.Errorf("result[%s] = %q, want it to say the batch rolled back", id, results[id])
+		if !strings.Contains(results[id].Text, "rolled back") {
+			t.Errorf("result[%s] = %q, want it to say the batch rolled back", id, results[id].Text)
 		}
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(got) != "original a\n" {
@@ -134,7 +134,7 @@ func TestCleanWriteEditedIsWrittenSet(t *testing.T) {
 	c := toolCoder(t, dir)
 	c.AddFile("a.txt")
 
-	results := map[string]string{}
+	results := toolResults{}
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", "a.txt", "new content\n"),

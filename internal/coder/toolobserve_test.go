@@ -43,7 +43,7 @@ func TestReadNumbersLinesAndPages(t *testing.T) {
 	}
 	c, _ := observeEnv(t, map[string]string{"f.txt": b.String()})
 
-	whole := c.runRead(call("read", `{"path":"f.txt"}`))
+	whole := readTool(c, call("read", `{"path":"f.txt"}`))
 	if !strings.Contains(whole, " 1\tbody") || !strings.Contains(whole, "10\tbody") {
 		t.Errorf("read result is not line-numbered:\n%s", whole)
 	}
@@ -51,7 +51,7 @@ func TestReadNumbersLinesAndPages(t *testing.T) {
 		t.Errorf("a complete read must not offer paging:\n%s", whole)
 	}
 
-	win := c.runRead(call("read", `{"path":"f.txt","offset":3,"limit":4}`))
+	win := readTool(c, call("read", `{"path":"f.txt","offset":3,"limit":4}`))
 	if !strings.Contains(win, "Read from offset 7 for more") {
 		t.Errorf("a short window must name the next offset:\n%s", win)
 	}
@@ -62,7 +62,7 @@ func TestReadNumbersLinesAndPages(t *testing.T) {
 
 func TestReadReportsMissingFileToTheModel(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	got := c.runRead(call("read", `{"path":"nope.txt"}`))
+	got := readTool(c, call("read", `{"path":"nope.txt"}`))
 	if !strings.Contains(got, "Could not read nope.txt") {
 		t.Errorf("result = %q, want a model-facing failure", got)
 	}
@@ -70,7 +70,7 @@ func TestReadReportsMissingFileToTheModel(t *testing.T) {
 
 func TestReadRequiresPath(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	if got := c.runRead(call("read", `{}`)); !strings.Contains(got, "path") {
+	if got := readTool(c, call("read", `{}`)); !strings.Contains(got, "path") {
 		t.Errorf("result = %q, want it to name the missing argument", got)
 	}
 }
@@ -294,12 +294,12 @@ func TestSymlinksAreNamedAsSuch(t *testing.T) {
 	if !strings.Contains(listing, "aliases.sh -> ") {
 		t.Errorf("ls does not name the link:\n%s", listing)
 	}
-	got := c.runRead(call("read", `{"path":"aliases.sh"}`))
+	got := readTool(c, call("read", `{"path":"aliases.sh"}`))
 	if !strings.Contains(got, "aliases.sh -> ") {
 		t.Errorf("read does not name the link:\n%s", got)
 	}
 	// The target itself is an ordinary file and must not grow an arrow.
-	if plain := c.runRead(call("read", `{"path":"real/aliases.sh"}`)); strings.Contains(plain, " -> ") {
+	if plain := readTool(c, call("read", `{"path":"real/aliases.sh"}`)); strings.Contains(plain, " -> ") {
 		t.Errorf("a plain file was reported as a link:\n%s", plain)
 	}
 }
@@ -346,7 +346,7 @@ func TestCheckShowsAFailure(t *testing.T) {
 func TestObservationToolsAnnounceThemselves(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"a.go": "package a\n"})
 
-	c.runRead(call("read", `{"path":"a.go"}`))
+	readTool(c, call("read", `{"path":"a.go"}`))
 	c.runGrep(call("grep", `{"pattern":"package"}`))
 	c.runGlob(call("glob", `{"pattern":"*.go"}`))
 	c.runLS(call("ls", `{}`))
@@ -541,4 +541,12 @@ func TestGrepDefaultDoesNotFlipsFilesMode(t *testing.T) {
 	if strings.Contains(out, "one") || strings.Contains(out, ":2:") {
 		t.Errorf("an omitted mode with omitted context produced content output:\n%s", out)
 	}
+}
+
+// readTool is runRead's text answer, for the tests that predate images and are
+// about the text path. A test that cares about an image asserts on the second
+// return directly.
+func readTool(c *Coder, tc llm.ToolCall) string {
+	text, _ := c.runRead(tc)
+	return text
 }

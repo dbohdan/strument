@@ -128,7 +128,7 @@ func (c *ResponsesClient) BuildBody(req llm.Request) map[string]any {
 	body := map[string]any{}
 	maps.Copy(body, req.ExtraParams)
 
-	instructions, items := splitInstructions(req.Messages)
+	instructions, items := splitInstructions(rehomeToolImages(req.Messages))
 
 	body["model"] = req.Model
 	body["input"] = items

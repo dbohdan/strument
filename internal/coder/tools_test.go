@@ -900,7 +900,7 @@ func TestAmbiguousEditFailsRatherThanTakingTheFirstSite(t *testing.T) {
 				t.Fatal(err)
 			}
 			c := toolCoder(t, dir)
-			results := map[string]string{}
+			results := toolResults{}
 			var failed bool
 			c.applyToolEdits([]plannedEdit{{
 				callID: "1", path: "f.txt", search: tc.search, replace: "REPLACED",
@@ -909,8 +909,8 @@ func TestAmbiguousEditFailsRatherThanTakingTheFirstSite(t *testing.T) {
 			if !failed {
 				t.Error("an ambiguous edit was not reported as a match failure")
 			}
-			if !strings.Contains(results["1"], "ambiguous") {
-				t.Errorf("result does not say why: %q", results["1"])
+			if !strings.Contains(results["1"].Text, "ambiguous") {
+				t.Errorf("result does not say why: %q", results["1"].Text)
 			}
 			after, err := os.ReadFile(filepath.Join(dir, "f.txt"))
 			if err != nil {
@@ -932,12 +932,12 @@ func TestUniqueEditStillApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	results := map[string]string{}
+	results := toolResults{}
 	var failed bool
 	c.applyToolEdits([]plannedEdit{{callID: "1", path: "f.txt", search: "a\nb", replace: "Q"}}, results, &failed)
 
 	if failed {
-		t.Errorf("a unique edit was refused: %q", results["1"])
+		t.Errorf("a unique edit was refused: %q", results["1"].Text)
 	}
 	after, _ := os.ReadFile(filepath.Join(dir, "f.txt"))
 	if string(after) != "Q\nx\na\nc\n" {

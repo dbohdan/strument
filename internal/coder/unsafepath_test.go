@@ -126,7 +126,7 @@ func TestApplyEditsAddedOutOfRootFile(t *testing.T) {
 	matchFailure := false
 	edited := c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", rel, "new content\n"),
-	}, map[string]string{}, &matchFailure)
+	}, toolResults{}, &matchFailure)
 	if matchFailure {
 		t.Error("unexpected reflection editing a file the user deliberately added")
 	}
@@ -209,7 +209,7 @@ func TestApplyEditsAcceptAbsolutePathInsideTheRoot(t *testing.T) {
 	var matchFailure bool
 	edited := c.applyToolEdits([]plannedEdit{
 		{callID: "call_1", path: abs, search: "package w\n\nconst N = 1", replace: "package w\n\nconst N = 2"},
-	}, map[string]string{}, &matchFailure)
+	}, toolResults{}, &matchFailure)
 	if matchFailure {
 		t.Error("unexpected match failure editing by absolute path")
 	}
@@ -317,7 +317,7 @@ func TestWriteToAPinnedAbsolutePathHitsTheRealFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := map[string]string{}
+	results := toolResults{}
 	var matchFailure bool
 	edited := c.applyToolEdits([]plannedEdit{{
 		callID: "call_1", path: abs, create: true,
@@ -330,7 +330,7 @@ func TestWriteToAPinnedAbsolutePathHitsTheRealFile(t *testing.T) {
 	}
 	if string(got) == before {
 		t.Errorf("the real file was not written; result was %q, edited=%v",
-			results["call_1"], edited)
+			results["call_1"].Text, edited)
 	}
 	// And no shadow tree: the only .go files under root are the one that was
 	// already there.

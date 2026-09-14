@@ -11,7 +11,7 @@ import (
 // snapshot is built the way a turn builds it, not hand-assembled.
 func editTurn(t *testing.T, c *Coder, path, content string) {
 	t.Helper()
-	res := map[string]string{}
+	res := toolResults{}
 	var reflect bool
 	c.applyToolEdits([]plannedEdit{wholeFileWrite("call_1", path, content)}, res, &reflect)
 	c.pushTurnSnapshot()

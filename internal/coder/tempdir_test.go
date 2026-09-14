@@ -25,7 +25,7 @@ func TestWriteToTempDirectoryIsAllowed(t *testing.T) {
 		t.Fatalf("a temp-dir path was refused: %s", reason)
 	}
 
-	results := map[string]string{}
+	results := toolResults{}
 	var matchFailure bool
 	edited := c.applyToolEdits([]plannedEdit{{
 		callID: "call_1", path: target, create: true,
@@ -64,14 +64,14 @@ func TestEditOfTempFileReadsTheRealFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := map[string]string{}
+	results := toolResults{}
 	var matchFailure bool
 	edited := c.applyToolEdits([]plannedEdit{{
 		callID: "call_1", path: target,
 		search: "beta\n", replace: "BETA\n",
 	}}, results, &matchFailure)
 	if matchFailure {
-		t.Fatalf("the planner could not read the temp file: result %q", results["call_1"])
+		t.Fatalf("the planner could not read the temp file: result %q", results["call_1"].Text)
 	}
 	got, err := os.ReadFile(target)
 	if err != nil {
@@ -159,7 +159,7 @@ func TestTurnCommitSkipsSymlinkEscapes(t *testing.T) {
 	c.Repo = repo
 	c.AutoCommits = true
 
-	results := map[string]string{}
+	results := toolResults{}
 	var matchFailure bool
 	c.applyToolEdits([]plannedEdit{
 		wholeFileWrite("call_1", "in.go", "package in\n"),

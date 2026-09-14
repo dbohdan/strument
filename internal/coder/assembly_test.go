@@ -461,7 +461,7 @@ func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
 	// A direct read-only call under the arm redirects, quoting the model's own
 	// arguments, rather than running as if the schema had offered it.
 	tc := llm.ToolCall{ID: "t1", Name: toolGrep, Arguments: `{"pattern":"TODO"}`}
-	got := c.runObservationRedirect(tc)
+	got, _ := c.runObservationRedirect(tc)
 	if !strings.Contains(got, `"grep" is not offered directly`) ||
 		!strings.Contains(got, `grep(pattern="TODO", glob="**/*.go")`) {
 		t.Errorf("the redirect does not teach the call shape:\n%s", got)
@@ -469,7 +469,7 @@ func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
 
 	// With the arm off, the same dispatch runs the tool for real.
 	off := testCoder(t)
-	if strings.Contains(off.runObservationRedirect(tc), "not offered directly") {
+	if text, _ := off.runObservationRedirect(tc); strings.Contains(text, "not offered directly") {
 		t.Error("the redirect fired with ObservationViaRunCode off")
 	}
 }
