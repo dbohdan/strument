@@ -228,10 +228,13 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// results, or an interrupted reply the user chose to continue — so it adds
 	// no user turn; inp is unused on that path.
 	appendedUser := false
+	var consumedAttachments []llm.ImageSource
 	if c.resumeInPlace {
 		c.resumeInPlace = false
 	} else {
-		c.curMessages = append(c.curMessages, llm.TextMessage("user", inp))
+		var msg llm.Message
+		msg, consumedAttachments = c.userMessage(inp)
+		c.curMessages = append(c.curMessages, msg)
 		appendedUser = true
 	}
 
@@ -245,6 +248,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	if !c.checkTokens(messages) {
 		if appendedUser {
 			c.curMessages = c.curMessages[:len(c.curMessages)-1]
+			// Give the attachments back. The turn never happened, and a user
+			// who has to shorten their context should not also have to find
+			// and re-attach the screenshot they were asking about.
+			c.pendingAttachments = consumedAttachments
 		}
 		return OutcomeFailed, ""
 	}

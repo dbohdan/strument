@@ -232,8 +232,12 @@ type Coder struct {
 	absFnames         []string // ordered, deduped
 	absReadOnlyFnames []string
 	doneMessages      []llm.Message
-	curMessages       []llm.Message
-	turnEditedFiles   map[string]bool
+	// pendingAttachments are images staged by /attach, consumed by the next
+	// user message and gone after it. Not session state and not in the resume
+	// file: see userMessage in attach.go.
+	pendingAttachments []llm.ImageSource
+	curMessages        []llm.Message
+	turnEditedFiles    map[string]bool
 	// toolLog tees Toolf into a per-turn record, so the transcript can say what
 	// the turn did and not only what it said about it. Installed lazily by
 	// recordToolLines; see toollog.go.

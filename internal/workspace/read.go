@@ -86,7 +86,7 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 	}
 	if info.Size() > w.Limits.fileBytes() {
 		return FileText{}, fmt.Errorf("%s is %s, larger than the %s read limit",
-			rel, humanBytes(info.Size()), humanBytes(w.Limits.fileBytes()))
+			rel, HumanBytes(info.Size()), HumanBytes(w.Limits.fileBytes()))
 	}
 
 	data, err := os.ReadFile(full)
@@ -171,7 +171,7 @@ func (w *Workspace) ReadBytes(rel string, offset, limit int64) (FileBytes, error
 	}
 	if info.Size() > w.Limits.fileBytes() {
 		return FileBytes{}, fmt.Errorf("%s is %s, larger than the %s read limit",
-			rel, humanBytes(info.Size()), humanBytes(w.Limits.fileBytes()))
+			rel, HumanBytes(info.Size()), HumanBytes(w.Limits.fileBytes()))
 	}
 
 	if offset < 0 {
@@ -232,7 +232,10 @@ func isBinary(data []byte) bool {
 	return !utf8.Valid(head) && len(head) > 0
 }
 
-func humanBytes(n int64) string {
+// HumanBytes formats a byte count for a message a person reads. Exported for
+// the coder's attachment limits, which refuse in the same units this package
+// refuses an oversized read in.
+func HumanBytes(n int64) string {
 	switch {
 	case n >= 1<<20:
 		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))

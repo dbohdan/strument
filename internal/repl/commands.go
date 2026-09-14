@@ -73,6 +73,7 @@ func init() {
 	commands = []command{
 		{"add", "<file> ...", "Pin files for the model to inspect or edit (globs allowed).", cmdAdd},
 		{"ask", "[<question>]", "Ask about the code without editing. With no question, switch to ask mode.", cmdAsk},
+		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message, or show and unstage what is attached.", cmdAttach},
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a project check; optionally add its output to the chat.", cmdCheck},
 		{"clear", "", "Clear the conversation history.", cmdClear},
@@ -219,6 +220,24 @@ func (r *REPL) completer() readline.AutoCompleter {
 		switch c.name {
 		case "add":
 			sub = append(sub, recursiveDynamic(r.completeAddable))
+		case "attach":
+			// Arbitrary paths, and a drop word that completes what is staged.
+			// A screenshot is almost never inside the project, so the flat
+			// root listing completeAddable offers would be the wrong set.
+			staged := func(string) []string {
+				attached := r.coder.Attachments()
+				out := make([]string, 0, len(attached))
+				for _, src := range attached {
+					out = append(out, src.Label)
+				}
+				return out
+			}
+			names := readline.PcItemDynamic(staged)
+			names.SetChildren([]*readline.PrefixCompleter{names})
+			sub = append(sub,
+				readline.PcItem("drop", names),
+				recursiveDynamic(r.completePaths),
+			)
 		case "submit", "read-only":
 			// Arbitrary filesystem paths, absolute included: /read-only's
 			// documented purpose is material outside the project, and /submit
