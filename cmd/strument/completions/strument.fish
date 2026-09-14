@@ -19,8 +19,8 @@ complete -c strument -f
 
 # Top-level commands.
 complete -c strument -n __strument_no_subcommand -a trust -d "Trust the project's config file and its skills"
-complete -c strument -n __strument_no_subcommand -a history -d "Print the path to this project's chat-history file"
-complete -c strument -n __strument_no_subcommand -a config -d "Inspect the resolved config"
+complete -c strument -n __strument_no_subcommand -a history -d "Inspect or edit this project's chat-history file"
+complete -c strument -n __strument_no_subcommand -a config -d "Inspect the resolved config, or find and edit a config file"
 complete -c strument -n __strument_no_subcommand -a model-config -d "Print copy-pastable model config fetched from a provider"
 complete -c strument -n __strument_no_subcommand -a project -d "Inspect the recorded projects, or adopt a renamed one's history"
 complete -c strument -n __strument_no_subcommand -a tool -d "Run one observation tool and print what a model would see"
@@ -48,7 +48,12 @@ complete -c strument -n __strument_chat_command --long yes-shell -d "Also auto-r
 complete -c strument -n __strument_chat_command --long version -d "Print version and exit"
 
 # config.
-complete -c strument -n "__fish_seen_subcommand_from config" -a "models default"
+complete -c strument -n "__fish_seen_subcommand_from config" -a "models default path edit"
+complete -c strument -n "__fish_seen_subcommand_from config" -l user -d "Act on the user config (the default)"
+complete -c strument -n "__fish_seen_subcommand_from config" -l project -d "Act on this project's config"
+
+# history.
+complete -c strument -n "__fish_seen_subcommand_from history" -a "path edit"
 
 # model-config.
 complete -c strument -n "__fish_seen_subcommand_from model-config" -s s -l source -d "Metadata source" -a openrouter

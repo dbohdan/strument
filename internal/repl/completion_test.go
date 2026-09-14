@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/fixture"
+	"dbohdan.com/strument/internal/shlex"
 )
 
 func runeStrings(rs [][]rune) []string {
@@ -204,7 +205,7 @@ func TestPathCompletionSpaceEscapes(t *testing.T) {
 	}
 
 	got := completionsFor(r.completer(), "/submit my")
-	if backslashEscapes {
+	if shlex.BackslashEscapes {
 		if len(got) != 1 || got[0] != `\ file.txt` {
 			t.Errorf("/submit my = %q, want escaped-space file.txt", got)
 		}

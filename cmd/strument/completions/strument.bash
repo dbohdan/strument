@@ -2,7 +2,9 @@
 
 _strument_commands="trust history config model-config project tool shell version"
 _strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --consult-scope --code-result --code-namespace --yes --yes-shell --version"
-_strument_config_commands="models default"
+_strument_config_commands="models default path edit"
+_strument_config_options="--user --project"
+_strument_history_commands="path edit"
 _strument_tool_commands="read grep glob ls symbol"
 _strument_project_commands="list adopt ignore"
 _strument_project_options="-a --all -y --yes"
@@ -64,7 +66,7 @@ _strument_complete() {
 
     case "$command" in
     config)
-        COMPREPLY=($(compgen -W "$_strument_config_commands" -- "$cur"))
+        COMPREPLY=($(compgen -W "$_strument_config_commands $_strument_config_options" -- "$cur"))
         ;;
     model-config)
         if [[ $prev == --source || $prev == -s ]]; then
@@ -107,7 +109,10 @@ _strument_complete() {
     trust)
         COMPREPLY=($(compgen -W "$_strument_trust_options" -- "$cur"))
         ;;
-    history|version)
+    history)
+        COMPREPLY=($(compgen -W "$_strument_history_commands" -- "$cur"))
+        ;;
+    version)
         COMPREPLY=()
         ;;
     *)

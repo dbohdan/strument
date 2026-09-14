@@ -225,6 +225,11 @@ inherited from aider.
     the one call that confines the process. Linux-only, with a stub that
     refuses elsewhere; the writable-set derivation is pure and tested without
     a kernel. See [`security.md`](security.md).
+  - `shlex/` — splitting a command string into argv on shell rules, small on
+    purpose. Shared by the REPL's slash commands and by `strument config edit`
+    for `$VISUAL`/`$EDITOR`. The caveat it exists to hold in one place: a
+    backslash escapes on Unix and is a path separator on Windows, so `SplitWith`
+    lets either rule be tested from either host.
   - `gitrepo/` — the git port; always argv, never a shell string.
   - `history/` — per-project markdown chat transcripts under
     `$XDG_STATE_HOME/strument`.

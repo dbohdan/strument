@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"dbohdan.com/strument/internal/readline"
+	"dbohdan.com/strument/internal/shlex"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -186,7 +187,7 @@ func (r *REPL) completePathsFor(line string, allowOutside bool) []string {
 				cand += "/"
 			}
 			cand = escapePathWord(cand)
-			if strings.ContainsRune(cand, ' ') && !backslashEscapes {
+			if strings.ContainsRune(cand, ' ') && !shlex.BackslashEscapes {
 				// The space cannot be quoted here (no backslash escapes), so
 				// the inserted text would never re-parse to this path: offer
 				// nothing rather than an unusable candidate.
@@ -208,7 +209,7 @@ func (r *REPL) completePathsFor(line string, allowOutside bool) []string {
 // and escapes stay in the returned word; the complement is unescapeWord for
 // the filesystem lookup and escapePathWord for the offered text.
 func lastCommandWord(line string) string {
-	esc := backslashEscapes
+	esc := shlex.BackslashEscapes
 	rs := []rune(line)
 	fieldStart := 0
 	for i := 0; i < len(rs); i++ {
@@ -245,7 +246,7 @@ func lastCommandWord(line string) string {
 // This is the path actually looked up on disk; the offered completion is
 // re-escaped by escapePathWord so the buffer stays parseable.
 func unescapeWord(w string) string {
-	if backslashEscapes {
+	if shlex.BackslashEscapes {
 		var b strings.Builder
 		rs := []rune(w)
 		for i := 0; i < len(rs); i++ {
@@ -264,7 +265,7 @@ func unescapeWord(w string) string {
 // escapes. On Windows a backslash is a path separator, so a path with spaces
 // must be quoted by hand instead: the same trade-off splitArgs documents.
 func escapePathWord(p string) string {
-	if !backslashEscapes {
+	if !shlex.BackslashEscapes {
 		return p
 	}
 	p = strings.ReplaceAll(p, `\`, `\\`)

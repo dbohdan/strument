@@ -41,10 +41,11 @@ prefix is needed. Outside a session, notices use that prefix. Kong adds it to
 returned errors.
 
 Outside a session, requested output goes to stdout and commentary goes to
-stderr. Output from `strument config models`, `strument history`, and
-`strument project list` is data; an untrusted-config warning is commentary,
-even when it appears during the same command. Inside a session, all output goes
-to stdout.
+stderr. Output from `strument config models`, `strument config path`,
+`strument history path`, and `strument project list` is data; an
+untrusted-config warning is commentary, even when it appears during the same
+command, and so is `config path`'s note that the file is not there yet — the
+path stays pipeable either way. Inside a session, all output goes to stdout.
 
 **One prefix per message, not per line.** A message that continues indents its
 continuation two spaces and carries no second prefix:

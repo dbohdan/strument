@@ -1377,21 +1377,167 @@ func confirmTrust() bool {
 	return answer == "y" || answer == "yes"
 }
 
-// configCmd inspects the resolved configuration for the current project:
-// the merge of the user config and a trusted project config, with the same
-// root resolution a chat session gets.
+// configCmd inspects the configuration for the current project: `models` and
+// `default` read the *resolved* config — the merge of the user config and a
+// trusted project config, with the same root resolution a chat session gets —
+// while `path` and `edit` act on one file, named by the scope flags.
+//
+// `--user` and `--project` rather than `--global` and `--local`. The pair they
+// replaced reads as a claim about reach, and neither is true here: a "global"
+// config is one user's on one machine, and "local" says nothing about which of
+// the two directories it means. Git spells the same distinction `--global` and
+// `--local` and means something different by it — `--local` there is the
+// repository's, `--global` the user's, and there is a third, `--system`, that
+// Strument has no equivalent of — so borrowing the words would import an
+// expectation the third one breaks.
 type configCmd struct {
+	// On the parent rather than on each subcommand so `strument config --user
+	// path` works, which is how someone writes it. The cost is that kong will
+	// also accept them on `models` and `default`, where they mean nothing:
+	// those two refuse them rather than ignoring them.
+	User    bool `help:"Act on the user config (the default)." xor:"scope"`
+	Project bool `help:"Act on this project's config."         xor:"scope"`
+
 	Models  configModelsCmd  `cmd:"" help:"Print the config's model aliases, one per line."`
 	Default configDefaultCmd `cmd:"" help:"Print the config's default model alias."`
+	Path    configPathCmd    `cmd:"" help:"Print the path to a config file, whether or not it exists."`
+	Edit    configEditCmd    `cmd:"" help:"Open a config file in your editor ($VISUAL, $EDITOR, or vi)."`
+}
+
+// scopedFile is the file the scope flags name. The same function answers for
+// `path` and for `edit`, so the path printed is always the path opened.
+func (c *configCmd) scopedFile() (string, error) {
+	if !c.Project {
+		return config.DefaultUserConfigPath()
+	}
+	root, err := historyRoot()
+	if err != nil {
+		return "", err
+	}
+	return projectConfigPathForEdit(root)
+}
+
+// refuseScope is what `models` and `default` say to a scope flag. They print
+// the merged config, which is not one file, so a flag selecting one has no
+// answer rather than a boring one.
+func (c *configCmd) refuseScope(sub string) error {
+	if !c.User && !c.Project {
+		return nil
+	}
+	return fmt.Errorf("`--user` and `--project` name one config file; `config %s` prints the merged config of both", sub)
+}
+
+// projectConfigPathForEdit picks which of the project's two config spellings to
+// act on.
+//
+// An existing one wins, via FindProjectConfig, so this command and the loader
+// cannot disagree about which file is the config — including its refusal when a
+// project has written both. When there is none yet, the choice follows what the
+// project already looks like: a repository with a .strument/ directory (skills,
+// usually) gets .strument/config.star so its Strument files stay together, and
+// anything else gets .strument.star. Neither is a migration target for the
+// other, so this only ever picks where a *first* config goes.
+func projectConfigPathForEdit(root string) (string, error) {
+	existing, err := config.FindProjectConfig(root)
+	if err != nil || existing != "" {
+		return existing, err
+	}
+	dir := filepath.Join(root, config.ProjectConfigDir)
+	if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+		return filepath.Join(dir, filepath.FromSlash(config.ProjectConfigInDir)), nil
+	}
+	return filepath.Join(root, config.ProjectConfigName), nil
 }
 
 type configModelsCmd struct{}
 
-func (*configModelsCmd) Run() error { return runConfigSets("models") }
+func (*configModelsCmd) Run(c *configCmd) error {
+	if err := c.refuseScope("models"); err != nil {
+		return err
+	}
+	return runConfigSets("models")
+}
 
 type configDefaultCmd struct{}
 
-func (*configDefaultCmd) Run() error { return runConfigSets("default") }
+func (*configDefaultCmd) Run(c *configCmd) error {
+	if err := c.refuseScope("default"); err != nil {
+		return err
+	}
+	return runConfigSets("default")
+}
+
+type configPathCmd struct{}
+
+// Run prints the path whether or not the file is there, the way `history path`
+// does: "where would my config go" is the same question as "where is it", and
+// answering only one of them makes the command useless to whoever has not
+// written a config yet. A file that is not there is said so on stderr, so the
+// path itself stays pipeable.
+func (*configPathCmd) Run(c *configCmd) error {
+	path, err := c.scopedFile()
+	if err != nil {
+		return err
+	}
+	fmt.Println(path)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		noticef("does not exist yet: %s", path)
+	}
+	return nil
+}
+
+type configEditCmd struct {
+	// edit is the test seam, unexported so kong does not see it as a flag.
+	edit func(path string) error
+}
+
+func (e *configEditCmd) Run(c *configCmd) error {
+	path, err := c.scopedFile()
+	if err != nil {
+		return err
+	}
+	edit := e.edit
+	if edit == nil {
+		edit = editFile
+	}
+	if err := edit(path); err != nil {
+		return err
+	}
+	if c.Project {
+		remindToTrust(path)
+	}
+	return nil
+}
+
+// remindToTrust says what editing a project config costs, and only when it
+// costs it.
+//
+// Trust is over content, so saving any change untrusts the file and the session
+// silently stops honouring it. Checked rather than printed unconditionally: an
+// edit the user abandoned, or one they have already trusted from another
+// window, should not be nagged about. config.TrustAdviceFor is the one phrasing
+// of this instruction in the tree.
+func remindToTrust(path string) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return // no file: they opened the editor and did not save
+	}
+	tsPath, err := config.DefaultTrustStorePath()
+	if err != nil {
+		return
+	}
+	ts, err := config.OpenTrustStore(tsPath)
+	if err != nil {
+		return
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return
+	}
+	if !ts.IsTrusted(abs, src) {
+		noticeWith("this project's config is not trusted as it now stands", config.TrustAdviceFor(1, false))
+	}
+}
 
 // loadProjectConfig loads the effective config for the current project. It
 // mirrors historyRoot so the answer is the one the chat session would act on,
@@ -1451,27 +1597,66 @@ func runConfigSets(kind string) error {
 
 // historyCmd prints the chat-history file for the current project (the one
 // XDG makes hard to discover). It resolves the same path chat mode writes.
-type historyCmd struct{}
+// historyCmd is a group with no default subcommand. A bare `strument history`
+// used to print the path; it was retired so that `history` and `config` are
+// asked the same way, and because "print" and "open" are two things one bare
+// noun cannot name.
+type historyCmd struct {
+	Path historyPathCmd `cmd:"" help:"Print the path to this project's chat-history file."`
+	Edit historyEditCmd `cmd:"" help:"Open this project's chat-history file in your editor ($VISUAL, $EDITOR, or vi)."`
+}
 
-func (*historyCmd) Run() error {
+// historyPath resolves the transcript for the current project.
+//
+// It honors a config override when the config loads, and otherwise falls back
+// to the default path, so "where is my history" always answers — a broken or
+// untrusted config is not a reason to withhold a path the session would still
+// use.
+func historyPath() (string, error) {
 	root, err := historyRoot()
 	if err != nil {
-		return err
+		return "", err
 	}
-	// Honor a config override when the config loads; otherwise fall back to
-	// the default path so "where is my history" always answers.
 	if cfg, err := config.Load(config.Options{ProjectRoot: root, Warn: warnNoticef}); err == nil {
 		if p, err := resolveHistoryPath(cfg, root); err == nil {
-			fmt.Println(p)
-			return nil
+			return p, nil
 		}
 	}
-	p, err := history.DefaultPath(root)
+	return history.DefaultPath(root)
+}
+
+type historyPathCmd struct{}
+
+// Run prints the path and says nothing about whether the file is there.
+//
+// Unlike `config path`, which notices a missing file: a config that does not
+// exist is a fact about the user's setup worth mentioning, while a transcript
+// that does not exist yet is just a project nobody has chatted in, which is the
+// ordinary state of a fresh checkout.
+func (*historyPathCmd) Run() error {
+	p, err := historyPath()
 	if err != nil {
 		return err
 	}
 	fmt.Println(p)
 	return nil
+}
+
+type historyEditCmd struct {
+	// edit is the test seam, unexported so kong does not see it as a flag.
+	edit func(path string) error
+}
+
+func (e *historyEditCmd) Run() error {
+	p, err := historyPath()
+	if err != nil {
+		return err
+	}
+	edit := e.edit
+	if edit == nil {
+		edit = editFile
+	}
+	return edit(p)
 }
 
 // modelConfigCmd scaffolds model() blocks from a provider's live catalog, so
@@ -1555,8 +1740,8 @@ func (c *modelConfigCmd) Run() error {
 type cli struct {
 	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                    help:"Chat with a model about the given files (default command)."`
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's config file and its skills."`
-	History     historyCmd       `cmd:""                         help:"Print the path to this project's chat-history file."`
-	Config      configCmd        `cmd:""                         help:"Inspect the resolved config: model aliases, or the default alias."`
+	History     historyCmd       `cmd:""                         help:"Inspect or edit this project's chat-history file."`
+	Config      configCmd        `cmd:""                         help:"Inspect the resolved config, or find and edit a config file."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."  name:"model-config"`
 	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`

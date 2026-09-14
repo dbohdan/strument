@@ -240,6 +240,12 @@ and `strument config default` prints the default model (the value of `default`).
 Both commands answer the question "what does my effective config say?".
 Both read the merged user + trusted project config for the current project, so the answer matches what a chat session would use.
 
+`strument config path` prints where a config file is, whether or not it exists yet, and `strument config edit` opens it.
+They take `--user` (the default) or `--project`; without an existing project config, `--project` picks `.strument/config.star` in a project that already has a `.strument/` directory and `.strument.star` otherwise.
+Editing a project config untrusts it, so `config --project edit` says when a re-run of `strument trust` is needed.
+`strument history path` and `strument history edit` do the same for the project's transcript.
+All four open the file with `$VISUAL`, then `$EDITOR`, then `vi`; the value is a command, so `EDITOR="code --wait"` works.
+
 The option `--yes <name>` removes confirmation from the named prompt: `bash`, `webfetch`, `websearch`, `steps`, `context`, `add-output`, or `all`.
 The option can be repeated and accepts comma-separated lists, so `--yes bash --yes webfetch,websearch` and `--yes bash,webfetch,websearch` mean the same thing.
 An unknown prompt name causes a startup error.

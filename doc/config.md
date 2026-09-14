@@ -94,7 +94,8 @@ projects/myproj-9428ba2d/
     cost.jsonl      one line per turn: tokens, cost, steps, files changed
 ```
 
-`strument history` prints the transcript's path. The `root` file records the
+`strument history path` prints the transcript's path and `strument history edit`
+opens it. The `root` file records the
 project path associated with the state directory. The directory is created with
 mode `0700` and its files with mode `0600`, because transcripts may contain
 sensitive project data.

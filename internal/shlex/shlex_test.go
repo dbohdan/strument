@@ -1,4 +1,4 @@
-package repl
+package shlex
 
 import (
 	"runtime"
@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// TestSplitArgs covers what both platforms agree on. The two cases that used to
+// TestSplit covers what both platforms agree on. The two cases that used to
 // live here — an unquoted backslash escaping the next rune — moved to
-// TestSplitArgsBackslashPerPlatform when that stopped being universal: they were
-// written as facts about splitArgs and were really facts about Unix, so Windows
+// TestSplitBackslashPerPlatform when that stopped being universal: they were
+// written as facts about Split and were really facts about Unix, so Windows
 // CI failed on the assertions rather than on the behavior.
-func TestSplitArgs(t *testing.T) {
+func TestSplit(t *testing.T) {
 	cases := []struct {
 		in   string
 		want []string
@@ -29,18 +29,18 @@ func TestSplitArgs(t *testing.T) {
 		{`"unterminated`, []string{"unterminated"}},
 	}
 	for _, tc := range cases {
-		got := splitArgs(tc.in)
+		got := Split(tc.in)
 		if !slices.Equal(got, tc.want) {
-			t.Errorf("splitArgs(%q) = %q, want %q", tc.in, got, tc.want)
+			t.Errorf("Split(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
 
-// TestSplitArgsBackslashPerPlatform exercises both platforms' rules from
-// whichever host runs the test. That is the point of the splitArgsWith seam:
+// TestSplitBackslashPerPlatform exercises both platforms' rules from
+// whichever host runs the test. That is the point of the SplitWith seam:
 // the Windows rule was wrong for as long as it existed and no Unix CI run could
 // have said so.
-func TestSplitArgsBackslashPerPlatform(t *testing.T) {
+func TestSplitBackslashPerPlatform(t *testing.T) {
 	tests := []struct {
 		name    string
 		in      string
@@ -82,7 +82,7 @@ func TestSplitArgsBackslashPerPlatform(t *testing.T) {
 			want:    []string{`C:\a\b.txt`, `D:\c\d.txt`},
 		},
 		{
-			// Moved from TestSplitArgs, where it read as a fact about splitArgs
+			// Moved from TestSplit, where it read as a fact about Split
 			// and was a fact about Unix.
 			name:    "unix: bare backslashes escape the next rune",
 			in:      `path\with\backslash`,
@@ -92,22 +92,22 @@ func TestSplitArgsBackslashPerPlatform(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := splitArgsWith(tt.in, tt.escapes)
+			got := SplitWith(tt.in, tt.escapes)
 			if !slices.Equal(got, tt.want) {
-				t.Errorf("splitArgsWith(%q, %v) = %q, want %q", tt.in, tt.escapes, got, tt.want)
+				t.Errorf("SplitWith(%q, %v) = %q, want %q", tt.in, tt.escapes, got, tt.want)
 			}
 		})
 	}
 }
 
-// TestSplitArgsUsesThePlatformRule ties the seam to the real thing, so the
+// TestSplitUsesThePlatformRule ties the seam to the real thing, so the
 // tested function and the used one cannot drift apart.
-func TestSplitArgsUsesThePlatformRule(t *testing.T) {
+func TestSplitUsesThePlatformRule(t *testing.T) {
 	in := `a\ b`
-	if got, want := splitArgs(in), splitArgsWith(in, backslashEscapes); !slices.Equal(got, want) {
-		t.Errorf("splitArgs(%q) = %q, want %q", in, got, want)
+	if got, want := Split(in), SplitWith(in, BackslashEscapes); !slices.Equal(got, want) {
+		t.Errorf("Split(%q) = %q, want %q", in, got, want)
 	}
-	if backslashEscapes != (runtime.GOOS != "windows") {
-		t.Errorf("backslashEscapes = %v on %s", backslashEscapes, runtime.GOOS)
+	if BackslashEscapes != (runtime.GOOS != "windows") {
+		t.Errorf("BackslashEscapes = %v on %s", BackslashEscapes, runtime.GOOS)
 	}
 }
