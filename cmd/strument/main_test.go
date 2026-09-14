@@ -684,6 +684,90 @@ func TestTrustDoesNotAskWhenNothingChanged(t *testing.T) {
 	}
 }
 
+// A project config that will not load must not take the project's skills down
+// with it. The case is real rather than hypothetical: a repository whose config
+// names a Unix path in `sandbox_write` does not load on Windows, and its skills
+// have nothing to do with that.
+//
+// Refusing the config itself is the other half, and it is not only about the
+// summary being empty: config.Load executes a project config only when it is
+// trusted and returns the failure hard, so recording this file would make
+// Strument refuse to start in the directory until it was untrusted again.
+func TestTrustSkillsSurviveAConfigThatWillNotLoad(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	skillPath := writeSkill(t, root, "release-notes")
+	cfgPath := filepath.Join(root, config.ProjectConfigPaths[0])
+	if err := os.WriteFile(cfgPath, []byte("sandbox_write = [\"relative/path\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (&trustCmd{Path: root, Yes: true}).Run(); err != nil {
+		t.Fatalf("a config that does not load blocked the whole command: %v", err)
+	}
+	if !isTrusted(t, skillPath) {
+		t.Error("the skill was not trusted because the config would not load")
+	}
+	if isTrusted(t, cfgPath) {
+		t.Error("a config that does not load was trusted anyway")
+	}
+
+	// The counter-arm: the same project with a config that loads trusts both,
+	// or the assertions above are reporting on a command that trusts nothing.
+	if err := os.WriteFile(cfgPath, []byte("shell = True\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&trustCmd{Path: root, Yes: true}).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !isTrusted(t, cfgPath) {
+		t.Error("a config that loads was not trusted")
+	}
+}
+
+// And when the unloadable config is the only thing there, nothing is trusted
+// and the status says so — a script's next line is usually the thing the trust
+// was for.
+func TestTrustFailsWhenOnlyTheConfigIsThereAndItWillNotLoad(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, config.ProjectConfigPaths[0]),
+		[]byte("sandbox_write = [\"relative/path\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := (&trustCmd{Path: root, Yes: true}).Run()
+	if err == nil {
+		t.Fatal("exited 0 having trusted nothing at all")
+	}
+	if !strings.Contains(err.Error(), "does not load") {
+		t.Errorf("the status does not say why nothing was trusted: %v", err)
+	}
+	if trustStoreExists(t) {
+		t.Error("the store was written for a project where nothing was trustable")
+	}
+}
+
+func isTrusted(t *testing.T, path string) bool {
+	t.Helper()
+	tsPath, err := config.DefaultTrustStorePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, err := config.OpenTrustStore(tsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ts.IsTrusted(abs, src)
+}
+
 func trustStoreExists(t *testing.T) bool {
 	t.Helper()
 	path, err := config.DefaultTrustStorePath()

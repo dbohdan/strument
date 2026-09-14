@@ -11,6 +11,14 @@ import (
 // can compare against the classification table whole rather than against a list
 // that would go stale. A key added to projectKeys and not to this file fails the
 // first test with the name of what is missing.
+//
+// {{writable}} is filled in by inspect() with a real temporary directory,
+// because `sandbox_write` is validated and a literal cannot satisfy it
+// everywhere: "/tmp" is not absolute on Windows, which is where this first
+// failed. It is substituted forward-slashed for a second reason that bites
+// before the first — a raw Windows path is `C:\Users\RUNNER~1\…`, and `\U` is
+// a Starlark escape, so the fixture would fail to parse before the
+// absolute-path check ever saw it. Windows accepts `C:/Users/…` as absolute.
 const everySetting = `
 router = provider("openrouter", api_key = env("OR_KEY"))
 corp = provider("openai", base_url = "https://llm.corp.internal:8443/v1", api_key = env("CORP_TOKEN"))
@@ -36,7 +44,7 @@ shell = True
 anchored_edits = True
 indent_column = True
 sandbox = ""
-sandbox_write = ["/tmp"]
+sandbox_write = ["{{writable}}"]
 shell_timeout = 30
 git_sign = "ABCD1234"
 env_allow = ["PATH", "HOME"]
@@ -54,7 +62,7 @@ chat_language = "en"
 func inspect(t *testing.T, body string, env map[string]string) *ProjectInspection {
 	t.Helper()
 	dir := t.TempDir()
-	write(t, dir, ProjectConfigName, body)
+	write(t, dir, ProjectConfigName, strings.ReplaceAll(body, "{{writable}}", filepath.ToSlash(t.TempDir())))
 	for k, v := range env {
 		t.Setenv(k, v)
 	}
@@ -198,6 +206,31 @@ func TestInspectReportsMissingEnv(t *testing.T) {
 	}
 	if len(insp.Capabilities) != 1 || insp.Capabilities[0].Key != "proxy" {
 		t.Errorf("a missing variable stopped the inspection: %v", keys(insp.Capabilities))
+	}
+}
+
+// A config that does not execute is an error, not an empty summary. The whole
+// value of the step is that the user sees what the file grants, and a file
+// nobody could parse grants nothing anyone can describe — so `strument trust`
+// has something to refuse on rather than a blank listing to show.
+func TestInspectFailsOnAConfigThatWillNotLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := write(t, dir, ProjectConfigName, "shell = )\n")
+	_, err := InspectProjectConfig(dir)
+	if err == nil {
+		t.Fatal("a config with a syntax error inspected cleanly")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("the error does not name the file it is about:\n%v", err)
+	}
+
+	// A config that is merely *wrong for this machine* fails the same way, and
+	// that is the case Windows CI found: a path this platform does not consider
+	// absolute stops the file loading at all.
+	dir2 := t.TempDir()
+	write(t, dir2, ProjectConfigName, "sandbox_write = [\"relative/path\"]\n")
+	if _, err := InspectProjectConfig(dir2); err == nil {
+		t.Error("a sandbox_write entry that is not an absolute path inspected cleanly")
 	}
 }
 

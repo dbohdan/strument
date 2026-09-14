@@ -330,6 +330,12 @@ itself holds only paths and hashes — no config content — which is why the
 summary describes what a file grants instead of diffing it against the version
 you approved before.
 
+A config that fails to load is refused while the project's skills are still
+trusted. That refusal protects more than the summary: a project config is
+executed only once it is trusted, and its failure is fatal at that point, so
+recording a broken one would stop Strument starting in the directory. Left
+untrusted, it is ignored with a warning.
+
 Without a terminal, `strument trust` refuses rather than trusting silently;
 `--yes` is how a script says it meant it, and the summary still prints so the
 log records what was granted.

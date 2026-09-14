@@ -1079,7 +1079,44 @@ func (c *trustCmd) Run() error {
 		items = append(items, item)
 	}
 
+	// What the config would be allowed to do, read out of the file itself.
+	//
+	// Before the all-unchanged check below, not after, so a config that has
+	// stopped loading is reported on every run rather than only on the run that
+	// happens to change something — including the case where it was trusted on
+	// another machine and is unchanged here.
+	var insp *config.ProjectInspection
+	configRefused := false
+	if cfgPath != "" {
+		var err error
+		if insp, err = config.InspectProjectConfig(root); err != nil {
+			// The config alone is refused, and the project's skills are not.
+			// They are separate files that parse, and there is nothing to be
+			// gained from making a repository's Unix-only config the reason a
+			// Windows user cannot approve its skills.
+			//
+			// Refusing the config itself is not only about the summary being
+			// empty. config.Load executes a project config *only* when it is
+			// trusted, and returns the failure hard; an untrusted one is merely
+			// warned about. So recording this file would make Strument refuse
+			// to start in this directory until it was untrusted again.
+			rest := append(strings.Split(err.Error(), "\n"),
+				"It stays untrusted, so a session will ignore it rather than fail to start.",
+				"Fix it and run `strument trust` again.")
+			noticeWith(fmt.Sprintf("not trusting %s: it does not load", cfgPath), rest...)
+			items = slices.DeleteFunc(items, func(it trustItem) bool { return it.skill == nil })
+			configRefused = true
+		}
+	}
+
 	if len(items) == 0 {
+		if configRefused {
+			// The project's only trustable file was the config, and it does not
+			// load. The notice above said what and why; this is the status,
+			// which a script chaining on the command reads instead.
+			return fmt.Errorf("nothing was trusted in %s: its only trustable file is a config that does not load",
+				strings.TrimRight(filepath.ToSlash(root), "/")+"/")
+		}
 		return fmt.Errorf("nothing to trust in %s: no %s or %s, and no skills under .strument/skills/ or .agents/skills/",
 			strings.TrimRight(filepath.ToSlash(root), "/")+"/",
 			config.ProjectConfigPaths[0], config.ProjectConfigPaths[1])
@@ -1095,16 +1132,7 @@ func (c *trustCmd) Run() error {
 		return nil
 	}
 
-	// What the config would be allowed to do, read out of the file itself. A
-	// config that does not execute is reported as the error it is rather than
-	// trusted with an empty summary: the whole value of this step is that the
-	// user sees what the file grants, and a file nobody could parse grants
-	// nothing anyone can describe.
-	if cfgPath != "" {
-		insp, err := config.InspectProjectConfig(root)
-		if err != nil {
-			return err
-		}
+	if insp != nil {
 		printInspection(insp, stateOf(items, cfgPath))
 	}
 	printSkills(items)
@@ -1136,8 +1164,14 @@ func (c *trustCmd) Run() error {
 	// Recorded only now. The old order trusted the config before it had even
 	// looked at the skills, so a failure partway through left half a decision
 	// applied.
-	if _, err := config.TrustProject(root, ""); err != nil {
-		return err
+	//
+	// TrustProject rather than TrustFiles on the path already resolved above:
+	// it re-checks the two-configs refusal, which internal/config/load.go keeps
+	// shared with the load path so the two cannot drift on what a conflict is.
+	if insp != nil {
+		if _, err := config.TrustProject(root, ""); err != nil {
+			return err
+		}
 	}
 	paths := make([]string, 0, len(skills))
 	for _, s := range skills {
@@ -1231,7 +1265,17 @@ func printInspection(insp *config.ProjectInspection, state string) {
 			strings.Join(insp.Preferences, ", "))
 	}
 	if len(insp.MissingEnv) > 0 {
-		noticef("not set, read as empty while reading the config: %s", strings.Join(insp.MissingEnv, ", "))
+		// Read as empty rather than refused, so a config written for another
+		// machine can still be summarised. The continuation is the part that
+		// matters: the session is stricter than this — config.Load takes an
+		// unset env() with no default as an error — so trusting a config is not
+		// a promise that it will load.
+		noticeWith(
+			"not set, read as empty while reading the config: "+strings.Join(insp.MissingEnv, ", "),
+			"The summary above shows the config as if "+
+				render.PluralWord(len(insp.MissingEnv), "it were", "they were")+
+				" empty. A session will need "+
+				render.PluralWord(len(insp.MissingEnv), "it", "them")+" set.")
 	}
 }
 

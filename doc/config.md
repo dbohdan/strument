@@ -1435,6 +1435,17 @@ No value that came from `env()` is printed — a proxy built out of a variable
 shows as `socks5://env(PROXY_HOST):1080` — and `env_set` shows variable names
 without their values. An `api_key` is never shown at all.
 
+A variable that is not set is read as empty here, and named on stderr, so a
+config written for another machine can still be summarised. A session is
+stricter: an `env()` with no `default` and no value is an error there, so
+trusting a config is not a promise that it will load.
+
+A config that does not load is **not** trusted, and the project's skills still
+are. The refusal is not only about the summary being empty: a project config is
+executed only once it is trusted, and its failure is fatal there, so recording
+a broken one would stop Strument starting in that directory until you untrusted
+it again. Left untrusted, it is ignored with a warning and the session runs.
+
 `--yes` (`-y`) skips the question and keeps the summary, so a script still
 leaves a record of what it granted. **Without a terminal and without `--yes`,
 the command refuses** and exits non-zero rather than trusting unattended.
