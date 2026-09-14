@@ -87,9 +87,16 @@ func (c *Coder) AttachFile(path string) (llm.ImageSource, error) {
 	src := llm.ImageSource{
 		MediaType: img.MediaType,
 		Data:      base64.StdEncoding.EncodeToString(data),
-		Label:     c.displayName(abs),
-		Width:     img.Width,
-		Height:    img.Height,
+		// The base name, never the path. An attachment is usually from
+		// outside the project -- a screenshot in ~/Pictures -- so displayName
+		// would put the user's home directory into the model's context on
+		// every attach, and on macOS and Windows it could not relativize at
+		// all: /var/folders vs /private/var behind a symlink, and RUNNER~1 vs
+		// the long name. The label is for naming the thing in prose, and the
+		// file's own name is what the user called it.
+		Label:  filepath.Base(abs),
+		Width:  img.Width,
+		Height: img.Height,
 	}
 	c.pendingAttachments = append(c.pendingAttachments, src)
 	return src, nil

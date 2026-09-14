@@ -159,3 +159,34 @@ func TestAttachmentsAreNotAliased(t *testing.T) {
 		t.Error("Attachments handed out the coder's own slice")
 	}
 }
+
+// The label is a file name, never a path. Two platforms proved this the hard
+// way in CI: on macOS t.TempDir() is under /var while the resolved root is
+// under /private/var, and on Windows it is the 8.3 short name, so relativizing
+// fell back to the absolute path. Beyond the test, an attachment usually comes
+// from outside the project, and a label carrying the full path would put the
+// user's home directory in front of the model on every screenshot.
+func TestAttachmentLabelIsJustTheFileName(t *testing.T) {
+	c := New(t.TempDir(), &config.Model{Slug: "m"})
+	sub := filepath.Join(c.Root, "deep", "nested")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestPNG(t, filepath.Join(sub, "shot.png"), 4, 4)
+
+	// Through the project, and from an absolute path outside it.
+	outside := filepath.Join(t.TempDir(), "elsewhere.png")
+	writeTestPNG(t, outside, 4, 4)
+	for _, path := range []string{filepath.Join("deep", "nested", "shot.png"), outside} {
+		src, err := c.AttachFile(path)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if strings.ContainsAny(src.Label, `/\`) {
+			t.Errorf("label %q carries a path", src.Label)
+		}
+	}
+	if got := c.Attachments(); got[0].Label != "shot.png" || got[1].Label != "elsewhere.png" {
+		t.Errorf("labels = %q, %q", got[0].Label, got[1].Label)
+	}
+}
