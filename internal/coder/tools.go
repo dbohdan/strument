@@ -688,7 +688,6 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			edits = append(edits, e)
-			c.toolLoops.observeMutation()
 		case toolBash:
 			cmd, msg := parseCommandArgs(tc)
 			if msg != "" {
@@ -773,6 +772,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// Edits apply directly. The commit comes at turn end, once, so a result
 	// here names what the call did rather than a commit that has not happened.
 	edited := c.applyToolEdits(edits, results, &needsReflection)
+	// The mutation signal belongs here, after the edits are applied, not where
+	// they were queued. Signalling on a *queued* edit meant a failing one reset
+	// both loop counters, so a model retrying an edit that could never match
+	// wiped the detector's memory on every attempt -- the one situation where
+	// the detector is most needed was the one it could never see.
+	if len(edited) > 0 {
+		c.toolLoops.observeMutation()
+	}
 	for _, f := range edited {
 		c.turnEditedFiles[f] = true
 		if !c.DryRun {
@@ -1377,7 +1384,17 @@ func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambigu
 	if n := editblock.CountOccurrences(content, e.search); n > 1 {
 		fmt.Fprintf(&b, "The text to replace appears %d times in %s, so it is ambiguous "+
 			"and nothing was changed.\n", n, quoteToolArg(e.path))
-		b.WriteString("Include enough surrounding lines to pick out the one you mean, " +
+		// Where, not just how many. A count alone leaves the model to
+		// reconstruct the file from a read several messages back, and the
+		// field report this came from shows what that produces: the same
+		// byte-identical ambiguous edit sent again immediately after being
+		// told it was ambiguous. The lines above each match are usually what
+		// distinguishes them, so they are what the model is shown.
+		if sites := editblock.Occurrences(content, e.search); sites != "" {
+			b.WriteString("\nHere is each one:\n\n")
+			b.WriteString(sites)
+		}
+		b.WriteString("\nInclude enough surrounding lines to pick out the one you mean, " +
 			"and make one call per place if you mean several.\n")
 		return b.String()
 	}

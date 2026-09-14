@@ -64,16 +64,30 @@ func newToolLoopWatcher() *toolLoopWatcher {
 	return &toolLoopWatcher{counts: map[string]int{}}
 }
 
-// exempt tools self-limit or legitimately repeat: a repeated edit fails on
-// old_string no longer matching, and bash/check/commit are the tools a
-// productive turn calls again and again with unchanged arguments. They are
-// also the mutation signal: see observeMutation.
+// exempt tools legitimately repeat with unchanged arguments: bash, check and
+// commit are what a productive turn calls again and again.
+//
+// edit and write used to be here too, on the reasoning that a repeated edit
+// self-limits because old_string no longer matches once the first one lands.
+// That holds for an edit that *succeeds* and is exactly wrong for one that
+// fails: an ambiguous or unmatched edit changes nothing, so resending it
+// verbatim fails identically forever. A field report has GLM-5.3-Flash doing
+// precisely that -- the same byte-identical ambiguous edit, immediately after
+// being told it was ambiguous -- with nothing to notice it, because the tool
+// that could was excused from looking.
 func toolLoopExempt(name string) bool {
 	switch name {
-	case toolBash, toolCheck, toolCommit, toolEdit, toolWrite:
+	case toolBash, toolCheck, toolCommit:
 		return true
 	}
 	return false
+}
+
+// countsAsRead separates the two detectors. A failed edit is worth counting as
+// a repeat, but it is not an observation, so it must not push the read cap or
+// the note would tell a model it had made read-only calls it did not make.
+func countsAsRead(name string) bool {
+	return name != toolEdit && name != toolWrite
 }
 
 // observeCall records a dispatched call and returns the loop note to inject
@@ -93,14 +107,17 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
 	}
 	key := name + "\x00" + argsJSON
 	w.counts[key]++
-	w.reads++
+	if countsAsRead(name) {
+		w.reads++
+	}
 	if w.counts[key] >= toolLoopMaxIdentical {
 		w.fired = true
 		return "You have made the same " + name + " call with the same arguments " +
 			"several times since anything last changed. The earlier results are " +
-			"already in the conversation above. If you are stuck in a loop, take " +
-			"a different approach — and if there is nothing useful left to do, " +
-			"call the interrupt tool to end the turn."
+			"already in the conversation above — including why the call did not " +
+			"do what you wanted, if it failed. Resending it unchanged will fail " +
+			"the same way. Take a different approach, and if there is nothing " +
+			"useful left to do, call the interrupt tool to end the turn."
 	}
 	if w.reads >= toolLoopMaxReads {
 		w.fired = true
