@@ -98,9 +98,22 @@ func (c Content) String() string {
 	}
 	var out strings.Builder
 	for _, b := range c.Blocks {
-		out.WriteString(b.Text)
+		out.WriteString(b.String())
 	}
 	return out.String()
+}
+
+// Images returns the image payloads in order, for the callers that have to
+// account for them separately: the token estimator and the capability
+// projection.
+func (c Content) Images() []ImageSource {
+	var out []ImageSource
+	for _, b := range c.Blocks {
+		if b.Type == BlockImage && b.Image != nil {
+			out = append(out, *b.Image)
+		}
+	}
+	return out
 }
 
 func (c Content) MarshalJSON() ([]byte, error) {
@@ -126,11 +139,96 @@ func (c *Content) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Content block kinds. A block carries exactly one payload, selected by Type.
+//
+// Every kind added here must gain a case in both wire clients. Neither one can
+// fall through to a default that drops the block: an image the provider never
+// received produces a plausible answer rather than an error, so the user reads
+// "I cannot see an image" as the model being bad at vision. blockkind_test.go
+// fails the build if a kind is missing from either client.
+const (
+	BlockText  = "text"
+	BlockImage = "image"
+)
+
 // ContentBlock is one block of structured message content.
 type ContentBlock struct {
-	Type         string        `json:"type"`
-	Text         string        `json:"text"`
+	Type string `json:"type"`
+	// Text is set when Type is BlockText. It carries omitempty so a block of
+	// another kind does not go out with a meaningless `"text":""` beside its
+	// own payload.
+	Text         string        `json:"text,omitempty"`
+	Image        *ImageSource  `json:"image,omitempty"`
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
+}
+
+// ImageSource is one image in a message, held as base64 rather than as a path
+// so the bytes that were read are the bytes that go out: a file that changes
+// between the read and the send cannot make the label disagree with the
+// payload.
+type ImageSource struct {
+	MediaType string `json:"media_type"` // "image/png", "image/jpeg", ...
+	Data      string `json:"data"`       // base64, with no data: URI prefix
+	// Label names the image in prose: the file it came from. It is what the
+	// text projection shows a model that cannot see images, and what the
+	// transcript shows a human.
+	Label  string `json:"label,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+// TextBlock builds a text block. Use it rather than a literal so a new kind
+// cannot be introduced by a caller that forgets to set Type.
+func TextBlock(text string) ContentBlock {
+	return ContentBlock{Type: BlockText, Text: text}
+}
+
+// ImageBlock builds an image block.
+func ImageBlock(src ImageSource) ContentBlock {
+	return ContentBlock{Type: BlockImage, Image: &src}
+}
+
+// BlocksContent wraps blocks as message content.
+func BlocksContent(blocks ...ContentBlock) Content { return Content{Blocks: blocks} }
+
+// String renders one block as text.
+//
+// An image renders as its label rather than as the empty string, and that is
+// the whole reason this method exists. Every existing caller of Message.Text()
+// — the token estimator in assemble.go, ChatSummary.count, renderForSummary —
+// sums or renders Content.String(), so a block that stringified to "" was a
+// silent zero in three separate accountings and a silent drop in the fourth.
+// A label is not the image, but it is true, and it is countable.
+func (b ContentBlock) String() string {
+	switch b.Type {
+	case BlockText:
+		return b.Text
+	case BlockImage:
+		if b.Image == nil {
+			return "[image: missing]"
+		}
+		return b.Image.String()
+	default:
+		// Never the empty string, and that is not tidiness. splitInstructions
+		// in the Responses client drops a message whose content stringifies to
+		// "", so a kind that rendered as nothing here was a whole user turn
+		// silently removed from the request — found by the in-band test in
+		// internal/client/imageblock_test.go, not by reading this.
+		return "[strument: unsupported content block " + b.Type + "]"
+	}
+}
+
+// String describes an image in one bracketed phrase, sized when the dimensions
+// are known.
+func (s ImageSource) String() string {
+	label := s.Label
+	if label == "" {
+		label = s.MediaType
+	}
+	if s.Width > 0 && s.Height > 0 {
+		return fmt.Sprintf("[image: %s, %dx%d]", label, s.Width, s.Height)
+	}
+	return fmt.Sprintf("[image: %s]", label)
 }
 
 // CacheControl marks a prompt-cache breakpoint.

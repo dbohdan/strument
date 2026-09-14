@@ -112,7 +112,17 @@ type antBlock struct {
 	Input        json.RawMessage   `json:"input,omitempty"`       // tool_use
 	ToolUseID    string            `json:"tool_use_id,omitempty"` // tool_result
 	Content      string            `json:"content,omitempty"`     // tool_result
+	Source       *antImageSource   `json:"source,omitempty"`      // image
 	CacheControl *llm.CacheControl `json:"cache_control,omitempty"`
+}
+
+// antImageSource is the inline payload of an "image" block. Anthropic also
+// accepts a URL source; Strument only ever sends bytes it has already read,
+// so base64 is the only variant here.
+type antImageSource struct {
+	Type      string `json:"type"` // always "base64"
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type antMessage struct {
@@ -241,10 +251,35 @@ func contentBlocks(c llm.Content) []antBlock {
 	}
 	var out []antBlock
 	for _, b := range c.Blocks {
-		if b.Text == "" {
-			continue
+		switch b.Type {
+		case llm.BlockImage:
+			if b.Image == nil {
+				continue
+			}
+			out = append(out, antBlock{
+				Type: "image",
+				Source: &antImageSource{
+					Type:      "base64",
+					MediaType: b.Image.MediaType,
+					Data:      b.Image.Data,
+				},
+				CacheControl: b.CacheControl,
+			})
+		case llm.BlockText:
+			// An empty text block is dropped, as before: Anthropic rejects one.
+			if b.Text == "" {
+				continue
+			}
+			out = append(out, antBlock{Type: "text", Text: b.Text, CacheControl: b.CacheControl})
+		default:
+			// Never reached while blockkind_test.go passes, and in band rather
+			// than skipped if it ever is. A dropped block is invisible; this
+			// arrives in the transcript and in the model's context.
+			out = append(out, antBlock{
+				Type: "text",
+				Text: "[strument: unsupported content block " + b.Type + "]",
+			})
 		}
-		out = append(out, antBlock{Type: "text", Text: b.Text, CacheControl: b.CacheControl})
 	}
 	return out
 }

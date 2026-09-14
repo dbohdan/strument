@@ -68,13 +68,59 @@ func (c *ResponsesClient) baseURL() string {
 // content; a function_call and a function_call_output are items of their own,
 // paired by call_id.
 type respItem struct {
-	Type      string `json:"type,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
+	Type string `json:"type,omitempty"`
+	Role string `json:"role,omitempty"`
+	// Content is any because this dialect takes either a bare string or a list
+	// of typed parts, and only a message carrying an image needs the second
+	// form. See respContent.
+	Content   any    `json:"content,omitempty"`
 	CallID    string `json:"call_id,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
 	Output    string `json:"output,omitempty"`
+}
+
+// respBlock is one content part in the Responses dialect. Note image_url is a
+// bare string here, not the object the chat-completions dialect uses for the
+// same idea — the kind of divergence that is only ever found by looking.
+type respBlock struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
+}
+
+// respContent renders user content for this dialect: the plain string when
+// there is nothing but text, so every request that worked before is unchanged
+// byte for byte, and a part list only when an image is present.
+func respContent(c llm.Content) any {
+	if len(c.Images()) == 0 {
+		return c.String()
+	}
+	out := make([]respBlock, 0, len(c.Blocks))
+	for _, b := range c.Blocks {
+		switch b.Type {
+		case llm.BlockImage:
+			if b.Image == nil {
+				continue
+			}
+			out = append(out, respBlock{
+				Type:     "input_image",
+				ImageURL: dataURI(b.Image.MediaType, b.Image.Data),
+			})
+		case llm.BlockText:
+			if b.Text == "" {
+				continue
+			}
+			out = append(out, respBlock{Type: "input_text", Text: b.Text})
+		default:
+			// See contentBlocks in anthropic.go: in band, never skipped.
+			out = append(out, respBlock{
+				Type: "input_text",
+				Text: "[strument: unsupported content block " + b.Type + "]",
+			})
+		}
+	}
+	return out
 }
 
 // BuildBody translates an llm.Request into the Responses dialect.
@@ -194,7 +240,7 @@ func splitInstructions(in []llm.Message) (string, []respItem) {
 			}
 		default:
 			if t := m.Text(); t != "" {
-				items = append(items, respItem{Role: llm.RoleUser, Content: t})
+				items = append(items, respItem{Role: llm.RoleUser, Content: respContent(m.Content)})
 			}
 		}
 	}

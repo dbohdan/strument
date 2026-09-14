@@ -116,12 +116,70 @@ var sessionID = sync.OnceValue(func() string {
 	return hex.EncodeToString(b[:])
 })
 
-// wireMessage is one message on the wire.
+// wireMessage is one message on the wire. Content is any because this dialect
+// carries either a bare string or a list of typed parts, and the two are not
+// one Go type.
 type wireMessage struct {
 	Role       string         `json:"role"`
-	Content    llm.Content    `json:"content"`
+	Content    any            `json:"content"`
 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
+}
+
+// wireBlock is one content part. Only one payload is set, selected by Type.
+// The field order is the wire order and client_test.go pins it.
+type wireBlock struct {
+	Type         string            `json:"type"`
+	Text         string            `json:"text,omitempty"`
+	ImageURL     *wireImageURL     `json:"image_url,omitempty"`
+	CacheControl *llm.CacheControl `json:"cache_control,omitempty"`
+}
+
+// wireImageURL carries an image as a data: URI, which is how this dialect
+// takes inline bytes.
+type wireImageURL struct {
+	URL string `json:"url"`
+}
+
+// wireContent renders llm.Content in the chat-completions dialect.
+//
+// Each client shapes its own dialect rather than marshalling llm.Content
+// directly, which is what used to happen here. The neutral type cannot serve
+// both: this dialect spells an image {"type":"image_url","image_url":{...}}
+// and Anthropic spells it {"type":"image","source":{...}}, so a single set of
+// struct tags would have to be wrong for one of them.
+func wireContent(c llm.Content) any {
+	if c.Text != nil {
+		return *c.Text
+	}
+	out := make([]wireBlock, 0, len(c.Blocks))
+	for _, b := range c.Blocks {
+		switch b.Type {
+		case llm.BlockImage:
+			if b.Image == nil {
+				continue
+			}
+			out = append(out, wireBlock{
+				Type:         "image_url",
+				ImageURL:     &wireImageURL{URL: dataURI(b.Image.MediaType, b.Image.Data)},
+				CacheControl: b.CacheControl,
+			})
+		case llm.BlockText:
+			out = append(out, wireBlock{Type: "text", Text: b.Text, CacheControl: b.CacheControl})
+		default:
+			// See contentBlocks in anthropic.go: in band, never skipped.
+			out = append(out, wireBlock{
+				Type: "text",
+				Text: "[strument: unsupported content block " + b.Type + "]",
+			})
+		}
+	}
+	return out
+}
+
+// dataURI builds the data: URI this dialect wants around inline image bytes.
+func dataURI(mediaType, base64Data string) string {
+	return "data:" + mediaType + ";base64," + base64Data
 }
 
 // wireToolCall is the OpenAI tool-call shape on an assistant message.
@@ -148,7 +206,7 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 
 	msgs := make([]wireMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		wm := wireMessage{Role: m.Role, Content: m.Content, ToolCallID: m.ToolCallID}
+		wm := wireMessage{Role: m.Role, Content: wireContent(m.Content), ToolCallID: m.ToolCallID}
 		for _, tc := range m.ToolCalls {
 			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{
 				ID:       tc.ID,
