@@ -315,6 +315,7 @@ strument shell fish | source
 ```
 
 The `-M`/`--model` option completes model aliases from the effective config by running `strument config models`.
+Subcommands, their flags, and enumerable option values (`--yes`, `--mode`, `--consult-scope`) complete too, and paths complete where a command takes one.
 To load completions automatically, add the command to your shell configuration.
 
 

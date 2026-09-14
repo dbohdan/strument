@@ -1,133 +1,182 @@
 # Bash completions for strument.
+#
+# Verified by driving _strument_complete directly, not by reading; see
+# cmd/strument/completions_test.go, which also holds the names below to the
+# ones kong actually parses, in both directions. That check was one-directional
+# once, and three names that no longer existed — a `version` command, a
+# `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
-_strument_commands="trust history config model-config project tool shell version"
-_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --consult-scope --code-result --code-namespace --yes --yes-shell --version"
+_strument_commands="chat trust history config model-config project tool shell"
+_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --yes --consult-scope --code-result --code-namespace --version"
+_strument_yes_names="bash webfetch websearch steps context add-output all"
+_strument_trust_options="-y --yes"
+_strument_history_commands="path edit"
 _strument_config_commands="models default path edit"
 _strument_config_options="--user --project"
-_strument_history_commands="path edit"
-_strument_tool_commands="read grep glob ls symbol"
-_strument_project_commands="list adopt ignore"
-_strument_project_options="-a --all -y --yes"
-_strument_trust_options="-y --yes"
 _strument_model_config_options="-s --source --provider-name --proxy"
-_strument_tool_options="-r --root --json"
+_strument_project_commands="list adopt ignore"
+_strument_project_list_options="-a --all"
+_strument_project_adopt_options="-y --yes"
+_strument_tool_commands="read grep glob ls symbol"
+_strument_tool_options="--root --json"
+
+# Every option that takes a value, so the scanner does not read one as a
+# subcommand: `strument -M trust` names a model, not the trust command.
+_strument_value_options="-m --message -M --model --jsonl --yes --consult-scope --code-result --code-namespace -s --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
 
 _strument_find_models() {
     command -v strument >/dev/null 2>&1 && strument config models 2>/dev/null
 }
 
-_strument_complete_models() {
-    COMPREPLY=($(compgen -W "$(_strument_find_models)" -- "$cur"))
+_strument_words() {
+    COMPREPLY=($(compgen -W "$1" -- "$cur"))
 }
 
 _strument_complete() {
-    local cur prev command word expecting_value i tool_command
+    local cur prev command sub word i expecting
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     command=""
-    tool_command=""
-    expecting_value=0
+    sub=""
+    expecting=0
 
-    if [[ $prev == -M || $prev == --model ]]; then
-        _strument_complete_models
+    # First pass: which command and subcommand are we inside? Options that take
+    # a value consume the next word, so it is never mistaken for a command.
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        word="${COMP_WORDS[i]}"
+        if ((expecting)); then
+            expecting=0
+            continue
+        fi
+        case " $_strument_value_options " in
+        *" $word "*)
+            expecting=1
+            continue
+            ;;
+        esac
+        case "$word" in
+        -*) continue ;;
+        esac
+        if [[ -z $command ]]; then
+            case " $_strument_commands " in
+            *" $word "*) command=$word ;;
+            *) break ;; # a file argument to chat; nothing after it is a command
+            esac
+        elif [[ -z $sub ]]; then
+            sub=$word
+        fi
+    done
+
+    # A value for the option just typed, whichever command we are in.
+    case "$prev" in
+    -M | --model)
+        _strument_words "$(_strument_find_models)"
         return
-    fi
+        ;;
+    --yes)
+        # Only chat's --yes takes a value; trust's and project adopt's are
+        # booleans, and offering prompt names after those would be a lie.
+        if [[ -z $command || $command == chat ]]; then
+            _strument_words "$_strument_yes_names"
+        fi
+        return
+        ;;
+    --consult-scope) _strument_words "none files chat" ; return ;;
+    --code-result) _strument_words "last all main" ; return ;;
+    --code-namespace) _strument_words "flat both only hint" ; return ;;
+    --mode) _strument_words "files content count" ; return ;;
+    --kind) _strument_words "definition reference" ; return ;;
+    -s | --source) _strument_words openrouter ; return ;;
+    --root | --path)
+        compopt -o dirnames
+        return
+        ;;
+    --jsonl)
+        compopt -o default
+        return
+        ;;
+    esac
+    case " $_strument_value_options " in
+    # A value we cannot enumerate: a message, a glob, a line count. Offer
+    # nothing rather than the command list, which is what the old script did.
+    *" $prev "*) return ;;
+    esac
+
     if [[ $cur == --model=* ]]; then
-        local model_prefix=${cur#--model=}
-        COMPREPLY=($(compgen -W "$(_strument_find_models)" -- "$model_prefix"))
+        COMPREPLY=($(compgen -W "$(_strument_find_models)" -- "${cur#--model=}"))
         COMPREPLY=("${COMPREPLY[@]/#/--model=}")
         return
     fi
 
-    for ((i = 1; i < COMP_CWORD; i++)); do
-        word="${COMP_WORDS[i]}"
-        if ((expecting_value)); then
-            expecting_value=0
-            continue
-        fi
-        case "$word" in
-        -M|--model|-m|--message|--jsonl|--consult-scope|--code-result|--code-namespace|--provider-name|--proxy|--root|--offset|--limit|--glob|--path|--mode|--kind)
-            expecting_value=1
-            ;;
-        -s)
-            [[ $command == model-config ]] && expecting_value=1
-            ;;
-        -r)
-            [[ $command == tool ]] && expecting_value=1
-            ;;
-        trust|history|config|model-config|project|tool|shell|version)
-            [[ -z $command ]] && command=$word
-            ;;
-        read|grep|glob|ls|symbol)
-            [[ $command == tool && -z $tool_command ]] && tool_command=$word
-            ;;
-        esac
-    done
-
     case "$command" in
-    config)
-        COMPREPLY=($(compgen -W "$_strument_config_commands $_strument_config_options" -- "$cur"))
-        ;;
-    model-config)
-        if [[ $prev == --source || $prev == -s ]]; then
-            COMPREPLY=($(compgen -W "openrouter" -- "$cur"))
-        elif [[ $prev == --provider-name || $prev == --proxy ]]; then
-            COMPREPLY=()
-        else
-            COMPREPLY=($(compgen -W "$_strument_model_config_options" -- "$cur"))
-        fi
-        ;;
-    tool)
-        if [[ $prev == --mode ]]; then
-            COMPREPLY=($(compgen -W "files content count" -- "$cur"))
-        elif [[ $prev == --kind ]]; then
-            COMPREPLY=($(compgen -W "definition reference" -- "$cur"))
-        elif [[ $prev == --root || $prev == --offset || $prev == --limit || $prev == --glob || $prev == --path ]]; then
-            COMPREPLY=()
-        elif [[ -n $tool_command ]]; then
-            case "$tool_command" in
-            grep)
-                COMPREPLY=($(compgen -W "--glob --path --mode --ignore-case --context-lines" -- "$cur"))
-                ;;
-            symbol)
-                COMPREPLY=($(compgen -W "--kind" -- "$cur"))
-                ;;
-            *)
-                COMPREPLY=()
-                ;;
-            esac
-        else
-            COMPREPLY=($(compgen -W "$_strument_tool_commands $_strument_tool_options" -- "$cur"))
-        fi
-        ;;
-    project)
-        COMPREPLY=($(compgen -W "$_strument_project_commands $_strument_project_options" -- "$cur"))
-        ;;
-    shell)
-        COMPREPLY=($(compgen -W "bash fish" -- "$cur"))
+    "" | chat)
+        # The default command. Its positional arguments are files to pin, so
+        # offer them alongside the command names.
+        _strument_words "$_strument_commands $_strument_chat_options"
+        [[ $cur == -* ]] || compopt -o default
         ;;
     trust)
-        COMPREPLY=($(compgen -W "$_strument_trust_options" -- "$cur"))
-        ;;
-    history)
-        COMPREPLY=($(compgen -W "$_strument_history_commands" -- "$cur"))
-        ;;
-    version)
-        COMPREPLY=()
-        ;;
-    *)
-        if [[ $prev == --consult-scope ]]; then
-            COMPREPLY=($(compgen -W "none files chat" -- "$cur"))
-        elif [[ $prev == --code-result ]]; then
-            COMPREPLY=($(compgen -W "last all main" -- "$cur"))
-        elif [[ $prev == --code-namespace ]]; then
-            COMPREPLY=($(compgen -W "flat both only hint" -- "$cur"))
-        elif [[ $prev == --offset || $prev == --limit || $prev == --max-count ]]; then
-            COMPREPLY=()
+        if [[ $cur == -* ]]; then
+            _strument_words "$_strument_trust_options"
         else
-            COMPREPLY=($(compgen -W "$_strument_commands $_strument_chat_options" -- "$cur"))
+            compopt -o dirnames
         fi
         ;;
+    history)
+        # Only while no subcommand has been chosen: `history path` takes
+        # nothing further, and offering its siblings there would suggest they
+        # compose.
+        [[ -n $sub ]] || _strument_words "$_strument_history_commands"
+        ;;
+    config)
+        if [[ $cur == -* ]]; then
+            # The scope flags name one file, so they belong to path and edit;
+            # models and default print the merge of both and refuse them.
+            case "$sub" in
+            path | edit) _strument_words "$_strument_config_options" ;;
+            esac
+        elif [[ -z $sub ]]; then
+            _strument_words "$_strument_config_commands"
+        fi
+        ;;
+    model-config) _strument_words "$_strument_model_config_options" ;;
+    project)
+        case "$sub" in
+        list) _strument_words "$_strument_project_list_options" ;;
+        adopt)
+            if [[ $cur == -* ]]; then
+                _strument_words "$_strument_project_adopt_options"
+            else
+                compopt -o dirnames
+            fi
+            ;;
+        ignore) compopt -o dirnames ;;
+        *) _strument_words "$_strument_project_commands" ;;
+        esac
+        ;;
+    tool)
+        case "$sub" in
+        read)
+            if [[ $cur == -* ]]; then
+                _strument_words "$_strument_tool_options --offset --limit"
+            else
+                compopt -o default
+            fi
+            ;;
+        grep) _strument_words "$_strument_tool_options --glob --path --mode --ignore-case --context-lines" ;;
+        symbol) _strument_words "$_strument_tool_options --kind" ;;
+        ls)
+            if [[ $cur == -* ]]; then
+                _strument_words "$_strument_tool_options"
+            else
+                compopt -o dirnames
+            fi
+            ;;
+        glob) _strument_words "$_strument_tool_options" ;;
+        *) _strument_words "$_strument_tool_commands $_strument_tool_options" ;;
+        esac
+        ;;
+    shell) _strument_words "bash fish" ;;
     esac
 }
 
