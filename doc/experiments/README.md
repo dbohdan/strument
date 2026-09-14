@@ -91,6 +91,7 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **design** — [2026-09-anchored-edit](2026-09-anchored-edit/) | How should anchored editing be evaluated across its preregistration and phases? This is a multi-phase plan rather than a completed result; start with [`phase0.md`](2026-09-anchored-edit/phase0.md). |
+| **trial** — [2026-09-replace-all](2026-09-replace-all/) | Is `replace_all` reached, given that a 2026-08 trial found 1/18 and argued against adding it? Yes: 20/20 uptake and 20/20 correct for GLM-5.3-Flash, with the ambiguity it avoids firing once in 20 runs. Ship it, default off. The naming comparison is vacuous — the message is rarely reached once the parameter exists — and safety is still unmeasured, the fixture having no decoys. |
 
 ## Sandbox and shell
 

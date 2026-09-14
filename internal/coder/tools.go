@@ -254,6 +254,10 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 						"include enough surrounding lines to pick out the one place you mean, and make " +
 						"a separate call for each place if you mean several.")},
 					{"new_string", strProp("The text to put in its place.")},
+					{"replace_all", map[string]any{"type": "boolean", "description": "Replace every " +
+						"occurrence of old_string instead of requiring exactly one. Default false. " +
+						"Use it when the same text should change everywhere in the file — renaming " +
+						"an identifier, or bumping a version that appears in several entries."}},
 				},
 				"required": []any{"path", "old_string", "new_string"},
 			},
@@ -587,6 +591,9 @@ type plannedEdit struct {
 	search  string
 	replace string
 	create  bool
+	// replaceAll replaces every exact occurrence rather than failing when
+	// there is more than one.
+	replaceAll bool
 	// anchor and endAnchor name a line range by identity. When anchor is set,
 	// search is unused: the range is the address, and there is nothing to
 	// match, which is what makes an anchored edit unambiguous by construction.
@@ -614,7 +621,9 @@ type editArgs struct {
 	Path      string `json:"path"`
 	OldString string `json:"old_string"`
 	NewString string `json:"new_string"`
-	Content   string `json:"content"`
+	// ReplaceAll turns the uniqueness requirement off for this one call.
+	ReplaceAll bool   `json:"replace_all"`
+	Content    string `json:"content"`
 	// Anchor and EndAnchor address lines by identity instead of by quoting
 	// them, when the session runs with anchored edits. See anchors.go.
 	Anchor    string `json:"anchor"`
@@ -636,6 +645,11 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 	case toolWrite:
 		return plannedEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
 	default: // toolEdit
+		if a.ReplaceAll && a.Anchor != "" {
+			return plannedEdit{}, "Send either \"anchor\" or \"replace_all\", not both: " +
+				"an anchor names one range by identity, so there is nothing for " +
+				"\"replace all of them\" to mean."
+		}
 		if a.Anchor != "" {
 			if a.OldString != "" {
 				return plannedEdit{}, "Send either \"anchor\" or \"old_string\", not both: " +
@@ -648,7 +662,8 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 		if a.EndAnchor != "" {
 			return plannedEdit{}, "\"end_anchor\" needs \"anchor\": it says where a range ends, not where it is."
 		}
-		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString, replace: a.NewString}, ""
+		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString,
+			replace: a.NewString, replaceAll: a.ReplaceAll}, ""
 	}
 }
 
@@ -1217,7 +1232,28 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			// reachable only by accident.
 			var ok bool
 			var how editblock.Match
-			ambiguous := editblock.CountOccurrences(content, e.search) > 1
+			occurrences := editblock.CountOccurrences(content, e.search)
+
+			// replace_all is the model saying "all of them are the one I
+			// mean", so ambiguity stops being a failure for this call.
+			//
+			// Exact matches only, deliberately. DoReplace below will fall back
+			// to a whitespace-tolerant match when the text does not appear
+			// verbatim, which is a good bet at one site and a bad one at five:
+			// a fuzzy match applied everywhere multiplies the risk instead of
+			// dividing it. If the text is not exactly present, this falls
+			// through to the ordinary path and its message.
+			if e.replaceAll && occurrences > 0 {
+				newContent = strings.ReplaceAll(content, e.search, e.replace)
+				c.editsExact++
+				callVerb[e.callID] = replacedVerb(occurrences)
+				if writeVerb[e.path] == "" {
+					writeVerb[e.path] = "Applied edit to"
+				}
+				break
+			}
+
+			ambiguous := occurrences > 1
 			if !ambiguous {
 				newContent, how, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
 			}
@@ -1394,8 +1430,10 @@ func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambigu
 			b.WriteString("\nHere is each one:\n\n")
 			b.WriteString(sites)
 		}
-		b.WriteString("\nInclude enough surrounding lines to pick out the one you mean, " +
-			"and make one call per place if you mean several.\n")
+		b.WriteString("\nTo change one of them, include enough surrounding lines to pick " +
+			"out the one you mean, and make one call per place if you mean several.\n")
+		b.WriteString("To change all of them the same way, send the call again with " +
+			"\"replace_all\": true.\n")
 		return b.String()
 	}
 
@@ -1410,4 +1448,14 @@ func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambigu
 		fmt.Fprintf(&b, "\nThe replacement text is already present in %s; this edit may not be needed.\n", quoteToolArg(e.path))
 	}
 	return b.String()
+}
+
+// replacedVerb is the per-call verb for a replace_all edit, which says how many
+// places changed. The count is the whole point: a model that asked for "all of
+// them" has no other way to learn whether that was two or twenty.
+func replacedVerb(n int) string {
+	if n == 1 {
+		return "Replaced 1 occurrence in"
+	}
+	return fmt.Sprintf("Replaced %d occurrences in", n)
 }

@@ -657,6 +657,24 @@ against adding it that does not depend on the risk ever being measured. The
 trial cannot say whether `replace_all` is dangerous, because it never got used
 enough to be. Say that, rather than letting 18/18 stand as a safety result.
 
+**Superseded in part, 2026-09.** `replace_all` shipped after a re-run put
+uptake at 20/20 for GLM-5.3-Flash
+([`2026-09-replace-all`](experiments/2026-09-replace-all/README.md)). The
+uptake half of the conclusion was a fact about six models in 2026-08, not a
+standing property of the feature, and it did not survive a different model on a
+different task shape a month later. Two things about it are worth keeping. The
+*lesson* — check that a treatment is reached before spending — is exactly what
+made the re-run cheap and worth doing, so it held up by being used. And the
+*safety* half still stands untouched: the re-run had no decoys at all, so it is
+an even weaker safety result than the one it replaced. An uptake number ages;
+"the hazard never fired" does not become "the hazard is not there".
+
+The re-run also produced this section's fault with the sign flipped. Its first
+prompt said "change **every** entry", which names the feature in the user's own
+words, so both arms took it 5/5 and the message under test never fired. A
+treatment applied in *both* arms is as uninformative as one applied in neither,
+and it looks like a clean result rather than a broken one.
+
 <a id="metric-counts-wrong-thing"></a>
 
 ### The mirror image: a metric that counts the wrong thing

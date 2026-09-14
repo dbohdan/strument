@@ -457,7 +457,13 @@ Ten tools, in three natures:
   which is the failure edit-tool-bench criticises in *fuzzy* edit tools — a
   harness reporting success on an underconstrained transformation, so the model
   reasons on from a change that may have landed in the wrong place. Exact
-  matching does not prevent that on its own; exact is not unique. `write(path, content)` puts down a whole file — creating it or
+  matching does not prevent that on its own; exact is not unique.
+  `replace_all` opts out for one call, changing every exact occurrence and
+  reporting how many — default off, exact matches only, and refused beside an
+  anchor, which already names one range. It exists because the refusal alone
+  left models reconstructing per-site context for a change they meant to apply
+  everywhere; see [`doc/experiments/2026-09-replace-all`](experiments/2026-09-replace-all/).
+  `write(path, content)` puts down a whole file — creating it or
   completely overwriting it, and the outcome line says which, so neither the
   user nor the model assumes the old contents survived. Both land the moment
   the call arrives. The safety net is the snapshot and the diff, not a
