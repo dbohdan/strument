@@ -282,7 +282,13 @@ type Coder struct {
 
 	// Send-scoped tool-call accumulation, in first-seen index order.
 	partialToolCalls []llm.ToolCall
-	toolCallIndex    map[int]int
+	// hitOutputLimit records that the last stream of this send ended on
+	// finish_reason=length. It is read only when a tool call's arguments also
+	// fail to parse, which together mean the call was cut off mid-argument —
+	// a different thing to tell the model than "your JSON was malformed", and
+	// the one that suggests the fix.
+	hitOutputLimit bool
+	toolCallIndex  map[int]int
 
 	// resumeInPlace makes the next send re-enter on what is already in
 	// curMessages, without adding a user turn for it.

@@ -674,6 +674,25 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 // user confirms. A call the model can fix — a search that didn't match, a
 // malformed argument — records its error as the tool result and the turn
 // re-sends (reflection) without a synthetic user turn.
+// malformedArgs reports how a tool call's arguments are unusable, or "" when
+// they parse.
+//
+// An empty argument string is left alone: some models send it for a tool that
+// takes none, and the tool's own parser gives the better message about what it
+// was missing. What is caught here is a non-empty string that is not JSON,
+// which no parser can do anything with.
+func (c *Coder) malformedArgs(tc llm.ToolCall) string {
+	if strings.TrimSpace(tc.Arguments) == "" || json.Valid([]byte(tc.Arguments)) {
+		return ""
+	}
+	if c.hitOutputLimit {
+		return fmt.Sprintf("The %s call was cut off partway through its arguments: the reply reached the "+
+			"model's output limit. Nothing ran. Make the call smaller — for a file, write it in several "+
+			"edits rather than one — rather than sending the same call again.", tc.Name)
+	}
+	return fmt.Sprintf("The arguments to %s were not valid JSON, so nothing ran.", tc.Name)
+}
+
 func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	if len(c.partialToolCalls) == 0 {
 		return OutcomeSuccess
@@ -693,6 +712,17 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	for _, tc := range c.partialToolCalls {
 		if note := c.toolLoops.observeCall(tc.Name, tc.Arguments); note != "" {
 			loopNote = note
+		}
+		// Arguments that are not JSON at all are answered here rather than by
+		// each tool's own parser, because none of them can act on the string
+		// and only this level knows why it is broken. The common cause is not
+		// a model that cannot write JSON: it is a reply cut off mid-argument by
+		// the output limit, and "your JSON was malformed" invites the model to
+		// send the same oversized call again.
+		if msg := c.malformedArgs(tc); msg != "" {
+			results.setText(tc.ID, msg)
+			needsReflection = true
+			continue
 		}
 		switch tc.Name {
 		case toolEdit, toolWrite:

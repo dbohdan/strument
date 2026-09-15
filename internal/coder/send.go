@@ -283,6 +283,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.toolCallIndex = map[int]int{}
 
 		res, streamErr := c.streamOnce(ctx, c.buildRequest(messages), usage, loops)
+		// Per stream, not sticky: a continuation that completes normally leaves
+		// this false, so only a reply whose *last* stream was capped is
+		// reported as truncated.
+		c.hitOutputLimit = res == resContinuation
 
 		if res == resFailed {
 			// A retryable error backs off and retries (the partial is discarded

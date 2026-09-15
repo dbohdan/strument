@@ -227,15 +227,11 @@ func splitInstructions(in []llm.Message) (string, []respItem) {
 				items = append(items, respItem{Role: llm.RoleAssistant, Content: t})
 			}
 			for _, tc := range m.ToolCalls {
-				args := tc.Arguments
-				if strings.TrimSpace(args) == "" {
-					args = "{}"
-				}
 				items = append(items, respItem{
 					Type:      "function_call",
 					CallID:    tc.ID,
 					Name:      tc.Name,
-					Arguments: args,
+					Arguments: tc.WireArguments(),
 				})
 			}
 		default:

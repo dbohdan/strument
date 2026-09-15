@@ -215,15 +215,11 @@ func splitSystem(in []llm.Message) ([]antBlock, []antMessage) {
 		case llm.RoleAssistant:
 			blocks := contentBlocks(m.Content)
 			for _, tc := range m.ToolCalls {
-				args := tc.Arguments
-				if strings.TrimSpace(args) == "" {
-					args = "{}" // an empty argument string is not valid JSON input
-				}
 				blocks = append(blocks, antBlock{
 					Type:  "tool_use",
 					ID:    tc.ID,
 					Name:  tc.Name,
-					Input: json.RawMessage(args),
+					Input: json.RawMessage(tc.WireArguments()),
 				})
 			}
 			if len(blocks) == 0 {

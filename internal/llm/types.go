@@ -35,6 +35,35 @@ type ToolCall struct {
 	Arguments string
 }
 
+// WireArguments is Arguments in a form a provider will accept: the model's own
+// string when it parses as JSON, and "{}" when it does not.
+//
+// Providers validate this field, and a request carrying one malformed call is
+// rejected whole — so a single bad call does not cost one tool result, it ends
+// every remaining turn of the session. Observed against OpenRouter, which
+// answers `{"error":{"code":502,"message":"Upstream error from DeepInfra:
+// Assistant tool call function.arguments must be valid JSON."}}` and keeps
+// answering it, because the malformed message is in the history now and goes
+// out with every subsequent request.
+//
+// Two ways to get one. The empty string, which some models send for a tool that
+// takes no arguments and which is not valid JSON — the Anthropic and Responses
+// clients each already worked that out and fixed it locally, which is how the
+// chat-completions client came to be the one that still sent it. And a call cut
+// off mid-argument when the reply hits the output limit, which is the same
+// defect and is not fixed by a non-empty check.
+//
+// Repaired here, at the wire, rather than in the conversation: the raw string
+// is what the model produced, the tool dispatch has to see it to tell the model
+// what was wrong with it, and the transcript should record what happened rather
+// than a tidied version of it.
+func (t ToolCall) WireArguments() string {
+	if json.Valid([]byte(t.Arguments)) {
+		return t.Arguments
+	}
+	return "{}"
+}
+
 // ToolResult builds a RoleTool result message for a given call id.
 func ToolResult(callID, text string) Message {
 	return Message{Role: RoleTool, Content: TextContent(text), ToolCallID: callID}

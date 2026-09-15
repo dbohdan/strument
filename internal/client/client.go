@@ -297,7 +297,7 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{
 				ID:       tc.ID,
 				Type:     "function",
-				Function: wireToolFunction{Name: tc.Name, Arguments: tc.Arguments},
+				Function: wireToolFunction{Name: tc.Name, Arguments: tc.WireArguments()},
 			})
 		}
 		msgs[i] = wm
