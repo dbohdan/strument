@@ -392,11 +392,18 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		// the reply went out through the wrong channel; see reasoningLeak.
 		switch marker, leaked := reasoningLeak(answer, c.partialReasoningContent, len(c.partialToolCalls)); {
 		case leaked:
-			c.Out.Warningf("The model wrote a tool call (%s) into its reasoning instead of calling the tool, "+
-				"so nothing ran and the turn is lost.", marker)
-			c.Out.Warningf("  This is the inference server's tool-call or reasoning parser, not the model's " +
-				"competence. With llama.cpp, check the chat template's thinking option — a template that " +
-				"opens `<think>` for the model leaves it to close it before acting.")
+			// Neither half of this is the harness's to adjudicate, and an
+			// earlier version tried: it told the user the parser was at fault
+			// and "not the model's competence", which is a confident causal
+			// claim from a position that cannot see either. The template sets
+			// the trap and the model's format-adherence decides whether it
+			// walks into it; both are levers, so both are named and neither is
+			// blamed.
+			c.Out.Warningf("Nothing ran: the model's tool call (%s) came before its reasoning block "+
+				"closed, so the inference server recorded it as a thought.", marker)
+			c.Out.Warningf("  A chat template that opens `<think>` for the model leaves it to close " +
+				"the block before acting, and smaller models close it late more often. With " +
+				"llama.cpp, check the template's thinking option.")
 		case strings.TrimSpace(c.partialReasoningContent) != "":
 			c.Out.Warningf("The model returned reasoning but no answer and no tool call.")
 		default:
