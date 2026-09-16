@@ -983,15 +983,37 @@ func formatTokenLine(sent, cacheWrite, cacheRead, received int, modelTime time.D
 	return line + "."
 }
 
-// tokenRate renders the throughput, or "" when there is nothing honest to say:
-// no tokens, or a duration too short to divide by without inventing precision.
-// A fake clock in tests reports no elapsed time at all, which lands here.
-func tokenRate(received int, modelTime time.Duration) string {
+// tokenRateValue is the throughput in tokens per second, or 0 when there is
+// nothing honest to say: no tokens, or a duration too short to divide by
+// without inventing precision. A fake clock in tests reports no elapsed time at
+// all, which lands here.
+//
+// Zero is the "unknown" value rather than a measurement, and can be, because a
+// real rate is never zero: the floor guarantees both operands are positive.
+// That is why it needs no companion flag, unlike cost, where $0 is a model that
+// is free rather than a model nobody priced.
+//
+// Split out from tokenRate so the screen, the transcript and the cost ledger
+// share one rule about when a rate exists. Three renderings of one measurement
+// is three chances for two of them to disagree about whether 40ms of stream
+// counts.
+func tokenRateValue(received int, modelTime time.Duration) float64 {
 	const floor = 50 * time.Millisecond
 	if received <= 0 || modelTime < floor {
+		return 0
+	}
+	// Two decimals. The divisor is wall-clock time including the network, so
+	// the fourteen significant figures a float64 will print claim an accuracy
+	// the measurement does not have.
+	return math.Round(float64(received)/modelTime.Seconds()*100) / 100
+}
+
+// tokenRate renders the throughput for the usage line, or "" when there is none.
+func tokenRate(received int, modelTime time.Duration) string {
+	rate := tokenRateValue(received, modelTime)
+	if rate == 0 {
 		return ""
 	}
-	rate := float64(received) / modelTime.Seconds()
 	if rate < 10 {
 		return fmt.Sprintf("%.1f t/s", rate)
 	}
@@ -1017,16 +1039,19 @@ func (c *Coder) flushTurnUsage() {
 	c.Out.Printf("%s", report)
 
 	c.record(Record{
-		Type:       "turn",
-		Outcome:    c.lastSendOutcome.String(),
-		Steps:      c.numSteps,
-		Sent:       c.messageTokensSent,
-		Received:   c.messageTokensReceived,
-		Cost:       c.messageCost,
-		CostKnown:  c.costKnown,
-		Pinned:     c.pinnedRecordPaths(),
-		EditsExact: c.editsExact,
-		EditsFuzzy: c.editsFuzzy,
+		Type:      "turn",
+		Outcome:   c.lastSendOutcome.String(),
+		Steps:     c.numSteps,
+		Sent:      c.messageTokensSent,
+		Received:  c.messageTokensReceived,
+		Cost:      c.messageCost,
+		CostKnown: c.costKnown,
+		// From the same two numbers the usage line above divides, so the row
+		// and the screen cannot disagree.
+		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),
+		Pinned:          c.pinnedRecordPaths(),
+		EditsExact:      c.editsExact,
+		EditsFuzzy:      c.editsFuzzy,
 	})
 
 	c.reportUsage(c.numSteps+1, len(c.turnEditedFiles))
@@ -1047,14 +1072,15 @@ func (c *Coder) reportUsage(steps, filesChanged int) {
 		return
 	}
 	u := TurnUsage{
-		Model:        c.Model.QualifiedSlug(),
-		TokensSent:   c.messageTokensSent,
-		TokensRecv:   c.messageTokensReceived,
-		CacheRead:    c.messageCacheRead,
-		CacheWrite:   c.messageCacheWrite,
-		Estimated:    c.messageEstimated,
-		Steps:        steps,
-		FilesChanged: filesChanged,
+		Model:           c.Model.QualifiedSlug(),
+		TokensSent:      c.messageTokensSent,
+		TokensRecv:      c.messageTokensReceived,
+		CacheRead:       c.messageCacheRead,
+		CacheWrite:      c.messageCacheWrite,
+		Estimated:       c.messageEstimated,
+		Steps:           steps,
+		FilesChanged:    filesChanged,
+		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),
 	}
 	if c.costKnown {
 		cost := c.messageCost
@@ -1075,6 +1101,10 @@ type TurnUsage struct {
 	Estimated    bool
 	Steps        int
 	FilesChanged int
+	// TokensPerSecond is zero when there is no rate to report; see
+	// tokenRateValue for why zero can carry that meaning here and nil has to
+	// carry it for Cost.
+	TokensPerSecond float64
 }
 
 // streamedText is everything received this send — stitched continuations plus

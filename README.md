@@ -263,7 +263,8 @@ Outside one it is already off.
 
 `--jsonl <file>` records the session as a [JSON Lines](https://jsonlines.org/) log alongside the normal output.
 The log consists of records.
-Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token count, and cost.
+Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token counts, cost, and throughput in tokens per second.
+`tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
 
 ```sh
 strument --jsonl run.jsonl -m 'Which functions call settleEdits?'

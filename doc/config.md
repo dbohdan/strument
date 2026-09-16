@@ -91,7 +91,7 @@ projects/myproj-9428ba2d/
     transcript.md   the chat transcript
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
     resume.json     pinned files and the model alias, so a restart costs no retyping
-    cost.jsonl      one line per turn: tokens, cost, steps, files changed
+    cost.jsonl      one line per turn: tokens, cost, t/s, steps, files changed
 ```
 
 `strument history path` prints the transcript's path and `strument history edit`

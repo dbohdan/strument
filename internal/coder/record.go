@@ -76,6 +76,16 @@ type Record struct {
 	Received  int     `json:"received,omitempty"`
 	Cost      float64 `json:"cost,omitempty"`
 	CostKnown bool    `json:"cost_known,omitempty"`
+	// TokensPerSecond is the turn's throughput, the same measurement the
+	// closing usage line renders as "161 t/s". Absent when there is none —
+	// nothing received, or too little elapsed time to divide by — which is why
+	// it needs no companion flag: a real rate is never zero.
+	//
+	// Worth having beside the counts because throughput is a property of the
+	// choice of model, not of the turn, and it is the one the token counts
+	// cannot show. A sweep's sample size is capped by wall-clock as often as by
+	// spend.
+	TokensPerSecond float64 `json:"tokens_per_second,omitempty"`
 	// Pinned lets a consumer distinguish files the model could see from files
 	// it never saw when auditing whether a file was read before it was edited.
 	Pinned []string `json:"pinned,omitempty"`

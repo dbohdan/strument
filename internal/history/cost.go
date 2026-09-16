@@ -26,6 +26,14 @@ type CostEntry struct {
 	Estimated    bool     `json:"estimated,omitempty"`
 	Steps        int      `json:"steps"`
 	FilesChanged int      `json:"files_changed,omitempty"`
+	// TokensPerSecond is the turn's throughput. Absent when there is none to
+	// report, which a rate can express as zero and a cost cannot: a model that
+	// is free costs $0, while nothing at all is ever generated at 0 t/s.
+	//
+	// Here as well as in the transcript because this is the file that answers
+	// "which model is actually worth it", and speed is half of that question —
+	// a sweep's sample size is capped by wall-clock as often as by spend.
+	TokensPerSecond float64 `json:"tokens_per_second,omitempty"`
 }
 
 // CostPath is the ledger for a project root.

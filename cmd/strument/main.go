@@ -310,15 +310,16 @@ func (c *chatCmd) Run() error {
 		// numbers.
 		cdr.RecordUsage = func(u coder.TurnUsage) {
 			_ = history.AppendCost(projectRoot, history.CostEntry{
-				Model:        u.Model,
-				TokensSent:   u.TokensSent,
-				TokensRecv:   u.TokensRecv,
-				CacheRead:    u.CacheRead,
-				CacheWrite:   u.CacheWrite,
-				Cost:         u.Cost,
-				Estimated:    u.Estimated,
-				Steps:        u.Steps,
-				FilesChanged: u.FilesChanged,
+				Model:           u.Model,
+				TokensSent:      u.TokensSent,
+				TokensRecv:      u.TokensRecv,
+				CacheRead:       u.CacheRead,
+				CacheWrite:      u.CacheWrite,
+				Cost:            u.Cost,
+				Estimated:       u.Estimated,
+				Steps:           u.Steps,
+				FilesChanged:    u.FilesChanged,
+				TokensPerSecond: u.TokensPerSecond,
 			})
 		}
 
