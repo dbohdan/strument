@@ -31,6 +31,11 @@ type codeFuncDef struct {
 	// signature and the return shape, because the description is the only
 	// place the model learns either.
 	summary string
+	// params is the positional order of the arguments, which must match the
+	// signature the summary states: the summary is the only place the model
+	// learns it, and Monty drops a positional it has no name for. See
+	// codeToolParams.
+	params []string
 	// fn receives the decoded arguments and returns data. The Coder is passed
 	// so a function can reach c.Files and c.Root — the same fields an
 	// Inspector is built from — and containment is each function's own
@@ -48,7 +53,8 @@ var codeFuncs = []codeFuncDef{
 			"{size, offset, truncated, data} where data is a list of 0-255 ints. For computing " +
 			"over binary files (magic numbers, entropy, embedded strings); read is the " +
 			"text-shaped one and refuses binaries.",
-		fn: runReadBin,
+		params: []string{"path", "offset", "limit"},
+		fn:     runReadBin,
 	},
 }
 

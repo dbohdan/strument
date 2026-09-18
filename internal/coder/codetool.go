@@ -448,6 +448,37 @@ func (c *Coder) codeCallableTools() []string {
 	return out
 }
 
+// codeToolParams is the positional order of each bridged tool's arguments.
+//
+// It has to be written out. A ToolDef's Parameters is a map, so it carries no
+// order at all — and what the model is shown is Go's JSON marshalling of that
+// map, which sorts the keys alphabetically. `grep` reaches the model as
+// context_lines, glob, ignore_case, mode, path, pattern. No order a program
+// could follow exists until one is chosen here.
+//
+// Chosen for the strongest prior a model has, not for the schema's source
+// order, and the second slot is the only one where that took any thinking:
+//
+//   - grep's is `path`, following the shell's `grep PATTERN FILE`. The
+//     alternative, glob, is what the tool's own description warns against —
+//     "This, not glob, is how to restrict a search to a subtree" — and it is
+//     also the safer error: `grep("foo", "src/")` meaning glob searches a
+//     subtree instead of the tree, while the reverse treats a directory as a
+//     glob and matches nothing.
+//   - read's follows read_bin's documented signature, which is already in the
+//     description the model reads.
+//
+// Monty drops a positional past the end of this list, silently, which is the
+// bug this table exists to fix — so the list is every parameter the schema has,
+// not just the required one. codeparams_test.go holds it to the schemas.
+var codeToolParams = map[string][]string{
+	toolRead:   {"path", "offset", "limit"},
+	toolGrep:   {"pattern", "path", "glob", "mode", "ignore_case", "context_lines"},
+	toolGlob:   {"pattern"},
+	toolLS:     {"path"},
+	toolSymbol: {"name", "kind"},
+}
+
 // codeOptions assembles the Execute options: the resource limits, plus the
 // read-only bridge. log collects what the program actually did, for the outcome
 // line and the result's note.
@@ -457,20 +488,25 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 
 	names := c.codeCallableTools()
 	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs))
-	// Each tool takes its arguments as keywords; the params list is what lets
-	// Monty map a positional call's arguments onto those names. The schemas
-	// differ per tool (path, pattern, limit, …), so the program passes
-	// everything by name and Monty hands over whatever it got — an argument
-	// this side does not recognize is answered by the tool itself, exactly as
-	// a direct call with a wrong field would be.
+	// The params list is what lets Monty bind a positional call's arguments to
+	// names. Registering without one does not make positional calls fail — it
+	// makes them vanish: `read("README.md")` arrives at the bridge as {}, the
+	// tool reports a missing path, and a step is gone. Observed with DeepSeek
+	// V4.1 Flash, which reaches for this tool readily (its own harness has one
+	// built in) and writes Python the way Python is written.
+	//
+	// Keywords are unaffected: an argument this side does not recognize still
+	// crosses as-is and is answered by the tool itself, exactly as a direct
+	// call with a wrong field would be.
 	for _, n := range names {
-		funcs = append(funcs, monty.Func(c.CodeNamespace.wireName(n)))
+		funcs = append(funcs, monty.Func(c.CodeNamespace.wireName(n), codeToolParams[n]...))
 	}
-	// Code functions ride the same registration: positional calls map onto
-	// their parameter names the same way, and an unregistered one raises
-	// NameError inside the program, which is the fail-closed path.
+	// Code functions ride the same registration, and need it more: their
+	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
+	// so a program written to the documentation was the case that silently
+	// dropped every argument.
 	for _, d := range codeFuncs {
-		funcs = append(funcs, monty.Func(d.name))
+		funcs = append(funcs, monty.Func(d.name, d.params...))
 	}
 	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
 	return opts
