@@ -113,6 +113,50 @@ model never learns it is wrong, so it never stops.
 habits". It is that a description cannot fix a mistake the model would correct
 on its own — and is the only thing that can fix one the model never notices.**
 
+## Post-hoc: what the signature line actually did
+
+Not preregistered. Prompted by the question "is `--code-signatures` worth
+testing properly?", and answered from the saved programs rather than by running
+more.
+
+The arm was built for the order of the *second and later* positional arguments.
+Across all 144 runs' 236 bridged calls:
+
+| | calls |
+| --- | --- |
+| total | 236 |
+| with at least one positional argument | 88 |
+| with **two or more** positional arguments | **9** |
+
+All nine are in the `sigs` arm. All nine are `read_bin`. **In every arm that
+does not advertise an order, no model ever passed two positional arguments to
+anything.** The hazard the arm addresses does not occur unless the arm induces
+it — and a model that writes one positional argument, which 79 of those 88 did,
+is already served: `codeToolParams` binds it.
+
+What the line did measurably was advertise `read_bin`:
+
+| arm | runs using `read_bin` | `total` task correct |
+| --- | --- | --- |
+| `base` | 4 | 4/9 |
+| `sigs` | 10 | 7/9 |
+| `text` | 0 | 9/9 |
+| `both` | 0 | 8/9 |
+
+The `sigs` arm's largest gain is the `total` task, and it comes from models
+reaching for `read_bin` to get raw bytes — a workaround for exactly the
+formatting problem `read_text` was built to solve. Once `read_text` is offered,
+`read_bin` use falls to zero and the same task is answered better.
+
+**So the signature line's one measured benefit was a detour around the problem
+the other arm fixes directly.** That is a better reason not to ship it than p =
+0.26 was: not "no effect was detected" but "the effect was a workaround, and it
+has been superseded".
+
+It also means a follow-up trial is not worth running. A fixture built to force
+two-positional calls would be a fixture built to produce the effect, and the
+natural rate it would be extrapolating from is zero.
+
 ## Threats
 
 - **One fixture.** Generated, but one shape: a line-oriented text file. Nothing
@@ -123,6 +167,11 @@ on its own — and is the only thing that can fix one the model never notices.**
   one. The arm is kept behind its flag rather than deleted for that reason.
 - **`cite` is answerable without a program**, which is why it separates the
   arms so poorly. It earns its place as the counter-metric, not as a task.
+- **Zero two-positional calls is evidence that the hazard is rare here, not
+  proof that it is absent.** These four tasks read whole text files. A workload
+  that pages through a large one with `offset` and `limit`, or reaches for
+  `read_bin`'s window, is where a second positional argument would arise, and
+  nothing here measures that.
 
 ## What the pilot cost, and paid for
 

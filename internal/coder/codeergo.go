@@ -16,11 +16,23 @@ import (
 // function that was doing the work. Not significant in either direction, so the
 // honest reading is "no demonstrated benefit", and the flag stays off.
 //
-// Kept rather than deleted because the question is not closed: the arm was
-// built for a gap that shrank underneath it. Positional arguments now bind
-// (codeToolParams), so what a signature line still buys is the order of the
-// second and later arguments — which the tasks here barely exercised, since
-// almost every call a model made took one.
+// A post-hoc pass over the trial's saved programs says more than the p-value
+// did, and says it against this arm. Of 236 bridged calls across 144 runs, 88
+// passed a positional argument and *nine* passed two or more — all nine in this
+// arm, all nine to read_bin. In every arm that does not advertise an order, no
+// model ever passed a second positional argument to anything. The hazard this
+// was built for does not arise unless this arm induces it, and the single
+// positional that 79 of those 88 calls used already binds.
+//
+// What the line measurably did was advertise read_bin: ten runs reached for it
+// here against four in the baseline, to get raw bytes — a detour around exactly
+// the formatting problem read_text now solves. With read_text offered, read_bin
+// use falls to zero and the same task is answered better.
+//
+// So the flag is kept only so the trial can be reproduced, and is not a
+// candidate for shipping. A follow-up would have to build a fixture that forces
+// two-positional calls, which is a fixture built to produce the effect,
+// extrapolating from a natural rate of zero.
 
 // CodeSignatures adds the bridged tools' positional signatures to the run_code
 // description.
