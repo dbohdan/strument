@@ -68,7 +68,7 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSignatures, readText CodeReadText) llm.ToolDef {
+func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSignatures) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
@@ -99,9 +99,9 @@ func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSign
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
 			strings.Join(nsQualified(callable, ns), ", "))
 	}
-	b.WriteString(codeFuncDoc(readText))
+	b.WriteString(codeFuncDoc())
 	if sigs {
-		b.WriteString(codeSignatureText(callable, ns, readText))
+		b.WriteString(codeSignatureText(callable, ns))
 	}
 
 	return llm.ToolDef{
@@ -508,7 +508,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
 	// so a program written to the documentation was the case that silently
 	// dropped every argument.
-	for _, d := range codeFuncsFor(c.CodeReadText) {
+	for _, d := range codeFuncs {
 		funcs = append(funcs, monty.Func(d.name, d.params...))
 	}
 	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
@@ -527,7 +527,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 // that never runs. The interpreter pauses at every real call, so this side has
 // the truth without parsing anything.
 func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc {
-	funcs := codeFuncsFor(c.CodeReadText)
+	funcs := codeFuncs
 	isAllowed := make(map[string]bool, len(allowed)+len(funcs))
 	for _, n := range allowed {
 		isAllowed[n] = true
@@ -574,7 +574,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 		// calling …" summary say what happened. A "‹run_code› read" line per
 		// call read as a separate action the model initiated — the confusion a
 		// live session reported.
-		if d := codeFuncByName(c.CodeReadText, call.Name); d != nil {
+		if d := codeFuncByName(call.Name); d != nil {
 			v, err := d.fn(c, call)
 			log.last = v
 			if log.keepEcho && err == nil {

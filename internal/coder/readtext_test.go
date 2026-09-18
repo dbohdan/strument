@@ -30,7 +30,6 @@ func TestReadTextRoundTripsTheFile(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%q", body), func(t *testing.T) {
 			c, _ := observeEnv(t, map[string]string{"f.txt": body})
-			c.CodeReadText = true
 			// Byte count and newline count rather than repr: Monty quotes the
 			// way Python does and Go's %q does not, and an assertion that
 			// compares quoting styles fails on a correct round-trip — which is
@@ -52,7 +51,6 @@ func TestReadTextRoundTripsTheFile(t *testing.T) {
 // not the content.
 func TestReadTextCountsBlankLinesCorrectly(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"f.txt": "a\n\nb\n\n"})
-	c.CodeReadText = true
 	got := c.runCode(context.Background(), codeCall{
 		code: "t = read_text(\"f.txt\")\nlines = t.split(\"\\n\")\n" +
 			"if lines and lines[-1] == \"\":\n    lines = lines[:-1]\n" +

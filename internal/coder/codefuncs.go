@@ -56,11 +56,12 @@ var codeFuncs = []codeFuncDef{
 		params: []string{"path", "offset", "limit"},
 		fn:     runReadBin,
 	},
+	readTextFunc,
 }
 
 // codeFuncByName returns the registry entry for name, or nil.
-func codeFuncByName(readText CodeReadText, name string) *codeFuncDef {
-	defs := codeFuncsFor(readText)
+func codeFuncByName(name string) *codeFuncDef {
+	defs := codeFuncs
 	for i := range defs {
 		if defs[i].name == name {
 			return &defs[i]
@@ -73,8 +74,8 @@ func codeFuncByName(readText CodeReadText, name string) *codeFuncDef {
 // function, appended after the bridged-tools list. Built from the registry so
 // description and dispatch cannot drift — the drift this repository has had
 // three times elsewhere.
-func codeFuncDoc(readText CodeReadText) string {
-	defs := codeFuncsFor(readText)
+func codeFuncDoc() string {
+	defs := codeFuncs
 	if len(defs) == 0 {
 		return ""
 	}
@@ -140,14 +141,22 @@ func codeArgInt(v any) int64 {
 // rather than truncating.
 const maxReadTextLines = 1_000_000
 
-// readTextFunc is the CodeReadText arm's function. Kept out of codeFuncs so the
-// registry stays the shipped set and the arm is the only thing that adds it;
-// codeFuncsFor assembles the list the description and the bridge both use.
+// readTextFunc answers the friction that read's own result is the *formatted*
+// tool output — a header and an "N\t" prefix per line — so a program computing
+// over a file's contents measures the harness unless it strips that first.
+//
+// Shipped after a trial rather than on the strength of the story:
+// doc/experiments/2026-09-run-code-ergonomics/README.md. 144 runs, and every
+// run that called this function answered correctly (51/51) against 14/27 for
+// the arm without it, p = 0.000036 — at 1.6 steps per turn rather than 2.7, and
+// for less money. Its own counter-metric came back clean: on the one task where
+// read's line numbers *are* the answer, no model reached for this instead.
 var readTextFunc = codeFuncDef{
 	name: "read_text",
 	summary: "read_text(path, offset=0, limit=0) returns a file's text exactly as stored — no " +
 		"line numbers, no header — for computing over contents (lengths, parsing, hashing, " +
-		"counting). read is the one to use when the answer cites a line number.",
+		"counting). It keeps the file's final newline, so use .splitlines() rather than " +
+		".split(\"\\n\") to get lines. read is the one to use when the answer cites a line number.",
 	params: []string{"path", "offset", "limit"},
 	fn:     runReadText,
 }

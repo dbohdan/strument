@@ -65,7 +65,6 @@ type chatCmd struct {
 	ConsultScope   string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                        help:"Session context to include in /consult requests."    name:"consult-scope"`
 	CodeResult     string   `default:"last"                                                                                                                                                    enum:"last,all,main"                                          help:"Result format for run_code programs (experimental)." name:"code-result"`
 	CodeSignatures bool     `help:"Document the bridged tools' positional order in the run_code description (experimental)."                                                                   name:"code-signatures"`
-	CodeReadText   bool     `help:"Offer read_text() to run_code programs (experimental)."                                                                                                     name:"code-read-text"`
 	CodeNamespace  string   `default:"flat"                                                                                                                                                    enum:"flat,both,only,hint"                                    help:"How run_code programs access tools (experimental)."  name:"code-namespace"`
 	Files          []string `arg:""                                                                                                                                                            help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
@@ -172,7 +171,6 @@ func (c *chatCmd) Run() error {
 	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
 	cdr.CodeNamespace, _ = coder.ParseCodeNamespace(c.CodeNamespace)
 	cdr.CodeSignatures = coder.CodeSignatures(c.CodeSignatures)
-	cdr.CodeReadText = coder.CodeReadText(c.CodeReadText)
 	if std, ok := cdr.Out.(*coder.StdOutput); ok {
 		// Script mode's output; the REPL swaps in its own and reads the setting
 		// from the config it already carries.

@@ -143,7 +143,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // the subset. A line that stops describing a real wall is a lie to the model;
 // each substring here corresponds to a probe in the tests below.
 func TestCodeDescriptionNamesTheLimits(t *testing.T) {
-	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false, false).Description
+	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false).Description
 	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -445,7 +445,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // from what a program can actually import.
 func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false, false).Description
+	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false).Description
 
 	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
 		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
@@ -501,10 +501,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 
 	// The description the model reads follows, in both directions.
-	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast, CodeNSFlat, false, false).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast, CodeNSFlat, false).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools(), CodeResultLast, CodeNSFlat, false, false).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools(), CodeResultLast, CodeNSFlat, false).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
@@ -609,7 +609,7 @@ func TestCodeResultDescriptionsMatchTheirArm(t *testing.T) {
 		{CodeResultMain, "Define a function called main", "    return caps\n"},
 	} {
 		t.Run(tt.arm.String(), func(t *testing.T) {
-			desc := codeTool(InspectorTools(), tt.arm, CodeNSFlat, false, false).Description
+			desc := codeTool(InspectorTools(), tt.arm, CodeNSFlat, false).Description
 			if !strings.Contains(desc, tt.contract) {
 				t.Errorf("arm %s does not state its contract (%q):\n%s", tt.arm, tt.contract, desc)
 			}
@@ -693,7 +693,7 @@ func TestCodeNamespaceArms(t *testing.T) {
 				t.Errorf("bare read worked = %v, want %v:\n%s", got, tc.bareCallWorks, bareGot)
 			}
 
-			desc := codeTool(InspectorTools(), CodeResultLast, tc.ns, false, false).Description
+			desc := codeTool(InspectorTools(), CodeResultLast, tc.ns, false).Description
 			if got := strings.Contains(desc, "tools.read"); got != tc.descSaysNamespace {
 				t.Errorf("description names tools.read = %v, want %v", got, tc.descSaysNamespace)
 			}

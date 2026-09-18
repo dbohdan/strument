@@ -66,7 +66,6 @@ complete -c strument -n $chat_cmd -l consult-scope -d "Session context to includ
 complete -c strument -n $chat_cmd -l code-result -d "Result format for run_code programs" -x -a "last all main"
 complete -c strument -n $chat_cmd -l code-namespace -d "How run_code programs access tools" -x -a "flat both only hint"
 complete -c strument -n $chat_cmd -l code-signatures -d "Document the bridged tools' positional order (experimental)"
-complete -c strument -n $chat_cmd -l code-read-text -d "Offer read_text() to run_code programs (experimental)"
 complete -c strument -n $chat_cmd -l version -d "Print version and exit"
 
 # trust: a project directory, and the flag that skips its question.

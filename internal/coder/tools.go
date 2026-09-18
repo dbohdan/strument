@@ -116,7 +116,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// ObservationViaRunCode forces it past that flag: the redirect arm has no
 	// other way to look at anything.
 	if c.OfferCode || c.ObservationViaRunCode {
-		defs = append(defs, codeTool(c.codeCallableTools(), c.CodeResult, c.CodeNamespace, c.CodeSignatures, c.CodeReadText))
+		defs = append(defs, codeTool(c.codeCallableTools(), c.CodeResult, c.CodeNamespace, c.CodeSignatures))
 	}
 	if c.editFormat == "ask" {
 		return defs
