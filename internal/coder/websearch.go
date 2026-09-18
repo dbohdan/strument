@@ -72,33 +72,45 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 	// Plain --yes covers it. webfetch withholds itself from --yes because the
 	// model picks where the bytes go; a search only ever reaches the instance
 	// the user configured.
-	asked := !c.turnAutoApprove["websearch"]
 	if !c.ConfirmGrouped(ConfirmRequest{
 		Prompt: "Search the web?",
 		Query:  s.query,
 		Group:  "websearch",
 		Grant:  GrantWebsearch,
 	}) {
+		c.Out.Toolf("Did not search the web for %s (declined)", quoteToolArg(s.query))
 		return "The user chose not to run that search."
-	}
-	// The searches after the first are the ones nobody was asked about, and the
-	// query still has to be on screen: an "a" answered once buys fewer
-	// questions, not less to read. Same rule webfetch follows for an
-	// allowlisted origin.
-	if !asked {
-		c.Out.Toolf("\u2039websearch\u203a")
-		c.Out.Printf("%s", s.query)
 	}
 
 	res, err := c.Search(ctx, s.query)
 	if err != nil {
-		// The reason, not just a failure: every way this fails is a thing the
-		// user can fix on their own instance, and a model that is told which
-		// one can say so instead of retrying a query that was never the
-		// problem.
+		// Said on screen as well as to the model. The model gets the reason
+		// because every way this fails is something the user can fix, and a
+		// model told which one can say so instead of retrying a query that was
+		// never the problem; the user gets a line because otherwise a session
+		// that silently stopped searching looks like a session that chose not
+		// to.
+		c.Out.Toolf("Could not search the web for %s", quoteToolArg(s.query))
 		return fmt.Sprintf("Could not search for %q: %v", s.query, err)
 	}
+	c.Out.Toolf("Searched the web for %s — %s", quoteToolArg(s.query), searchSummary(res))
 	return truncateResult(formatSearchResults(s.query, res))
+}
+
+// searchSummary is the outcome line's tail: what came back, and — when the
+// backend says so — what did not.
+//
+// The second half is why this is not just a count. A SearXNG instance can
+// answer with three of its engines rate-limited or showing a CAPTCHA, and "4
+// results" then reads as a thin web rather than as a broken search. The model
+// is told the same thing in the result body (degradedNote); this is the user's
+// copy of it.
+func searchSummary(res SearchResults) string {
+	out := plural(len(res.Results), "result", "results")
+	if n := len(res.Unresponsive); n > 0 {
+		out += fmt.Sprintf(", %s did not answer", plural(n, "engine", "engines"))
+	}
+	return out
 }
 
 // formatSearchResults renders results for the model: the answer first if there

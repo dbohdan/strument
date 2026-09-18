@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -123,17 +124,100 @@ func TestSearchAlwaysCoversTheTurnAndDiesWithIt(t *testing.T) {
 // A search nobody was asked about still has to be seen, the same rule webfetch
 // follows for an allowlisted origin: an "a" buys fewer questions, not less to
 // read.
-func TestSearchAnnouncesTheQueriesItWasNotAskedAbout(t *testing.T) {
-	c := searchCoder(t, SearchResults{Query: "q"})
-	c.Confirm = &alwaysConfirmer{}
+// Every way a search can be approved leaves a line on screen naming the query.
+//
+// This is a regression test with a story. Visibility used to be a side effect
+// of the confirmation prompt: a search announced itself only when it had *not*
+// been asked about, decided by reading turnAutoApprove. That covered the "a"
+// answered mid-turn and nothing else. A user with auto_approve = ["websearch"]
+// in their config is approved through Grants instead, which never touches
+// turnAutoApprove — so the prompt did not appear, the announcement decided it
+// was unnecessary, and searches ran in complete silence. The outcome line is
+// now unconditional, and this table is the thing that keeps it that way: each
+// row is a different route to "yes", and none of them may be quiet.
+func TestEveryApprovalPathStillShowsTheSearch(t *testing.T) {
+	granted, err := ParseGrants([]string{"websearch"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		confirm Confirmer
+	}{
+		{"asked and answered yes", &recordingConfirmer{answer: true}},
+		{"answered always, turn-scoped", &alwaysConfirmer{}},
+		// The one that was broken: approved by config, never prompted.
+		{"granted by auto_approve", AutoConfirmer{
+			Granted:  StaticGrants(granted),
+			Fallback: &recordingConfirmer{answer: false},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := searchCoder(t, SearchResults{
+				Query:   "q",
+				Results: []SearchResult{{Title: "T", URL: "https://example.org/a"}},
+			})
+			c.Confirm = tc.confirm
+			out := &captureOutput{}
+			c.Out = out
+
+			runSearch(t, c, searchCall("the first one"))
+			if !strings.Contains(out.String(), "the first one") {
+				t.Errorf("the first search left no trace:\n%s", out.String())
+			}
+			// And the second, which is where an "always" answer starts
+			// suppressing the question. Fewer questions, not less to read.
+			out.reset()
+			runSearch(t, c, searchCall("the second one"))
+			if !strings.Contains(out.String(), "the second one") {
+				t.Errorf("a follow-up search left no trace:\n%s", out.String())
+			}
+			if !strings.Contains(out.String(), "1 result") {
+				t.Errorf("the line does not say what came back:\n%s", out.String())
+			}
+		})
+	}
+}
+
+// A backend that reports engine health gets it into the user's line too: "4
+// results" alone reads as a thin web when what happened was three engines
+// failing.
+func TestSearchLineNamesUnresponsiveEngines(t *testing.T) {
+	c := searchCoder(t, SearchResults{
+		Query:        "q",
+		Results:      []SearchResult{{Title: "T", URL: "https://example.org/a"}},
+		Unresponsive: []UnresponsiveEngine{{Engine: "brave"}, {Engine: "startpage"}},
+	})
 	out := &captureOutput{}
 	c.Out = out
+	runSearch(t, c, searchCall("q"))
+	if !strings.Contains(out.String(), "2 engines did not answer") {
+		t.Errorf("the line hid the engine failures:\n%s", out.String())
+	}
+}
 
-	runSearch(t, c, searchCall("the first one"))
-	out.reset()
-	runSearch(t, c, searchCall("the second one"))
-	if !strings.Contains(out.String(), "the second one") {
-		t.Errorf("an unprompted search left no trace:\n%s", out.String())
+// A search that fails, and one the user declines, are both visible too — a
+// session that quietly stopped searching otherwise looks like one that decided
+// not to.
+func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
+	c := searchCoder(t, SearchResults{})
+	c.Search = func(context.Context, string) (SearchResults, error) {
+		return SearchResults{}, errors.New("instance down")
+	}
+	out := &captureOutput{}
+	c.Out = out
+	runSearch(t, c, searchCall("broken one"))
+	if !strings.Contains(out.String(), "broken one") {
+		t.Errorf("a failed search left no trace:\n%s", out.String())
+	}
+
+	c2 := searchCoder(t, SearchResults{Query: "q"})
+	c2.Confirm = &recordingConfirmer{answer: false}
+	out2 := &captureOutput{}
+	c2.Out = out2
+	runSearch(t, c2, searchCall("declined one"))
+	if !strings.Contains(out2.String(), "declined one") {
+		t.Errorf("a declined search left no trace:\n%s", out2.String())
 	}
 }
 
