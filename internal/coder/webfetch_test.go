@@ -358,31 +358,59 @@ func (o *captureOutput) FlushStream()                        {}
 func (o *captureOutput) String() string                      { return o.b.String() }
 func (o *captureOutput) reset()                              { o.b.Reset() }
 
-// A fetch nobody was asked about still has to be seen. webfetch was the one
-// observation tool with no line of its own — read, grep, glob, ls and check all
-// announce themselves, and webfetch borrowed its visibility from the permission
-// prompt. That was survivable while silence took a config edit; a session grant
-// buys it with one keystroke, and a grant announced once cannot cover for uses
-// nobody can see. Found by reading a live transcript: turn two showed the answer
-// with no trace that a page had been fetched to get it.
-func TestWebfetchAnnouncesAnUnpromptedFetch(t *testing.T) {
-	c, _, _ := fetchCoder(t, true)
-	out := &captureOutput{}
-	c.Out = out
-	c.WebfetchAllow = []string{"go.dev"}
-
-	runFetch(t, c, fetchCall("https://go.dev/doc/go1.26", "read the release notes"))
-	s := out.String()
-	if !strings.Contains(s, "read the release notes") || !strings.Contains(s, "https://go.dev/doc/go1.26") {
-		t.Errorf("an allowlisted fetch left no trace:\n%s", s)
+// Every fetch is announced, whoever approved it and however.
+//
+// This test used to assert the opposite of its last case: that a *prompted*
+// fetch stays quiet, because the prompt had already drawn the purpose and the
+// URL. That was reversed deliberately, for two reasons the original rule did
+// not have in view.
+//
+// The rule needed to know whether a prompt had appeared, and inferred it from
+// sessionAutoApprove — which only one approval route touches. Under
+// auto_approve = ["webfetch"] the answer comes from AutoConfirmer, which sets
+// nothing, so no prompt was drawn and the rule concluded one had been: every
+// fetch in such a session was silent. Search had the identical bug, found first
+// in a real session.
+//
+// And Toolf is what toolLog tees into the turn's record, while a prompt is not.
+// So the old rule also kept every prompted fetch out of the transcript — and
+// session notes regenerate from the transcript, which is the exact failure
+// toollog.go was written to fix. Saying it twice on screen is the smaller cost.
+func TestWebfetchAnnouncesEveryFetch(t *testing.T) {
+	granted, err := ParseGrants([]string{"webfetch"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, tc := range []struct {
+		name  string
+		setup func(*Coder)
+	}{
+		{"allowlisted origin, never prompted", func(c *Coder) {
+			c.WebfetchAllow = []string{"example.com"}
+		}},
+		{"prompted and answered yes", func(*Coder) {}},
+		// The one that was broken: approved by config, never prompted.
+		{"granted by auto_approve", func(c *Coder) {
+			c.Confirm = AutoConfirmer{
+				Granted:  StaticGrants(granted),
+				Fallback: &recordingConfirmer{answer: false},
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _ := fetchCoder(t, true)
+			out := &captureOutput{}
+			c.Out = out
+			tc.setup(c)
 
-	// A prompted fetch must not say it twice: the prompt already drew the
-	// purpose and the URL, and asked about them.
-	out.reset()
-	c.WebfetchAllow = nil
-	runFetch(t, c, fetchCall("https://example.com/x", "read it"))
-	if strings.Count(out.String(), "read it") > 0 {
-		t.Errorf("a prompted fetch was announced twice:\n%s", out.String())
+			runFetch(t, c, fetchCall("https://example.com/x", "read the release notes"))
+			s := out.String()
+			if !strings.Contains(s, "read the release notes") {
+				t.Errorf("the fetch left no purpose on screen:\n%s", s)
+			}
+			if !strings.Contains(s, "https://example.com/x") {
+				t.Errorf("the fetch left no URL on screen:\n%s", s)
+			}
+		})
 	}
 }

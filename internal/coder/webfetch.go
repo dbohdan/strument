@@ -165,9 +165,6 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	if err != nil {
 		return "That URL cannot be fetched: " + err.Error() + "."
 	}
-	// asked records whether the user saw this fetch as a question, which is
-	// what decides below whether it has to be announced instead.
-	asked := false
 	// An allowlisted origin skips the prompt entirely — which is also why it
 	// needs no --yes flag. The flag question only ever arises for an origin the
 	// user never named.
@@ -180,7 +177,6 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		// user never saw.
 		group := "webfetch:" + org
 		granted := c.sessionAutoApprove[group]
-		asked = !granted
 		if !c.ConfirmGrouped(ConfirmRequest{
 			Prompt:       "Fetch this page?",
 			URL:          f.url,
@@ -190,6 +186,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 			GroupSession: true,
 			Grant:        GrantWebfetch,
 		}) {
+			c.Out.Toolf("Did not fetch %s (declined)", org)
 			return "The user chose not to fetch that page."
 		}
 		// Said once, when the grant is made. A turn boundary used to give this
@@ -202,26 +199,35 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		}
 	}
 
-	// A fetch nobody was asked about still has to be seen. Every other
-	// observation tool announces itself — "Read x.go", "Searched for y" — and
-	// webfetch was the one whose visibility came from its permission prompt
-	// instead, so an allowlisted fetch has always been silent. Session grants
-	// make that the common case rather than the rare one, and a grant
-	// announced once cannot cover for uses nobody can see. Skipped when we did
-	// prompt, since the prompt drew all of this and asked about it.
-	if !asked {
-		if f.purpose != "" {
-			c.Out.Toolf("\u2039webfetch\u203a %s", f.purpose)
-		} else {
-			c.Out.Warningf("\u2039webfetch\u203a (no purpose given)")
-		}
-		c.Out.Link(f.url)
+	// Every fetch is announced, whoever approved it and however.
+	//
+	// This used to be skipped when the user had been prompted, on the reasoning
+	// that the prompt had already drawn it. That reasoning needed to know
+	// whether a prompt appeared, and it worked it out from sessionAutoApprove —
+	// which only one of the approval routes touches. A user with
+	// auto_approve = ["webfetch"] is answered inside AutoConfirmer, which sets
+	// nothing, so no prompt was drawn and the announcement concluded one had
+	// been: every fetch in such a session was silent. Search had the identical
+	// bug, found first, from a real session.
+	//
+	// So the condition is gone rather than corrected. Nothing here has to infer
+	// what the user saw, a fourth approval route cannot reintroduce this, and
+	// the line goes into the transcript besides — Toolf is recorded, a prompt is
+	// not, so this is also what puts the fetch in the session's record.
+	if f.purpose != "" {
+		c.Out.Toolf("\u2039webfetch\u203a %s", f.purpose)
+	} else {
+		c.Out.Warningf("\u2039webfetch\u203a (no purpose given)")
 	}
+	c.Out.Link(f.url)
 
 	content, err := c.Scrape(ctx, f.url, ScrapeOptions{Outline: f.outline, Range: rangeArg(f)})
 	if err != nil {
 		// The model gets the reason, so it can try a different URL rather than
-		// conclude the page said nothing.
+		// conclude the page said nothing. The user gets the origin, because a
+		// fetch announced and then never mentioned again reads as one that
+		// silently succeeded.
+		c.Out.Toolf("Could not fetch %s", org)
 		return fmt.Sprintf("Could not fetch %s: %v", f.url, err)
 	}
 	if f.outline {
