@@ -68,7 +68,7 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool(callable []string, arm CodeResult, ns CodeNamespace) llm.ToolDef {
+func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSignatures, readText CodeReadText) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
@@ -99,7 +99,10 @@ func codeTool(callable []string, arm CodeResult, ns CodeNamespace) llm.ToolDef {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
 			strings.Join(nsQualified(callable, ns), ", "))
 	}
-	b.WriteString(codeFuncDoc())
+	b.WriteString(codeFuncDoc(readText))
+	if sigs {
+		b.WriteString(codeSignatureText(callable, ns, readText))
+	}
 
 	return llm.ToolDef{
 		Name:        toolRunCode,
@@ -487,7 +490,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	opts = append(opts, monty.WithLimits(codeLimits))
 
 	names := c.codeCallableTools()
-	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs))
+	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs)+1)
 	// The params list is what lets Monty bind a positional call's arguments to
 	// names. Registering without one does not make positional calls fail — it
 	// makes them vanish: `read("README.md")` arrives at the bridge as {}, the
@@ -505,7 +508,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
 	// so a program written to the documentation was the case that silently
 	// dropped every argument.
-	for _, d := range codeFuncs {
+	for _, d := range codeFuncsFor(c.CodeReadText) {
 		funcs = append(funcs, monty.Func(d.name, d.params...))
 	}
 	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
@@ -524,14 +527,17 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 // that never runs. The interpreter pauses at every real call, so this side has
 // the truth without parsing anything.
 func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc {
-	isAllowed := make(map[string]bool, len(allowed)+len(codeFuncs))
+	funcs := codeFuncsFor(c.CodeReadText)
+	isAllowed := make(map[string]bool, len(allowed)+len(funcs))
 	for _, n := range allowed {
 		isAllowed[n] = true
 	}
 	// The code functions are allowed by the same fail-closed check — they are
 	// called from the same bridge, counted in the same cap, and announced the
-	// same way. Their own dispatch happens below the check.
-	for _, d := range codeFuncs {
+	// same way. Their own dispatch happens below the check. From the arm's
+	// registry, so an arm that does not offer a function does not allow it
+	// either: the two lists have to be the same list.
+	for _, d := range funcs {
 		isAllowed[d.name] = true
 	}
 
@@ -568,7 +574,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 		// calling …" summary say what happened. A "‹run_code› read" line per
 		// call read as a separate action the model initiated — the confusion a
 		// live session reported.
-		if d := codeFuncByName(call.Name); d != nil {
+		if d := codeFuncByName(c.CodeReadText, call.Name); d != nil {
 			v, err := d.fn(c, call)
 			log.last = v
 			if log.keepEcho && err == nil {

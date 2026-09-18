@@ -59,10 +59,11 @@ var codeFuncs = []codeFuncDef{
 }
 
 // codeFuncByName returns the registry entry for name, or nil.
-func codeFuncByName(name string) *codeFuncDef {
-	for i := range codeFuncs {
-		if codeFuncs[i].name == name {
-			return &codeFuncs[i]
+func codeFuncByName(readText CodeReadText, name string) *codeFuncDef {
+	defs := codeFuncsFor(readText)
+	for i := range defs {
+		if defs[i].name == name {
+			return &defs[i]
 		}
 	}
 	return nil
@@ -72,14 +73,15 @@ func codeFuncByName(name string) *codeFuncDef {
 // function, appended after the bridged-tools list. Built from the registry so
 // description and dispatch cannot drift — the drift this repository has had
 // three times elsewhere.
-func codeFuncDoc() string {
-	if len(codeFuncs) == 0 {
+func codeFuncDoc(readText CodeReadText) string {
+	defs := codeFuncsFor(readText)
+	if len(defs) == 0 {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString("\n\nAlso callable, but only from inside a program (they return data for " +
 		"the program, not text for you):\n")
-	for _, d := range codeFuncs {
+	for _, d := range defs {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}
 	return b.String()
@@ -130,4 +132,57 @@ func codeArgInt(v any) int64 {
 		return int64(n)
 	}
 	return 0
+}
+
+// maxReadTextLines bounds a whole-file read_text. Larger than any file the
+// workspace will open by line count — its byte cap binds first — so reaching it
+// means a pathological file rather than an ordinary one, and reaching it raises
+// rather than truncating.
+const maxReadTextLines = 1_000_000
+
+// readTextFunc is the CodeReadText arm's function. Kept out of codeFuncs so the
+// registry stays the shipped set and the arm is the only thing that adds it;
+// codeFuncsFor assembles the list the description and the bridge both use.
+var readTextFunc = codeFuncDef{
+	name: "read_text",
+	summary: "read_text(path, offset=0, limit=0) returns a file's text exactly as stored — no " +
+		"line numbers, no header — for computing over contents (lengths, parsing, hashing, " +
+		"counting). read is the one to use when the answer cites a line number.",
+	params: []string{"path", "offset", "limit"},
+	fn:     runReadText,
+}
+
+// runReadText answers one read_text call.
+//
+// It goes through Workspace.Read, so the containment and ignore rules that bind
+// every other way of opening a file bind this one too; the only difference from
+// the read tool is that the tool layer's numbering and header are not applied.
+//
+// A window that stops short raises rather than returning a partial file. The
+// whole purpose here is computing over contents, and a length or a count taken
+// from silently truncated text is a wrong answer that looks like a right one —
+// the failure this function exists to remove, reintroduced one layer down.
+func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
+	path, _ := call.Args["path"].(string)
+	if path == "" {
+		return nil, errors.New("read_text requires a \"path\" argument")
+	}
+	offset := int(codeArgInt(call.Args["offset"]))
+	limit := int(codeArgInt(call.Args["limit"]))
+	if limit <= 0 {
+		// The whole file. Workspace refuses one larger than its byte cap before
+		// this is reached, so "all of it" is already bounded.
+		limit = maxReadTextLines
+	}
+	ft, err := c.Files.Read(path, offset, limit)
+	if err != nil {
+		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		return nil, fmt.Errorf("Could not read %s: %w", quoteToolArg(path), err)
+	}
+	if ft.Truncated {
+		//nolint:staticcheck // ST1005, as above.
+		return nil, fmt.Errorf("Could not read all of %s: it has %d lines and the window stopped at %d; "+
+			"pass offset and limit to take it in pieces", quoteToolArg(path), ft.Total, len(ft.Lines))
+	}
+	return strings.Join(ft.Lines, "\n"), nil
 }

@@ -87,6 +87,12 @@ type Coder struct {
 	// main() the program defines. Under trial; see codetool.go.
 	CodeResult CodeResult
 
+	// CodeSignatures documents the bridged tools' positional order in the
+	// run_code description; CodeReadText registers read_text. Both under
+	// trial; see codeergo.go.
+	CodeSignatures CodeSignatures
+	CodeReadText   CodeReadText
+
 	// CodeNamespace selects how a run_code program reaches the tools. Under
 	// trial; see codens.go.
 	CodeNamespace CodeNamespace
