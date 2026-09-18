@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -102,6 +104,72 @@ func TestBuildBodyDialects(t *testing.T) {
 	body = oa.BuildBody(req)
 	if body["temperature"] != 0.5 {
 		t.Errorf("temperature = %v", body["temperature"])
+	}
+}
+
+// Every dialect has to carry the output cap, under whatever name it spells it.
+//
+// This is a guard against a drift that already happened and lasted: the OpenAI
+// dialect wrote no max_tokens field at all, while Anthropic and Responses both
+// wrote theirs. `max_output` was documented as "the maximum output tokens" and
+// silently did nothing on every OpenAI-compatible provider, which is most of
+// them — so the continuation path in send.go could only be reached when a
+// provider's *own* default cap happened to be hit. A per-dialect test would not
+// have caught it, because each dialect was self-consistent; only asking all
+// three the same question does.
+//
+// Both directions. Asserting only that the field appears would pass for a
+// client that hardcoded a cap and ignored the model's setting.
+func TestEveryDialectCarriesTheOutputCap(t *testing.T) {
+	for _, d := range []struct {
+		name, key string
+		build     func(llm.Request) map[string]any
+	}{
+		{"openrouter", "max_tokens", New(config.Provider{Adapter: config.AdapterOpenRouter}).BuildBody},
+		{"openai", "max_tokens", New(config.Provider{Adapter: config.AdapterOpenAI}).BuildBody},
+		{"anthropic", "max_tokens", func(r llm.Request) map[string]any { return antBody(t, r) }},
+		{"responses", "max_output_tokens", func(r llm.Request) map[string]any { return respBody(t, r) }},
+	} {
+		t.Run(d.name, func(t *testing.T) {
+			req := llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")}}
+
+			req.MaxTokens = 4096
+			got := d.build(req)[d.key]
+			if fmt.Sprintf("%v", got) != "4096" {
+				t.Errorf("%s = %v with max_output 4096, want the model's own value", d.key, got)
+			}
+
+			// Unset is the one place the dialects legitimately differ:
+			// Anthropic's endpoint requires the field, so that client
+			// substitutes a default rather than sending a 400.
+			req.MaxTokens = 0
+			got = d.build(req)[d.key]
+			if d.name == "anthropic" {
+				if fmt.Sprintf("%v", got) != strconv.Itoa(defaultMaxTokens) {
+					t.Errorf("%s = %v with no max_output, want the default %d", d.key, got, defaultMaxTokens)
+				}
+				return
+			}
+			if got != nil {
+				t.Errorf("%s = %v with no max_output, want it omitted so the provider decides", d.key, got)
+			}
+		})
+	}
+}
+
+// The cap is written after the passthrough in every dialect, so an extra_params
+// entry for it could only ever be ignored. config fences the key for that
+// reason; this is the other half — the fence would be pointless if the
+// passthrough actually won here.
+func TestOutputCapBeatsThePassthrough(t *testing.T) {
+	c := New(config.Provider{Adapter: config.AdapterOpenRouter})
+	body := c.BuildBody(llm.Request{
+		Model:       "m",
+		MaxTokens:   4096,
+		ExtraParams: map[string]any{"max_tokens": 120},
+	})
+	if body["max_tokens"] != 4096 {
+		t.Errorf("max_tokens = %v, want the model's 4096 rather than the passthrough's 120", body["max_tokens"])
 	}
 }
 

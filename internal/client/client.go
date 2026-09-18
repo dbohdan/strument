@@ -309,6 +309,16 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
+	// Zero means "unset": omit the field and let the provider decide, unlike
+	// Anthropic's dialect, where the field is required and a default is
+	// substituted. Omitting is the right unset behavior here — a provider's own
+	// cap is usually its model's real maximum — but *only* for unset. This
+	// field went missing entirely for a long time, so `max_output` was
+	// documented as "the maximum output tokens" while silently doing nothing
+	// on every OpenAI-compatible provider, which is most of them.
+	if req.MaxTokens > 0 {
+		body["max_tokens"] = req.MaxTokens
+	}
 	// Reasoning control. "" and "default" defer to the provider's own
 	// default (send nothing). "off" turns reasoning off where the provider
 	// can express it — OpenRouter via reasoning:{enabled:false}, Ollama-style

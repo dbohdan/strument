@@ -489,6 +489,26 @@ default = "m"
 		t.Errorf("err = %v", err)
 	}
 
+	// The output cap, under either dialect's spelling. It is fenced late: it
+	// was reachable through extra_params for as long as the OpenAI dialect
+	// forgot to send it, so somebody's config may well carry it as the
+	// workaround it had to be. The refusal names the setting that replaces it,
+	// because "reserved" alone leaves them with nothing to write.
+	for _, key := range []string{"max_tokens", "max_output_tokens"} {
+		src := fmt.Sprintf(`
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s", extra_params = {%q: 120})}
+default = "m"
+`, key)
+		_, err := Load(harness(t, src, "", nil))
+		if err == nil || !strings.Contains(err.Error(), "reserved transport key") {
+			t.Errorf("%s: err = %v, want it refused", key, err)
+		}
+		if err != nil && !strings.Contains(err.Error(), "`max_output`") {
+			t.Errorf("%s: err = %v, want it to name max_output", key, err)
+		}
+	}
+
 	// Non-JSON value rejected.
 	src2 := `
 def f(): pass

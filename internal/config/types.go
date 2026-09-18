@@ -59,13 +59,22 @@ var retiredEditFormats = map[string]bool{
 }
 
 // reservedParamKeys are transport keys Strument owns; extra_params cannot
-// override them.
-var reservedParamKeys = map[string]bool{
-	"model":          true,
-	"messages":       true,
-	"stream":         true,
-	"stream_options": true,
-	"usage":          true,
+// override them. The value, when non-empty, is the setting that does own the
+// key, so the refusal can say what to write instead of only what not to.
+//
+// The output cap is fenced because every dialect writes it after the
+// passthrough — max_tokens here and on Anthropic, max_output_tokens on
+// Responses — so a passthrough entry would be silently overridden rather than
+// honored. It was reachable before only because the OpenAI dialect was not
+// writing the field at all, which was the bug, not the feature.
+var reservedParamKeys = map[string]string{
+	"model":             "",
+	"messages":          "",
+	"stream":            "",
+	"stream_options":    "",
+	"usage":             "",
+	"max_tokens":        "max_output",
+	"max_output_tokens": "max_output",
 }
 
 // Provider is a pure carrier of endpoint + dialect; no behavior inheritance.
@@ -424,9 +433,15 @@ func (c *Config) DefaultModel() *Model { return c.Models[c.Default] }
 // validateExtraParams enforces JSON-only values and the reserved-key fence.
 func validateExtraParams(where string, params map[string]any) error {
 	for k := range params {
-		if reservedParamKeys[k] {
+		owner, reserved := reservedParamKeys[k]
+		if !reserved {
+			continue
+		}
+		if owner == "" {
 			return fmt.Errorf("%s: extra_params key %q is a reserved transport key", where, k)
 		}
+		return fmt.Errorf("%s: extra_params key %q is a reserved transport key — set `%s` instead",
+			where, k, owner)
 	}
 	if _, err := json.Marshal(params); err != nil {
 		return fmt.Errorf("%s: extra_params must be JSON-serializable: %w", where, err)

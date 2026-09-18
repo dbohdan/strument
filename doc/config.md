@@ -1042,8 +1042,10 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   global `proxy` is set; unset inherits the global one. Credentials may be inline
   (`socks5://user:pass@host:1080`) or from `env()`.
 - **`extra_params`** — a dict of extra request fields, merged into the JSON body
-  beneath the keys Strument owns (`model`, `messages`, `stream`, … — those are
-  rejected). Values must be JSON-serializable.
+  beneath the keys Strument owns (`model`, `messages`, `stream`,
+  `stream_options`, `usage`, `max_tokens`, `max_output_tokens` — those are
+  rejected). Values must be JSON-serializable. The output cap has its own
+  setting, `max_output`, and the refusal says so.
 
 #### opencode Go
 
@@ -1207,7 +1209,15 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   grows its history until the provider refuses the request. Both are silent when
   it is unset — there is nothing to warn about a limit you have not stated — so
   set it on every model you use for real work.
-- **`max_output`** — the maximum output tokens.
+- **`max_output`** — the maximum output tokens. It is sent as the request's
+  output cap (`max_tokens`, or `max_output_tokens` on the Responses dialect),
+  so a model that reaches it stops with a length finish. Unset leaves the cap
+  to the provider on every dialect but Anthropic's, whose API requires the field
+  and therefore gets a built-in default.
+
+  Do not set it through `extra_params`: the key is reserved, because every
+  dialect writes the cap after the passthrough and a passthrough entry could
+  only be ignored.
 - **`input_modalities`** — the kinds of content this model accepts, as a list.
   The only values are `"text"` and `"image"`; anything else is an error at load
   rather than a setting that quietly does nothing. Unset means text only, which
