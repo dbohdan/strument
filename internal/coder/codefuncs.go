@@ -184,5 +184,14 @@ func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
 		return nil, fmt.Errorf("Could not read all of %s: it has %d lines and the window stopped at %d; "+
 			"pass offset and limit to take it in pieces", quoteToolArg(path), ft.Total, len(ft.Lines))
 	}
-	return strings.Join(ft.Lines, "\n"), nil
+	text := strings.Join(ft.Lines, "\n")
+	// The terminator splitLines removed, when this window reached the end of
+	// the file. Without it the text is not what is stored, and a file whose
+	// last line is blank loses that line entirely — which is a wrong count
+	// that looks like a right one, the exact failure this function exists to
+	// remove. Found in the trial's pilot, by a model that did everything right.
+	if ft.EndsWithNewline && !ft.Truncated && len(ft.Lines) > 0 {
+		text += "\n"
+	}
+	return text, nil
 }

@@ -61,7 +61,7 @@ func TestReadTextArmRegistersTheFunction(t *testing.T) {
 
 	c.CodeReadText = true
 	got := c.runCode(context.Background(), codeCall{code: `print(len(read_text("f.txt")))`})
-	if want := "16"; !strings.Contains(got, want) {
+	if want := "17"; !strings.Contains(got, want) {
 		t.Errorf("read_text did not return the file as stored (want length %s):\n%s", want, got)
 	}
 	// The point of the function: read's own result carries the header and the

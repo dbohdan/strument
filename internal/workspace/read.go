@@ -44,6 +44,15 @@ type FileText struct {
 	// Link is the target when Path is a symlink, so a reader given both the
 	// link and the target can tell it is holding one file rather than two.
 	Link string
+	// EndsWithNewline reports that the file's last line is terminated.
+	//
+	// splitLines drops that terminator and nothing else recorded that it had,
+	// so a caller reassembling the text with strings.Join produced a file one
+	// byte short — and, for a file whose last line is blank, one *line* short.
+	// The read tool never noticed because it numbers lines rather than
+	// rejoining them; read_text did, by answering "how many blank lines" with
+	// one fewer than the file has.
+	EndsWithNewline bool
 }
 
 // Read returns a window of a text file. offset is 1-based; 0 means the start.
@@ -97,7 +106,8 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 		return FileText{}, fmt.Errorf("%s looks like a binary file", rel)
 	}
 
-	lines := splitLines(string(data))
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	lines := splitLines(text)
 	if offset < 1 {
 		offset = 1
 	}
@@ -105,7 +115,8 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 		limit = defaultReadLines
 	}
 
-	out := FileText{Path: rel, Start: offset, Total: len(lines)}
+	out := FileText{Path: rel, Start: offset, Total: len(lines),
+		EndsWithNewline: strings.HasSuffix(text, "\n")}
 	if li, err := os.Lstat(full); err == nil && li.Mode()&os.ModeSymlink != 0 {
 		out.Link, _ = os.Readlink(full)
 	}
