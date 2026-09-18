@@ -1162,7 +1162,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1211,13 +1211,33 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   set it on every model you use for real work.
 - **`max_output`** — the maximum output tokens. It is sent as the request's
   output cap (`max_tokens`, or `max_output_tokens` on the Responses dialect),
-  so a model that reaches it stops with a length finish. Unset leaves the cap
-  to the provider on every dialect but Anthropic's, whose API requires the field
-  and therefore gets a built-in default.
+  so a model that reaches it stops with a length finish — see `prefill` for
+  what happens next. Unset leaves the cap to the provider on every dialect but
+  Anthropic's, whose API requires the field and therefore gets a built-in
+  default.
 
   Do not set it through `extra_params`: the key is reserved, because every
   dialect writes the cap after the passthrough and a passthrough entry could
   only be ignored.
+- **`prefill`** — this model continues a partial assistant message instead of
+  answering afresh. With it on, a reply stopped by `max_output` is resumed:
+  Strument appends what came back as an assistant turn, asks again, and stitches
+  the pieces. Off (the default), the reply stops where the cap did and you are
+  told so.
+
+  **Check it against your model before turning it on**, because getting it wrong
+  in this direction is silent. A model that does not continue reads the appended
+  text as something *you* wrote and answers about it, so the stitched reply is
+  the partial answer glued to a second, unrelated one — and the whole
+  continuation budget is spent producing it. Measured over one OpenRouter
+  endpoint, three runs each: `claude-haiku-4.5`, `gemini-3.1-flash-lite`,
+  `mistral-small-3.2`, `llama-3.3-70b` and `deepseek-v4-flash-0731` continued
+  every time, while `mimo-v2.5`, `glm-5.3-flash`, `deepseek-v4.1-flash`,
+  `gpt-4.1-nano` and `gpt-5-nano` started over every time. The adapter does not
+  predict it; the model does.
+
+  The check is one request: put a partial sentence in an assistant message and
+  see whether the reply carries on from it or repeats it.
 - **`input_modalities`** — the kinds of content this model accepts, as a list.
   The only values are `"text"` and `"image"`; anything else is an error at load
   rather than a setting that quietly does nothing. Unset means text only, which

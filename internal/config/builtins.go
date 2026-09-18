@@ -173,7 +173,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 // model(provider, slug, *, display_name=None, edit_format="tool",
 //
 //	side_model=None, reasoning=None, reasoning_tag=None, temperature=None,
-//	repo_map=True, cache=False, context=None, max_output=None,
+//	repo_map=True, cache=False, context=None, max_output=None, prefill=False,
 //	input_cost=None, output_cost=None, extra_params={}).
 //
 // input_cost and output_cost are USD per million tokens.
@@ -191,6 +191,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	repoMap := true
 	var cache bool
 	var contextTokens, maxOutput int
+	var prefill bool
 	var inputCost, outputCost starlark.Value
 	var extraParams *starlark.Dict
 	var inputModalities *starlark.List
@@ -209,6 +210,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"cache?", &cache,
 		"context?", &contextTokens,
 		"max_output?", &maxOutput,
+		"prefill?", &prefill,
 		"input_cost?", &inputCost,
 		"output_cost?", &outputCost,
 		"extra_params?", &extraParams,
@@ -259,6 +261,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		Cache:        cache,
 		Context:      contextTokens,
 		MaxOutput:    maxOutput,
+		Prefill:      prefill,
 
 		InputModalities: modalities,
 	}

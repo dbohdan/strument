@@ -44,9 +44,13 @@ type Coder struct {
 	// ShellWithheld records --no-shell. The flag can turn the bash tool off and
 	// cannot turn it on, so ApplyConfig has to remember it: a /reload must not
 	// undo a decision made on the command line.
-	ShellWithheld      bool
-	Stream             bool
-	PrefillSupported   bool // continuation on finish_reason=length
+	ShellWithheld bool
+	Stream        bool
+	// PrefillSupported says the model continues a partial assistant message
+	// rather than answering afresh, which is what makes a reply stopped on
+	// finish_reason=length resumable. From the model's `prefill`; see
+	// config.Model.Prefill for the measurements behind its default of false.
+	PrefillSupported   bool
 	SystemPromptPrefix string
 	// PromptCode and PromptAsk are user replacements for the active mode's
 	// MainSystem (the `prompt_code` / `prompt_ask` config). Empty means "use the
@@ -430,7 +434,7 @@ func New(root string, model *config.Model) *Coder {
 		Model:                model,
 		SuggestShellCommands: true,
 		Stream:               true,
-		PrefillSupported:     true,
+		PrefillSupported:     model.Prefill,
 		OfferCode:            true,
 		MaxSteps:             defaultMaxSteps,
 		MaxErrorReflections:  defaultMaxErrorReflections,

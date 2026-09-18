@@ -264,6 +264,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	backoff := retryBackoff{delay: initialRetryDelay}
 	continuations := 0
+	// Why the reply stopped short, for the notice below: the model does not
+	// continue a partial answer, or it does and the continuation cap ran out.
+	// Both end as resOutputExhausted and differ only in what the user can do.
+	declinedPrefill := false
 
 	// One detector per send, not per streamOnce: a continuation is the same
 	// reply resumed, and a loop that spans the stitch is still a loop.
@@ -301,6 +305,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 		if res == resContinuation {
 			if !c.PrefillSupported {
+				declinedPrefill = true
 				term = resOutputExhausted
 				break
 			}
@@ -369,8 +374,23 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.showExhaustedError()
 		return OutcomeContextExhausted, ""
 	case resOutputExhausted:
-		// The large partial was kept above; no diagnostic (trailing message
-		// is the assistant partial).
+		// The large partial was kept above, and no diagnostic goes into the
+		// conversation — the trailing message is the assistant partial, and a
+		// system note after it would be describing what the model can see.
+		//
+		// The *user* is told, though, and after FlushStream so the notice does
+		// not land against an unterminated stream. An answer that stops
+		// mid-sentence otherwise reads as the model losing its thread rather
+		// than as a cap, and with prefill off by default that is no longer a
+		// rare event. Each cause names the setting that changes it.
+		if declinedPrefill {
+			c.Out.Warningf("The reply reached the model's output limit and stops here. " +
+				"Ask for the rest, raise `max_output`, or set `prefill = True` on the model " +
+				"if it continues a partial answer.")
+		} else {
+			c.Out.Warningf("The reply reached the model's output limit %d times and stops here. "+
+				"Ask for the rest, or raise `max_output`.", continuationCap+1)
+		}
 		return OutcomeOutputExhausted, ""
 	case resFailed:
 		if answer == "" {

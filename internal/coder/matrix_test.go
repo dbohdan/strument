@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -57,7 +58,9 @@ func TestContinuationStitch(t *testing.T) {
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 {"kind":"expect_usage","sent":22,"received":11,"cost_known":false}
 `)
-	env := setupScenario(t, sc, nil)
+	// Prefill is off by default, so a continuation test has to opt in — the
+	// thing under test is the stitch, not the default.
+	env := setupScenario(t, sc, func(c *Coder) { c.PrefillSupported = true })
 	var prefills []string
 	env.stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
 		last := req.Messages[len(req.Messages)-1]
@@ -83,7 +86,7 @@ func TestSecondContinuationReplacesPrefill(t *testing.T) {
 {"kind":"stream","events":[{"kind":"Answer","text":"C"},{"kind":"Finish","finish_reason":"stop"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `)
-	env := setupScenario(t, sc, nil)
+	env := setupScenario(t, sc, func(c *Coder) { c.PrefillSupported = true })
 	var prefills []string
 	var assistantCounts []int
 	env.stub.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
@@ -119,7 +122,7 @@ func TestContinuationCapOutputExhausted(t *testing.T) {
 	rows += rowsSb112.String()
 	rows += `{"kind":"expect_outcome","outcome":"OutputExhausted","reflections":0}`
 	sc := inlineScenario(t, rows)
-	env := setupScenario(t, sc, nil)
+	env := setupScenario(t, sc, func(c *Coder) { c.PrefillSupported = true })
 	env.run(t)
 	// Cap is 4 continuations => 5 attempts consumed, the partial kept, and
 	// the trailing history message is the assistant partial (no diagnostic).
@@ -138,10 +141,36 @@ func TestContinuationWithoutPrefillSupport(t *testing.T) {
 {"kind":"stream","events":[{"kind":"Answer","text":"partial"},{"kind":"Finish","finish_reason":"length"}]}
 {"kind":"expect_outcome","outcome":"OutputExhausted","reflections":0}
 `)
-	env := setupScenario(t, sc, func(c *Coder) { c.PrefillSupported = false })
+	out := &captureOut{}
+	env := setupScenario(t, sc, func(c *Coder) { c.PrefillSupported = false; c.Out = out })
 	env.run(t)
 	if env.stub.Remaining() != 0 {
 		t.Error("should not attempt continuation without prefill support")
+	}
+	// The answer stops mid-sentence, and with prefill off by default that is
+	// no longer rare. Silence here reads as the model losing its thread; the
+	// notice has to name the cause and the two settings that change it.
+	said := strings.Join(out.lines, "\n")
+	for _, want := range []string{"output limit", "max_output", "prefill"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("a truncated reply must mention %q, got:\n%s", want, said)
+		}
+	}
+}
+
+// The default is off, and flipping it back should take a deliberate edit to
+// this line. The measurements are in config.Model.Prefill: five of ten models
+// on one OpenRouter endpoint answered a prefill by starting over, among them
+// the two this project uses most, and a wrong "true" is the silent, expensive
+// half of the asymmetry.
+func TestPrefillDefaultsOffAndFollowsTheModel(t *testing.T) {
+	off := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	if off.PrefillSupported {
+		t.Error("prefill must default off; a model that restarts turns a capped reply into two glued answers")
+	}
+	on := New(t.TempDir(), &config.Model{EditFormat: "tool", Prefill: true})
+	if !on.PrefillSupported {
+		t.Error("`prefill = True` on the model must reach the coder")
 	}
 }
 
@@ -263,7 +292,9 @@ func TestStaleAccumulatorRegression(t *testing.T) {
 {"kind":"stream","events":[{"kind":"Answer","text":"understood, no edit"},{"kind":"Finish","finish_reason":"stop"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
 `)
-	env := setupScenario(t, sc, toolMode)
+	// The scenario's first stream ends on length, so this needs the
+	// continuation to happen at all before it can check what it leaves behind.
+	env := setupScenario(t, sc, func(c *Coder) { toolMode(c); c.PrefillSupported = true })
 	env.run(t)
 	if env.coder.partialResponseContent != "understood, no edit" {
 		t.Errorf("final answer = %q (stale accumulator?)", env.coder.partialResponseContent)

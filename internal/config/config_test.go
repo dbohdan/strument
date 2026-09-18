@@ -1123,3 +1123,33 @@ default = "m"
 		t.Error("a missing env() with no default loaded cleanly without OnMissingEnv")
 	}
 }
+
+// `prefill` says the model continues a partial assistant message rather than
+// answering afresh. Both directions, because the default is the load-bearing
+// half: a model block that says nothing must not get the behaviour that
+// corrupts a capped reply on the models that do not support it.
+func TestPrefillParsing(t *testing.T) {
+	load := func(t *testing.T, decl string) *Model {
+		t.Helper()
+		src := fmt.Sprintf(`
+p = provider("openrouter", api_key = "k")
+models = {"m": model(p, "s"%s)}
+default = "m"
+`, decl)
+		cfg, err := Load(harness(t, src, "", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Models["m"]
+	}
+
+	if load(t, "").Prefill {
+		t.Error("prefill must default off when the model block does not mention it")
+	}
+	if !load(t, ", prefill = True").Prefill {
+		t.Error("prefill = True did not reach the model")
+	}
+	if load(t, ", prefill = False").Prefill {
+		t.Error("prefill = False did not reach the model")
+	}
+}

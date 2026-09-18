@@ -108,6 +108,27 @@ type Model struct {
 	Cache        bool // enable prompt-cache breakpoints (1h TTL)
 	Context      int  // input window tokens; 0 => unknown
 	MaxOutput    int
+	// Prefill says this model continues a partial assistant message instead of
+	// answering afresh. It is what lets a reply stopped by max_output be
+	// resumed: send.go appends what came back as an assistant turn and asks
+	// again, stitching the pieces.
+	//
+	// Default false, which is the conservative half of an asymmetry. Wrong-false
+	// costs a truncated answer and a warning saying so, and the user can ask for
+	// the rest. Wrong-true is silent and expensive: a model that does not
+	// continue reads the appended text as something the *user* wrote and answers
+	// about it, so the stitch is the partial answer glued to a fresh one. Live,
+	// against a 120-token cap, MiMo-V2.5 narrated "the user has provided what
+	// appears to be a partial response to their own request", burned all four
+	// continuations (600 tokens every run) and produced nothing usable, where
+	// Claude Haiku 4.5 finished cleanly in 444.
+	//
+	// It is per model, not per provider: over one OpenRouter endpoint,
+	// claude-haiku-4.5, gemini-3.1-flash-lite, mistral-small-3.2,
+	// llama-3.3-70b and deepseek-v4-flash-0731 continued 3/3, while
+	// mimo-v2.5, glm-5.3-flash, deepseek-v4.1-flash, gpt-4.1-nano and
+	// gpt-5-nano restarted 3/3. Nothing about the adapter predicts which.
+	Prefill bool
 	// InputModalities names the content kinds this model accepts besides text,
 	// using the same strings as the llm.Block* kinds so a projection can look a
 	// block up directly. Empty means text only, which is the safe default: a
