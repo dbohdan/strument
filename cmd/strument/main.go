@@ -49,24 +49,21 @@ var version = "0.0.0-dev"
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message        string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
-	Continue       bool     `help:"Generate session notes from the previous transcript at startup."                                                                                            name:"continue"                                               short:"c"`
-	Model          string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
-	NoGit          bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
-	NoColor        bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode       bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                              xor:"palette"`
-	LightMode      bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                             xor:"palette"`
-	NoAutoCommits  bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
-	NoHistory      bool     `help:"Do not write the session to the chat-history file."                                                                                                         name:"no-history"`
-	JSONL          string   `help:"Also write a JSONL session log to this file."                                                                                                               name:"jsonl"                                                  placeholder:"<file>"`
-	DryRun         bool     `help:"Report edits without writing files or committing."                                                                                                          name:"dry-run"`
-	NoShell        bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
-	Yes            []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	ConsultScope   string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                        help:"Session context to include in /consult requests."    name:"consult-scope"`
-	CodeResult     string   `default:"last"                                                                                                                                                    enum:"last,all,main"                                          help:"Result format for run_code programs (experimental)." name:"code-result"`
-	CodeSignatures bool     `help:"Document the bridged tools' positional order in the run_code description (experimental)."                                                                   name:"code-signatures"`
-	CodeNamespace  string   `default:"flat"                                                                                                                                                    enum:"flat,both,only,hint"                                    help:"How run_code programs access tools (experimental)."  name:"code-namespace"`
-	Files          []string `arg:""                                                                                                                                                            help:"Files for the model to edit (they need not exist yet)." optional:""`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
+	Continue      bool     `help:"Generate session notes from the previous transcript at startup."                                                                                            name:"continue"                                               short:"c"`
+	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                              xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                             xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                                                         name:"no-history"`
+	JSONL         string   `help:"Also write a JSONL session log to this file."                                                                                                               name:"jsonl"                                                  placeholder:"<file>"`
+	DryRun        bool     `help:"Report edits without writing files or committing."                                                                                                          name:"dry-run"`
+	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
+	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                        help:"Session context to include in /consult requests." name:"consult-scope"`
+	Files         []string `arg:""                                                                                                                                                            help:"Files for the model to edit (they need not exist yet)." optional:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -167,10 +164,6 @@ func (c *chatCmd) Run() error {
 	// silently dropped -- found by running the binary, not by a test.
 	cdr.Grants = coder.NewGrants(grants)
 	coder.ApplyConfig(cdr, cfg)
-	// Kong's enum has already refused anything else. Trial arms, not config.
-	cdr.CodeResult, _ = coder.ParseCodeResult(c.CodeResult)
-	cdr.CodeNamespace, _ = coder.ParseCodeNamespace(c.CodeNamespace)
-	cdr.CodeSignatures = coder.CodeSignatures(c.CodeSignatures)
 	if std, ok := cdr.Out.(*coder.StdOutput); ok {
 		// Script mode's output; the REPL swaps in its own and reads the setting
 		// from the config it already carries.

@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"regexp"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -68,16 +65,19 @@ const maxBridgedCalls = 50
 // nobody. The negations are compressed to one sentence and paired with the
 // recovery path, because "grep always works; this opens with a failure
 // surface" was the risk asymmetry the first version created.
-func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSignatures) llm.ToolDef {
+func codeTool(callable []string) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
 		"several. Use this when one answer needs multiple read/grep/glob/ls " +
 		"results combined, or needs arithmetic, counting, sorting, or date " +
 		"math.\n\n" +
-		codeCallStyleText(ns) +
+		"The program can call the read-only tools directly — " +
+		"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)" +
 		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. Example:\n\n", maxBridgedCalls) +
-		codeExampleText(arm, ns) +
-		codeContractText(arm) +
+		codeExampleText() +
+		"Only the program's last evaluated value comes back to you, so end it " +
+		"with what you want to see — two calls on two lines return the second " +
+		"one's result and drop the first. print() shows intermediate values.\n\n" +
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
 		"math, re, datetime, json, itertools and collections all work. Not " +
@@ -96,13 +96,9 @@ func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSign
 	// ride in through codeFuncDoc, from the same registry the bridge
 	// dispatches on.
 	if len(callable) > 0 {
-		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.",
-			strings.Join(nsQualified(callable, ns), ", "))
+		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
 	b.WriteString(codeFuncDoc())
-	if sigs {
-		b.WriteString(codeSignatureText(callable, ns))
-	}
 
 	return llm.ToolDef{
 		Name:        toolRunCode,
@@ -118,84 +114,16 @@ func codeTool(callable []string, arm CodeResult, ns CodeNamespace, sigs CodeSign
 	}
 }
 
-// codeExampleText is the worked example, in the shape the arm's contract calls
-// for. An example that contradicts the paragraph above it would be the loudest
-// thing in the description, and models copy the example.
-func codeExampleText(arm CodeResult, ns CodeNamespace) string {
-	g := nsQualify("grep", ns)
-	body := "caps = {}\n" +
+// codeExampleText is the worked example. It is kept out of the string above
+// because models copy the example, so it is the part most worth being able to
+// read on its own: it has to agree with the contract paragraph beside it.
+func codeExampleText() string {
+	return "```python\n" +
+		"caps = {}\n" +
 		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-		"    caps[name] = " + g + "(pattern=name + \" =\", glob=\"**/*.go\")\n"
-	switch arm {
-	case CodeResultMain:
-		body = "def main():\n" +
-			"    caps = {}\n" +
-			"    for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-			"        caps[name] = " + g + "(pattern=name + \" =\", glob=\"**/*.go\")\n" +
-			"    return caps\n"
-	default:
-		body += "caps\n"
-	}
-	return "```python\n" + body + "```\n\n"
-}
-
-// nsQualify writes a tool name the way the arm's programs call it.
-func nsQualify(tool string, ns CodeNamespace) string {
-	if ns == CodeNSBoth || ns == CodeNSOnly {
-		return "tools." + tool
-	}
-	return tool
-}
-
-func nsQualified(tools []string, ns CodeNamespace) []string {
-	out := make([]string, 0, len(tools))
-	for _, t := range tools {
-		out = append(out, nsQualify(t, ns))
-	}
-	return out
-}
-
-// codeCallStyleText is the sentence the CodeNamespace arms differ in: how a
-// program reaches the tools. Kept apart from the rest of the description for the
-// same reason the result contract is — so the arms differ in one paragraph and
-// its example, rather than in two rewritten descriptions.
-func codeCallStyleText(ns CodeNamespace) string {
-	switch ns {
-	case CodeNSBoth:
-		return "The tools live in a tools namespace the program can call directly — " +
-			"tools.grep(pattern=\"TODO\", glob=\"**/*.go\"), tools.read(path=\"a.go\", limit=20). " +
-			"print(tools) lists them with their arguments. The bare names work too"
-	case CodeNSOnly:
-		return "The tools live in a tools namespace the program calls through — " +
-			"tools.grep(pattern=\"TODO\", glob=\"**/*.go\"), tools.read(path=\"a.go\", limit=20). " +
-			"print(tools) lists them with their arguments. The bare names are not defined"
-	default:
-		return "The program can call the read-only tools directly — " +
-			"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)"
-	}
-}
-
-// codeContractText is the one paragraph the CodeResult arms differ in: what the
-// model is told comes back. Kept apart from the rest of the description so the
-// arms differ in exactly this, which is what makes the trial a comparison of
-// the contract rather than of two rewritten descriptions.
-func codeContractText(arm CodeResult) string {
-	switch arm {
-	case CodeResultAll:
-		return "Every call the program makes returns its result to you, in order, " +
-			"followed by the program's final value. Compute over the results and " +
-			"end with a conclusion when you can; the raw results come back either " +
-			"way. print() shows anything else.\n\n"
-	case CodeResultMain:
-		return "Define a function called main and return what you want to see from " +
-			"it; the program is run and then main() is called, and its return value " +
-			"is what comes back. A program that returns nothing hands you None. " +
-			"print() shows intermediate values.\n\n"
-	default:
-		return "Only the program's last evaluated value comes back to you, so end it " +
-			"with what you want to see — two calls on two lines return the second " +
-			"one's result and drop the first. print() shows intermediate values.\n\n"
-	}
+		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
+		"caps\n" +
+		"```\n\n"
 }
 
 type codeCall struct {
@@ -244,20 +172,8 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	// actual output dropped on the floor. Under the observation force arm
 	// print is the primary reporting channel, so this is not cosmetic.
 	var printed strings.Builder
-	log := bridgeLog{keepEcho: c.CodeResult == CodeResultAll}
-	// The main() arm runs the program to define things and then calls main(),
-	// so the value comes from a return statement. A program that defines no
-	// main raises NameError, which is the whole point: the failure is loud
-	// rather than a quiet None.
-	source := cc.code
-	if c.CodeResult == CodeResultMain && !callsMain(cc.code) {
-		source += "\n\nmain()"
-	}
-	// The namespace arms build `tools` ahead of the model's code, which shifts
-	// every traceback line; the offset is subtracted back out below.
-	prelude := codePrelude(c.CodeNamespace, c.codeCallableTools())
-	source = prelude + source
-	result, err := runner.Execute(context.Background(), source, nil,
+	var log bridgeLog
+	result, err := runner.Execute(context.Background(), cc.code, nil,
 		append(c.codeOptions(&log), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
 	summary := codeCalledText(codeLines(cc.code), log.names)
 	if err != nil {
@@ -265,44 +181,10 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		// aborted mid-way is precisely where the summary carries information
 		// the value cannot.
 		c.Out.Toolf("%s", summary)
-		return c.codeFailureText(err, preludeLines(prelude))
+		return codeErrorText(err)
 	}
 	c.Out.Toolf("%s", summary)
-	return truncateResult(codeEchoText(&log) + codeResultText(result, printed.String(), &log))
-}
-
-// codeArgsText renders a bridged call's arguments the way the model wrote them,
-// as keywords rather than as the JSON they crossed the boundary in. The echo is
-// meant to read as the program's own lines coming back.
-func codeArgsText(argsJSON string) string {
-	var m map[string]any
-	if json.Unmarshal([]byte(argsJSON), &m) != nil {
-		return strings.TrimSpace(argsJSON)
-	}
-	parts := make([]string, 0, len(m))
-	for _, k := range slices.Sorted(maps.Keys(m)) {
-		v, err := json.Marshal(m[k])
-		if err != nil {
-			continue
-		}
-		parts = append(parts, k+"="+string(v))
-	}
-	return strings.Join(parts, ", ")
-}
-
-// mainCallRE matches a top-level call to main() on its own line.
-var mainCallRE = regexp.MustCompile(`(?m)^main\(\s*\)\s*$`)
-
-// callsMain reports whether the program already calls main() itself, so the
-// harness does not append a second call.
-//
-// Measured, not anticipated: 38 of 89 programs under this arm ended in main(),
-// having been told the program is run and then main() is called. Appending
-// unconditionally ran the whole program twice — every read repeated, every call
-// counted twice against the bridge cap, and the arm's token cost roughly
-// doubled, which would have been read as a fact about the design.
-func callsMain(code string) bool {
-	return mainCallRE.MatchString(code)
+	return truncateResult(codeResultText(result, printed.String(), &log))
 }
 
 // bridgeLog is what the bridge records about one program's calls: which tools
@@ -314,91 +196,6 @@ type bridgeLog struct {
 	names []string // distinct tool names, in first-call order
 	calls int
 	last  any // what the last bridged call returned
-	// keepEcho records every call for CodeResultAll. Off by default so the
-	// other arms do not accumulate results nobody will read.
-	keepEcho bool
-	// echo is one entry per call — name, arguments, result — kept only for
-	// CodeResultAll, which hands them all back. Under the other arms it stays
-	// nil rather than accumulating megabytes nobody reads.
-	echo []bridgedCall
-}
-
-// bridgedCall is one call a program made, as CodeResultAll reports it.
-type bridgedCall struct {
-	name   string
-	args   string
-	result any
-}
-
-// CodeResult selects what a run_code program hands back. It exists to be
-// measured: doc/experiments/2026-09-code-result/README.md is the trial, and until it
-// reports, CodeResultLast is the shipped behaviour rather than the chosen one.
-type CodeResult int
-
-const (
-	// CodeResultLast returns the program's final value, the way a Jupyter cell
-	// echoes its last expression.
-	CodeResultLast CodeResult = iota
-	// CodeResultAll returns every bridged call's result and then the final
-	// value, the way an interactive interpreter echoes each statement. The
-	// hypothesis it tests: a model writing read() reads it as a tool call, and
-	// everywhere else in this harness a tool call's result comes back.
-	CodeResultAll
-	// CodeResultMain runs the program and then calls main(), so the value comes
-	// from a return statement rather than from whatever was evaluated last.
-	CodeResultMain
-)
-
-func (r CodeResult) String() string {
-	switch r {
-	case CodeResultAll:
-		return "all"
-	case CodeResultMain:
-		return "main"
-	default:
-		return "last"
-	}
-}
-
-// ParseCodeResult reads an arm name, reporting whether it is one.
-func ParseCodeResult(name string) (CodeResult, bool) {
-	switch name {
-	case "last":
-		return CodeResultLast, true
-	case "all":
-		return CodeResultAll, true
-	case "main":
-		return CodeResultMain, true
-	}
-	return 0, false
-}
-
-// CodeResultNames lists the arms, for help text and errors.
-var CodeResultNames = []string{"last", "all", "main"}
-
-// codeEchoText renders every call a program made, the way an interactive
-// interpreter would have as the program ran. The arguments come along because
-// two greps differing only in their glob are otherwise two identical headings.
-func codeEchoText(log *bridgeLog) string {
-	if log == nil || len(log.echo) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	for _, e := range log.echo {
-		fmt.Fprintf(&b, ">>> %s(%s)\n", e.name, codeArgsText(e.args))
-		switch v := e.result.(type) {
-		case string:
-			b.WriteString(strings.TrimRight(v, "\n"))
-		default:
-			if data, err := json.Marshal(v); err == nil {
-				b.Write(data)
-			} else {
-				fmt.Fprintf(&b, "%v", v)
-			}
-		}
-		b.WriteString("\n\n")
-	}
-	return b.String()
 }
 
 // codeLines counts the program's lines, discounting the leading and trailing
@@ -502,7 +299,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	// crosses as-is and is answered by the tool itself, exactly as a direct
 	// call with a wrong field would be.
 	for _, n := range names {
-		funcs = append(funcs, monty.Func(c.CodeNamespace.wireName(n), codeToolParams[n]...))
+		funcs = append(funcs, monty.Func(n, codeToolParams[n]...))
 	}
 	// Code functions ride the same registration, and need it more: their
 	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
@@ -543,10 +340,6 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 
 	seen := map[string]bool{}
 	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
-		// Under the tools-only arm the functions are registered with a prefix
-		// the program never types; the prelude binds tools.read to it. Strip it
-		// before anything else looks at the name.
-		call.Name = c.CodeNamespace.toolName(call.Name)
 		// Fail closed. This runs behind the registration check already — a
 		// name outside `allowed` is not registered with Monty at all and
 		// raises NameError inside the program — but the check lives here too
@@ -577,9 +370,6 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 		if d := codeFuncByName(call.Name); d != nil {
 			v, err := d.fn(c, call)
 			log.last = v
-			if log.keepEcho && err == nil {
-				log.echo = append(log.echo, bridgedCall{name: call.Name, args: call.ArgsJSON(), result: v})
-			}
 			return v, err
 		}
 
@@ -600,9 +390,6 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
 		}
 		log.last = out
-		if log.keepEcho {
-			log.echo = append(log.echo, bridgedCall{name: call.Name, args: call.ArgsJSON(), result: out})
-		}
 		return out, nil
 	}
 }
@@ -640,11 +427,6 @@ func bridgeToolFailure(out string) (string, bool) {
 // list or dict the model wants to read comes back as JSON rather than Go's
 // `%v` spacing, which a model would otherwise have to misread as Python.
 func codeResultText(result any, printed string, log *bridgeLog) string {
-	// Under the echoing arm the last call's result has just been printed in
-	// full; repeating it as the value doubles the largest thing in the reply.
-	if log != nil && log.keepEcho && printed == "" && sameBridgedValue(result, log.last) {
-		return ""
-	}
 	var b strings.Builder
 	if printed != "" {
 		b.WriteString(strings.TrimRight(printed, "\n"))
@@ -699,11 +481,6 @@ func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 	if log == nil || log.calls == 0 {
 		return ""
 	}
-	// Nothing is lost when every call's result is handed back, and a note
-	// saying otherwise would contradict the contract the model was given.
-	if log.keepEcho {
-		return ""
-	}
 	// Nothing came back at all: every result was discarded.
 	if result == nil && printed == "" {
 		return fmt.Sprintf("The program made %s and returned none of their results. "+
@@ -740,17 +517,6 @@ func sameBridgedValue(result, last any) bool {
 // leading file framing is dropped because it is constant — every program is
 // "script.py" from Monty's point of view — and the exception itself is what
 // the model needs.
-// codeFailureText renders a failed program for the model: the exception, with
-// the prelude's lines subtracted from the traceback, plus — under the hint arm —
-// a pointer to the tool that serves what the program reached for.
-func (c *Coder) codeFailureText(err error, offset int) string {
-	msg := renumberTraceback(codeErrorText(err), offset)
-	if c.CodeNamespace == CodeNSHint && reachedForPython.MatchString(msg) {
-		msg += codeReachHint
-	}
-	return msg
-}
-
 func codeErrorText(err error) string {
 	msg := err.Error()
 	msg = strings.TrimPrefix(msg, "monty: ")

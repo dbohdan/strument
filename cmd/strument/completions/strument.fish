@@ -63,9 +63,6 @@ complete -c strument -n $chat_cmd -l no-shell -d "Disable the model's bash tool"
 complete -c strument -n $chat_cmd -l yes -d "Approve prompts of this type automatically" -x \
     -a "bash webfetch websearch steps context add-output all"
 complete -c strument -n $chat_cmd -l consult-scope -d "Session context to include in /consult requests" -x -a "none files chat"
-complete -c strument -n $chat_cmd -l code-result -d "Result format for run_code programs" -x -a "last all main"
-complete -c strument -n $chat_cmd -l code-namespace -d "How run_code programs access tools" -x -a "flat both only hint"
-complete -c strument -n $chat_cmd -l code-signatures -d "Document the bridged tools' positional order (experimental)"
 complete -c strument -n $chat_cmd -l version -d "Print version and exit"
 
 # trust: a project directory, and the flag that skips its question.

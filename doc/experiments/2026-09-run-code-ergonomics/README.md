@@ -164,7 +164,9 @@ natural rate it would be extrapolating from is zero.
 - **`sigs` was built for a gap that shrank underneath it.** Positional
   arguments bind now, so what a signature line still buys is the order of the
   *second* and later arguments — and almost every call the models made took
-  one. The arm is kept behind its flag rather than deleted for that reason.
+  one. The arm was deleted after this writeup, along with `--code-result` and
+  `--code-namespace`: reproducing any of the three needs the binary at its own
+  commit, which a flag surviving in HEAD does not provide.
 - **`cite` is answerable without a program**, which is why it separates the
   arms so poorly. It earns its place as the counter-metric, not as a task.
 - **Zero two-positional calls is evidence that the hazard is rare here, not

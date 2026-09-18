@@ -143,7 +143,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // the subset. A line that stops describing a real wall is a lie to the model;
 // each substring here corresponds to a probe in the tests below.
 func TestCodeDescriptionNamesTheLimits(t *testing.T) {
-	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false).Description
+	desc := codeTool(InspectorTools()).Description
 	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -445,7 +445,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // from what a program can actually import.
 func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools(), CodeResultLast, CodeNSFlat, false).Description
+	desc := codeTool(InspectorTools()).Description
 
 	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
 		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
@@ -501,10 +501,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 
 	// The description the model reads follows, in both directions.
-	if desc := codeTool(withMap.codeCallableTools(), CodeResultLast, CodeNSFlat, false).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools()).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools(), CodeResultLast, CodeNSFlat, false).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools()).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
@@ -526,234 +526,5 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 	if got := withMap.runCode(context.Background(), codeCall{code: `symbol(name="Target")`}); strings.Contains(got, "not defined") {
 		t.Errorf("symbol must be registered with a repo map, got:\n%s", got)
-	}
-}
-
-// --- what a program hands back --------------------------------------------
-
-// The three CodeResult arms, pinned at the level the model sees. They exist to
-// be measured (doc/experiments/2026-09-code-result/README.md), and a trial whose arms
-// do not actually differ measures nothing — so the difference is asserted here
-// rather than assumed from the flag having been passed.
-func TestCodeResultArmsDiffer(t *testing.T) {
-	files := map[string]string{"a.py": "x = 1  # NEEDLE\n", "b.py": "y = 2  # NEEDLE\n"}
-	twoCalls := "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")"
-
-	last, _ := observeEnv(t, files)
-	got := last.runCode(context.Background(), codeCall{code: twoCalls})
-	if strings.Contains(got, "a.py") {
-		t.Errorf("the default arm must return the last call only, got:\n%s", got)
-	}
-	if !strings.Contains(got, "That is the last call's result") {
-		t.Errorf("the default arm must say what it dropped, got:\n%s", got)
-	}
-
-	all, _ := observeEnv(t, files)
-	all.CodeResult = CodeResultAll
-	got = all.runCode(context.Background(), codeCall{code: twoCalls})
-	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
-		t.Errorf("the echoing arm must return every call's result, got:\n%s", got)
-	}
-	// Nothing was lost, so the note that says something was would contradict
-	// the contract this arm gave the model.
-	if strings.Contains(got, "last call's result") || strings.Contains(got, "returned none") {
-		t.Errorf("the echoing arm must not claim results were lost, got:\n%s", got)
-	}
-	// And the last result is not repeated once as an echo and again as the
-	// value — the largest thing in the reply, twice.
-	if n := strings.Count(got, "1 match in 1 file for NEEDLE matching b.py"); n != 1 {
-		t.Errorf("the last result appears %d times, want 1:\n%s", n, got)
-	}
-	// The calls come back as the program wrote them, not as wire JSON.
-	if !strings.Contains(got, `>>> grep(glob="a.py", pattern="NEEDLE")`) {
-		t.Errorf("the echo must render keywords, not JSON, got:\n%s", got)
-	}
-	// A program that keeps nothing is the case the note was written for, and
-	// the case where this arm must stay quiet: the results did come back. The
-	// check above cannot see this, because a program whose value is the last
-	// call's result never reaches the note at all.
-	got = all.runCode(context.Background(), codeCall{
-		code: "for g in [\"a.py\", \"b.py\"]:\n    grep(pattern=\"NEEDLE\", glob=g)"})
-	if strings.Contains(got, "returned none of their results") {
-		t.Errorf("the echoing arm handed back every result and must not say otherwise:\n%s", got)
-	}
-	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
-		t.Errorf("the echoing arm must return both results even when the program keeps none:\n%s", got)
-	}
-
-	main, _ := observeEnv(t, files)
-	main.CodeResult = CodeResultMain
-	got = main.runCode(context.Background(), codeCall{
-		code: "def main():\n    return [grep(pattern=\"NEEDLE\", glob=g) for g in [\"a.py\", \"b.py\"]]"})
-	if !strings.Contains(got, "a.py") || !strings.Contains(got, "b.py") {
-		t.Errorf("the main arm must return what main returned, got:\n%s", got)
-	}
-	// A program that defines no main fails loudly rather than handing back a
-	// quiet None, which is the whole argument for this arm.
-	got = main.runCode(context.Background(), codeCall{code: twoCalls})
-	if !strings.Contains(got, "'main' is not defined") {
-		t.Errorf("the main arm must fail loudly with no main defined, got:\n%s", got)
-	}
-}
-
-// Each arm's description states its own contract and shows an example obeying
-// it. An example that contradicts the paragraph above it is the loudest thing
-// in a tool description, and models copy examples.
-func TestCodeResultDescriptionsMatchTheirArm(t *testing.T) {
-	for _, tt := range []struct {
-		arm               CodeResult
-		contract, example string
-	}{
-		{CodeResultLast, "Only the program's last evaluated value", "\ncaps\n"},
-		{CodeResultAll, "Every call the program makes returns its result", "\ncaps\n"},
-		{CodeResultMain, "Define a function called main", "    return caps\n"},
-	} {
-		t.Run(tt.arm.String(), func(t *testing.T) {
-			desc := codeTool(InspectorTools(), tt.arm, CodeNSFlat, false).Description
-			if !strings.Contains(desc, tt.contract) {
-				t.Errorf("arm %s does not state its contract (%q):\n%s", tt.arm, tt.contract, desc)
-			}
-			if !strings.Contains(desc, tt.example) {
-				t.Errorf("arm %s's example does not obey it (%q):\n%s", tt.arm, tt.example, desc)
-			}
-		})
-	}
-}
-
-func TestParseCodeResultRoundTrips(t *testing.T) {
-	for _, name := range CodeResultNames {
-		arm, ok := ParseCodeResult(name)
-		if !ok {
-			t.Fatalf("ParseCodeResult(%q) was not recognized", name)
-		}
-		if got := arm.String(); got != name {
-			t.Errorf("%q parsed to an arm that renders as %q", name, got)
-		}
-	}
-	if _, ok := ParseCodeResult("every"); ok {
-		t.Error("ParseCodeResult accepted a name that is not an arm")
-	}
-}
-
-// The main arm appends main() only when the program has not called it already.
-// Told "the program is run and then main() is called", 38 of 89 programs in the
-// trial ended in main() anyway — and appending a second call ran everything
-// twice, which showed up as that arm costing more.
-func TestCodeMainArmDoesNotRunTwice(t *testing.T) {
-	c, _ := observeEnv(t, map[string]string{"a.py": "x = 1  # NEEDLE\n"})
-	c.CodeResult = CodeResultMain
-	out := &captureOut{}
-	c.Out = out
-
-	c.runCode(context.Background(), codeCall{
-		code: "def main():\n    return read(path=\"a.py\")\n\nmain()"})
-	if n := strings.Count(strings.Join(out.lines, "\n"), "Read a.py"); n != 1 {
-		t.Errorf("a program that calls main() itself read the file %d times, want 1", n)
-	}
-
-	// And a program that does not call main still gets the appended call.
-	out.lines = nil
-	got := c.runCode(context.Background(), codeCall{
-		code: "def main():\n    return read(path=\"a.py\")"})
-	if !strings.Contains(got, "NEEDLE") {
-		t.Errorf("a program that leaves main uncalled must still be run:\n%s", got)
-	}
-}
-
-// --- the tools namespace --------------------------------------------------
-
-// Each namespace arm has to differ where it claims to: in what a program can
-// call, in what the description tells the model to write, and — for the only
-// arm — in what stops working. Both directions, since a check that only looks
-// for tools.read passing would pass for an arm that changed nothing.
-func TestCodeNamespaceArms(t *testing.T) {
-	files := map[string]string{"a.py": "x = 1  # NEEDLE\n"}
-
-	for _, tc := range []struct {
-		ns                CodeNamespace
-		nsCallWorks       bool
-		bareCallWorks     bool
-		descSaysNamespace bool
-	}{
-		{CodeNSFlat, false, true, false},
-		{CodeNSBoth, true, true, true},
-		{CodeNSOnly, true, false, true},
-		{CodeNSHint, false, true, false},
-	} {
-		t.Run(tc.ns.String(), func(t *testing.T) {
-			c, _ := observeEnv(t, files)
-			c.CodeNamespace = tc.ns
-
-			nsGot := c.runCode(context.Background(), codeCall{code: `tools.read(path="a.py")`})
-			if got := strings.Contains(nsGot, "NEEDLE"); got != tc.nsCallWorks {
-				t.Errorf("tools.read worked = %v, want %v:\n%s", got, tc.nsCallWorks, nsGot)
-			}
-			bareGot := c.runCode(context.Background(), codeCall{code: `read(path="a.py")`})
-			if got := strings.Contains(bareGot, "NEEDLE"); got != tc.bareCallWorks {
-				t.Errorf("bare read worked = %v, want %v:\n%s", got, tc.bareCallWorks, bareGot)
-			}
-
-			desc := codeTool(InspectorTools(), CodeResultLast, tc.ns, false).Description
-			if got := strings.Contains(desc, "tools.read"); got != tc.descSaysNamespace {
-				t.Errorf("description names tools.read = %v, want %v", got, tc.descSaysNamespace)
-			}
-		})
-	}
-}
-
-// print(tools) is the whole of the introspection available: Monty has no dir(),
-// vars(), globals() or __dict__, all probed against the vendored wasm. If a
-// future Monty grows dir(), this is where to reconsider the design rather than
-// keep a __str__ nobody needs.
-func TestCodeNamespaceListsItself(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	c.CodeNamespace = CodeNSBoth
-
-	got := c.runCode(context.Background(), codeCall{code: "print(tools)"})
-	for _, want := range []string{"read(path", "grep(pattern", "glob(pattern", "ls(path"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("print(tools) does not list %q:\n%s", want, got)
-		}
-	}
-	if dir := c.runCode(context.Background(), codeCall{code: "dir()"}); !strings.Contains(dir, "not defined") {
-		t.Errorf("Monty now has dir(); the namespace design should be revisited:\n%s", dir)
-	}
-}
-
-// A prelude shifts every line in a traceback, and an error naming the wrong
-// line is worse than one naming none. The offset is subtracted back out.
-func TestCodeNamespaceTracebackNumbersTheModelsLines(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	c.CodeNamespace = CodeNSBoth
-
-	// The model wrote two lines; the failure is on its second.
-	got := c.runCode(context.Background(), codeCall{code: "x = 1\nboom"})
-	if !strings.Contains(got, "line 2,") {
-		t.Errorf("the traceback must number the model's own lines:\n%s", got)
-	}
-	if strings.Contains(got, "line 10,") || strings.Contains(got, "line 9,") {
-		t.Errorf("the prelude's offset leaked into the traceback:\n%s", got)
-	}
-}
-
-// The hint arm answers a reach for Python's filesystem with the tool that
-// serves it — and stays quiet on every other failure, or it is noise on the
-// common case.
-func TestCodeHintArmAnswersTheReachOnly(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	c.CodeNamespace = CodeNSHint
-
-	for _, code := range []string{"import os\nos.walk(\".\")", "open('a.py')", "import subprocess"} {
-		if got := c.runCode(context.Background(), codeCall{code: code}); !strings.Contains(got, "no filesystem of its own") {
-			t.Errorf("a reach for the filesystem got no pointer:\n%s\n%s", code, got)
-		}
-	}
-	if got := c.runCode(context.Background(), codeCall{code: "1 / 0"}); strings.Contains(got, "no filesystem of its own") {
-		t.Errorf("an unrelated failure got the filesystem pointer:\n%s", got)
-	}
-	// And the flat arm says nothing, or the arms do not differ.
-	c.CodeNamespace = CodeNSFlat
-	if got := c.runCode(context.Background(), codeCall{code: "import os\nos.walk(\".\")"}); strings.Contains(got, "no filesystem of its own") {
-		t.Errorf("the flat arm must not carry the hint:\n%s", got)
 	}
 }
