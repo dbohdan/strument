@@ -314,29 +314,21 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		mainSys = c.SystemPromptPrefix + "\n" + mainSys
 	}
 
+	// Examples ride as real messages, never folded into the system prompt.
+	// aider chooses between the two per model; Strument does not, because the
+	// choice was never wired to anything a user or a config could set, and an
+	// always-false branch is a claim about behaviour nobody can check.
 	var exampleMessages []llm.Message
-	if c.ExamplesAsSysMsg {
-		if len(c.Prompts.ExampleMessages) > 0 {
-			mainSys += "\n# Example conversations:\n\n"
-		}
-		var examples strings.Builder
-		for _, msg := range c.Prompts.ExampleMessages {
-			examples.WriteString("## " + strings.ToUpper(msg.Role) + ": " + c.fmtSystemPrompt(msg.Content) + "\n\n")
-		}
-		mainSys += examples.String()
-		mainSys = strings.TrimSpace(mainSys)
-	} else {
-		for _, msg := range c.Prompts.ExampleMessages {
-			exampleMessages = append(exampleMessages, llm.TextMessage(msg.Role, c.fmtSystemPrompt(msg.Content)))
-		}
-		if len(c.Prompts.ExampleMessages) > 0 {
-			// The bridge from illustration to the real conversation. It used to
-			// be a fabricated user turn answered by a fabricated "Ok.", which
-			// is two lies to draw one line; the harness can just say it.
-			exampleMessages = append(exampleMessages, llm.HarnessNote(
-				"The exchange above is an example, not part of this conversation. "+
-					"The files and history that follow are the real ones."))
-		}
+	for _, msg := range c.Prompts.ExampleMessages {
+		exampleMessages = append(exampleMessages, llm.TextMessage(msg.Role, c.fmtSystemPrompt(msg.Content)))
+	}
+	if len(c.Prompts.ExampleMessages) > 0 {
+		// The bridge from illustration to the real conversation. It used to
+		// be a fabricated user turn answered by a fabricated "Ok.", which
+		// is two lies to draw one line; the harness can just say it.
+		exampleMessages = append(exampleMessages, llm.HarnessNote(
+			"The exchange above is an example, not part of this conversation. "+
+				"The files and history that follow are the real ones."))
 	}
 
 	// The reminder rides in the system prompt and nowhere else.

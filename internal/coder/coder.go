@@ -47,7 +47,6 @@ type Coder struct {
 	ShellWithheld      bool
 	Stream             bool
 	PrefillSupported   bool // continuation on finish_reason=length
-	ExamplesAsSysMsg   bool
 	SystemPromptPrefix string
 	// PromptCode and PromptAsk are user replacements for the active mode's
 	// MainSystem (the `prompt_code` / `prompt_ask` config). Empty means "use the
