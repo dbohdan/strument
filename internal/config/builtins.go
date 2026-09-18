@@ -448,9 +448,21 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 		if rawURL == "" {
 			rawURL = AnySearchDefaultURL
 		}
+	case SearchExa:
+		if rawURL == "" {
+			rawURL = ExaDefaultURL
+		}
+		// Refused at load rather than at the first search. Exa has no anonymous
+		// tier, and a keyless request is not answered with a plain 401 but with
+		// an x402 payment challenge quoting a wallet address — a confusing
+		// thing to meet mid-session, and entirely avoidable here.
+		if apiKey == "" {
+			return nil, fmt.Errorf("search: %q needs api_key= — Exa has no anonymous tier. "+
+				"Use api_key=env(\"EXA_API_KEY\") to keep it out of the file", backend)
+		}
 	default:
-		return nil, fmt.Errorf("search: unknown backend %q (want %q or %q)",
-			backend, SearchSearxNG, SearchAnySearch)
+		return nil, fmt.Errorf("search: unknown backend %q (want one of %s)",
+			backend, strings.Join(SearchBackends, ", "))
 	}
 	// Checked here rather than at the first search, because a config error that
 	// waits for the model to reach for a tool is a config error nobody sees.

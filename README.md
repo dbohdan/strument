@@ -53,7 +53,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   If a page exceeds the size limit, the tool returns an outline instead.
 - Web search, if you enable it.
   Configure [`websearch`](doc/config.md#websearch) and the model gets a `websearch` tool.
-  Use your own [SearXNG](https://docs.searxng.org/) instance, with your choice of engines and no API key, or hosted [AnySearch](https://anysearch.com/), which requires no setup and works with or without a key.
+  Use your own [SearXNG](https://docs.searxng.org/) instance, with your choice of engines and no API key, or a hosted backend that needs no setup: [AnySearch](https://anysearch.com/), which works with or without a key, or [Exa](https://exa.ai/), which searches its own index and returns page text instead of snippets (key required).
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
 The terminal interface has stayed deliberately close to aider's, including the green/blue palette (with `--dark-mode` and `--light-mode`).

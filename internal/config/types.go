@@ -476,24 +476,38 @@ func validateExtraParams(where string, params map[string]any) error {
 // inherits whatever engines and policy they already chose, with no API key and
 // no third party for Strument to speak for. AnySearch is the opposite trade and
 // the reason it is worth having beside it: a hosted service, nothing to run,
-// working anonymously and better with a key.
+// working anonymously and better with a key. Exa is a third point rather than a
+// second of the same: its own index rather than a federation of other engines,
+// a key required, and results carrying the indexed page's own text instead of a
+// search-engine snippet.
 const (
 	SearchSearxNG   = "searxng"
 	SearchAnySearch = "anysearch"
+	SearchExa       = "exa"
 )
+
+// SearchBackends lists them for help text and errors, so a typo can be answered
+// with what would have worked rather than with a silent failure.
+var SearchBackends = []string{SearchSearxNG, SearchAnySearch, SearchExa}
 
 // AnySearchDefaultURL is the service's base URL. Overridable through url= so a
 // mirror, or a test server, can stand in.
 const AnySearchDefaultURL = "https://api.anysearch.com"
 
+// ExaDefaultURL is Exa's API base. Overridable through url= for the same
+// reasons as AnySearch's: a mirror, a gateway, or a test server.
+const ExaDefaultURL = "https://api.exa.ai"
+
 // WebSearch is a configured search backend, from search().
 type WebSearch struct {
-	Backend string // SearchSearxNG or SearchAnySearch
+	Backend string // one of SearchBackends
 	URL     string // the base URL, no trailing slash
-	// APIKey authenticates a hosted backend. Empty is valid — AnySearch serves
-	// anonymous requests at a lower rate limit — and SearXNG has no notion of
-	// one. Keep it out of the config file with api_key=env("..."), the way
-	// provider() does; nothing prints it, including searchValue's String.
+	// APIKey authenticates a hosted backend. Empty is valid for AnySearch,
+	// which serves anonymous requests at a lower rate limit, and meaningless
+	// for SearXNG, which has no notion of one; Exa requires it and search()
+	// refuses the backend without one. Keep it out of the config file with
+	// api_key=env("..."), the way provider() does; nothing prints it, including
+	// searchValue's String.
 	APIKey string
 	// Proxy is a socks5 URL, "direct" to opt out of a global proxy, or "" to
 	// inherit it. "direct" is the case that matters: a self-hosted instance is

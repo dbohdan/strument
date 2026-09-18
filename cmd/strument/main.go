@@ -1806,6 +1806,8 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 		switch ws.Backend {
 		case config.SearchAnySearch:
 			cdr.Search = coder.NewAnySearch(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
+		case config.SearchExa:
+			cdr.Search = coder.NewExa(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
 		default:
 			cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
 		}

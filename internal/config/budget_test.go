@@ -443,3 +443,64 @@ func TestExampleMessagesRejectsBadShapes(t *testing.T) {
 		}
 	}
 }
+
+// Exa has no anonymous tier, and a keyless request is not refused with a plain
+// 401 — the endpoint answers with an x402 payment challenge quoting a wallet
+// address. That is a baffling thing to meet mid-session for a missing setting,
+// so it is refused at load, and the refusal names the setting.
+func TestSearchExaNeedsAnAPIKey(t *testing.T) {
+	_, err := loadBudget(t, `websearch = search("exa")`)
+	if err == nil {
+		t.Fatal("a keyless exa search loaded")
+	}
+	if !strings.Contains(err.Error(), "api_key") {
+		t.Errorf("the error did not name the missing setting: %v", err)
+	}
+
+	cfg, err := loadBudget(t, `websearch = search("exa", api_key="k")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WebSearch == nil || cfg.WebSearch.Backend != SearchExa {
+		t.Fatalf("websearch = %+v", cfg.WebSearch)
+	}
+	// url= is optional for a hosted backend; the default stands in.
+	if cfg.WebSearch.URL != ExaDefaultURL {
+		t.Errorf("URL = %q, want the default %q", cfg.WebSearch.URL, ExaDefaultURL)
+	}
+}
+
+// Every backend in the list loads under its own name, and the typo message
+// offers all of them. A backend added to SearchBackends but not to the switch,
+// or the reverse, fails here rather than at a user's first search.
+func TestEverySearchBackendLoads(t *testing.T) {
+	minimal := map[string]string{
+		SearchSearxNG:   `search("searxng", url="http://localhost:8888")`,
+		SearchAnySearch: `search("anysearch")`,
+		SearchExa:       `search("exa", api_key="k")`,
+	}
+	for _, name := range SearchBackends {
+		src, ok := minimal[name]
+		if !ok {
+			t.Fatalf("backend %q is listed but this test does not know how to load it", name)
+		}
+		cfg, err := loadBudget(t, "websearch = "+src)
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if cfg.WebSearch == nil || cfg.WebSearch.Backend != name {
+			t.Errorf("%s loaded as %+v", name, cfg.WebSearch)
+		}
+	}
+
+	_, err := loadBudget(t, `websearch = search("nope")`)
+	if err == nil {
+		t.Fatal("an unknown backend loaded")
+	}
+	for _, name := range SearchBackends {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("the typo message does not offer %q: %v", name, err)
+		}
+	}
+}

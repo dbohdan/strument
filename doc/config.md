@@ -482,24 +482,51 @@ Automatically approved fetches still print their purpose and URL.
 A search backend for the `websearch` tool. Unset by default, and the tool is not
 offered at all without it.
 
-SearXNG requires an instance configured for JSON responses. AnySearch is hosted
-and works without a key at a lower rate limit, but sends queries to a third
-party.
+There are three backends. SearXNG requires an instance configured for JSON
+responses. AnySearch and Exa are hosted, so there is nothing to run, but both
+send your queries to a third party.
 
 ```python
 websearch = search("searxng", url="http://localhost:8888")   # yours to run
 websearch = search("anysearch")                              # nothing to run
 websearch = search("anysearch", api_key=env("ANYSEARCH_API_KEY"))
+websearch = search("exa", api_key=env("EXA_API_KEY"))
 ```
 
 **SearXNG** is self-hosted: you choose the instance, engines, and policy, and
 no API key is required. The instance must be configured to return JSON.
 
 **AnySearch** is hosted. `search("anysearch")` works without a key at a lower
-rate limit and works better with one. Hosted search sends queries to a third
-party.
+rate limit and works better with one.
 
-The rest of this section describes SearXNG, since AnySearch needs no setup.
+**Exa** is hosted and searches its own index rather than federating other
+engines, so a key is required — there is no anonymous tier, and `search("exa")`
+without `api_key=` is refused at load. Its results carry the opening of the
+indexed page rather than a search-engine snippet: more text than a snippet, and
+less targeted, since it is the top of the document rather than the part matching
+your query. Strument asks Exa for its `fast` search type rather than its default
+`auto`, which is not a tuning preference — see the note below.
+
+#### Why Exa is asked for `fast`
+
+Exa's default search type is `auto`. Measured over 45 developer queries on
+2026-09-18, `auto` returned a bare origin in place of the page's URL in 79 of
+450 results (18%), across 33 of the 45 queries: a title from a real deep page
+beside a URL that was only the site root. The title is not stale — fetching the
+page that `fast` returns for the identical title shows the live `<title>` is the
+same string — so the URL is the field that is wrong. `fast` did it once in 450.
+
+That matters here more than it would elsewhere, because a search result's URL is
+what the model hands to `webfetch` next. A wrong one sends it to a homepage,
+where it finds plausible text and never learns it missed. The failure is silent,
+which is the kind this harness cannot catch for you.
+
+So the search type is not configurable: `auto` is measurably wrong for this use
+and you would have no way to know. This has been reported to Exa, and the choice
+is worth revisiting when they answer.
+
+The rest of this section describes SearXNG, since neither hosted backend needs
+setup.
 
 **Your instance must have JSON turned on.** SearXNG ships `formats: [html]`, so
 a fresh instance answers `403` until an admin opts in:
@@ -991,18 +1018,21 @@ keyword-only.
 
 ### `search(backend, *, url=None, api_key=None, proxy=None)`
 
-A search backend for `websearch`. `backend` is `"searxng"` or `"anysearch"`; an
-unknown value is refused at load and names what would have worked.
+A search backend for `websearch`. `backend` is `"searxng"`, `"anysearch"`, or
+`"exa"`; an unknown value is refused at load and names what would have worked.
 
 - **`url`** — a base URL, with no path, query, or fragment. Required for
   `searxng`, since a self-hosted instance is wherever you put it; optional for
-  `anysearch`, which defaults to `https://api.anysearch.com` and takes a URL
-  only to point at a mirror.
-- **`api_key`** — `anysearch` only, and optional there: without one the service
-  answers at a lower rate limit. Keep it out of the file with
-  `api_key=env("ANYSEARCH_API_KEY")`, exactly as with `provider()`. `searxng`
-  refuses an `api_key` rather than ignoring it — your own instance has none, so
-  passing one means you meant something else.
+  `anysearch` and `exa`, which default to `https://api.anysearch.com` and
+  `https://api.exa.ai` and take a URL only to point at a mirror or gateway.
+- **`api_key`** — required for `exa`, optional for `anysearch`, refused for
+  `searxng`. Without one AnySearch answers at a lower rate limit; Exa has no
+  anonymous tier at all, and a keyless request is answered with an x402 payment
+  challenge rather than a plain authentication error, so it is refused at load
+  instead. Keep the key out of the file with `api_key=env("EXA_API_KEY")`,
+  exactly as with `provider()`. `searxng` refuses an `api_key` rather than
+  ignoring it — your own instance has none, so passing one means you meant
+  something else.
 - **`proxy`** — as on `provider()`: a `socks5://` URL, or `"direct"` to opt out
   of a global `proxy`. `"direct"` matters most for a SearXNG instance on
   localhost; a hosted backend usually wants the global proxy.
