@@ -128,15 +128,15 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 	root := undoRoot(t)
 
 	var st UndoState
-	for i := range maxUndoTurns + 5 {
+	for i := range MaxUndoTurns + 5 {
 		st.Turns = append(st.Turns, turn("f.txt", "old", string(rune('a'+i%26)), true))
 	}
 	if err := SaveUndo(root, st); err != nil {
 		t.Fatal(err)
 	}
 	got := LoadUndo(root)
-	if len(got.Turns) != maxUndoTurns {
-		t.Errorf("turns = %d, want the cap %d", len(got.Turns), maxUndoTurns)
+	if len(got.Turns) != MaxUndoTurns {
+		t.Errorf("turns = %d, want the cap %d", len(got.Turns), MaxUndoTurns)
 	}
 	// The newest survived: it is the one /undo would reach first.
 	last := got.Turns[len(got.Turns)-1].Entries[0].After

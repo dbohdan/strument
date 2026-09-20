@@ -35,7 +35,9 @@ const undoVersion = 1
 // its size, and a long session of those is how a state directory quietly becomes
 // a gigabyte of somebody's source.
 const (
-	maxUndoTurns = 20
+	// MaxUndoTurns is exported so the coder can bound its in-memory stack to the
+	// same depth; main.go wires the two together.
+	MaxUndoTurns = 20
 	maxUndoBytes = 8 << 20 // 8 MiB of before/after contents, oldest evicted first
 )
 
@@ -152,8 +154,8 @@ func SaveUndo(projectRoot string, s UndoState) error {
 // one the user is about to undo, and refusing to record it would trade a bounded
 // disk cost for unbounded surprise.
 func trimUndoTurns(turns []UndoTurn) []UndoTurn {
-	if len(turns) > maxUndoTurns {
-		turns = turns[len(turns)-maxUndoTurns:]
+	if len(turns) > MaxUndoTurns {
+		turns = turns[len(turns)-MaxUndoTurns:]
 	}
 	total := 0
 	for _, t := range turns {

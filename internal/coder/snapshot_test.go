@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -455,5 +456,103 @@ func TestNoteUndoTellsTheModel(t *testing.T) {
 	c.NoteUndo(nil)
 	if len(c.doneMessages) != before+1 {
 		t.Errorf("an empty undo added %d messages", len(c.doneMessages)-before-1)
+	}
+}
+
+// The in-memory undo stack used to grow for the life of the session, holding
+// every turn's before and after contents while the writer discarded all but the
+// newest twenty on every save. These pin the bound, and pin that the evicted
+// turns are actually released rather than merely hidden behind a shorter len.
+
+func TestUndoStackIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+
+	const turns = 120
+	for i := range turns {
+		applyBatch(t, c, plannedEdit{
+			callID: strconv.Itoa(i), path: "a.txt",
+			search: "", replace: "version " + strconv.Itoa(i) + "\n",
+		})
+		c.pushTurnSnapshot()
+	}
+
+	if got := len(c.undoStack); got != defaultUndoDepth {
+		t.Errorf("stack holds %d turns after %d, want it bounded at %d", got, turns, defaultUndoDepth)
+	}
+}
+
+// Bounding the stack must not cost the thing the stack is for.
+func TestUndoStillWorksAfterTheStackIsTrimmed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("start\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+
+	for i := range defaultUndoDepth + 5 {
+		prev := "start\n"
+		if i > 0 {
+			prev = "v" + strconv.Itoa(i-1) + "\n"
+		}
+		applyBatch(t, c, plannedEdit{
+			callID: strconv.Itoa(i), path: "a.txt",
+			search: strings.TrimSuffix(prev, "\n"), replace: "v" + strconv.Itoa(i),
+		})
+		c.pushTurnSnapshot()
+	}
+
+	last := defaultUndoDepth + 4
+	if _, err := c.UndoLastTurn(); err != nil {
+		t.Fatalf("undo after trimming: %v", err)
+	}
+	want := "v" + strconv.Itoa(last-1) + "\n"
+	if got := read(t, dir, "a.txt"); got != want {
+		t.Errorf("undo left %q, want %q — the newest turn must stay reachable", got, want)
+	}
+}
+
+// A stack loaded from a file written by a build with a deeper retention must
+// not put this session back above its own bound.
+func TestSetUndoStackTrimsWhatItLoads(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+
+	stack := make([][]TurnEdit, 0, defaultUndoDepth*2)
+	for i := range defaultUndoDepth * 2 {
+		stack = append(stack, []TurnEdit{{
+			Path: "a.txt", Before: []byte("b"), After: []byte(strconv.Itoa(i)), Existed: true, Mode: 0o644,
+		}})
+	}
+	c.SetUndoStack(stack)
+
+	if got := len(c.undoStack); got != defaultUndoDepth {
+		t.Errorf("loaded stack holds %d turns, want %d", got, defaultUndoDepth)
+	}
+	// The newest must be the one kept, not the oldest.
+	newest := c.undoStack[len(c.undoStack)-1]
+	if got := string(newest.entries["a.txt"].after); got != strconv.Itoa(defaultUndoDepth*2-1) {
+		t.Errorf("kept turn has after = %q, want the newest", got)
+	}
+}
+
+// /squash gates on IsSessionCommit, and the session's commit set is not
+// bounded, so a long session can ask to squash further back than the stack
+// retains. That used to merge nothing at all, leaving /undo to unwind one turn
+// of a range covering many.
+func TestSquashMergesWhatIsRetained(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+
+	for i := range 3 {
+		applyBatch(t, c, plannedEdit{
+			callID: strconv.Itoa(i), path: "a.txt", search: "", replace: "v" + strconv.Itoa(i) + "\n",
+		})
+		c.pushTurnSnapshot()
+	}
+
+	c.SquashTurns("abc1234", 50) // far past what is there
+
+	if got := len(c.undoStack); got != 1 {
+		t.Errorf("stack holds %d turns after squashing past its depth, want 1 merged turn", got)
 	}
 }

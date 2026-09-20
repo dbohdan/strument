@@ -319,6 +319,12 @@ func (c *chatCmd) Run() error {
 			})
 		}
 
+		// One retention depth, chosen by the side that stores the bytes. The
+		// coder bounds its live stack to the same number so /undo reaches as
+		// far in this session as it will after a restart, and so the stack
+		// stops growing for the life of the session.
+		cdr.MaxUndoTurns = history.MaxUndoTurns
+
 		// The undo record, which is the only one there is without git. A write
 		// failure is worth a word here, unlike the ledger above: the user would
 		// otherwise believe a turn is undoable tomorrow when it is not.

@@ -93,6 +93,12 @@ type Coder struct {
 	// reflection is the model recovering from its own mistake and should
 	// stay rare. Configurable; the default (3) is set by New.
 	MaxErrorReflections int
+	// MaxUndoTurns is how many turns the in-memory undo stack keeps. Zero takes
+	// defaultUndoDepth. It is set from the state writer's own retention, so the
+	// two cannot drift into disagreeing about how far /undo reaches — the coder
+	// still learns nothing about where state lives, which is the property the
+	// SaveUndo callback exists to preserve.
+	MaxUndoTurns int
 	// WebfetchAllow are origins (host:port) the webfetch tool may fetch without
 	// asking. From `webfetch_allow`; see fetchAllowed for what it does and does
 	// not promise.
@@ -380,6 +386,11 @@ func promptsForFormat(format string) prompts.Set {
 const (
 	defaultMaxSteps            = 25
 	defaultMaxErrorReflections = 3
+	// defaultUndoDepth matches what the state writer retains, so /undo reaches
+	// the same distance back in a live session as it does after a restart. The
+	// number is the writer's to choose — main.go sets MaxUndoTurns from it —
+	// and this is the fallback for a Coder built without one.
+	defaultUndoDepth = 20
 )
 
 func (c *Coder) setPrompts() {

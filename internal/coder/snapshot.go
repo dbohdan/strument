@@ -99,7 +99,58 @@ func (c *Coder) pushTurnSnapshot() {
 	}
 	c.undoStack = append(c.undoStack, c.turnSnap)
 	c.turnSnap = nil
+	c.trimUndoStack()
 	c.saveUndo()
+}
+
+// trimUndoStack drops the oldest turns beyond the retention depth.
+//
+// The reasoning is the one history's own retention comment already gives for
+// the persisted copy: "the stack is bounded from the bottom because only the
+// top is reachable: /undo pops, so a turn buried under twenty others is not
+// something anyone is about to restore, while its bytes are as heavy as the top
+// one's." That was worked out for disk and never carried across, so the
+// in-memory stack grew for the life of the session — holding every turn's
+// before *and* after contents for every file it touched, while the writer
+// discarded all but the newest twenty on every save.
+//
+// Two costs, and the second is the quiet one. Memory grew without bound. And
+// UndoStack() walks the whole stack on every turn to build the slice the writer
+// then trims, so the per-turn work grew with the session: linear each turn,
+// quadratic across one. Neither is visible in a session short enough to fit a
+// person's patience, which is why it survived this long.
+//
+// The evicted slots are nil'd rather than left in the backing array, so the
+// snapshots are released when the trim happens rather than whenever the next
+// append outgrows the array and copies only the live elements forward.
+//
+// That difference is deliberate but small, and it is untested: reslicing alone
+// is also eventually bounded, by exactly that reallocation, so the two are
+// indistinguishable to anything a test can observe here. Two attempts at a
+// guard — inspecting the slots past the length, then a weak reference to an
+// evicted turn — both passed against the implementation they were written to
+// reject. The bound itself is covered; this line rests on the argument above.
+func (c *Coder) trimUndoStack() {
+	depth := c.undoDepth()
+	n := len(c.undoStack)
+	if n <= depth {
+		return
+	}
+	copy(c.undoStack, c.undoStack[n-depth:])
+	for i := depth; i < n; i++ {
+		c.undoStack[i] = nil
+	}
+	c.undoStack = c.undoStack[:depth]
+}
+
+// undoDepth is how many turns the in-memory stack keeps. Zero means the
+// default, so a Coder built literally — as tests do — is bounded too. An
+// unbounded default is the bug this exists to fix.
+func (c *Coder) undoDepth() int {
+	if c.MaxUndoTurns > 0 {
+		return c.MaxUndoTurns
+	}
+	return defaultUndoDepth
 }
 
 // HasTurnSnapshot reports whether there is a turn to undo.
@@ -157,6 +208,10 @@ func (c *Coder) SetUndoStack(stack [][]TurnEdit) {
 			c.undoStack = append(c.undoStack, snap)
 		}
 	}
+	// A stack loaded from disk is already within the writer's retention, but
+	// this session's depth is what governs from here — and a file written by a
+	// build with a larger depth must not put the session back above its own.
+	c.trimUndoStack()
 }
 
 // SessionCommits exports the auto-commit hashes /undo gates on, and
@@ -218,9 +273,22 @@ func (c *Coder) SquashTurns(hash string, n int) {
 	// in memory would be un-undoable after a restart.
 	defer c.saveUndo()
 
-	if n < 2 || len(c.undoStack) < n {
+	if n < 2 || len(c.undoStack) == 0 {
 		return
 	}
+	// Merge what is retained rather than nothing when the range reaches past
+	// the stack's depth. /squash gates on IsSessionCommit, and the session's
+	// commit set is not bounded, so a long session can legitimately squash
+	// further back than twenty turns — and the old `len < n` guard answered
+	// that by merging nothing at all, leaving /undo to unwind one turn of a
+	// range covering many. Folding the turns that are still here is partial,
+	// but it is the closest to the range the squash actually covers, and it is
+	// what an /undo of that squash should reach.
+	//
+	// Reachable before this by restarting, since the writer has always trimmed
+	// to its retention; bounding the in-memory stack is what makes it reachable
+	// without one.
+	n = min(n, len(c.undoStack))
 	head := len(c.undoStack) - n
 	merged := newTurnSnapshot()
 	for _, snap := range c.undoStack[head:] {
