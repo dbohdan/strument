@@ -1,9 +1,13 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"io"
 	"sync"
 	"time"
+
+	"dbohdan.com/strument/internal/llm"
 )
 
 // defaultStreamIdleTimeout bounds how long a started stream may go silent.
@@ -87,4 +91,32 @@ func (ir *idleReader) Close() error {
 	ir.timer.Stop()
 	ir.mu.Unlock()
 	return ir.r.Close()
+}
+
+// contextError turns a cancelled or expired request context into a typed
+// StreamError.
+//
+// It used to be yielded bare, and that is the defect behind a side call that
+// died in a way nobody could read. Two things went wrong at once. The text was
+// Go's — a user waiting for session notes was told "context deadline
+// exceeded", which names an implementation detail and no remedy. And because a
+// bare context error is not a *llm.StreamError, errors.As failed on it in
+// retryBackoff.retry, so the call took the non-retryable branch by accident
+// rather than by decision.
+//
+// Non-retryable is nonetheless the right answer here, which is why this is a
+// classification and not a repair: the context carries the whole call's budget,
+// so once it is gone there is nothing left to retry into. What changes is that
+// the decision is now made on purpose and says so. ErrRequest is the class for
+// "this request will not work as asked", which is exactly the case.
+//
+// The original error is wrapped rather than replaced, so errors.Is still
+// reaches context.DeadlineExceeded and context.Canceled for a caller that
+// distinguishes them.
+func contextError(err error) error {
+	message := "the request was cancelled"
+	if errors.Is(err, context.DeadlineExceeded) {
+		message = "the request ran out of time"
+	}
+	return &llm.StreamError{Class: llm.ErrRequest, Message: message, Err: err}
 }

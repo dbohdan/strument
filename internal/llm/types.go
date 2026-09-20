@@ -360,7 +360,16 @@ const (
 type StreamError struct {
 	Class   ErrorClass
 	Message string
+	// Err is the underlying cause, when there is one worth keeping. It exists
+	// so a classified error stays reachable by errors.Is: a request killed by
+	// its own deadline is reported in the user's terms and is still
+	// context.DeadlineExceeded to anything that asks.
+	Err error
 }
+
+// Unwrap exposes Err, so errors.Is and errors.As see through the
+// classification to whatever caused it.
+func (e *StreamError) Unwrap() error { return e.Err }
 
 func (e *StreamError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Class, e.Message)

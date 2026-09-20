@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+
+	"dbohdan.com/strument/internal/config"
 )
 
 // stallingServer sends headers and a first chunk, then holds the connection
@@ -121,4 +122,79 @@ func flush(t *testing.T, w http.ResponseWriter) {
 		t.Fatal("the test server's ResponseWriter cannot flush")
 	}
 	f.Flush()
+}
+
+// A request killed by its own deadline has to arrive as something the retry
+// path can classify and a person can read. Bare, it was neither: errors.As
+// failed on it, so retryBackoff took its non-retryable branch by accident, and
+// the user was shown Go's "context deadline exceeded".
+func TestContextErrorIsTypedAndStillTheSentinel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"deadline", context.DeadlineExceeded, "ran out of time"},
+		{"cancel", context.Canceled, "cancelled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := contextError(tc.err)
+
+			var se *llm.StreamError
+			if !errors.As(got, &se) {
+				t.Fatalf("%v is not a StreamError, so the retry path cannot classify it", got)
+			}
+			if se.Retryable() {
+				t.Error("a spent budget was marked retryable; there is nothing left to retry into")
+			}
+			if !strings.Contains(se.Message, tc.want) {
+				t.Errorf("message = %q, want it to say %q in the user's terms", se.Message, tc.want)
+			}
+			if strings.Contains(se.Message, "context") {
+				t.Errorf("message = %q still names Go's plumbing", se.Message)
+			}
+			// The classification must not hide the cause from callers.
+			if !errors.Is(got, tc.err) {
+				t.Errorf("%v is no longer errors.Is %v", got, tc.err)
+			}
+		})
+	}
+}
+
+// The classifier has to be wired in, not merely defined. This drives a real
+// Send against a server that never answers and lets the context expire, which
+// is the shape of the failure a side call hits when its budget runs out.
+func TestSendReportsAnExpiredContextReadably(t *testing.T) {
+	// Bounded rather than blocking on r.Context().Done(): httptest's Close
+	// waits for outstanding handlers, and a handler that only returns when the
+	// client disconnects deadlocks the test rather than the product.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		time.Sleep(2 * time.Second) // far longer than the context below
+	}))
+	defer srv.Close()
+
+	c := &Client{Provider: config.Provider{BaseURL: srv.URL, APIKey: "k"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	var got error
+	for _, err := range c.Send(ctx, llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage("user", "hi")}}) {
+		if err != nil {
+			got = err
+		}
+	}
+
+	if got == nil {
+		t.Fatal("an expired request reported no error")
+	}
+	var se *llm.StreamError
+	if !errors.As(got, &se) {
+		t.Fatalf("error %v is not a StreamError, so retryBackoff cannot classify it", got)
+	}
+	if strings.Contains(got.Error(), "context deadline exceeded") {
+		t.Errorf("the user is still shown Go's phrasing: %v", got)
+	}
+	if !errors.Is(got, context.DeadlineExceeded) {
+		t.Errorf("%v no longer identifies as a deadline to callers that check", got)
+	}
 }

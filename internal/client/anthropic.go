@@ -381,7 +381,7 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		resp, err := httpClient.Do(httpReq)
 		if err != nil {
 			if ctx.Err() != nil {
-				yield(llm.StreamEvent{}, ctx.Err())
+				yield(llm.StreamEvent{}, contextError(ctx.Err()))
 				return
 			}
 			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrNetwork, Message: err.Error()})
@@ -415,7 +415,7 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 			return
 		}
 		if !stalled() && ctx.Err() != nil {
-			yield(llm.StreamEvent{}, ctx.Err())
+			yield(llm.StreamEvent{}, contextError(ctx.Err()))
 		}
 	}
 }
