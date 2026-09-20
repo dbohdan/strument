@@ -131,6 +131,18 @@ func describe(dir string) (turns int, last time.Time, bytes int64) {
 		if err != nil {
 			continue
 		}
+		if e.IsDir() {
+			// A directory's own inode size says nothing about what is under
+			// it, and a blob store is the largest thing in here. Reporting
+			// that number would make `strument project list` quietly wrong
+			// about exactly the artifact worth knowing the size of.
+			subBytes, subLast := subtree(filepath.Join(dir, e.Name()))
+			bytes += subBytes
+			if subLast.After(last) {
+				last = subLast
+			}
+			continue
+		}
 		bytes += info.Size()
 		if info.ModTime().After(last) {
 			last = info.ModTime()
@@ -144,6 +156,36 @@ func describe(dir string) (turns int, last time.Time, bytes int64) {
 		}
 	}
 	return turns, last, bytes
+}
+
+// subtree sums a directory artifact's size and newest modification time.
+// Errors are swallowed the way describe's are: this feeds a listing, and a
+// directory that cannot be read is better reported as nothing than as a
+// failure to list the project at all.
+func subtree(dir string) (bytes int64, last time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, time.Time{}
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			subBytes, subLast := subtree(filepath.Join(dir, e.Name()))
+			bytes += subBytes
+			if subLast.After(last) {
+				last = subLast
+			}
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		bytes += info.Size()
+		if info.ModTime().After(last) {
+			last = info.ModTime()
+		}
+	}
+	return bytes, last
 }
 
 // FindOrphan returns the single orphan matching the witness, or nil.
@@ -300,10 +342,58 @@ func mergeArtifact(p mergePolicy, src, dst string) error {
 		return mergeJSONL(src, dst)
 	case keepNewest:
 		return keepNewestFile(src, dst)
+	case mergeUnion:
+		return unionDir(src, dst)
 	case skipTransient, rewritten:
 		return nil
 	}
 	return fmt.Errorf("unhandled merge policy %d for %s", p, filepath.Base(dst))
+}
+
+// unionDir copies the entries of src that dst does not already have.
+//
+// Keeping the destination's copy on a name collision rather than overwriting
+// is safe only because of what mergeUnion is declared for: names that carry
+// their own identity, where one name is one payload. A blob's name is the hash
+// of its contents, and a log segment's is the instant it was opened. Under
+// that rule the two copies are the same bytes and the choice does not matter;
+// without it, this would silently drop the source's version, which is why the
+// policy says what it is for and unionDir does not take it on faith.
+//
+// Nested directories recurse, so a tree of sessions unions session by session.
+func unionDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, dirMode); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		from, to := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			if err := unionDir(from, to); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := os.Stat(to); err == nil {
+			continue // the destination already has this name, so it has this thing
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		data, err := os.ReadFile(from)
+		if err != nil {
+			return err
+		}
+		if err := writeArtifact(to, data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // appendFile puts the source's contents before the destination's.

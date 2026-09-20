@@ -261,3 +261,81 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+// A directory artifact unions rather than being read as a file. The names
+// inside carry their own identity — a blob's is the hash of its contents — so
+// two entries with one name are the same thing and keeping either is correct.
+func TestAdoptUnionsADirectoryArtifact(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	dst := t.TempDir()
+	dstDir, err := EnsureProjectDir(dst, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := t.TempDir()
+	srcDir, err := EnsureProjectDir(src, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blobs := artifacts[artBlobs].name
+	write := func(dir, name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, blobs, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(srcDir, "only-in-source", "a")
+	write(srcDir, "in-both", "same")
+	write(dstDir, "in-both", "same")
+	write(dstDir, "only-in-dest", "b")
+	// A nested directory has to recurse, since sessions are a tree.
+	if err := os.MkdirAll(filepath.Join(srcDir, blobs, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(srcDir, filepath.Join("nested", "deep"), "c")
+
+	if err := Adopt(dst, srcDir, ""); err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+
+	for _, want := range []string{"only-in-source", "in-both", "only-in-dest", "nested/deep"} {
+		if _, err := os.Stat(filepath.Join(dstDir, blobs, filepath.FromSlash(want))); err != nil {
+			t.Errorf("%s did not survive the union: %v", want, err)
+		}
+	}
+}
+
+// The failure this exists to prevent: adopting used to read every artifact
+// with os.ReadFile, and a directory returns EISDIR — which is not
+// os.ErrNotExist, so the missing-source escape hatch does not fire. Adopt
+// returns on the first error while iterating the table in map order, so the
+// damage is an arbitrary subset of the other artifacts already rewritten.
+func TestAdoptDoesNotAbortOnADirectoryArtifact(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	dst := t.TempDir()
+	dstDir, err := EnsureProjectDir(dst, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := t.TempDir()
+	srcDir, err := EnsureProjectDir(src, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Give every file artifact something to merge, so an abort is visible as a
+	// missing merge rather than as nothing having happened at all.
+	if err := os.WriteFile(filepath.Join(srcDir, artifacts[artInput].name), []byte("typed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Adopt(dst, srcDir, ""); err != nil {
+		t.Fatalf("adopt aborted on a directory artifact: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dstDir, artifacts[artInput].name))
+	if err != nil || !strings.Contains(string(got), "typed") {
+		t.Errorf("the file artifacts did not merge (%v); the loop aborted partway", err)
+	}
+}

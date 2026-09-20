@@ -84,6 +84,11 @@ func TestProjectDirHoldsOnlyRegisteredArtifacts(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, e := range entries {
+		if id, ok := known[e.Name()]; ok && artifacts[id].dir != e.IsDir() {
+			kind := map[bool]string{true: "a directory", false: "a file"}
+			t.Errorf("%q is %s on disk but registered as %s; adopt would apply the wrong policy",
+				e.Name(), kind[e.IsDir()], kind[artifacts[id].dir])
+		}
 		if _, ok := known[e.Name()]; !ok {
 			t.Errorf("%q is in a project's state directory but not in artifact.go's table, "+
 				"so `strument project adopt` would drop it — register it with a merge policy",
@@ -99,6 +104,24 @@ func TestProjectDirHoldsOnlyRegisteredArtifacts(t *testing.T) {
 		if !seen[name] {
 			t.Errorf("%q is registered but no writer in this package produced it; "+
 				"either populateProjectDir is out of date or the entry is dead", name)
+		}
+	}
+}
+
+// A directory artifact must carry mergeUnion. Every other policy begins with
+// os.ReadFile, which returns EISDIR on a directory — and EISDIR is not
+// os.ErrNotExist, so adopt.go's missing-source escape hatches do not fire.
+// Adopt iterates the table in map order and returns on the first error, so the
+// result would be a merge that aborted after rewriting an arbitrary,
+// irreproducible subset of the other artifacts.
+func TestDirectoryArtifactsMergeByUnion(t *testing.T) {
+	for id, a := range artifacts {
+		if a.dir && a.policy != mergeUnion {
+			t.Errorf("artifact %q (%s) is a directory but does not use mergeUnion; "+
+				"every other policy reads it as a file and fails with EISDIR", id, a.name)
+		}
+		if !a.dir && a.policy == mergeUnion {
+			t.Errorf("artifact %q (%s) uses mergeUnion but is not a directory", id, a.name)
 		}
 	}
 }

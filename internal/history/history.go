@@ -141,6 +141,18 @@ func EnsureProjectDir(projectRoot, gitRootCommit string) (string, error) {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return "", err
 	}
+	// Directory artifacts are created with the project directory rather than
+	// lazily by their first writer, so that the registry's guard test has
+	// something to check and `strument project adopt` has something to union
+	// from the day the entry exists.
+	for _, a := range artifacts {
+		if !a.dir {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Join(dir, a.name), dirMode); err != nil {
+			return "", err
+		}
+	}
 	abs, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return "", err

@@ -18,7 +18,17 @@ import (
 // The remaining hole is a caller that joins onto ProjectDir's result by hand
 // from another package. ProjectDir's doc says not to; review is what catches it.
 type artifact struct {
-	name   string
+	name string
+	// dir marks an artifact that is a directory rather than a file.
+	//
+	// Every policy but mergeUnion starts with os.ReadFile, which on a
+	// directory returns EISDIR — not os.ErrNotExist, so the missing-source
+	// escape hatches in adopt.go do not fire and a merge aborts partway
+	// through a map-ordered loop, having already rewritten an arbitrary
+	// subset. A directory artifact must therefore carry mergeUnion, which
+	// mergeArtifact checks rather than trusting the table to be written
+	// carefully.
+	dir    bool
 	policy mergePolicy
 	// why documents the policy for a reader of `strument project adopt`'s
 	// plan, which prints it. A policy nobody can see the reason for is one
@@ -46,6 +56,12 @@ const (
 	// rewritten is handled by the adopt itself, not by the merge — the
 	// identity record is the thing being repaired.
 	rewritten
+	// mergeUnion copies the source directory's entries that the destination
+	// does not already have. Only for a directory whose entry names carry
+	// their own identity, so that two entries with one name are the same
+	// thing rather than a collision: content-addressed blobs, and log
+	// segments named by the instant they were opened.
+	mergeUnion
 )
 
 // Artifact ids. Callers name these rather than the file names.
@@ -58,6 +74,7 @@ const (
 	artRoot       = "root"
 	artLock       = "lock"
 	artDismissed  = "dismissed"
+	artBlobs      = "blobs"
 )
 
 // artifacts is every file Strument writes into a project's state directory.
@@ -96,6 +113,10 @@ var artifacts = map[string]artifact{
 	artDismissed: {
 		name: "dismissed", policy: mergeAppend,
 		why: "orphans you said not to offer; both sides' answers stay true after a merge",
+	},
+	artBlobs: {
+		name: "blobs", dir: true, policy: mergeUnion,
+		why: "content-addressed, so one name is one payload and a union cannot conflict",
 	},
 }
 
