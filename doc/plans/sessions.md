@@ -115,6 +115,23 @@ conversation rather than machine payload.
 blob, keep the summary line already written beside it. Hermes is the only
 panel member with time-based expiry, and it is the outlier.
 
+**SHA-256, recorded once per segment rather than per file.** The tree has
+de facto standardized on it: `trust.go` sets `DefaultTrustHash =
+multihash.SHA2_256`, and `history.go` and `anchors.go` both use it. BLAKE3 is
+already in the module graph and measurably faster — 24µs against 177µs on a
+64 KiB input here — but `maxToolOutputBytes` is 60,000, so the largest blob
+this can produce saves 153µs against turns that run for seconds. `sha256sum`
+also verifies a blob with coreutils, which matters for an artifact whose job
+includes being handed to someone else.
+
+The algorithm is not baked into the filename. Blobs are named with bare hex,
+and the `session` record's header — which already carries `version` — names
+the algorithm its segment's hashes were made with. That is `trust.go`'s
+property without its format: *"a future default-hash migration invalidates
+nothing"*. A store-level marker file would be worse, since it would sit inside
+a mergeUnion directory and two stores with different algorithms would collide
+on one name with different contents.
+
 **Content hashes, not tool call ids, name blobs.** The deciding case is the
 accidental secret: under hash addressing, removing a `.env` that was read three
 times is one `rm` and every reference converges on it; under id addressing you
