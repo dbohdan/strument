@@ -213,8 +213,15 @@ const commitMessageTimeout = sideTimeout
 // commitInputCutNote marks a truncated diff, so the model reads it as cut
 // rather than as a change that ends there — the same reason clipForSummary and
 // maxToolOutputBytes announce their cuts.
-const commitInputCutNote = "\n… (diff cut to fit the side model's context; " +
-	"describe what is shown and do not guess at the rest)"
+//
+// Phrased for its reader, which is the model writing the message. It first said
+// the diff was "cut to fit the side model's context", which got the audience
+// wrong twice over: "side model" is this codebase's name for a role, not
+// something the model on the other end knows it occupies, and why the cut
+// happened is not something it can act on. What it can act on is the scope of
+// what it was given.
+const commitInputCutNote = "\n… (cut; the rest of the diff is not part of this input — " +
+	"describe only the changes shown)"
 
 // commitCharsPerToken converts a token bound into a character budget.
 //
