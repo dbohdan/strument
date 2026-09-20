@@ -247,8 +247,15 @@ func TestContextExhaustedEmptyAddsDiagnostic(t *testing.T) {
 	// error about itself.
 	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Role != llm.RoleSystem ||
-		!strings.Contains(hist[1].Text(), "cut off") {
+		!strings.Contains(hist[1].Text(), "No reply came back") {
 		t.Errorf("history = %s", dumpHistory(hist))
+	}
+	// And it must not describe a truncated reply, which is what it used to say
+	// — in contradiction of the comment above, which had the reason right. A
+	// reply that was "cut off" invites the model to carry on from where it
+	// stopped, and on this path there is nothing to carry on from.
+	if strings.Contains(hist[1].Text(), "cut off") {
+		t.Errorf("the note claims a reply was truncated when none arrived: %s", hist[1].Text())
 	}
 }
 

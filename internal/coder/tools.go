@@ -686,8 +686,13 @@ func (c *Coder) malformedArgs(tc llm.ToolCall) string {
 		return ""
 	}
 	if c.hitOutputLimit {
-		return fmt.Sprintf("The %s call was cut off partway through its arguments: the reply reached the "+
-			"model's output limit. Nothing ran. Make the call smaller — for a file, write it in several "+
+		// Second person, because this is a tool result and its reader is the
+		// model that produced the truncated call. It used to say "the model's
+		// output limit" while giving that same model three instructions in the
+		// next sentence. The identical phrase is right in send.go's warnings,
+		// which are addressed to the user about the model.
+		return fmt.Sprintf("The %s call was cut off partway through its arguments: your reply reached the "+
+			"output limit. Nothing ran. Make the call smaller — for a file, write it in several "+
 			"edits rather than one — rather than sending the same call again.", tc.Name)
 	}
 	return fmt.Sprintf("The arguments to %s were not valid JSON, so nothing ran.", tc.Name)

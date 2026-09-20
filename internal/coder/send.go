@@ -411,8 +411,14 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		// below is for; whose voice carries it is a separate question, and the
 		// harness's own is the honest one.
 		if n := len(c.curMessages); n > 0 && c.curMessages[n-1].Role == "user" {
+			// "No reply came back" rather than "the reply was cut off", which
+			// described something that did not happen: on this path the
+			// request exceeded the limit and was refused, so there was never a
+			// reply to truncate. The distinction matters to the model reading
+			// it — a truncated reply invites continuing, and there is nothing
+			// here to continue from.
 			c.curMessages = append(c.curMessages,
-				llm.TextMessage(llm.RoleSystem, "The reply was cut off: the request exceeded the context limit."))
+				llm.TextMessage(llm.RoleSystem, "No reply came back: the request exceeded the context limit."))
 		}
 		c.showExhaustedError()
 		return OutcomeContextExhausted, ""
