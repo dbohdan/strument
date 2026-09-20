@@ -2,8 +2,8 @@ package coder
 
 import (
 	"context"
+	"errors"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -29,7 +29,8 @@ import (
 // gracefully where a verbatim history does not, and they assert nothing about
 // who said what.
 
-const notesTimeout = 60 * time.Second
+// notesTimeout is sideTimeout; the name stays for the doc comment above it.
+const notesTimeout = sideTimeout
 
 // maxNotesInput caps the transcript slice fed to the side model. The transcript
 // grows without bound, and the recent end is what a resumed session needs — the
@@ -43,20 +44,23 @@ const maxNotesInput = 24_000
 // hook so the side request reaches the turn's accounting instead of being spent
 // invisibly. It shares the side-call retry (side.go).
 //
-// It returns "" on any failure. Notes are a convenience; a session that cannot
-// write them must still be a session.
-func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage), out Output, clock Clock) func(transcript string) string {
-	return func(transcript string) string {
+// It returns "" on any failure, with the reason beside it. Notes are a
+// convenience; a session that cannot write them must still be a session. The
+// error is carried out rather than dropped so a caller can say *why* there are
+// none — "the model returned no notes" is a lie when the truth is that the call
+// ran out of its own time budget.
+func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage), out Output, clock Clock) func(transcript string) (string, error) {
+	return func(transcript string) (string, error) {
 		transcript = strings.TrimSpace(transcript)
 		if transcript == "" {
-			return ""
+			return "", errors.New("the transcript is empty")
 		}
 		transcript = sampleTranscript(transcript)
 
 		ctx, cancel := context.WithTimeout(context.Background(), notesTimeout)
 		defer cancel()
 
-		answer, _ := sendSide(ctx, cl, llm.Request{
+		answer, err := sendSide(ctx, cl, llm.Request{
 			Model: model.Slug,
 			Messages: []llm.Message{
 				llm.TextMessage(llm.RoleSystem, prompts.SessionNotes),
@@ -67,8 +71,12 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 			// paid for and invisible.
 			Temperature: model.Temperature,
 			ExtraParams: model.RequestExtraParams(),
-		}, out, clock, record)
-		return strings.TrimSpace(answer) // "" after exhausted retries => notes are skipped
+		}, "the session notes", out, clock, record)
+		notes := strings.TrimSpace(answer)
+		if notes == "" && err == nil {
+			err = errors.New("the model returned no notes")
+		}
+		return notes, err
 	}
 }
 

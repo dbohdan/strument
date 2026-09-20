@@ -350,8 +350,14 @@ func (c *chatCmd) Run() error {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
 			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
-			notes := write(transcript)
+			notes, err := write(transcript)
 			cdr.FlushSideUsage()
+			if err != nil {
+				// Said, not swallowed. This path used to test `notes != ""` with
+				// no else, so a session resumed with --continue simply started
+				// without notes and without a word about why.
+				noticef("could not generate session notes: %v", err)
+			}
 			if notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
@@ -875,8 +881,11 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if transcript == "" {
 				return errors.New("transcript is empty")
 			}
-			notes := write(transcript)
+			notes, err := write(transcript)
 			cdr.FlushSideUsage()
+			if err != nil {
+				return err
+			}
 			if notes == "" {
 				return errors.New("the model returned no notes")
 			}

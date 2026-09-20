@@ -31,8 +31,11 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 	if len(clock.slept) != 1 {
 		t.Errorf("expected exactly one backoff sleep, got %v", clock.slept)
 	}
-	if !strings.Contains(strings.Join(out.lines, "\n"), "Retrying in") {
-		t.Error("the retry was not reported to the user")
+	// Reported, and named. A countdown during a wait for your own prompt says
+	// nothing about which side call is retrying unless it says so.
+	said := strings.Join(out.lines, "\n")
+	if !strings.Contains(said, "Retrying the commit message in") {
+		t.Errorf("the retry was not reported as the commit message's:\n%s", said)
 	}
 }
 
@@ -53,7 +56,11 @@ func TestNotesWriterRetriesTransientError(t *testing.T) {
 	clock := &fastClock{}
 	write := NotesWriter(stub, &config.Model{Slug: "side"}, nil, &summaryOutput{}, clock)
 
-	if got := write("## a turn"); got != "42" {
+	got, err := write("## a turn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "42" {
 		t.Errorf("notes = %q, want 42 after one retry", got)
 	}
 	if len(clock.slept) != 1 {
@@ -95,7 +102,7 @@ func TestSendSideStopsAtTheCap(t *testing.T) {
 	out := &summaryOutput{}
 	start := time.Now()
 
-	ans, err := sendSide(context.Background(), summaryErrStub{}, llm.Request{}, out, clock, nil)
+	ans, err := sendSide(context.Background(), summaryErrStub{}, llm.Request{}, "a side call", out, clock, nil)
 
 	if err == nil || ans != "" {
 		t.Errorf("expected failure, got %q / %v", ans, err)
@@ -147,7 +154,7 @@ func TestSendSideRetriesAnEmptyResponse(t *testing.T) {
 	clock := &fastClock{}
 	out := &summaryOutput{}
 
-	got, err := sendSide(context.Background(), stub, llm.Request{}, out, clock, nil)
+	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil)
 
 	if err != nil || got != "fix(poll): raise the interval" {
 		t.Errorf("got %q / %v, want the answer from the second attempt", got, err)
@@ -155,8 +162,9 @@ func TestSendSideRetriesAnEmptyResponse(t *testing.T) {
 	if stub.calls != 2 {
 		t.Errorf("%d requests went out, want 2 — the blank one was not retried", stub.calls)
 	}
-	if !strings.Contains(strings.Join(out.lines, "\n"), "Retrying in") {
-		t.Error("the retry was silent")
+	said := strings.Join(out.lines, "\n")
+	if !strings.Contains(said, "Retrying a side call in") {
+		t.Errorf("the retry was silent or unnamed:\n%s", said)
 	}
 }
 
@@ -169,7 +177,7 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 	clock := &fastClock{}
 	out := &summaryOutput{}
 
-	got, err := sendSide(context.Background(), stub, llm.Request{}, out, clock, nil)
+	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil)
 
 	if err == nil || got != "" {
 		t.Errorf("got %q / %v, want a failure so the caller falls back", got, err)
@@ -195,5 +203,73 @@ func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
 	}
 	if stub.calls != maxEmptyRetries+1 {
 		t.Errorf("%d requests went out, want %d", stub.calls, maxEmptyRetries+1)
+	}
+}
+
+// The retry ladder has to fit inside the budget it runs under.
+//
+// This is the bug that made session notes look unreliable, and it was pure
+// arithmetic: every side call had 60s for the whole attempt, while the ladder
+// it ran was the turn's, capped at retryTimeout — 0.25+0.5+1+2+4+8+16+32 =
+// 63.75s of sleeping alone, before the failed requests themselves. The ladder
+// could not finish, so the retries it appeared to promise were never going to
+// happen, and the call died of its own deadline partway through.
+//
+// Nothing in the code connected the two numbers, so nothing objected. This is
+// that connection. It fails if either constant moves out from under the other.
+func TestSideLadderFitsItsBudget(t *testing.T) {
+	var total time.Duration
+	rb := retryBackoff{delay: initialRetryDelay, cap: sideRetryCap}
+	clock := &fastClock{}
+	out := &summaryOutput{}
+	transient := &llm.StreamError{Class: llm.ErrServer, Message: "busy"}
+
+	for rb.retry(context.Background(), out, clock, transient) {
+		if len(clock.slept) > 50 {
+			t.Fatal("the ladder does not terminate")
+		}
+	}
+	for _, d := range clock.slept {
+		total += d
+	}
+	if total >= sideTimeout {
+		t.Errorf("the ladder sleeps %v inside a %v budget, so it can never run to the end "+
+			"— raise sideTimeout or lower sideRetryCap", total, sideTimeout)
+	}
+	// And it must still be a ladder rather than a single attempt: giving up
+	// instantly would satisfy the line above and help nobody.
+	if len(clock.slept) < 4 {
+		t.Errorf("only %d retries fit; that is not worth calling a backoff", len(clock.slept))
+	}
+	t.Logf("side ladder: %d retries, %v total, inside a %v budget", len(clock.slept), total, sideTimeout)
+}
+
+// A side call killed by its own deadline says so, instead of returning an empty
+// answer that reads as a model with nothing to say.
+//
+// The old code short-circuited on ctx.Err() *before* the one function that
+// prints, so this path was mute — and `/notes generate` reported it as "the
+// model returned no notes", which is a budget we imposed wearing the costume of
+// a decision the model made.
+func TestSideCallReportsItsOwnDeadline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already past its deadline when the first attempt fails
+
+	out := &summaryOutput{}
+	got, err := sendSide(ctx, &emptyThenStub{blanks: 99}, llm.Request{}, "the session notes",
+		out, &fastClock{}, nil)
+
+	if got != "" {
+		t.Errorf("got %q, want nothing", got)
+	}
+	if err == nil {
+		t.Fatal("a call that ran out of time returned no error")
+	}
+	said := strings.Join(out.lines, "\n")
+	if !strings.Contains(said, "the session notes") {
+		t.Errorf("the failure did not name the call:\n%s", said)
+	}
+	if !strings.Contains(said, "gave up") {
+		t.Errorf("the deadline was not reported:\n%s", said)
 	}
 }

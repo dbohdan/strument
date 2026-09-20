@@ -5,6 +5,7 @@
 package coder
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,8 +21,15 @@ import (
 // fastClock never sleeps; it records requested delays.
 type fastClock struct{ slept []time.Duration }
 
-func (f *fastClock) Sleep(d time.Duration) { f.slept = append(f.slept, d) }
-func (f *fastClock) Now() time.Time        { return time.Unix(0, 0) }
+// Records the delay and returns immediately, so a retry test costs no wall
+// time. It still honours a dead context, because that is now part of what the
+// production clock reports and a test clock that always said "slept fully"
+// could not tell a fitting ladder from an overrunning one.
+func (f *fastClock) Sleep(ctx context.Context, d time.Duration) bool {
+	f.slept = append(f.slept, d)
+	return ctx.Err() == nil
+}
+func (f *fastClock) Now() time.Time { return time.Unix(0, 0) }
 
 // fakeRepo provides tracked files for repo-map and repository-backed tests.
 type fakeRepo struct{ tracked []string }

@@ -2,7 +2,9 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -29,11 +31,12 @@ func sendSide(
 	ctx context.Context,
 	cl llm.ModelClient,
 	req llm.Request,
+	what string,
 	out Output,
 	clock Clock,
 	record func(llm.Usage),
 ) (string, error) {
-	backoff := retryBackoff{delay: initialRetryDelay}
+	backoff := retryBackoff{delay: initialRetryDelay, cap: sideRetryCap, what: what}
 	empties := 0
 	for {
 		attempt, err := sideOnce(ctx, cl, req, record)
@@ -44,11 +47,20 @@ func sendSide(
 			empties++
 			err = &llm.StreamError{Class: llm.ErrServer, Message: emptySideResponse}
 			if empties > maxEmptyRetries {
-				out.Errorf("%v", err)
+				out.Errorf("%s: %v", what, err)
 				return "", err
 			}
 		}
-		if ctx.Err() != nil || !backoff.retry(out, clock, err) {
+		// ctx is checked inside retry, which sleeps against it and says so when
+		// the deadline is what ended the call. It used to be short-circuited
+		// here instead, ahead of the one function that prints — so a side call
+		// killed by its own timeout returned in silence, and `/notes generate`
+		// reported it as "the model returned no notes": a budget we imposed,
+		// wearing the costume of a decision the model made.
+		if !backoff.retry(ctx, out, clock, err) {
+			if ctx.Err() != nil {
+				return "", fmt.Errorf("%w after %v", ctx.Err(), sideTimeout)
+			}
 			return "", err
 		}
 	}
@@ -78,6 +90,27 @@ func sendSide(
 const (
 	maxEmptyRetries   = 2
 	emptySideResponse = "the model returned an empty response"
+
+	// sideTimeout bounds one side call, retries included. Every side call uses
+	// it, so the ladder below can be sized against one number.
+	sideTimeout = 60 * time.Second
+
+	// sideRetryCap bounds the backoff for a side call, and is small on purpose.
+	//
+	// The turn's own cap is retryTimeout, 60s, which makes the ladder sleep
+	// 0.25+0.5+1+2+4+8+16+32 = 63.75s if it runs to the end. Under a 60s
+	// deadline that ladder cannot finish: the context died partway, the call
+	// returned nothing, and the retries it had left were never going to happen.
+	// The arithmetic was the bug, not the retrying.
+	//
+	// At 8s the ladder sleeps 0.25+0.5+1+2+4+8 = 15.75s over six retries,
+	// leaving the rest of the minute for the seven requests themselves. Giving
+	// up sooner is also the right shape for a side call: a user waiting on
+	// their own prompt is better served by notes that fail in twenty seconds
+	// than by notes that arrive in two minutes.
+	//
+	// sideLadderFitsItsBudget holds this to sideTimeout.
+	sideRetryCap = 8 * time.Second
 )
 
 // sideOnce runs one attempt and returns its answer text. Blank text with a nil

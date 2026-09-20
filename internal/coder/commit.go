@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -209,7 +208,7 @@ func renderCommitMessages(msgs []llm.Message) string {
 
 // commitMessageTimeout bounds the side-model commit-message call; on
 // timeout the commit proceeds with the fallback message.
-const commitMessageTimeout = 60 * time.Second
+const commitMessageTimeout = sideTimeout
 
 // CommitMessenger returns a commit-message generator backed by a model,
 // packaged as the git port's Message func. An empty return means "no message"
@@ -260,7 +259,7 @@ func CommitMessenger(
 			// prompt back.
 			Temperature: model.Temperature,
 			ExtraParams: model.RequestExtraParams(),
-		}, out, clock, record)
+		}, "the commit message", out, clock, record)
 		return strings.TrimSpace(answer) // "" after exhausted retries => caller falls back
 	}
 }

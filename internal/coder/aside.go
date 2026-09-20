@@ -58,7 +58,7 @@ func (c *Coder) runSide(ctx context.Context, prompt string) string {
 		// cost a summary rather than visibly stop a reply.
 		res, streamErr := c.streamOnce(ctx, req, usage, nil)
 		if res == resFailed {
-			if backoff.retry(c.Out, c.Clock, streamErr) {
+			if backoff.retry(ctx, c.Out, c.Clock, streamErr) {
 				continue // transient error: retry with the same backoff as a turn
 			}
 			break

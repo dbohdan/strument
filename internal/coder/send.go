@@ -195,29 +195,72 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 
 // retryBackoff carries the doubling delay for transient stream errors across a
 // send's retry loop.
-type retryBackoff struct{ delay time.Duration }
+//
+// cap bounds the delay; past it the call gives up. Zero means retryTimeout, the
+// turn's own bound. A side call passes a smaller one — see sideRetryCap.
+//
+// what names the call in the messages, for a side call that the user did not
+// ask for directly and cannot otherwise place: "Retrying in 4.0 seconds..."
+// during a wait for your own prompt says nothing about which of the session
+// notes, the commit message or a compaction is the thing retrying. Empty is the
+// turn itself, which needs no naming because it is what the user is watching.
+type retryBackoff struct {
+	delay time.Duration
+	cap   time.Duration
+	what  string
+}
+
+func (rb *retryBackoff) limit() time.Duration {
+	if rb.cap == 0 {
+		return retryTimeout
+	}
+	return rb.cap
+}
 
 // retry reports whether to retry a failed stream. A retryable error backs off —
-// doubling the delay (capped at retryTimeout) and sleeping — then returns true;
-// a non-retryable error, or one past the cap, reports the failure and returns
-// false. It takes Output and Clock rather than the Coder so the side-model
-// side calls (side.go) share it without owning one; sendMessage, RunAside, and
-// those side calls all retry identically.
-func (rb *retryBackoff) retry(out Output, clock Clock, streamErr error) bool {
+// doubling the delay (capped) and sleeping — then returns true; a non-retryable
+// error, one past the cap, or a context that ended during the wait reports the
+// failure and returns false. It takes Output and Clock rather than the Coder so
+// the side-model calls (side.go) share it without owning one; sendMessage,
+// RunAside, and those side calls all retry identically, and now report
+// identically too.
+func (rb *retryBackoff) retry(ctx context.Context, out Output, clock Clock, streamErr error) bool {
 	var se *llm.StreamError
 	if !errors.As(streamErr, &se) || !se.Retryable() {
-		out.Errorf("%v", streamErr)
+		out.Errorf("%s%v", rb.prefix(), streamErr)
 		return false
 	}
 	rb.delay *= 2
-	if rb.delay > retryTimeout {
-		out.Errorf("%s", se.Error())
+	if rb.delay > rb.limit() {
+		out.Errorf("%s%s", rb.prefix(), se.Error())
 		return false
 	}
-	out.Warningf("%s", se.Error())
-	out.Printf("Retrying in %.1f seconds...", rb.delay.Seconds())
-	clock.Sleep(rb.delay)
+	out.Warningf("%s%s", rb.prefix(), se.Error())
+	out.Printf("Retrying%s in %.1f seconds...", rb.suffix(), rb.delay.Seconds())
+	if !clock.Sleep(ctx, rb.delay) {
+		// The wait outlived the call's own deadline. Said rather than returned
+		// quietly: this is the path that made a failed side call look like a
+		// model that had decided there was nothing to say.
+		out.Errorf("%sgave up: %v", rb.prefix(), ctx.Err())
+		return false
+	}
 	return true
+}
+
+// prefix names the call at the start of a message, or nothing for the turn.
+func (rb *retryBackoff) prefix() string {
+	if rb.what == "" {
+		return ""
+	}
+	return rb.what + ": "
+}
+
+// suffix names the call inside the countdown line.
+func (rb *retryBackoff) suffix() string {
+	if rb.what == "" {
+		return ""
+	}
+	return " " + rb.what
 }
 
 // sendMessage is the phase machine. It returns the outcome and, for
@@ -296,7 +339,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			// A retryable error backs off and retries (the partial is discarded
 			// at the loop top; accumulated multiResponseContent is untouched);
 			// anything else is a hard failure.
-			if backoff.retry(c.Out, c.Clock, streamErr) {
+			if backoff.retry(ctx, c.Out, c.Clock, streamErr) {
 				continue
 			}
 			term = resFailed

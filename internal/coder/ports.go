@@ -273,16 +273,33 @@ type Repo interface {
 }
 
 // Clock injects time so retry/continuation tests don't sleep.
+//
+// Sleep takes a context and reports whether it slept the whole duration. It
+// used to be a bare time.Sleep, which is a logic bug wherever a deadline is in
+// play: the backoff ladder reaches 16 and 32 seconds, and a call whose context
+// had already expired went on sleeping anyway — burning the tail of its own
+// budget waiting for a request it was never going to make.
 type Clock interface {
-	Sleep(d time.Duration)
+	// Sleep blocks for d, or until ctx ends. It reports true when it slept the
+	// whole duration and false when the context ended first.
+	Sleep(ctx context.Context, d time.Duration) bool
 	Now() time.Time
 }
 
 // RealClock is the production clock.
 type RealClock struct{}
 
-func (RealClock) Sleep(d time.Duration) { time.Sleep(d) }
-func (RealClock) Now() time.Time        { return time.Now() }
+func (RealClock) Sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+func (RealClock) Now() time.Time { return time.Now() }
 
 // Output is where the coder talks to the user. StreamText receives answer
 // deltas as they arrive; StreamReasoning receives reasoning deltas

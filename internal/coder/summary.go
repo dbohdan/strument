@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -13,7 +12,7 @@ import (
 
 // Summarization tunables, ported from aider's ChatSummary (history.py).
 const (
-	summaryTimeout       = 60 * time.Second
+	summaryTimeout       = sideTimeout
 	summaryMinSplit      = 4    // below this many messages, summarize the lot
 	summaryMaxDepth      = 3    // recursion cap before summarizing the lot
 	summaryInputBuffer   = 512  // reserved from the side model's window per call
@@ -202,7 +201,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		ReasoningEffort: s.side.Reasoning,
 		Temperature:     s.side.Temperature,
 		ExtraParams:     s.side.RequestExtraParams(),
-	}, s.out, s.clock, nil)
+	}, "the chat summary", s.out, s.clock, nil)
 	if err != nil {
 		return nil, err
 	}
