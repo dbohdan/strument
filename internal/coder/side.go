@@ -35,6 +35,7 @@ func sendSide(
 	out Output,
 	clock Clock,
 	record func(llm.Usage),
+	report SideCallReporter,
 ) (string, error) {
 	backoff := retryBackoff{delay: initialRetryDelay, cap: sideRetryCap, what: what}
 	empties := 0
@@ -42,9 +43,47 @@ func sendSide(
 	// what this call actually spent rather than naming a constant that belongs
 	// to a different caller.
 	started := clock.Now()
+
+	// These three requests go out through the client directly, so nothing else
+	// in the JSONL log sees them. Without this, a side call that failed left no
+	// trace but its absence: a commit with the fallback message, or notes that
+	// were simply not there.
+	attempts := 0
+	var spent llm.Usage
+	countUsage := func(u llm.Usage) {
+		spent.PromptTokens += u.PromptTokens
+		spent.CompletionTokens += u.CompletionTokens
+		if u.Cost != nil {
+			total := u.Cost
+			if spent.Cost != nil {
+				sum := *spent.Cost + *u.Cost
+				total = &sum
+			}
+			spent.Cost = total
+		}
+		if record != nil {
+			record(u)
+		}
+	}
+	finish := func(outcome string, err error) {
+		if report == nil {
+			return
+		}
+		s := SideCall{
+			What: what, Model: req.Model, Duration: clock.Now().Sub(started),
+			Attempts: attempts, Outcome: outcome, Usage: spent,
+		}
+		if err != nil {
+			s.Err = err.Error()
+		}
+		report(s)
+	}
+
 	for {
-		attempt, err := sideOnce(ctx, cl, req, record)
+		attempts++
+		attempt, err := sideOnce(ctx, cl, req, countUsage)
 		if err == nil && strings.TrimSpace(attempt) != "" {
+			finish("ok", nil)
 			return attempt, nil
 		}
 		if err == nil {
@@ -52,6 +91,7 @@ func sendSide(
 			err = &llm.StreamError{Class: llm.ErrServer, Message: emptySideResponse}
 			if empties > maxEmptyRetries {
 				out.Errorf("%s: %v", what, err)
+				finish("empty", err)
 				return "", err
 			}
 		}
@@ -63,8 +103,11 @@ func sendSide(
 		// wearing the costume of a decision the model made.
 		if !backoff.retry(ctx, out, clock, err) {
 			if ctx.Err() != nil {
-				return "", fmt.Errorf("%w after %v", ctx.Err(), clock.Now().Sub(started).Round(time.Second))
+				spent := fmt.Errorf("%w after %v", ctx.Err(), clock.Now().Sub(started).Round(time.Second))
+				finish("deadline", spent)
+				return "", spent
 			}
+			finish("error", err)
 			return "", err
 		}
 	}

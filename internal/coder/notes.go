@@ -49,7 +49,9 @@ const maxNotesInput = 24_000
 // error is carried out rather than dropped so a caller can say *why* there are
 // none — "the model returned no notes" is a lie when the truth is that the call
 // ran out of its own time budget.
-func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage), out Output, clock Clock) func(transcript string) (string, error) {
+func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage), out Output, clock Clock,
+	report SideCallReporter,
+) func(transcript string) (string, error) {
 	return func(transcript string) (string, error) {
 		transcript = strings.TrimSpace(transcript)
 		if transcript == "" {
@@ -72,7 +74,7 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 			ReasoningEffort: model.Reasoning,
 			Temperature:     model.Temperature,
 			ExtraParams:     model.RequestExtraParams(),
-		}, "session notes", out, clock, record)
+		}, "session notes", out, clock, record, report)
 		notes := strings.TrimSpace(answer)
 		if notes == "" && err == nil {
 			err = errors.New("the model returned no notes")

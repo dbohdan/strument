@@ -78,7 +78,7 @@ func TestMaxChatHistoryTokens(t *testing.T) {
 }
 
 func TestChatSummaryTooBig(t *testing.T) {
-	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 	msgs := []llm.Message{msgTok("user", 60), msgTok("assistant", 60)} // 120 tokens
 	if !s.tooBig(msgs, 100) {
 		t.Error("120 tokens should exceed budget 100")
@@ -92,7 +92,7 @@ func TestChatSummaryTooBig(t *testing.T) {
 // alone made the history most worth compacting look small. The budget that
 // decides when to compact must see the arguments.
 func TestChatSummaryCountSeesToolCalls(t *testing.T) {
-	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "w"}, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 	msgs := []llm.Message{{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{
 		{ID: "c1", Name: "edit", Arguments: `{"path":"a.go","old_string":"` +
 			strings.Repeat("x", 4000) + `","new_string":"y"}`},
@@ -105,7 +105,7 @@ func TestChatSummaryCountSeesToolCalls(t *testing.T) {
 func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 	stub := &summaryStub{}
 	side := &config.Model{Slug: "side", Context: 100000}
-	s := NewChatSummary(stub, side, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(stub, side, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 
 	// Six big older messages + two small recent ones; budget 200 (half 100)
 	// keeps the two small recent messages and collapses the rest.
@@ -138,7 +138,7 @@ func TestChatSummaryCollapsesHeadKeepsTail(t *testing.T) {
 }
 
 func TestChatSummarizeErrorLeavesHistoryIntact(t *testing.T) {
-	s := NewChatSummary(summaryErrStub{}, &config.Model{Slug: "w", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(summaryErrStub{}, &config.Model{Slug: "w", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 	msgs := []llm.Message{
 		msgTok("user", 80), msgTok("assistant", 80),
 		msgTok("user", 80), msgTok("assistant", 80),
@@ -168,7 +168,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 	t.Run("unknown context is a no-op", func(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 0
-		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) != 10 {
@@ -189,7 +189,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 	t.Run("under budget is a no-op", func(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 1_000_000 // threshold 125_000; ~2500 tokens fits
-		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) != 10 {
@@ -201,7 +201,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 		c := testCoder(t)
 		c.Model.Context = 16384 // threshold 2048; ~2500 tokens overflows
 		stub := &summaryStub{}
-		c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+		c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) >= 10 {
@@ -218,7 +218,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	out := &summaryOutput{}
 	c.Out = out
 	c.Model.Context = 16384
-	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	c.doneMessages = []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -252,7 +252,7 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 	c.Out = out
 	c.Model.Context = 16384
 	stub := &summaryEmptyStub{}
-	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	c.doneMessages = []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -307,7 +307,7 @@ func TestMaybeSummarizeRejectsABiggerSummary(t *testing.T) {
 	c.Out = out
 	c.Model.Context = 16384
 	stub := &summaryBloatStub{}
-	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock)
+	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	before := []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -356,7 +356,7 @@ func (c *captureStub) Send(_ context.Context, req llm.Request) iter.Seq2[llm.Str
 // Pinned as a property of the output rather than of the wording, so a future
 // rewrite of the prompt cannot quietly reintroduce the shape.
 func TestSummaryFabricatesNoTurn(t *testing.T) {
-	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(&summaryStub{}, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 	msgs := []llm.Message{
 		msgTok("user", 80), msgTok("assistant", 80),
 		msgTok("user", 80), msgTok("assistant", 80),
@@ -404,7 +404,7 @@ func TestSummarizePromptDoesNotAskForImpersonation(t *testing.T) {
 // thing: twelve tool calls and one closing sentence became that sentence.
 func TestSummarySeesToolWork(t *testing.T) {
 	stub := &captureStub{}
-	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{})
+	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, &fastClock{}, nil)
 
 	big := strings.Repeat("z", summaryToolBytes*2)
 	msgs := []llm.Message{

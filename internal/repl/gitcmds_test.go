@@ -258,7 +258,7 @@ func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
 			return oldClient
 		},
 		RefreshCommitMessage: func(m *config.Model) {
-			g.Message = coder.CommitMessenger(newClient, m.SideModel, "", nil, cdr.Out, cdr.Clock, "")
+			g.Message = coder.CommitMessenger(newClient, m.SideModel, "", nil, cdr.Out, cdr.Clock, "", nil)
 		},
 		Stdin:      strings.NewReader("/model big\n/exit\n"),
 		Stdout:     out,

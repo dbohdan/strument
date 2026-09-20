@@ -28,6 +28,7 @@ package coder
 
 import (
 	"slices"
+	"time"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -96,6 +97,33 @@ type Record struct {
 	// doc/experiments/2026-09-anchored-edit/preregistration.md, M9.
 	EditsExact int `json:"edits_exact,omitempty"`
 	EditsFuzzy int `json:"edits_fuzzy,omitempty"`
+
+	// side_call
+	//
+	// The three requests Strument makes for itself — the commit message, the
+	// session notes, the compaction summary — go out through the client
+	// directly and so appear nowhere else in this log. They were invisible in
+	// exactly the way that matters: a failed one shows up as a missing commit
+	// message or a `/notes generate` that produced nothing, with no record of
+	// which model was asked, how long it took, or what came back.
+	//
+	// Model, Outcome, Sent, Received, Cost and CostKnown are reused rather than
+	// duplicated, since they mean here what they mean on a turn. Outcome's
+	// vocabulary differs — "ok", "empty", "error", "deadline" — which the type
+	// discriminator is what separates.
+
+	// Call names which side request this was, in the same words the retry
+	// messages use: "commit message", "session notes", "chat summary".
+	Call string `json:"call,omitempty"`
+	// Attempts counts requests actually sent, so a call that succeeded on its
+	// third try is distinguishable from one that succeeded outright.
+	Attempts int `json:"attempts,omitempty"`
+	// Seconds is wall-clock for the whole call, retries and backoff included.
+	// It is the measurement the budgets in side.go were set from, so a log that
+	// omitted it would not let anyone check them against their own models.
+	Seconds float64 `json:"seconds,omitempty"`
+	// Error is the failure as the user was shown it, empty on success.
+	Error string `json:"error,omitempty"`
 }
 
 // RecordToolCall is one call the model made, with its arguments verbatim.
@@ -109,6 +137,45 @@ type RecordToolCall struct {
 // which is the default and costs nothing.
 type Recorder interface {
 	Record(r Record)
+}
+
+// SideCall is one finished side request, as sendSide saw it.
+type SideCall struct {
+	What     string
+	Model    string
+	Duration time.Duration
+	Attempts int
+	Outcome  string
+	Err      string
+	Usage    llm.Usage
+}
+
+// SideCallReporter receives a finished side call. Nil means no log.
+//
+// A function rather than a Recorder, and passed as a method value, for the
+// same reason RecordTurnSideUsage is: the side callers are built in main.go
+// before the Coder's Recorder is necessarily set, so a Recorder captured by
+// value there would be the nil it had at construction.
+type SideCallReporter func(SideCall)
+
+// RecordSideCall logs one side request. It is the method value handed to
+// CommitMessenger, NotesWriter and NewChatSummary.
+func (c *Coder) RecordSideCall(s SideCall) {
+	r := Record{
+		Type:     "side_call",
+		Call:     s.What,
+		Model:    s.Model,
+		Attempts: s.Attempts,
+		Seconds:  s.Duration.Round(time.Millisecond).Seconds(),
+		Outcome:  s.Outcome,
+		Error:    s.Err,
+		Sent:     s.Usage.PromptTokens,
+		Received: s.Usage.CompletionTokens,
+	}
+	if s.Usage.Cost != nil {
+		r.Cost, r.CostKnown = *s.Usage.Cost, true
+	}
+	c.record(r)
 }
 
 // record emits one record if a Recorder is wired.

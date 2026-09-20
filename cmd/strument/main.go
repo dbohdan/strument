@@ -169,7 +169,8 @@ func (c *chatCmd) Run() error {
 		// from the config it already carries.
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
-	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens, cdr.Out, cdr.Clock)
+	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens,
+		cdr.Out, cdr.Clock, cdr.RecordSideCall)
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
@@ -180,7 +181,7 @@ func (c *chatCmd) Run() error {
 		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
 		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit)
+			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.AutoCommits = !c.NoAutoCommits
@@ -349,7 +350,7 @@ func (c *chatCmd) Run() error {
 	if c.Continue && hist != nil {
 		transcript := history.ReadTranscript(hist.Path())
 		if transcript != "" {
-			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
 			notes, err := write(transcript)
 			cdr.FlushSideUsage()
 			if err != nil {
@@ -838,7 +839,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		}
 		side := m.SideModel
 		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit)
+			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
 	}
 	// Scoped to the project like the transcript, in the directory Run already
 	// created — and suppressed with it when the session leaves no trace.
@@ -876,7 +877,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if side == nil {
 				return errors.New("no side model configured")
 			}
-			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock)
+			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
 			transcript := history.ReadTranscript(hist.Path())
 			if transcript == "" {
 				return errors.New("transcript is empty")

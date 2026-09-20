@@ -136,7 +136,7 @@ func (r *REPL) useModel(m *config.Model) {
 	if r.opts.MakeClient != nil {
 		r.coder.Client = r.opts.MakeClient(m)
 		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel,
-			r.coder.Tokens, r.coder.Out, r.coder.Clock)
+			r.coder.Tokens, r.coder.Out, r.coder.Clock, r.coder.RecordSideCall)
 	}
 	if r.opts.RefreshCommitMessage != nil {
 		r.opts.RefreshCommitMessage(m)

@@ -50,13 +50,16 @@ type ChatSummary struct {
 	tokens TokenCounter
 	out    Output
 	clock  Clock
+	report SideCallReporter
 }
 
 // NewChatSummary builds a summarizer backed by the side model. out and clock
 // are the same ports the coder talks through, so a compaction retry reports
 // and sleeps exactly like a turn's.
-func NewChatSummary(client llm.ModelClient, side *config.Model, tokens TokenCounter, out Output, clock Clock) *ChatSummary {
-	return &ChatSummary{client: client, side: side, tokens: tokens, out: out, clock: clock}
+func NewChatSummary(client llm.ModelClient, side *config.Model, tokens TokenCounter, out Output, clock Clock,
+	report SideCallReporter,
+) *ChatSummary {
+	return &ChatSummary{client: client, side: side, tokens: tokens, out: out, clock: clock, report: report}
 }
 
 // count estimates one message's tokens, including its tool calls. m.Text()
@@ -236,7 +239,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		ReasoningEffort: s.side.Reasoning,
 		Temperature:     s.side.Temperature,
 		ExtraParams:     s.side.RequestExtraParams(),
-	}, "chat summary", s.out, s.clock, nil)
+	}, "chat summary", s.out, s.clock, nil, s.report)
 	if err != nil {
 		return nil, err
 	}

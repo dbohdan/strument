@@ -21,7 +21,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
 	out := &summaryOutput{}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock, "")
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock, "", nil)
 
 	got := msg("", "diff text")
 
@@ -41,7 +41,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 
 func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
 	clock := &fastClock{}
-	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock, "")
+	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock, "", nil)
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so the caller falls back", got)
@@ -54,7 +54,7 @@ func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
 func TestNotesWriterRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
-	write := NotesWriter(stub, &config.Model{Slug: "side"}, nil, &summaryOutput{}, clock)
+	write := NotesWriter(stub, &config.Model{Slug: "side"}, nil, &summaryOutput{}, clock, nil)
 
 	got, err := write("## a turn")
 	if err != nil {
@@ -71,7 +71,7 @@ func TestNotesWriterRetriesTransientError(t *testing.T) {
 func TestChatSummaryRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
 	clock := &fastClock{}
-	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, clock)
+	s := NewChatSummary(stub, &config.Model{Slug: "side", Context: 100000}, RuneCounter{}, &summaryOutput{}, clock, nil)
 	msgs := []llm.Message{msgTok("user", 80), msgTok("assistant", 80)}
 
 	out, err := s.summarizeAll(msgs)
@@ -102,7 +102,7 @@ func TestSendSideStopsAtTheCap(t *testing.T) {
 	out := &summaryOutput{}
 	start := time.Now()
 
-	ans, err := sendSide(context.Background(), summaryErrStub{}, llm.Request{}, "a side call", out, clock, nil)
+	ans, err := sendSide(context.Background(), summaryErrStub{}, llm.Request{}, "a side call", out, clock, nil, nil)
 
 	if err == nil || ans != "" {
 		t.Errorf("expected failure, got %q / %v", ans, err)
@@ -154,7 +154,7 @@ func TestSendSideRetriesAnEmptyResponse(t *testing.T) {
 	clock := &fastClock{}
 	out := &summaryOutput{}
 
-	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil)
+	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil, nil)
 
 	if err != nil || got != "fix(poll): raise the interval" {
 		t.Errorf("got %q / %v, want the answer from the second attempt", got, err)
@@ -177,7 +177,7 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 	clock := &fastClock{}
 	out := &summaryOutput{}
 
-	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil)
+	got, err := sendSide(context.Background(), stub, llm.Request{}, "a side call", out, clock, nil, nil)
 
 	if err == nil || got != "" {
 		t.Errorf("got %q / %v, want a failure so the caller falls back", got, err)
@@ -196,7 +196,7 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 // takes, since that is where this was found.
 func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
 	stub := &emptyThenStub{blanks: 99}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{}, "")
+	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{}, "", nil)
 
 	if got := msg("", "diff text"); got != "" {
 		t.Errorf("message = %q, want empty so gitrepo falls back", got)
@@ -257,7 +257,7 @@ func TestSideCallReportsItsOwnDeadline(t *testing.T) {
 
 	out := &summaryOutput{}
 	got, err := sendSide(ctx, &emptyThenStub{blanks: 99}, llm.Request{}, "session notes",
-		out, &fastClock{}, nil)
+		out, &fastClock{}, nil, nil)
 
 	if got != "" {
 		t.Errorf("got %q, want nothing", got)
@@ -271,5 +271,107 @@ func TestSideCallReportsItsOwnDeadline(t *testing.T) {
 	}
 	if !strings.Contains(said, "gave up") {
 		t.Errorf("the deadline was not reported:\n%s", said)
+	}
+}
+
+// The three side requests go out through the client directly, so nothing else
+// in the JSONL log sees them. A failed one used to show up only as its
+// consequence — a commit with the fallback message, notes that were not there —
+// with no record of which model was asked or what came back.
+
+func TestSideCallIsRecorded(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		stub     llm.ModelClient
+		outcome  string
+		attempts int
+		wantErr  bool
+	}{
+		{"success first try", &emptyThenStub{blanks: 0}, "ok", 1, false},
+		{"success after a retry", &retryOnceStub{}, "ok", 2, false},
+		{"nothing but blanks", &emptyThenStub{blanks: 99}, "empty", maxEmptyRetries + 1, true},
+		{"a permanent failure", summaryErrStub{}, "error", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []SideCall
+			_, _ = sendSide(context.Background(), tc.stub, llm.Request{Model: "side-slug"},
+				"session notes", &summaryOutput{}, &fastClock{}, nil,
+				func(s SideCall) { got = append(got, s) })
+
+			if len(got) != 1 {
+				t.Fatalf("%d records, want exactly 1 — every exit path reports once", len(got))
+			}
+			r := got[0]
+			if r.Outcome != tc.outcome {
+				t.Errorf("outcome = %q, want %q", r.Outcome, tc.outcome)
+			}
+			if tc.attempts > 0 && r.Attempts != tc.attempts {
+				t.Errorf("attempts = %d, want %d", r.Attempts, tc.attempts)
+			}
+			if r.Attempts < 1 {
+				t.Errorf("attempts = %d; a recorded call sent at least one request", r.Attempts)
+			}
+			if r.What != "session notes" || r.Model != "side-slug" {
+				t.Errorf("record does not identify the call: %+v", r)
+			}
+			if (r.Err != "") != tc.wantErr {
+				t.Errorf("err = %q, wantErr = %v", r.Err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// A deadline is its own outcome, not lumped in with "error". It is the one the
+// budgets in side.go are answerable for, so a log that could not tell it apart
+// could not tell anyone whether a budget was set too low.
+func TestSideCallRecordsADeadlineAsItsOwn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var got []SideCall
+	_, _ = sendSide(ctx, &emptyThenStub{blanks: 99}, llm.Request{Model: "m"},
+		"chat summary", &summaryOutput{}, &fastClock{}, nil,
+		func(s SideCall) { got = append(got, s) })
+
+	if len(got) != 1 || got[0].Outcome != "deadline" {
+		t.Fatalf("records = %+v, want one with outcome \"deadline\"", got)
+	}
+}
+
+// Usage is summed across attempts rather than reported for the last one. A call
+// that retried twice cost three requests, and a log showing only the third
+// understates what the session paid.
+func TestSideCallSumsUsageAcrossAttempts(t *testing.T) {
+	var got SideCall
+	_, _ = sendSide(context.Background(), &usageStub{}, llm.Request{Model: "m"},
+		"commit message", &summaryOutput{}, &fastClock{}, nil,
+		func(s SideCall) { got = s })
+
+	if got.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", got.Attempts)
+	}
+	if got.Usage.PromptTokens != 30 || got.Usage.CompletionTokens != 3 {
+		t.Errorf("usage = %d/%d, want the sum 30/3 over both attempts",
+			got.Usage.PromptTokens, got.Usage.CompletionTokens)
+	}
+}
+
+// usageStub reports usage on a blank first attempt and on the real second one.
+type usageStub struct{ calls int }
+
+func (s *usageStub) Send(context.Context, llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		s.calls++
+		text := "ok"
+		if s.calls == 1 {
+			text = "  "
+		}
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: text}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{
+			Kind:  llm.EventUsage,
+			Usage: &llm.Usage{PromptTokens: 10 * s.calls, CompletionTokens: s.calls},
+		}, nil)
 	}
 }

@@ -266,6 +266,14 @@ The log consists of records.
 Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token counts, cost, and throughput in tokens per second.
 `tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
 
+A `side_call` record covers each request Strument makes for itself — the commit message, the session notes, the compaction summary.
+These go out separately from the conversation, so they appear nowhere else in the log, and until they were recorded a failed one was visible only as its consequence: a commit reading `(no commit message provided)`, or `/notes generate` producing nothing.
+The record names the `call` and the `model`, and carries `seconds`, `attempts`, an `outcome` of `ok`, `empty`, `error` or `deadline`, and the `error` text when there is one.
+
+```sh
+jq -c 'select(.type=="side_call" and .outcome!="ok")' run.jsonl
+```
+
 ```sh
 strument --jsonl run.jsonl -m 'Which functions call settleEdits?'
 jq -r 'select(.type=="message" and .role=="assistant") | .text' run.jsonl

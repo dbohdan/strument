@@ -299,7 +299,7 @@ func fitCommitInput(chatContext, diffs string, bound int, out Output) string {
 // paid $0.00093. Nil is accepted for a caller that does not account.
 func CommitMessenger(
 	cl llm.ModelClient, model *config.Model, language string, record func(llm.Usage),
-	out Output, clock Clock, prompt string,
+	out Output, clock Clock, prompt string, report SideCallReporter,
 ) func(diffs, context string) string {
 	return func(diffs, chatContext string) string { //nolint:contextcheck // its own timeout; the turn's context is already done here.
 		languageInstruction := ""
@@ -348,7 +348,7 @@ func CommitMessenger(
 			ReasoningEffort: model.Reasoning,
 			Temperature:     model.Temperature,
 			ExtraParams:     model.RequestExtraParams(),
-		}, "commit message", out, clock, record)
+		}, "commit message", out, clock, record, report)
 		return strings.TrimSpace(answer) // "" after exhausted retries => caller falls back
 	}
 }
