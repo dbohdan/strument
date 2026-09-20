@@ -246,6 +246,14 @@ type Config struct {
 	// default (25). The budget is a checkpoint, not a wall: on exhaustion the
 	// user is shown what the turn has done and asked whether to keep going.
 	MaxSteps int
+	// UndoTurns is how many turns /undo can reach back through. 0 uses the
+	// built-in default (20). It governs both the live stack and the saved one,
+	// so the distance is the same in a session and after a restart.
+	//
+	// Raising it costs memory: a turn holds every touched file's contents
+	// twice, before and after. The saved copy is separately bounded by bytes,
+	// so a large value is paid for in the session rather than on disk.
+	MaxUndoTurns int
 	// MaxErrorReflections overrides the error-reflection budget per turn. 0
 	// uses the built-in default (3). An error reflection is the model
 	// recovering from its own mistake — a failed edit match, a bad shell

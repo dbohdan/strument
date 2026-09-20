@@ -48,6 +48,16 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	if cfg.MaxErrorReflections > 0 {
 		c.MaxErrorReflections = cfg.MaxErrorReflections
 	}
+	c.MaxUndoTurns = defaultUndoDepth
+	if cfg.MaxUndoTurns > 0 {
+		c.MaxUndoTurns = cfg.MaxUndoTurns
+	}
+	// A /reload that lowers the depth takes effect on the stack that already
+	// exists, rather than only on turns after it. The alternative leaves a
+	// session holding more than its config says it should until enough turns
+	// pass to squeeze it out, which is the kind of "eventually" that makes a
+	// setting hard to trust.
+	c.trimUndoStack()
 	if cfg.ShellTimeout != 0 {
 		// Seconds in the config, a Duration in the coder; -1 carries "no limit"
 		// through as a negative duration, which shellTimeout reads as such.

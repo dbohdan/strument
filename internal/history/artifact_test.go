@@ -34,7 +34,7 @@ func populateProjectDir(t *testing.T, project string) string {
 	if err := SaveResume(project, Resume{Version: resumeVersion, Updated: "2026-09-06T10:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveUndo(project, UndoState{Version: undoVersion, Updated: "2026-09-06T10:00:00Z"}); err != nil {
+	if err := SaveUndo(project, UndoState{Version: undoVersion, Updated: "2026-09-06T10:00:00Z"}, 0); err != nil {
 		t.Fatal(err)
 	}
 	in, err := InputHistoryPath(project)

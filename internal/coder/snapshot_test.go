@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -554,5 +555,51 @@ func TestSquashMergesWhatIsRetained(t *testing.T) {
 
 	if got := len(c.undoStack); got != 1 {
 		t.Errorf("stack holds %d turns after squashing past its depth, want 1 merged turn", got)
+	}
+}
+
+// max_undo_turns governs the live stack, not just the saved one. The two are set
+// from the same number so /undo reaches the same distance in a session as it
+// does after a restart; a setting that moved only one of them would make the
+// answer depend on whether the process had been restarted.
+func TestUndoTurnsSettingBoundsTheStack(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+	c.MaxUndoTurns = 3
+
+	for i := range 10 {
+		applyBatch(t, c, plannedEdit{
+			callID: strconv.Itoa(i), path: "a.txt", search: "", replace: "v" + strconv.Itoa(i) + "\n",
+		})
+		c.pushTurnSnapshot()
+	}
+
+	if got := len(c.undoStack); got != 3 {
+		t.Errorf("stack = %d turns, want the configured 3", got)
+	}
+}
+
+// Lowering the depth on /reload applies to the stack that already exists. The
+// alternative leaves a session holding more than its config says until enough
+// turns squeeze it out, which is the kind of "eventually" that makes a setting
+// hard to trust.
+func TestReloadLoweringUndoTurnsTrimsAtOnce(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+
+	for i := range 10 {
+		applyBatch(t, c, plannedEdit{
+			callID: strconv.Itoa(i), path: "a.txt", search: "", replace: "v" + strconv.Itoa(i) + "\n",
+		})
+		c.pushTurnSnapshot()
+	}
+	if len(c.undoStack) != 10 {
+		t.Fatalf("stack = %d before the reload, want 10", len(c.undoStack))
+	}
+
+	ApplyConfig(c, &config.Config{MaxUndoTurns: 2})
+
+	if got := len(c.undoStack); got != 2 {
+		t.Errorf("stack = %d after reloading with max_undo_turns = 2, want 2", got)
 	}
 }

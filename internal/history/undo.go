@@ -106,21 +106,29 @@ func LoadUndo(projectRoot string) UndoState {
 }
 
 // SaveUndo writes the undo state atomically, owner-only, after trimming it to
-// the retention caps.
+// the retention caps. maxTurns is the configured depth; zero takes
+// MaxUndoTurns.
+//
+// The depth is a parameter rather than a constant here because the coder bounds
+// its live stack to the same number, and a writer that enforced its own would
+// silently cap a user who asked for more — the distance /undo reaches would
+// then depend on whether the session had restarted. The byte cap is not
+// configurable and still applies: it is the one that keeps a state directory
+// from quietly becoming a gigabyte of somebody's source.
 //
 // The whole stack is rewritten rather than appended to. A content-addressed blob
 // store would write less, and it would also need a garbage collector, a
 // reference count, and a story for a half-written index — for a file that is
 // single-digit megabytes and written once per turn. Rewriting is milliseconds
 // and cannot leave a dangling reference.
-func SaveUndo(projectRoot string, s UndoState) error {
+func SaveUndo(projectRoot string, s UndoState, maxTurns int) error {
 	p, err := UndoPath(projectRoot)
 	if err != nil {
 		return err
 	}
 	s.Version = undoVersion
 	s.Updated = time.Now().UTC().Format(time.RFC3339)
-	s.Turns = trimUndoTurns(s.Turns)
+	s.Turns = trimUndoTurns(s.Turns, maxTurns)
 
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -153,9 +161,12 @@ func SaveUndo(projectRoot string, s UndoState) error {
 // keeps at least the newest turn: a single turn over the byte cap is still the
 // one the user is about to undo, and refusing to record it would trade a bounded
 // disk cost for unbounded surprise.
-func trimUndoTurns(turns []UndoTurn) []UndoTurn {
-	if len(turns) > MaxUndoTurns {
-		turns = turns[len(turns)-MaxUndoTurns:]
+func trimUndoTurns(turns []UndoTurn, maxTurns int) []UndoTurn {
+	if maxTurns <= 0 {
+		maxTurns = MaxUndoTurns
+	}
+	if len(turns) > maxTurns {
+		turns = turns[len(turns)-maxTurns:]
 	}
 	total := 0
 	for _, t := range turns {

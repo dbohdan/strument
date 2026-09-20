@@ -210,6 +210,7 @@ var projectKeyOrder = []string{
 	"hasCheckAuto",
 	"hasReasoningDisplay",
 	"hasMaxSteps",
+	"hasMaxUndoTurns",
 	"hasMaxErrorReflections",
 	"hasWebfetchAllow",
 	"hasWebSearch",
@@ -311,6 +312,7 @@ var projectKeys = map[string]projectKey{
 
 	"hasReasoningDisplay":    {name: "reasoning_display", set: func(g *fileGlobals) bool { return g.hasReasoningDisplay }},
 	"hasMaxSteps":            {name: "max_steps", set: func(g *fileGlobals) bool { return g.hasMaxSteps }},
+	"hasMaxUndoTurns":        {name: "max_undo_turns", set: func(g *fileGlobals) bool { return g.hasMaxUndoTurns }},
 	"hasMaxErrorReflections": {name: "max_error_reflections", set: func(g *fileGlobals) bool { return g.hasMaxErrorReflections }},
 
 	"hasWebfetchAllow": {

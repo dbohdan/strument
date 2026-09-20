@@ -1,6 +1,7 @@
 package history
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,7 +40,7 @@ func TestUndoRoundTrip(t *testing.T) {
 		Commits: []string{"abc1234", "def5678"},
 		Last:    "def5678",
 	}
-	if err := SaveUndo(root, want); err != nil {
+	if err := SaveUndo(root, want, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,7 +70,7 @@ func TestUndoFileIsOwnerOnly(t *testing.T) {
 		t.Skip("Windows does not provide Unix permission bits")
 	}
 	root := undoRoot(t)
-	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("a", "x", "y", true)}}); err != nil {
+	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("a", "x", "y", true)}}, 0); err != nil {
 		t.Fatal(err)
 	}
 	p, err := UndoPath(root)
@@ -131,7 +132,7 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 	for i := range MaxUndoTurns + 5 {
 		st.Turns = append(st.Turns, turn("f.txt", "old", string(rune('a'+i%26)), true))
 	}
-	if err := SaveUndo(root, st); err != nil {
+	if err := SaveUndo(root, st, 0); err != nil {
 		t.Fatal(err)
 	}
 	got := LoadUndo(root)
@@ -151,7 +152,7 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 		turn("b", big, big, true),
 		turn("c", big, big, true),
 	}}
-	if err := SaveUndo(root, heavy); err != nil {
+	if err := SaveUndo(root, heavy, 0); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(LoadUndo(root).Turns); n != 1 {
@@ -164,10 +165,40 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 func TestUndoAlwaysKeepsTheNewestTurn(t *testing.T) {
 	root := undoRoot(t)
 	huge := strings.Repeat("y", (maxUndoBytes*2)+1)
-	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("big.bin", huge, huge, true)}}); err != nil {
+	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("big.bin", huge, huge, true)}}, 0); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(LoadUndo(root).Turns); n != 1 {
 		t.Errorf("turns = %d, want 1 even though it exceeds the cap alone", n)
+	}
+}
+
+// The writer honours the configured depth instead of enforcing its own. A
+// writer that capped at MaxUndoTurns regardless would make /undo reach further
+// in a live session than after a restart, for anyone who raised undo_turns —
+// the drift the shared number exists to prevent.
+func TestSaveUndoHonoursAConfiguredDepth(t *testing.T) {
+	root := t.TempDir()
+	var st UndoState
+	for i := range MaxUndoTurns * 2 {
+		st.Turns = append(st.Turns, UndoTurn{Entries: []UndoEntry{{
+			Path: "a.txt", Before: []byte("b"), After: fmt.Appendf(nil, "%d", i), Existed: true,
+		}}})
+	}
+
+	if err := SaveUndo(root, st, MaxUndoTurns+7); err != nil {
+		t.Fatal(err)
+	}
+	got := LoadUndo(root)
+	if len(got.Turns) != MaxUndoTurns+7 {
+		t.Errorf("saved %d turns, want the configured %d", len(got.Turns), MaxUndoTurns+7)
+	}
+	// Zero still means the default, so a caller that has no opinion gets one.
+	if err := SaveUndo(root, st, 0); err != nil {
+		t.Fatal(err)
+	}
+	got = LoadUndo(root)
+	if len(got.Turns) != MaxUndoTurns {
+		t.Errorf("with depth 0 saved %d turns, want the default %d", len(got.Turns), MaxUndoTurns)
 	}
 }

@@ -34,6 +34,7 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
+| `max_undo_turns` | positive integer | Optional. How many turns of file contents are kept for `/undo` and `/squash`. Default 20. See below. |
 | `webfetch_allow` | list of strings | Optional. Host or host:port entries the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
@@ -383,6 +384,39 @@ them, set `reasoning="off"` on the model instead — that changes the request,
 where this changes only the screen. Keeping them apart matters: otherwise a
 project's `.strument.star` could change what a turn costs by way of a display
 preference.
+
+### `max_undo_turns`
+
+How many turns of file contents Strument keeps — the record `/undo` restores
+from and `/squash` folds.
+
+```python
+max_undo_turns = 20    # the default
+max_undo_turns = 50    # a longer tail, at the cost of memory
+max_undo_turns = 5     # for a session editing very large files
+```
+
+The setting governs both the stack held in the session and the one saved under
+the state directory, so the distance is the same whether or not Strument has
+been restarted since. Lowering it on `/reload` takes effect immediately rather
+than after enough turns have passed to squeeze the older ones out.
+
+**Inside a git repository this is not the limit on `/undo`.** There `/undo`
+unwinds the session's own commits and git restores the contents, so it can step
+back further than the retained depth — the gate is that each commit was made by
+Strument in this session, unpushed and still HEAD. The retained stack is what
+`/undo` uses in a directory that is not a repository, what restores files a
+commit does not cover, and what `/squash` folds.
+
+Raising it costs memory. A turn holds the full contents of every file it
+touched, twice — before and after — so the stack's size is the depth times what
+a turn edits. Four hundred turns rewriting a 40 KB file hold 32 MB unbounded;
+the default holds 1.6 MB. The saved copy has its own byte cap that is not
+configurable, so a large value is paid for in the session rather than on disk.
+
+`/squash n` folds the last `n` turns into one. A squash reaching further back
+than the retained depth folds what is retained, which is the closest it can get
+to the range the squash commit covers.
 
 ### `max_steps`
 

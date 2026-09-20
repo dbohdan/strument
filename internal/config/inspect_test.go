@@ -36,6 +36,7 @@ check = {"test": ["task", "test"]}
 check_auto = ["test"]
 reasoning_display = "off"
 max_steps = 40
+max_undo_turns = 5
 max_error_reflections = 2
 webfetch_allow = ["docs.example.com"]
 websearch = search("searxng", url = "http://localhost:8888")

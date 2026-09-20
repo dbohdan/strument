@@ -191,6 +191,8 @@ type fileGlobals struct {
 
 	hasMaxSteps              bool
 	maxStepsVal              int
+	hasMaxUndoTurns          bool
+	maxUndoTurnsVal          int
 	hasMaxErrorReflections   bool
 	maxErrorReflectionsVal   int
 	hasLoopDetection         bool
@@ -504,6 +506,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasMaxSteps {
 		cfg.MaxSteps = user.maxStepsVal
 	}
+	if user.hasMaxUndoTurns {
+		cfg.MaxUndoTurns = user.maxUndoTurnsVal
+	}
 	if user.hasMaxErrorReflections {
 		cfg.MaxErrorReflections = user.maxErrorReflectionsVal
 	}
@@ -611,6 +616,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasMaxSteps {
 			cfg.MaxSteps = project.maxStepsVal
+		}
+		if project.hasMaxUndoTurns {
+			cfg.MaxUndoTurns = project.maxUndoTurnsVal
 		}
 		if project.hasMaxErrorReflections {
 			cfg.MaxErrorReflections = project.maxErrorReflectionsVal
@@ -1046,6 +1054,15 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasMaxSteps = true
 		out.maxStepsVal = n
+	}
+
+	if ut, ok := globals["max_undo_turns"]; ok {
+		n, err := parsePositiveInt(path, "max_undo_turns", ut)
+		if err != nil {
+			return nil, err
+		}
+		out.hasMaxUndoTurns = true
+		out.maxUndoTurnsVal = n
 	}
 
 	if er, ok := globals["max_error_reflections"]; ok {
