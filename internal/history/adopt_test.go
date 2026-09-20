@@ -26,7 +26,7 @@ func writeState(t *testing.T, dir string, transcript, cost, resumeUpdated string
 	write(artifacts[artTranscript].name, transcript)
 	write(artifacts[artCost].name, cost)
 	if resumeUpdated != "" {
-		write(artifacts[artResume].name, mustJSON(t, Resume{
+		write(sessionArtifacts[sartResume].name, mustJSON(t, Resume{
 			Version: resumeVersion, Updated: resumeUpdated, Model: resumeUpdated,
 		})+"\n")
 	}
@@ -124,7 +124,7 @@ func TestAdoptOverExistingData(t *testing.T) {
 
 	// resume.json is one value, and the accidental session's is the newer one.
 	var res Resume
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(dst, artifacts[artResume].name))), &res); err != nil {
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(dst, sessionArtifacts[sartResume].name))), &res); err != nil {
 		t.Fatal(err)
 	}
 	if res.Updated != "2026-09-05T10:00:00Z" {
@@ -337,5 +337,59 @@ func TestAdoptDoesNotAbortOnADirectoryArtifact(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dstDir, artifacts[artInput].name))
 	if err != nil || !strings.Contains(string(got), "typed") {
 		t.Errorf("the file artifacts did not merge (%v); the loop aborted partway", err)
+	}
+}
+
+// A session both projects have merges artifact by artifact, not by union.
+//
+// This is why mergeSessions exists. A union resolves a name collision by
+// keeping the destination's copy, which is right for a blob — the name is the
+// contents — and wrong for resume.json, where the name identifies a
+// conversation and the contents are a state of one. Keeping the older pin set
+// because it happened to be the destination's is a silent loss.
+func TestAdoptMergesASharedSessionByArtifact(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	dst, src := t.TempDir(), t.TempDir()
+	if _, err := EnsureProjectDir(dst, ""); err != nil {
+		t.Fatal(err)
+	}
+	srcDir, err := EnsureProjectDir(src, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Written directly rather than through SaveResume, which stamps Updated
+	// with time.Now() at RFC3339's one-second resolution — two saves in one
+	// second tie, and keepNewest keeps the destination on a tie. Real adopts
+	// merge state written on different days; a test that used the real writer
+	// would be measuring the clock rather than the policy.
+	writeResume := func(project, session, updated, file string) {
+		t.Helper()
+		dir, err := EnsureSessionDir(project, session)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := mustJSON(t, Resume{Version: resumeVersion, Updated: updated, Files: []string{file}})
+		if err := os.WriteFile(filepath.Join(dir, sessionArtifacts[sartResume].name),
+			[]byte(body+"\n"), fileMode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeResume(dst, DefaultSession, "2026-09-01T00:00:00Z", "old.go")
+	writeResume(src, DefaultSession, "2026-09-20T00:00:00Z", "new.go")
+	// A session only the source has is copied whole.
+	writeResume(src, "other", "2026-09-20T00:00:00Z", "elsewhere.go")
+
+	if err := Adopt(dst, srcDir, ""); err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+
+	if got := LoadResume(dst, DefaultSession); len(got.Files) != 1 || got.Files[0] != "new.go" {
+		t.Errorf("shared session resume = %v, want the newer pins; a union kept the destination's",
+			got.Files)
+	}
+	if got := LoadResume(dst, "other"); len(got.Files) != 1 || got.Files[0] != "elsewhere.go" {
+		t.Errorf("a session only the source had did not come across: %v", got.Files)
 	}
 }

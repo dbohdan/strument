@@ -344,10 +344,51 @@ func mergeArtifact(p mergePolicy, src, dst string) error {
 		return keepNewestFile(src, dst)
 	case mergeUnion:
 		return unionDir(src, dst)
+	case mergeSessions:
+		return mergeSessionTree(src, dst)
 	case skipTransient, rewritten:
 		return nil
 	}
 	return fmt.Errorf("unhandled merge policy %d for %s", p, filepath.Base(dst))
+}
+
+// mergeSessionTree merges a tree of session directories.
+//
+// A session only the source has is copied whole — there is nothing to
+// reconcile. A session both have is merged artifact by artifact under
+// sessionArtifacts, so each file inside gets the policy its own kind deserves
+// rather than the directory's. That distinction is the reason mergeSessions
+// exists: a union would keep the destination's resume.json on a name
+// collision, which is the wrong answer when the source's is newer.
+func mergeSessionTree(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, dirMode); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			// Sessions are directories. Anything else here is not ours, and
+			// dropping it silently is what this table exists to prevent, so
+			// leave it where it is and let the guard test report it.
+			continue
+		}
+		from, to := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
+		if err := os.MkdirAll(to, dirMode); err != nil {
+			return err
+		}
+		for _, a := range sessionArtifacts {
+			if err := mergeArtifact(a.policy, filepath.Join(from, a.name), filepath.Join(to, a.name)); err != nil {
+				return fmt.Errorf("session %s: merging %s: %w", e.Name(), a.name, err)
+			}
+		}
+	}
+	return nil
 }
 
 // unionDir copies the entries of src that dst does not already have.

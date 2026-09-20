@@ -31,10 +31,10 @@ func populateProjectDir(t *testing.T, project string) string {
 	if err := AppendCost(project, CostEntry{Time: "2026-09-06T10:00:00Z", Model: "m", Steps: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveResume(project, Resume{Version: resumeVersion, Updated: "2026-09-06T10:00:00Z"}); err != nil {
+	if err := SaveResume(project, DefaultSession, Resume{Version: resumeVersion, Updated: "2026-09-06T10:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveUndo(project, UndoState{Version: undoVersion, Updated: "2026-09-06T10:00:00Z"}, 0); err != nil {
+	if err := SaveUndo(project, DefaultSession, UndoState{Version: undoVersion, Updated: "2026-09-06T10:00:00Z"}, 0); err != nil {
 		t.Fatal(err)
 	}
 	in, err := InputHistoryPath(project)
@@ -49,6 +49,9 @@ func populateProjectDir(t *testing.T, project string) string {
 		t.Fatal(err)
 	}
 	if err := Dismiss(project, "some-other-project-1234"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetCurrentSession(project, DefaultSession); err != nil {
 		t.Fatal(err)
 	}
 	lk := flock.New(lp)
@@ -75,7 +78,8 @@ func populateProjectDir(t *testing.T, project string) string {
 // table, because the table cannot be wrong about itself.
 func TestProjectDirHoldsOnlyRegisteredArtifacts(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	dir := populateProjectDir(t, t.TempDir())
+	project := t.TempDir()
+	dir := populateProjectDir(t, project)
 
 	known := artifactNames()
 	entries, err := os.ReadDir(dir)
@@ -106,22 +110,52 @@ func TestProjectDirHoldsOnlyRegisteredArtifacts(t *testing.T) {
 				"either populateProjectDir is out of date or the entry is dead", name)
 		}
 	}
+
+	// And the same, one level down. A session directory is where resume and
+	// undo live now, so a file that skipped sessionArtifacts is one
+	// mergeSessions would walk past — the same silent drop, out of reach of
+	// the loop above because it only reads the top level.
+	sessionDir, err := SessionDir(project, DefaultSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionEntries, err := os.ReadDir(sessionDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	knownSession := sessionArtifactNames()
+	seenSession := map[string]bool{}
+	for _, e := range sessionEntries {
+		if _, ok := knownSession[e.Name()]; !ok {
+			t.Errorf("%q is in a session directory but not in sessionArtifacts, "+
+				"so adopting a session both projects have would drop it", e.Name())
+			continue
+		}
+		seenSession[e.Name()] = true
+	}
+	for name := range knownSession {
+		if !seenSession[name] {
+			t.Errorf("%q is registered as a session artifact but no writer produced it", name)
+		}
+	}
 }
 
-// A directory artifact must carry mergeUnion. Every other policy begins with
+// A directory artifact must carry a directory policy. Every file policy begins with
 // os.ReadFile, which returns EISDIR on a directory — and EISDIR is not
 // os.ErrNotExist, so adopt.go's missing-source escape hatches do not fire.
 // Adopt iterates the table in map order and returns on the first error, so the
 // result would be a merge that aborted after rewriting an arbitrary,
 // irreproducible subset of the other artifacts.
-func TestDirectoryArtifactsMergeByUnion(t *testing.T) {
-	for id, a := range artifacts {
-		if a.dir && a.policy != mergeUnion {
-			t.Errorf("artifact %q (%s) is a directory but does not use mergeUnion; "+
-				"every other policy reads it as a file and fails with EISDIR", id, a.name)
-		}
-		if !a.dir && a.policy == mergeUnion {
-			t.Errorf("artifact %q (%s) uses mergeUnion but is not a directory", id, a.name)
+func TestArtifactKindMatchesItsPolicy(t *testing.T) {
+	for _, table := range []map[string]artifact{artifacts, sessionArtifacts} {
+		for id, a := range table {
+			if a.dir && !dirPolicies[a.policy] {
+				t.Errorf("artifact %q (%s) is a directory but its policy reads a file; "+
+					"every file policy begins with os.ReadFile, which fails with EISDIR", id, a.name)
+			}
+			if !a.dir && dirPolicies[a.policy] {
+				t.Errorf("artifact %q (%s) has a directory policy but is not a directory", id, a.name)
+			}
 		}
 	}
 }

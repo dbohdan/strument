@@ -80,8 +80,8 @@ type UndoState struct {
 }
 
 // UndoPath is the undo file for a project root.
-func UndoPath(projectRoot string) (string, error) {
-	return artifactPath(projectRoot, artUndo)
+func UndoPath(projectRoot, session string) (string, error) {
+	return sessionArtifactPath(projectRoot, session, sartUndo)
 }
 
 // LoadUndo reads a project's undo state. A missing, unreadable, malformed, or
@@ -89,8 +89,8 @@ func UndoPath(projectRoot string) (string, error) {
 // judgement as LoadResume, and for a stronger reason here: a stale stack cannot
 // do damage. UndoLastTurn refuses any file whose contents no longer match what
 // Strument wrote, so the worst a wrong stack produces is a refusal.
-func LoadUndo(projectRoot string) UndoState {
-	p, err := UndoPath(projectRoot)
+func LoadUndo(projectRoot, session string) UndoState {
+	p, err := UndoPath(projectRoot, session)
 	if err != nil {
 		return UndoState{}
 	}
@@ -121,8 +121,8 @@ func LoadUndo(projectRoot string) UndoState {
 // reference count, and a story for a half-written index — for a file that is
 // single-digit megabytes and written once per turn. Rewriting is milliseconds
 // and cannot leave a dangling reference.
-func SaveUndo(projectRoot string, s UndoState, maxTurns int) error {
-	p, err := UndoPath(projectRoot)
+func SaveUndo(projectRoot, session string, s UndoState, maxTurns int) error {
+	p, err := UndoPath(projectRoot, session)
 	if err != nil {
 		return err
 	}

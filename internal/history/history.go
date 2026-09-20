@@ -360,3 +360,53 @@ func ReadTranscript(path string) string {
 	}
 	return string(data)
 }
+
+// EnsureSessionDir creates one session's directory and returns it.
+//
+// Separate from EnsureProjectDir because a project exists before anyone picks
+// a session, and because `strument session new` creates one without touching
+// anything else in the project.
+func EnsureSessionDir(projectRoot, session string) (string, error) {
+	dir, err := SessionDir(projectRoot, session)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, dirMode); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// CurrentSession is the session a resume picks up: whatever `current` names,
+// or DefaultSession.
+//
+// Unreadable and missing are the same answer on purpose. This decides which
+// conversation to continue, and a project whose pointer was lost should open
+// its default session rather than refuse to start — the sessions are all still
+// on disk either way, and `strument session list` shows them.
+func CurrentSession(projectRoot string) string {
+	p, err := artifactPath(projectRoot, artCurrent)
+	if err != nil {
+		return DefaultSession
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return DefaultSession
+	}
+	if name := strings.TrimSpace(string(data)); name != "" {
+		return name
+	}
+	return DefaultSession
+}
+
+// SetCurrentSession records which session a resume should pick up.
+func SetCurrentSession(projectRoot, session string) error {
+	if session == "" {
+		session = DefaultSession
+	}
+	p, err := artifactPath(projectRoot, artCurrent)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(session+"\n"), fileMode)
+}

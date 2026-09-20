@@ -114,9 +114,15 @@ func (c *chatCmd) Run() error {
 	// Resolved before the model, because a remembered alias participates in
 	// choosing one.
 	projectRoot, rootErr := historyRoot()
+	// One session per process for now: whichever `current` names, or the
+	// default. `--session` and `/session` choose it in a later phase; until
+	// then every path below takes the name rather than assuming one, so that
+	// phase adds a flag rather than a parameter to everything.
+	session := history.DefaultSession
 	var res history.Resume
 	if rootErr == nil {
-		res = history.LoadResume(projectRoot)
+		session = history.CurrentSession(projectRoot)
+		res = history.LoadResume(projectRoot, session)
 	}
 
 	// -M beats a remembered alias beats the config's default.
@@ -339,7 +345,7 @@ func (c *chatCmd) Run() error {
 				}
 				st.Turns = append(st.Turns, t)
 			}
-			if err := history.SaveUndo(projectRoot, st, cdr.MaxUndoTurns); err != nil {
+			if err := history.SaveUndo(projectRoot, session, st, cdr.MaxUndoTurns); err != nil {
 				noticef("could not save the undo record; /undo will not be able to restore this turn's changes: %v", err)
 			}
 		}
@@ -382,7 +388,7 @@ func (c *chatCmd) Run() error {
 		note := ""
 		if len(c.Files) == 0 && rootErr == nil {
 			var offered, notesRestored bool
-			note, offered, notesRestored = restoreSession(cdr, projectRoot, res)
+			note, offered, notesRestored = restoreSession(cdr, projectRoot, session, res)
 			if notesRestored {
 				// Announced, never silent. The notes go into every request this
 				// session, so a user who never types /notes should still know
@@ -396,10 +402,10 @@ func (c *chatCmd) Run() error {
 			// that it happens once per session.
 			if offered && keepState {
 				res.AutoPinned = append(res.AutoPinned, coder.AgentsFileName)
-				_ = history.SaveResume(projectRoot, resumeWithPins(cdr, projectRoot, res))
+				_ = history.SaveResume(projectRoot, session, resumeWithPins(cdr, projectRoot, res))
 			}
 		}
-		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, keepState, note)
+		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, session, keepState, note)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
@@ -629,7 +635,7 @@ func fileInProject(root, file string) bool {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (note string, offered, notesRestored bool) {
+func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered, notesRestored bool) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
 		if !filepath.IsAbs(p) {
@@ -645,7 +651,7 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 	// are undoable" on every start would be noise for a fact they can ask for.
 	// It is safe to restore optimistically because UndoLastTurn refuses any file
 	// whose contents no longer match what Strument wrote.
-	if u := history.LoadUndo(projectRoot); len(u.Turns) > 0 || len(u.Commits) > 0 {
+	if u := history.LoadUndo(projectRoot, session); len(u.Turns) > 0 || len(u.Commits) > 0 {
 		stack := make([][]coder.TurnEdit, 0, len(u.Turns))
 		for _, t := range u.Turns {
 			turn := make([]coder.TurnEdit, 0, len(t.Entries))
@@ -735,7 +741,7 @@ func restoreSession(cdr *coder.Coder, projectRoot string, res history.Resume) (n
 // project was opened, so that later editing `default` in config.star would
 // mysteriously not take effect there. It also gives an obvious way out —
 // switching back to the default stops the pinning.
-func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, keepState bool) func(alias string) {
+func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot, session string, keepState bool) func(alias string) {
 	if !keepState {
 		return nil
 	}
@@ -747,12 +753,12 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 		// ordinary use. Re-reading a small JSON file per /add costs nothing and
 		// cannot go out of sync with what is on disk.
 		res := resumeWithPins(cdr, projectRoot, history.Resume{
-			AutoPinned: history.LoadResume(projectRoot).AutoPinned,
+			AutoPinned: history.LoadResume(projectRoot, session).AutoPinned,
 		})
 		if alias != cfg.Default {
 			res.Model = alias
 		}
-		_ = history.SaveResume(projectRoot, res)
+		_ = history.SaveResume(projectRoot, session, res)
 	}
 }
 
@@ -844,7 +850,7 @@ func terminalSize() (int, int) {
 
 // runREPL starts the interactive session.
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer,
-	alias, projectRoot string, keepState bool, resumeNote string,
+	alias, projectRoot, session string, keepState bool, resumeNote string,
 ) error {
 	refreshCommitMessage := func(m *config.Model) {
 		if repo == nil {
@@ -867,7 +873,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		History:              hist,
 		ModelAlias:           alias,
 		ResumeNote:           resumeNote,
-		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, keepState),
+		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, session, keepState),
 		ApplyEgress:          applyEgressConfig,
 		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		RefreshCommitMessage: refreshCommitMessage,

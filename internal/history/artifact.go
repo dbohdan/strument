@@ -62,19 +62,43 @@ const (
 	// thing rather than a collision: content-addressed blobs, and log
 	// segments named by the instant they were opened.
 	mergeUnion
+	// mergeSessions unions a tree of session directories: a session only the
+	// source has is copied whole, and a session both have merges artifact by
+	// artifact under sessionArtifacts.
+	//
+	// Not mergeUnion, which would resolve a name collision by keeping the
+	// destination's copy. That rule is sound only for names that identify
+	// their own contents, and a session's name identifies a conversation, not
+	// a state of one — two `default/resume.json` files are two different pin
+	// sets, and picking by directory order rather than by timestamp would
+	// silently discard the newer.
+	mergeSessions
 )
+
+// dirPolicies are the policies that read a directory. A directory artifact
+// must carry one and a file artifact must not, which
+// TestArtifactKindMatchesItsPolicy enforces: every other policy begins with
+// os.ReadFile, and on a directory that returns EISDIR rather than
+// os.ErrNotExist, so adopt.go's missing-source escape hatches do not fire.
+var dirPolicies = map[mergePolicy]bool{mergeUnion: true, mergeSessions: true}
 
 // Artifact ids. Callers name these rather than the file names.
 const (
 	artTranscript = "transcript"
 	artInput      = "input"
 	artCost       = "cost"
-	artResume     = "resume"
-	artUndo       = "undo"
 	artRoot       = "root"
 	artLock       = "lock"
 	artDismissed  = "dismissed"
 	artBlobs      = "blobs"
+	artSessions   = "sessions"
+	artCurrent    = "current"
+)
+
+// Session-level artifact ids, for the files inside sessions/<name>/.
+const (
+	sartResume = "resume"
+	sartUndo   = "undo"
 )
 
 // artifacts is every file Strument writes into a project's state directory.
@@ -94,14 +118,6 @@ var artifacts = map[string]artifact{
 		name: "cost.jsonl", policy: mergeJSONLByTime,
 		why: "one timestamped row per turn, so the two ledgers interleave by time",
 	},
-	artResume: {
-		name: "resume.json", policy: keepNewest,
-		why: "one value: there is no meaningful union of two pinned file sets",
-	},
-	artUndo: {
-		name: "undo.json", policy: keepNewest,
-		why: "a stack against one continuous tree history; two overlapping stacks cannot be ordered",
-	},
 	artRoot: {
 		name: "root", policy: rewritten,
 		why: "the identity record being repaired",
@@ -117,6 +133,28 @@ var artifacts = map[string]artifact{
 	artBlobs: {
 		name: "blobs", dir: true, policy: mergeUnion,
 		why: "content-addressed, so one name is one payload and a union cannot conflict",
+	},
+	artSessions: {
+		name: "sessions", dir: true, policy: mergeSessions,
+		why: "a tree of conversations; a session both sides have merges by its own artifacts",
+	},
+	artCurrent: {
+		name: "current", policy: keepNewest,
+		why: "one value: the session a resume picks up, and two answers cannot both be it",
+	},
+}
+
+// sessionArtifacts is every file Strument writes into one session's directory,
+// under the same rule as artifacts: naming it here is what makes it exist, and
+// mergeSessions walks this table when adopting a session both projects have.
+var sessionArtifacts = map[string]artifact{
+	sartResume: {
+		name: "resume.json", policy: keepNewest,
+		why: "one value: there is no meaningful union of two pinned file sets",
+	},
+	sartUndo: {
+		name: "undo.json", policy: keepNewest,
+		why: "a stack against one continuous tree history; two overlapping stacks cannot be ordered",
 	},
 }
 
@@ -136,11 +174,52 @@ func artifactPath(projectRoot, id string) (string, error) {
 	return filepath.Join(dir, a.name), nil
 }
 
+// DefaultSession is the session a project has before anyone names another, and
+// the one a resume picks up when `current` is missing or unreadable.
+const DefaultSession = "default"
+
+// SessionDir is one session's directory inside a project's state directory.
+// It does not create anything; EnsureSessionDir does.
+func SessionDir(projectRoot, session string) (string, error) {
+	if session == "" {
+		session = DefaultSession
+	}
+	dir, err := artifactPath(projectRoot, artSessions)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, session), nil
+}
+
+// sessionArtifactPath is the one way to build a path inside a session's
+// directory, for the same reason artifactPath is: a name that skipped the
+// table is a name `strument project adopt` would drop.
+func sessionArtifactPath(projectRoot, session, id string) (string, error) {
+	a, ok := sessionArtifacts[id]
+	if !ok {
+		return "", fmt.Errorf("no such session artifact %q", id)
+	}
+	dir, err := SessionDir(projectRoot, session)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, a.name), nil
+}
+
 // artifactNames lists every registered file name, for callers that need to
 // recognize what belongs in a project directory.
 func artifactNames() map[string]string {
-	out := make(map[string]string, len(artifacts))
-	for id, a := range artifacts {
+	return namesOf(artifacts)
+}
+
+// sessionArtifactNames is artifactNames for one session's directory.
+func sessionArtifactNames() map[string]string {
+	return namesOf(sessionArtifacts)
+}
+
+func namesOf(table map[string]artifact) map[string]string {
+	out := make(map[string]string, len(table))
+	for id, a := range table {
 		out[a.name] = id
 	}
 	return out

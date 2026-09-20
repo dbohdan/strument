@@ -218,29 +218,29 @@ func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
 	cfg := &config.Config{Default: "mimo"}
 	cdr := coder.New(root, &config.Model{Slug: "x"})
 
-	save := saveResumeFunc(cdr, cfg, root, true)
+	save := saveResumeFunc(cdr, cfg, root, history.DefaultSession, true)
 	if save == nil {
 		t.Fatal("no save function when state is kept")
 	}
 
 	save("mimo") // the default: nothing to remember
-	if got := history.LoadResume(root).Model; got != "" {
+	if got := history.LoadResume(root, history.DefaultSession).Model; got != "" {
 		t.Errorf("the default alias was pinned: %q", got)
 	}
 	save("sonnet") // a deliberate choice: remember it
-	if got := history.LoadResume(root).Model; got != "sonnet" {
+	if got := history.LoadResume(root, history.DefaultSession).Model; got != "sonnet" {
 		t.Errorf("model = %q, want sonnet", got)
 	}
 	// Switching back to the default is the way out of the pin.
 	save("mimo")
-	if got := history.LoadResume(root).Model; got != "" {
+	if got := history.LoadResume(root, history.DefaultSession).Model; got != "" {
 		t.Errorf("switching back to the default left %q pinned", got)
 	}
 }
 
 // --no-history means leave no trace, so there is nothing to call.
 func TestResumeIsNotSavedWithoutState(t *testing.T) {
-	if save := saveResumeFunc(nil, nil, "/tmp/whatever", false); save != nil {
+	if save := saveResumeFunc(nil, nil, "/tmp/whatever", history.DefaultSession, false); save != nil {
 		t.Error("a no-trace session should have no save function")
 	}
 }
@@ -258,9 +258,9 @@ func TestResumePathsAreProjectRelative(t *testing.T) {
 	cdr := coder.New(sub, &config.Model{Slug: "x"})
 	cdr.AddFile(filepath.Join(sub, "b.go"))
 
-	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, true)("m")
+	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, history.DefaultSession, true)("m")
 
-	got := history.LoadResume(root).Files
+	got := history.LoadResume(root, history.DefaultSession).Files
 	if len(got) != 1 || got[0] != "sub/b.go" {
 		t.Errorf("files = %v, want [sub/b.go]", got)
 	}
@@ -351,7 +351,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 
 	// First session: nothing recorded, so it is offered.
 	c1 := newCoder()
-	_, offered, _ := restoreSession(c1, root, history.Resume{})
+	_, offered, _ := restoreSession(c1, root, history.DefaultSession, history.Resume{})
 	if !offered {
 		t.Fatal("a project with AGENTS.md and no record should be offered it")
 	}
@@ -362,7 +362,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// Second session, with the offer recorded and the user having dropped it:
 	// dropped stays dropped.
 	c2 := newCoder()
-	_, offered, _ = restoreSession(c2, root, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
+	_, offered, _ = restoreSession(c2, root, history.DefaultSession, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
 	if offered {
 		t.Error("the offer must not repeat once recorded")
 	}
@@ -373,7 +373,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// And with it recorded *and* still pinned, it comes back as an ordinary
 	// resume entry rather than as a fresh offer.
 	c3 := newCoder()
-	_, offered, _ = restoreSession(c3, root, history.Resume{
+	_, offered, _ = restoreSession(c3, root, history.DefaultSession, history.Resume{
 		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
 	})
 	if offered {
@@ -392,7 +392,7 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	root := t.TempDir()
 	c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
 
-	if _, offered, _ := restoreSession(c, root, history.Resume{}); offered {
+	if _, offered, _ := restoreSession(c, root, history.DefaultSession, history.Resume{}); offered {
 		t.Error("nothing to offer in a project with no AGENTS.md")
 	}
 	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {
@@ -442,7 +442,7 @@ func TestRestoreSessionNote(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cdr := coder.New(root, &config.Model{Slug: "test"})
-			note, _, _ := restoreSession(cdr, root, tt.res)
+			note, _, _ := restoreSession(cdr, root, history.DefaultSession, tt.res)
 			if tt.empty {
 				if note != "" {
 					t.Errorf("note = %q, want empty", note)

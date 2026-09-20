@@ -40,11 +40,11 @@ func TestUndoRoundTrip(t *testing.T) {
 		Commits: []string{"abc1234", "def5678"},
 		Last:    "def5678",
 	}
-	if err := SaveUndo(root, want, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, want, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	got := LoadUndo(root)
+	got := LoadUndo(root, DefaultSession)
 	if len(got.Turns) != 3 {
 		t.Fatalf("turns = %d, want 3", len(got.Turns))
 	}
@@ -70,10 +70,10 @@ func TestUndoFileIsOwnerOnly(t *testing.T) {
 		t.Skip("Windows does not provide Unix permission bits")
 	}
 	root := undoRoot(t)
-	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("a", "x", "y", true)}}, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, UndoState{Turns: []UndoTurn{turn("a", "x", "y", true)}}, 0); err != nil {
 		t.Fatal(err)
 	}
-	p, err := UndoPath(root)
+	p, err := UndoPath(root, DefaultSession)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,11 +97,11 @@ func TestUndoFileIsOwnerOnly(t *testing.T) {
 // can only produce a refusal.
 func TestLoadUndoToleratesJunk(t *testing.T) {
 	root := undoRoot(t)
-	if got := LoadUndo(root); len(got.Turns) != 0 {
+	if got := LoadUndo(root, DefaultSession); len(got.Turns) != 0 {
 		t.Error("a missing file should load as the zero value")
 	}
 
-	p, err := UndoPath(root)
+	p, err := UndoPath(root, DefaultSession)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestLoadUndoToleratesJunk(t *testing.T) {
 		if err := os.WriteFile(p, []byte(junk), fileMode); err != nil {
 			t.Fatal(err)
 		}
-		if got := LoadUndo(root); len(got.Turns) != 0 {
+		if got := LoadUndo(root, DefaultSession); len(got.Turns) != 0 {
 			t.Errorf("junk %q loaded %d turns, want 0", junk, len(got.Turns))
 		}
 	}
@@ -132,10 +132,10 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 	for i := range MaxUndoTurns + 5 {
 		st.Turns = append(st.Turns, turn("f.txt", "old", string(rune('a'+i%26)), true))
 	}
-	if err := SaveUndo(root, st, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, st, 0); err != nil {
 		t.Fatal(err)
 	}
-	got := LoadUndo(root)
+	got := LoadUndo(root, DefaultSession)
 	if len(got.Turns) != MaxUndoTurns {
 		t.Errorf("turns = %d, want the cap %d", len(got.Turns), MaxUndoTurns)
 	}
@@ -152,10 +152,10 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 		turn("b", big, big, true),
 		turn("c", big, big, true),
 	}}
-	if err := SaveUndo(root, heavy, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, heavy, 0); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(LoadUndo(root).Turns); n != 1 {
+	if n := len(LoadUndo(root, DefaultSession).Turns); n != 1 {
 		t.Errorf("turns kept = %d; 3 x 10 MiB against an %d-byte cap should leave 1", n, maxUndoBytes)
 	}
 }
@@ -165,10 +165,10 @@ func TestUndoRetentionEvictsOldestFirst(t *testing.T) {
 func TestUndoAlwaysKeepsTheNewestTurn(t *testing.T) {
 	root := undoRoot(t)
 	huge := strings.Repeat("y", (maxUndoBytes*2)+1)
-	if err := SaveUndo(root, UndoState{Turns: []UndoTurn{turn("big.bin", huge, huge, true)}}, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, UndoState{Turns: []UndoTurn{turn("big.bin", huge, huge, true)}}, 0); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(LoadUndo(root).Turns); n != 1 {
+	if n := len(LoadUndo(root, DefaultSession).Turns); n != 1 {
 		t.Errorf("turns = %d, want 1 even though it exceeds the cap alone", n)
 	}
 }
@@ -186,18 +186,18 @@ func TestSaveUndoHonoursAConfiguredDepth(t *testing.T) {
 		}}})
 	}
 
-	if err := SaveUndo(root, st, MaxUndoTurns+7); err != nil {
+	if err := SaveUndo(root, DefaultSession, st, MaxUndoTurns+7); err != nil {
 		t.Fatal(err)
 	}
-	got := LoadUndo(root)
+	got := LoadUndo(root, DefaultSession)
 	if len(got.Turns) != MaxUndoTurns+7 {
 		t.Errorf("saved %d turns, want the configured %d", len(got.Turns), MaxUndoTurns+7)
 	}
 	// Zero still means the default, so a caller that has no opinion gets one.
-	if err := SaveUndo(root, st, 0); err != nil {
+	if err := SaveUndo(root, DefaultSession, st, 0); err != nil {
 		t.Fatal(err)
 	}
-	got = LoadUndo(root)
+	got = LoadUndo(root, DefaultSession)
 	if len(got.Turns) != MaxUndoTurns {
 		t.Errorf("with depth 0 saved %d turns, want the default %d", len(got.Turns), MaxUndoTurns)
 	}

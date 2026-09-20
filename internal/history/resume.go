@@ -51,8 +51,8 @@ type Resume struct {
 }
 
 // ResumePath is the resume file for a project root.
-func ResumePath(projectRoot string) (string, error) {
-	return artifactPath(projectRoot, artResume)
+func ResumePath(projectRoot, session string) (string, error) {
+	return sessionArtifactPath(projectRoot, session, sartResume)
 }
 
 // LoadResume reads a project's resume file. A missing, unreadable, malformed,
@@ -62,8 +62,8 @@ func ResumePath(projectRoot string) (string, error) {
 // loader fails loudly on a version mismatch because a wrong fixture invalidates
 // a test, while a stale resume file should cost nothing more than retyping. It
 // is overwritten on the next change either way.
-func LoadResume(projectRoot string) Resume {
-	p, err := ResumePath(projectRoot)
+func LoadResume(projectRoot, session string) Resume {
+	p, err := ResumePath(projectRoot, session)
 	if err != nil {
 		return Resume{}
 	}
@@ -86,8 +86,8 @@ func LoadResume(projectRoot string) Resume {
 // rename replaces the destination's inode, so a mode set on the original does
 // not survive, which is the same trap writeAtomically and the vendored readline
 // each had to be taught.
-func SaveResume(projectRoot string, r Resume) error {
-	p, err := ResumePath(projectRoot)
+func SaveResume(projectRoot, session string, r Resume) error {
+	p, err := ResumePath(projectRoot, session)
 	if err != nil {
 		return err
 	}
