@@ -210,6 +210,78 @@ func renderCommitMessages(msgs []llm.Message) string {
 // timeout the commit proceeds with the fallback message.
 const commitMessageTimeout = sideTimeout
 
+// commitInputCutNote marks a truncated diff, so the model reads it as cut
+// rather than as a change that ends there — the same reason clipForSummary and
+// maxToolOutputBytes announce their cuts.
+const commitInputCutNote = "\n… (diff cut to fit the side model's context; " +
+	"describe what is shown and do not guess at the rest)"
+
+// commitCharsPerToken converts a token bound into a character budget.
+//
+// RuneCounter estimates at 4 characters per token, and its own comment says
+// code runs closer to 3.3 — which is what a diff is. Everywhere else that
+// estimate is advisory; here it decides what to cut, so it rounds the wrong way
+// deliberately. At 3 the budget cuts a little more than it strictly must; at 4
+// a dense diff slips through and the provider rejects the whole request, which
+// is the failure this exists to prevent.
+const commitCharsPerToken = 3
+
+// commitContextOmittedNote marks a chat context cut to fit, matching the phrase
+// commitContext already uses when maxCommitHistory trims the same material.
+const commitContextOmittedNote = "(Earlier conversation omitted.)\n"
+
+// fitCommitInput assembles the commit-message input within bound tokens,
+// sacrificing the chat context before the diff.
+//
+// The order is the whole point. The prompt tells the model to "describe only
+// what the diff does" and treats earlier turns as background, so when something
+// has to go, background is what goes: a message written from a full diff and no
+// context is worse-explained, while one written from full context and half a
+// diff is wrong about what changed. The diff is cut only when it exceeds the
+// budget by itself.
+//
+// Sized in characters against a token bound at commitCharsPerToken.
+func fitCommitInput(chatContext, diffs string, bound int, out Output) string {
+	budget := (bound - summaryInputBuffer) * commitCharsPerToken
+	if budget <= 0 {
+		return "# Diffs:\n" + diffs
+	}
+
+	body := "# Diffs:\n" + diffs
+	if len(body) >= budget {
+		// No room for context at all, and the diff itself must give.
+		keep := budget - len(commitInputCutNote)
+		if keep < len(body) && keep > 0 {
+			out.Toolf("The diff is too large for the commit-message model; describing the first %s of it.",
+				render.Plural(keep, "character", "characters"))
+			return body[:keep] + commitInputCutNote
+		}
+		return body
+	}
+	if chatContext == "" {
+		return body
+	}
+
+	if room := budget - len(body) - 1; room >= len(chatContext) { // -1 for the joining newline
+		return chatContext + "\n" + body
+	}
+	// The marker is part of what gets sent, so it comes out of the budget
+	// rather than being added on top of it — which is what it did first, and
+	// what put the result 29 characters over a bound the whole function exists
+	// to hold.
+	room := budget - len(body) - 1 - len(commitContextOmittedNote)
+	if room <= 0 {
+		return body
+	}
+	// Keep the tail: the reason for a change is usually stated a turn or two
+	// before it lands, which is the same reasoning maxCommitHistory follows.
+	cut := chatContext[len(chatContext)-room:]
+	if i := strings.IndexByte(cut, '\n'); i >= 0 {
+		cut = cut[i+1:]
+	}
+	return commitContextOmittedNote + cut + "\n" + body
+}
+
 // CommitMessenger returns a commit-message generator backed by a model,
 // packaged as the git port's Message func. An empty return means "no message"
 // and the caller falls back.
@@ -238,11 +310,7 @@ func CommitMessenger(
 			"language_instruction": languageInstruction,
 		})
 
-		content := ""
-		if chatContext != "" {
-			content = chatContext + "\n"
-		}
-		content += "# Diffs:\n" + diffs
+		content := fitCommitInput(chatContext, diffs, sideInputBound(model), out)
 
 		ctx, cancel := context.WithTimeout(context.Background(), commitMessageTimeout)
 		defer cancel()
@@ -253,13 +321,27 @@ func CommitMessenger(
 				llm.TextMessage("system", system),
 				llm.TextMessage("user", content),
 			},
-			// No ReasoningEffort. It used to inherit the model's, so a reasoning
-			// model would think its way to a subject line — paid for, invisible,
-			// and slower at the one moment the user is waiting to get their
-			// prompt back.
-			Temperature: model.Temperature,
-			ExtraParams: model.RequestExtraParams(),
-		}, "the commit message", out, clock, record)
+			// The side model's own reasoning setting, like the summary call.
+			//
+			// This field used to be left unset, with a comment claiming that
+			// stopped a reasoning model from thinking its way to a subject
+			// line. It did not: client.go reads "" as "defer to the provider
+			// default; send nothing", so the model reasoned exactly as much as
+			// it pleased and Strument merely gave up the ability to say
+			// otherwise. Live, every one of four side models reasoned here —
+			// one spent 36,141 characters of reasoning on a 202-character
+			// commit message, taking 845.9s.
+			//
+			// Passing the configured effort through is what makes the comment's
+			// intent reachable: `reasoning="off"` on the side model now turns it
+			// off, where before the setting was ignored on this path. It is not
+			// forced off here, because "off" is not universally accepted —
+			// glm-5.3-flash rejects reasoning:{enabled:false} with HTTP 400 —
+			// so the choice belongs in config, where the user knows their model.
+			ReasoningEffort: model.Reasoning,
+			Temperature:     model.Temperature,
+			ExtraParams:     model.RequestExtraParams(),
+		}, "commit message", out, clock, record)
 		return strings.TrimSpace(answer) // "" after exhausted retries => caller falls back
 	}
 }

@@ -12,11 +12,27 @@ import (
 
 // Summarization tunables, ported from aider's ChatSummary (history.py).
 const (
-	summaryTimeout       = sideTimeout
-	summaryMinSplit      = 4    // below this many messages, summarize the lot
-	summaryMaxDepth      = 3    // recursion cap before summarizing the lot
-	summaryInputBuffer   = 512  // reserved from the side model's window per call
-	summaryFallbackInput = 4096 // side-model window when its Context is unknown
+	summaryTimeout     = summaryTimeoutBudget
+	summaryMinSplit    = 4   // below this many messages, summarize the lot
+	summaryMaxDepth    = 3   // recursion cap before summarizing the lot
+	summaryInputBuffer = 512 // reserved from the side model's window per call
+	// summaryFallbackInput is the side model's window when its Context is
+	// unknown, which is the default: config's `context` is None unless the user
+	// sets it or generates the entry with `strument config models`.
+	//
+	// It was 4096, inherited rather than chosen, and that is not a window any
+	// current model has. Across 747 sessions of real use the smallest window
+	// was 65,536 and the median 1,050,000, so 4096 was 16x below the smallest
+	// model in the sample. Harmless while only compaction read it — a coarser
+	// fold is still a fold — and not harmless at all once the commit message
+	// reads it too, because 4096 tokens is about 16k characters and 36% of this
+	// repository's last 200 commits have a larger diff than that.
+	//
+	// 32,768 is half the smallest observed window, so it cannot overflow a model
+	// anyone here has run, and it leaves 2.5% of those diffs needing a cut
+	// rather than 36%. It stays a floor rather than a guess: a model whose
+	// window is actually known uses that instead.
+	summaryFallbackInput = 32_768
 	// summaryToolBytes caps one tool result fed to the summarizer. A read of a
 	// large file would otherwise fill the side model's window with the very
 	// content the prompt asks it to leave out.
@@ -80,8 +96,27 @@ func (s *ChatSummary) total(msgs []llm.Message) int {
 
 // sideInputBound is how much head the side model can be fed in one call.
 func (s *ChatSummary) sideInputBound() int {
-	if s.side != nil && s.side.Context > 0 {
-		return s.side.Context
+	return sideInputBound(s.side)
+}
+
+// sideInputBound is how much input one side call may be given: the side model's
+// whole window, or the fallback when it does not report one.
+//
+// The whole window rather than a share of it, and that distinction is the
+// reason this is one rule rather than two. maxChatHistoryTokens divides by
+// historyShare because the main model's window is *contended* — history sits
+// there beside pinned files, the repo map, the tool schemas and the exchange in
+// progress. A side call's request is its system prompt plus this content and
+// nothing else, so it owns the window and only needs headroom for the reply.
+//
+// Shared by compaction and the commit message. The commit message used to have
+// no bound at all: gitrepo hands over `git diff --cached` verbatim and
+// renderCommitMessages writes every message's full text, so a turn that read
+// three large files put all three into the call. Nothing truncated it and
+// nothing reported it; it simply grew until the provider refused.
+func sideInputBound(side *config.Model) int {
+	if side != nil && side.Context > 0 {
+		return side.Context
 	}
 	return summaryFallbackInput
 }
@@ -201,7 +236,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 		ReasoningEffort: s.side.Reasoning,
 		Temperature:     s.side.Temperature,
 		ExtraParams:     s.side.RequestExtraParams(),
-	}, "the chat summary", s.out, s.clock, nil)
+	}, "chat summary", s.out, s.clock, nil)
 	if err != nil {
 		return nil, err
 	}

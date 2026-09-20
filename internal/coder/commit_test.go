@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -197,5 +198,111 @@ func TestCommitTurnNoopAfterToolCommit(t *testing.T) {
 	if !found {
 		t.Errorf("no \"Nothing to commit since %s\" announcement; got:\n%s",
 			c.lastCommitHash[:7], strings.Join(out.lines, "\n"))
+	}
+}
+
+// The commit-message input used to have no bound at all: gitrepo passes
+// `git diff --cached` through verbatim and renderCommitMessages writes every
+// message's full text, so the call grew with the turn until a provider refused
+// it. These pin the bound and, more importantly, pin *what gives* when the
+// input does not fit.
+
+// Both paths have to respect the budget, and they are different code: a diff
+// that overflows on its own is truncated, while a diff that fits leaves a
+// remainder for the chat context to be trimmed into. An earlier version of this
+// test passed a 50k diff for every case, which took the first path every time
+// and left the second unexercised — it stayed green against a bound that let
+// the context run past the budget by an order of magnitude.
+func TestCommitInputFitsWithinTheSideModelsWindow(t *testing.T) {
+	bound := 1000 // tokens
+	budget := (bound - summaryInputBuffer) * commitCharsPerToken
+
+	for _, tc := range []struct {
+		name string
+		diff string
+	}{
+		{"diff overflows on its own", strings.Repeat("d", 50_000)},
+		{"diff fits, context must be trimmed", strings.Repeat("d", 600)},
+		{"both tiny", "d"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := fitCommitInput(strings.Repeat("c", 50_000), tc.diff, bound, &summaryOutput{})
+			if len(got) > budget {
+				t.Errorf("input is %d chars, over the %d-char budget for a %d-token window",
+					len(got), budget, bound)
+			}
+		})
+	}
+}
+
+// The order is the whole point. The prompt tells the model to describe only
+// what the diff does and treats earlier turns as background, so background is
+// what goes first. A message written from a full diff and no context is
+// worse-explained; one written from half a diff is wrong about what changed.
+func TestCommitInputSacrificesContextBeforeTheDiff(t *testing.T) {
+	diff := "diff --git a/x b/x\n" + strings.Repeat("+line\n", 200)
+	chatContext := strings.Repeat("CHATTER\n", 5000)
+
+	bound := 1000
+	budget := (bound - summaryInputBuffer) * commitCharsPerToken
+	got := fitCommitInput(chatContext, diff, bound, &summaryOutput{})
+
+	if !strings.Contains(got, diff) {
+		t.Error("the diff was cut while chat context was still present")
+	}
+	if strings.Count(got, "CHATTER") >= 5000 {
+		t.Error("nothing was cut; the fixture is too small to exercise the bound")
+	}
+	// Keeping the diff whole is only half the rule; the result still has to fit.
+	// Without this the test passes on an implementation that keeps everything.
+	if len(got) > budget {
+		t.Errorf("the diff survived but the result is %d chars, over the %d-char budget", len(got), budget)
+	}
+}
+
+// A diff that exceeds the budget on its own has to give, and must say so — a
+// model handed a silently truncated diff reads it as a change that ends there
+// and describes a commit that does not exist.
+func TestCommitInputAnnouncesATruncatedDiff(t *testing.T) {
+	out := &summaryOutput{}
+	got := fitCommitInput("", strings.Repeat("d", 100_000), 1000, out)
+
+	if !strings.Contains(got, commitInputCutNote) {
+		t.Error("the diff was cut without telling the model it was cut")
+	}
+	if !strings.Contains(strings.Join(out.lines, "\n"), "too large") {
+		t.Errorf("the cut was not reported to the user:\n%s", strings.Join(out.lines, "\n"))
+	}
+}
+
+// The common case must not be touched at all. A bound that trimmed ordinary
+// commits would be a regression wearing a guard rail's clothes.
+func TestCommitInputLeavesAnOrdinaryCommitAlone(t *testing.T) {
+	// The median diff over this repository's last 200 commits is ~10k chars.
+	diff := strings.Repeat("+a line of a patch\n", 500)
+	chatContext := "USER: fix the thing\nASSISTANT: done\n"
+
+	got := fitCommitInput(chatContext, diff, summaryFallbackInput, &summaryOutput{})
+
+	if !strings.Contains(got, chatContext) || !strings.Contains(got, diff) {
+		t.Error("an ordinary commit was trimmed; the fallback bound is too tight")
+	}
+	if strings.Contains(got, commitInputCutNote) {
+		t.Error("an ordinary commit was marked as cut")
+	}
+}
+
+// sideInputBound is the rule compaction already used; the commit message now
+// reads the same one. A model that reports its window uses it, and only a model
+// that does not falls back.
+func TestSideInputBoundPrefersTheModelsOwnWindow(t *testing.T) {
+	if got := sideInputBound(&config.Model{Context: 200_000}); got != 200_000 {
+		t.Errorf("bound = %d, want the model's own 200000", got)
+	}
+	if got := sideInputBound(&config.Model{}); got != summaryFallbackInput {
+		t.Errorf("bound = %d, want the %d fallback", got, summaryFallbackInput)
+	}
+	if got := sideInputBound(nil); got != summaryFallbackInput {
+		t.Errorf("bound = %d for a nil model, want the %d fallback", got, summaryFallbackInput)
 	}
 }

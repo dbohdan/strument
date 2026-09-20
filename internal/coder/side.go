@@ -38,6 +38,10 @@ func sendSide(
 ) (string, error) {
 	backoff := retryBackoff{delay: initialRetryDelay, cap: sideRetryCap, what: what}
 	empties := 0
+	// The budgets differ per entry point now, so the deadline message reports
+	// what this call actually spent rather than naming a constant that belongs
+	// to a different caller.
+	started := clock.Now()
 	for {
 		attempt, err := sideOnce(ctx, cl, req, record)
 		if err == nil && strings.TrimSpace(attempt) != "" {
@@ -59,7 +63,7 @@ func sendSide(
 		// wearing the costume of a decision the model made.
 		if !backoff.retry(ctx, out, clock, err) {
 			if ctx.Err() != nil {
-				return "", fmt.Errorf("%w after %v", ctx.Err(), sideTimeout)
+				return "", fmt.Errorf("%w after %v", ctx.Err(), clock.Now().Sub(started).Round(time.Second))
 			}
 			return "", err
 		}
@@ -91,9 +95,42 @@ const (
 	maxEmptyRetries   = 2
 	emptySideResponse = "the model returned an empty response"
 
-	// sideTimeout bounds one side call, retries included. Every side call uses
-	// it, so the ladder below can be sized against one number.
-	sideTimeout = 60 * time.Second
+	// sideTimeout is the floor every side-call budget is built from, and the
+	// budget for a call with nothing more specific to say about itself.
+	//
+	// It was 60s for all three calls, and 60s was too small by a wide margin.
+	// Over 72 live calls across four side models and six input shapes
+	// (doc/experiments/2026-09-side-call-timing/), a 60s budget cuts 62% of
+	// compaction calls and 31% of commit-message calls — and none of those were
+	// stalls. The largest gap between bytes in the whole sample was 10.8s; the
+	// calls were simply long, because a side model reasons before it answers
+	// whether or not anyone asked it to (see the note on ReasoningEffort in
+	// commit.go). What looked like a flaky side model was a deadline set below
+	// the work.
+	//
+	// The per-call budgets below are not a new mechanism. A stalled stream is
+	// already caught upstream by the client's idle timeout, which bounds the gap
+	// between bytes rather than the duration of the call
+	// (internal/client/idle.go) and covers side calls because they share the
+	// client. These budgets exist for the failure an idle timeout cannot see: a
+	// model that streams steadily and never stops. One call in the sample spent
+	// 845.9s and 36,141 characters of reasoning to produce a 202-character
+	// commit message, with a maximum gap of 0.8s. Nothing watching for silence
+	// would ever have cut it.
+	sideTimeout = 120 * time.Second
+
+	// summaryTimeoutBudget is larger than the rest because compaction's failure
+	// is the most expensive of the three. A commit message falls back to a
+	// generated one and notes are simply absent, but a fold that does not happen
+	// leaves the history oversized, so the *next* send is the one that fails.
+	//
+	// 300s cuts 4% of the summary calls in the sample against 17% at 180s and
+	// 33% at 120s. The 4% is not a number to chase to zero: the slowest call
+	// measured ran 675.8s, and a fold nobody is willing to wait eleven minutes
+	// for is one worth abandoning. What the budget buys is that the *typical*
+	// long fold — the sample's median is 94.1s — now completes, where under 60s
+	// it did not.
+	summaryTimeoutBudget = 300 * time.Second
 
 	// sideRetryCap bounds the backoff for a side call, and is small on purpose.
 	//
@@ -104,12 +141,13 @@ const (
 	// The arithmetic was the bug, not the retrying.
 	//
 	// At 8s the ladder sleeps 0.25+0.5+1+2+4+8 = 15.75s over six retries,
-	// leaving the rest of the minute for the seven requests themselves. Giving
+	// leaving the rest of the budget for the seven requests themselves. Giving
 	// up sooner is also the right shape for a side call: a user waiting on
 	// their own prompt is better served by notes that fail in twenty seconds
 	// than by notes that arrive in two minutes.
 	//
-	// sideLadderFitsItsBudget holds this to sideTimeout.
+	// sideLadderFitsItsBudget holds this to sideTimeout, which is the smallest
+	// of the budgets, so it fits in all of them.
 	sideRetryCap = 8 * time.Second
 )
 

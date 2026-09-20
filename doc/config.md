@@ -1212,6 +1212,14 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   — prose about the session rather than work on your code — which is where the
   name comes from, and why a cheaper and/or faster model usually belongs here.
 
+  Its `reasoning` applies to all three, which is worth knowing because these
+  calls happen while you wait for your prompt back and a reasoning model can
+  spend a great deal of thought on a one-line commit subject — measured at 845.9
+  seconds and 36,141 characters of reasoning for a 202-character message, in
+  [`doc/experiments/2026-09-side-call-timing`](experiments/2026-09-side-call-timing/).
+  Set `reasoning="off"` on the side model if your provider accepts it; some,
+  such as `z-ai/glm-5.3-flash`, reject the request outright instead.
+
   The setting was previously called `weak_model`. A config still using
   `weak_model` gets an error naming the new key.
 - **`reasoning`** — reasoning effort. OpenRouter accepts `"max"`, `"xhigh"`,

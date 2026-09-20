@@ -34,7 +34,7 @@ func TestCommitMessengerRetriesTransientError(t *testing.T) {
 	// Reported, and named. A countdown during a wait for your own prompt says
 	// nothing about which side call is retrying unless it says so.
 	said := strings.Join(out.lines, "\n")
-	if !strings.Contains(said, "Retrying the commit message in") {
+	if !strings.Contains(said, "Retrying commit message in") {
 		t.Errorf("the retry was not reported as the commit message's:\n%s", said)
 	}
 }
@@ -256,7 +256,7 @@ func TestSideCallReportsItsOwnDeadline(t *testing.T) {
 	cancel() // already past its deadline when the first attempt fails
 
 	out := &summaryOutput{}
-	got, err := sendSide(ctx, &emptyThenStub{blanks: 99}, llm.Request{}, "the session notes",
+	got, err := sendSide(ctx, &emptyThenStub{blanks: 99}, llm.Request{}, "session notes",
 		out, &fastClock{}, nil)
 
 	if got != "" {
@@ -266,7 +266,7 @@ func TestSideCallReportsItsOwnDeadline(t *testing.T) {
 		t.Fatal("a call that ran out of time returned no error")
 	}
 	said := strings.Join(out.lines, "\n")
-	if !strings.Contains(said, "the session notes") {
+	if !strings.Contains(said, "session notes") {
 		t.Errorf("the failure did not name the call:\n%s", said)
 	}
 	if !strings.Contains(said, "gave up") {

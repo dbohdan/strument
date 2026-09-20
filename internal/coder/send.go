@@ -720,8 +720,20 @@ func (c *Coder) endTurnHistory() {
 // maxChatHistoryTokens is the settled-history budget: context/8,
 // derived from the main model's window, with a 2048 floor for small windows.
 // It is increased from aider's context/16.
+// historyShare is the fraction of the main model's window chat history may
+// occupy: one eighth. The divisor is named because it is a share of a
+// *contended* window — history sits there beside pinned files, the repo map,
+// the tool schemas and the exchange in progress — which is what distinguishes
+// it from sideInputBound, where the call owns the window and takes nearly all
+// of it. Two numbers, one idea, applied at two scopes.
+const historyShare = 8
+
+// minChatHistoryTokens keeps a tiny window from reducing the history budget to
+// nothing, which would compact after every turn and never fit.
+const minChatHistoryTokens = 2048
+
 func maxChatHistoryTokens(context int) int {
-	return max(context/8, 2048)
+	return max(context/historyShare, minChatHistoryTokens)
 }
 
 // countSummaryMessages reports how many retained history messages are compaction summaries.

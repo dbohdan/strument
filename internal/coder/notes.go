@@ -66,12 +66,13 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 				llm.TextMessage(llm.RoleSystem, prompts.SessionNotes),
 				llm.TextMessage(llm.RoleUser, transcript),
 			},
-			// No ReasoningEffort, like the commit message: this runs while the
-			// user is waiting for their prompt back, and thinking about it is
-			// paid for and invisible.
-			Temperature: model.Temperature,
-			ExtraParams: model.RequestExtraParams(),
-		}, "the session notes", out, clock, record)
+			// The side model's own reasoning setting, like the commit message
+			// and the summary — see commit.go for why leaving it unset did not
+			// mean what its comment said it meant.
+			ReasoningEffort: model.Reasoning,
+			Temperature:     model.Temperature,
+			ExtraParams:     model.RequestExtraParams(),
+		}, "session notes", out, clock, record)
 		notes := strings.TrimSpace(answer)
 		if notes == "" && err == nil {
 			err = errors.New("the model returned no notes")
