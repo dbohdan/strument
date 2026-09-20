@@ -408,6 +408,14 @@ func (c *chatCmd) Run() error {
 	costBefore, _ := cdr.SessionCost()
 
 	appendTurn := func(crashed bool, assistant string) {
+		// Guarded here rather than only at the call below, because OnCrash is
+		// installed unconditionally: under --no-history there is no transcript
+		// to append to, and a panic would have turned into a nil dereference
+		// inside the recovery handler — losing the original stack, which is
+		// the one thing a crash path exists to preserve.
+		if hist == nil {
+			return
+		}
 		sentAfter, recvAfter := cdr.SessionTokens()
 		costAfter, known := cdr.SessionCost()
 		if err := hist.Append(history.Turn{
