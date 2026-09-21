@@ -129,13 +129,71 @@ func TestNoNotesNoSlot(t *testing.T) {
 // failure this feature can cause is a model acting on a note the tree has moved
 // past, so the note says which side loses.
 func TestNotesHeaderNamesTheFilesAsAuthoritative(t *testing.T) {
-	got := prompts.SessionNotesPrefix("2026-08-16 10:00")
+	got := prompts.SessionNotesPrefix(prompts.SessionNotesContext{When: "2026-08-16 10:00"})
 	for _, want := range []string{"2026-08-16 10:00", "summary, not a record", "the files are right"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the notes header is missing %q:\n%s", want, got)
 		}
 	}
-	if !strings.Contains(prompts.SessionNotesPrefix(""), "date unknown") {
+	if !strings.Contains(prompts.SessionNotesPrefix(prompts.SessionNotesContext{}), "date unknown") {
 		t.Error("a missing date should say so rather than print an empty parenthetical")
+	}
+}
+
+// The coder's own session and the session the notes came from reach the
+// header.
+//
+// prompts has its own tests for the wording; this one is about the wiring,
+// which is three fields that have to arrive in the right slots. A swap would
+// tell the model it is working in the session it is reading notes *from*,
+// which is the one mistake the header exists to prevent.
+func TestTheNotesHeaderKnowsWhichSessionIsWhich(t *testing.T) {
+	c := testCoder(t)
+	c.Session = "impl"
+	c.SessionNotes = "Tried B, kept A."
+	c.SessionNotesDate = "2026-09-18 14:02"
+	c.SessionNotesSession = "spike"
+	c.curMessages = []llm.Message{llm.TextMessage("user", "go on")}
+
+	var header string
+	for _, m := range c.formatMessages().allMessages() {
+		if strings.Contains(m.Text(), "Notes from earlier work") {
+			header = m.Text()
+		}
+	}
+	if header == "" {
+		t.Fatal("the notes slot emitted no header")
+	}
+	if !strings.Contains(header, `a different session, named "spike"`) {
+		t.Errorf("the header does not name the session the notes came from:\n%s", header)
+	}
+	if !strings.Contains(header, `You are working in the session named "impl"`) {
+		t.Errorf("the header does not tell the model which session it is in:\n%s", header)
+	}
+	if !strings.Contains(header, "Tried B, kept A.") {
+		t.Errorf("the header lost the notes themselves:\n%s", header)
+	}
+}
+
+// One session reading its own earlier notes names neither, so a project that
+// never touches `/session` sees the wording it always saw.
+func TestOneSessionReadingItsOwnNotesNamesNoSessions(t *testing.T) {
+	c := testCoder(t)
+	c.Session = "default"
+	c.SessionNotes = "Tried B, kept A."
+	c.SessionNotesDate = "2026-09-18 14:02"
+	c.SessionNotesSession = "default"
+	c.curMessages = []llm.Message{llm.TextMessage("user", "go on")}
+
+	for _, m := range c.formatMessages().allMessages() {
+		if !strings.Contains(m.Text(), "Notes from earlier work") {
+			continue
+		}
+		if strings.Contains(m.Text(), "default") {
+			t.Errorf("the header named a session with no contrast to draw:\n%s", m.Text())
+		}
+		if !strings.Contains(m.Text(), "an earlier session") {
+			t.Errorf("the header lost its unnamed wording:\n%s", m.Text())
+		}
 	}
 }

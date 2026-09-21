@@ -506,19 +506,63 @@ const Summarize = "Briefly summarize this partial conversation about programming
 // It says "written by Strument" because that is true and because the
 // alternative readings are both false: the notes are not something the user
 // said, and not something the previous model said either — a different model
-// usually wrote them, and a different model again is reading them now.
+// usually wrote them, and a different model again is reading them now. That is
+// also why no model is named: the header makes no claim about authorship, and
+// naming one would invite the reader to weigh the notes by whose they were
+// rather than by what they say. The record keeps the model on every turn, so
+// nothing is lost by leaving it out here.
+//
+// It says "an earlier session" rather than "the last session", which is what
+// it used to say. Once a project holds several named sessions the notes in
+// hand are routinely not from the last one — a fork carries its parent's
+// notes forward — and the old wording was simply false.
+//
+// The session names, when there are any, go on the second line rather than the
+// last. The conflict rule is the block's last sentence on purpose — it is the
+// counter-metric turned into an instruction — and appending anything after it
+// takes away the final word it is there to have. Rendering the header is what
+// showed this; reading the format string did not.
 const sessionNotesPrefix = "Notes from earlier work on this project, written by Strument at the end of " +
-	"the last session (%s).\n" +
+	"%s (%s).\n" +
+	"%s" +
 	"They are a summary, not a record: they may be incomplete, and the project may have " +
 	"changed since.\n" +
 	"Where they disagree with what you find in the files, the files are right.\n"
 
-// SessionNotesPrefix renders the notes header for a given date.
-func SessionNotesPrefix(when string) string {
+// SessionNotesContext is where a set of notes came from and who is reading it.
+//
+// A struct rather than three string arguments because all three are strings
+// and two of them are session names, so a swapped pair would compile, read
+// plausibly, and produce a header that says the opposite of the truth.
+type SessionNotesContext struct {
+	// When the notes were written, already formatted.
+	When string
+	// From is the session they were written in, and In is the session reading
+	// them. They are named only when they differ: a name is worth its tokens
+	// when it draws a contrast, and "you are in session default" beside notes
+	// from session default draws none.
+	//
+	// The pair is named together or not at all, because a source label means
+	// nothing to a reader with no label of its own — "notes from session
+	// spike" leaves a model that does not know which session it is in with a
+	// name and no referent, which is worse than no name.
+	From string
+	In   string
+}
+
+// SessionNotesPrefix renders the notes header.
+func SessionNotesPrefix(c SessionNotesContext) string {
+	when := c.When
 	if when == "" {
 		when = "date unknown"
 	}
-	return fmt.Sprintf(sessionNotesPrefix, when)
+	// Both names or neither: see SessionNotesContext.
+	source, reader := "an earlier session", ""
+	if c.From != "" && c.In != "" && c.From != c.In {
+		source = fmt.Sprintf("a different session, named %q", c.From)
+		reader = fmt.Sprintf("You are working in the session named %q.\n", c.In)
+	}
+	return fmt.Sprintf(sessionNotesPrefix, source, when, reader)
 }
 
 // SessionNotes asks the side model for notes a *later* session can start from.

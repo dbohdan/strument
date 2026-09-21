@@ -146,6 +146,7 @@ func (c *chatCmd) Run() error {
 	}
 
 	cdr := coder.New(root, model)
+	cdr.Session = session
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.ForProvider(model.Provider)
 	// Every config-to-coder assignment lives in ApplyConfig, which /reload also
@@ -382,6 +383,7 @@ func (c *chatCmd) Run() error {
 			if notes != "" {
 				cdr.SessionNotes = notes
 				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
+				cdr.SessionNotesSession = session
 				// The notes call is paid for; say so with the same token/cost line
 				// a turn ends with, rather than leaving the charge invisible.
 				cdr.ReportSideUsageDone()
@@ -849,7 +851,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Rediscover: func() []skill.Skill { return discoverSkills(cdr.Root) },
 		Notes:      func() string { return cdr.SessionNotes },
 		DropNotes: func() {
-			cdr.SessionNotes, cdr.SessionNotesDate = "", ""
+			cdr.SessionNotes, cdr.SessionNotesDate, cdr.SessionNotesSession = "", "", ""
 		},
 		GenerateNotes: func(_ context.Context) error {
 			if !keepState {
@@ -874,6 +876,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			}
 			cdr.SessionNotes = notes
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
+			cdr.SessionNotesSession = session
 			cdr.ReportSideUsageDone()
 			return nil
 		},

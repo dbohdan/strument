@@ -162,3 +162,117 @@ func TestCommitSystemScopesToTheDiff(t *testing.T) {
 		t.Error("the prompt permits earlier work to be described as this change")
 	}
 }
+
+// The notes header names the session the notes came from and the session
+// reading them, but only when naming them draws a contrast.
+//
+// The two names go in together or not at all. A source label means nothing to
+// a reader with no label of its own, and a self label beside notes from the
+// same session says nothing at all — both halves of that are checked here,
+// because the failure either way is a prompt that reads fine and misleads.
+func TestSessionNotesPrefixNamesSessionsOnlyWhenTheyDiffer(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		ctx     SessionNotesContext
+		want    []string
+		notWant []string
+	}{
+		{
+			name: "a fork names both sides",
+			ctx:  SessionNotesContext{When: "2026-09-18 14:02", From: "spike", In: "impl"},
+			want: []string{
+				`a different session, named "spike"`,
+				`You are working in the session named "impl"`,
+				"2026-09-18 14:02",
+			},
+			notWant: []string{"an earlier session"},
+		},
+		{
+			name:    "the same session names neither",
+			ctx:     SessionNotesContext{When: "2026-09-18 14:02", From: "review", In: "review"},
+			want:    []string{"an earlier session"},
+			notWant: []string{"review", "You are working in"},
+		},
+		{
+			name:    "an unknown source names neither",
+			ctx:     SessionNotesContext{When: "2026-09-18 14:02", In: "impl"},
+			want:    []string{"an earlier session"},
+			notWant: []string{"impl", "You are working in"},
+		},
+		{
+			name:    "a reader that does not know its own session names neither",
+			ctx:     SessionNotesContext{When: "2026-09-18 14:02", From: "spike"},
+			want:    []string{"an earlier session"},
+			notWant: []string{"spike", "You are working in"},
+		},
+		{
+			name:    "no date says so rather than leaving a gap",
+			ctx:     SessionNotesContext{},
+			want:    []string{"date unknown", "an earlier session"},
+			notWant: []string{"You are working in"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SessionNotesPrefix(tc.ctx)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("header does not contain %q:\n%s", want, got)
+				}
+			}
+			for _, notWant := range tc.notWant {
+				if strings.Contains(got, notWant) {
+					t.Errorf("header contains %q and should not:\n%s", notWant, got)
+				}
+			}
+		})
+	}
+}
+
+// The conflict rule keeps the last word.
+//
+// It is the block's most important sentence — the counter-metric turned into
+// an instruction — and the first draft of the session labels appended after
+// it, which rendering caught and reading the format string had not. Pinned
+// here so it stays caught.
+func TestSessionNotesPrefixKeepsTheConflictRuleLast(t *testing.T) {
+	got := SessionNotesPrefix(SessionNotesContext{When: "2026-09-18 14:02", From: "spike", In: "impl"})
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, "the files are right") {
+		t.Errorf("the block ends on %q, want the conflict rule:\n%s", last, got)
+	}
+	// And the two session labels are adjacent, because they are a pair.
+	if strings.Index(got, "named \"impl\"") < strings.Index(got, "a summary, not a record") {
+		return
+	}
+	t.Errorf("the reader's own session is stated after the standing claims:\n%s", got)
+}
+
+// The header's standing claims survive every variant: they are the sentences
+// a live trial settled, and the conflict rule is the one that keeps a model
+// from acting confidently on a note the tree has moved past.
+func TestSessionNotesPrefixAlwaysCarriesItsStandingClaims(t *testing.T) {
+	for _, ctx := range []SessionNotesContext{
+		{When: "2026-09-18 14:02", From: "spike", In: "impl"},
+		{When: "2026-09-18 14:02", From: "review", In: "review"},
+		{},
+	} {
+		got := SessionNotesPrefix(ctx)
+		for _, want := range []string{
+			"written by Strument",
+			"a summary, not a record",
+			"the files are right",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%+v: header dropped %q:\n%s", ctx, want, got)
+			}
+		}
+		// No model is named, whatever the context: the header makes no claim
+		// about authorship, deliberately.
+		for _, never := range []string{"model", "Model"} {
+			if strings.Contains(got, never) {
+				t.Errorf("%+v: header mentions %q:\n%s", ctx, never, got)
+			}
+		}
+	}
+}

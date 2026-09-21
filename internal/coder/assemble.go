@@ -403,7 +403,11 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	// comment records; that is the precedent not to follow.
 	if notes := strings.TrimSpace(c.SessionNotes); notes != "" {
 		chunks.notes = []llm.Message{llm.TextMessage(llm.RoleSystem,
-			prompts.SessionNotesPrefix(c.SessionNotesDate)+"\n"+notes+"\n")}
+			prompts.SessionNotesPrefix(prompts.SessionNotesContext{
+				When: c.SessionNotesDate,
+				From: c.SessionNotesSession,
+				In:   c.Session,
+			})+"\n"+notes+"\n")}
 	}
 
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)

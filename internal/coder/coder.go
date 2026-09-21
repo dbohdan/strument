@@ -219,13 +219,26 @@ type Coder struct {
 	// model, so the tool set and prompt set read this, not Model.EditFormat.
 	editFormat string
 
-	// SessionNotes are the session's notes, generated from the transcript
-	// on demand (--continue at startup, /notes generate mid-session).
-	// SessionNotesDate says when they were generated. "" leaves the slot
-	// out of the prompt entirely. Notes live in memory only; the transcript
-	// is the durable artifact they derive from.
-	SessionNotes     string
-	SessionNotesDate string
+	// Session is the name of the conversation this coder is running, as
+	// `strument session list` shows it. "" means the caller did not say,
+	// which leaves the session out of the prompt rather than guessing.
+	//
+	// The coder uses it for one thing: telling the model which session it is
+	// in when it is being handed notes written in a different one. It is not
+	// used to find anything on disk — the coder never learns where state
+	// lives.
+	Session string
+
+	// SessionNotes are the session's notes, generated from the session
+	// record on demand (/notes generate, and a fork carrying its parent's
+	// notes forward). SessionNotesDate says when they were generated and
+	// SessionNotesSession which session they were generated in — the pair
+	// the header needs to say whose they are. "" leaves the slot out of the
+	// prompt entirely. Notes live in memory only; the record is the durable
+	// artifact they derive from.
+	SessionNotes        string
+	SessionNotesDate    string
+	SessionNotesSession string
 
 	// Chat state.
 	absFnames         []string // ordered, deduped
