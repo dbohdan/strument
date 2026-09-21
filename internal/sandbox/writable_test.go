@@ -43,7 +43,7 @@ func TestDefaultWritableKeepsGoBinReadOnly(t *testing.T) {
 	}
 	t.Setenv("GOPATH", gopath)
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 
 	if !has(t, got, filepath.Join(gopath, "pkg")) {
 		t.Errorf("the module cache is not writable; `go build` would fail:\n%v", got)
@@ -63,7 +63,7 @@ func TestDefaultWritableHonoursMovedCaches(t *testing.T) {
 	moved := t.TempDir()
 	t.Setenv("GOCACHE", moved)
 
-	if got := DefaultWritable(t.TempDir(), t.TempDir(), nil); !has(t, got, moved) {
+	if got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil); !has(t, got, moved) {
 		t.Errorf("a relocated GOCACHE was not granted:\n%v", got)
 	}
 }
@@ -86,7 +86,7 @@ func TestGitDirForAWorktree(t *testing.T) {
 	if got := gitDir(project); got != gitdir {
 		t.Errorf("gitDir = %q, want the whole %q — git writes shared refs and objects there, not just the worktree's subdirectory", got, gitdir)
 	}
-	if !has(t, DefaultWritable(project, t.TempDir(), nil), gitdir) {
+	if !has(t, DefaultWritable(project, t.TempDir(), filepath.Dir(t.TempDir()), nil), gitdir) {
 		t.Error("a worktree's git directory is not writable; every commit would fail")
 	}
 }
@@ -118,7 +118,7 @@ func TestGitDirIgnoresRubbish(t *testing.T) {
 // lists the writable roots to a user.
 func TestDefaultWritableIsDeduped(t *testing.T) {
 	project := t.TempDir()
-	got := DefaultWritable(project, project, []string{project, project + "/"})
+	got := DefaultWritable(project, project, project, []string{project, project + "/"})
 
 	count := 0
 	for _, p := range got {
@@ -140,7 +140,7 @@ func TestDefaultWritableNeverGrantsTheWholeHome(t *testing.T) {
 	if err != nil || home == "" || home == "/" {
 		t.Skip("no usable home directory here")
 	}
-	for _, p := range DefaultWritable(t.TempDir(), t.TempDir(), nil) {
+	for _, p := range DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil) {
 		if p == filepath.Clean(home) {
 			t.Fatalf("the whole home directory is writable, via %q", p)
 		}
@@ -153,7 +153,7 @@ func TestDefaultWritableNeverGrantsTheWholeHome(t *testing.T) {
 // TestDefaultWritableSkipsEmptyEntries: an unset environment variable must not
 // become a rule, least of all one for the current working directory.
 func TestDefaultWritableSkipsEmptyEntries(t *testing.T) {
-	for _, p := range DefaultWritable("", "", []string{""}) {
+	for _, p := range DefaultWritable("", "", "", []string{""}) {
 		if p == "" || !filepath.IsAbs(p) {
 			t.Errorf("a non-absolute or empty path reached the ruleset: %q", p)
 		}
@@ -164,7 +164,7 @@ func TestDefaultWritableSkipsEmptyEntries(t *testing.T) {
 // assume a temp directory exists and os.TempDir is how each platform answers
 // that: TMPDIR on Unix, TMP/TEMP on Windows.
 func TestTempDirIsAlwaysGranted(t *testing.T) {
-	if got := DefaultWritable(t.TempDir(), t.TempDir(), nil); !has(t, got, os.TempDir()) {
+	if got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil); !has(t, got, os.TempDir()) {
 		t.Errorf("the platform's temp directory was not granted:\n%v", got)
 	}
 }
@@ -184,7 +184,7 @@ func TestSlashTmpIsGrantedBesideAMovedTMPDIR(t *testing.T) {
 	moved := t.TempDir()
 	t.Setenv("TMPDIR", moved)
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 	if !has(t, got, moved) {
 		t.Errorf("TMPDIR was not granted:\n%v", got)
 	}
@@ -247,7 +247,7 @@ func TestFlatEcosystemOverridesAreHonoured(t *testing.T) {
 		t.Run(tc.ecosystem, func(t *testing.T) {
 			moved := t.TempDir()
 			t.Setenv(tc.env, moved)
-			if got := DefaultWritable(t.TempDir(), t.TempDir(), nil); !has(t, got, moved) {
+			if got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil); !has(t, got, moved) {
 				t.Errorf("%s moved to %s via %s and was not granted; check the variable's spelling",
 					tc.ecosystem, moved, tc.env)
 			}
@@ -283,7 +283,7 @@ func TestScannedEcosystemOverridesAreHonoured(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+			got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 			if !has(t, got, filepath.Join(root, tc.sub)) {
 				t.Errorf("%s/%s was not granted after %s moved:\n%v", root, tc.sub, tc.env, got)
 			}
@@ -318,7 +318,7 @@ func TestScannedRootExcludesWhateverIsOnPath(t *testing.T) {
 	t.Setenv("GOPATH", root)
 	t.Setenv("PATH", onPath+string(os.PathListSeparator)+"/usr/bin")
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 	if has(t, got, onPath) {
 		t.Errorf("a directory on PATH was granted; anything written there runs as the user later:\n%v", got)
 	}
@@ -338,7 +338,7 @@ func TestScannedRootSkipsSymlinks(t *testing.T) {
 	}
 	t.Setenv("GOPATH", root)
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 	for _, p := range []string{link, elsewhere} {
 		if has(t, got, p) {
 			t.Errorf("a symlinked subdirectory was granted (%s), which grants whatever it points at:\n%v", p, got)
@@ -357,7 +357,7 @@ func TestScannedRootWithNothingToGrantIsEmpty(t *testing.T) {
 	}
 	t.Setenv("CARGO_HOME", root)
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 	for _, p := range []string{root, filepath.Join(root, "bin")} {
 		if has(t, got, p) {
 			t.Errorf("%s was granted for a toolchain that has never run", p)
@@ -385,7 +385,7 @@ func TestScannedRootWithholdsShimsOffPath(t *testing.T) {
 	t.Setenv("GOPATH", root)
 	t.Setenv("PATH", "")
 
-	got := DefaultWritable(t.TempDir(), t.TempDir(), nil)
+	got := DefaultWritable(t.TempDir(), t.TempDir(), filepath.Join(os.TempDir(), "unused-state-root"), nil)
 	if has(t, got, shims) {
 		t.Errorf("shims was granted with an empty PATH; a version manager's shims must never be writable:\n%v", got)
 	}
