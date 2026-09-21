@@ -190,11 +190,16 @@ func (m *Model) ReadableName() string {
 // endpoint diagnosable at a glance — which provider is this model on? — and
 // converges on aider's provider-prefixed model names.
 func (m *Model) QualifiedSlug() string {
-	prov := m.Provider.Name
-	if prov == "" {
-		prov = m.Provider.Adapter
+	return ProviderName(m) + "/" + m.Slug
+}
+
+// ProviderName is the name a model's provider is known by: the configured
+// name, or the adapter when unnamed.
+func ProviderName(m *Model) string {
+	if m.Provider.Name != "" {
+		return m.Provider.Name
 	}
-	return prov + "/" + m.Slug
+	return m.Provider.Adapter
 }
 
 // RequestExtraParams merges provider-scoped and model-scoped extra_params,

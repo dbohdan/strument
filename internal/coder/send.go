@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -1187,6 +1188,7 @@ func (c *Coder) reportUsage(steps, filesChanged int) {
 	}
 	u := TurnUsage{
 		Model:           c.Model.QualifiedSlug(),
+		Provider:        config.ProviderName(c.Model),
 		TokensSent:      c.messageTokensSent,
 		TokensRecv:      c.messageTokensReceived,
 		CacheRead:       c.messageCacheRead,
@@ -1206,7 +1208,13 @@ func (c *Coder) reportUsage(steps, filesChanged int) {
 // TurnUsage is one turn's accounting, handed to RecordUsage at turn end — the
 // same numbers the closing usage line prints.
 type TurnUsage struct {
-	Model        string
+	Model string
+	// Provider is the provider the model is declared on: its configured name,
+	// or its adapter when unnamed. Carried as a field rather than parsed out
+	// of Model later, because slugs contain slashes of their own
+	// ("xiaomi/mimo-v2.5") and splitting a joined "provider/slug" apart again
+	// is a parse that only has to be wrong once.
+	Provider     string
 	TokensSent   int
 	TokensRecv   int
 	CacheRead    int

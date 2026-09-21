@@ -370,6 +370,24 @@ func (c *chatCmd) Run() error {
 				FilesChanged:    u.FilesChanged,
 				TokensPerSecond: u.TokensPerSecond,
 			})
+			// The per-provider ledger, beside the per-project one. The same
+			// accounting filed twice, because "what did this turn cost the
+			// project" and "what is this provider costing me" are different
+			// questions with different scopes: the provider's rows live in one
+			// global place, whatever project the turn ran in. Gated with
+			// keepState like the ledger: a session that leaves no trace leaves
+			// none here either.
+			if u.Provider != "" {
+				_ = history.AppendUsage(u.Provider, history.CostEntry{
+					Model:      u.Model,
+					TokensSent: u.TokensSent,
+					TokensRecv: u.TokensRecv,
+					CacheRead:  u.CacheRead,
+					CacheWrite: u.CacheWrite,
+					Cost:       u.Cost,
+					Estimated:  u.Estimated,
+				})
+			}
 		}
 
 		// The compaction summary's input, which the trial in
