@@ -676,7 +676,7 @@ func cmdUsage(_ context.Context, r *REPL, args string) string {
 		r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
 		return ""
 	}
-	any := false
+	printed := false
 	for _, name := range names {
 		rows, err := history.ReadUsage(name)
 		if err != nil {
@@ -686,10 +686,10 @@ func cmdUsage(_ context.Context, r *REPL, args string) string {
 		if len(rows) == 0 {
 			continue
 		}
-		any = true
+		printed = true
 		r.printf("%s", history.FormatUsage(name, rows, time.Now()))
 	}
-	if !any {
+	if !printed {
 		if provider == history.UsageAll {
 			r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
 		} else {

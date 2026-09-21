@@ -56,8 +56,13 @@ func TestFormatUsageShowsTheThreeWindowsAndFootnotes(t *testing.T) {
 	// The footnotes belong to the window they qualify, not to the report's
 	// bottom: the 48-hour-old unpriced row is in the week and month windows
 	// but not in the day's.
-	day := got[strings.Index(got, "Last 24 hours:"):strings.Index(got, "Last 7 days:")]
-	week := got[strings.Index(got, "Last 7 days:"):]
+	dayAt := strings.Index(got, "Last 24 hours:")
+	weekAt := strings.Index(got, "Last 7 days:")
+	if dayAt < 0 || weekAt < 0 {
+		t.Fatalf("report is missing a window header:\n%s", got)
+	}
+	day := got[dayAt:weekAt]
+	week := got[weekAt:]
 	if strings.Contains(day, "reported no cost") {
 		t.Errorf("the day window claims an unpriced turn it does not hold:\n%s", day)
 	}

@@ -222,7 +222,7 @@ func TestAggregateUsageSumsWithinTheWindow(t *testing.T) {
 
 	// The windows are nested, so the totals have to be monotonic whatever the
 	// rows — this is the property that makes the output sanity-checkable.
-	if !(day.Total.TokensSent <= week.Total.TokensSent && week.Total.TokensSent <= month.Total.TokensSent) {
+	if day.Total.TokensSent > week.Total.TokensSent || week.Total.TokensSent > month.Total.TokensSent {
 		t.Errorf("windows not nested: day %d, week %d, month %d",
 			day.Total.TokensSent, week.Total.TokensSent, month.Total.TokensSent)
 	}

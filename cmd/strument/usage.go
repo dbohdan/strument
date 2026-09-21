@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,7 +25,7 @@ import (
 // beside a provider's calendar invoice would read as a discrepancy rather
 // than as a different question.
 type usageCmd struct {
-	Provider string `arg:""                                     help:"Provider name, or 'all' for every provider (default: the default model's)." optional:""`
+	Provider string `arg:"" help:"Provider name, or 'all' for every provider (default: the default model's)." optional:""`
 }
 
 func (c *usageCmd) Run() error {
@@ -39,7 +40,7 @@ func (c *usageCmd) Run() error {
 		}
 		provider = defaultProvider(cfg)
 		if provider == "" {
-			return fmt.Errorf("no provider to report: the config names no default model")
+			return errors.New("no provider to report: the config names no default model")
 		}
 	}
 	return runUsageOne(provider)
@@ -56,7 +57,7 @@ func runUsageOne(provider string) error {
 	}
 	if !slices.Contains(known, provider) {
 		if len(known) == 0 {
-			return fmt.Errorf("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
+			return errors.New("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
 		}
 		return fmt.Errorf("no usage recorded for provider %q (with usage: %s)", provider, strings.Join(known, ", "))
 	}
@@ -76,7 +77,7 @@ func runUsageAll() error {
 		return err
 	}
 	if len(known) == 0 {
-		return fmt.Errorf("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
+		return errors.New("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
 	}
 	for _, provider := range known {
 		rows, err := history.ReadUsage(provider)

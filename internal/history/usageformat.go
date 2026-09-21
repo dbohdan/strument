@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,15 +43,15 @@ func FormatUsage(provider string, rows []CostEntry, now time.Time) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Usage for provider %q, as of %s:\n", provider, now.Format("2006-01-02 15:04 MST"))
 
-	any := false
+	seen := false
 	for _, w := range UsageWindows {
 		rep := AggregateUsage(rows, now, w.Window)
 		if rep.Total.Turns > 0 {
-			any = true
+			seen = true
 		}
 		fmt.Fprintf(&b, "\n%s:\n%s", w.Header, formatWindow(rep))
 	}
-	if !any {
+	if !seen {
 		fmt.Fprintf(&b, "\nNo usage recorded in the last 30 days. Usage tracking begins when the version that writes it runs.\n")
 	}
 	return b.String()
@@ -80,6 +81,8 @@ func formatWindow(rep UsageReport) string {
 
 	// The footnotes are the honesty of the report. Each says what the number
 	// above it does not include, rather than making the reader find out.
+	// The footnotes are the honesty of the report. Each says what the number
+	// above it does not include, rather than making the reader find out.
 	if t.UnpricedTurns > 0 {
 		fmt.Fprintf(&b, "  (%s reported no cost, not counted in the totals above.)\n",
 			render.Plural(t.UnpricedTurns, "turn", "turns"))
@@ -94,7 +97,7 @@ func formatWindow(rep UsageReport) string {
 // tokens renders a token count the way the closing usage line does.
 func tokens(n int) string {
 	if n < 1000 {
-		return fmt.Sprintf("%d", n)
+		return strconv.Itoa(n)
 	}
 	return fmt.Sprintf("%.1fk", float64(n)/1000.0)
 }

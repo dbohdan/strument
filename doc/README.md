@@ -233,7 +233,9 @@ inherited from aider.
   - `gitrepo/` — the git port; always argv, never a shell string.
   - `history/` — per-project state under `$XDG_STATE_HOME/strument`: the
     session record (JSON Lines), the cost ledger, resume and undo, and the
-    markdown transcript derived from the record on demand.
+    markdown transcript derived from the record on demand. Beside `projects/`
+    sits the per-provider usage store, `usage/<provider>.jsonl`, read by
+    `strument usage` and `/usage`.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
   - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
@@ -1185,6 +1187,20 @@ file to begin with — a per-session ledger would make the project-wide question
 a directory walk, and that is the question asked more often. Rows written
 before sessions existed carry no `session`, which is what distinguishes them
 from rows that named one.
+
+`usage/<provider>.jsonl`, beside `projects/`, is the second ledger and the
+other scope: one file per provider, global across projects, answering "what is
+this provider costing me". The same `RecordUsage` callback writes both — a
+usage row is the turn accounting a turn already records, minus the fields that
+only make sense per project — so `/consult`'s advisor spend and a `/model`
+switch land under the right provider the same way the ledger catches them.
+`strument usage` and `/usage` read it; the windows are rolling (last 24 hours,
+7 days, 30 days) so no calendar or timezone question reaches the sum, and the
+headers say what they mean rather than borrowing "today" or "this month" —
+which, beside a calendar-billed invoice, would read as a discrepancy rather
+than as a different question. The files are not project artifacts and the
+adopt policy table does not name them: nothing here is keyed by project path,
+so a rename cannot orphan it and a merge has nothing to do.
 
 ## Testing
 

@@ -211,6 +211,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/commits [on \| off]` | Show or change whether a turn that edits a file ends in a commit; bare reports rather than toggles. `--no-auto-commits` starts a session with it off. With commits off, edits still land in the working tree, and `/undo` and `/diff` still work. |
 | `/undo` | Revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one. |
 | `/squash [<n>]` | Fold the last `n` turns' commits into one. |
+| `/usage [<provider> \| all]` | Show per-provider token and cost usage over the last 24 hours, 7 days and 30 days. Default: the model currently in use. |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |
 | `/context [<n>]` | Show the chat history as the model sees it: compaction summaries followed by recent, unsummarized messages. `n` limits the number of summaries shown. |
 | `/skill [<name>]` | Show the skills this session found, or add one's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
@@ -264,8 +265,10 @@ Outside one it is already off.
 `/undo` works either way.
 
 A project can hold several conversations, each under its own name.
-`--session <name>` says which one to work in, creating it the first time, and the name is remembered as the one a bare `strument` picks up next.
+`--session <name>` (`-s`) says which one to work in, creating it the first time, and the name is remembered as the one a bare `strument` picks up next.
 Each has its own record, its own pinned files and its own undo history; the cost ledger stays one file and names the session on every row, so it answers both "what has this project cost me" and "was that session worth it".
+
+`strument usage [<provider>]` reports token and cost usage per provider, across every project: `usage all` for every provider, no argument for the default model's provider. `/usage [<provider>]` prints the same report in the REPL, defaulting to the model currently in use. It shows rolling windows — last 24 hours, 7 days, 30 days — which will not match a provider's calendar-billed invoice; see [doc/config.md](doc/config.md#strument-usage).
 
 Inside a session, `/session` shows them and moves between them without restarting; switching restores the conversation you are moving to, since that is what opening one interactively means.
 `/session fork <name>` starts a new conversation carrying this one's notes forward — the ritual of `/notes generate`, `/clear` and carrying on, with the parent recorded so the notes say whose they are.

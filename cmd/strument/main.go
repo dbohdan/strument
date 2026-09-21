@@ -1899,11 +1899,11 @@ func (c *modelConfigCmd) Run() error {
 }
 
 type cli struct {
-	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                    help:"Chat with a model about the given files (default command)."`
+	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                            help:"Chat with a model about the given files (default command)."`
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's config file and its skills."`
 	History     historyCmd       `cmd:""                         help:"Inspect or edit this project's chat-history file."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config, or find and edit a config file."`
-	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."  name:"model-config"`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."          name:"model-config"`
 	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
 	Session     sessionCmd       `cmd:""                         help:"List, rename or delete this project's conversations."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`

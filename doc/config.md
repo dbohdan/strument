@@ -98,6 +98,37 @@ projects/myproj-9428ba2d/
         undo.json   file contents to step back through
 ```
 
+Beside `projects/` sits a per-provider usage store:
+
+```
+usage/
+    <provider>.jsonl    one line per turn: model, tokens, cache, cost
+```
+
+### `strument usage`
+
+`strument usage [<provider>]` reports token and cost usage per provider —
+`usage all` for every provider that has a ledger, and no argument for the
+default model's provider. `/usage [<provider>]` prints the same report in the
+REPL, defaulting to the live model's provider, so after `/model` it follows
+the switch.
+
+The report shows three rolling windows — **last 24 hours, last 7 days, last
+30 days**. They are rolling, not calendar: "last 24 hours" means the previous
+24 hours from the moment the report runs, and the header says so. That makes
+the windows independent of time zones and nested within each other; it also
+means the totals will not match a provider's calendar-billed invoice, which
+is a different question, not a discrepancy. The raw rows keep their
+timestamps, so a calendar question stays answerable from the files.
+
+The files are appended, never rewritten: one line per turn under
+`$XDG_STATE_HOME/strument/usage/<provider>.jsonl`, filed under the provider's
+configured `name=` (its adapter when unnamed). A turn the provider reported no
+cost for counts its tokens but is footnoted rather than summed as $0, and a
+turn whose cost was estimated locally is marked as such. There is no pruning
+policy to get wrong: about a hundred bytes a turn, under a megabyte a year of
+heavy use.
+
 `strument history path` prints the newest record segment and `strument history
 edit` opens it; `strument history markdown` prints the session as markdown, and
 takes `-t <n>` for the last *n* turns. A directory written by an older version
