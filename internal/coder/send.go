@@ -633,13 +633,18 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 // has failed. aider #2979 is the shape: an 80k-token restored history fails on
 // the wire, and configuring the side model for summarization does not help,
 // because compaction runs at the end of a turn and there has not been one yet.
-// Strument restores less — pins, notes, and the read-only block rather than a
-// conversation — but the same trap is available, and a user who pinned a large
-// spec last session should hear about it before typing rather than after.
+//
+// This comment used to add that Strument restored less — pins, notes, and the
+// read-only block rather than a conversation. With `--continue` it restores a
+// conversation too, which is aider's own shape, so the trap is no longer
+// merely available. RestoreHistory answers the mechanism by compacting at
+// restore time instead of waiting for a turn boundary that has not arrived;
+// this stays as the backstop for everything compaction does not bound — the
+// pins, the read-only block, a window smaller than the summary itself.
 //
 // It warns rather than asking. A confirmation before the user has typed
 // anything is a toll on every start, and there is nothing to decide yet: the
-// remedy is /drop or /notes drop, which they can reach either way.
+// remedy is /drop, /notes drop or /clear, which they can reach either way.
 func (c *Coder) CheckRestoredContext() {
 	if c.Model == nil || c.Model.Context <= 0 {
 		return
@@ -650,7 +655,8 @@ func (c *Coder) CheckRestoredContext() {
 	}
 	c.Out.Warningf("This session starts with about %d tokens of context, which already reaches "+
 		"the %d-token limit for %s.", n, c.Model.Context, c.Model.QualifiedSlug())
-	c.Out.Printf("Use /drop to unpin files, /notes drop to discard the session notes, or /tokens to see the split.")
+	c.Out.Printf("Use /drop to unpin files, /notes drop to discard the session notes, /clear to forget the " +
+		"restored conversation, or /tokens to see the split.")
 }
 
 // checkTokens warns when the estimate reaches the input window and asks to

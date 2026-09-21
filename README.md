@@ -205,7 +205,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/attach <file> ...` | Attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` unstages. Attachments ride on one message and are gone after it, unlike pinned files. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing — declare `input_modalities` to make one that can. |
 | `/check [<name>]` | Run a project check by name, or all checks if no name is given. Checks run in the order they are listed in the config and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is silent. |
 | `/consult <alias> <question>`, `/consult scope [<name>]` | Ask another model without switching the active model, then optionally add its answer to the conversation, identified by the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the session's starting value. The consultation is billed at the advisor's own rates and appears in the cost ledger under its slug. |
-| `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the transcript, or discard them. Generate notes with `--continue` at startup or `/notes generate` during a session. Notes remain in memory and are not saved to disk. See [`doc/sessions.md`](doc/sessions.md). |
+| `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the session record, or discard them. Notes remain in memory and are not saved to disk. They carry context from one conversation to a different one; to pick *this* conversation back up, use `--continue`. See [`doc/sessions.md`](doc/sessions.md). |
 | `/read-only <file> ...` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/commits [on \| off]` | Show or change whether a turn that edits a file ends in a commit; bare reports rather than toggles. `--no-auto-commits` starts a session with it off. With commits off, edits still land in the working tree, and `/undo` and `/diff` still work. |
 | `/undo` | Revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one. |
@@ -261,6 +261,11 @@ This feature is meant for a terminal you are watching rather than for CI or cron
 `--no-git` turns off the git integration inside a repository.
 Outside one it is already off.
 `/undo` works either way.
+
+`strument --continue` picks a session back up: it rebuilds the conversation from the record described below, so a session survives the process that had it — a crash, a closed laptop, a machine that lost power.
+It compacts the conversation if it is already too big to send, rather than waiting for the end of a turn that would fail first, and it says how many messages came back.
+If the conversation was made by a different model than the one now running, Strument adds one line saying so: an assistant turn is otherwise read by the next model as its own past self.
+Without `--continue` a session starts empty, which is what every comparable tool does and what the trial runners in `doc/experiments/` depend on.
 
 Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per time you start it.
 `strument history path` prints the newest one, and `strument history markdown` renders the whole session as the markdown transcript.

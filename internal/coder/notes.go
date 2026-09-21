@@ -10,24 +10,33 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 )
 
-// Session notes are the durable half of picking a project back up: what the
-// work was for, what was decided and why, what was left in flight. They are
-// deliberately *not* a replayed conversation.
+// Session notes carry context *across* sessions: what the work was for, what
+// was decided and why, what was left in flight, in a form a different
+// conversation and a different model can start from.
 //
-// Every other harness persists a transcript and replays it verbatim — Claude
-// Code, Codex CLI, Gemini CLI, OpenCode all do. Three reasons Strument does not.
-// Cost: a restored history is re-sent with every message of the next session,
-// uncached, and silently until the token line. Attention: everything in the
-// window influences the output, so carrying last week's abandoned approach is
-// degrading rather than merely wasteful. And attribution: messages labelled
-// `assistant` are read by the next model as its own past self, so it will
-// rationalize and then defend choices it would never have made, with no seam
-// anywhere to notice. A single-vendor harness can lean on the models sharing
-// dispositions; Strument is multi-vendor by design and cannot.
+// They used to carry it across a *restart* as well, because the conversation
+// did not survive the process. It does now (restore.go), and resuming a
+// session restores it rather than summarizing it — a lossy paraphrase beside
+// the thing it paraphrases competes for attention and can contradict it.
 //
-// Notes are ~300 words instead of tens of thousands of tokens, they go stale
-// gracefully where a verbatim history does not, and they assert nothing about
-// who said what.
+// The three arguments this comment used to make against restoring a
+// conversation are still the right ones to answer, and restore.go answers
+// them. Cost and attention: a restored history is re-sent with every message,
+// so it goes through compaction at restore time rather than waiting for a
+// turn boundary. Attribution: messages labelled `assistant` are read by the
+// next model as its own past self, "so it will rationalize and then defend
+// choices it would never have made, with no seam anywhere to notice" — which
+// is answered by putting a seam there when the model has changed. A
+// single-vendor harness can lean on its models sharing dispositions; Strument
+// is multi-vendor by design and cannot, which is why the seam is said out
+// loud rather than assumed.
+//
+// What is left for notes is the job the arguments never applied to. Crossing
+// from one conversation to another is not a restart: there is no history to
+// restore, because the whole point is that it is a different thread. Notes are
+// ~300 words instead of tens of thousands of tokens, they go stale gracefully
+// where a verbatim history does not, and they assert nothing about who said
+// what.
 
 // notesTimeout is sideTimeout; the name stays for the doc comment above it.
 const notesTimeout = sideTimeout

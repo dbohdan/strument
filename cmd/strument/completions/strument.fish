@@ -46,7 +46,7 @@ complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell comple
 set -l chat_cmd "not __fish_seen_subcommand_from $subcommands"
 complete -c strument -n $chat_cmd -F
 complete -c strument -n $chat_cmd -s m -l message -d "Send one message, apply the edits, and exit" -x
-complete -c strument -n $chat_cmd -s c -l continue -d "Generate session notes from the session record at startup"
+complete -c strument -n $chat_cmd -s c -l continue -d "Resume this session: restore its conversation from the record"
 complete -c strument -n $chat_cmd -s M -l model -d "Model alias to use" -x -a "(__strument_models)"
 complete -c strument -n $chat_cmd -l no-git -d "Disable git integration even inside a repository"
 complete -c strument -n $chat_cmd -l no-color -d "Disable ANSI color and styling"

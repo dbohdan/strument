@@ -50,7 +50,7 @@ var version = "0.0.0-dev"
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
-	Continue      bool     `help:"Generate session notes from the session record at startup."                                                                                                 name:"continue"                                               short:"c"`
+	Continue      bool     `help:"Resume this session: restore its conversation from the record."                                                                                             name:"continue"                                               short:"c"`
 	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
@@ -368,27 +368,18 @@ func (c *chatCmd) Run() error {
 		}
 	}
 
+	// --continue restores the conversation itself.
+	//
+	// It used to generate session notes instead: ~300 words of third-person
+	// summary, which was the best available answer while the conversation did
+	// not survive the process. It does now. Summarizing a conversation that is
+	// sitting right there would put a lossy paraphrase beside the thing it
+	// paraphrases, competing for the model's attention and able to contradict
+	// it — and the job notes are genuinely the answer to is carrying context
+	// *across* sessions, which resuming one does not do.
+	restoreNote := ""
 	if c.Continue && keepState {
-		transcript := sessionMarkdown(projectRoot, session)
-		if transcript != "" {
-			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
-			notes, err := write(transcript)
-			cdr.FlushSideUsage()
-			if err != nil {
-				// Said, not swallowed. This path used to test `notes != ""` with
-				// no else, so a session resumed with --continue simply started
-				// without notes and without a word about why.
-				noticef("could not generate session notes: %v", err)
-			}
-			if notes != "" {
-				cdr.SessionNotes = notes
-				cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
-				cdr.SessionNotesSession = session
-				// The notes call is paid for; say so with the same token/cost line
-				// a turn ends with, rather than leaving the charge invisible.
-				cdr.ReportSideUsageDone()
-			}
-		}
+		restoreNote = restoreConversation(cdr, projectRoot, session)
 	}
 
 	if c.Message == "" {
@@ -396,10 +387,12 @@ func (c *chatCmd) Run() error {
 		// own arguments: `strument -m ...` should send what it was told to, not
 		// whatever an interactive session left pinned, which the user would pay
 		// for without seeing it.
-		note := ""
+		note := restoreNote
 		if len(c.Files) == 0 && rootErr == nil {
 			var offered, notesRestored bool
-			note, offered, notesRestored = restoreSession(cdr, projectRoot, session, res)
+			var pins string
+			pins, offered, notesRestored = restoreSession(cdr, projectRoot, session, res)
+			note = strings.TrimSpace(note + "\n" + pins)
 			if notesRestored {
 				// Announced, never silent. The notes go into every request this
 				// session, so a user who never types /notes should still know
@@ -417,6 +410,13 @@ func (c *chatCmd) Run() error {
 			}
 		}
 		return c.runREPL(cfg, cdr, repo, alias, projectRoot, session, keepState, note)
+	}
+
+	// Script mode has no banner, so the restore goes to stderr: a human sees
+	// that a conversation was loaded and paid for, and a script reading stdout
+	// is not given a line it did not ask for.
+	if restoreNote != "" {
+		noticef("%s", restoreNote)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
@@ -765,6 +765,45 @@ func toProjectPaths(cdr *coder.Coder, projectRoot string, rels []string) []strin
 		out = append(out, filepath.ToSlash(r))
 	}
 	return out
+}
+
+// restoreConversation rebuilds a session's conversation from its record and
+// hands it back to the coder, returning the line to tell the user, or "" when
+// there was nothing to restore.
+//
+// Everything it needs is already on disk: the record holds every message in
+// order, and the blob store holds whatever was too big to keep inline. What it
+// adds is the seam — a conversation made by a different model is announced as
+// one, because an assistant turn is otherwise read by the next model as its
+// own past self.
+//
+// A failure here is a notice, not an exit. The session still works without its
+// history, and refusing to start because a year-old segment will not parse
+// would be the wrong trade.
+func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
+	records, missing, err := history.ReadSessionRecords(projectRoot, session)
+	if err != nil {
+		noticef("could not read the session record, so this session starts empty: %v", err)
+		return ""
+	}
+	msgs, stats := coder.MessagesFromRecords(records)
+	if len(msgs) == 0 {
+		return ""
+	}
+	cdr.RestoreHistory(msgs)
+	if cdr.RestoredFromAnotherModel(stats) {
+		cdr.NoteRestoredFromAnotherModel()
+	}
+	note := stats.RestoreNote()
+	if missing > 0 {
+		// The pruning this is the other half of: a payload that was deleted
+		// leaves the description the record kept beside it, and the model is
+		// told in words that the result is no longer stored. Say so here too,
+		// because a conversation quietly missing three tool results is the
+		// kind of thing that is invisible until it matters.
+		note += fmt.Sprintf(" %d stored payload(s) have been pruned.", missing)
+	}
+	return note
 }
 
 // sessionMarkdown is the session's history as the notes writer reads it: the

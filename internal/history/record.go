@@ -176,6 +176,43 @@ func ReadTurns(projectRoot, session string) ([]Turn, error) {
 	return turns, nil
 }
 
+// ReadSessionRecords reads a session's whole record, oldest first, with every
+// payload put back from the blob store.
+//
+// The second return is how many payloads were not there. Callers say so: a
+// conversation restored with three tool results replaced by "this result is no
+// longer stored" is still a conversation, but the difference between that and
+// the real thing is exactly what someone pruning history should be able to
+// see.
+//
+// Segments are concatenated for the same reason ReadTurns concatenates them:
+// LogSegments sorts by the timestamp in the name, one process wrote each, and
+// the project lock keeps two from overlapping.
+func ReadSessionRecords(projectRoot, session string) ([]coder.Record, int, error) {
+	segments, err := LogSegments(projectRoot, session)
+	if err != nil {
+		return nil, 0, err
+	}
+	var out []coder.Record
+	missing := 0
+	for _, seg := range segments {
+		records, err := ReadRecords(seg)
+		if err != nil {
+			// A segment that cannot be opened is skipped, not fatal: the rest
+			// of the conversation is still worth having.
+			continue
+		}
+		for _, r := range records {
+			resolved, whole := Resolve(projectRoot, r)
+			if !whole {
+				missing++
+			}
+			out = append(out, resolved)
+		}
+	}
+	return out, missing, nil
+}
+
 // Markdown renders turns in the transcript's format, header and all.
 //
 // Byte-for-byte what Writer produced, including its skip rule: a turn with no

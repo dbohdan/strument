@@ -302,6 +302,36 @@ the floor plus a named set of tools whose results always stay inline.
 - Reuse `internal/fixture`'s deserialisation if its shape fits.
 - `-m` never replays unless `--session` is given explicitly.
 
+Four corrections, found the same way as the earlier phases'.
+
+**Not called "replay" in `internal/coder`.** The package already uses the word
+for the fixture harness that re-runs the coder against recorded streams. This
+is the other direction, so it is "restore", which is also what the pins and the
+undo stack already call it.
+
+**Seeded into `doneMessages`, never `curMessages`.** The recorder's watermark
+walks `curMessages`, so a conversation seeded there would be written into this
+run's segment as though it had just happened — duplicating the whole history on
+every resume.
+
+**Compaction runs at restore time, not at the first turn boundary.** The turn
+that would trigger it is the turn that would fail. This is aider #2979, which
+`CheckRestoredContext` already warned about while being able to say Strument
+restored less than a conversation; it no longer can, and its comment says so.
+
+**Tool call ids are matched within the answering window, not across the
+record.** This was a real bug, and running it is what found it: a provider need
+only make an id unique within one request, while the record spans every request
+a session ever made, so a global match let a later result answer an earlier
+call of the same name — restoring an unanswered call as though it were fine.
+The stub that caught it reuses one id, which is the cheap version of a provider
+that happens to. The wire validator built to check this missed it at first for
+the same reason the code did: it tested set membership where it had to count.
+
+Notes did not move to `--continue`'s old job by accident — `--continue`
+restores instead of summarizing, and notes keep the job they were always the
+answer to, which Phase 5's fork is the other half of.
+
 ## Phase 5 - sessions plural
 
 - `--session <name>`, created on first use; `current` tracks the last used.
