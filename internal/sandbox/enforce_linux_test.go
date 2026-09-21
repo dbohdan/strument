@@ -47,6 +47,7 @@ func TestEnforcePolicy(t *testing.T) {
 		{"write-project", "can a turn write inside the project?"},
 		{"write-tmp", "can a build write to the real TMPDIR?"},
 		{"write-state", "can a turn write the transcript to the state directory?"},
+		{"write-usage", "can a turn append to the per-provider usage ledger, which lives outside the project's state directory?"},
 		{"devnull", "does `> /dev/null` work now that it is granted?"},
 		{"rename-across", "does mv across directories work with WithRefer?"},
 		{"pty", "can a pty be allocated and sized (ptmx + WithIoctlDev)?"},
@@ -147,7 +148,12 @@ func runEnforce(t *testing.T, name string) (string, error) {
 	cmd.Env = append(os.Environ(),
 		enforceEnv+"="+name,
 		"STRUMENT_ENFORCE_PROJECT="+project,
-		"STRUMENT_ENFORCE_STATE="+filepath.Join(dir, "state"))
+		// The state root beside the project and the project's directory under
+		// it, mirroring ~/.local/state/strument and .../projects/<name>: the
+		// derivation under test grants both, and deny-parent needs the fixture
+		// arranged the way a real session is.
+		"STRUMENT_ENFORCE_STATE="+filepath.Join(dir, "state", "projects", "x"),
+		"STRUMENT_ENFORCE_ROOT="+filepath.Join(dir, "state"))
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -159,6 +165,7 @@ func TestEnforceHelper(t *testing.T) {
 	}
 	project := os.Getenv("STRUMENT_ENFORCE_PROJECT")
 	state := os.Getenv("STRUMENT_ENFORCE_STATE")
+	root := os.Getenv("STRUMENT_ENFORCE_ROOT")
 	_ = os.MkdirAll(state, 0o700)
 
 	// The shipped derivation, not a hand-built approximation of it. The first
@@ -167,15 +174,15 @@ func TestEnforceHelper(t *testing.T) {
 	// directory in the real TMPDIR, so CI reported the sandbox breaking an
 	// ordinary build when the fixture was what was wrong. A test of a model of
 	// the code tests the model.
-	pol := Policy{Writable: DefaultWritable(project, state, filepath.Dir(state), nil)}
+	pol := Policy{Writable: DefaultWritable(project, state, root, nil)}
 	if err := pol.Apply(); err != nil {
 		fmt.Println("apply failed:", err)
 		return
 	}
-	fmt.Println(enforceCase(name, project, state))
+	fmt.Println(enforceCase(name, project, state, root))
 }
 
-func enforceCase(name, project, state string) string {
+func enforceCase(name, project, state, root string) string {
 	switch name {
 	case "write-project":
 		return allow("write inside the project",
@@ -192,6 +199,21 @@ func enforceCase(name, project, state string) string {
 	case "write-state":
 		return allow("write to the state directory, where the transcript goes",
 			os.WriteFile(filepath.Join(state, "transcript.md"), []byte("x"), 0o600))
+
+	case "write-usage":
+		// The ledger lives beside projects/, not inside the project's own
+		// directory — the case the writable set once missed, silently dropping
+		// every per-provider usage row a sandboxed session produced.
+		usage := filepath.Join(root, "usage", "openrouter.jsonl")
+		if err := os.MkdirAll(filepath.Dir(usage), 0o700); err != nil {
+			return deny("create the usage directory", err)
+		}
+		f, err := os.OpenFile(usage, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err == nil {
+			_, err = f.WriteString("{}\n")
+			f.Close()
+		}
+		return allow("append to the per-provider usage ledger", err)
 
 	case "devnull":
 		f, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)

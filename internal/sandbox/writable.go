@@ -14,9 +14,15 @@ import (
 // and each group is here for a reason that can be checked:
 //
 //   - The project, because that is the work.
-//   - The state directory, because the transcript, the undo spill, the resume
-//     record and the lock live there, and a session that cannot write them
-//     fails at the end of a turn rather than the start.
+//   - The session's state directory, because the transcript, the undo spill, the
+//     resume record and the lock live there, and a session that cannot write
+//     them fails at the end of a turn rather than the start.
+//   - The global state root that directory sits under (stateRoot), because the
+//     trust store and the per-provider usage ledgers live beside projects/ and
+//     are written after the ruleset is installed. A sandboxed session used to
+//     lose every usage row this way: the write failed with EACCES and the
+//     caller discarded the error, while the per-project cost ledger, inside
+//     the granted directory, kept recording.
 //   - The git directory when it is elsewhere, i.e. a worktree or a submodule,
 //     where .git is a file pointing outside the project.
 //   - A temporary directory, because build tools assume one exists.
@@ -34,7 +40,7 @@ import (
 // inode a path resolves to, so a project root that is a symlink is handled
 // already; and a symlink *inside* the project pointing outward stays
 // unwritable, which is the correct answer rather than an oversight.
-func DefaultWritable(projectRoot, stateDir string, extra []string) []string {
+func DefaultWritable(projectRoot, stateDir, stateRoot string, extra []string) []string {
 	var out []string
 	add := func(paths ...string) {
 		for _, p := range paths {
@@ -44,11 +50,11 @@ func DefaultWritable(projectRoot, stateDir string, extra []string) []string {
 		}
 	}
 
-	add(projectRoot, stateDir)
+	add(projectRoot, stateDir, stateRoot)
+	add(extra...)
 	add(gitDir(projectRoot))
 	add(tempDirs()...)
 	add(cacheDirs()...)
-	add(extra...)
 
 	return dedupe(out)
 }

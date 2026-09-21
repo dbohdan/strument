@@ -39,6 +39,16 @@ func stateDir() (string, error) {
 	return filepath.Join(dir, "strument"), nil
 }
 
+// StateDir is the exported stateDir: the global state root, of which a
+// project's directory under projects/ is one entry. The sandbox derives its
+// writable set from it, because the per-provider usage ledgers live beside
+// projects/ and are written after the ruleset is installed — a root the
+// writable set did not name was a root every usage write silently failed
+// out of.
+func StateDir() (string, error) {
+	return stateDir()
+}
+
 // ProjectDir is a project's state directory:
 // $XDG_STATE_HOME/strument/projects/<basename>-<hash8>/, keyed by the absolute
 // root path (readable prefix, hash suffix against collisions — the trust

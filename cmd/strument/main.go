@@ -305,7 +305,15 @@ func (c *chatCmd) Run() error {
 	// a right and hand it out later.
 	cdr.Sandbox = coder.SandboxState{Required: cfg.Sandbox != ""}
 	if cfg.Sandbox == config.SandboxLandlock {
-		writable := sandbox.DefaultWritable(projectRoot, stateDir, cfg.SandboxWrite)
+		// The global state root is granted beside the project's directory
+		// under it: the per-provider usage ledgers live there, and a ruleset
+		// that names only the project directory denies every write to them
+		// with no turn to show for it.
+		globalState, err := history.StateDir()
+		if err != nil {
+			globalState = ""
+		}
+		writable := sandbox.DefaultWritable(projectRoot, stateDir, globalState, cfg.SandboxWrite)
 		policy := sandbox.Policy{Writable: writable}
 		if err := policy.Apply(); err != nil {
 			cdr.Sandbox.Unavailable = err.Error()
@@ -377,8 +385,15 @@ func (c *chatCmd) Run() error {
 			// global place, whatever project the turn ran in. Gated with
 			// keepState like the ledger: a session that leaves no trace leaves
 			// none here either.
+			//
+			// A write failure is said, not swallowed. The `_ =` here once hid
+			// a real bug for its whole life: under the sandbox the global
+			// state root was not writable, every row failed with EACCES, and
+			// nothing anywhere said so — /usage reported empty while the usage
+			// line on screen showed the spend. Silent loss of a ledger is how
+			// a record stops being a record.
 			if u.Provider != "" {
-				_ = history.AppendUsage(u.Provider, history.CostEntry{
+				if err := history.AppendUsage(u.Provider, history.CostEntry{
 					Model:      u.Model,
 					TokensSent: u.TokensSent,
 					TokensRecv: u.TokensRecv,
@@ -386,7 +401,9 @@ func (c *chatCmd) Run() error {
 					CacheWrite: u.CacheWrite,
 					Cost:       u.Cost,
 					Estimated:  u.Estimated,
-				})
+				}); err != nil {
+					noticef("could not record usage for provider %q: %v", u.Provider, err)
+				}
 			}
 		}
 

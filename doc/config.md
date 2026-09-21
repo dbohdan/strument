@@ -1026,7 +1026,9 @@ filesystem; writing is permitted only under a derived set of paths:
 
 - the project root, including `.git`, and the real git directory when `.git` is
   a file (a worktree or a submodule)
-- the session's state directory under `$XDG_STATE_HOME/strument`
+- the session's state directory under `$XDG_STATE_HOME/strument`, and the
+  global state root itself (where the trust store and the per-provider usage
+  ledgers live)
 - `TMPDIR`, and `/tmp` besides
 - this machine's toolchain caches — the last column of
   [Language support](#language-support) above

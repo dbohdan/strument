@@ -21,9 +21,9 @@ func TestDefaultWritableCoversASession(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	project, state := t.TempDir(), t.TempDir()
 
-	got := DefaultWritable(project, state, []string{"/extra"})
+	got := DefaultWritable(project, state, filepath.Dir(state), []string{"/extra"})
 
-	for _, want := range []string{project, state, os.TempDir(), os.Getenv("XDG_CACHE_HOME"), "/extra"} {
+	for _, want := range []string{project, state, filepath.Dir(state), os.TempDir(), os.Getenv("XDG_CACHE_HOME"), "/extra"} {
 		if !has(t, got, want) {
 			t.Errorf("%s is not writable; a session needs it:\n%v", want, got)
 		}

@@ -83,9 +83,10 @@ The policy has two main rules:
   `~/go/bin`, `~/.cargo/bin`, and other executables on your `PATH` remain
   usable, subject to normal filesystem permissions, without enumerating
   individual files or keeping the list current.
-- **Write only under a derived list of paths** — the project, the session's state
-  directory, a temporary directory, the detected toolchain cache directories,
-  and whatever `sandbox_write` adds.
+- **Write only under a derived list of paths** — the project, the session's
+  state directory and the global state root it sits under (so the trust store
+  and the per-provider usage ledgers are writable), a temporary directory, the
+  detected toolchain cache directories, and whatever `sandbox_write` adds.
 
 `/sandbox` in the REPL prints the effective list for the current session.
 [`doc/config.md`](config.md#language-support) documents where the cache paths
