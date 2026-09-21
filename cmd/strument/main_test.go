@@ -887,7 +887,7 @@ func TestFlagPlaceholdersUseAngleBrackets(t *testing.T) {
 	cmds := [][]string{
 		{"chat"}, {"model-config"}, {"trust"}, {"history"},
 		{"tool", "read"}, {"tool", "grep"}, {"tool", "glob"},
-		{"tool", "ls"}, {"tool", "symbol"},
+		{"tool", "ls"}, {"tool", "symbol"}, {"tool", "run_code"},
 	}
 	// --flag=VALUE where VALUE starts with an uppercase letter: kong's
 	// type-derived default, never something written by hand.

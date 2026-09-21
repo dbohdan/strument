@@ -8,6 +8,7 @@ import (
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/workspace"
 )
@@ -34,6 +35,11 @@ type toolCmd struct {
 	Glob   toolGlobCmd   `cmd:"" help:"Match files by path pattern, as the glob tool returns it."`
 	Ls     toolLsCmd     `cmd:"" help:"List a directory, as the ls tool returns it."`
 	Symbol toolSymbolCmd `cmd:"" help:"Look a name up in the language parser, as the symbol tool returns it."`
+	// RunCode's subcommand name comes from the name tag: the field name cannot
+	// carry the underscore (revive), and the tool's exact name — not a
+	// kebab-cased reading of it — is the point of a door that shows what the
+	// model sees.
+	RunCode toolRunCodeCmd `cmd:"" help:"Run a short Python program through run_code, as the model's tool returns it." name:"run_code"`
 }
 
 // toolStderr carries the one-line outcome — "Searched for … — 100 matches in 5
@@ -45,6 +51,24 @@ func (toolStderr) Toolf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
+// ToolBlock routes a run_code program's shaped source block to stderr too, on
+// the same reasoning: the block is the command's announcement, not its answer.
+func (toolStderr) ToolBlock(title, body string) {
+	render.ToolBlock(os.Stderr, title, body)
+}
+
+// The rest of coder.Output is unreachable from these commands — they never
+// stream an answer, print a link, or render a diff — and panics rather than
+// staying silent would hide a future runCode path growing one.
+func (toolStderr) Printf(string, ...any)              { panic("tool: output used as a full Output") }
+func (toolStderr) Warningf(string, ...any)            { panic("tool: output used as a full Output") }
+func (toolStderr) Errorf(string, ...any)              { panic("tool: output used as a full Output") }
+func (toolStderr) Link(string)                        { panic("tool: output used as a full Output") }
+func (toolStderr) StreamText(string)                  { panic("tool: output used as a full Output") }
+func (toolStderr) StreamReasoning(string)             { panic("tool: output used as a full Output") }
+func (toolStderr) StreamToolCall(int, string, string) { panic("tool: output used as a full Output") }
+func (toolStderr) FlushStream()                       { panic("tool: output used as a full Output") }
+
 // inspector builds the tool layer over the project root.
 //
 // It deliberately does not load the config. The limits these tools obey are
@@ -53,18 +77,9 @@ func (toolStderr) Toolf(format string, args ...any) {
 // config settings, this has to start loading it or the command will quietly
 // measure the defaults instead of the project's.
 func (c *toolCmd) inspector() (*coder.Inspector, error) {
-	root := c.Root
-	if root == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		root = cwd
-		// The same root the chat session would use, so a measurement taken here
-		// describes the tree a turn would see.
-		if g, err := gitrepo.Discover(root); err == nil {
-			root = g.Root()
-		}
+	root, err := c.root()
+	if err != nil {
+		return nil, err
 	}
 	return &coder.Inspector{
 		Root:  root,
@@ -75,6 +90,42 @@ func (c *toolCmd) inspector() (*coder.Inspector, error) {
 		RepoMap: repomap.New(root),
 		Out:     toolStderr{},
 	}, nil
+}
+
+// coder builds the minimal Coder that run_code needs. The chat session's own
+// fields — the staleness tracker, the anchor registry, the model — are nil or
+// default here, which every path a program can reach treats as "nothing
+// special": a bridge call reads through Files, and nothing a program can do
+// writes a file or talks to a model.
+func (c *toolCmd) coder() (*coder.Coder, error) {
+	root, err := c.root()
+	if err != nil {
+		return nil, err
+	}
+	return &coder.Coder{
+		Root:    root,
+		Out:     toolStderr{},
+		Files:   workspace.New(root),
+		RepoMap: repomap.New(root),
+	}, nil
+}
+
+// root resolves --root the same way for every subcommand: the flag, else the
+// git worktree root, else the working directory.
+func (c *toolCmd) root() (string, error) {
+	if c.Root != "" {
+		return c.Root, nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	// The same root the chat session would use, so a measurement taken here
+	// describes the tree a turn would see.
+	if g, err := gitrepo.Discover(cwd); err == nil {
+		return g.Root(), nil
+	}
+	return cwd, nil
 }
 
 // run is every subcommand's whole body: build the argument JSON the model would
@@ -174,4 +225,37 @@ type toolSymbolCmd struct {
 
 func (t *toolSymbolCmd) Run(c *toolCmd) error {
 	return c.run("symbol", map[string]any{"name": t.Name, "kind": t.Kind})
+}
+
+// toolRunCodeCmd runs a program through the run_code tool. The subcommand name
+// is the tool's exact name, not a kebab-cased reading of it: the mapping from
+// command to tool is one-to-one here, which is the whole point of a door that
+// shows what the model sees.
+//
+// The program is the arg, read verbatim — it is Python, and a shell will eat
+// its own quoting before kong sees it, so the usual invocation is
+// `strument tool run_code 'print(1 + 2)'` with the program single-quoted.
+type toolRunCodeCmd struct {
+	Code string `arg:"" help:"The Python program, as the run_code tool would receive it."`
+}
+
+func (t *toolRunCodeCmd) Run(c *toolCmd) error {
+	cod, err := c.coder()
+	if err != nil {
+		return err
+	}
+	// The program block and the outcome line went to stderr, so stdout is the
+	// result alone — the same stdout discipline as run(): byte-exact through a
+	// pipe, one trailing newline added for a terminal. --json is deliberately
+	// not offered here: the result is already data-shaped text, and the other
+	// tools' {tool, arguments, result} envelope would measure the envelope.
+	result := cod.RunCode(t.Code)
+	if _, err := os.Stdout.WriteString(result); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(result, "\n") && isCharDevice(os.Stdout) {
+		_, err := os.Stdout.WriteString("\n")
+		return err
+	}
+	return nil
 }

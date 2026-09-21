@@ -188,6 +188,21 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 	return truncateResult(codeResultText(result, printed.String(), &log))
 }
 
+// RunCode answers one run_code call and returns the text a model would
+// receive — the door `strument tool run_code` drives, on the same terms
+// Inspector.Run backs the other tools' command line: the program the model
+// would send, the result it would get, byte for byte.
+//
+// It wraps the unexported runCode rather than being the unexported runCode for
+// the same reason the Inspector exists: the chat loop's dispatch (tools.go)
+// works on codeCall and thread-safety assumptions a command line does not
+// carry, and this entry point owns the one difference — an Out that is
+// required here, because the program block and the outcome line are the
+// command's visible behavior.
+func (c *Coder) RunCode(code string) string {
+	return c.runCode(context.Background(), codeCall{code: code})
+}
+
 // bridgeLog is what the bridge records about one program's calls: which tools
 // it reached for, how many calls it made in total, and what the last one
 // answered. The first feeds the outcome line on screen; the other two feed the

@@ -135,16 +135,18 @@ complete -c strument -n "__fish_seen_subcommand_from project; and __fish_seen_su
     -a "(__fish_complete_directories)"
 
 # tool.
-complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol" \
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code" \
     -a read -d "Read a window of a file"
-complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol" \
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code" \
     -a grep -d "Search file contents"
-complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol" \
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code" \
     -a glob -d "Match files by path pattern"
-complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol" \
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code" \
     -a ls -d "List a directory"
-complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol" \
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code" \
     -a symbol -d "Look a name up in the language parser"
+complete -c strument -n "__fish_seen_subcommand_from tool; and not __fish_seen_subcommand_from read grep glob ls symbol run_code run_code" \
+    -a run_code -d "Run a short Python program through run_code"
 complete -c strument -n "__fish_seen_subcommand_from tool" -l root -d "Project root" -r -a "(__fish_complete_directories)"
 complete -c strument -n "__fish_seen_subcommand_from tool" -l json -d "Print the call and its result as JSON"
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from read" -F

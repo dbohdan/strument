@@ -21,7 +21,7 @@ _strument_model_config_options="-s --source --provider-name --proxy"
 _strument_project_commands="list adopt ignore"
 _strument_project_list_options="-a --all"
 _strument_project_adopt_options="-y --yes"
-_strument_tool_commands="read grep glob ls symbol"
+_strument_tool_commands="read grep glob ls symbol run_code"
 _strument_tool_options="--root --json"
 
 # Every option that takes a value, so the scanner does not read one as a
@@ -184,6 +184,13 @@ _strument_complete() {
             fi
             ;;
         glob) _strument_words "$_strument_tool_options" ;;
+        run_code)
+            if [[ $cur == -* ]]; then
+                _strument_words "$_strument_tool_options"
+            else
+                compopt -o default
+            fi
+            ;;
         *) _strument_words "$_strument_tool_commands $_strument_tool_options" ;;
         esac
         ;;
