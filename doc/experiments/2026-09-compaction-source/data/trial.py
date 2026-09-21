@@ -252,7 +252,7 @@ if __name__ == "__main__":
     random.seed(20260921)
     random.shuffle(jobs)  # the arm must not be confounded with the hour it ran
     out_path = EXP / ("pilot.jsonl" if reps <= 2 else "results.jsonl")
-    with open(out_path, "w") as fh, ThreadPoolExecutor(4) as pool:
+    with open(out_path, "w") as fh, ThreadPoolExecutor(6) as pool:
         done = 0
         for fut in as_completed([pool.submit(run_one, j) for j in jobs]):
             fh.write(json.dumps(fut.result()) + "\n")

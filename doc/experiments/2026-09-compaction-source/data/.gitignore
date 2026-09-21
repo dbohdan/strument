@@ -4,3 +4,9 @@ bin/
 # later. results.jsonl is the artifact, and it is committed with its raw
 # stdout so a scoring mistake is rescored rather than re-run.
 pilot.jsonl
+
+# results.jsonl is held back *while the batch runs*: the file is open in a
+# live process, so whatever is committed mid-run is an arbitrary prefix of it.
+# This line is removed in the same commit that lands the finished results, so
+# the exclusion cannot outlive its reason.
+results.jsonl
