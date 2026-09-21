@@ -51,6 +51,15 @@ type ChatSummary struct {
 	out    Output
 	clock  Clock
 	report SideCallReporter
+
+	// Record returns the session's durable history as markdown, or "" when
+	// there is none. Set, it becomes the summarizer's input in place of the
+	// messages being folded — see summarizeHead. nil is the behaviour this
+	// has always had.
+	//
+	// A callback for the reason PutBlob and RecordUsage are: nothing here
+	// learns where state lives.
+	Record func() string
 }
 
 // NewChatSummary builds a summarizer backed by the side model. out and clock
@@ -190,7 +199,7 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 		keep = append(keep, m)
 	}
 
-	summary, err := s.summarizeAll(keep)
+	summary, err := s.summarizeHead(keep)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +211,33 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 		return combined, nil
 	}
 	return s.summarizeReal(combined, maxTokens, depth+1)
+}
+
+// summarizeHead summarizes the part of the history being folded away.
+//
+// Ordinarily that is the messages themselves. Under the record source it is
+// the session record instead — the same durable text notes regenerate from,
+// sampled to the same bound.
+//
+// The distinction is the whole of the trial in
+// doc/experiments/2026-09-compaction-source. The messages being folded already
+// contain the previous summary, because summarizeReal prepends its output to
+// the retained tail, so summary n+1 is built from summary n and an error
+// introduced at one fold is source material at the next. notes.go names that
+// pattern and rejects it for notes; compaction is what the argument was
+// written against, and could not be changed to match until there was a record
+// to regenerate from.
+func (s *ChatSummary) summarizeHead(keep []llm.Message) ([]llm.Message, error) {
+	if s.Record == nil {
+		return s.summarizeAll(keep)
+	}
+	record := strings.TrimSpace(s.Record())
+	if record == "" {
+		// Nothing recorded yet — a session with --no-history, or a first fold
+		// before anything reached disk. Folding the messages is what there is.
+		return s.summarizeAll(keep)
+	}
+	return s.summarizeText(sampleTranscript(record))
 }
 
 // summarizeAll collapses msgs into a single marked harness turn via the side
@@ -225,8 +261,15 @@ func (s *ChatSummary) summarizeReal(msgs []llm.Message, maxTokens, depth int) ([
 // prefixed user message, OpenCode an assistant message flagged as a summary.
 // None uses system.
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
-	content := renderForSummary(msgs)
+	return s.summarizeText(renderForSummary(msgs))
+}
 
+// summarizeText is summarizeAll once its input is already laid out.
+//
+// Split out for the trial in doc/experiments/2026-09-compaction-source, whose
+// treatment changes only where that layout comes from: the folded message list
+// above, or the session record below.
+func (s *ChatSummary) summarizeText(content string) ([]llm.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), summaryTimeout)
 	defer cancel()
 
