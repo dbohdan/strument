@@ -1,0 +1,6 @@
+# The trial binary is 60 MB and rebuildable from the commit the write-up names.
+bin/
+# Pilot output is scratch: it exists to check the equipment, not to be read
+# later. results.jsonl is the artifact, and it is committed with its raw
+# stdout so a scoring mistake is rescored rather than re-run.
+pilot.jsonl

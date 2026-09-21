@@ -28,6 +28,24 @@ only difference is what the summarizer reads.
 summarizer's input and in nothing else — same prompt, same budget, same
 placement of the result, same tail.
 
+## What the arms actually differ in
+
+Two things, coupled, and saying so here rather than in the write-up.
+
+The **source** is the intended change: the folded messages, which hold the
+previous summary, against the record, which does not.
+
+The **granularity** comes with it. `renderForSummary` lays out messages with
+tool calls in full and tool results clipped to a budget. The record's markdown
+has neither: it carries the prompt, the answer and the harness's one-line work
+summaries. So `record` sees more of the session and less of each turn.
+
+They are not separable without inventing a third rendering that exists nowhere
+else, and the point of the change is that compaction reads *what notes read* —
+one source, two prompts. A result therefore says something about that bundle,
+the way the 2026-08 trial's did about its own. What it cannot say is which half
+of the bundle carried the effect.
+
 ## What the prior says will happen
 
 Two predictions that point in opposite directions, which is why both are
