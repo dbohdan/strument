@@ -12,10 +12,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
@@ -102,6 +104,7 @@ func init() {
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser.", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage.", cmdTokens},
 		{"undo", "", "Undo the last turn's edits.", cmdUndo},
+		{"usage", "[<provider> | all]", "Show per-provider token and cost usage (last 24 hours, 7 days, 30 days). Default: this session's model's provider.", cmdUsage},
 		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page or #section. With no URL, list the origins webfetch can access without asking.", cmdWeb},
 		{"yes", "[add <name> ... | drop <name> ... | reset]", "Show or change which confirmation prompts are answered without asking.", cmdYes},
 	}
@@ -645,6 +648,54 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 
 func cmdTokens(_ context.Context, r *REPL, _ string) string {
 	r.printf("%s", r.coder.TokensReport())
+	return ""
+}
+
+// cmdUsage prints the per-provider usage report, from the same ledgers and
+// through the same renderer `strument usage` uses. The default provider is
+// the live model's — after /model it follows the switch, which is the question
+// "what is this costing me" asks mid-session.
+func cmdUsage(_ context.Context, r *REPL, args string) string {
+	provider := strings.TrimSpace(args)
+	if provider == "" {
+		provider = config.ProviderName(r.coder.Model)
+	}
+	// One ledger per provider; `all` is a loop over them, not a merged file,
+	// because the ledgers are what the append-only write path produces and a
+	// merged view can be rendered from them at read time.
+	names := []string{provider}
+	if provider == history.UsageAll {
+		known, err := history.UsageProviders()
+		if err != nil {
+			r.out.Errorf("%s", err)
+			return ""
+		}
+		names = known
+	}
+	if len(names) == 0 {
+		r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
+		return ""
+	}
+	any := false
+	for _, name := range names {
+		rows, err := history.ReadUsage(name)
+		if err != nil {
+			r.out.Errorf("%s", err)
+			return ""
+		}
+		if len(rows) == 0 {
+			continue
+		}
+		any = true
+		r.printf("%s", history.FormatUsage(name, rows, time.Now()))
+	}
+	if !any {
+		if provider == history.UsageAll {
+			r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
+		} else {
+			r.printf("No usage recorded for provider %q. Run /usage all to see the providers that have some.", provider)
+		}
+	}
 	return ""
 }
 

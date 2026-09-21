@@ -1908,6 +1908,7 @@ type cli struct {
 	Session     sessionCmd       `cmd:""                         help:"List, rename or delete this project's conversations."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
+	Usage       usageCmd         `cmd:""                         help:"Show per-provider token and cost usage over rolling 24-hour, 7-day and 30-day windows."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
 }
 
