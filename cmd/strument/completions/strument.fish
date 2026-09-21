@@ -47,7 +47,7 @@ complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell comple
 set -l chat_cmd "not __fish_seen_subcommand_from $subcommands"
 complete -c strument -n $chat_cmd -F
 complete -c strument -n $chat_cmd -s m -l message -d "Send one message, apply the edits, and exit" -x
-complete -c strument -n $chat_cmd -l session -d "Conversation to work in, created if new" -x
+complete -c strument -n $chat_cmd -s s -l session -d "Conversation to work in, created if new" -x
 complete -c strument -n $chat_cmd -s c -l continue -d "Resume this session: restore its conversation from the record"
 complete -c strument -n $chat_cmd -s M -l model -d "Model alias to use" -x -a "(__strument_models)"
 complete -c strument -n $chat_cmd -l no-git -d "Disable git integration even inside a repository"
@@ -80,7 +80,7 @@ complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_see
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
     -a strip -d "Remove stored tool payloads that nothing recent points at"
 complete -c strument -n "__fish_seen_subcommand_from history" \
-    -l session -d "The conversation to act on" -x
+    -s s -l session -d "The conversation to act on" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from strip" \

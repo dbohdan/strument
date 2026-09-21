@@ -277,7 +277,7 @@ Inside a session, `/session` shows them and moves between them without restartin
 `strument session list` shows them with their turn counts and sizes, `strument session rename` renames one keeping its record, and `strument session delete` removes one after saying what that costs.
 Deleting a session leaves the stored tool payloads alone: they are shared between sessions and named by their contents.
 
-`--session` selects a conversation; it does not resume it.
+`--session` (`-s`) selects a conversation; it does not resume it.
 `strument --session review -c` picks that one up, and `strument --session review` starts fresh in it.
 
 `strument --continue` picks a session back up: it rebuilds the conversation from the record described below, so a session survives the process that had it — a crash, a closed laptop, a machine that lost power.

@@ -49,7 +49,7 @@ var version = "0.0.0-dev"
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
 	Message string `help:"Send one message, apply the edits, and exit (script mode)."            placeholder:"<text>" short:"m"`
-	Session string `help:"Conversation to work in, created if new (default: the last one used)." placeholder:"<name>"`
+	Session string `help:"Conversation to work in, created if new (default: the last one used)." placeholder:"<name>" short:"s"`
 	// Hidden: an arm of doc/experiments/2026-09-compaction-source, removed or
 	// promoted when that trial reports. A flag in --help is a supported
 	// feature, and this is a question.
@@ -1687,7 +1687,7 @@ type historyCmd struct {
 	// shape as configCmd's scope flags and the same cost: kong accepts it on
 	// `strip` too, where it means nothing because payloads are shared across
 	// a project and a sweep of one session's worth would be wrong.
-	Session string `help:"The conversation to act on (default: the last one used)." placeholder:"<name>"`
+	Session string `help:"The conversation to act on (default: the last one used)." placeholder:"<name>" short:"s"`
 
 	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
