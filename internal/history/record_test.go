@@ -2,8 +2,10 @@ package history
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -104,8 +106,7 @@ func TestDerivedMarkdownMatchesTheTranscriptFormat(t *testing.T) {
 	}
 	derived := Markdown(TurnsFromRecords(records))
 	if derived != string(want) {
-		t.Errorf("derived transcript differs from the format the writer produced\n--- want ---\n%s\n--- got ---\n%s",
-			want, derived)
+		t.Error(describeFirstDifference(string(want), derived))
 	}
 	// The fixture has to reach both interesting branches, or the comparison
 	// above is between two renderings of the plain case.
@@ -199,4 +200,37 @@ func TestLastTurnsCountsAfterTheSkipRule(t *testing.T) {
 	if n := len(LastTurns(turns, 0)); n != 3 {
 		t.Errorf("no limit gave %d turns, want the 3 that are not skipped", n)
 	}
+}
+
+// describeFirstDifference says where two documents diverge, quoted.
+//
+// Printing both whole is what this test used to do, and a real failure proved
+// it useless: the golden file arrived from a Windows checkout with CRLF line
+// endings, so the two documents were byte-different and rendered identically
+// in the CI log. Whoever read that log had nothing to go on. Quoting a window
+// around the first differing byte shows an \r as an \r.
+func describeFirstDifference(want, got string) string {
+	var b strings.Builder
+	b.WriteString("derived transcript differs from the format the writer produced")
+
+	i := 0
+	for i < len(want) && i < len(got) && want[i] == got[i] {
+		i++
+	}
+	window := func(s string) string {
+		start := max(i-30, 0)
+		end := min(i+30, len(s))
+		return strconv.Quote(s[start:end])
+	}
+	fmt.Fprintf(&b, "\n first difference at byte %d\n want %s\n  got %s", i, window(want), window(got))
+
+	// The specific trap, named. A reader who has not met it before would
+	// otherwise see two \r bytes in a quoted string and have to work out what
+	// they imply.
+	if strings.Contains(want, "\r\n") && !strings.Contains(got, "\r\n") {
+		b.WriteString("\n\nThe golden file has CRLF line endings and the renderer emits LF, so this is " +
+			"a checkout that translated it rather than a change to the format. " +
+			"Check that .gitattributes still marks testdata as not-text.")
+	}
+	return b.String()
 }

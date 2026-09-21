@@ -1,0 +1,8 @@
+# Files that a test compares byte for byte are content, not text.
+#
+# Git for Windows checks out with core.autocrlf=true by default, and that is
+# what the CI runner uses, so a golden file with no rule here arrives with CRLF
+# line endings while the code it is compared against emits LF. The test then
+# fails printing two documents that render identically in a log — which is how
+# this was found, and is worth one line to prevent.
+**/testdata/** -text
