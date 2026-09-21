@@ -160,7 +160,16 @@ func DeleteSession(projectRoot, session string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return fmt.Errorf("no session named %q", session)
 	}
-	return os.RemoveAll(dir)
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	// The pointer must not outlive what it points at. Leaving it would make
+	// the next run open a session by that name, recreate its directory, and
+	// present an empty conversation as the one the user had been in.
+	if CurrentSession(projectRoot) == session {
+		return SetCurrentSession(projectRoot, DefaultSession)
+	}
+	return nil
 }
 
 // RenameSession moves a session's directory, and follows `current` if it
@@ -192,10 +201,14 @@ func RenameSession(projectRoot, from, to string) error {
 	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("a session named %q already exists", to)
 	}
+	// Read before the move, not after. CurrentSession checks that the session
+	// it names still exists, and after the rename the old name does not — so
+	// asking afterwards reports the default and the pointer never follows.
+	wasCurrent := CurrentSession(projectRoot) == from
 	if err := os.Rename(src, dst); err != nil {
 		return err
 	}
-	if CurrentSession(projectRoot) == from {
+	if wasCurrent {
 		return SetCurrentSession(projectRoot, to)
 	}
 	return nil

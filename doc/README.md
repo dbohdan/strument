@@ -1054,6 +1054,23 @@ arrives in a small result is inline forever, since a sweep over blobs cannot
 reach it; editing the record by hand is the answer for one specific thing, and
 pruning is the answer for bulk.
 
+`strument history strip` is that sweep. It works out which payloads no record
+newer than a cutoff still points at, says what removing them costs, and asks.
+A reference's age is the modification time of the segment holding it — one run
+of Strument, so its mtime is when that conversation last had anything happen —
+which fails in the safe direction, since a copy or a restore that resets mtimes
+makes everything look recent and the sweep keeps rather than removes.
+
+The default reaches back 90 days rather than over everything. This is the one
+operation here that destroys recorded material, and a bare invocation is what
+someone types to find out what a command does. Ninety days is a choice, not a
+measurement: of the harnesses surveyed, Hermes is the only one with time-based
+expiry at all, so a number is defensible and a consensus is not available.
+
+Blobs with no reference at all go whatever the cutoff, because nothing
+establishes an age for them. They are what a deleted session leaves, or a run
+that died between storing a payload and recording the row that named it.
+
 The project, for this purpose, is the git worktree root wherever there is one
 and the working directory otherwise — **independent of `--no-git`**, which says
 how a turn is committed rather than which project you are in.

@@ -218,3 +218,56 @@ func mustSessionsDir(t *testing.T, project string) string {
 	}
 	return d
 }
+
+// The pointer must not outlive what it points at: a `current` naming a
+// deleted session would make the next run recreate it empty, under a name the
+// user associates with work they had done.
+func TestDeletingTheCurrentSessionClearsThePointer(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+	if _, err := EnsureProjectDir(project, ""); err != nil {
+		t.Fatal(err)
+	}
+	seedSession(t, project, "spike", 1, 1)
+	seedSession(t, project, "other", 1, 1)
+	if err := SetCurrentSession(project, "spike"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DeleteSession(project, "other"); err != nil {
+		t.Fatal(err)
+	}
+	if got := CurrentSession(project); got != "spike" {
+		t.Errorf("deleting another session moved the pointer to %q", got)
+	}
+	if err := DeleteSession(project, "spike"); err != nil {
+		t.Fatal(err)
+	}
+	if got := CurrentSession(project); got != DefaultSession {
+		t.Errorf("current = %q after deleting it, want the default", got)
+	}
+}
+
+// And a directory removed by other means — an rm -rf, a partial restore —
+// leaves the pointer naming nothing, which reads as the default too.
+func TestCurrentSessionFallsBackWhenItsDirectoryIsGone(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+	if _, err := EnsureProjectDir(project, ""); err != nil {
+		t.Fatal(err)
+	}
+	seedSession(t, project, "spike", 1, 1)
+	if err := SetCurrentSession(project, "spike"); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := SessionDir(project, "spike")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := CurrentSession(project); got != DefaultSession {
+		t.Errorf("current = %q with its directory gone, want the default", got)
+	}
+}

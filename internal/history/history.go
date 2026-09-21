@@ -346,10 +346,42 @@ func CurrentSession(projectRoot string) string {
 	// which conversation to continue, and a pointer that has been corrupted
 	// or hand-edited into something unusable should open the default session
 	// rather than refuse to start.
-	if name := strings.TrimSpace(string(data)); ValidSessionName(name) == nil {
-		return name
+	name := strings.TrimSpace(string(data))
+	if ValidSessionName(name) != nil {
+		return DefaultSession
 	}
-	return DefaultSession
+	// And it has to still be there. DeleteSession clears the pointer it
+	// invalidates, but a directory removed by other means — an rm -rf, a
+	// partial restore — would otherwise leave this naming a conversation that
+	// no longer exists, and the next run would recreate it empty under a name
+	// the user associates with work.
+	if !sessionExists(projectRoot, name) {
+		return DefaultSession
+	}
+	return name
+}
+
+// sessionExists reports whether a project has a session by this name.
+//
+// It reads the directory and compares names rather than stat-ing a path built
+// from one. The name came out of a file here, so not joining it onto a path at
+// all is the simplest way to be sure it cannot reach anywhere — ValidSessionName
+// above already rules that out, and this leaves nothing to argue about.
+func sessionExists(projectRoot, name string) bool {
+	dir, err := artifactPath(projectRoot, artSessions)
+	if err != nil {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() && e.Name() == name {
+			return true
+		}
+	}
+	return false
 }
 
 // SetCurrentSession records which session a resume should pick up.

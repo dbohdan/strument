@@ -835,7 +835,9 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 		// told in words that the result is no longer stored. Say so here too,
 		// because a conversation quietly missing three tool results is the
 		// kind of thing that is invisible until it matters.
-		note += fmt.Sprintf(" %d stored payload(s) have been pruned.", missing)
+		note += fmt.Sprintf(" %s %s been pruned.",
+			render.Plural(missing, "stored payload", "stored payloads"),
+			map[bool]string{true: "has", false: "have"}[missing == 1])
 	}
 	return note
 }
@@ -1671,6 +1673,7 @@ type historyCmd struct {
 	Path     historyPathCmd     `cmd:"" help:"Print the path to this session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open this session's record in $VISUAL, $EDITOR, or your platform's default editor."`
 	Markdown historyMarkdownCmd `cmd:"" help:"Print this session's history as markdown."`
+	Strip    historyStripCmd    `cmd:"" help:"Remove stored tool payloads that nothing recent points at, keeping every record."`
 }
 
 // historySession resolves the project and the session `history` acts on: the

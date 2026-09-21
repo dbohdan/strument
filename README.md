@@ -310,6 +310,14 @@ An answer you typed to `ask_user_question` is never moved out of the record; it 
 jq -r 'select(.blob) | [.bytes, .summary] | @tsv' "$(strument history path)" | sort -rn
 ```
 
+`strument history strip` removes stored payloads that nothing recent points at, and keeps every record.
+Without `--older-than` it reaches back 90 days, so a bare invocation prunes what is plainly old rather than everything; pass an age like `30d`, `6w` or `720h` to choose.
+It says what it will remove and asks first.
+
+Each stripped result keeps its hash, its size and its first line, so the conversation still reads and still replays — a restored one shows `[strument] This result is no longer stored. It was 13710 bytes. It began: big.txt (200 lines)` where the payload was.
+Payloads are shared, so one is removed only when no recent record anywhere in the project still points at it — and removing something that should never have been recorded takes every copy of it at once.
+For a single small thing that stayed inline, `strument history edit` opens the record in your editor.
+
 Recording does not change the terminal output.
 The log lives outside your project, which is deliberate: one inside the tree would be part of the workspace, so `grep` and `glob` would match it and the model could read its own transcript back.
 (In a 300-session trial, a search hit the log in 46 of them.)

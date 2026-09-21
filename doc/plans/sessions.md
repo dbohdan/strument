@@ -382,6 +382,28 @@ operation in the tool.
   project". Under this design that is more true, not less, and the doc should
   say what is now kept and how to strip it.
 
+The default is **90 days**, not "everything". A bare `strument history strip`
+is what someone types to find out what the command does, and this is the one
+operation that destroys recorded material — so the bare form reaches for what
+is plainly old. The number is a choice rather than a measurement: Hermes is the
+panel's only time-based expiry, which is why a number is defensible here and
+why there is no consensus to cite. It could not be re-read while this landed,
+so the interval is not attributed to it.
+
+A reference's age is the modification time of the segment holding it, which
+fails in the safe direction — a copy or a restore that resets mtimes makes
+everything look recent, and the sweep then keeps rather than removes.
+
+Blobs nothing refers to go whatever the cutoff, since no age can be established
+for them.
+
+**A Phase 5 bug surfaced here:** deleting the session `current` pointed at left
+the pointer dangling, so the next run recreated an empty conversation under a
+name the user associated with work. DeleteSession now clears the pointer it
+invalidates, and CurrentSession falls back when the session it names is gone —
+which caught RenameSession reading `current` *after* the move, by which point
+the old name no longer resolved.
+
 ## Phase 7 - compaction and notes converge
 
 Today notes regenerate from the rendered transcript and compaction folds the
