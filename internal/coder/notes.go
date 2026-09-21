@@ -55,7 +55,7 @@ func NotesWriter(cl llm.ModelClient, model *config.Model, record func(llm.Usage)
 	return func(transcript string) (string, error) {
 		transcript = strings.TrimSpace(transcript)
 		if transcript == "" {
-			return "", errors.New("the transcript is empty")
+			return "", errors.New("the session record is empty")
 		}
 		transcript = sampleTranscript(transcript)
 

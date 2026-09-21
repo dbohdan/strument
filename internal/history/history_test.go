@@ -11,15 +11,15 @@ import (
 	"github.com/gofrs/flock"
 )
 
-func TestDefaultPathKeying(t *testing.T) {
+func TestProjectDirKeying(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 
-	p1, err := DefaultPath("/home/user/myproj")
+	p1, err := ProjectDir("/home/user/myproj")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p1again, _ := DefaultPath("/home/user/myproj")
-	p2, _ := DefaultPath("/home/user/other")
+	p1again, _ := ProjectDir("/home/user/myproj")
+	p2, _ := ProjectDir("/home/user/other")
 
 	if p1 != p1again {
 		t.Errorf("same root gave different paths: %q vs %q", p1, p1again)
@@ -27,9 +27,9 @@ func TestDefaultPathKeying(t *testing.T) {
 	if p1 == p2 {
 		t.Errorf("different roots gave the same path: %q", p1)
 	}
-	// The key is the directory now, and it keeps the readable prefix: a
-	// listing of projects/ should be legible without resolving hashes.
-	if dir := filepath.Base(filepath.Dir(p1)); !strings.HasPrefix(dir, "myproj-") {
+	// The key keeps the readable prefix: a listing of projects/ should be
+	// legible without resolving hashes.
+	if dir := filepath.Base(p1); !strings.HasPrefix(dir, "myproj-") {
 		t.Errorf("project dir = %q, want myproj-<hash>", dir)
 	}
 	if !strings.Contains(p1, filepath.Join("strument", "projects")) {
@@ -52,16 +52,9 @@ func TestProjectDirLayout(t *testing.T) {
 	if filepath.Base(filepath.Dir(dir)) != "projects" {
 		t.Errorf("project dir not under projects/: %q", dir)
 	}
-	transcript, err := DefaultPath("/tmp/alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
 	input, err := InputHistoryPath("/tmp/alpha")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if got := filepath.Join(dir, "transcript.md"); transcript != got {
-		t.Errorf("transcript = %q, want %q", transcript, got)
 	}
 	if got := filepath.Join(dir, "input.txt"); input != got {
 		t.Errorf("input history = %q, want %q", input, got)
@@ -183,15 +176,10 @@ func TestProjectStateIsOwnerOnly(t *testing.T) {
 		t.Errorf("project dir mode = %04o, want %04o", perm, dirMode)
 	}
 
-	p, err := DefaultPath(project)
-	if err != nil {
+	if err := SetCurrentSession(project, DefaultSession); err != nil {
 		t.Fatal(err)
 	}
-	w := New(p)
-	if err := w.Append(Turn{User: "q", Assistant: "a"}); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"transcript.md", "root"} {
+	for _, name := range []string{"current", "root"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil {
 			t.Fatal(err)
@@ -202,40 +190,29 @@ func TestProjectStateIsOwnerOnly(t *testing.T) {
 	}
 }
 
-func TestAppendFormat(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "chat.md")
-	w := New(path)
-
+func TestTranscriptFormat(t *testing.T) {
 	when := time.Date(2026, 7, 17, 14, 30, 5, 0, time.UTC)
-	if err := w.Append(Turn{
-		Time:           when,
-		Model:          "flash",
-		TokensSent:     2600,
-		TokensReceived: 433,
-		Cost:           0.00046,
-		CostKnown:      true,
-		User:           "change the greeting",
-		Assistant:      "Sure, here is the change.",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	// Second turn, cost unknown.
-	if err := w.Append(Turn{
-		Time:           when.Add(time.Minute),
-		Model:          "flash",
-		TokensSent:     10,
-		TokensReceived: 5,
-		User:           "thanks",
-		Assistant:      "You're welcome.",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(data)
+	got := Markdown([]Turn{
+		{
+			Time:           when,
+			Model:          "flash",
+			TokensSent:     2600,
+			TokensReceived: 433,
+			Cost:           0.00046,
+			CostKnown:      true,
+			User:           "change the greeting",
+			Assistant:      "Sure, here is the change.",
+		},
+		// Second turn, cost unknown.
+		{
+			Time:           when.Add(time.Minute),
+			Model:          "flash",
+			TokensSent:     10,
+			TokensReceived: 5,
+			User:           "thanks",
+			Assistant:      "You're welcome.",
+		},
+	})
 
 	for _, want := range []string{
 		"# Strument chat history",
@@ -251,48 +228,35 @@ func TestAppendFormat(t *testing.T) {
 			t.Errorf("history missing %q:\n%s", want, got)
 		}
 	}
-	// The title header appears exactly once across appends.
+	// The title header appears exactly once, however many turns there are.
 	if n := strings.Count(got, "# Strument chat history"); n != 1 {
 		t.Errorf("title header appears %d times, want 1", n)
 	}
 }
 
-// A turn with no answer and no work is still not a real exchange; the file is
-// not created for it.
-func TestAppendSkipsEmptyTurn(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "chat.md")
-	w := New(path)
-	if err := w.Append(Turn{User: "hi", Assistant: "   \n"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("empty turn should not create the file: err=%v", err)
+// A turn with no answer and no work is still not a real exchange; it is not
+// rendered at all, so a transcript of nothing but those is the title alone.
+func TestTranscriptSkipsEmptyTurn(t *testing.T) {
+	got := Markdown([]Turn{{User: "hi", Assistant: "   \n"}})
+	if got != transcriptTitle {
+		t.Errorf("an empty turn was rendered:\n%s", got)
 	}
 }
 
-// TestAppendRecordsUnansweredTurn pins the budget-declined shape: a turn that
+// TestTranscriptRecordsUnansweredTurn pins the budget-declined shape: a turn that
 // ran tools and ended without a final answer — max_steps declined, a send
 // failed, an interrupt — is written with the tool lines and a response
 // section that says why it is empty. Dropping the turn would make the notes
 // regenerated from the transcript blind to work that happened.
-func TestAppendRecordsUnansweredTurn(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "chat.md")
-	w := New(path)
-	if err := w.Append(Turn{
+func TestTranscriptRecordsUnansweredTurn(t *testing.T) {
+	got := Markdown([]Turn{{
 		User: "big task",
 		Tools: []string{
 			"Read poll/poll.go (5 lines)",
 			"Applied edit to poll/poll.go",
 		},
 		Files: []string{"poll/poll.go"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(data)
+	}})
 	for _, want := range []string{
 		"big task",
 		"- `poll/poll.go`",
@@ -310,24 +274,13 @@ func TestAppendRecordsUnansweredTurn(t *testing.T) {
 // something a human reads. The assistant's own prose routinely says "done"
 // without naming a path.
 func TestTranscriptRecordsChangedFiles(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	p := filepath.Join(t.TempDir(), "transcript.md")
-	w := New(p)
-
-	if err := w.Append(Turn{
-		User: "rename it", Assistant: "Done.",
-		Files: []string{"internal/poll/poll.go", "internal/poll/watch.go"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Append(Turn{User: "what is this?", Assistant: "A poll loop."}); err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(body)
+	got := Markdown([]Turn{
+		{
+			User: "rename it", Assistant: "Done.",
+			Files: []string{"internal/poll/poll.go", "internal/poll/watch.go"},
+		},
+		{User: "what is this?", Assistant: "A poll loop."},
+	})
 
 	for _, want := range []string{"2 files changed", "### Changed", "`internal/poll/poll.go`", "`internal/poll/watch.go`"} {
 		if !strings.Contains(got, want) {
@@ -339,12 +292,9 @@ func TestTranscriptRecordsChangedFiles(t *testing.T) {
 		t.Errorf("a no-edit turn should add no Changed section:\n%s", got)
 	}
 	// One file is singular. plural() elsewhere has been wrong about this before.
-	if err := w.Append(Turn{User: "x", Assistant: "y", Files: []string{"a.go"}}); err != nil {
-		t.Fatal(err)
-	}
-	body, _ = os.ReadFile(p)
-	if !strings.Contains(string(body), "1 file changed") {
-		t.Errorf("one file should be singular:\n%s", body)
+	one := Markdown([]Turn{{User: "x", Assistant: "y", Files: []string{"a.go"}}})
+	if !strings.Contains(one, "1 file changed") {
+		t.Errorf("one file should be singular:\n%s", one)
 	}
 }
 

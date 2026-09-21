@@ -81,25 +81,31 @@ func recordTurns() ([]coder.Record, []Turn) {
 // The point of the whole exercise: the document derived from the record is the
 // document the transcript writer produced, byte for byte. Anything less and
 // retiring the transcript loses something.
-func TestDerivedMarkdownMatchesTheWrittenTranscript(t *testing.T) {
-	records, turns := recordTurns()
+// The point of the whole exercise: the document derived from the record is the
+// document the transcript writer produced, byte for byte.
+//
+// The golden file is that writer's output. It was captured while the writer
+// still existed, from a test that rendered the same turns both ways and
+// compared them, and separately confirmed by diffing `strument history
+// markdown` against a real transcript.md in a scratch project — twice, once on
+// a plain tool-calling turn and once on a turn where an automatic check failed
+// and the answer it interrupted is correctly absent from both documents. The
+// writer is gone now, so the file is what holds the format still: changing the
+// renderer has to mean changing this on purpose.
+//
+// script/find-loops.py parses `## <time> — <model>` and `### Response` out of
+// it.
+func TestDerivedMarkdownMatchesTheTranscriptFormat(t *testing.T) {
+	records, _ := recordTurns()
 
-	path := filepath.Join(t.TempDir(), "transcript.md")
-	w := New(path)
-	for _, turn := range turns {
-		if err := w.Append(turn); err != nil {
-			t.Fatal(err)
-		}
-	}
-	written, err := os.ReadFile(path)
+	want, err := os.ReadFile(filepath.Join("testdata", "transcript.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	derived := Markdown(TurnsFromRecords(records))
-	if derived != string(written) {
-		t.Errorf("derived transcript differs from the written one\n--- written ---\n%s\n--- derived ---\n%s",
-			written, derived)
+	if derived != string(want) {
+		t.Errorf("derived transcript differs from the format the writer produced\n--- want ---\n%s\n--- got ---\n%s",
+			want, derived)
 	}
 	// The fixture has to reach both interesting branches, or the comparison
 	// above is between two renderings of the plain case.
@@ -107,7 +113,7 @@ func TestDerivedMarkdownMatchesTheWrittenTranscript(t *testing.T) {
 		t.Error("fixture never exercised a crashed turn")
 	}
 	if strings.Contains(derived, "hello?") {
-		t.Error("a turn with no answer and no work was derived; the writer drops those")
+		t.Error("a turn with no answer and no work was derived; the writer dropped those")
 	}
 }
 

@@ -24,7 +24,6 @@ The loader reads these module-level variables after running your file:
 | --- | --- | --- |
 | `models` | dict | Maps an **alias** (string) to a `model()`. Required, non-empty. |
 | `default` | string | The alias used when none is given on the command line. Required; must be a key of `models`. |
-| `history_file` | string | Optional. Overrides the chat-history path (absolute, or relative to the project root). See below. |
 | `proxy` | string | Optional. A global SOCKS5 proxy URL — the fallback for providers that set none, and the proxy for `strument model-config`, built-in scraping, and search. |
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `check` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
@@ -80,7 +79,7 @@ not enforcing. A user-requested fetch uses the same command but is not blocked b
 that model-execution check. The built-in fetcher spawns no subprocess and is not
 gated that way.
 
-### `history_file`
+### Per-project state
 
 Strument keeps one directory per project under
 `$XDG_STATE_HOME/strument/projects/<basename>-<hash>/`, where the hash is the
@@ -90,7 +89,6 @@ first 8 hex characters of the SHA-256 of the project root's absolute path:
 projects/myproj-9428ba2d/
     root            the absolute path this directory belongs to
     current         the session a restart picks up
-    transcript.md   the chat transcript
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
     cost.jsonl      one line per turn: tokens, cost, t/s, steps, files changed
     blobs/          payloads the records point at
@@ -101,12 +99,12 @@ projects/myproj-9428ba2d/
 ```
 
 `strument history path` prints the newest record segment and `strument history
-edit` opens it; `strument history markdown` prints the same session as the
-markdown the transcript holds, newest turns last, and takes `-t <n>` for the
-last *n* turns. The `root` file records the
-project path associated with the state directory. The directory is created with
-mode `0700` and its files with mode `0600`, because transcripts may contain
-sensitive project data.
+edit` opens it; `strument history markdown` prints the session as markdown, and
+takes `-t <n>` for the last *n* turns. A directory written by an older version
+also holds a `transcript.md`; nothing writes one now, and nothing deletes it
+either. The `root` file records the project path associated with the state
+directory. The directory is created with mode `0700` and its files with mode
+`0600`, because the record holds whatever the model read out of the project.
 
 The project, for this purpose, is the **git worktree root** wherever there is
 one, and the working directory otherwise. That holds from any subdirectory, and
@@ -114,13 +112,12 @@ it does not change under `--no-git`: that flag says how a turn is committed, not
 which project you are in, so one repository keeps one directory however you
 launch Strument in it.
 
-`history_file` overrides the transcript path. An absolute value is used as
-given; a relative one resolves against that same project root. It does not move
-the input history, which has no override.
-
-```python
-history_file = "notes/strument.md"
-```
+There is no override for any of this. `history_file` used to move the
+transcript; the transcript is now derived from the session record rather than
+written, and a key that pointed one file somewhere else while the rest of a
+session's state stayed put was never a whole answer. A config that still sets
+it is not an error — it is simply an unused variable, like any other name a
+Starlark file defines.
 
 ### `proxy`
 

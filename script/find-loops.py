@@ -13,11 +13,15 @@ Formats, detected per file rather than declared:
             at", user turns are "#### " lines, aider's own console echo is "> ",
             everything else is the model.
   strument  a Markdown transcript — turns are "## <time> — <model>", and the
-            model's prose is the "### Response" section.
-  jsonl     a Strument --jsonl log — one JSON object per line; assistant
-            messages and reasoning arrive as separate records, which matters,
-            because a model that loops while thinking and then answers cleanly
-            is a different animal from one that loops in the answer.
+            model's prose is the "### Response" section. Strument no longer
+            writes one; `strument history markdown > chat.md` derives it from
+            the session record, in this same format.
+  jsonl     a Strument session record — one JSON object per line, found under
+            the project's state directory (`strument history path` names the
+            newest one). Assistant messages and reasoning arrive as separate
+            records, which matters, because a model that loops while thinking
+            and then answers cleanly is a different animal from one that loops
+            in the answer.
 
 Three detectors, because they fail differently:
 

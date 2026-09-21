@@ -29,9 +29,8 @@ models = {
 }
 default = "fast"
 
-history_file = env("SHARE_DIR") + "/history.md"
 proxy = "socks5://" + env("PROXY_HOST") + ":1080"
-scraper = ["curl", "-sS"]
+scraper = ["curl", "-sS", "--output-dir", env("SHARE_DIR")]
 check = {"test": ["task", "test"]}
 check_auto = ["test"]
 reasoning_display = "off"
@@ -180,10 +179,10 @@ func TestInspectHidesEnvironmentValues(t *testing.T) {
 	// rendered nothing at all, so the fields that carried one have to be shown
 	// to be present, with the variable named in place of its value.
 	for _, want := range []string{
-		"${SHARE_DIR}/history.md", // history_file
-		"socks5://${PROXY_HOST}",  // proxy
-		"llm.corp.internal:8443",  // models: a base URL that is not a secret stays
-		"CORP_TOKEN",              // env_set names the variable...
+		"--output-dir ${SHARE_DIR}", // scraper
+		"socks5://${PROXY_HOST}",    // proxy
+		"llm.corp.internal:8443",    // models: a base URL that is not a secret stays
+		"CORP_TOKEN",                // env_set names the variable...
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Errorf("the summary does not contain %q, so the redaction check above "+

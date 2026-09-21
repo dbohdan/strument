@@ -22,13 +22,6 @@ func populateProjectDir(t *testing.T, project string) string {
 		t.Fatal(err)
 	}
 
-	p, err := DefaultPath(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := New(p).Append(Turn{User: "hi", Assistant: "hello"}); err != nil {
-		t.Fatal(err)
-	}
 	if err := AppendCost(project, CostEntry{Time: "2026-09-06T10:00:00Z", Model: "m", Steps: 1}); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +105,18 @@ func TestProjectDirHoldsOnlyRegisteredArtifacts(t *testing.T) {
 	// The other direction: a registered artifact that no writer produces means
 	// the table has drifted ahead of the code, and the test above would then be
 	// checking a set nothing fills.
-	for name := range known {
+	for name, id := range known {
+		// A legacy artifact is registered precisely because nothing writes it
+		// any more: the entry is there so an adopt carries across what an
+		// older version left. The claim is checked in the other direction —
+		// an artifact that says it is legacy and still turns up on disk is
+		// one whose writer was never actually retired.
+		if artifacts[id].legacy {
+			if seen[name] {
+				t.Errorf("%q is registered as legacy but a writer in this package still produces it", name)
+			}
+			continue
+		}
 		if !seen[name] {
 			t.Errorf("%q is registered but no writer in this package produced it; "+
 				"either populateProjectDir is out of date or the entry is dead", name)

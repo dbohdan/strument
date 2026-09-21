@@ -177,11 +177,6 @@ func EnsureProjectDir(projectRoot, gitRootCommit string) (string, error) {
 	return dir, nil
 }
 
-// DefaultPath is the chat-history file for a project root.
-func DefaultPath(projectRoot string) (string, error) {
-	return artifactPath(projectRoot, artTranscript)
-}
-
 // LockPath is the advisory-lock file for a project's state directory. Two
 // harness copies keyed to the same project root compute the same path; whoever
 // holds the lock owns the transcript, cost ledger, and undo spill for the
@@ -239,54 +234,6 @@ type Turn struct {
 	// prose alone, so a turn that made a dozen tool calls and closed with one
 	// sentence was, to the next session, that sentence.
 	Tools []string
-}
-
-// Writer appends turns to a markdown file, creating it (and its parent
-// directory, and a one-time title header) on first write.
-type Writer struct {
-	path string
-}
-
-// New returns a Writer for path.
-func New(path string) *Writer { return &Writer{path: path} }
-
-// Path returns the file the Writer appends to.
-func (w *Writer) Path() string { return w.path }
-
-// Append writes one turn.
-//
-// A turn whose assistant answer is empty is still written when it has other
-// content — tool lines, changed files — with the response section saying so.
-// That is the shape of a turn that ended without an answer: the step budget
-// was declined, a send failed, the model was interrupted. The work happened;
-// dropping the turn because its last sentence is missing records nothing, and
-// the notes regenerated from this file would not know the work existed. A
-// turn with nothing at all — no answer, no work — is still skipped.
-func (w *Writer) Append(t Turn) error {
-	if skipTurn(t) {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(w.path), dirMode); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, fileMode)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Title header, once, when the file is new/empty.
-	if info, err := f.Stat(); err == nil && info.Size() == 0 {
-		if _, err := f.WriteString(transcriptTitle); err != nil {
-			return err
-		}
-	}
-
-	if _, err := f.WriteString(t.render()); err != nil {
-		return err
-	}
-	return nil
 }
 
 // transcriptTitle opens the file, once. Shared with the renderer that derives
@@ -360,18 +307,6 @@ func (t Turn) render() string {
 	}
 	b.WriteString("\n\n---\n\n")
 	return b.String()
-}
-
-// ReadTranscript returns a project's transcript, or "" if there is none. It is
-// the source session notes are regenerated from — regenerating from the record
-// rather than from the previous notes is what stops the telephone game that
-// every iterative-compaction scheme suffers from.
-func ReadTranscript(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }
 
 // EnsureSessionDir creates one session's directory and returns it.

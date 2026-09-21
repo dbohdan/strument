@@ -203,7 +203,6 @@ type projectKey struct {
 var projectKeyOrder = []string{
 	"models",
 	"hasDefault",
-	"hasHistoryFile",
 	"hasProxy",
 	"hasScraper",
 	"hasCheck",
@@ -258,13 +257,6 @@ var projectKeys = map[string]projectKey{
 	// names a user alias only chooses between models the user wrote.
 	"hasDefault": {name: "default", set: func(g *fileGlobals) bool { return g.hasDefault }},
 
-	"hasHistoryFile": {
-		name: "history_file",
-		set:  func(g *fileGlobals) bool { return g.hasHistoryFile },
-		detail: func(g *fileGlobals, red func(string) string) string {
-			return "writes the chat transcript to " + red(g.historyFile)
-		},
-	},
 	"hasProxy": {
 		name: "proxy",
 		set:  func(g *fileGlobals) bool { return g.hasProxy },

@@ -196,17 +196,6 @@ type Coder struct {
 	// reason. nil in a session that leaves no trace.
 	RecordUsage func(TurnUsage)
 
-	// OnCrash receives the turn's partial answer when a turn dies with a panic:
-	// Run recovers, calls this, and re-panics so the process still dies. The
-	// transcript writer lives outside the Coder, so this is how a turn that
-	// never returned still reaches it — with the work it did along the way,
-	// which is otherwise lost with the process. nil (the default) records
-	// nothing; a panic then behaves exactly as before.
-	//
-	// Only Run calls it. An aside and the internal commands are single sends
-	// with no work to lose, and their panics are not worth a transcript entry.
-	OnCrash func(partialAnswer string)
-
 	// SaveUndo, when set, receives the undo stack and the session's commit
 	// hashes whenever either changes. Same shape and same reason as
 	// RecordUsage: the coder never learns where state lives, and a session that
@@ -679,34 +668,30 @@ func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
 // blockquote, and the final send's content — the same string the transcript
 // records.
 //
-// A panic inside the turn is recovered once, handed to OnCrash, and re-raised:
-// the transcript keeps the turn's partial answer (the caller appends its tool
-// lines and edited files from the same accessors it uses after a normal turn —
-// the panic unwound through runOne's defer, which settled those), and the
-// process still dies with the original stack trace. A recovered-and-swallowed
-// panic in a coding agent leaves the tree half-edited and the session running
-// on a broken coder; dying is the honest outcome. What recovery buys is that
-// the work the turn already did is not lost with the process.
+// A panic inside the turn is recorded and re-raised, not recovered: runOne's
+// turn-end defer runs on the way out, so the row carries the turn's partial
+// answer, the files it edited and the lines it printed, marked with the
+// outcome "Crashed". The process still dies with the original stack trace. A
+// recovered-and-swallowed panic in a coding agent leaves the tree half-edited
+// and the session running on a broken coder; dying is the honest outcome. What
+// the record buys is that the work the turn already did is not lost with the
+// process.
+//
+// This used to need a callback into a transcript writer outside the Coder,
+// because the transcript was appended after Run returned and a turn that never
+// returned never reached it. Recording from inside the defer has no such gap.
 func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
-	defer func() {
-		if r := recover(); r != nil {
-			if c.OnCrash != nil {
-				c.OnCrash(c.turnAnswer())
-			}
-			panic(r)
-		}
-	}()
 	c.runOne(ctx, withMessage)
 	return c.turnAnswer()
 }
 
-// turnAnswer is the turn's answer as the transcript records it: every
-// interrupted send's content in order, each steer as a blockquote, and the
-// final send's content.
+// turnAnswer is the turn's answer as the record keeps it: every interrupted
+// send's content in order, each steer as a blockquote, and the final send's
+// content.
 //
-// One expression with three callers — Run, the crash path, and the turn record
-// — because they must agree. They are what a reader of the record compares
-// against what was on the screen.
+// One expression with two callers — Run and the turn record — because they
+// must agree. It is what a reader of the record compares against what was on
+// the screen.
 func (c *Coder) turnAnswer() string {
 	return c.turnHistory + c.multiResponseContent + c.partialResponseContent
 }

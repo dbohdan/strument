@@ -220,9 +220,6 @@ const SandboxLandlock = "landlock"
 type Config struct {
 	Models  map[string]*Model // alias -> model
 	Default string            // must be a key of Models
-	// HistoryFile overrides the chat-history path ("" => the XDG default).
-	// A relative path is resolved against the project root by the caller.
-	HistoryFile string
 	// Proxy is the global fallback SOCKS5 proxy URL: it applies to
 	// model-config, URL scraping, and any provider that sets no proxy of its
 	// own ("" => no global proxy).

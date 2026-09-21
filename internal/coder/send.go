@@ -971,7 +971,7 @@ func (c *Coder) FlushSideUsage() {
 // sideUsageDoneMessage is the message printed after a side usage line that
 // named the charge — the session notes — so the user knows what the charge was
 // for. Both the startup --continue notes call and /notes generate print it.
-const sideUsageDoneMessage = "Session notes generated from the transcript."
+const sideUsageDoneMessage = "Session notes generated from the session record."
 
 // ReportSideUsageDone prints sideUsageDoneMessage through the coder's output
 // writer. Call it after FlushSideUsage so the charge — the session notes — is

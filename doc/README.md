@@ -231,8 +231,9 @@ inherited from aider.
     backslash escapes on Unix and is a path separator on Windows, so `SplitWith`
     lets either rule be tested from either host.
   - `gitrepo/` — the git port; always argv, never a shell string.
-  - `history/` — per-project markdown chat transcripts under
-    `$XDG_STATE_HOME/strument`.
+  - `history/` — per-project state under `$XDG_STATE_HOME/strument`: the
+    session record (JSON Lines), the cost ledger, resume and undo, and the
+    markdown transcript derived from the record on demand.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
   - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
@@ -1014,10 +1015,16 @@ no external dependency is needed.
 Strument keeps one directory per project under
 `$XDG_STATE_HOME/strument/projects/<basename>-<hash8>/`, keyed by the SHA-256 of
 the project root's absolute path. It holds `root` (the identity record; see
-below), the markdown `transcript.md`, and readline's `input.txt`. The directory
-is `0700` and its files `0600`: a transcript records whatever the model read out
-of the project, and the case that justified `--no-git` in the first place is a
+below), the cost ledger, readline's `input.txt`, and one directory per session
+carrying that session's record — one JSON Lines segment per run. The directory
+is `0700` and its files `0600`: the record holds whatever the model read out of
+the project, and the case that justified `--no-git` in the first place is a
 live configuration directory.
+
+The record is the durable artifact. `strument history markdown` renders it as
+the markdown transcript Strument used to write, and the notes writer reads the
+same rendering. Writing the transcript and deriving it were two copies of one
+document, and only one of them held the tool calls.
 
 The project, for this purpose, is the git worktree root wherever there is one
 and the working directory otherwise — **independent of `--no-git`**, which says
@@ -1036,7 +1043,7 @@ file that skipped the table fails the build rather than the user.
 
 Keying on the path means renaming a project directory orphans everything in it.
 aider avoided this by keeping history in the tree; that is not available here,
-because the transcript holds whatever the model read and `undo.json` holds
+because the record holds whatever the model read and `undo.json` holds
 verbatim copies of source, and either one inside the repo is one `git add -A`
 from a public remote.
 
@@ -1049,7 +1056,7 @@ recorded path is gone and whose witness matches, and prints one line naming
 
 It only ever prints. Every clone of a repository shares a root commit, so the
 evidence cannot tell two checkouts apart; adopting on it would attach the wrong
-project's transcript. A history with several root commits, or no repository at
+project's history. A history with several root commits, or no repository at
 all, has no witness and is never matched — `strument project list` and an
 explicit adopt are the answer there. Two matching orphans decline for the same
 reason.

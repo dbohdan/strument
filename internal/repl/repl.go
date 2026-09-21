@@ -16,7 +16,6 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
-	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
@@ -46,10 +45,6 @@ type Options struct {
 
 	// Git enables /undo and /diff; nil outside a repository (--no-git).
 	Git *gitrepo.Repo
-
-	// History records each turn to a markdown transcript; nil disables it
-	// (--no-history).
-	History *history.Writer
 
 	// Notes returns the current session notes for /notes. nil disables the
 	// command.
@@ -159,11 +154,6 @@ type REPL struct {
 	// and /reload.
 	envAdded   map[string]bool
 	envDropped map[string]bool
-
-	// crashRecorded says the current turn's transcript entry was written by
-	// the OnCrash path, so the post-run append in runTurn must not write it
-	// again. Set and cleared only inside runTurn.
-	crashRecorded bool
 }
 
 // New builds the REPL, wires the coder's Out to the live renderer, and
@@ -608,55 +598,9 @@ func (r *REPL) runAside(ctx context.Context, question string) {
 // runTurn runs one user message through the coder with in-turn Ctrl-C
 // handling: the first cancels the send, the second within 2s exits.
 func (r *REPL) runTurn(ctx context.Context, message string) {
-	sentBefore, recvBefore := r.coder.SessionTokens()
-	costBefore, _ := r.coder.SessionCost()
-
-	if r.opts.History == nil {
-		r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
-			return r.coder.Run(tctx, message)
-		})
-		return
-	}
-
-	appendTurn := func(crashed bool, partial string) {
-		sentAfter, recvAfter := r.coder.SessionTokens()
-		costAfter, known := r.coder.SessionCost()
-		if err := r.opts.History.Append(history.Turn{
-			Model:          r.coder.Model.QualifiedSlug(),
-			TokensSent:     sentAfter - sentBefore,
-			TokensReceived: recvAfter - recvBefore,
-			Cost:           costAfter - costBefore,
-			CostKnown:      known,
-			User:           message,
-			Assistant:      partial,
-			Files:          r.coder.TurnEditedFiles(),
-			Tools:          r.coder.TurnToolLines(),
-			Crashed:        crashed,
-		}); err != nil {
-			r.out.Warningf("Could not write chat history: %v", err)
-		}
-	}
-	// OnCrash records the turn when it dies with a panic. The transcript
-	// writer lives outside the coder, so this is how a turn that never
-	// returned still reaches it. The panic continues upward after the
-	// callback — the REPL does not survive it, but the work it did is in
-	// the transcript — so the flag keeps the post-run append from recording
-	// the turn twice if that unwind ever changes.
-	r.coder.OnCrash = func(partial string) {
-		r.crashRecorded = true
-		appendTurn(true, partial)
-	}
-	defer func() {
-		r.coder.OnCrash = nil
-		r.crashRecorded = false
-	}()
-
-	answer := r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
+	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
 		return r.coder.Run(tctx, message)
 	})
-	if !r.crashRecorded {
-		appendTurn(false, answer)
-	}
 }
 func (r *REPL) showUndoHint() {
 	if r.coder.Repo == nil {

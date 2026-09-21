@@ -28,7 +28,12 @@ type artifact struct {
 	// subset. A directory artifact must therefore carry mergeUnion, which
 	// mergeArtifact checks rather than trusting the table to be written
 	// carefully.
-	dir    bool
+	dir bool
+	// legacy marks an artifact Strument no longer writes but still merges.
+	// Nothing here is ever deleted, so a state directory that predates a
+	// change keeps whatever that version left, and `strument project adopt`
+	// must carry it across rather than drop it for want of a policy.
+	legacy bool
 	policy mergePolicy
 	// why documents the policy for a reader of `strument project adopt`'s
 	// plan, which prints it. A policy nobody can see the reason for is one
@@ -108,8 +113,8 @@ const (
 // TestProjectDirHoldsOnlyRegisteredArtifacts is there to catch.
 var artifacts = map[string]artifact{
 	artTranscript: {
-		name: "transcript.md", policy: mergeAppend,
-		why: "append-only prose; one turn after another reads the same either way",
+		name: "transcript.md", policy: mergeAppend, legacy: true,
+		why: "append-only prose from before the session record; one turn after another reads the same either way",
 	},
 	artInput: {
 		name: "input.txt", policy: mergeAppend,

@@ -172,19 +172,17 @@ func DefaultUserConfigPath() (string, error) {
 
 // fileGlobals is the result of executing one config file.
 type fileGlobals struct {
-	models         map[string]*Model
-	hasDefault     bool
-	defaultVal     string
-	hasHistoryFile bool
-	historyFile    string
-	hasProxy       bool
-	proxyVal       string
-	hasScraper     bool
-	scraperVal     []string
-	hasCheck       bool
-	checkVal       []Check
-	hasCheckAuto   bool
-	checkAutoVal   []string
+	models       map[string]*Model
+	hasDefault   bool
+	defaultVal   string
+	hasProxy     bool
+	proxyVal     string
+	hasScraper   bool
+	scraperVal   []string
+	hasCheck     bool
+	checkVal     []Check
+	hasCheckAuto bool
+	checkAutoVal []string
 
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
@@ -475,8 +473,7 @@ func Load(opts Options) (*Config, error) {
 		}
 	}
 
-	// 4. Merge: models whole-key, project wins; default and history_file
-	// project-over-user.
+	// 4. Merge: models whole-key, project wins; default project-over-user.
 	// The sandbox is on by default where it can be, and the default is set
 	// here rather than at the point of use so `strument model-config` and any
 	// other reader sees the same answer the session will act on.
@@ -484,9 +481,6 @@ func Load(opts Options) (*Config, error) {
 	maps.Copy(cfg.Models, user.models)
 	if user.hasDefault {
 		cfg.Default = user.defaultVal
-	}
-	if user.hasHistoryFile {
-		cfg.HistoryFile = user.historyFile
 	}
 	if user.hasProxy {
 		cfg.Proxy = user.proxyVal
@@ -579,9 +573,6 @@ func Load(opts Options) (*Config, error) {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
 			cfg.Default = project.defaultVal
-		}
-		if project.hasHistoryFile {
-			cfg.HistoryFile = project.historyFile
 		}
 		if project.hasProxy {
 			cfg.Proxy = project.proxyVal
@@ -971,15 +962,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasDefault = true
 		out.defaultVal = s
-	}
-
-	if hv, ok := globals["history_file"]; ok {
-		s, ok := starlark.AsString(hv)
-		if !ok {
-			return nil, fmt.Errorf("%s: `history_file` must be a string path, got %s", path, hv.Type())
-		}
-		out.hasHistoryFile = true
-		out.historyFile = s
 	}
 
 	if pv, ok := globals["proxy"]; ok {

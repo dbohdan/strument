@@ -50,7 +50,7 @@ var version = "0.0.0-dev"
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
-	Continue      bool     `help:"Generate session notes from the previous transcript at startup."                                                                                            name:"continue"                                               short:"c"`
+	Continue      bool     `help:"Generate session notes from the session record at startup."                                                                                                 name:"continue"                                               short:"c"`
 	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
 	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
@@ -358,15 +358,8 @@ func (c *chatCmd) Run() error {
 		}
 	}
 
-	var hist *history.Writer
-	if keepState {
-		if p, err := resolveHistoryPath(cfg, projectRoot); err == nil {
-			hist = history.New(p)
-		}
-	}
-
-	if c.Continue && hist != nil {
-		transcript := history.ReadTranscript(hist.Path())
+	if c.Continue && keepState {
+		transcript := sessionMarkdown(projectRoot, session)
 		if transcript != "" {
 			write := coder.NotesWriter(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
 			notes, err := write(transcript)
@@ -412,61 +405,13 @@ func (c *chatCmd) Run() error {
 				_ = history.SaveResume(projectRoot, session, resumeWithPins(cdr, projectRoot, res))
 			}
 		}
-		return c.runREPL(cfg, cdr, repo, hist, alias, projectRoot, session, keepState, note)
+		return c.runREPL(cfg, cdr, repo, alias, projectRoot, session, keepState, note)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
 	defer stop()
-	sentBefore, recvBefore := cdr.SessionTokens()
-	costBefore, _ := cdr.SessionCost()
 
-	appendTurn := func(crashed bool, assistant string) {
-		// Guarded here rather than only at the call below, because OnCrash is
-		// installed unconditionally: under --no-history there is no transcript
-		// to append to, and a panic would have turned into a nil dereference
-		// inside the recovery handler — losing the original stack, which is
-		// the one thing a crash path exists to preserve.
-		if hist == nil {
-			return
-		}
-		sentAfter, recvAfter := cdr.SessionTokens()
-		costAfter, known := cdr.SessionCost()
-		if err := hist.Append(history.Turn{
-			Model:          model.QualifiedSlug(),
-			TokensSent:     sentAfter - sentBefore,
-			TokensReceived: recvAfter - recvBefore,
-			Cost:           costAfter - costBefore,
-			CostKnown:      known,
-			User:           c.Message,
-			Assistant:      assistant,
-			Files:          cdr.TurnEditedFiles(),
-			Tools:          cdr.TurnToolLines(),
-			Crashed:        crashed,
-		}); err != nil {
-			noticef("could not write the chat history, so this turn is not in the transcript: %v", err)
-		}
-	}
-	// OnCrash records the turn even when it dies with a panic: a
-	// half-finished long turn has usually edited files, and the transcript
-	// is the only record of that once the process is gone. The panic
-	// continues upward after the callback, so crash behaviour is unchanged
-	// and the post-run append below never runs — which is what the flag
-	// guards against.
-	crashRecorded := false
-	cdr.OnCrash = func(partial string) {
-		crashRecorded = true
-		appendTurn(true, partial)
-	}
-	// Run comes first, unconditionally: --no-history (hist == nil) must still
-	// send the message and print the answer. The crash-recording commit moved
-	// this call inside `if hist != nil`, which turned every scripted
-	// `--no-history` run — the trial runner's mode — into a silent no-op that
-	// exited 0: no request, no output, no error. Three trial binaries were
-	// built from that commit before the wire check caught it.
-	answer := cdr.Run(ctx, c.Message)
-	if hist != nil && !crashRecorded {
-		appendTurn(false, answer)
-	}
+	cdr.Run(ctx, c.Message)
 	// A scripted run that got no answer must not exit 0. `strument -m …` used
 	// to report success after a refused key or a dead endpoint: the diagnostic
 	// went to stderr and the status said everything was fine, so a script
@@ -811,17 +756,20 @@ func toProjectPaths(cdr *coder.Coder, projectRoot string, rels []string) []strin
 	return out
 }
 
-// resolveHistoryPath is the config override (absolute, or relative to the
-// history root above) or the XDG default.
-func resolveHistoryPath(cfg *config.Config, projectRoot string) (string, error) {
-	if cfg.HistoryFile != "" {
-		p := cfg.HistoryFile
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(projectRoot, p)
-		}
-		return p, nil
+// sessionMarkdown is the session's history as the notes writer reads it: the
+// record rendered by the same renderer `strument history markdown` uses.
+//
+// It reads every segment, so notes regenerate from the whole session rather
+// than from the run that happens to be current — and, in a running session,
+// from the turns of that session too, since the writer flushes per record.
+//
+// "" for a session with nothing in it, which is the caller's cue to say so.
+func sessionMarkdown(projectRoot, session string) string {
+	turns, err := history.ReadTurns(projectRoot, session)
+	if err != nil || len(turns) == 0 {
+		return ""
 	}
-	return history.DefaultPath(projectRoot)
+	return history.Markdown(turns)
 }
 
 // paletteTheme picks the color palette from the --dark-mode/--light-mode
@@ -856,7 +804,7 @@ func terminalSize() (int, int) {
 }
 
 // runREPL starts the interactive session.
-func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, hist *history.Writer,
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo,
 	alias, projectRoot, session string, keepState bool, resumeNote string,
 ) error {
 	refreshCommitMessage := func(m *config.Model) {
@@ -877,7 +825,6 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Coder:                cdr,
 		Config:               cfg,
 		Git:                  repo,
-		History:              hist,
 		ModelAlias:           alias,
 		ResumeNote:           resumeNote,
 		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, session, keepState),
@@ -896,17 +843,17 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			cdr.SessionNotes, cdr.SessionNotesDate = "", ""
 		},
 		GenerateNotes: func(_ context.Context) error {
-			if hist == nil {
-				return errors.New("no transcript available")
+			if !keepState {
+				return errors.New("no session record available")
 			}
 			side := cdr.Model.SideModel
 			if side == nil {
 				return errors.New("no side model configured")
 			}
 			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
-			transcript := history.ReadTranscript(hist.Path())
+			transcript := sessionMarkdown(projectRoot, session)
 			if transcript == "" {
-				return errors.New("transcript is empty")
+				return errors.New("the session record is empty")
 			}
 			notes, err := write(transcript)
 			cdr.FlushSideUsage()
