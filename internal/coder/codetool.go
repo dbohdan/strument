@@ -81,10 +81,10 @@ func codeTool(callable []string) llm.ToolDef {
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
 		"math, re, datetime, json, itertools and collections all work. Not " +
-		"available: with, match, del, eval/exec, open, network access, and other " +
-		"imports — os, sys and pathlib import but reach no filesystem, so use " +
-		"glob(pattern=\"**/*.py\") to walk the tree and read() to open a file; " +
-		"the bash tool, not this one, runs commands. " +
+		"available: with, match, del, eval/exec, open, subprocess, network " +
+		"access, and other imports — os, sys and pathlib import but reach no " +
+		"filesystem, so use glob(pattern=\"**/*.py\") to walk the tree and " +
+		"read() to open a file; the bash tool, not this one, runs commands. " +
 		"A missing construct raises an error naming it — simplify and rerun; a " +
 		"failed program costs one cheap retry.")
 
@@ -98,6 +98,7 @@ func codeTool(callable []string) llm.ToolDef {
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
+	b.WriteString(codeDataFuncDoc())
 	b.WriteString(codeFuncDoc())
 
 	return llm.ToolDef{
@@ -283,11 +284,12 @@ var codeToolParams = map[string][]string{
 // read-only bridge. log collects what the program actually did, for the outcome
 // line and the result's note.
 func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
-	opts := make([]monty.ExecuteOption, 0, 2)
+	opts := make([]monty.ExecuteOption, 0, 3)
 	opts = append(opts, monty.WithLimits(codeLimits))
+	opts = append(opts, monty.WithOsCallFunc(codeOsCall))
 
 	names := c.codeCallableTools()
-	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs)+1)
+	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs)+len(codeDataFuncs))
 	// The params list is what lets Monty bind a positional call's arguments to
 	// names. Registering without one does not make positional calls fail — it
 	// makes them vanish: `read("README.md")` arrives at the bridge as {}, the
@@ -304,12 +306,35 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	// Code functions ride the same registration, and need it more: their
 	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
 	// so a program written to the documentation was the case that silently
-	// dropped every argument.
+	// dropped every argument. The data functions are in the same position:
+	// `glob("*.go")` is the first call a model writes, and the whole reason
+	// the data shape exists.
 	for _, d := range codeFuncs {
+		funcs = append(funcs, monty.Func(d.name, d.params...))
+	}
+	for _, d := range codeDataFuncs {
 		funcs = append(funcs, monty.Func(d.name, d.params...))
 	}
 	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
 	return opts
+}
+
+// codeOsCall answers the OS-call channel Monty routes filesystem touches
+// through — os.listdir, Path.iterdir, open. Probed against the vendored
+// monty.wasm (TestCodeNoFilesystemAccess): these are the reaches that arrive
+// not as ModuleNotFoundError but as a half-working import, which is the worst
+// of the wrong reaches because the AttributeError-free first steps read as
+// success. Without a handler the error was "OS call %q but no handler
+// configured" — harness-shaped, naming nothing the program could do next, and
+// (before the wrapper learned to resume with the error) with no traceback at
+// all. The handler refuses, in the words of the failure mode, and names the
+// tool that serves the intent.
+//
+// It deliberately does not answer any OS call with data: the tools are the
+// filesystem here, and every one of them is already one bridged call away.
+func codeOsCall(_ context.Context, call *monty.OsCall) (any, error) {
+	return nil, fmt.Errorf("a program has no filesystem; use the glob, ls, and read "+
+		"functions instead of %s", call.Function)
 }
 
 // bridgeCall is the ExternalFunc that pauses the program and answers one
@@ -325,7 +350,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 // the truth without parsing anything.
 func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc {
 	funcs := codeFuncs
-	isAllowed := make(map[string]bool, len(allowed)+len(funcs))
+	isAllowed := make(map[string]bool, len(allowed)+len(funcs)+len(codeDataFuncs))
 	for _, n := range allowed {
 		isAllowed[n] = true
 	}
@@ -335,6 +360,9 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 	// registry, so an arm that does not offer a function does not allow it
 	// either: the two lists have to be the same list.
 	for _, d := range funcs {
+		isAllowed[d.name] = true
+	}
+	for _, d := range codeDataFuncs {
 		isAllowed[d.name] = true
 	}
 
@@ -372,10 +400,22 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 			log.last = v
 			return v, err
 		}
+		// The data shapes go before Inspector.Run: they are the same tool
+		// names, answered as data inside a program. The prose shapes stay
+		// behind them untouched, for the model's direct calls.
+		if d := codeDataFuncByName(call.Name); d != nil {
+			v, err := d.fn(c, call)
+			log.last = v
+			return v, err
+		}
 
 		// The call crosses the boundary as the same Inspector.Run a direct
 		// call goes through, so the outcome line and the model's answer are
-		// byte-for-byte what a direct call would produce.
+		// byte-for-byte what a direct call would produce — for the tools whose
+		// result *is* prose. The data-shaped ones (glob, ls) answered above,
+		// because a program that computes over a result needs the result, not
+		// the report about it: glob's prose names the pattern and explains
+		// syntax, and sorted() over prose iterates its characters.
 		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
 		out := c.inspector().Run(call.Name, tc.Arguments)
 
@@ -525,7 +565,25 @@ func codeErrorText(err error) string {
 	if i := strings.Index(msg, "\n"); i >= 0 && strings.Contains(msg[:i], "script.py") {
 		msg = msg[i+1:]
 	}
-	return "The program failed: " + msg
+	return codeHintText("The program failed: "+msg, msg)
+}
+
+// codeHintText appends the recovery hint to the error classes the model
+// self-corrects on anyway — the wrong-reach family, whose measured cost is one
+// step per session (doc/experiments/2026-09-code-namespace/README.md) and whose
+// description-side fixes all failed: the mistake is the first program of a
+// session, written before any description is consulted. The error channel is
+// the one that fires exactly when the mistake did, and costs nothing on
+// correct programs. Returned unchanged for every other failure, so the hint
+// never rides on a wall the model could not have avoided.
+func codeHintText(full, msg string) string {
+	if !strings.Contains(msg, "No module named '") {
+		return full
+	}
+	return full + "\n\nMonty has no subprocess, no filesystem, and only a few modules " +
+		"(math, re, datetime, json, itertools, collections); os, sys and pathlib " +
+		"import but reach no filesystem. Use the glob, ls, read, and grep functions " +
+		"instead."
 }
 
 // montyRunner lazily builds the one process-wide Runner. Compiling monty.wasm

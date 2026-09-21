@@ -59,9 +59,55 @@ var codeFuncs = []codeFuncDef{
 	readTextFunc,
 }
 
+// codeDataFuncs are the bridged tools that exist in two shapes. Inside a
+// program the data shape wins, because a program computes over a result and
+// the tool shape is prose for the model: glob's answer names the pattern and
+// explains glob syntax, and sorted() over that prose iterates its characters —
+// a live session turned one such call into 49 junk tool calls under the
+// 50-call cap, and the model's own diagnosis was that the interpreter was
+// broken. The shapes cannot collide at a call site: the bridge dispatches on
+// this registry before Inspector.Run, and a direct tool call never crosses the
+// bridge. The registered list, the bridge's dispatch, and the description's
+// "returns data" sentence all read from codeDataFuncs, so the three cannot
+// drift.
+//
+// Errors stay empty results rather than failures, matching the prose shape:
+// "No files match" is an answer a program filters on, so it arrives as an
+// empty list.
+var codeDataFuncs = []codeFuncDef{
+	{
+		name: "glob",
+		summary: "glob(pattern) returns the matching project-relative paths as a list of strings — " +
+			"data for the program, unlike the glob tool's prose. Empty list when nothing matches. " +
+			"The pattern is matched against the whole path, segment by segment; \"**/*.go\" reaches " +
+			"every directory, \"*.go\" only the root, and a bare directory name matches nothing.",
+		params: []string{"pattern"},
+		fn:     runGlobData,
+	},
+	{
+		name: "ls",
+		summary: "ls(path=\"\") returns one directory's entries as a list of dicts {path, is_dir, link} " +
+			"sorted by path — data for the program, unlike the ls tool's prose. Empty path is the " +
+			"project root; a directory under the standard temp directory is allowed too. " +
+			"link is the symlink target, present only on symlinks.",
+		params: []string{"path"},
+		fn:     runLSData,
+	},
+}
+
 // codeFuncByName returns the registry entry for name, or nil.
 func codeFuncByName(name string) *codeFuncDef {
-	defs := codeFuncs
+	return codeFuncScan(codeFuncs, name)
+}
+
+// codeDataFuncByName returns the data-shape entry for name, or nil. Separate
+// from codeFuncByName so a future name that exists in both shapes is a
+// decision, not an accident of scan order.
+func codeDataFuncByName(name string) *codeFuncDef {
+	return codeFuncScan(codeDataFuncs, name)
+}
+
+func codeFuncScan(defs []codeFuncDef, name string) *codeFuncDef {
 	for i := range defs {
 		if defs[i].name == name {
 			return &defs[i]
@@ -83,6 +129,20 @@ func codeFuncDoc() string {
 	b.WriteString("\n\nAlso callable, but only from inside a program (they return data for " +
 		"the program, not text for you):\n")
 	for _, d := range defs {
+		fmt.Fprintf(&b, "- %s\n", d.summary)
+	}
+	return b.String()
+}
+
+// codeDataFuncDoc renders the data shapes into the description, with the
+// overriding stated in the header: these names are the tools', so the program
+// gets the list, not the tool's prose. Built from the registry like
+// codeFuncDoc, for the same reason.
+func codeDataFuncDoc() string {
+	var b strings.Builder
+	b.WriteString("\n\nInside a program, glob and ls return data rather than the tools' " +
+		"prose, and override them:\n")
+	for _, d := range codeDataFuncs {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}
 	return b.String()
@@ -203,4 +263,61 @@ func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
 		text += "\n"
 	}
 	return text, nil
+}
+
+// runGlobData answers a glob call from a program with the paths as data. It
+// runs the same Workspace.Glob the tool runs, so containment, ignore rules,
+// and the results limit are shared; only the rendering differs.
+//
+// The return is the bare list, not a dict carrying a truncation flag beside
+// it: iterating a dict yields its keys, so `for p in glob("**/*.go")` would
+// have produced ["paths"] — the same quiet wrong-shape iteration the prose
+// shape produced, one level down. Truncation instead raises, naming the
+// repair: the tool's 1,000-path limit is real, and a program computing over
+// a silently cut list would take a wrong answer for a right one.
+func runGlobData(c *Coder, call *monty.FunctionCall) (any, error) {
+	pattern, _ := call.Args["pattern"].(string)
+	if strings.TrimSpace(pattern) == "" {
+		return nil, errors.New("glob requires a \"pattern\" argument")
+	}
+	paths, trunc, err := c.Files.Glob(pattern)
+	if err != nil {
+		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		return nil, fmt.Errorf("Could not match %s: %w", quoteToolArg(pattern), err)
+	}
+	if trunc.Any() {
+		return nil, fmt.Errorf("glob matched at least %d paths, past the limit; narrow the pattern "+
+			"— with a directory path in grep, or a **/sub/ pattern — and work on a subtree",
+			len(paths))
+	}
+	// A nil slice marshals to JSON null, which Monty turns into Python None —
+	// and a no-match result then looks exactly like the discarded-results
+	// failure the note is for. Empty is a value; make it the value it claims
+	// to be.
+	if paths == nil {
+		paths = []string{}
+	}
+	return paths, nil
+}
+
+// runLSData answers an ls call from a program with the entries as data. Same
+// containment as the tool, including the temp-directory exemption, which is
+// what the live session's program was actually after when it went through
+// glob: listing cloned repositories under /tmp.
+func runLSData(c *Coder, call *monty.FunctionCall) (any, error) {
+	dir, _ := call.Args["path"].(string)
+	entries, err := c.Files.List(dir)
+	if err != nil {
+		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		return nil, fmt.Errorf("Could not list %s: %w", quoteToolArg(dir), err)
+	}
+	out := make([]any, 0, len(entries))
+	for _, e := range entries {
+		m := map[string]any{"path": e.Path, "is_dir": e.IsDir}
+		if e.Link != "" {
+			m["link"] = e.Link
+		}
+		out = append(out, m)
+	}
+	return out, nil
 }

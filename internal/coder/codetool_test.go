@@ -2,6 +2,9 @@ package coder
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -152,9 +155,16 @@ func TestCodeDescriptionNamesTheLimits(t *testing.T) {
 }
 
 // TestCodeNoFilesystemAccess is the security claim, tested not assumed. Monty
-// has no `open` and routes os/pathlib through an OsCallFunc this tool never
-// registers, so the calls must fail. If a Monty upgrade makes any of these
-// succeed, that upgrade must not ship.
+// routes the filesystem-reaching calls — os.listdir, Path.iterdir, open —
+// through the OsCallFunc this tool registers with codeOsCall, which refuses
+// them in words that name the substitute. If a Monty upgrade makes any of
+// these succeed, that upgrade must not ship.
+//
+// The refusal must arrive as an exception *inside* the program, with line
+// attribution — the wasm.go resumeWithError path. A harness-shaped flat line
+// ("but no handler configured") was the pre-fix failure mode, and one live
+// session met it verbatim, `OS call "Path.iterdir" but no handler configured`,
+// as the result of a program that was one wrong reach into a survey.
 func TestCodeNoFilesystemAccess(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
@@ -171,6 +181,14 @@ func TestCodeNoFilesystemAccess(t *testing.T) {
 				t.Errorf("filesystem access must fail and did not:\n%s", got)
 			}
 		})
+	}
+
+	// The OS-call channel's refusals are catchable and name the tools, which
+	// is the point of answering the channel rather than leaving it
+	// unconfigured.
+	got := c.runCode(context.Background(), codeCall{code: "try:\n    import os\n    os.listdir('/')\nexcept Exception as e:\n    print('caught:', 'glob' in str(e))\n"})
+	if !strings.Contains(got, "caught: True") {
+		t.Errorf("an os.listdir refusal must be catchable and name a substitute:\n%s", got)
 	}
 }
 
@@ -232,6 +250,105 @@ lines = [l for l in out.splitlines() if l.endswith(".go")]
 	}
 	if !strings.Contains(got, "false") {
 		t.Errorf("the Python filter must have excluded c.txt, got:\n%s", got)
+	}
+}
+
+// TestCodeGlobReturnsData pins the fix for the incident this shape exists for:
+// a program calling glob() gets the paths as a list, not the tool's prose. The
+// live failure was sorted() over the prose — which iterates its characters —
+// turning one call into 49 junk tool calls under the cap. A list cannot be
+// mistaken for prose, and an empty match is an empty list, a value the
+// program filters on, not an error.
+func TestCodeGlobReturnsData(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"a.go":         "package a\n",
+		"sub/b.go":     "package b\n",
+		"sub/deep.txt": "x\n",
+	})
+
+	got := c.runCode(context.Background(), codeCall{code: `glob("*.go")`})
+	if !strings.Contains(got, `["a.go"]`) {
+		t.Errorf("glob must return the paths as a JSON list, got:\n%s", got)
+	}
+
+	got = c.runCode(context.Background(), codeCall{code: `[p for p in glob("**/*.go")]`})
+	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"sub/b.go"`) {
+		t.Errorf("glob must return every matching path, got:\n%s", got)
+	}
+
+	// The empty result is a value, not a failure.
+	got = c.runCode(context.Background(), codeCall{code: `glob("*.rs")`})
+	if strings.TrimSpace(got) != `[]` {
+		t.Errorf("an empty glob must be an empty list, got:\n%s", got)
+	}
+
+	// The failure mode the shape removed, pinned as the program that once
+	// mangled it: sorting a glob result yields paths, not characters.
+	got = c.runCode(context.Background(), codeCall{code: `sorted(glob("**/*.go"))`})
+	if strings.Contains(got, `"a.go"`) && !strings.Contains(got, `"sub/b.go"`) {
+		t.Errorf("sorting the glob result must sort paths, got:\n%s", got)
+	}
+}
+
+// TestCodeLSReturnsData covers the data shape's other half: entries as dicts,
+// the is_dir flag a program needs to walk a tree, and link only on symlinks —
+// the same three facts the tool's prose renders, in the shape a program
+// computes over. The temp-directory exemption is asserted too, because it is
+// why the function exists at all: /tmp clones were what the misbehaving
+// program was actually trying to enumerate.
+func TestCodeLSReturnsData(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
+
+	entries := c.runCode(context.Background(), codeCall{code: `ls()`})
+	if !strings.Contains(entries, `"path":"a.go"`) || !strings.Contains(entries, `"is_dir":false`) {
+		t.Errorf("ls must return entries as dicts, got:\n%s", entries)
+	}
+
+	// A directory under the standard temp directory is reachable, as the tool
+	// is: the workspace root stays behind Files, and the exemption is what
+	// makes a /tmp checkout enumerable from a program.
+	temp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(temp, "note.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries = c.runCode(context.Background(), codeCall{code: fmt.Sprintf("ls(path=%q)", temp)})
+	if !strings.Contains(entries, "note.txt") || !strings.Contains(entries, `"is_dir":false`) {
+		t.Errorf("ls must reach a temp directory like the tool does, got:\n%s", entries)
+	}
+
+	// A missing directory is a failure the program can catch.
+	got := c.runCode(context.Background(), codeCall{code: "try:\n    ls(path=\"missing\")\nexcept Exception as e:\n    print(\"caught\")\n"})
+	if !strings.Contains(got, "caught") {
+		t.Errorf("a failed ls must raise inside the program, got:\n%s", got)
+	}
+}
+
+// TestCodeGlobLSOverrideTheToolNames: inside a program the data shape answers
+// the same names the tools answer, so a program written against the tool
+// description's prose — glob(pattern="...") — gets data, not the tool's
+// report about the search.
+func TestCodeGlobLSOverrideTheToolNames(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"a.go": "package a\n"})
+
+	got := c.runCode(context.Background(), codeCall{code: `glob(pattern="*.go")`})
+	if !strings.Contains(got, `["a.go"]`) {
+		t.Errorf("glob(pattern=...) must return data like glob(...), got:\n%s", got)
+	}
+	if joined := strings.Join(out.lines, "\n"); strings.Contains(joined, "Matched") {
+		t.Errorf("the data shape must not run the tool's outcome line, got:\n%s", joined)
+	}
+}
+
+// TestCodeBridgeGrepStaysProse pins the boundary of the shape change: only
+// glob and ls return data; grep and read still cross as the same text a
+// direct call would produce, which the bridge's contract comment still
+// claims and the model may still parse.
+func TestCodeBridgeGrepStaysProse(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.go": "// Target\n"})
+
+	got := c.runCode(context.Background(), codeCall{code: `grep(pattern="Target", glob="a.go")`})
+	if !strings.Contains(got, "1 match in 1 file for Target") {
+		t.Errorf("grep must still return the tool's prose shape, got:\n%s", got)
 	}
 }
 
@@ -470,6 +587,69 @@ func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must say %q:\n%s", want, desc)
 		}
+	}
+}
+
+// TestCodeDataFuncsOverrideTheBridge pins the two-shape contract from both
+// sides: inside a program glob and ls return data (the bridge dispatches them
+// before Inspector.Run), and the description the model reads says so, because
+// a program written expecting the tool's prose — the failure that motivated
+// the change — must meet a list, and a model reading the description must be
+// told the names are overridden. The summary strings, the registered params,
+// and the description sentence all read from codeDataFuncs.
+func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
+	desc := codeTool(InspectorTools()).Description
+
+	// The description states the override and the return shapes.
+	if !strings.Contains(desc, "return data rather than the tools' prose") {
+		t.Errorf("the description must state the override:\n%s", desc)
+	}
+	for _, want := range []string{"glob(pattern)", "list of strings", "{path, is_dir, link}"} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("the description must name the data shape (%q):\n%s", want, desc)
+		}
+	}
+
+	// And the shapes hold: a list, not a dict whose keys a for-loop would
+	// iterate; entries, not a report about them.
+	for _, tc := range []struct{ code, want string }{
+		{`glob("*.go")`, `["a.go"]`},
+		{`[e["path"] for e in ls() if e["is_dir"]]`, `[]`},
+	} {
+		if got := c.runCode(context.Background(), codeCall{code: tc.code}); !strings.Contains(got, tc.want) {
+			t.Errorf("%s must return %s-shaped data, got:\n%s", tc.code, tc.want, got)
+		}
+	}
+}
+
+// TestCodeModuleHintRidesTheRightError checks the error-channel hint lands on
+// the wrong-reach failures and on nothing else: the subprocess/os reaches get
+// the substitute list, while a wall the model could not have avoided — a
+// missing module that is not the stdlib trap, a syntax error — is returned
+// bare. The hint is model-facing text; on the wrong failure it would be noise
+// on every legitimate retry.
+func TestCodeModuleHintRidesTheRightError(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+
+	// os.listdir and open go through the OS-call channel, whose refusal names
+	// the substitutes itself — the codeOsCall handler — so the module hint is
+	// not stacked on top of an error that already says what to do.
+	for _, code := range []string{"import subprocess\n1", "import glob\n1"} {
+		t.Run(code, func(t *testing.T) {
+			got := c.runCode(context.Background(), codeCall{code: code})
+			if !strings.Contains(got, "no subprocess, no filesystem") {
+				t.Errorf("the hint must ride the wrong-reach failure:\n%s", got)
+			}
+		})
+	}
+	for _, code := range []string{"import math\nmath.teeth(1)", "x = = 1"} {
+		t.Run(code, func(t *testing.T) {
+			got := c.runCode(context.Background(), codeCall{code: code})
+			if strings.Contains(got, "no subprocess, no filesystem") {
+				t.Errorf("the hint must not ride an unrelated failure:\n%s", got)
+			}
+		})
 	}
 }
 

@@ -326,7 +326,18 @@ func (inst *instance) execute(ctx context.Context, code string, inputs map[strin
 
 			returnVal, fnErr := cfg.osCallFunc(ctx, call)
 			if fnErr != nil {
-				return nil, fmt.Errorf("monty: OS call %q failed: %w", call.Function, fnErr)
+				// The same resume-with-error the tool-failure branch uses: an
+				// abandoned snapshot put the refusal out of the program's reach
+				// — no line attribution, nothing a try/except could catch — and
+				// read as a harness fault rather than the environment saying
+				// "this interpreter has no filesystem".
+				status, err = inst.resumeWithError(ctx,
+					derefU32(progress.SnapshotHandle),
+					fmt.Sprintf("OS call %q failed: %v", call.Function, fnErr))
+				if err != nil {
+					return nil, err
+				}
+				continue
 			}
 
 			status, err = inst.resumeWithValue(ctx, derefU32(progress.SnapshotHandle), returnVal)

@@ -1675,8 +1675,15 @@ cgo, vendored under `internal/monty/`.
 
 It is a **subset**, and the tool description lists the interpreter's
 limitations: no `with`, no `match`, no `eval`/`exec`, no `open`, no
-`os`/`pathlib` filesystem access, no network, no imports beyond
-`math`/`re`/`datetime`/`json`, and no third-party libraries.
+`os`/`pathlib` filesystem access, no network, no `subprocess`, and no
+third-party libraries. Imports beyond `math`/`re`/`datetime`/`json` (plus
+`itertools`/`collections`, which work unadvertised) raise
+`ModuleNotFoundError`; `os`, `sys`, and `pathlib` import but reach no
+filesystem — their path-string helpers work, and their filesystem calls are
+refused with the substitute named. A wrong reach is answered in the error
+channel rather than the description, because the mistake is the first program
+of a session, written before any description is consulted (see
+`doc/experiments/2026-09-code-namespace/README.md`).
 Available: f-strings, `while`, `try/except`, comprehensions, generators,
 classes, `lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/
 `abs`, and all of `math`. There is no `%-formatting` and no `.format()`.
@@ -1691,15 +1698,26 @@ other tool call and is available in ask mode.
 
 ### The read-only bridge
 
-Inside a `run_code` program, the five observation tools — `read`, `grep`, `glob`,
-`ls`, `symbol` — are callable as functions. Each returns the same text the
-tool itself would return, and each call's outcome line appears under the
-program block that caused it — you see the same `Searched for …` line whether
-the model called `grep` directly or from inside a program, minus the per-call
+Inside a `run_code` program, the five observation tools — `read`, `grep`,
+`glob`, `ls`, `symbol` — are callable as functions, and each returns the same
+text the tool itself would return, with its outcome line under the program
+block that caused it — you see the same `Searched for …` line whether the
+model called `grep` directly or from inside a program, minus the per-call
 announcement: a "‹run_code› read" line before each outcome read as a separate
 action the model had initiated, when it was downstream of the program already
 on screen, and the turn's `Ran N lines of code calling …` summary already
 attributes the run. A program may issue at most 50 bridged calls.
+
+Two of the five exist in a **data shape** inside a program, which overrides
+the tool's prose: `glob(pattern)` returns the matching paths as a list of
+strings, and `ls(path)` returns entries as `{path, is_dir, link}` dicts. The
+prose shape is for the model; a program computes over a result, and glob's
+prose (pattern echo, glob-syntax notes) was being iterated as a string — one
+live session turned a single call into 49 junk tool calls under the bridge
+cap. An empty match is `[]`, a value to filter on. A match past the 1,000-path
+results limit raises rather than truncating, for the same reason `read_text`
+does. `grep` and `read` still cross as prose, which a program parses with
+`.splitlines()`.
 
 Only the five read-only observation tools are callable from a `run_code`
 program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a

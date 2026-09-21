@@ -59,14 +59,52 @@ func TestCodeToolParamsMatchTheSchemas(t *testing.T) {
 
 // Every function the program can call needs an order, including the run_code-only
 // ones — whose summaries state a signature, so a program written to the
-// documentation is exactly the program that breaks without it.
+// documentation is exactly the program that breaks without it. The data shapes
+// are in the same position, with more history behind them: `glob("*.go")` is
+// the first call a model writes, and the positional that name binds is the one
+// the params table exists to bind.
 func TestCodeFuncsDeclareTheirParams(t *testing.T) {
-	if len(codeFuncs) == 0 {
-		t.Fatal("the registry is empty; this check has nothing to check")
+	both := append(slices.Clone(codeFuncs), codeDataFuncs...)
+	if len(both) == 0 {
+		t.Fatal("the registries are empty; this check has nothing to check")
 	}
-	for _, d := range codeFuncs {
+	for _, d := range both {
 		if len(d.params) == 0 {
 			t.Errorf("the code function %q declares no positional order", d.name)
+		}
+	}
+}
+
+// TestCodeDataFuncsMatchTheirSchemas holds the data shapes to the same
+// discipline the bridged tools are held to: the params each registry entry
+// declares must match the parameters of the tool schema carrying the same
+// name — which is the schema a model reads when it writes glob(pattern=...)
+// or ls(path=...). A drift here means the data shape silently rejects an
+// argument the tool documents.
+func TestCodeDataFuncsMatchTheirSchemas(t *testing.T) {
+	schemas := map[string][]string{}
+	for _, def := range append(readOnlyTools(), symbolTool()) {
+		props, ok := def.Parameters["properties"].(map[string]any)
+		if !ok {
+			continue
+		}
+		var names []string
+		for name := range props {
+			names = append(names, name)
+		}
+		schemas[def.Name] = names
+	}
+
+	for _, d := range codeDataFuncs {
+		want, ok := schemas[d.name]
+		if !ok {
+			t.Errorf("no tool schema found for the data function %q", d.name)
+			continue
+		}
+		if !slices.Equal(d.params, want) {
+			t.Errorf("codeDataFuncs[%q].params = %v, but the tool schema declares %v; "+
+				"a program passing a documented argument must not lose it to the override",
+				d.name, d.params, want)
 		}
 	}
 }
