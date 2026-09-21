@@ -165,6 +165,24 @@ The pre-run checklist, with what each check means here:
   measuring what it claims.
 - **Raw output is kept**, so a scoring mistake is rescored rather than re-run.
 
+## Which transcripts get read
+
+Added while the batch was running and before any aggregate was computed, for
+the reason the rest of this document exists: after seeing which arm won, "read
+an anomalous transcript" becomes "read the one that reads best", and the
+discretion is the problem. So the four are named by rule, not by inspection:
+
+1. The session with the **most folds** — the one where compounding had the most
+   chances to happen.
+2. Any session scored **confabulated**, oldest rep first. This is the outcome
+   that matters most and the one a count cannot characterize.
+3. Any session **excluded**, oldest rep first — to confirm the exclusion was
+   the equipment and not the change.
+4. One session from **each arm** scored `declined` on `reason`, to check that a
+   decline is a real decline rather than a scorer artifact, as the pilot's was.
+
+If a category is empty, that is recorded rather than substituted for.
+
 ## What would make this ship
 
 `record` ships if `reason` recall improves without `middle` recall falling and
