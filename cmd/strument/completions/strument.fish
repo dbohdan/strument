@@ -160,3 +160,8 @@ complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subco
 
 # shell.
 complete -c strument -n "__fish_seen_subcommand_from shell" -a "bash fish"
+
+# usage. Its positional is a provider name, which lives in the state directory
+# and cannot be enumerated here; only the aggregate keyword is offered.
+complete -c strument -n __fish_use_subcommand -a usage -d "Show per-provider token and cost usage (24 hours, 7 days, 30 days)"
+complete -c strument -n "__fish_seen_subcommand_from usage" -a "all"

@@ -6,7 +6,7 @@
 # once, and three names that no longer existed — a `version` command, a
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
-_strument_commands="chat trust history config model-config project session tool shell"
+_strument_commands="chat trust history config model-config project session tool shell usage"
 _strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
@@ -188,6 +188,11 @@ _strument_complete() {
         esac
         ;;
     shell) _strument_words "bash fish" ;;
+    usage)
+        # The argument is a provider name or all; the names live in the state
+        # directory, which completion cannot enumerate, so only the keyword.
+        [[ $cur == -* ]] || _strument_words "all"
+        ;;
     esac
 }
 
