@@ -182,6 +182,21 @@ message list (`doneMessages`), while notes are regenerated from the on-disk
 transcript. By the time notes are regenerated, the transcript already includes
 everything, whether compaction has occurred or not.
 
+## Where a compaction summary's input comes from
+
+Compaction folds `doneMessages`, which already holds the previous summary, so
+summary *n+1* is built from summary *n*. That is the self-reinforcing pattern
+the section below rejects for notes, and it was never changed to match because
+until the session record existed there was nothing else to read.
+
+[2026-09-compaction-source](experiments/2026-09-compaction-source/) tested the
+change. Reading the record instead recalled a turn-1 reason in 10/12 MiMo
+sessions against 0/12 for folding, and the predicted harm to a
+mid-conversation fact did not appear — but the confabulation counter-metric
+turned out to be measuring the wrong thing, so the check its ship rule depends
+on did not run. Not shipped; `--compaction-source` stays hidden and defaults
+to folding. A re-run with a disambiguated probe would settle it.
+
 ## Notes are regenerated, never folded
 
 Notes are regenerated from the session record — rendered as the markdown the
@@ -244,6 +259,36 @@ does not help if the model never checks the files.
   defaults to `agent.name`). A different model writes the notes and another
   model may read them, so agentless wording avoids assigning either one the
   summary's voice.
+
+## What the panel persists
+
+Read 2026-09-20 at the commits named, for the design that became the session
+record and the blob store. Kept here because a claim about a fast-moving
+repository is a dated observation, and this is where it can be re-checked.
+
+| harness | commit | what it persists |
+| --- | --- | --- |
+| Codex CLI | `e29eceb` | `ResponseItem` including `FunctionCallOutput` |
+| OpenCode | `d870e22` | full JSON in SQLite `PartTable.data`; truncates in `compaction.ts` |
+| Hermes Agent | `8c2f9ca` | full content; caps only its FTS index, with a `LIKE` fallback over the full text "so no search capability is lost" |
+| Pi | `3390bd9` | throws `SessionInvariantError` when a tool call is missing persisted arguments |
+| Chronicle (connectome-host) | `013f138` | never deletes a record; `compact_state` *appends* a snapshot, and heavy payloads live in a content-addressed store with an individual delete |
+
+Two things the survey settled. **Nobody redacts tool content on the durable
+path** — the redaction in all of them is auth, keys in headers and tokens in
+logs — and the clip is consistently at the *context* boundary, never at the
+*storage* one. And Hermes's comment on why its index is capped is the
+footprint argument in one line: *"Tool results are often multi-megabyte
+machine payloads."*
+
+Chronicle is the shape Strument took: a permanent cheap timeline beside
+deletable heavy payloads. Strument adds the one-line description Chronicle
+does not keep, so a stripped record still reads as a conversation and can
+still be replayed.
+
+**Hermes is the only one of them with time-based expiry**, which is why
+`strument history strip` has a default age at all and why that number is a
+choice rather than a consensus.
 
 ## Influences
 

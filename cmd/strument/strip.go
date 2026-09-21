@@ -21,9 +21,9 @@ import (
 // invocation reaches for the part of the history that is plainly old rather
 // than for all of it.
 //
-// Ninety days is a choice, not a measurement. Of the harnesses surveyed for
-// doc/plans/sessions.md, Hermes is the only one with time-based expiry at all,
-// which is why a number is defensible here and why it is not a consensus.
+// Ninety days is a choice, not a measurement. Of the harnesses surveyed in
+// doc/sessions.md, Hermes is the only one with time-based expiry at all, which
+// is why a number is defensible here and why it is not a consensus.
 const defaultStripAge = 90 * 24 * time.Hour
 
 // historyStripCmd removes stored tool payloads that nothing recent points at.
