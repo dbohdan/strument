@@ -167,7 +167,7 @@ func TestEnforceHelper(t *testing.T) {
 	// directory in the real TMPDIR, so CI reported the sandbox breaking an
 	// ordinary build when the fixture was what was wrong. A test of a model of
 	// the code tests the model.
-	pol := Policy{Writable: DefaultWritable(project, state, nil)}
+	pol := Policy{Writable: DefaultWritable(project, state, filepath.Dir(state), nil)}
 	if err := pol.Apply(); err != nil {
 		fmt.Println("apply failed:", err)
 		return
