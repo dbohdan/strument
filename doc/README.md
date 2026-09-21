@@ -1133,6 +1133,14 @@ about a hundred bytes a turn there is no pruning policy to get wrong. The coder
 reaches it through a `RecordUsage` callback rather than a writer, so it keeps
 knowing nothing about where state lives.
 
+Each row names its `session`, so the same file answers both scopes: "what has
+this project cost me" by ignoring the field, "was that session worth it" by
+grouping on it. The ledger stays at the project level for the reason it was one
+file to begin with — a per-session ledger would make the project-wide question
+a directory walk, and that is the question asked more often. Rows written
+before sessions existed carry no `session`, which is what distinguishes them
+from rows that named one.
+
 ## Testing
 
 - `go test ./...` runs everything without network, sockets, or API keys.

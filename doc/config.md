@@ -90,7 +90,7 @@ projects/myproj-9428ba2d/
     root            the absolute path this directory belongs to
     current         the session a restart picks up
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
-    cost.jsonl      one line per turn: tokens, cost, t/s, steps, files changed
+    cost.jsonl      one line per turn: session, tokens, cost, t/s, steps, files
     blobs/          payloads the records point at
     sessions/default/
         log/        the session record, one JSON Lines file per run

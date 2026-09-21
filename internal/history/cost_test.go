@@ -56,3 +56,40 @@ func TestAppendCostIsOneLinePerTurn(t *testing.T) {
 		t.Errorf("cost.jsonl mode = %04o, want %04o", perm, fileMode)
 	}
 }
+
+// A project holds several sessions and one ledger, so the row has to say which
+// conversation it belongs to — and a row from before sessions existed has to
+// stay distinguishable from one that named a session, which is why the field
+// is omitted rather than defaulted.
+func TestCostRowsNameTheirSession(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+
+	if err := AppendCost(project, CostEntry{Session: "review", Model: "a/b", Steps: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendCost(project, CostEntry{Model: "a/b", Steps: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	p, _ := CostPath(project)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want 2 lines, got %d:\n%s", len(lines), data)
+	}
+
+	var named CostEntry
+	if err := json.Unmarshal([]byte(lines[0]), &named); err != nil {
+		t.Fatal(err)
+	}
+	if named.Session != "review" {
+		t.Errorf("session = %q, want the session the turn ran in", named.Session)
+	}
+	if strings.Contains(lines[1], `"session"`) {
+		t.Errorf("a row with no session should omit the field: %s", lines[1])
+	}
+}

@@ -16,7 +16,15 @@ import (
 // question sharply: the sample size ended up set by the most expensive model
 // rather than by the question, and nothing on disk could have said so.
 type CostEntry struct {
-	Time         string   `json:"time"`
+	Time string `json:"time"`
+	// Session is the conversation the turn belonged to. A project holds
+	// several, and "what has this cost me" is a question about the project
+	// while "was that session worth it" is a question about one of them; the
+	// ledger stays one file and answers both.
+	//
+	// Absent on rows written before sessions existed, which is what tells
+	// them apart from a row that named one.
+	Session      string   `json:"session,omitempty"`
 	Model        string   `json:"model"`
 	TokensSent   int      `json:"tokens_sent"`
 	TokensRecv   int      `json:"tokens_received"`
