@@ -42,8 +42,13 @@ type RestoreStats struct {
 	// provider would accept one. A number worth surfacing, because it is the
 	// difference between the record and what the model will see.
 	Dropped int
-	// Models is every distinct model that produced the restored assistant
-	// turns, in first-seen order, as the turn rows recorded it.
+	// Models is every distinct model that produced an assistant turn in the
+	// restored conversation, in first-seen order, as the turn rows recorded it.
+	// A turn row names its model only when the conversation it accounts for
+	// still holds an assistant message: an interrupted turn that was cut off
+	// before anything of the model's was recorded names a model the restored
+	// conversation never shows, and attributing the seam note to it would
+	// claim turns that are not there.
 	Models []string
 }
 
@@ -79,10 +84,6 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 	open := map[string]int{}
 
 	for i, r := range records {
-		if r.Type == "turn" && r.Model != "" && !seenModel[r.Model] {
-			seenModel[r.Model] = true
-			stats.Models = append(stats.Models, r.Model)
-		}
 		if r.Type != "message" {
 			continue
 		}
@@ -121,6 +122,16 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 				stats.Dropped += len(r.ToolCalls) - len(msg.ToolCalls)
 			}
 			out = append(out, msg)
+			// Attribution at the point of survival, not from the turn row:
+			// a turn row follows the messages it accounts for, so this is
+			// where "this model said something the conversation still holds"
+			// is actually known. The turn that names the model could be
+			// interrupted with nothing recorded, and a seam note pointing at
+			// turns that are not there would be worse than none.
+			if model := nextTurnModel(records, i); model != "" && !seenModel[model] {
+				seenModel[model] = true
+				stats.Models = append(stats.Models, model)
+			}
 
 		case llm.RoleTool:
 			// A result whose call did not make it back is an orphan, and a
@@ -178,6 +189,37 @@ func answeredAfter(records []Record, i int) map[string]int {
 		}
 	}
 	return answered
+}
+
+// nextTurnModel is the model of the turn row nearest after the message at i,
+// or "" when the message is not followed by one.
+//
+// A record is segmented: the messages of a turn, then the turn row that
+// accounts for them. The model a request ran under is not on the message rows
+// themselves — it is a property of the turn, so the attribution walks forward
+// to the row that closes it. answeredAfter already commits this package to
+// reading that shape (a turn row does not end a run of tool results), and the
+// recorder writes the rows in this order; a record that held a turn row in the
+// middle of a tool-run would attribute to the wrong turn, which is a shape
+// nothing writes today and the note would misfire on.
+//
+// A model is only ever attributed once the assistant message it produced has
+// survived into the restored conversation — the caller checks that — because
+// the alternative is a seam note about turns the conversation does not
+// contain: the exactly-backwards failure of a note whose whole job is
+// attribution.
+func nextTurnModel(records []Record, i int) string {
+	for _, r := range records[i+1:] {
+		if r.Type == "turn" {
+			return r.Model
+		}
+		if r.Type == "message" && r.Role == llm.RoleUser {
+			// The next turn's messages began: this message was never
+			// accounted for.
+			return ""
+		}
+	}
+	return ""
 }
 
 // trimToFirstUserTurn drops anything before the conversation's first user

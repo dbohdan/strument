@@ -244,6 +244,32 @@ func TestTheSeamNoteFiresOnlyForAnotherModel(t *testing.T) {
 	}
 }
 
+// An interrupted turn's row still names its model, but the turn left no
+// assistant message to attribute — the reply was cut off before the model
+// recorded anything, and the restore carries nothing of it. A seam note about
+// turns the conversation does not contain is the note misfiring, and it fired
+// on exactly this: a session reopened once under the default model,
+// interrupted, then resumed under its own model for the rest of its life.
+func TestAnInterruptedTurnWithNoAnswerLeavesNoSeam(t *testing.T) {
+	records := []Record{
+		{Type: "session", Version: RecordVersion, Model: "mimo"},
+		// The prompt is a blob and the harness note is all that followed:
+		// the model never emitted a message before the interrupt.
+		msg(llm.RoleUser, ""),
+		msg(llm.RoleUser, "[strument] The user pressed Ctrl-C, so your reply above was cut off."),
+		{Type: "turn", Model: "openrouter/xiaomi/mimo-v2.5", Outcome: "Interrupted", Prompt: "diagnose the run_code failure"},
+	}
+
+	got, stats := MessagesFromRecords(records)
+
+	if want := strings.Join([]string{llm.RoleUser, llm.RoleUser}, " "); shape(got) != want {
+		t.Errorf("shape = %q, want %q: the interrupted turn restored with nothing to show for it", shape(got), want)
+	}
+	if len(stats.Models) != 0 {
+		t.Errorf("models = %v; a turn with no surviving assistant message attributes none", stats.Models)
+	}
+}
+
 func TestTheSeamNoteIsAMarkedUserTurn(t *testing.T) {
 	c := testCoder(t)
 	c.RestoreHistory([]llm.Message{llm.TextMessage(llm.RoleUser, "hi")})
