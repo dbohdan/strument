@@ -16,6 +16,7 @@ import (
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
+	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
@@ -45,6 +46,12 @@ type Options struct {
 
 	// Git enables /undo and /diff; nil outside a repository (--no-git).
 	Git *gitrepo.Repo
+
+	// Sessions is what /session needs from the host: a project's
+	// conversations and the operations that move between them. nil disables
+	// the command, which is what a session leaving no trace wants — there is
+	// nowhere for another conversation to be.
+	Sessions *SessionOps
 
 	// Notes returns the current session notes for /notes. nil disables the
 	// command.
@@ -130,6 +137,33 @@ type Options struct {
 	Exit func(code int)
 	// Now is the chord clock. Default: time.Now.
 	Now func() time.Time
+}
+
+// SessionOps are the host's session operations, for /session.
+//
+// The REPL knows a conversation by name and nothing else. Where one lives,
+// what it restores and how its record is opened are the host's, for the same
+// reason SaveResume and GenerateNotes are: neither the coder nor the REPL
+// learns the layout of the state directory.
+type SessionOps struct {
+	// Current is the conversation in use.
+	Current func() string
+	// List is every conversation the project holds, newest use first.
+	List func() ([]history.Session, error)
+	// Switch opens another conversation; create says whether it is expected
+	// to be new. It returns the lines to show.
+	//
+	// alias is the model alias the user typed, which the REPL owns because
+	// /model changes it. The host writes it into the new session's record
+	// header and its resume file, and has no other way to know it.
+	Switch func(name string, create bool, alias string) (string, error)
+	// Fork starts a new conversation carrying this one's notes.
+	Fork func(name, alias string) (string, error)
+	// Rename renames one, following the process into it when it is the one in
+	// use.
+	Rename func(from, to string) error
+	// Delete removes one that is not in use.
+	Delete func(name string) error
 }
 
 // REPL is the interactive session driver.

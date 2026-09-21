@@ -199,8 +199,10 @@ func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
 	root, _ := newRepo(t)
 	cfg := &config.Config{Default: "mimo"}
 	cdr := coder.New(root, &config.Model{Slug: "x"})
+	// The saved session is the coder's own now, so /session moves it.
+	cdr.Session = history.DefaultSession
 
-	save := saveResumeFunc(cdr, cfg, root, history.DefaultSession, true)
+	save := saveResumeFunc(cdr, cfg, root, true)
 	if save == nil {
 		t.Fatal("no save function when state is kept")
 	}
@@ -222,7 +224,7 @@ func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
 
 // --no-history means leave no trace, so there is nothing to call.
 func TestResumeIsNotSavedWithoutState(t *testing.T) {
-	if save := saveResumeFunc(nil, nil, "/tmp/whatever", history.DefaultSession, false); save != nil {
+	if save := saveResumeFunc(nil, nil, "/tmp/whatever", false); save != nil {
 		t.Error("a no-trace session should have no save function")
 	}
 }
@@ -240,7 +242,7 @@ func TestResumePathsAreProjectRelative(t *testing.T) {
 	cdr := coder.New(sub, &config.Model{Slug: "x"})
 	cdr.AddFile(filepath.Join(sub, "b.go"))
 
-	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, history.DefaultSession, true)("m")
+	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, true)("m")
 
 	got := history.LoadResume(root, history.DefaultSession).Files
 	if len(got) != 1 || got[0] != "sub/b.go" {

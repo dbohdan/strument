@@ -342,6 +342,36 @@ answer to, which Phase 5's fork is the other half of.
 - `strument session list|delete` outside a session.
 - Register the slash command per `doc/README.md`'s "Adding a slash command".
 
+Three corrections.
+
+**`--session` selects; it does not resume.** The plan had it resuming, which
+would have replayed a conversation into every one of the hundreds of scripted
+invocations a trial in `doc/experiments/` makes. `-c` resumes whatever
+`--session` selected, so the two compose.
+
+**`/session switch` does restore, and that asymmetry is the point.** The flag's
+non-resuming default exists for scripted runs; there is no such concern
+interactively, where opening a named conversation and not getting it is
+surprising. `/clear` is the way to have the name without the history.
+
+**The session name is checked on the path builder, not at the flag.** It is a
+directory name arriving from outside twice over — `--session` is whatever was
+typed and `current` is a file `strument history edit` opens — so a name
+containing `..` would otherwise reach out of the state directory.
+
+Two things the design did not anticipate needing. The record has to move when
+the session does, or a switch writes the new conversation's turns into the old
+conversation's file; a small indirection owns the open segment so the coder
+never learns the session can change. And every callback that had captured the
+session name at startup — the cost row, the undo save, the resume save, the
+notes writer — reads the coder's own `Session` instead, so one assignment moves
+all of them.
+
+`/session delete` asks for the name to be typed rather than for y/n. Every
+other confirm in the REPL defaults to yes on an empty line, which is right for
+a prompt the user just read a command in and wrong for the only irreversible
+operation in the tool.
+
 ## Phase 6 - privacy and retention
 
 - `strument history strip [--older-than …]`: delete every blob no retained

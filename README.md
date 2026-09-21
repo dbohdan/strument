@@ -205,6 +205,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/attach <file> ...` | Attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` unstages. Attachments ride on one message and are gone after it, unlike pinned files. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing — declare `input_modalities` to make one that can. |
 | `/check [<name>]` | Run a project check by name, or all checks if no name is given. Checks run in the order they are listed in the config and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is silent. |
 | `/consult <alias> <question>`, `/consult scope [<name>]` | Ask another model without switching the active model, then optionally add its answer to the conversation, identified by the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the session's starting value. The consultation is billed at the advisor's own rates and appears in the cost ledger under its slug. |
+| `/session`, `/session new\|switch\|fork\|rename\|delete <name>` | Show this project's conversations, or move between them. `fork` starts a new one carrying this one's notes forward. Deleting asks you to type the name. |
 | `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the session record, or discard them. Notes remain in memory and are not saved to disk. They carry context from one conversation to a different one; to pick *this* conversation back up, use `--continue`. See [`doc/sessions.md`](doc/sessions.md). |
 | `/read-only <file> ...` | Pin a file the model can read but not edit. This is a way to show it something outside the project, like a spec or a sibling repository's header. Search tools only see the project itself. |
 | `/commits [on \| off]` | Show or change whether a turn that edits a file ends in a commit; bare reports rather than toggles. `--no-auto-commits` starts a session with it off. With commits off, edits still land in the working tree, and `/undo` and `/diff` still work. |
@@ -265,6 +266,10 @@ Outside one it is already off.
 A project can hold several conversations, each under its own name.
 `--session <name>` says which one to work in, creating it the first time, and the name is remembered as the one a bare `strument` picks up next.
 Each has its own record, its own pinned files and its own undo history; the cost ledger stays one file and names the session on every row, so it answers both "what has this project cost me" and "was that session worth it".
+
+Inside a session, `/session` shows them and moves between them without restarting; switching restores the conversation you are moving to, since that is what opening one interactively means.
+`/session fork <name>` starts a new conversation carrying this one's notes forward — the ritual of `/notes generate`, `/clear` and carrying on, with the parent recorded so the notes say whose they are.
+`/model` does not fork: many conversations on one strong model is the common case, so forking belongs to the session.
 
 `strument session list` shows them with their turn counts and sizes, `strument session rename` renames one keeping its record, and `strument session delete` removes one after saying what that costs.
 Deleting a session leaves the stored tool payloads alone: they are shared between sessions and named by their contents.

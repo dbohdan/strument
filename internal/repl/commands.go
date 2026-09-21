@@ -95,6 +95,7 @@ func init() {
 		{"reset", "", "Unpin everything, clear the history, and forget approved origins.", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
+		{"session", "[new | switch | fork | rename | delete] [<name>]", "Show this project's conversations, or move between them.", cmdSession},
 		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat.", cmdSkill},
 		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2).", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
@@ -1143,4 +1144,161 @@ func humanBytes(n int64) string {
 	default:
 		return fmt.Sprintf("%d B", n)
 	}
+}
+
+// cmdSession shows a project's conversations and moves between them.
+//
+// A verb and a name rather than a bare `/session <name>`, because the names
+// are the user's and would collide with the verbs the moment somebody has a
+// session called "new". The bare form lists, which is the question asked most
+// often and the only one that is not destructive.
+//
+// switch and new are separate for the same reason the host refuses to guess
+// between them: opening a conversation that is not there and creating one over
+// a conversation that is are different mistakes, and both are cheap to make
+// with a typo. fork is the third, and the one worth having a word for — it is
+// the ritual of `/notes generate`, `/clear` and carrying on, with the parent
+// recorded so the notes can say whose they are.
+func cmdSession(_ context.Context, r *REPL, args string) string {
+	ops := r.opts.Sessions
+	if ops == nil {
+		r.printf("Sessions are disabled for this session.")
+		return ""
+	}
+	verb, name := splitVerb(args)
+
+	switch verb {
+	case "":
+		r.listSessions(ops)
+	case "new", "switch", "fork", "rename", "delete":
+		if name == "" {
+			r.out.Errorf("`/session %s` needs a name. %s", verb, usage("session"))
+			return ""
+		}
+		r.runSessionVerb(ops, verb, name)
+	default:
+		r.out.Errorf("%s", usage("session"))
+	}
+	return ""
+}
+
+// runSessionVerb is the half of cmdSession that changes something, split out
+// so the dispatch above reads as the vocabulary it is.
+func (r *REPL) runSessionVerb(ops *SessionOps, verb, name string) {
+	switch verb {
+	case "new", "switch":
+		note, err := ops.Switch(name, verb == "new", r.opts.ModelAlias)
+		if err != nil {
+			r.out.Errorf("%v", err)
+			return
+		}
+		r.printf("%s", note)
+	case "fork":
+		note, err := ops.Fork(name, r.opts.ModelAlias)
+		if err != nil {
+			r.out.Errorf("Could not fork: %v", err)
+			return
+		}
+		r.printf("%s", note)
+	case "rename":
+		from := ops.Current()
+		if err := ops.Rename(from, name); err != nil {
+			r.out.Errorf("%v", err)
+			return
+		}
+		r.printf("Renamed %s to %s.", from, name)
+	case "delete":
+		if !r.confirmSessionDelete(ops, name) {
+			return
+		}
+		if err := ops.Delete(name); err != nil {
+			r.out.Errorf("%v", err)
+			return
+		}
+		r.printf("Deleted %s.", name)
+	}
+}
+
+func (r *REPL) listSessions(ops *SessionOps) {
+	sessions, err := ops.List()
+	if err != nil {
+		r.out.Errorf("Could not list the sessions: %v", err)
+		return
+	}
+	if len(sessions) == 0 {
+		r.printf("No sessions recorded yet.")
+		return
+	}
+	for _, s := range sessions {
+		mark := " "
+		if s.Current {
+			mark = "*"
+		}
+		turns := "no turns"
+		if s.Turns > 0 {
+			turns = render.Plural(s.Turns, "turn", "turns")
+		}
+		r.printf("%s %s — %s", mark, s.Name, turns)
+	}
+}
+
+// splitVerb takes the first word of an argument string and returns it with the
+// rest, both trimmed.
+func splitVerb(args string) (verb, rest string) {
+	fields := strings.Fields(strings.TrimSpace(args))
+	if len(fields) == 0 {
+		return "", ""
+	}
+	return fields[0], strings.TrimSpace(strings.Join(fields[1:], " "))
+}
+
+// confirmSessionDelete asks before destroying a conversation.
+//
+// It asks for the name rather than for y/n, and the reason is that every other
+// confirm in this REPL defaults to yes on an empty line — right for a prompt
+// the user just read a command in, wrong for the one irreversible thing in the
+// tool. Nothing else here deletes a record; the retention rule is that history
+// is never dropped to save space, so the one command that drops it on request
+// should be hard to type by accident.
+//
+// Typing the name also names what is being destroyed at the moment of
+// deciding, which "(y/N)" does not.
+func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
+	var lost string
+	if sessions, err := ops.List(); err == nil {
+		for _, s := range sessions {
+			if s.Name != name {
+				continue
+			}
+			lost = "no turns"
+			if s.Turns > 0 {
+				lost = render.Plural(s.Turns, "turn", "turns")
+			}
+		}
+	}
+	if lost == "" {
+		// Not found in the listing; let the host say so in its own words.
+		return true
+	}
+	r.printf("Deleting %s discards its conversation (%s), its pins and its undo record. "+
+		"Stored tool payloads are shared and are left alone.", name, lost)
+
+	if !r.canAsk() {
+		r.out.Warningf("Declined: deleting a session needs an interactive terminal. " +
+			"Use `strument session delete` outside a session.")
+		return false
+	}
+	cfg := r.rl.GetConfig()
+	cfg.Prompt = "Type the name to delete it: "
+	cfg.HistoryLimit = -1
+	cfg.AutoComplete = nil
+	line, err := r.rl.ReadLineWithConfig(cfg)
+	if err != nil {
+		return false
+	}
+	if strings.TrimSpace(line) != name {
+		r.printf("Left %s alone.", name)
+		return false
+	}
+	return true
 }

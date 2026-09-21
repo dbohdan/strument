@@ -26,7 +26,6 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/httpx"
-	"dbohdan.com/strument/internal/jsonlog"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/modelconfig"
 	"dbohdan.com/strument/internal/render"
@@ -246,6 +245,10 @@ func (c *chatCmd) Run() error {
 	if keepState {
 		hintAtRenamedProject(projectRoot)
 	}
+	// The record segment for whichever conversation is active. nil when the
+	// session leaves no trace.
+	var slog *sessionLog
+
 	stateDir := ""
 	if keepState {
 		dir, err := history.EnsureProjectDir(projectRoot, projectRootCommit(projectRoot))
@@ -331,13 +334,13 @@ func (c *chatCmd) Run() error {
 		// A segment that cannot be opened is a notice rather than a failure.
 		// The user asked for a coding session; the record is instrumentation,
 		// and the same judgement the ledger and the undo record already make.
-		if seg, segErr := history.NewLogSegment(projectRoot, session, time.Now()); segErr != nil {
-			noticef("could not open the session log, so this run is not recorded: %v", segErr)
-		} else if jl, jerr := jsonlog.Create(seg); jerr != nil {
-			noticef("could not open the session log, so this run is not recorded: %v", jerr)
+		slog = &sessionLog{projectRoot: projectRoot}
+		if err := slog.Open(session); err != nil {
+			noticef("could not open the session log, so this run is not recorded: %v", err)
+			slog = nil
 		} else {
-			defer func() { _ = jl.Close() }()
-			cdr.Recorder = jl
+			defer func() { _ = slog.Close() }()
+			cdr.Recorder = slog
 			cdr.RecordSession(alias)
 		}
 
@@ -347,7 +350,11 @@ func (c *chatCmd) Run() error {
 		// numbers.
 		cdr.RecordUsage = func(u coder.TurnUsage) {
 			_ = history.AppendCost(projectRoot, history.CostEntry{
-				Session:         session,
+				// The coder's own name for the conversation, not the one
+				// resolved at startup: /session can change it, and a cost row
+				// filed under the session the process began in would be wrong
+				// about the turn it describes.
+				Session:         cdr.Session,
 				Model:           u.Model,
 				TokensSent:      u.TokensSent,
 				TokensRecv:      u.TokensRecv,
@@ -389,7 +396,7 @@ func (c *chatCmd) Run() error {
 				}
 				st.Turns = append(st.Turns, t)
 			}
-			if err := history.SaveUndo(projectRoot, session, st, cdr.MaxUndoTurns); err != nil {
+			if err := history.SaveUndo(projectRoot, cdr.Session, st, cdr.MaxUndoTurns); err != nil {
 				noticef("could not save the undo record; /undo will not be able to restore this turn's changes: %v", err)
 			}
 		}
@@ -436,7 +443,7 @@ func (c *chatCmd) Run() error {
 				_ = history.SaveResume(projectRoot, session, resumeWithPins(cdr, projectRoot, res))
 			}
 		}
-		return c.runREPL(cfg, cdr, repo, alias, projectRoot, session, keepState, note)
+		return c.runREPL(cfg, cdr, repo, slog, alias, projectRoot, keepState, note)
 	}
 
 	// Script mode has no banner, so the restore goes to stderr: a human sees
@@ -731,7 +738,7 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 // project was opened, so that later editing `default` in config.star would
 // mysteriously not take effect there. It also gives an obvious way out —
 // switching back to the default stops the pinning.
-func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot, session string, keepState bool) func(alias string) {
+func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, keepState bool) func(alias string) {
 	if !keepState {
 		return nil
 	}
@@ -743,12 +750,12 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot, session s
 		// ordinary use. Re-reading a small JSON file per /add costs nothing and
 		// cannot go out of sync with what is on disk.
 		res := resumeWithPins(cdr, projectRoot, history.Resume{
-			AutoPinned: history.LoadResume(projectRoot, session).AutoPinned,
+			AutoPinned: history.LoadResume(projectRoot, cdr.Session).AutoPinned,
 		})
 		if alias != cfg.Default {
 			res.Model = alias
 		}
-		_ = history.SaveResume(projectRoot, session, res)
+		_ = history.SaveResume(projectRoot, cdr.Session, res)
 	}
 }
 
@@ -881,8 +888,8 @@ func terminalSize() (int, int) {
 }
 
 // runREPL starts the interactive session.
-func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo,
-	alias, projectRoot, session string, keepState bool, resumeNote string,
+func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, slog *sessionLog,
+	alias, projectRoot string, keepState bool, resumeNote string,
 ) error {
 	refreshCommitMessage := func(m *config.Model) {
 		if repo == nil {
@@ -904,7 +911,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Git:                  repo,
 		ModelAlias:           alias,
 		ResumeNote:           resumeNote,
-		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, session, keepState),
+		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, keepState),
 		ApplyEgress:          applyEgressConfig,
 		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		RefreshCommitMessage: refreshCommitMessage,
@@ -919,6 +926,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		DropNotes: func() {
 			cdr.SessionNotes, cdr.SessionNotesDate, cdr.SessionNotesSession = "", "", ""
 		},
+		Sessions: sessionOps(cdr, cfg, projectRoot, slog, keepState),
 		GenerateNotes: func(_ context.Context) error {
 			if !keepState {
 				return errors.New("no session record available")
@@ -928,7 +936,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 				return errors.New("no side model configured")
 			}
 			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
-			transcript := sessionMarkdown(projectRoot, session)
+			transcript := sessionMarkdown(projectRoot, cdr.Session)
 			if transcript == "" {
 				return errors.New("the session record is empty")
 			}
@@ -942,7 +950,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			}
 			cdr.SessionNotes = notes
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
-			cdr.SessionNotesSession = session
+			cdr.SessionNotesSession = cdr.Session
 			cdr.ReportSideUsageDone()
 			return nil
 		},
