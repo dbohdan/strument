@@ -18,11 +18,11 @@
 // the thing a scorer most needs held apart from the answer.
 //
 // What it deliberately does not do is replace the terminal. Output stays what
-// the human reviews, and `--jsonl` is a second sink beside it rather than a
-// mode: an experiment that wants to check what the user *saw* can still read
-// the rendered stream, which matters because moving all measurement off the
-// rendered path would retire a canary. The ANSI bug was found because it broke a
-// scorer.
+// the human reviews, and the session log is a second sink beside it rather
+// than a mode: an experiment that wants to check what the user *saw* can still
+// read the rendered stream, which matters because moving all measurement off
+// the rendered path would retire a canary. The ANSI bug was found because it
+// broke a scorer.
 
 package coder
 

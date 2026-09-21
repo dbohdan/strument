@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -52,6 +53,13 @@ func populateProjectDir(t *testing.T, project string) string {
 		t.Fatal(err)
 	}
 	if err := SetCurrentSession(project, DefaultSession); err != nil {
+		t.Fatal(err)
+	}
+	seg, err := NewLogSegment(project, DefaultSession, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(seg, []byte(`{"type":"session","version":1}`+"\n"), fileMode); err != nil {
 		t.Fatal(err)
 	}
 	lk := flock.New(lp)

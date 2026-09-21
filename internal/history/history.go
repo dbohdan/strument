@@ -16,9 +16,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -409,4 +411,59 @@ func SetCurrentSession(projectRoot, session string) error {
 		return err
 	}
 	return os.WriteFile(p, []byte(session+"\n"), fileMode)
+}
+
+// logSegmentStamp names a log segment by the instant it was opened.
+//
+// Milliseconds, and no counter. The timestamp sorts lexically, which makes it
+// the ordering as well as the name; a counter would add nothing to that and
+// would grow gaps the moment a segment were deleted, which on a design that
+// never deletes records by itself is still something a person can do by hand.
+// Milliseconds rather than seconds because a scripted run can start twice in
+// one second.
+const logSegmentStamp = "20060102T150405.000Z"
+
+// NewLogSegment creates the session's log directory and returns the path of a
+// fresh segment for this process to write.
+//
+// One segment per process start rather than one file per session: an
+// append-only file being written by a live process is awkward to rotate, to
+// strip and to hand to someone else, and segments make each of those a matter
+// of whole files. Readers concatenate in name order.
+func NewLogSegment(projectRoot, session string, now time.Time) (string, error) {
+	dir, err := sessionArtifactPath(projectRoot, session, sartLog)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, dirMode); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, now.UTC().Format(logSegmentStamp)+".jsonl"), nil
+}
+
+// LogSegments lists a session's segments, oldest first.
+//
+// Name order is time order, which is what makes reading the tail cheap: a
+// caller wanting the recent end opens the last file and stops, instead of
+// parsing a session-long record to discard the front of it.
+func LogSegments(projectRoot, session string) ([]string, error) {
+	dir, err := sessionArtifactPath(projectRoot, session, sartLog)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jsonl") {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }

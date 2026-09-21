@@ -7,7 +7,7 @@
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
 _strument_commands="chat trust history config model-config project tool shell"
-_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --jsonl --dry-run --no-shell --yes --consult-scope --version"
+_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="path edit"
@@ -22,7 +22,7 @@ _strument_tool_options="--root --json"
 
 # Every option that takes a value, so the scanner does not read one as a
 # subcommand: `strument -M trust` names a model, not the trust command.
-_strument_value_options="-m --message -M --model --jsonl --yes --consult-scope -s --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
+_strument_value_options="-m --message -M --model --yes --consult-scope -s --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
 
 _strument_find_models() {
     command -v strument >/dev/null 2>&1 && strument config models 2>/dev/null
@@ -87,10 +87,6 @@ _strument_complete() {
     -s | --source) _strument_words openrouter ; return ;;
     --root | --path)
         compopt -o dirnames
-        return
-        ;;
-    --jsonl)
-        compopt -o default
         return
         ;;
     esac

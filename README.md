@@ -261,7 +261,8 @@ This feature is meant for a terminal you are watching rather than for CI or cron
 Outside one it is already off.
 `/undo` works either way.
 
-`--jsonl <file>` records the session as a [JSON Lines](https://jsonlines.org/) log alongside the normal output.
+Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per time you start it.
+`strument history path` prints the newest one.
 The log consists of records.
 Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token counts, cost, and throughput in tokens per second.
 `tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
@@ -271,18 +272,14 @@ These go out separately from the conversation, so they appear nowhere else in th
 The record names the `call` and the `model`, and carries `seconds`, `attempts`, an `outcome` of `ok`, `empty`, `error` or `deadline`, and the `error` text when there is one.
 
 ```sh
-jq -c 'select(.type=="side_call" and .outcome!="ok")' run.jsonl
+jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
+jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
 ```
 
-```sh
-strument --jsonl run.jsonl -m 'Which functions call settleEdits?'
-jq -r 'select(.type=="message" and .role=="assistant") | .text' run.jsonl
-```
-
-JSONL logging does not change the terminal output.
-Write the file **outside the project directory**: a log inside the tree is part of the workspace, so `grep` and `glob` will match it and the model can read its own transcript back.
+Recording does not change the terminal output.
+The log lives outside your project, which is deliberate: one inside the tree would be part of the workspace, so `grep` and `glob` would match it and the model could read its own transcript back.
 (In a 300-session trial, a search hit the log in 46 of them.)
-JSONL logging was added for model-assisted debugging.
+`--no-history` records nothing at all.
 
 ### If you rename a project directory
 

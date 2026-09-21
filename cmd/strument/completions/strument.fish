@@ -54,7 +54,6 @@ complete -c strument -n $chat_cmd -l dark-mode -d "Use colors suited to a dark t
 complete -c strument -n $chat_cmd -l light-mode -d "Use colors suited to a light terminal background"
 complete -c strument -n $chat_cmd -l no-auto-commits -d "Keep git integration but do not auto-commit edits"
 complete -c strument -n $chat_cmd -l no-history -d "Do not write the session to the chat-history file"
-complete -c strument -n $chat_cmd -l jsonl -d "Also write a JSONL session log to this file" -r -F
 complete -c strument -n $chat_cmd -l dry-run -d "Report edits without writing files or committing"
 complete -c strument -n $chat_cmd -l no-shell -d "Disable the model's bash tool"
 # --yes takes a prompt name here, unlike the bare --yes of trust and project

@@ -58,7 +58,6 @@ type chatCmd struct {
 	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                             xor:"palette"`
 	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
 	NoHistory     bool     `help:"Do not write the session to the chat-history file."                                                                                                         name:"no-history"`
-	JSONL         string   `help:"Also write a JSONL session log to this file."                                                                                                               name:"jsonl"                                                  placeholder:"<file>"`
 	DryRun        bool     `help:"Report edits without writing files or committing."                                                                                                          name:"dry-run"`
 	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
 	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
@@ -148,18 +147,6 @@ func (c *chatCmd) Run() error {
 
 	cdr := coder.New(root, model)
 	cdr.DryRun = c.DryRun
-	// A second sink beside the terminal, not a mode: the rendered stream stays
-	// exactly what it was, so an experiment can still check what the user saw.
-	// See internal/coder/record.go for why that matters.
-	if c.JSONL != "" {
-		jl, jerr := jsonlog.Create(c.JSONL)
-		if jerr != nil {
-			return fmt.Errorf("cannot write the JSONL log: %w", jerr)
-		}
-		defer func() { _ = jl.Close() }()
-		cdr.Recorder = jl
-		cdr.RecordSession(alias)
-	}
 	cdr.Client = client.ForProvider(model.Provider)
 	// Every config-to-coder assignment lives in ApplyConfig, which /reload also
 	// calls. Adding one here instead is the bug that made three reloads look
@@ -306,6 +293,26 @@ func (c *chatCmd) Run() error {
 	}
 
 	if keepState {
+		// The session's durable record, one segment per process start.
+		//
+		// Gated on keepState, unlike the --jsonl flag it replaces: that flag
+		// was independent of it, so `--no-history --jsonl x` recorded the
+		// session anyway. --no-history means leave no trace, and this is now
+		// the trace.
+		//
+		// A segment that cannot be opened is a notice rather than a failure.
+		// The user asked for a coding session; the record is instrumentation,
+		// and the same judgement the ledger and the undo record already make.
+		if seg, segErr := history.NewLogSegment(projectRoot, session, time.Now()); segErr != nil {
+			noticef("could not open the session log, so this run is not recorded: %v", segErr)
+		} else if jl, jerr := jsonlog.Create(seg); jerr != nil {
+			noticef("could not open the session log, so this run is not recorded: %v", jerr)
+		} else {
+			defer func() { _ = jl.Close() }()
+			cdr.Recorder = jl
+			cdr.RecordSession(alias)
+		}
+
 		// A callback, so the coder stays ignorant of where state lives. A write
 		// failure is not worth interrupting a turn over: the ledger is a record
 		// to read later, and the usage line has already told the user the

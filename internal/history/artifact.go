@@ -99,6 +99,7 @@ const (
 const (
 	sartResume = "resume"
 	sartUndo   = "undo"
+	sartLog    = "log"
 )
 
 // artifacts is every file Strument writes into a project's state directory.
@@ -155,6 +156,10 @@ var sessionArtifacts = map[string]artifact{
 	sartUndo: {
 		name: "undo.json", policy: keepNewest,
 		why: "a stack against one continuous tree history; two overlapping stacks cannot be ordered",
+	},
+	sartLog: {
+		name: "log", dir: true, policy: mergeUnion,
+		why: "segments named by the instant they were opened, so one name is one run",
 	},
 }
 
