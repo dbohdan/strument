@@ -246,6 +246,16 @@ type Coder struct {
 	// the turn did and not only what it said about it. Installed lazily by
 	// recordToolLines; see toollog.go.
 	toolLog *toolLog
+	// turnCrashed marks the turn that is unwinding from a panic, so the turn
+	// record can say so. Set around the loop rather than by a recover: see
+	// runOne.
+	turnCrashed bool
+	// turnUserMessage is the prompt that opened the turn, kept so the turn
+	// record can carry it. The message records hold it too, but not
+	// distinguishably: a tool continuation and a failed automatic check both
+	// re-enter the loop as user messages, and neither is something a human
+	// typed.
+	turnUserMessage string
 
 	numReflections int // error reflections this turn (maxErrorReflections)
 	numSteps       int // work steps this turn (maxSteps)
@@ -681,12 +691,23 @@ func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
 	defer func() {
 		if r := recover(); r != nil {
 			if c.OnCrash != nil {
-				c.OnCrash(c.turnHistory + c.multiResponseContent + c.partialResponseContent)
+				c.OnCrash(c.turnAnswer())
 			}
 			panic(r)
 		}
 	}()
 	c.runOne(ctx, withMessage)
+	return c.turnAnswer()
+}
+
+// turnAnswer is the turn's answer as the transcript records it: every
+// interrupted send's content in order, each steer as a blockquote, and the
+// final send's content.
+//
+// One expression with three callers — Run, the crash path, and the turn record
+// — because they must agree. They are what a reader of the record compares
+// against what was on the screen.
+func (c *Coder) turnAnswer() string {
 	return c.turnHistory + c.multiResponseContent + c.partialResponseContent
 }
 
@@ -698,6 +719,7 @@ func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
 func (c *Coder) runOne(ctx context.Context, userMessage string) {
 	c.initBeforeMessage()
 	c.turnHistory = ""
+	c.turnUserMessage = userMessage
 
 	if userMessage == "" {
 		return
@@ -722,6 +744,19 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 		c.flushTurnUsage()
 	}()
 
+	// Bracketing the loop, rather than recovering around it, is how the turn
+	// record learns the turn crashed. Run's recover is one frame too late: the
+	// defer above has already emitted the row by the time it runs. A recover
+	// here instead would work, but it would add a second "[recovered]" layer
+	// to the stack trace that the crash path exists to preserve. A panic
+	// simply skips the assignment below, which is all the signal needed.
+	c.turnCrashed = true
+	c.turnLoop(ctx, message)
+	c.turnCrashed = false
+}
+
+// turnLoop is runOne's body, split out so a panic in it skips one assignment.
+func (c *Coder) turnLoop(ctx context.Context, message string) {
 	// Outcome-driven so a re-send that carries no message text — both a tool
 	// reflection and a tool continuation re-enter on the appended tool results
 	// — keeps the loop going.

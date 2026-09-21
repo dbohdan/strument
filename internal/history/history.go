@@ -263,7 +263,7 @@ func (w *Writer) Path() string { return w.path }
 // the notes regenerated from this file would not know the work existed. A
 // turn with nothing at all — no answer, no work — is still skipped.
 func (w *Writer) Append(t Turn) error {
-	if strings.TrimSpace(t.Assistant) == "" && len(t.Tools) == 0 && len(t.Files) == 0 {
+	if skipTurn(t) {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(w.path), dirMode); err != nil {
@@ -278,7 +278,7 @@ func (w *Writer) Append(t Turn) error {
 
 	// Title header, once, when the file is new/empty.
 	if info, err := f.Stat(); err == nil && info.Size() == 0 {
-		if _, err := f.WriteString("# Strument chat history\n\n"); err != nil {
+		if _, err := f.WriteString(transcriptTitle); err != nil {
 			return err
 		}
 	}
@@ -287,6 +287,17 @@ func (w *Writer) Append(t Turn) error {
 		return err
 	}
 	return nil
+}
+
+// transcriptTitle opens the file, once. Shared with the renderer that derives
+// the same document from the record, so the two cannot drift apart.
+const transcriptTitle = "# Strument chat history\n\n"
+
+// skipTurn reports a turn with nothing in it: no answer, no work. Writer
+// dropped those and the derived transcript must drop the same ones, or the
+// two documents differ over a turn neither has anything to say about.
+func skipTurn(t Turn) bool {
+	return strings.TrimSpace(t.Assistant) == "" && len(t.Tools) == 0 && len(t.Files) == 0
 }
 
 // render formats one turn as a markdown block.

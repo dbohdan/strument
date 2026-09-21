@@ -235,6 +235,27 @@ per-session undo defensible; without it, undo would have to stay project-level.
   is worth keeping.
 - Cost rows gain `session`.
 
+Two things the turn record has to carry that the plan did not foresee, both
+found by trying to rebuild a turn out of the message rows.
+
+The **tool lines belong on the turn**, not on each tool-result message.
+`toollog.go` tees `Toolf`, and the automatic checks and the commit write to it
+too; neither is a tool the model called, so per-message summaries would
+silently drop the lines a later session most wants. Phase 3's per-result
+summary — which exists so that dropping a payload leaves its description
+behind — is a different field for a different job.
+
+The **prompt and the answer belong on the turn** as the transcript received
+them. The answer is assembled from live state the messages do not carry: an
+interrupted send's content is accumulated with its steer as a blockquote,
+while a failed automatic check re-enters the loop as an ordinary user message
+whose reply *replaces* what came before. The two are indistinguishable in the
+message stream, so a renderer that reconstructed would show a sentence the
+transcript never did — verified live, where the answer the check interrupted
+is correctly absent from both documents. Recording the string the transcript
+was written from is what makes the record and the screen agree by
+construction; the test for it compares the two documents byte for byte.
+
 ## Phase 3 - content-addressed blobs
 
 - A flat sha256 store under `blobs/`. A tool-result record carries the summary

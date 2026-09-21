@@ -89,14 +89,21 @@ first 8 hex characters of the SHA-256 of the project root's absolute path:
 ```
 projects/myproj-9428ba2d/
     root            the absolute path this directory belongs to
+    current         the session a restart picks up
     transcript.md   the chat transcript
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
-    resume.json     pinned files and the model alias, so a restart costs no retyping
     cost.jsonl      one line per turn: tokens, cost, t/s, steps, files changed
+    blobs/          payloads the records point at
+    sessions/default/
+        log/        the session record, one JSON Lines file per run
+        resume.json pinned files and the model alias, so a restart costs no retyping
+        undo.json   file contents to step back through
 ```
 
-`strument history path` prints the transcript's path and `strument history edit`
-opens it. The `root` file records the
+`strument history path` prints the newest record segment and `strument history
+edit` opens it; `strument history markdown` prints the same session as the
+markdown the transcript holds, newest turns last, and takes `-t <n>` for the
+last *n* turns. The `root` file records the
 project path associated with the state directory. The directory is created with
 mode `0700` and its files with mode `0600`, because transcripts may contain
 sensitive project data.

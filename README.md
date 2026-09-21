@@ -243,8 +243,9 @@ Both read the merged user + trusted project config for the current project, so t
 `strument config path` prints where a config file is, whether or not it exists yet, and `strument config edit` opens it.
 They take `--user` (the default) or `--project`; without an existing project config, `--project` picks `.strument/config.star` in a project that already has a `.strument/` directory and `.strument.star` otherwise.
 Editing a project config untrusts it, so `config --project edit` says when a re-run of `strument trust` is needed.
-`strument history path` and `strument history edit` do the same for the project's transcript.
-All four open the file with `$VISUAL`, then `$EDITOR`, then a platform default: `vi` on Unix, and on Windows the first of `edit` (Microsoft Edit) and `notepad` that is installed.
+`strument history path` and `strument history edit` do the same for this session's record.
+`strument history markdown` prints that record as markdown, and `-t <n>` limits it to the last *n* turns.
+The four editing commands open the file with `$VISUAL`, then `$EDITOR`, then a platform default: `vi` on Unix, and on Windows the first of `edit` (Microsoft Edit) and `notepad` that is installed.
 The variable holds a command rather than a program name, so `EDITOR="code --wait"` works, and a path with spaces can be quoted.
 Windows has no editor every installation has, so set `EDITOR` if you reach a Windows machine over SSH and it has no `edit`: `notepad` would try to open a window you cannot see.
 
@@ -262,10 +263,12 @@ Outside one it is already off.
 `/undo` works either way.
 
 Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per time you start it.
-`strument history path` prints the newest one.
+`strument history path` prints the newest one, and `strument history markdown` renders the whole session as the markdown transcript.
 The log consists of records.
-Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record once at the end with the outcome, number of steps, token counts, cost, and throughput in tokens per second.
+Each has a `type` field: a `session` header once at the start, then `message` and `reasoning` records for every message the model sent or received (including the tool calls), and a `turn` record at the end of each turn.
+A `turn` record carries the outcome, the number of steps, token counts, cost, throughput in tokens per second, the files the turn changed, the harness's one-line summaries of the work, and the prompt and answer as a reader sees them.
 `tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
+`outcome` is `Crashed` for a turn that died with a panic, whose answer is the fragment it had produced.
 
 A `side_call` record covers each request Strument makes for itself — the commit message, the session notes, the compaction summary.
 These go out separately from the conversation, so they appear nowhere else in the log, and until they were recorded a failed one was visible only as its consequence: a commit reading `(no commit message provided)`, or `/notes generate` producing nothing.

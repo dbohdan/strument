@@ -69,10 +69,14 @@ complete -c strument -n "__fish_seen_subcommand_from trust" -a "(__fish_complete
 complete -c strument -n "__fish_seen_subcommand_from trust" -s y -l yes -d "Do not ask; for scripts"
 
 # history.
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit" \
-    -a path -d "Print the path to this project's chat-history file"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown" \
+    -a path -d "Print the path to this session's record"
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown" \
     -a edit -d "Open it in \$VISUAL, \$EDITOR, or your platform's default editor"
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown" \
+    -a markdown -d "Print this session's history as markdown"
+complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
+    -s t -l turns -d "Show only the last <n> turns" -x
 
 # config. The scope flags name one file, so they belong to path and edit; models
 # and default print the merge of both and refuse them.
@@ -84,9 +88,9 @@ complete -c strument -n "__fish_seen_subcommand_from config; and not __fish_seen
     -a path -d "Print the path to a config file, whether or not it exists"
 complete -c strument -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from models default path edit" \
     -a edit -d "Open a config file in \$VISUAL, \$EDITOR, or your platform's default editor"
-complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit" \
+complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit markdown" \
     -l user -d "Act on the user config (the default)"
-complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit" \
+complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit markdown" \
     -l project -d "Act on this project's config"
 
 # model-config. Its positional is a provider's model slug, which nothing here

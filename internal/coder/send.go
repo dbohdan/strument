@@ -1120,8 +1120,18 @@ func (c *Coder) flushTurnUsage() {
 	c.Out.Printf("%s", report)
 
 	c.record(Record{
-		Type:      "turn",
-		Outcome:   c.lastSendOutcome.String(),
+		Type: "turn",
+		// The instant the turn closed, which is what the transcript's header
+		// showed: Turn.Time was never set by either caller, so render() fell
+		// through to time.Now() at append time — a few microseconds after
+		// this.
+		Time: time.Now().Format(time.RFC3339),
+		// The qualified slug, not the alias the session header carries: the
+		// transcript's header showed the slug, and once a project holds
+		// several sessions the model is a property of the turn rather than of
+		// the process.
+		Model:     c.Model.QualifiedSlug(),
+		Outcome:   c.turnOutcome(),
 		Steps:     c.numSteps,
 		Sent:      c.messageTokensSent,
 		Received:  c.messageTokensReceived,
@@ -1133,9 +1143,26 @@ func (c *Coder) flushTurnUsage() {
 		Pinned:          c.pinnedRecordPaths(),
 		EditsExact:      c.editsExact,
 		EditsFuzzy:      c.editsFuzzy,
+		Files:           c.TurnEditedFiles(),
+		Tools:           c.TurnToolLines(),
+		Prompt:          c.turnUserMessage,
+		Answer:          c.turnAnswer(),
 	})
 
 	c.reportUsage(c.numSteps+1, len(c.turnEditedFiles))
+}
+
+// OutcomeCrashed is the turn outcome for a turn that died with a panic. It is
+// not a SendOutcome: no send produced it, and by the time it is known the
+// sends are over.
+const OutcomeCrashed = "Crashed"
+
+// turnOutcome is the last send's outcome, unless the turn never got to finish.
+func (c *Coder) turnOutcome() string {
+	if c.turnCrashed {
+		return OutcomeCrashed
+	}
+	return c.lastSendOutcome.String()
 }
 
 // reportUsage hands the message-scoped accounting to RecordUsage, when there is

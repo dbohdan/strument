@@ -10,8 +10,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/history"
 )
 
 // The editor is a command, not a program name, and the whole reason it goes
@@ -296,6 +298,11 @@ func TestConfigScopeFlagsRefusedWhereTheyMeanNothing(t *testing.T) {
 // either one being wrong.
 func TestEditOpensThePathThatPathPrints(t *testing.T) {
 	writeTempUserConfig(t, "# empty\n")
+	// `history path` names the newest record segment, so there has to be one:
+	// an unchatted project has no path to print and says so. State goes to a
+	// temporary root so the segment is not left in the developer's own.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	writeRecordSegment(t)
 
 	var opened string
 	var seamErr error
@@ -404,5 +411,25 @@ func captureStderr(t *testing.T) func() string {
 		}
 		_ = r.Close()
 		return out.String()
+	}
+}
+
+// writeRecordSegment gives the current project one session record, so the
+// commands that read one have something to read.
+func writeRecordSegment(t *testing.T) {
+	t.Helper()
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seg, err := history.NewLogSegment(root, history.CurrentSession(root), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"turn","time":"2026-07-17T14:30:05Z","model":"flash",` +
+		`"outcome":"Success","sent":10,"received":5,` +
+		`"prompt":"hello","answer":"hi"}` + "\n"
+	if err := os.WriteFile(seg, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

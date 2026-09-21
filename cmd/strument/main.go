@@ -1635,43 +1635,92 @@ func runConfigSets(kind string) error {
 // asked the same way, and because "print" and "open" are two things one bare
 // noun cannot name.
 type historyCmd struct {
-	Path historyPathCmd `cmd:"" help:"Print the path to this project's chat-history file."`
-	Edit historyEditCmd `cmd:"" help:"Open this project's chat-history file in $VISUAL, $EDITOR, or your platform's default editor."`
+	Path     historyPathCmd     `cmd:"" help:"Print the path to this session's record."`
+	Edit     historyEditCmd     `cmd:"" help:"Open this session's record in $VISUAL, $EDITOR, or your platform's default editor."`
+	Markdown historyMarkdownCmd `cmd:"" help:"Print this session's history as markdown."`
 }
 
-// historyPath resolves the transcript for the current project.
+// historySession resolves the project and the session `history` acts on: the
+// one a chat would resume, which is the one the user just finished.
+func historySession() (root, session string, err error) {
+	root, err = historyRoot()
+	if err != nil {
+		return "", "", err
+	}
+	return root, history.CurrentSession(root), nil
+}
+
+// historyPath resolves the newest record segment for the current session.
 //
-// It honors a config override when the config loads, and otherwise falls back
-// to the default path, so "where is my history" always answers — a broken or
-// untrusted config is not a reason to withhold a path the session would still
-// use.
+// Newest rather than all of them because this answers "where is what I just
+// did", which is what a jq one-liner wants to be pointed at. `history
+// markdown` reads every segment; someone who wants the same of the raw
+// records has the directory this path sits in.
+//
+// A session that has never been chatted in has no segment yet. The path of the
+// one the next run would open is not a useful answer — it does not exist and
+// its name is a timestamp that has not happened — so this reports that there
+// is nothing, and the caller says so.
 func historyPath() (string, error) {
-	root, err := historyRoot()
+	root, session, err := historySession()
 	if err != nil {
 		return "", err
 	}
-	if cfg, err := config.Load(config.Options{ProjectRoot: root, Warn: warnNoticef}); err == nil {
-		if p, err := resolveHistoryPath(cfg, root); err == nil {
-			return p, nil
-		}
+	segments, err := history.LogSegments(root, session)
+	if err != nil {
+		return "", err
 	}
-	return history.DefaultPath(root)
+	if len(segments) == 0 {
+		return "", errNoRecord
+	}
+	return segments[len(segments)-1], nil
 }
+
+// errNoRecord is a project nobody has chatted in yet, which is the ordinary
+// state of a fresh checkout rather than a failure.
+var errNoRecord = errors.New("this project has no session record yet")
 
 type historyPathCmd struct{}
 
-// Run prints the path and says nothing about whether the file is there.
+// Run prints the newest segment's path.
 //
-// Unlike `config path`, which notices a missing file: a config that does not
-// exist is a fact about the user's setup worth mentioning, while a transcript
-// that does not exist yet is just a project nobody has chatted in, which is the
-// ordinary state of a fresh checkout.
+// Unlike `config path`, this cannot name a file that is not there: a config
+// path is a fixed name whether or not anyone wrote it, while a segment is
+// named after the moment it was opened. There is nothing to print for a
+// project nobody has chatted in, so it says that instead.
 func (*historyPathCmd) Run() error {
 	p, err := historyPath()
 	if err != nil {
 		return err
 	}
 	fmt.Println(p)
+	return nil
+}
+
+// historyMarkdownCmd renders the record as the transcript used to look.
+//
+// The record is JSON Lines, which is what a program wants and not what a
+// person reading back over an afternoon's work wants. This is the same
+// renderer the transcript file was written with, over the same turns, so the
+// document is the one that used to be on disk — now derived, and derived from
+// a record that also holds the tool calls the transcript never did.
+type historyMarkdownCmd struct {
+	Turns int `help:"Show only the last <n> turns (default: all)." placeholder:"<n>" short:"t"`
+}
+
+func (c *historyMarkdownCmd) Run() error {
+	root, session, err := historySession()
+	if err != nil {
+		return err
+	}
+	turns, err := history.ReadTurns(root, session)
+	if err != nil {
+		return err
+	}
+	if len(turns) == 0 {
+		return errNoRecord
+	}
+	fmt.Print(history.Markdown(history.LastTurns(turns, c.Turns)))
 	return nil
 }
 

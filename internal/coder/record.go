@@ -71,6 +71,12 @@ type Record struct {
 	// then failed to give it.
 
 	// turn
+	//
+	// Time is when the turn ended, RFC 3339. A durable record with no clock in
+	// it is a poor one: the markdown the transcript used to hold carried the
+	// turn's time in its header, and rebuilding that header is what reading
+	// these rows back is for.
+	Time      string  `json:"time,omitempty"`
 	Outcome   string  `json:"outcome,omitempty"`
 	Steps     int     `json:"steps,omitempty"`
 	Sent      int     `json:"sent,omitempty"`
@@ -97,6 +103,38 @@ type Record struct {
 	// doc/experiments/2026-09-anchored-edit/preregistration.md, M9.
 	EditsExact int `json:"edits_exact,omitempty"`
 	EditsFuzzy int `json:"edits_fuzzy,omitempty"`
+	// Files is what the turn changed, root-relative — what Pinned and the edit
+	// counts between them cannot say, since one is what the model could see and
+	// the other is only how many edits landed.
+	Files []string `json:"files,omitempty"`
+	// Tools is the harness's own one-line summaries for the turn, in order:
+	// "Read poll/poll.go (5 lines)", "‹check› lint $ golangci-lint run",
+	// "failed (exit status 1)".
+	//
+	// On the turn rather than on each tool-result message, although the plan
+	// this came from put it there. The set is not the same: toollog.go tees
+	// Toolf, which the automatic checks and the commit also write to, and
+	// neither of those is a tool the model called. Collecting per-message
+	// summaries would quietly drop them, and they are the lines a later
+	// session most wants — a check that failed and what was done about it is
+	// carried by no diff. Phase 3's per-result summary, which exists so that
+	// dropping a payload leaves its description behind, is a different field
+	// for a different job.
+	Tools []string `json:"tools,omitempty"`
+	// Prompt and Answer are the turn as a reader sees it: the message that
+	// opened it, and the answer with every interrupted send's content in
+	// order and each steer as a blockquote.
+	//
+	// They overlap the message records, and that is the point. The arc is
+	// assembled from live state that the messages do not carry — an
+	// interrupted send's content is accumulated with its steer, while a failed
+	// automatic check re-enters as a user message whose reply replaces what
+	// came before. Rebuilding one from the other means encoding those rules a
+	// second time, in a renderer, where a change to the first copy would break
+	// the second silently. Recording the string the transcript was written
+	// from is what makes the record and the screen agree by construction.
+	Prompt string `json:"prompt,omitempty"`
+	Answer string `json:"answer,omitempty"`
 
 	// side_call
 	//

@@ -10,7 +10,8 @@ _strument_commands="chat trust history config model-config project tool shell"
 _strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
-_strument_history_commands="path edit"
+_strument_history_commands="path edit markdown"
+_strument_history_markdown_options="-t --turns"
 _strument_config_commands="models default path edit"
 _strument_config_options="--user --project"
 _strument_model_config_options="-s --source --provider-name --proxy"
@@ -119,8 +120,12 @@ _strument_complete() {
     history)
         # Only while no subcommand has been chosen: `history path` takes
         # nothing further, and offering its siblings there would suggest they
-        # compose.
-        [[ -n $sub ]] || _strument_words "$_strument_history_commands"
+        # compose. markdown is the exception — it takes a turn count.
+        if [[ $cur == -* && $sub == markdown ]]; then
+            _strument_words "$_strument_history_markdown_options"
+        elif [[ -z $sub ]]; then
+            _strument_words "$_strument_history_commands"
+        fi
         ;;
     config)
         if [[ $cur == -* ]]; then
