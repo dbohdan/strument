@@ -63,6 +63,25 @@ type Record struct {
 	// answers, so results can be paired with arguments without guessing.
 	ToolCallID string `json:"tool_call_id,omitempty"`
 
+	// Blob, Bytes and Summary describe a payload that is stored separately,
+	// under internal/history's blob store, instead of inline in Text. Set
+	// together or not at all: a record that has them has no Text, and one
+	// that has Text has none of them.
+	//
+	// The separation is what lets history be pruned without being forgotten.
+	// A tool result is whatever the model read out of the project, so a record
+	// that keeps every one verbatim and is never deleted accumulates exactly
+	// the material nobody wants kept. Dropping the blob leaves the timeline,
+	// the hash and one line saying what was there.
+	//
+	// A reader that finds no blob under Blob shows Summary in its place. That
+	// is the design working, not a failure — Chronicle's own `get` returns an
+	// Option for the same reason.
+	Blob  string `json:"blob,omitempty"`
+	Bytes int    `json:"bytes,omitempty"`
+	// Summary is the payload's first line, capped. See payloadSummary.
+	Summary string `json:"summary,omitempty"`
+
 	// reasoning
 	//
 	// Its own record type rather than a field on the assistant message,
@@ -164,17 +183,60 @@ type Record struct {
 	Error string `json:"error,omitempty"`
 }
 
-// RecordToolCall is one call the model made, with its arguments verbatim.
+// RecordToolCall is one call the model made, with its arguments verbatim —
+// unless they were large enough to store separately, in which case they carry
+// the same Blob/Bytes/Summary triple a message does and Arguments is empty.
+//
+// Arguments are stored separately for the same reasons results are, and the
+// case that makes it worth doing is the same one toollog.go calls "the
+// expensive half": a write call's arguments are the whole new file, and an
+// edit call's are the original text being replaced — text that came out of a
+// file that may hold something nobody wanted recorded.
 type RecordToolCall struct {
 	ID        string `json:"id,omitempty"`
 	Name      string `json:"name"`
 	Arguments string `json:"arguments,omitempty"`
+	Blob      string `json:"blob,omitempty"`
+	Bytes     int    `json:"bytes,omitempty"`
+	Summary   string `json:"summary,omitempty"`
 }
 
 // Recorder receives the records. A nil Recorder on the Coder means no log,
 // which is the default and costs nothing.
 type Recorder interface {
 	Record(r Record)
+}
+
+// BlobStore stores a payload and returns the name to find it under.
+//
+// A callback rather than a path, for the reason RecordUsage and SaveUndo are:
+// the coder never learns where state lives. nil is the default and keeps every
+// payload inline, which is what a session that leaves no trace wants — there
+// is nowhere to put a blob when there is no project directory.
+type BlobStore func(data []byte) (string, error)
+
+// offload decides a payload's fate and fills in whichever fields apply.
+//
+// setInline and setBlob are passed rather than returned into, because the two
+// callers write into different structs — a Record and a RecordToolCall — that
+// carry the same four fields for the same reason but are not the same type.
+//
+// A store that fails keeps the payload inline and says nothing. The record is
+// a thing to read afterwards: a turn that worked must not fail, and must not
+// print a warning, because the blob store being full is not news the person
+// mid-conversation can act on. The cost of the quiet fallback is a larger
+// record, which is the state everything was in before this existed.
+func (c *Coder) offload(tool, payload string, setInline func(string), setBlob func(blob string, size int, summary string)) {
+	if c.PutBlob == nil || !storeSeparately(tool, len(payload)) {
+		setInline(payload)
+		return
+	}
+	hash, err := c.PutBlob([]byte(payload))
+	if err != nil || hash == "" {
+		setInline(payload)
+		return
+	}
+	setBlob(hash, len(payload), payloadSummary(payload))
 }
 
 // SideCall is one finished side request, as sendSide saw it.
@@ -285,15 +347,33 @@ func (c *Coder) recordNewMessages() {
 		}
 	}
 
+	// A tool result names the call it answers but not the tool that ran, and
+	// the policy needs the name. The assistant message that made the call and
+	// the results answering it arrive in one flush — sendMessage appends both
+	// before returning — so a map built as this loop goes is enough. A name it
+	// does not find gets the default rule, which differs only for tools whose
+	// results are short anyway.
+	toolNames := map[string]string{}
+
 	for _, m := range c.curMessages[min(c.recordedMessages, len(c.curMessages)):] {
 		if m.Role == llm.RoleAssistant {
 			emitReasoning()
 		}
-		r := Record{Type: "message", Role: m.Role, Text: m.Text(), ToolCallID: m.ToolCallID}
-		for _, tc := range m.ToolCalls {
-			r.ToolCalls = append(r.ToolCalls, RecordToolCall{
-				ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments,
+		r := Record{Type: "message", Role: m.Role, ToolCallID: m.ToolCallID}
+		c.offload(toolNames[m.ToolCallID], m.Text(),
+			func(text string) { r.Text = text },
+			func(blob string, size int, summary string) {
+				r.Blob, r.Bytes, r.Summary = blob, size, summary
 			})
+		for _, tc := range m.ToolCalls {
+			toolNames[tc.ID] = tc.Name
+			rec := RecordToolCall{ID: tc.ID, Name: tc.Name}
+			c.offload(tc.Name, tc.Arguments,
+				func(args string) { rec.Arguments = args },
+				func(blob string, size int, summary string) {
+					rec.Blob, rec.Bytes, rec.Summary = blob, size, summary
+				})
+			r.ToolCalls = append(r.ToolCalls, rec)
 		}
 		c.record(r)
 	}

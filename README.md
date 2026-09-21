@@ -279,6 +279,17 @@ jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
 jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
 ```
 
+A tool result or a tool call's arguments of a kilobyte or more are stored beside the record rather than in it, in a `blobs/` directory under the project's state, named by the SHA-256 of their contents.
+The record then carries `blob` (that name), `bytes`, and `summary` (the payload's first line) in place of `text` or `arguments`.
+This is so history can be pruned without being forgotten: deleting a payload leaves the timeline, the hash, and one line saying what was there.
+Identical payloads are stored once, so a file read in five turns is one file on disk — and removing something that should never have been recorded is one deletion rather than five.
+An answer you typed to `ask_user_question` is never moved out of the record; it is your own words, not machine output.
+
+```sh
+# What has this project stored, largest first?
+jq -r 'select(.blob) | [.bytes, .summary] | @tsv' "$(strument history path)" | sort -rn
+```
+
 Recording does not change the terminal output.
 The log lives outside your project, which is deliberate: one inside the tree would be part of the workspace, so `grep` and `glob` would match it and the model could read its own transcript back.
 (In a 300-session trial, a search hit the log in 46 of them.)

@@ -196,6 +196,12 @@ type Coder struct {
 	// reason. nil in a session that leaves no trace.
 	RecordUsage func(TurnUsage)
 
+	// PutBlob, when set, stores a tool payload too large to keep inline and
+	// returns the name to find it under. nil keeps every payload inline; see
+	// blob.go for what "too large" means and offload for what happens to the
+	// record.
+	PutBlob BlobStore
+
 	// SaveUndo, when set, receives the undo stack and the session's commit
 	// hashes whenever either changes. Same shape and same reason as
 	// RecordUsage: the coder never learns where state lives, and a session that

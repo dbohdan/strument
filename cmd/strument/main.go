@@ -333,6 +333,14 @@ func (c *chatCmd) Run() error {
 			})
 		}
 
+		// Heavy tool payloads go beside the record rather than into it, so
+		// that pruning them later is an unlink rather than a rewrite of the
+		// timeline. Gated on keepState with everything else: there is nowhere
+		// to put a blob in a session that leaves no trace.
+		cdr.PutBlob = func(data []byte) (string, error) {
+			return history.PutBlob(projectRoot, data)
+		}
+
 		// One retention depth for the live stack and the saved one, so /undo
 		// reaches as far in this session as it will after a restart. ApplyConfig
 		// has already set MaxUndoTurns from `undo_turns` (or the default), and

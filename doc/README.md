@@ -1026,6 +1026,34 @@ the markdown transcript Strument used to write, and the notes writer reads the
 same rendering. Writing the transcript and deriving it were two copies of one
 document, and only one of them held the tool calls.
 
+`blobs/` holds the heavy half of that record: a tool result, or a tool call's
+arguments, of a kilobyte or more, keyed by the SHA-256 of its contents. The
+record keeps the hash, the size and the payload's first line in its place.
+
+This is the one decision in the state layout that is about retention rather
+than about storage. Nothing here is ever deleted on Strument's own initiative,
+and a record that holds every tool result verbatim is therefore a growing pile
+of whatever the model read out of the project — an `.env`, an SSH config, a
+customer's data. Separating the payload makes pruning an unlink instead of a
+rewrite of the timeline: the conversation stays, the material goes. The shape
+is Connectome's Chronicle, read at `013f138` on 2026-09-20, which likewise
+never deletes a record and keeps heavy payloads in a content-addressed store
+with an individual delete. Strument keeps the one-line description Chronicle
+does not, so a stripped record still reads as a conversation and can still be
+replayed to a model.
+
+Content-addressing rather than keying on the tool call id, which is unique and
+was the obvious candidate: a file read in five turns is one blob, so deleting
+it is one unlink rather than five — and the fifth is the one a call-id-keyed
+store would leave behind. Flat, with no `ab/cdef…` sharding, because a flat
+directory of 200k files reads back in 214ms and lookup does not degrade across
+a 20× range of sizes.
+
+The floor is what makes `strument history edit` worth keeping. A secret that
+arrives in a small result is inline forever, since a sweep over blobs cannot
+reach it; editing the record by hand is the answer for one specific thing, and
+pruning is the answer for bulk.
+
 The project, for this purpose, is the git worktree root wherever there is one
 and the working directory otherwise — **independent of `--no-git`**, which says
 how a turn is committed rather than which project you are in.

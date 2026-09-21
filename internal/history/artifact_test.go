@@ -48,6 +48,9 @@ func populateProjectDir(t *testing.T, project string) string {
 	if err := SetCurrentSession(project, DefaultSession); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := PutBlob(project, []byte("a tool result too large to keep inline")); err != nil {
+		t.Fatal(err)
+	}
 	seg, err := NewLogSegment(project, DefaultSession, time.Now())
 	if err != nil {
 		t.Fatal(err)

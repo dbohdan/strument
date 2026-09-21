@@ -3,6 +3,7 @@ package history
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -97,6 +98,59 @@ func ReadRecords(path string) ([]coder.Record, error) {
 // already bounded by the harness; this is the backstop that keeps a corrupt
 // file from being read into memory whole.
 const maxRecordLine = 16 << 20
+
+// Resolve puts a record's payloads back where they were, reading the blob
+// store, and reports whether every one it needed was there.
+//
+// A missing payload is not an error. Pruning is a supported operation — that
+// is the whole reason the payloads are separable — so a record that outlives
+// its blobs is the design working. What takes the payload's place is the
+// description the record kept beside the hash, marked as a stand-in so that
+// neither a reader nor a model replaying the conversation mistakes it for
+// what the tool actually said.
+//
+// The hash stays on the record either way. A payload that comes back later —
+// restored from a backup, or written again by a tool that read the same
+// unchanged file — is found by the same name.
+func Resolve(projectRoot string, r coder.Record) (coder.Record, bool) {
+	whole := true
+	resolve := func(blob, summary string, size int) (string, bool) {
+		if blob == "" {
+			return "", false
+		}
+		if data, ok := GetBlob(projectRoot, blob); ok {
+			return string(data), true
+		}
+		whole = false
+		return strippedNote(summary, size), true
+	}
+	if text, ok := resolve(r.Blob, r.Summary, r.Bytes); ok {
+		r.Text = text
+	}
+	for i, tc := range r.ToolCalls {
+		if args, ok := resolve(tc.Blob, tc.Summary, tc.Bytes); ok {
+			r.ToolCalls[i].Arguments = args
+		}
+	}
+	return r, whole
+}
+
+// strippedNote stands in for a payload that is gone.
+//
+// It says so in words rather than leaving a blank, because this text can be
+// replayed to a model: a tool result that came back empty reads as a tool that
+// found nothing, which is a different and wrong thing. Saying the result is no
+// longer stored is both true and something a model can reason about.
+func strippedNote(summary string, size int) string {
+	note := "[strument] This result is no longer stored."
+	if size > 0 {
+		note += fmt.Sprintf(" It was %d bytes.", size)
+	}
+	if summary != "" {
+		note += " It began: " + summary
+	}
+	return note
+}
 
 // ReadTurns rebuilds a session's turns from every segment it has, oldest
 // first.

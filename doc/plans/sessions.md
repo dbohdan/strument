@@ -268,6 +268,27 @@ construction; the test for it compares the two documents byte for byte.
 - The summary lines already exist: `Toolf` → `toolLog` → `TurnToolLines()`
   produces exactly the text the record should keep.
 
+Two more corrections, of the same kind as Phase 2's and found the same way.
+
+**The summary beside a hash is the payload's own first line, not the harness's
+`Toolf` line.** The plan said to reuse `TurnToolLines()`, which Phase 2 had
+already shown to be turn-scoped: `toollog.go` tees `Toolf`, the automatic
+checks and the commit write to it too, and there is no per-call attribution to
+be had without bracketing every handler. The payload's first line needs no
+plumbing and is as good — Strument's tools put a header there ("big.txt (200
+lines)"), and a tool call's arguments are one line of JSON whose front is the
+path, ordered that way on purpose. The verb the `Toolf` line adds is redundant:
+the tool's name and its arguments are already on the assistant message above.
+
+**A tool call's arguments are stored separately too, not only its results.**
+The plan named results alone. The same two arguments apply to arguments, and
+`toollog.go` had already named the case: a `write` call's arguments are the
+whole new file, and an `edit` call's are the original text being replaced —
+text that came out of a file that may hold something nobody wanted recorded.
+
+A per-tool policy table turned out to have one meaningful row, so the rule is
+the floor plus a named set of tools whose results always stay inline.
+
 ## Phase 4 - replay
 
 - On `-c` or `--session`, rebuild `[]llm.Message` from the record, seed
