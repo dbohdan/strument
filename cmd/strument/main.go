@@ -1670,18 +1670,31 @@ func runConfigSets(kind string) error {
 // asked the same way, and because "print" and "open" are two things one bare
 // noun cannot name.
 type historyCmd struct {
-	Path     historyPathCmd     `cmd:"" help:"Print the path to this session's record."`
-	Edit     historyEditCmd     `cmd:"" help:"Open this session's record in $VISUAL, $EDITOR, or your platform's default editor."`
-	Markdown historyMarkdownCmd `cmd:"" help:"Print this session's history as markdown."`
+	// On the parent rather than on each subcommand, so `strument history
+	// --session review markdown` works, which is how someone writes it. Same
+	// shape as configCmd's scope flags and the same cost: kong accepts it on
+	// `strip` too, where it means nothing because payloads are shared across
+	// a project and a sweep of one session's worth would be wrong.
+	Session string `help:"The conversation to act on (default: the last one used)." placeholder:"<name>"`
+
+	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
+	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
+	Markdown historyMarkdownCmd `cmd:"" help:"Print a session's history as markdown."`
 	Strip    historyStripCmd    `cmd:"" help:"Remove stored tool payloads that nothing recent points at, keeping every record."`
 }
 
 // historySession resolves the project and the session `history` acts on: the
-// one a chat would resume, which is the one the user just finished.
-func historySession() (root, session string, err error) {
+// one named, or the one a chat would resume.
+func historySession(named string) (root, session string, err error) {
 	root, err = historyRoot()
 	if err != nil {
 		return "", "", err
+	}
+	if named != "" {
+		if err := history.ValidSessionName(named); err != nil {
+			return "", "", err
+		}
+		return root, named, nil
 	}
 	return root, history.CurrentSession(root), nil
 }
@@ -1697,8 +1710,8 @@ func historySession() (root, session string, err error) {
 // one the next run would open is not a useful answer — it does not exist and
 // its name is a timestamp that has not happened — so this reports that there
 // is nothing, and the caller says so.
-func historyPath() (string, error) {
-	root, session, err := historySession()
+func historyPath(named string) (string, error) {
+	root, session, err := historySession(named)
 	if err != nil {
 		return "", err
 	}
@@ -1724,8 +1737,8 @@ type historyPathCmd struct{}
 // path is a fixed name whether or not anyone wrote it, while a segment is
 // named after the moment it was opened. There is nothing to print for a
 // project nobody has chatted in, so it says that instead.
-func (*historyPathCmd) Run() error {
-	p, err := historyPath()
+func (*historyPathCmd) Run(parent *historyCmd) error {
+	p, err := historyPath(parent.Session)
 	if err != nil {
 		return err
 	}
@@ -1744,8 +1757,8 @@ type historyMarkdownCmd struct {
 	Turns int `help:"Show only the last <n> turns (default: all)." placeholder:"<n>" short:"t"`
 }
 
-func (c *historyMarkdownCmd) Run() error {
-	root, session, err := historySession()
+func (c *historyMarkdownCmd) Run(parent *historyCmd) error {
+	root, session, err := historySession(parent.Session)
 	if err != nil {
 		return err
 	}
@@ -1765,8 +1778,8 @@ type historyEditCmd struct {
 	edit func(path string) error
 }
 
-func (e *historyEditCmd) Run() error {
-	p, err := historyPath()
+func (e *historyEditCmd) Run(parent *historyCmd) error {
+	p, err := historyPath(parent.Session)
 	if err != nil {
 		return err
 	}

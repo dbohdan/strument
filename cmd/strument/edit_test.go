@@ -325,8 +325,8 @@ func TestEditOpensThePathThatPathPrints(t *testing.T) {
 		},
 		{
 			name: "history",
-			run:  func() error { return (&historyEditCmd{edit: seam}).Run() },
-			want: historyPath,
+			run:  func() error { return (&historyEditCmd{edit: seam}).Run(&historyCmd{}) },
+			want: func() (string, error) { return historyPath("") },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestEditOpensThePathThatPathPrints(t *testing.T) {
 	if err := (&configEditCmd{edit: seam}).Run(&configCmd{}); err == nil {
 		t.Error("config edit exited 0 after the editor failed")
 	}
-	if err := (&historyEditCmd{edit: seam}).Run(); err == nil {
+	if err := (&historyEditCmd{edit: seam}).Run(&historyCmd{}); err == nil {
 		t.Error("history edit exited 0 after the editor failed")
 	}
 }
@@ -431,5 +431,51 @@ func writeRecordSegment(t *testing.T) {
 		`"prompt":"hello","answer":"hi"}` + "\n"
 	if err := os.WriteFile(seg, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// `history --session <name>` acts on the conversation named rather than the
+// one a chat would resume. Without it the two answers are the same, which is
+// what makes a test that only ever passed "" unable to tell them apart.
+func TestHistoryActsOnTheSessionNamed(t *testing.T) {
+	writeTempUserConfig(t, "# empty\n")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	writeRecordSegment(t)
+
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := history.EnsureSessionDir(root, "review"); err != nil {
+		t.Fatal(err)
+	}
+	seg, err := history.NewLogSegment(root, "review", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"turn","time":"2026-07-18T09:00:00Z","model":"flash",` +
+		`"outcome":"Success","prompt":"in review","answer":"yes"}` + "\n"
+	if err := os.WriteFile(seg, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	named, err := historyPath("review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := historyPath("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if named == current {
+		t.Errorf("--session review resolved to the current session's record: %s", named)
+	}
+	if !strings.Contains(named, filepath.Join("sessions", "review")) {
+		t.Errorf("path = %q, want it under the named session", named)
+	}
+	// A name that could reach out of the state directory is refused here too,
+	// not only at the chat flag.
+	if p, err := historyPath("../../etc"); err == nil {
+		t.Errorf("historyPath escaped to %q", p)
 	}
 }

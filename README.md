@@ -271,6 +271,9 @@ Inside a session, `/session` shows them and moves between them without restartin
 `/session fork <name>` starts a new conversation carrying this one's notes forward — the ritual of `/notes generate`, `/clear` and carrying on, with the parent recorded so the notes say whose they are.
 `/model` does not fork: many conversations on one strong model is the common case, so forking belongs to the session.
 
+`strument history --session <name>` reads another conversation's record without switching to it, for `path`, `edit` and `markdown`.
+`strip` takes no session: payloads are shared across a project, so a sweep of one session's worth would be the wrong unit.
+
 `strument session list` shows them with their turn counts and sizes, `strument session rename` renames one keeping its record, and `strument session delete` removes one after saying what that costs.
 Deleting a session leaves the stored tool payloads alone: they are shared between sessions and named by their contents.
 

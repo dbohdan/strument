@@ -12,6 +12,7 @@ _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="path edit markdown strip"
 _strument_history_strip_options="--older-than -y --yes"
+_strument_history_options="--session"
 _strument_session_commands="list rename delete"
 _strument_history_markdown_options="-t --turns"
 _strument_config_commands="models default path edit"
@@ -127,6 +128,8 @@ _strument_complete() {
             _strument_words "$_strument_history_markdown_options"
         elif [[ $cur == -* && $sub == strip ]]; then
             _strument_words "$_strument_history_strip_options"
+        elif [[ $cur == -* ]]; then
+            _strument_words "$_strument_history_options"
         elif [[ -z $sub ]]; then
             _strument_words "$_strument_history_commands"
         fi

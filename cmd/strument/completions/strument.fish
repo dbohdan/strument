@@ -79,6 +79,8 @@ complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_see
     -a markdown -d "Print this session's history as markdown"
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
     -a strip -d "Remove stored tool payloads that nothing recent points at"
+complete -c strument -n "__fish_seen_subcommand_from history" \
+    -l session -d "The conversation to act on" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from strip" \
