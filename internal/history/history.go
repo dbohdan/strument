@@ -341,7 +341,12 @@ func CurrentSession(projectRoot string) string {
 	if err != nil {
 		return DefaultSession
 	}
-	if name := strings.TrimSpace(string(data)); name != "" {
+	// A name that could not have been created by Strument is treated as no
+	// name at all, for the same reason an unreadable file is: this decides
+	// which conversation to continue, and a pointer that has been corrupted
+	// or hand-edited into something unusable should open the default session
+	// rather than refuse to start.
+	if name := strings.TrimSpace(string(data)); ValidSessionName(name) == nil {
 		return name
 	}
 	return DefaultSession

@@ -6,11 +6,12 @@
 # once, and three names that no longer existed — a `version` command, a
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
-_strument_commands="chat trust history config model-config project tool shell"
-_strument_chat_options="-m --message -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
+_strument_commands="chat trust history config model-config project session tool shell"
+_strument_chat_options="-m --message -c --continue --session -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="path edit markdown"
+_strument_session_commands="list rename delete"
 _strument_history_markdown_options="-t --turns"
 _strument_config_commands="models default path edit"
 _strument_config_options="--user --project"
@@ -126,6 +127,11 @@ _strument_complete() {
         elif [[ -z $sub ]]; then
             _strument_words "$_strument_history_commands"
         fi
+        ;;
+    session)
+        # Only while no subcommand has been chosen: the arguments after one are
+        # session names, which this cannot know.
+        [[ -n $sub ]] || _strument_words "$_strument_session_commands"
         ;;
     config)
         if [[ $cur == -* ]]; then

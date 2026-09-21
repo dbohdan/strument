@@ -262,6 +262,16 @@ This feature is meant for a terminal you are watching rather than for CI or cron
 Outside one it is already off.
 `/undo` works either way.
 
+A project can hold several conversations, each under its own name.
+`--session <name>` says which one to work in, creating it the first time, and the name is remembered as the one a bare `strument` picks up next.
+Each has its own record, its own pinned files and its own undo history; the cost ledger stays one file and names the session on every row, so it answers both "what has this project cost me" and "was that session worth it".
+
+`strument session list` shows them with their turn counts and sizes, `strument session rename` renames one keeping its record, and `strument session delete` removes one after saying what that costs.
+Deleting a session leaves the stored tool payloads alone: they are shared between sessions and named by their contents.
+
+`--session` selects a conversation; it does not resume it.
+`strument --session review -c` picks that one up, and `strument --session review` starts fresh in it.
+
 `strument --continue` picks a session back up: it rebuilds the conversation from the record described below, so a session survives the process that had it — a crash, a closed laptop, a machine that lost power.
 It compacts the conversation if it is already too big to send, rather than waiting for the end of a turn that would fail first, and it says how many messages came back.
 If the conversation was made by a different model than the one now running, Strument adds one line saying so: an assistant turn is otherwise read by the next model as its own past self.

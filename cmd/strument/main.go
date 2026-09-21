@@ -50,6 +50,7 @@ var version = "0.0.0-dev"
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
 	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                          short:"m"`
+	Session       string   `help:"Conversation to work in, created if new (default: the last one used)."                                                                                      placeholder:"<name>"`
 	Continue      bool     `help:"Resume this session: restore its conversation from the record."                                                                                             name:"continue"                                               short:"c"`
 	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
 	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
@@ -113,14 +114,28 @@ func (c *chatCmd) Run() error {
 	// Resolved before the model, because a remembered alias participates in
 	// choosing one.
 	projectRoot, rootErr := historyRoot()
-	// One session per process for now: whichever `current` names, or the
-	// default. `--session` and `/session` choose it in a later phase; until
-	// then every path below takes the name rather than assuming one, so that
-	// phase adds a flag rather than a parameter to everything.
+	// Which conversation this run belongs to: whatever --session names,
+	// otherwise whichever `current` names, otherwise the default.
+	//
+	// --session selects; it does not resume. -c resumes whatever was
+	// selected, so `--session review -c` picks that conversation up and
+	// `--session review` alone starts a fresh one in it. The plan had
+	// --session resuming, which is wrong for the reason a resuming default is
+	// wrong anywhere: doc/experiments/ runs hundreds of scripted invocations
+	// per trial, and an arm that wanted its own cost rows would have replayed
+	// a conversation into every one of them.
 	session := history.DefaultSession
 	var res history.Resume
 	if rootErr == nil {
 		session = history.CurrentSession(projectRoot)
+	}
+	if c.Session != "" {
+		if err := history.ValidSessionName(c.Session); err != nil {
+			return err
+		}
+		session = c.Session
+	}
+	if rootErr == nil {
 		res = history.LoadResume(projectRoot, session)
 	}
 
@@ -252,6 +267,18 @@ func (c *chatCmd) Run() error {
 				return fmt.Errorf("an instance is already running in this project (%s); exit it before starting another", dir)
 			}
 			defer lk.Close()
+
+			// A named session is created on first use, and becomes the one a
+			// bare `strument` picks up next time. Only when it was named:
+			// reading `current` must not rewrite it, or every run would
+			// reorder the sessions by accident.
+			if _, err := history.EnsureSessionDir(projectRoot, session); err != nil {
+				noticef("could not create the session directory: %v", err)
+			} else if c.Session != "" {
+				if err := history.SetCurrentSession(projectRoot, session); err != nil {
+					noticef("could not record %s as the current session: %v", session, err)
+				}
+			}
 		}
 	}
 
@@ -1824,6 +1851,7 @@ type cli struct {
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config, or find and edit a config file."`
 	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."  name:"model-config"`
 	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
+	Session     sessionCmd       `cmd:""                         help:"List, rename or delete this project's conversations."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Version     kong.VersionFlag `help:"Print version and exit."`

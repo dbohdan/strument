@@ -20,7 +20,7 @@
 
 # chat is a command you can name as well as the default one, so it is offered
 # like the rest but does not end chat's own flags.
-set -l subcommands trust history config model-config project tool shell
+set -l subcommands trust history config model-config project session tool shell
 set -l commands chat $subcommands
 
 function __strument_models
@@ -37,6 +37,7 @@ complete -c strument -n __fish_use_subcommand -a history -d "Inspect or edit thi
 complete -c strument -n __fish_use_subcommand -a config -d "Inspect the resolved config, or find and edit a config file"
 complete -c strument -n __fish_use_subcommand -a model-config -d "Print a model() block from a provider's catalog"
 complete -c strument -n __fish_use_subcommand -a project -d "Inspect the recorded projects, or adopt a renamed one's history"
+complete -c strument -n __fish_use_subcommand -a session -d "List, rename or delete this project's conversations"
 complete -c strument -n __fish_use_subcommand -a tool -d "Run one observation tool and print what a model would see"
 complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell completions"
 
@@ -46,6 +47,7 @@ complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell comple
 set -l chat_cmd "not __fish_seen_subcommand_from $subcommands"
 complete -c strument -n $chat_cmd -F
 complete -c strument -n $chat_cmd -s m -l message -d "Send one message, apply the edits, and exit" -x
+complete -c strument -n $chat_cmd -l session -d "Conversation to work in, created if new" -x
 complete -c strument -n $chat_cmd -s c -l continue -d "Resume this session: restore its conversation from the record"
 complete -c strument -n $chat_cmd -s M -l model -d "Model alias to use" -x -a "(__strument_models)"
 complete -c strument -n $chat_cmd -l no-git -d "Disable git integration even inside a repository"
@@ -77,6 +79,16 @@ complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_see
     -a markdown -d "Print this session's history as markdown"
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
+
+# session.
+complete -c strument -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list rename delete" \
+    -a list -d "List this project's sessions"
+complete -c strument -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list rename delete" \
+    -a rename -d "Rename a session, keeping its record"
+complete -c strument -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list rename delete" \
+    -a delete -d "Delete a session and everything recorded in it"
+complete -c strument -n "__fish_seen_subcommand_from session; and __fish_seen_subcommand_from delete" \
+    -s y -l yes -d "Delete without asking"
 
 # config. The scope flags name one file, so they belong to path and edit; models
 # and default print the merge of both and refuse them.

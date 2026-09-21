@@ -190,9 +190,18 @@ const DefaultSession = "default"
 
 // SessionDir is one session's directory inside a project's state directory.
 // It does not create anything; EnsureSessionDir does.
+//
+// The name is checked here rather than trusted, because it arrives from
+// outside twice over: `--session` is whatever was typed, and `current` is a
+// file `strument history edit` puts in an editor. A name is joined onto a
+// path, so one containing ".." would reach out of the state directory
+// entirely.
 func SessionDir(projectRoot, session string) (string, error) {
 	if session == "" {
 		session = DefaultSession
+	}
+	if err := ValidSessionName(session); err != nil {
+		return "", err
 	}
 	dir, err := artifactPath(projectRoot, artSessions)
 	if err != nil {

@@ -92,7 +92,7 @@ projects/myproj-9428ba2d/
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
     cost.jsonl      one line per turn: session, tokens, cost, t/s, steps, files
     blobs/          tool payloads of 1 KiB or more, named by their SHA-256
-    sessions/default/
+    sessions/<name>/    one directory per conversation
         log/        the session record, one JSON Lines file per run
         resume.json pinned files and the model alias, so a restart costs no retyping
         undo.json   file contents to step back through
