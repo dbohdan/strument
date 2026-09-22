@@ -2,9 +2,10 @@ package runes
 
 import (
 	"bytes"
-	"golang.org/x/text/width"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/width"
 )
 
 var TabWidth = 4

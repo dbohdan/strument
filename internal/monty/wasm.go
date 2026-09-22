@@ -19,18 +19,18 @@ const (
 
 // instance wraps a single WASM module instance for one execution.
 type instance struct {
-	mod        api.Module
-	alloc      api.Function
-	dealloc    api.Function
-	compile    api.Function
-	start      api.Function
-	resume     api.Function
-	resumeErr  api.Function
-	resumeFut  api.Function
-	resLen     api.Function
-	resRead    api.Function
-	freeRun    api.Function
-	freeSnap   api.Function
+	mod       api.Module
+	alloc     api.Function
+	dealloc   api.Function
+	compile   api.Function
+	start     api.Function
+	resume    api.Function
+	resumeErr api.Function
+	resumeFut api.Function
+	resLen    api.Function
+	resRead   api.Function
+	freeRun   api.Function
+	freeSnap  api.Function
 }
 
 func (inst *instance) resolveExports() error {
