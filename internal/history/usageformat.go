@@ -59,13 +59,13 @@ func FormatUsage(provider string, rows []CostEntry, now time.Time) string {
 
 // formatWindow renders one window: per-model rows sorted by name, then the
 // total, then the footnotes the totals would otherwise be lying by omitting.
-// The table goes through a tabwriter, so the columns size themselves to the
-// rows instead of to a fixed 35/10-char format: short model names no longer
+// The table goes through a tabwriter, so the name column sizes itself to the
+// rows instead of to a fixed 35-char format: short model names no longer
 // leave a wide gutter, and long ones no longer push the figures right. The
-// writer aligns a whole table left — its AlignRight flag is writer-wide, not
-// per-column — so a figure whose width crosses a tokens() bucket shifts the
-// "in"/"out" word by a character. That is the cost of one pass over mixed
-// alignment, accepted; the columns' left edges are what stays put.
+// figures keep their columns because tokens() renders every count at a fixed
+// 6-char width — suffix included — which is what makes tabwriter's
+// writer-wide left alignment enough. Only a count that rounds past that
+// width (999.95k and up, 1e9 and up) can still shift its word.
 func formatWindow(rep UsageReport) string {
 	if rep.Total.Turns == 0 {
 		return "  No turns in this window.\n"
@@ -112,7 +112,7 @@ func formatWindow(rep UsageReport) string {
 // but with a fixed width and support for millions.
 func tokens(n int) string {
 	if n < 1_000 {
-		return fmt.Sprintf("%5d", n)
+		return fmt.Sprintf("%6d", n)
 	}
 
 	if n < 1_000_000 {
