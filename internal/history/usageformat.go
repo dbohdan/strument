@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"dbohdan.com/strument/internal/render"
@@ -59,28 +59,42 @@ func FormatUsage(provider string, rows []CostEntry, now time.Time) string {
 
 // formatWindow renders one window: per-model rows sorted by name, then the
 // total, then the footnotes the totals would otherwise be lying by omitting.
+// The table goes through a tabwriter, so the columns size themselves to the
+// rows instead of to a fixed 35/10-char format: short model names no longer
+// leave a wide gutter, and long ones no longer push the figures right. The
+// writer aligns a whole table left — its AlignRight flag is writer-wide, not
+// per-column — so a figure whose width crosses a tokens() bucket shifts the
+// "in"/"out" word by a character. That is the cost of one pass over mixed
+// alignment, accepted; the columns' left edges are what stays put.
 func formatWindow(rep UsageReport) string {
-	var b strings.Builder
 	if rep.Total.Turns == 0 {
-		b.WriteString("  No turns in this window.\n")
-		return b.String()
+		return "  No turns in this window.\n"
 	}
+
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 
 	for _, model := range slices.Sorted(maps.Keys(rep.PerModel)) {
 		t := rep.PerModel[model]
-		fmt.Fprintf(&b, "  %-40s %10s in %10s out\n", model, tokens(t.TokensSent), tokens(t.TokensRecv))
+		// The first two cells are tab-terminated and so aligned; the last
+		// cell of each row has no trailing tab, which keeps the table from
+		// gaining a phantom empty column at the right.
+		fmt.Fprintf(w, "  %s\t%s in\t%s out\n",
+			model, tokens(t.TokensSent), tokens(t.TokensRecv))
 	}
 	t := rep.Total
 	if t.Cost > 0 {
-		fmt.Fprintf(&b, "  %-40s %10s in %10s out   $%.4f total\n",
-			"total", tokens(t.TokensSent), tokens(t.TokensRecv), t.Cost)
+		fmt.Fprintf(w, "  total\t%s in\t%s out\t$%.2f total\n",
+			tokens(t.TokensSent), tokens(t.TokensRecv), t.Cost)
 	} else {
-		fmt.Fprintf(&b, "  %-40s %10s in %10s out\n",
-			"total", tokens(t.TokensSent), tokens(t.TokensRecv))
+		fmt.Fprintf(w, "  total\t%s in\t%s out\n",
+			tokens(t.TokensSent), tokens(t.TokensRecv))
 	}
+	// Flush before writing the footnotes to b: the writer buffers rows until
+	// it knows the column widths, so anything written to b ahead of Flush
+	// would come out before the table.
+	_ = w.Flush()
 
-	// The footnotes are the honesty of the report. Each says what the number
-	// above it does not include, rather than making the reader find out.
 	// The footnotes are the honesty of the report. Each says what the number
 	// above it does not include, rather than making the reader find out.
 	if t.UnpricedTurns > 0 {
@@ -94,10 +108,16 @@ func formatWindow(rep UsageReport) string {
 	return b.String()
 }
 
-// tokens renders a token count the way the closing usage line does.
+// tokens renders a token count the way the closing usage line does
+// but with a fixed width and support for millions.
 func tokens(n int) string {
-	if n < 1000 {
-		return strconv.Itoa(n)
+	if n < 1_000 {
+		return fmt.Sprintf("%5d", n)
 	}
-	return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+
+	if n < 1_000_000 {
+		return fmt.Sprintf("%5.1fk", float64(n)/1_000.0)
+	}
+
+	return fmt.Sprintf("%5.1fm", float64(n)/1_000_000.0)
 }
