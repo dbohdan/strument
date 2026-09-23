@@ -357,6 +357,18 @@ func (r *REPL) announce() {
 	}
 	r.printf("Strument v%s", r.opts.Version)
 	r.printf("Model: %s", r.coder.Model.QualifiedSlug())
+	// The conversation this run writes to, read through the same seam
+	// /session lists, so the banner and the command cannot name different
+	// sessions. Nil means there is no state directory to hold one
+	// (--no-history, or one that could not be created); that says "off"
+	// rather than nothing, the way the Git and Sandbox lines report their
+	// off-state: that nothing is being recorded is worth knowing before
+	// the first turn.
+	if ops := r.opts.Sessions; ops != nil {
+		r.printf("Session: %s", ops.Current())
+	} else {
+		r.printf("Session: off")
+	}
 	if r.opts.Git != nil {
 		r.printf("Git repo: .git with %d files", len(r.opts.Git.TrackedFiles()))
 	} else {

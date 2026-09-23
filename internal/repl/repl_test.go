@@ -321,6 +321,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			Config:     testConfig(model),
 			ModelAlias: "test",
 			Version:    "9.9.9",
+			Sessions:   &SessionOps{Current: func() string { return "review" }},
 			Color:      color,
 			Stdin:      strings.NewReader(""),
 			Stdout:     out,
@@ -342,6 +343,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 		for _, want := range []string{
 			"Strument v9.9.9",
 			"Model: openrouter/test-model",
+			"Session: review", // the conversation this run writes to
 			"Git repo: none",
 			"Language parser: off",
 			"Pinned hello.txt.",         // banner: an /add pin, unmarked
@@ -361,6 +363,20 @@ func TestBannerAndPromptHeader(t *testing.T) {
 		}
 		if !color && strings.Contains(got, "\x1b") {
 			t.Errorf("no-color: must not emit escape codes:\n%q", got)
+		}
+
+		// With no state directory to hold a conversation (--no-history,
+		// or one that could not be created), the banner says
+		// "Session: off" rather than dropping the line: the Git and
+		// Sandbox lines report their off-state the same way, and that
+		// nothing is being recorded is worth knowing before the first
+		// turn.
+		r.opts.Sessions = nil
+		out.Reset()
+		r.announce()
+		off := out.String()
+		if !strings.Contains(off, "Session: off") || strings.Contains(off, "Session: review") {
+			t.Errorf("color=%v: banner without sessions must say Session: off and nothing else:\n%q", color, off)
 		}
 	}
 }
