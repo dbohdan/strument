@@ -274,6 +274,19 @@ why the prompt shows the full URL. URL query parameters can contain the part
 that distinguishes one resource from another, or instructions a reviewer should
 see.
 
+**A redirect does not widen an approval.** Approving an origin approves that
+origin, so a redirect from it to another origin is followed only when a fetch
+of the target would have gone ahead without a prompt anyway — the target is on
+`webfetch_allow`, was approved for the session, or `webfetch` is granted
+outright. Otherwise the fetch stops, and the model is told where the page
+went; fetching that URL is then a call of its own, with its own prompt showing
+the real destination. Without this, one open redirect on an approved or
+allowlisted site would carry the fetch anywhere. Redirects within one origin
+are followed. A configured [`scraper`](config.md#scraper) command is a program
+of your own and follows redirects however it does; this rule binds the
+built-in fetcher. `/web`, which you type yourself, follows redirects the way a
+browser does.
+
 ## The environment allowlist
 
 Model-run commands receive an allowlisted subset of your environment rather

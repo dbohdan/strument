@@ -19,6 +19,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
 
+	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/repomap"
 )
 
@@ -50,6 +51,12 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 	}
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
 	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {
+		client := client
+		if opts.Follow != nil {
+			follow := *client
+			follow.CheckRedirect = redirectPolicy(opts.Follow)
+			client = &follow
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return "", err
@@ -62,6 +69,10 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 
 		resp, err := client.Do(req)
 		if err != nil {
+			var refused *RedirectRefusedError
+			if errors.As(err, &refused) {
+				return "", refused
+			}
 			return "", err
 		}
 		defer resp.Body.Close()
@@ -86,6 +97,46 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 			return wrap(url, text) + "\n\n(Redirected to " + final + ".)\n", nil
 		}
 		return wrap(url, text), nil
+	}
+}
+
+// maxRedirects is net/http's own default, kept when CheckRedirect is replaced:
+// setting the hook drops the built-in limit along with the default policy.
+const maxRedirects = 10
+
+// RedirectRefusedError is a redirect to an origin the caller would not follow.
+// The target is the whole point of the error: the model is told where the page
+// went, so it can fetch that URL itself and be asked about it in the usual way.
+type RedirectRefusedError struct {
+	From, To string
+}
+
+func (e *RedirectRefusedError) Error() string {
+	return "redirected to " + e.To + ", a different origin"
+}
+
+// redirectPolicy is a CheckRedirect that follows a redirect within the origin
+// the request started at, and asks follow about any other.
+//
+// The origin compared against is the first request's, not the previous hop's:
+// a chain that leaves and comes back has still been somewhere nobody approved.
+func redirectPolicy(follow func(string) bool) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		start, err := origin.Of(via[0].URL.String())
+		if err != nil {
+			return err
+		}
+		next, err := origin.Of(req.URL.String())
+		if err != nil {
+			return err
+		}
+		if next == start || follow(req.URL.String()) {
+			return nil
+		}
+		return &RedirectRefusedError{From: via[len(via)-1].URL.String(), To: req.URL.String()}
 	}
 }
 

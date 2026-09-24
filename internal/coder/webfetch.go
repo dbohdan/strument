@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -221,7 +222,20 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	}
 	c.Out.Link(f.url)
 
-	content, err := c.Scrape(ctx, f.url, ScrapeOptions{Outline: f.outline, Range: rangeArg(f)})
+	content, err := c.Scrape(ctx, f.url, ScrapeOptions{
+		Outline: f.outline, Range: rangeArg(f), Follow: c.fetchesWithoutAsking,
+	})
+	var refused *RedirectRefusedError
+	if errors.As(err, &refused) {
+		// Not a failure to report as one: the page exists, it lives somewhere
+		// else. The model gets the target, and fetching it goes through the
+		// prompt above with the real destination in it — which is what the
+		// user approving this origin did not agree to on the target's behalf.
+		c.Out.Toolf("Did not follow a redirect from %s to %s (not approved)", org, refused.To)
+		return fmt.Sprintf("%s redirects to %s, which is a different origin. The redirect was "+
+			"not followed. To read that page, fetch %s itself; the user will be asked about it.",
+			f.url, refused.To, refused.To)
+	}
 	if err != nil {
 		// The model gets the reason, so it can try a different URL rather than
 		// conclude the page said nothing. The user gets the origin, because a
@@ -386,6 +400,20 @@ func navigationHint(kind contentKind) string {
 	}
 	return "Outline of the whole of it follows; fetch a part of it by giving webfetch a range " +
 		"of lines, as the outline lists"
+}
+
+// fetchesWithoutAsking reports whether a fetch of url would go ahead without
+// a prompt: an allowlisted origin, one approved for the session, or webfetch
+// granted outright. It is the redirect rule — a redirect may take a fetch
+// anywhere the model could have fetched unasked, and nowhere else.
+func (c *Coder) fetchesWithoutAsking(url string) bool {
+	org, err := origin.Of(url)
+	if err != nil {
+		return false
+	}
+	return origin.Allowed(org, c.WebfetchAllow) ||
+		c.sessionAutoApprove["webfetch:"+org] ||
+		c.Grants.Granted(GrantWebfetch)
 }
 
 // SessionOrigins lists the origins approved by an "a" answer this session,

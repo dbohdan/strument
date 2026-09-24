@@ -358,6 +358,14 @@ type ScrapeOptions struct {
 	// anchors: the outline of a text page advertises line numbers, so the
 	// fetch that follows them takes this.
 	Range string
+
+	// Follow decides whether a redirect to another origin is followed. nil
+	// follows every redirect, which is right for /web: the user typed that URL
+	// and reads what comes back. webfetch sets it, because the model picked
+	// the URL and the user approved one origin — an open redirect on it must
+	// not carry the fetch to an origin nobody approved. A redirect within the
+	// same origin is always followed; this is asked only about the others.
+	Follow func(url string) bool
 }
 
 // lineRange is the parsed Range field: (0, 0) when unset.
