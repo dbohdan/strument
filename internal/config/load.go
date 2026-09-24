@@ -892,7 +892,7 @@ func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
 		}
 		j := strings.Index(s[i:], "}")
 		if j < 0 {
-			return fmt.Errorf("%s: `%s` has an unmatched \"{\" — double literal braces as {{ and }}", path, name)
+			return fmt.Errorf("%s: `%s` has an unmatched \"{\"; write literal braces as {{ and }}", path, name)
 		}
 		slot := s[i+1 : i+j]
 		if !allowed[slot] {

@@ -451,7 +451,7 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 			return nil, fmt.Errorf("search: %q needs url=, the base URL of your instance", backend)
 		}
 		if apiKey != "" {
-			return nil, fmt.Errorf("search: %q takes no api_key — a SearXNG instance is your own", backend)
+			return nil, fmt.Errorf("search: %q takes no api_key; a SearXNG instance is your own", backend)
 		}
 	case SearchAnySearch:
 		// Hosted at a known address, and usable without a key at a lower rate
@@ -468,7 +468,7 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 		// an x402 payment challenge quoting a wallet address — a confusing
 		// thing to meet mid-session, and entirely avoidable here.
 		if apiKey == "" {
-			return nil, fmt.Errorf("search: %q needs api_key= — Exa has no anonymous tier. "+
+			return nil, fmt.Errorf("search: %q needs api_key=, because Exa has no anonymous tier. "+
 				"Use api_key=env(\"EXA_API_KEY\") to keep it out of the file", backend)
 		}
 	default:

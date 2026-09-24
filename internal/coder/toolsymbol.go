@@ -71,7 +71,7 @@ func (i *Inspector) runSymbol(tc llm.ToolCall) string {
 	if problem != "" {
 		return problem
 	}
-	i.Out.Toolf("Looked up %s — %s %s", quoteToolArg(strings.TrimSpace(a.Name)),
+	i.Out.Toolf("Looked up %s: %s %s", quoteToolArg(strings.TrimSpace(a.Name)),
 		plural(count, "site", "sites"), lookupNoun(a.Kind))
 	return truncateResult(text)
 }

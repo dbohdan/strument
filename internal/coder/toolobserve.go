@@ -225,7 +225,7 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	// "no matches" — so a report naming only the pattern blames the wrong
 	// argument, and leaves both the model and the user with nothing to correct.
 	query := fmt.Sprintf("%s%s as %s", quoteToolArg(a.Pattern), grepScope(a.Path, a.Glob), modeName)
-	i.Out.Toolf("Searched for %s — %s", query, matchSummary(res))
+	i.Out.Toolf("Searched for %s: %s", query, matchSummary(res))
 
 	if len(res.Files) == 0 {
 		return grepNothing(query, res)

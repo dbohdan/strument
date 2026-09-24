@@ -480,7 +480,7 @@ func validateExtraParams(where string, params map[string]any) error {
 		if owner == "" {
 			return fmt.Errorf("%s: extra_params key %q is a reserved transport key", where, k)
 		}
-		return fmt.Errorf("%s: extra_params key %q is a reserved transport key — set `%s` instead",
+		return fmt.Errorf("%s: extra_params key %q is a reserved transport key; set `%s` instead",
 			where, k, owner)
 	}
 	if _, err := json.Marshal(params); err != nil {

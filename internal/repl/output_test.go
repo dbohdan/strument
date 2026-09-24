@@ -377,7 +377,7 @@ func TestNoDoubledBlankLines(t *testing.T) {
 			o.StreamText("I'll search the project first.\n\n")
 			o.StreamToolCall(0, "grep", `{"pattern":"Sum"}`)
 			o.FlushStream()
-			o.Toolf("Searched for Sum as content — 4 matches in 3 files")
+			o.Toolf("Searched for Sum as content: 4 matches in 3 files")
 		}},
 	} {
 		for _, color := range []bool{false, true} {
