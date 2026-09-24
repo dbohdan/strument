@@ -140,7 +140,7 @@ func TestSkillCompletionOffersOnlyUsable(t *testing.T) {
 func TestSkillCommandUnknownName(t *testing.T) {
 	r, _, out := newTestREPL(t, nil, strings.NewReader(""))
 	cmdSkill(context.Background(), r, "absent")
-	if !strings.Contains(out.String(), "No skill called") {
+	if !strings.Contains(out.String(), "No skill named") {
 		t.Errorf("an unknown name got %q", out.String())
 	}
 }

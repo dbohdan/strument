@@ -62,7 +62,7 @@ func TestCommitsReportsWhatActuallyGatesACommit(t *testing.T) {
 		{
 			name:  "no repository",
 			setup: func(c *coder.Coder) { c.Repo = nil; c.AutoCommits = true },
-			want:  "git integration is not on",
+			want:  "Git integration is disabled",
 		},
 		{
 			name:  "dry run outranks the setting",

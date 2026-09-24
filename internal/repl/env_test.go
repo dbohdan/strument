@@ -127,7 +127,7 @@ func TestEnvValidatesNames(t *testing.T) {
 			"/env nonsense\n"+
 			"/exit\n")
 
-	if !strings.Contains(out, `"FOO=bar" is not an environment variable name`) {
+	if !strings.Contains(out, `"FOO=bar" is not a valid environment variable name`) {
 		t.Errorf("NAME=VALUE rejection missing:\n%s", out)
 	}
 	if !strings.Contains(out, usage("env")) {

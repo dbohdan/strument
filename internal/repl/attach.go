@@ -53,7 +53,7 @@ func attachDrop(r *REPL, names []string) string {
 		if n := r.coder.DropAttachments(); n == 0 {
 			r.printf("Nothing was attached.")
 		} else {
-			r.printf("Unattached %s.", plural(n, "image", "images"))
+			r.printf("Removed %s from your next message.", plural(n, "image", "images"))
 		}
 		return ""
 	}
@@ -62,7 +62,7 @@ func attachDrop(r *REPL, names []string) string {
 			r.out.Warningf("No attachment matched %q.", name)
 			continue
 		}
-		r.printf("Unattached %s.", name)
+		r.printf("Removed %s from your next message.", name)
 	}
 	return ""
 }
@@ -72,7 +72,7 @@ func attachDrop(r *REPL, names []string) string {
 func (r *REPL) printAttachments() {
 	staged := r.coder.Attachments()
 	if len(staged) == 0 {
-		r.printf("No images are attached. They ride on the next message you send.")
+		r.printf("No images are attached. Attached images are sent with your next message.")
 		return
 	}
 	r.printf("Attached to your next message:")

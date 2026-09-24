@@ -24,7 +24,7 @@ func TestYesBareReportsAndChangesNothing(t *testing.T) {
 		t.Error("bare /yes granted something")
 	}
 	got := out.String()
-	if !strings.Contains(got, "Nothing is auto-approved") {
+	if !strings.Contains(got, "Nothing is approved automatically") {
 		t.Errorf("the empty report does not say so:\n%s", got)
 	}
 }
@@ -40,7 +40,7 @@ func TestYesAddAndDrop(t *testing.T) {
 	}
 	// The other prompts have to be named too: which ones still stop a turn is
 	// the thing being decided.
-	if !strings.Contains(out.String(), "Still asked") {
+	if !strings.Contains(out.String(), "Still asks first") {
 		t.Errorf("the report does not say what still asks:\n%s", out.String())
 	}
 	r.dispatch(context.Background(), "/yes drop websearch")
@@ -91,7 +91,7 @@ func TestYesRejectsAnUnknownSubcommand(t *testing.T) {
 func TestYesWarnsWhenNothingWillStopATurn(t *testing.T) {
 	r, _, out := yesREPL(t)
 	r.dispatch(context.Background(), "/yes add all")
-	if !strings.Contains(out.String(), "nothing will stop a turn") {
+	if !strings.Contains(out.String(), "no turn will pause to ask you") {
 		t.Errorf("no warning when everything is granted:\n%s", out.String())
 	}
 }

@@ -28,35 +28,35 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 
 	sha, short, subject, parents, err := g.HeadInfo()
 	if err != nil {
-		r.out.Errorf("Unable to complete undo: %v", err)
+		r.out.Errorf("Could not undo: %v", err)
 		return ""
 	}
 	if parents == 0 {
-		r.out.Errorf("This is the first commit in the repository. Cannot undo.")
+		r.out.Errorf("Cannot undo the repository's first commit.")
 		return ""
 	}
 	if !r.coder.IsSessionCommit(short) {
 		r.out.Errorf("The last commit was not made by Strument in this chat session.")
-		r.printf("You could try `git reset --hard HEAD^` but be aware that this is a destructive command!")
+		r.printf("To remove it anyway, use git: `git reset --hard HEAD^` discards the commit and any uncommitted changes.")
 		return ""
 	}
 	if parents > 1 {
-		r.out.Errorf("The last commit %s has more than 1 parent, can't undo.", sha)
+		r.out.Errorf("Cannot undo %s: it is a merge commit.", sha)
 		return ""
 	}
 
 	changed, err := g.ChangedInHead()
 	if err != nil {
-		r.out.Errorf("Unable to complete undo: %v", err)
+		r.out.Errorf("Could not undo: %v", err)
 		return ""
 	}
 	for _, f := range changed {
 		if g.IsDirty(f) {
-			r.out.Errorf("The file %s has uncommitted changes. Please stash them before undoing.", f)
+			r.out.Errorf("Cannot undo: %s has uncommitted changes. Commit or stash them first.", f)
 			return ""
 		}
 		if !g.InCommit("HEAD^", f) {
-			r.out.Errorf("The file %s was not in the repository in the previous commit. Cannot undo safely.", f)
+			r.out.Errorf("Cannot undo safely: %s did not exist in the previous commit.", f)
 			return ""
 		}
 	}
@@ -75,12 +75,12 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 		}
 	}
 	if len(unrestored) > 0 {
-		r.out.Errorf("Error restoring %s, aborting undo.", unrestored[len(unrestored)-1])
+		r.out.Errorf("Could not restore %s, so the undo was stopped.", unrestored[len(unrestored)-1])
 		r.printf("Restored files:")
 		for _, f := range restored {
 			r.printf("  %s", f)
 		}
-		r.printf("Unable to restore files:")
+		r.printf("Could not restore:")
 		for _, f := range unrestored {
 			r.printf("  %s", f)
 		}
@@ -88,7 +88,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 	}
 
 	if err := g.ResetSoft("HEAD~1"); err != nil {
-		r.out.Errorf("Unable to complete undo: %v", err)
+		r.out.Errorf("Could not undo: %v", err)
 		return ""
 	}
 	r.coder.DropTurnSnapshot() // the commit was the record here; keep the stacks level
@@ -107,7 +107,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 func undoFromSnapshot(r *REPL) string {
 	restored, err := r.coder.UndoLastTurn()
 	if err != nil {
-		r.out.Errorf("Unable to complete undo: %v", err)
+		r.out.Errorf("Could not undo: %v", err)
 		return ""
 	}
 	r.coder.NoteUndo(restored)
@@ -150,7 +150,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 
 	commits, err := g.LastCommits(n)
 	if err != nil {
-		r.out.Errorf("Unable to squash: %v", err)
+		r.out.Errorf("Could not squash: %v", err)
 		return ""
 	}
 	if len(commits) < n {
@@ -176,7 +176,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 
 	files, err := g.ChangedInRange(base)
 	if err != nil {
-		r.out.Errorf("Unable to squash: %v", err)
+		r.out.Errorf("Could not squash: %v", err)
 		return ""
 	}
 	if len(files) == 0 {
@@ -185,13 +185,13 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	}
 	for _, f := range files {
 		if g.IsDirty(f) {
-			r.out.Errorf("The file %s has uncommitted changes. Please commit or stash them before squashing.", f)
+			r.out.Errorf("Cannot squash: %s has uncommitted changes. Commit or stash them first.", f)
 			return ""
 		}
 	}
 
 	if err := g.ResetSoft(base); err != nil {
-		r.out.Errorf("Unable to squash: %v", err)
+		r.out.Errorf("Could not squash: %v", err)
 		return ""
 	}
 	// Commit re-stages the files, diffs them, and asks the side model for a
@@ -205,7 +205,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	}
 	hash, message, ok, err := g.Commit(files, context.String(), "", true)
 	if err != nil || !ok {
-		r.out.Errorf("The commits were folded back into the index but not committed: %v", err)
+		r.out.Errorf("The commits were undone and their changes staged, but the combined commit failed: %v", err)
 		r.printf("Your changes are staged; commit them yourself with `git commit`.")
 		return ""
 	}
@@ -227,7 +227,7 @@ func cmdDiff(_ context.Context, r *REPL, _ string) string {
 
 	head := g.HeadSHA()
 	if head == "" {
-		r.out.Errorf("Unable to get current commit. The repository might be empty.")
+		r.out.Errorf("Could not read the current commit; the repository may be empty.")
 		return ""
 	}
 
@@ -243,7 +243,7 @@ func cmdDiff(_ context.Context, r *REPL, _ string) string {
 	r.printf("Diff since %.7s...", base)
 	diff, err := g.DiffWorktree(base)
 	if err != nil {
-		r.out.Errorf("Unable to complete diff: %v", err)
+		r.out.Errorf("Could not show the diff: %v", err)
 		return ""
 	}
 	if strings.TrimSpace(diff) == "" {

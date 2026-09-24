@@ -33,7 +33,7 @@ func cmdCommits(_ context.Context, r *REPL, args string) string {
 			// Not recoverable mid-session: the repository handle is built at
 			// startup, so there is nothing for a commit to go to. Say that
 			// rather than setting a flag that cannot have an effect.
-			r.out.Errorf("Git integration is off for this session, so there is nothing to commit to.")
+			r.out.Errorf("Git integration is disabled for this session, so there is nothing to commit to.")
 			r.printf("  Start without --no-git, in a directory that is a git repository, to commit.")
 			return ""
 		}
@@ -53,16 +53,16 @@ func cmdCommits(_ context.Context, r *REPL, args string) string {
 func (r *REPL) printCommitState() {
 	switch {
 	case r.coder.Repo == nil:
-		r.printf("Commits: off — git integration is not on for this session.")
-		r.printf("  Edits still land in the working tree, and /undo still covers a turn.")
+		r.printf("Commits: off. Git integration is disabled for this session.")
+		r.printf("  Edits are still written to the working tree, and /undo can still reverse a turn.")
 	case r.coder.DryRun:
 		// DryRun outranks the setting in commitTurn, so reporting the setting
 		// alone would be true and useless.
-		r.printf("Commits: off — this is a dry run, so no file is written either.")
+		r.printf("Commits: off. This is a dry run, so no files are written either.")
 	case r.coder.AutoCommits:
 		r.printf("Commits: on. Each turn that changes a file ends in a commit.")
 	default:
-		r.printf("Commits: off. Edits land in the working tree and are not committed.")
-		r.printf("  /undo still covers a turn, and /diff still shows what changed.")
+		r.printf("Commits: off. Edits are written to the working tree but not committed.")
+		r.printf("  /undo can still reverse a turn, and /diff still shows what changed.")
 	}
 }

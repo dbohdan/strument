@@ -32,7 +32,7 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 		r.printf("Sandbox: on (Landlock).")
 	case sb.Required:
 		r.out.Errorf("Sandbox: required but unavailable (%s).", sb.Unavailable)
-		r.printf("Nothing the model can cause to run will run. /run still works — you typed it.")
+		r.printf("Commands the model causes will not run. /run still works, since you type those commands.")
 		r.printf(`Set sandbox = "" in your config to work without one.`)
 		return ""
 	default:
@@ -51,7 +51,7 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 	// the alternative is finding out from a denied command that the setting
 	// looked applied and was not.
 	for _, p := range sb.Skipped {
-		r.out.Errorf("Not granted: %s does not exist, so nothing was granted for it.", p)
+		r.out.Errorf("Not writable: %s does not exist, so no access was granted for it.", p)
 	}
 	r.printf("Add a path with sandbox_write in your config; it cannot be changed mid-session.")
 	return ""

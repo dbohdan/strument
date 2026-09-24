@@ -154,7 +154,7 @@ func cmdEnv(_ context.Context, r *REPL, args string) string {
 		}
 		for _, name := range names {
 			if !config.ValidEnvAllowName(name) {
-				r.out.Errorf("%q is not an environment variable name.", name)
+				r.out.Errorf("%q is not a valid environment variable name.", name)
 				continue
 			}
 			delete(r.envAdded, name)

@@ -329,8 +329,8 @@ func TestDiffAndUndoSession(t *testing.T) {
 
 	for _, want := range []string{
 		"The last commit was not made by Strument in this chat session.", // pre-turn /undo
-		"Commit ",                                // auto-commit announcement
-		"You can use /undo to undo and discard ", // undo hint after the turn
+		"Commit ",                    // auto-commit announcement
+		"Use /undo to undo a commit", // undo hint after the turn
 		"Diff since ",
 		"-hello world", // /diff shows the change
 		"+hello strument",

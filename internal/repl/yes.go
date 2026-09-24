@@ -51,7 +51,7 @@ func cmdYes(_ context.Context, r *REPL, args string) string {
 			// Dropping something that was never granted changes nothing, and
 			// a silent no-op here reads exactly like a successful revocation.
 			if !r.coder.Grants.Granted(name) {
-				r.out.Warningf("%s was not answered automatically; nothing changed.", name)
+				r.out.Warningf("%s was not approved automatically; nothing changed.", name)
 				continue
 			}
 			r.coder.Grants.Drop(name)
@@ -59,7 +59,7 @@ func cmdYes(_ context.Context, r *REPL, args string) string {
 		r.printYesState()
 	case "reset":
 		r.coder.Grants.Reset()
-		r.printf("Back to what --yes and the config say.")
+		r.printf("Automatic approvals reset to what --yes and the config set.")
 		r.printYesState()
 	default:
 		r.out.Errorf("%s", usage("yes"))
@@ -76,12 +76,12 @@ func (r *REPL) printYesState() {
 	g := r.coder.Grants
 	sources := g.Sources()
 	if len(sources) == 0 {
-		r.printf("Nothing is auto-approved: every permission prompt is asked.")
+		r.printf("Nothing is approved automatically; every prompt asks first.")
 		r.printf("  /yes add %s approves one for this session.", coder.GrantWebsearch)
 		return
 	}
 
-	r.printf("Answered without asking:")
+	r.printf("Approved automatically:")
 	width := 0
 	for _, s := range sources {
 		width = max(width, len(s.Name))
@@ -97,12 +97,12 @@ func (r *REPL) printYesState() {
 		}
 	}
 	if len(asking) == 0 {
-		r.out.Warningf("Every prompt is answered automatically; nothing will stop a turn.")
+		r.out.Warningf("Every prompt is approved automatically; no turn will pause to ask you.")
 	} else {
-		r.printf("Still asked: %s.", strings.Join(asking, ", "))
+		r.printf("Still asks first: %s.", strings.Join(asking, ", "))
 	}
 	if dropped := g.Dropped(); len(dropped) > 0 {
-		r.printf("  %s came from --yes or the config and this session turned asking back on.",
+		r.printf("  %s came from --yes or the config; this session asks first again.",
 			strings.Join(dropped, ", "))
 	}
 }

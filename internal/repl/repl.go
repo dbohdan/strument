@@ -510,7 +510,7 @@ func (r *REPL) Run(ctx context.Context) error {
 			if r.chord() {
 				return nil
 			}
-			r.printf("^C again to exit")
+			r.printf("Press Ctrl-C again to exit")
 			continue
 		case errors.Is(err, io.EOF):
 			return nil
@@ -659,7 +659,7 @@ func (r *REPL) showUndoHint() {
 	}
 	cbm := r.coder.CommitsBeforeMessage()
 	if len(cbm) > 0 && cbm[len(cbm)-1] != r.coder.Repo.HeadSHA() {
-		r.printf("You can use /undo to undo and discard each Strument commit.")
+		r.printf("Use /undo to undo a commit Strument made.")
 	}
 }
 
@@ -811,7 +811,7 @@ func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 			}
 			r.opts.Exit(130)
 		}
-		fmt.Fprintln(r.opts.Stderr, "^C again to exit")
+		fmt.Fprintln(r.opts.Stderr, "Press Ctrl-C again to exit")
 		return "", false
 	}
 	if err != nil {
@@ -847,7 +847,7 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 	// user turn as the answer. There is no flag that answers a question, so
 	// the honest outcome is the one a nil Asker already produces.
 	if !r.canAsk() {
-		r.out.Warningf("No terminal to answer on; the question goes back unanswered.")
+		r.out.Warningf("Declined: answering a question requires an interactive terminal. The model is told it went unanswered.")
 		return nil
 	}
 

@@ -76,7 +76,7 @@ func loadSkill(r *REPL, name string) string {
 			return ""
 		}
 	}
-	r.out.Errorf("No skill called %q. /skill lists the ones there are.", name)
+	r.out.Errorf("No skill named %q. Use /skill to list the available skills.", name)
 	return ""
 }
 

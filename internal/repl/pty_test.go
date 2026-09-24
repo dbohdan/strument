@@ -102,7 +102,7 @@ func TestInteractivePty(t *testing.T) {
 	expect("\x1b[1mstrong") // live render styles **strong** as bold
 
 	_, _ = ptmx.WriteString("\x03")
-	expect("^C again to exit")
+	expect("Press Ctrl-C again to exit")
 	_, _ = ptmx.WriteString("\x03")
 
 	select {

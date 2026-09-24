@@ -228,7 +228,7 @@ func (r *Repo) Commit(fnames []string, context, want string, attributed bool) (h
 
 	addArgs := append([]string{"add", "--"}, fnames...)
 	if _, err := r.git(addArgs...); err != nil {
-		return "", "", false, fmt.Errorf("unable to add: %w", err)
+		return "", "", false, fmt.Errorf("could not stage the files: %w", err)
 	}
 
 	statusArgs := append([]string{"status", "--porcelain", "--untracked-files=no", "--"}, fnames...)

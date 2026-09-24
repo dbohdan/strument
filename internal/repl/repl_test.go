@@ -868,7 +868,7 @@ func TestPromptCtrlCChordExits(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("REPL did not exit on the ^C chord")
 	}
-	if !strings.Contains(out.String(), "^C again to exit") {
+	if !strings.Contains(out.String(), "Press Ctrl-C again to exit") {
 		t.Errorf("missing chord hint:\n%s", out.String())
 	}
 }
@@ -899,7 +899,7 @@ func TestPromptCtrlCOutsideWindowDoesNotExit(t *testing.T) {
 	}
 	// Both ^C printed the hint; the session ended via /exit, meaning the
 	// second ^C did not exit.
-	if got := strings.Count(out.String(), "^C again to exit"); got != 2 {
+	if got := strings.Count(out.String(), "Press Ctrl-C again to exit"); got != 2 {
 		t.Errorf("hint count = %d, want 2:\n%s", got, out.String())
 	}
 }
