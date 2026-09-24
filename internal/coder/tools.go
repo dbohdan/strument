@@ -714,6 +714,10 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	// Edits are collected first and applied as one batch below, so sequential
 	// edits to one file compose and the whole batch commits together.
 	loopNote := ""
+	offered := map[string]bool{}
+	for _, d := range c.toolDefs() {
+		offered[d.Name] = true
+	}
 	for _, tc := range c.partialToolCalls {
 		if note := c.toolLoops.observeCall(tc.Name, tc.Arguments); note != "" {
 			loopNote = note
@@ -727,6 +731,16 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		if msg := c.malformedArgs(tc); msg != "" {
 			results.setText(tc.ID, msg)
 			needsReflection = true
+			continue
+		}
+		// Only what this step offered runs. The mode's tool set was enforced
+		// by the schema alone, and a model can name a tool the schema left
+		// out: in ask mode, bash ran when a model was asked to try it anyway,
+		// and edit, write, and commit would have too. The one withheld name
+		// with its own answer is a direct observation call under
+		// ObservationViaRunCode, which gets the run_code redirect.
+		if !offered[tc.Name] && (!c.ObservationViaRunCode || !isObservationTool(tc.Name)) {
+			results.setText(tc.ID, c.notOfferedText(tc.Name))
 			continue
 		}
 		switch tc.Name {
@@ -912,6 +926,37 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		return OutcomeReflect
 	}
 	return OutcomeContinue
+}
+
+// isObservationTool reports the five direct read-only tools.
+func isObservationTool(name string) bool {
+	switch name {
+	case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
+		return true
+	}
+	return false
+}
+
+// notOfferedText is the result for a call to a tool this step did not offer.
+// In ask mode it says why and what the model can do instead, since the tools
+// that are missing there are missing on purpose and the user can bring them
+// back; anywhere else the tool is simply not part of this session.
+func (c *Coder) notOfferedText(name string) string {
+	if c.editFormat == "ask" && isAskWithheld(name) {
+		return fmt.Sprintf("Not run: this is ask mode, where the user wants discussion rather "+
+			"than changes, so %s is not available. Describe what you would do instead; the "+
+			"user can switch to code mode with /code to have it done.", quoteToolArg(name))
+	}
+	return fmt.Sprintf("Not run: %s is not one of the tools offered in this session.", quoteToolArg(name))
+}
+
+// isAskWithheld reports the tools code mode offers and ask mode withholds.
+func isAskWithheld(name string) bool {
+	switch name {
+	case toolEdit, toolWrite, toolBash, toolCheck, toolCommit:
+		return true
+	}
+	return false
 }
 
 // runObservationRedirect answers a direct read-only call. Normally it is the
