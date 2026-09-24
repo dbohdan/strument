@@ -1055,3 +1055,47 @@ func TestParserFollowsConfigNotModel(t *testing.T) {
 		t.Error("a reload that left the setting on rebuilt the layer, dropping its tag cache")
 	}
 }
+
+// A renewed budget must not reset what the turn reports. confirmMoreSteps
+// zeroes the budget's counter, and the turn record, the usage line and the
+// summary all read that counter — so a turn that ran two budgets reported the
+// steps since the last renewal. In unattended runs, where --yes steps renews
+// silently, that was every long turn: the FrontierHarness trials recorded 2
+// steps for a turn of some 35.
+func TestRenewedBudgetKeepsTheTurnsStepCount(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"kind":"meta","v":1,"scenario":"tool-loop-budget-renewed","source":"authored"}
+{"kind":"fs","path":"a.txt","content":"start\n"}
+{"kind":"chat","editable":["a.txt"]}
+{"kind":"user","text":"keep rewriting a.txt"}
+{"kind":"confirm","prompt":"Keep going?","answer":"yes"}
+{"kind":"confirm","prompt":"Keep going?","answer":"no"}
+`)
+	for i := range 2*25 + 1 {
+		fmt.Fprintf(&b, `{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_%d","tool_name":"write","tool_args":"{\"path\":\"a.txt\",\"content\":\"pass %d\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}`+"\n", i, i)
+	}
+	sc := inlineScenario(t, b.String())
+
+	out := &captureOut{}
+	rec := &capture{}
+	env := setupScenario(t, sc, func(c *Coder) {
+		c.editFormat = "tool"
+		c.Out = out
+		c.Recorder = rec
+	})
+	env.coder.Run(t.Context(), sc.User)
+
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "has run 50 steps") {
+		t.Errorf("the second budget prompt did not count the whole turn:\n%s", joined)
+	}
+	var steps int
+	for _, r := range rec.recs {
+		if r.Type == "turn" {
+			steps = r.Steps
+		}
+	}
+	if steps != 2*env.coder.MaxSteps {
+		t.Errorf("the turn record says %d steps, want %d", steps, 2*env.coder.MaxSteps)
+	}
+}

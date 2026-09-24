@@ -1145,7 +1145,7 @@ func (c *Coder) flushTurnUsage() {
 		// the process.
 		Model:     c.Model.QualifiedSlug(),
 		Outcome:   c.turnOutcome(),
-		Steps:     c.numSteps,
+		Steps:     c.turnSteps,
 		Sent:      c.messageTokensSent,
 		Received:  c.messageTokensReceived,
 		Cost:      c.messageCost,
@@ -1164,7 +1164,7 @@ func (c *Coder) flushTurnUsage() {
 		Answer:          c.turnAnswer(),
 	})
 
-	c.reportUsage(c.numSteps+1, len(c.turnEditedFiles))
+	c.reportUsage(c.turnSteps+1, len(c.turnEditedFiles))
 }
 
 // OutcomeCrashed is the turn outcome for a turn that died with a panic. It is
@@ -1290,8 +1290,8 @@ func stripReasoning(answer, tag string) string {
 // steps meant twenty-five status lines competing with the diffs.
 func (c *Coder) turnSummary() string {
 	var parts []string
-	if c.numSteps > 0 {
-		parts = append(parts, plural(c.numSteps+1, "step", "steps"))
+	if c.turnSteps > 0 {
+		parts = append(parts, plural(c.turnSteps+1, "step", "steps"))
 	}
 	if n := len(c.turnEditedFiles); n > 0 {
 		parts = append(parts, plural(n, "file", "files")+" changed")

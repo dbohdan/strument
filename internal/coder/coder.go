@@ -263,8 +263,13 @@ type Coder struct {
 	turnUserMessage string
 
 	numReflections int // error reflections this turn (maxErrorReflections)
-	numSteps       int // work steps this turn (maxSteps)
-	autoChecks     int // automatic check rounds this turn (maxAutoCheck)
+	numSteps       int // work steps since the budget was last granted (maxSteps)
+	// turnSteps counts the whole turn's work steps. numSteps is the budget's
+	// counter and starts over each time the user grants more; everything that
+	// reports the turn reads this one, or a turn that ran two budgets would
+	// report the steps since the second began.
+	turnSteps  int
+	autoChecks int // automatic check rounds this turn (maxAutoCheck)
 	// toolLoops counts this turn's read-class tool calls for exact repetition.
 	// Per turn: a new task may legitimately re-read what the last one read.
 	toolLoops *toolLoopWatcher
@@ -644,6 +649,7 @@ func (c *Coder) initBeforeMessage() {
 	// scope; /reset and "/web reset" are what end it.
 	c.numReflections = 0
 	c.numSteps = 0
+	c.turnSteps = 0
 	c.autoChecks = 0
 	// The tool-loop watcher follows LoopDetection, the same switch the text
 	// detector answers to — a user who turned detection off asked for neither
@@ -794,6 +800,7 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 
 		case OutcomeContinue:
 			c.numSteps++
+			c.turnSteps++
 			if c.numSteps >= c.MaxSteps && !c.confirmMoreSteps() {
 				return
 			}
@@ -1096,7 +1103,7 @@ func (c *Coder) confirmMoreSteps() bool {
 	if files == 1 {
 		noun = "file"
 	}
-	c.Out.Printf("This turn has run %s and edited %d %s.", render.Plural(c.numSteps, "step", "steps"), files, noun)
+	c.Out.Printf("This turn has run %s and edited %d %s.", render.Plural(c.turnSteps, "step", "steps"), files, noun)
 	if c.costKnown {
 		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
 	}
