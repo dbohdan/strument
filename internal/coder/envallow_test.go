@@ -3,6 +3,7 @@ package coder
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -203,8 +204,11 @@ func TestPipeRunnerSeedsPWD(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
 
+	// The real PATH, not a fixed one: the block runs `env`, which Windows
+	// finds only in Git's usr/bin, and "PATH=/usr/bin" names nothing there.
+	path := "PATH=" + os.Getenv("PATH")
 	stale := FilterEnv(func() []string {
-		return []string{"PATH=/usr/bin", "PWD=/stale/session/start"}
+		return []string{path, "PWD=/stale/session/start"}
 	}, nil)
 	_, out, err := (PipeRunner{Env: stale}).Run(ctx, "env", dir)
 	if err != nil {
@@ -217,7 +221,7 @@ func TestPipeRunnerSeedsPWD(t *testing.T) {
 		t.Errorf("the session's stale PWD reached the block:\n%s", out)
 	}
 
-	absent := FilterEnv(func() []string { return []string{"PATH=/usr/bin"} }, nil)
+	absent := FilterEnv(func() []string { return []string{path} }, nil)
 	_, out, err = (PipeRunner{Env: absent}).Run(ctx, "env", dir)
 	if err != nil {
 		t.Fatal(err)
