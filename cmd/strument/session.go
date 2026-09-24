@@ -137,7 +137,7 @@ func (c *sessionDeleteCmd) Run() error {
 }
 
 func confirmDeleteSession() bool {
-	if !isCharDevice(os.Stdin) {
+	if !isTerminal(os.Stdin) {
 		fmt.Println("\nDeclined: there is no terminal to ask on. Pass --yes to delete without one.")
 		return false
 	}

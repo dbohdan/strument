@@ -100,7 +100,7 @@ func (c *historyStripCmd) Run() error {
 }
 
 func confirmStrip() bool {
-	if !isCharDevice(os.Stdin) {
+	if !isTerminal(os.Stdin) {
 		fmt.Println("\nDeclined: there is no terminal to ask on. Pass --yes to strip without one.")
 		return false
 	}

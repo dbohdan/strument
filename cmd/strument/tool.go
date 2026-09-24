@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/term"
+
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/render"
@@ -165,16 +167,22 @@ func (c *toolCmd) run(name string, args map[string]any) error {
 	// Some results have no trailing newline — the short refusals especially —
 	// and one running into the shell prompt is a papercut. Adding one only for
 	// a terminal keeps a pipe byte-exact, which is the whole point of `| wc -c`.
-	if !strings.HasSuffix(result, "\n") && isCharDevice(os.Stdout) {
+	if !strings.HasSuffix(result, "\n") && isTerminal(os.Stdout) {
 		_, err := os.Stdout.WriteString("\n")
 		return err
 	}
 	return nil
 }
 
-func isCharDevice(f *os.File) bool {
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+// isTerminal reports whether f is a terminal a person is at.
+//
+// It asks the terminal driver rather than checking for a character device,
+// which is what it did: /dev/null is a character device too, so
+// `strument -m … < /dev/null` — the ordinary way to run it from a script or CI
+// — was taken for a person at a keyboard. Confirmations were printed and then
+// read EOF, and nothing said they had been declined.
+func isTerminal(f *os.File) bool {
+	return term.IsTerminal(int(f.Fd()))
 }
 
 type toolReadCmd struct {
@@ -254,7 +262,7 @@ func (t *toolRunCodeCmd) Run(c *toolCmd) error {
 	if _, err := os.Stdout.WriteString(result); err != nil {
 		return err
 	}
-	if !strings.HasSuffix(result, "\n") && isCharDevice(os.Stdout) {
+	if !strings.HasSuffix(result, "\n") && isTerminal(os.Stdout) {
 		_, err := os.Stdout.WriteString("\n")
 		return err
 	}

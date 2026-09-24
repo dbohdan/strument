@@ -514,7 +514,7 @@ func (c *chatCmd) Run() error {
 	// happened; this line exists to make main exit non-zero, and to say that
 	// the status is a consequence of the failure just above it.
 	if cdr.LastOutcome() == coder.OutcomeFailed {
-		return errors.New("the request failed; see the error above")
+		return errors.New("the model gave no answer; see the message above")
 	}
 	return nil
 }
@@ -1008,7 +1008,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		IsTerminal: drivingATerminal,
 		// Only stdin: `strument | tee log` still has a human to ask.
-		StdinIsTerminal: func() bool { return isCharDevice(os.Stdin) },
+		StdinIsTerminal: func() bool { return isTerminal(os.Stdin) },
 		HistoryFile:     inputHistory,
 		Version:         version,
 		Theme:           c.paletteTheme(),
@@ -1026,7 +1026,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 	return r.Run(context.Background())
 }
 
-func stdoutIsTerminal() bool { return isCharDevice(os.Stdout) }
+func stdoutIsTerminal() bool { return isTerminal(os.Stdout) }
 
 // drivingATerminal reports whether a human is at both ends: line editing needs
 // stdin, and the banner, the per-prompt rules, and the "Waiting for <model>"
@@ -1047,7 +1047,7 @@ func stdoutIsTerminal() bool { return isCharDevice(os.Stdout) }
 // terminal would then leave the waiting line on screen, unerased, forever.
 // Colour and terminal-ness are different questions.
 func drivingATerminal() bool {
-	return isCharDevice(os.Stdin) && isCharDevice(os.Stdout)
+	return isTerminal(os.Stdin) && isTerminal(os.Stdout)
 }
 
 // terminalConfirmer asks y/n questions on the terminal in script mode, where
@@ -1091,7 +1091,7 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	// The REPL's rlConfirmer declines rather than reading when nobody is at
 	// the keyboard; this surface follows, so the two mean the same thing. Only
 	// stdin is consulted: redirecting output does not take the human away.
-	if !isCharDevice(os.Stdin) {
+	if !isTerminal(os.Stdin) {
 		// The same advice the REPL gives, and for the same reason: name the
 		// flag that would have answered *this* prompt rather than the nearest
 		// of two.
@@ -1107,7 +1107,11 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	line, err := stdinReader.ReadString('\n')
 	if err != nil {
 		// No answer available at all — a closed or redirected stdin. Declining
-		// is the safe reading: nobody is there to have meant yes.
+		// is the safe reading: nobody is there to have meant yes. Said, and on
+		// its own line: the prompt left the cursor after "(Y/n) ", and the next
+		// message used to run on from there.
+		fmt.Println()
+		fmt.Println("Declined: no answer was given.")
 		return coder.ConfirmResult{}
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
@@ -1262,7 +1266,7 @@ func (c *trustCmd) Run() error {
 			fmt.Println("Nothing was trusted.")
 			return nil
 		}
-	case stdinIsTerminal():
+	case isTerminal(os.Stdin):
 		if !confirmTrust() {
 			// Declining at a prompt exits 0, unlike the no-terminal case
 			// below: a person who typed "n" knows what happened and does not
@@ -1469,16 +1473,6 @@ func promptField(s string, limit int) string {
 	}
 	return s
 }
-
-// stdinIsTerminal reports whether there is really someone at the keyboard.
-//
-// Stricter than isCharDevice, which every other prompt in this command tree
-// uses: /dev/null is a character device, so `strument trust < /dev/null` looked
-// interactive, printed a question, read EOF, and declined. Declining is the
-// safe answer, but it exits 0 — and this is the one prompt whose *status* a
-// script reads, because a setup script's next line is usually the thing the
-// trust was for. So it asks the question the kernel can answer exactly.
-func stdinIsTerminal() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
 
 func confirmTrust() bool {
 	fmt.Print("\nTrust these? (y/N) ")

@@ -282,8 +282,8 @@ func TestTerminalDetectionIsWired(t *testing.T) {
 	// And the halves are independent: colour is a different question from
 	// terminal-ness, so gating the erase on Color would leave NO_COLOR=1 users
 	// staring at an unerased "Waiting for ..." line.
-	if isCharDevice(os.Stdout) {
-		t.Error("isCharDevice(os.Stdout) should be false under a pipe")
+	if isTerminal(os.Stdout) {
+		t.Error("isTerminal(os.Stdout) should be false under a pipe")
 	}
 }
 
@@ -526,7 +526,7 @@ func TestTrustWithNothingToTrust(t *testing.T) {
 // device and not a terminal — the distinction this branch turns on, and the one
 // that made an earlier draft print a question into a pipe and read EOF.
 func TestTrustRefusesWithoutATerminal(t *testing.T) {
-	if stdinIsTerminal() {
+	if isTerminal(os.Stdin) {
 		t.Skip("this test needs a non-terminal stdin, which go test normally provides")
 	}
 	state := t.TempDir()
@@ -912,5 +912,19 @@ func TestFlagPlaceholdersUseAngleBrackets(t *testing.T) {
 			t.Errorf("strument %s --help renders %q; give the flag a placeholder like \"<name>\"",
 				strings.Join(args, " "), m[0])
 		}
+	}
+}
+
+// /dev/null is a character device and not a terminal, and every prompt in this
+// command tree used to test for the first: `strument -m … < /dev/null`, the
+// usual way to run it from a script, printed confirmations and read EOF.
+func TestDevNullIsNotATerminal(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if isTerminal(f) {
+		t.Errorf("%s was taken for a terminal", os.DevNull)
 	}
 }
