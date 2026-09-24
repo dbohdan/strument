@@ -80,14 +80,19 @@ func TestStalledStreamFailsInsteadOfHanging(t *testing.T) {
 // A stream that keeps producing must not be cut off, however long it runs:
 // the timer bounds the gap between bytes, not the total.
 func TestSlowButLiveStreamIsNotCutOff(t *testing.T) {
+	const liveChunks = 20
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		// Ten chunks at half the idle timeout apart: total well over it.
-		for range 10 {
+		// Twenty chunks a tenth of the idle timeout apart: the total is twice
+		// the timeout, and each gap leaves ample slack. The slack is the point.
+		// At half the timeout apart this failed on a Windows runner, where a
+		// sleep rounds up to the timer tick and parallel test packages delay
+		// the reader, so one late chunk tripped a timer the stream never earned.
+		for range liveChunks {
 			fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n")
 			flush(t, w)
-			time.Sleep(75 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 		fmt.Fprint(w, "data: [DONE]\n\n")
 		flush(t, w)
@@ -96,7 +101,7 @@ func TestSlowButLiveStreamIsNotCutOff(t *testing.T) {
 
 	c := &Client{
 		Provider:          config.Provider{BaseURL: srv.URL, APIKey: "k"},
-		StreamIdleTimeout: 150 * time.Millisecond,
+		StreamIdleTimeout: 500 * time.Millisecond,
 	}
 	var got int
 	for ev, err := range c.Send(context.Background(), llm.Request{Model: "m"}) {
@@ -107,8 +112,8 @@ func TestSlowButLiveStreamIsNotCutOff(t *testing.T) {
 			got++
 		}
 	}
-	if got != 10 {
-		t.Errorf("got %d chunks, want 10", got)
+	if got != liveChunks {
+		t.Errorf("got %d chunks, want %d", got, liveChunks)
 	}
 }
 
