@@ -1020,3 +1020,31 @@ func TestShellCommitGetsTrailer(t *testing.T) {
 		t.Error("lastCommitHash not set")
 	}
 }
+
+// repo_map is per model, so the parse layer — and the symbol tool offered from
+// it — has to follow /model and /reload, which switch through SetModel. It was
+// built once in main from the startup model and never revisited.
+func TestParserFollowsModelSwitch(t *testing.T) {
+	offersSymbol := func(c *Coder) bool {
+		return slices.ContainsFunc(c.toolDefs(), func(d llm.ToolDef) bool { return d.Name == toolSymbol })
+	}
+	c := New(t.TempDir(), &config.Model{EditFormat: "tool", RepoMap: true})
+	if c.RepoMap == nil || !offersSymbol(c) {
+		t.Fatal("a model with repo_map=True must get the parse layer and the symbol tool")
+	}
+
+	c.SetModel(&config.Model{EditFormat: "tool", RepoMap: false})
+	if c.RepoMap != nil || offersSymbol(c) {
+		t.Error("switching to a model with repo_map=False kept the parse layer")
+	}
+
+	c.SetModel(&config.Model{EditFormat: "tool", RepoMap: true})
+	if c.RepoMap == nil || !offersSymbol(c) {
+		t.Error("switching to a model with repo_map=True did not build the parse layer")
+	}
+	next := c.RepoMap
+	c.SetModel(&config.Model{EditFormat: "tool", RepoMap: true})
+	if c.RepoMap != next {
+		t.Error("a switch between two models that both want the layer rebuilt it, dropping the tag cache")
+	}
+}

@@ -126,9 +126,10 @@ func (c *Coder) AppendContext(text string) {
 // SetModel switches the chat to a different model (/model). The caller
 // swaps the Client to match the model's provider. Switching models resets
 // the active edit format to the new model's default (leaving ask mode, if
-// any).
+// any), and builds or drops the parse layer to match its repo_map.
 func (c *Coder) SetModel(m *config.Model) {
 	c.Model = m
+	c.syncParser()
 	c.SetEditFormat(m.EditFormat)
 }
 

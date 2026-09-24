@@ -474,6 +474,7 @@ func New(root string, model *config.Model) *Coder {
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},
 	}
+	c.syncParser()
 	c.setPrompts()
 	c.Platform = defaultPlatformInfo(c)
 	// The observation tools are contained to the project root, with the same
@@ -482,6 +483,25 @@ func New(root string, model *config.Model) *Coder {
 	// bookkeeping and the two lists cannot go stale.
 	c.Files.Pinned = c.isPinned
 	return c
+}
+
+// syncParser makes the parse layer follow the model's `repo_map`: build it
+// when the model wants one and there is none, drop it when the model does not.
+// An existing layer is kept, tag cache and all, across a switch between two
+// models that both want it.
+//
+// It runs from New and SetModel because the setting is per model and /model
+// and /reload both switch through SetModel. It used to be built once in main
+// from the startup model, so a switch to a model with repo_map=False kept
+// offering symbol, and the reverse never offered it — the same stale-copy
+// shape as prefill.
+func (c *Coder) syncParser() {
+	switch {
+	case !c.Model.RepoMap:
+		c.RepoMap = nil
+	case c.RepoMap == nil:
+		c.RepoMap = repomap.New(c.Root)
+	}
 }
 
 // isPinned reports whether abs is a file the user added with /add or

@@ -30,7 +30,6 @@ import (
 	"dbohdan.com/strument/internal/modelconfig"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repl"
-	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/sandbox"
 	"dbohdan.com/strument/internal/skill"
 	"dbohdan.com/strument/internal/workspace"
@@ -186,9 +185,6 @@ func (c *chatCmd) Run() error {
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
-	if model.RepoMap {
-		cdr.RepoMap = repomap.New(root)
-	}
 	if repo != nil {
 		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
