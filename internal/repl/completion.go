@@ -16,13 +16,25 @@ import (
 
 // promptCompleter routes Tab completion: a line that starts with "/" goes to the
 // slash-command completer (cmd, the existing PrefixCompleter tree), and any other
-// line completes the file-path word under the cursor against the current
-// chat/repo files. This adds aider-style file completion in the main prompt
-// without disturbing command completion.
+// line completes the word under the cursor against the current chat/repo files
+// and, from two typed characters on, the words the last turns of the
+// conversation put in play (coder.CompletionWords).
 type promptCompleter struct {
 	cmd   readline.AutoCompleter
 	files func() []string
+	words func() []string
 }
+
+// minWordPrefix is how much of a conversation word has to be typed before it
+// is offered. Files complete from one character, as they always have; a word
+// pool is less predictable, and one letter would list most of it.
+const minWordPrefix = 2
+
+// completionTurns is how far back the conversation contributes words. Five is
+// a guess, deliberately: long enough to span a piece of work, short enough that
+// a name stops being offered once the talk has moved on. It is the number to
+// calibrate against session records once there are enough of them.
+const completionTurns = 5
 
 var _ readline.AutoCompleter = promptCompleter{}
 
@@ -30,7 +42,31 @@ func (p promptCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	if len(line) > 0 && line[0] == '/' {
 		return p.cmd.Do(line, pos)
 	}
-	return completeWord(line, pos, p.files())
+	candidates := p.files()
+	if p.words != nil {
+		if token := wordToken(line, pos); len(token) >= minWordPrefix {
+			candidates = append(candidates, p.words()...)
+		}
+	}
+	return completeWord(line, pos, candidates)
+}
+
+// wordToken is the word ending at pos: the text back to the
+// last space, less an opening backtick, quote, or parenthesis. Those are
+// punctuation around a name in a message — "why does `fooB" — and a token that
+// kept them would match no candidate.
+func wordToken(line []rune, pos int) []rune {
+	if pos < 0 || pos > len(line) {
+		return nil
+	}
+	start := pos
+	for start > 0 && !unicode.IsSpace(line[start-1]) {
+		start--
+	}
+	for start < pos && strings.ContainsRune("`'\"(", line[start]) {
+		start++
+	}
+	return line[start:pos]
 }
 
 // completeWord completes the whitespace-delimited token ending at pos against
@@ -43,11 +79,7 @@ func completeWord(line []rune, pos int, candidates []string) ([][]rune, int) {
 	if pos < 0 || pos > len(line) {
 		return nil, 0
 	}
-	start := pos
-	for start > 0 && !unicode.IsSpace(line[start-1]) {
-		start--
-	}
-	token := line[start:pos]
+	token := wordToken(line, pos)
 	if len(token) == 0 {
 		return nil, 0
 	}

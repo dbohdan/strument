@@ -308,7 +308,11 @@ func (r *REPL) completer() readline.AutoCompleter {
 		}
 		items = append(items, readline.PcItem("/"+c.name, sub...))
 	}
-	return promptCompleter{cmd: readline.NewPrefixCompleter(items...), files: r.completePromptFiles}
+	return promptCompleter{
+		cmd:   readline.NewPrefixCompleter(items...),
+		files: r.completePromptFiles,
+		words: func() []string { return r.coder.CompletionWords(completionTurns) },
+	}
 }
 
 // recursiveDynamic builds a dynamic completer that re-offers itself for each

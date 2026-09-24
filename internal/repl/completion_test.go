@@ -217,3 +217,32 @@ func TestPathCompletionSpaceEscapes(t *testing.T) {
 		}
 	}
 }
+
+// Conversation words join the files, need two typed characters, and match
+// behind an opening backtick, since that is how a name is written in a message.
+func TestPromptCompletesConversationWords(t *testing.T) {
+	p := promptCompleter{
+		files: func() []string { return []string{"formatter.go"} },
+		words: func() []string { return []string{"formatWindow", "fmtPrint"} },
+	}
+	complete := func(line string) []string {
+		sfx, _ := p.Do([]rune(line), len([]rune(line)))
+		var out []string
+		for _, s := range sfx {
+			out = append(out, string(s))
+		}
+		return out
+	}
+	if got := complete("see formatW"); !slices.Equal(got, []string{"indow"}) {
+		t.Errorf("formatW -> %q", got)
+	}
+	if got := complete("why does `formatW"); !slices.Equal(got, []string{"indow"}) {
+		t.Errorf("a leading backtick blocked the match: %q", got)
+	}
+	if got := complete("f"); slices.Contains(got, "matWindow") || !slices.Contains(got, "ormatter.go") {
+		t.Errorf("one character offered conversation words, or lost files: %q", got)
+	}
+	if got := complete("fo"); !slices.Contains(got, "rmatWindow") || !slices.Contains(got, "rmatter.go") {
+		t.Errorf("two characters: %q", got)
+	}
+}
