@@ -63,6 +63,12 @@ without introducing regressions.
 | **trial** — [2026-08-welfare-wording](2026-08-welfare-wording/) | Can prompt-welfare changes be shipped without breaking scope discipline? The patches caused no measurable safety regression; the larger benefit run was underpowered for a positive claim but excluded a large regression. Keep both wording changes and continue treating the benefit as uncertain. |
 | **characterization** — [2026-08-prompt-review](2026-08-prompt-review/) | Can several models find defects in rendered prompts? Five reviewers found nine actionable defects, including two regressions, although no single reviewer found them all. Use an ensemble and rendered artifacts, but treat reviewer judgements as leads that require code confirmation. |
 
+## Harness notes
+
+| experiment | question → result → decision |
+| --- | --- |
+| **trial** — [2026-09-note-attribution](2026-09-note-attribution/) | Does the model read a user-role harness note as the user's words, and does the `[strument]` marker, or the marker plus a sentence defining it, change that? Unmarked, reasoning put the note's words in the user's mouth in 4/39 sessions; marked, 1/39; marked and defined, 0/39 (post hoc strict count; the preregistered count, 14 vs 5 vs 5, p = 0.033, overcounted). Behavior did not move: the note was acted on in every plain session and never overrode the user's own instruction, and no final answer misattributed it. Every harness note is now marked, and both system prompts define the marker. |
+
 ## Tools, and whether they get reached for
 
 Whether a model chooses a tool, and whether the tool description tells it what the
