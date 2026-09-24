@@ -94,7 +94,7 @@ chunk you read and reply per occurrence. For startup
 chrome (banner, the per-prompt rule, the file list) no API key is needed —
 launch, let it reach the prompt, send `/exit`. For streamed answers and
 reasoning, run against a live model with `OPENROUTER_API_KEY` in the
-environment (never in a file). aider installs in its own venv
+environment (see *Keys* under Conventions). aider installs in its own venv
 (`python -m venv … && pip install aider-chat`).
 
 A worked example of why this matters: aider draws **two different horizontal
@@ -112,7 +112,7 @@ The discipline above generalizes past the UI. Every part of Strument that meets
 the outside world — a model's wire behavior, a real page's HTML, a terminal's
 redraw, a proxy's egress — tends to differ from what the source predicts, and
 the difference stays invisible until observed. A live pass against a real model
-(`OPENROUTER_API_KEY` in the environment, never a file) has caught bugs no unit
+(`OPENROUTER_API_KEY` in the environment) has caught bugs no unit
 test would: a reversed tool-call field order, surfaced only because a second
 model ordered it differently; a code-fence marker leaking into the stream;
 reasoning that wouldn't turn off; a cache TTL that wasn't honored. Test with
@@ -223,8 +223,22 @@ Past trials live one directory each under
 - **Comments**: match the surrounding density and idiom; explain *why*, not
   *what*. Describe divergences from aider and the reasons for them.
 - **Verify before you commit**: `task check` green, in one run. For anything with a runtime surface, exercise it, don't just test it.
-- **Never commit secrets** — API keys go in the environment
-  (`OPENROUTER_API_KEY`), never in files, docs, or commits.
+- **Keys: never in the repository, and never in more places than needed.**
+  The line is the project directory and its history, which are committed,
+  shared and backed up. Keys stay out of commits, docs, fixtures, experiment
+  runners and transcripts; `internal/fixture/guard_test.go` fails on anything
+  key-shaped under `testdata/fixtures/` or `doc/experiments/`. Scripts read the
+  key from `OPENROUTER_API_KEY`, never from an argument: argv shows in `ps`,
+  in shell history, and in any transcript of the command.
+
+  Outside the project the goal is fewer copies, not zero files. A key a human
+  hands an agent in conversation is in that conversation's log already, which
+  is why the key to hand over is an expense-capped, expiring one. An agent's shell does not keep state between commands, so the
+  literal "environment only" rule forces the key to be retyped into every
+  command line — each of which is one more copy in the log. Write it once to a
+  mode-600 env file in scratch space outside the project (`umask 077; printf
+  'export OPENROUTER_API_KEY=%s\n' "$KEY" > "$SCRATCH/or.env"`), source it per
+  command (`. "$SCRATCH/or.env" && …`), and never print it.
 - **Keep bulk disposable artifacts out of the repository.** The project
   directory is backed up regularly in some enviornments, so don't put large
   temporary data anywhere tracked — project checkouts, one-off binaries,
