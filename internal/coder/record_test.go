@@ -63,6 +63,7 @@ func (s *toolThenAnswer) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.St
 // model's reply, then the results of that reply's tool calls — so reasoning
 // emitted first lands ahead of the message that prompted it, and emitted last
 // lands after tool results it never saw. Both were written before this test.
+// A request record follows the reply it produced, for the same reason.
 func TestRecordIsATimeline(t *testing.T) {
 	c := testCoder(t)
 	rec := &capture{}
@@ -72,7 +73,7 @@ func TestRecordIsATimeline(t *testing.T) {
 	c.runOne(context.Background(), "do the thing")
 
 	got := strings.Join(rec.types(), " ")
-	want := "message:user reasoning message:assistant message:tool reasoning message:assistant turn"
+	want := "message:user reasoning message:assistant request message:tool reasoning message:assistant request turn"
 	if got != want {
 		t.Errorf("record order:\n got %s\nwant %s", got, want)
 	}
@@ -217,5 +218,94 @@ func TestTurnRecordNamesTheModeAndTheOfferedTools(t *testing.T) {
 				t.Errorf("offered_tools = %v, want read in every mode", turn.OfferedTools)
 			}
 		})
+	}
+}
+
+// usageThenAnswer fails its first send with a retryable error, then makes a
+// tool call and answers, reporting usage — with a provider and a reasoning
+// split — on both of the sends that succeed.
+type usageThenAnswer struct{ sends int }
+
+func (s *usageThenAnswer) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	s.sends++
+	n := s.sends
+	return func(yield func(llm.StreamEvent, error) bool) {
+		cost := 0.01 * float64(n)
+		usage := &llm.Usage{PromptTokens: 1000 * n, CompletionTokens: 100, CacheReadTokens: 800,
+			ReasoningTokens: 60, Provider: "Fireworks", Cost: &cost}
+		switch n {
+		case 1:
+			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrRateLimit, Message: "429"})
+		case 2:
+			if !yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: &llm.ToolCallDelta{
+				Index: 0, ID: "call_1", Name: "ls", Args: `{"path":"."}`,
+			}}, nil) {
+				return
+			}
+			if !yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "tool_calls"}, nil) {
+				return
+			}
+			yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: usage}, nil)
+		default:
+			if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "Done."}, nil) {
+				return
+			}
+			if !yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil) {
+				return
+			}
+			yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: usage}, nil)
+		}
+	}
+}
+
+// Every request gets a record, the failed one included, and each carries its
+// own usage rather than the running sum. The turn record cannot say which
+// request a cost came from, or which provider a router sent it to.
+func TestRecordRequests(t *testing.T) {
+	c := testCoder(t)
+	rec := &capture{}
+	c.Recorder = rec
+	c.Client = &usageThenAnswer{}
+	c.Clock = &fastClock{}
+
+	c.runOne(context.Background(), "do the thing")
+
+	var reqs []Record
+	for _, r := range rec.recs {
+		if r.Type == "request" {
+			reqs = append(reqs, r)
+		}
+	}
+	if len(reqs) != 3 {
+		t.Fatalf("%d request records, want 3 (a failure, a tool call, an answer): %v", len(reqs), rec.types())
+	}
+
+	failed := reqs[0]
+	if failed.Outcome != "failed" || !strings.Contains(failed.Error, "429") {
+		t.Errorf("first request: outcome %q, error %q; want failed with the 429", failed.Outcome, failed.Error)
+	}
+	if failed.Sent != 0 || failed.CostKnown || failed.Provider != "" {
+		t.Errorf("a request with no usage reported counts: %+v", failed)
+	}
+
+	for i, r := range reqs[1:] {
+		n := i + 2
+		if r.Call != "turn" || r.Outcome != "done" {
+			t.Errorf("request %d: call %q, outcome %q", n, r.Call, r.Outcome)
+		}
+		if r.Sent != 1000*n || r.Received != 100 || r.CacheRead != 800 || r.Reasoning != 60 {
+			t.Errorf("request %d carries %d/%d/%d/%d, want its own usage %d/100/800/60",
+				n, r.Sent, r.Received, r.CacheRead, r.Reasoning, 1000*n)
+		}
+		if r.Provider != "Fireworks" || !r.CostKnown {
+			t.Errorf("request %d: provider %q, cost known %v", n, r.Provider, r.CostKnown)
+		}
+	}
+	if reqs[1].FinishReason != "tool_calls" || reqs[2].FinishReason != "stop" {
+		t.Errorf("finish reasons %q, %q", reqs[1].FinishReason, reqs[2].FinishReason)
+	}
+	// The retry repeats its step; the answer follows one completed step.
+	if reqs[0].Step != 0 || reqs[1].Step != 0 || reqs[2].Step != 1 {
+		t.Errorf("steps %d, %d, %d; want 0, 0, 1", reqs[0].Step, reqs[1].Step, reqs[2].Step)
 	}
 }

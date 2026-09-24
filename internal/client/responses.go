@@ -268,6 +268,9 @@ type respStreamEvent struct {
 				CachedTokens     int `json:"cached_tokens"`
 				CacheWriteTokens int `json:"cache_write_tokens"`
 			} `json:"input_tokens_details"`
+			OutputTokensDetails *struct {
+				ReasoningTokens int `json:"reasoning_tokens"`
+			} `json:"output_tokens_details"`
 		} `json:"usage"`
 		IncompleteDetails *struct {
 			Reason string `json:"reason"`
@@ -426,6 +429,9 @@ func (c *ResponsesClient) parseStream(body io.Reader, yield func(llm.StreamEvent
 				if d := u.InputTokensDetails; d != nil {
 					usage.CacheReadTokens = d.CachedTokens
 					usage.CacheWriteTokens = d.CacheWriteTokens
+				}
+				if d := u.OutputTokensDetails; d != nil {
+					usage.ReasoningTokens = d.ReasoningTokens
 				}
 				if !yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: &usage}, nil) {
 					return false

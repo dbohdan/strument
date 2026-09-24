@@ -36,8 +36,14 @@ type sseChunk struct {
 			CachedTokens     int `json:"cached_tokens"`
 			CacheWriteTokens int `json:"cache_write_tokens"`
 		} `json:"prompt_tokens_details"`
+		CompletionTokensDetails *struct {
+			ReasoningTokens int `json:"reasoning_tokens"`
+		} `json:"completion_tokens_details"`
 	} `json:"usage"`
-	Error *struct {
+	// Provider is OpenRouter's name for the upstream that served the request,
+	// repeated on every chunk. Other endpoints leave it empty.
+	Provider string `json:"provider"`
+	Error    *struct {
 		Message string `json:"message"`
 		Code    any    `json:"code"`
 	} `json:"error"`
@@ -78,6 +84,8 @@ func scanSSEData(r io.Reader) iter.Seq2[string, error] {
 // into fixture rows.
 func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 	return func(yield func(llm.StreamEvent, error) bool) {
+		// Kept across chunks: the usage chunk is not guaranteed to carry it.
+		var provider string
 		for payload, err := range scanSSEData(r) {
 			if err != nil {
 				yield(llm.StreamEvent{}, err)
@@ -87,6 +95,9 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 				yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: "bad SSE chunk: " + err.Error()})
 				return
+			}
+			if chunk.Provider != "" {
+				provider = chunk.Provider
 			}
 			// Providers can surface errors mid-stream as an error object.
 			if chunk.Error != nil {
@@ -134,7 +145,11 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 					u.CacheReadTokens = d.CachedTokens
 					u.CacheWriteTokens = d.CacheWriteTokens
 				}
+				if d := chunk.Usage.CompletionTokensDetails; d != nil {
+					u.ReasoningTokens = d.ReasoningTokens
+				}
 				u.Cost = chunk.Usage.Cost.ptr()
+				u.Provider = provider
 				if !yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: u}, nil) {
 					return
 				}

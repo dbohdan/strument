@@ -221,6 +221,8 @@ func TestResponsesStreamParallelToolCalls(t *testing.T) {
 	}
 	if u := usageOf(evs); u == nil || u.PromptTokens == 0 {
 		t.Errorf("usage = %+v, want it read from response.completed", u)
+	} else if u.ReasoningTokens != 19 {
+		t.Errorf("reasoning tokens = %d, want the capture's 19 from output_tokens_details", u.ReasoningTokens)
 	}
 }
 

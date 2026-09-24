@@ -214,6 +214,10 @@ type Coder struct {
 	// curMessages — see record.go for why the flush is per-send.
 	Recorder         Recorder
 	recordedMessages int
+	// pendingRequests holds the send's request records until the flush that
+	// writes its messages, so each lands after the reply it produced rather
+	// than ahead of the user message that prompted it.
+	pendingRequests []Record
 
 	// editFormat is the active mode, "tool" or "ask". It starts as the model's
 	// EditFormat but /ask and /code switch it at runtime without changing the

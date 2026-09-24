@@ -287,8 +287,16 @@ A `side_call` record covers each request Strument makes for itself: a commit mes
 These requests are separate from the conversation, so they appear nowhere else in the log; without these records, a failed one showed only as its consequence, such as a commit reading `(no commit message provided)`.
 The record names the `call` and the `model`, and carries `seconds`, `attempts`, an `outcome` of `ok`, `empty`, `error`, or `deadline`, and the `error` text when there is one.
 
+A `request` record covers each request to the model a turn or an aside makes, retries and continuations included; it follows the assistant message it produced.
+The turn record has only the sums, and the per-request split is what shows where a turn's cost went: the fixed prompt, the growing history, reasoning or the answer.
+It carries the `call` (`turn` or `aside`), the `step` the turn had completed when the request went out, an `outcome` (`done`, `continuation`, `failed`, `interrupted`, and others), the provider's `finish_reason`, `seconds`, and the `error` for a failed request.
+When the provider reported usage, it adds `sent` and `received`, their `cache_read`, `cache_write` and `reasoning` parts, the `cost`, and the `provider` that actually served it where a router reports one (OpenRouter does).
+A request that failed before usage arrived has no counts rather than zeroes.
+`side_call` records carry the same usage fields.
+
 ```sh
 jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
+jq -s 'map(select(.type=="request")) | group_by(.provider) | map({provider: .[0].provider, requests: length, reasoning: (map(.reasoning // 0) | add)})' "$(strument history path)"
 jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
 ```
 

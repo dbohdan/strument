@@ -369,6 +369,34 @@ func TestErrorClassification(t *testing.T) {
 	}
 }
 
+// OpenRouter names the upstream on every chunk, but nothing promises the usage
+// chunk is one of them, so the name is carried from wherever it was seen.
+func TestParseSSEUsageCarriesProviderAndReasoning(t *testing.T) {
+	sse := `data: {"provider":"Fireworks","choices":[{"delta":{"content":"hi"}}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":40,"completion_tokens_details":{"reasoning_tokens":25},"prompt_tokens_details":{"cached_tokens":60}}}
+
+data: [DONE]
+`
+	var u *llm.Usage
+	for ev, err := range ParseSSE(strings.NewReader(sse)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.Kind == llm.EventUsage {
+			u = ev.Usage
+		}
+	}
+	if u == nil {
+		t.Fatal("no usage event")
+	}
+	if u.Provider != "Fireworks" || u.ReasoningTokens != 25 || u.CacheReadTokens != 60 {
+		t.Errorf("usage = %+v, want provider Fireworks, 25 reasoning, 60 cached", u)
+	}
+}
+
 func TestMidStreamErrorObject(t *testing.T) {
 	sse := `data: {"choices":[{"delta":{"content":"partial"}}]}
 

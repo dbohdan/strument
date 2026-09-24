@@ -305,6 +305,14 @@ type Usage struct {
 	CacheWriteTokens int      `json:"cache_write_tokens,omitempty"`
 	CacheReadTokens  int      `json:"cache_read_tokens,omitempty"`
 	Cost             *float64 `json:"cost,omitempty"` // in-band cost (OpenRouter); nil => unknown
+	// ReasoningTokens is the part of CompletionTokens the provider reports as
+	// reasoning, 0 where it does not say. Anthropic's dialect never does: its
+	// output_tokens include thinking with no split.
+	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+	// Provider is who actually served the request, where a router reports it
+	// (OpenRouter's "provider" field). The configured provider names a route;
+	// with fallbacks allowed, this is the only record of where it went.
+	Provider string `json:"provider,omitempty"`
 }
 
 // Add accumulates u2 into u. A known cost adds to a known (or zero) cost;
@@ -316,6 +324,10 @@ func (u *Usage) Add(u2 Usage) {
 	u.CompletionTokens += u2.CompletionTokens
 	u.CacheWriteTokens += u2.CacheWriteTokens
 	u.CacheReadTokens += u2.CacheReadTokens
+	u.ReasoningTokens += u2.ReasoningTokens
+	if u2.Provider != "" {
+		u.Provider = u2.Provider
+	}
 	if u2.Cost != nil {
 		if u.Cost == nil {
 			c := *u2.Cost

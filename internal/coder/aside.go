@@ -56,7 +56,7 @@ func (c *Coder) runSide(ctx context.Context, prompt string) string {
 		// No loop detection on a side call: these are short, structured, and
 		// bounded by their own prompts, and a false stop here would silently
 		// cost a summary rather than visibly stop a reply.
-		res, streamErr := c.streamOnce(ctx, req, usage, nil)
+		res, streamErr := c.streamOnce(ctx, "aside", req, usage, nil)
 		if res == resFailed {
 			if backoff.retry(ctx, c.Out, c.Clock, streamErr) {
 				continue // transient error: retry with the same backoff as a turn

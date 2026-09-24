@@ -138,9 +138,14 @@ const (
 // loops may be nil, which detects nothing; returning early from the range over
 // Send is what stops the reply, so a detected loop costs the provider nothing
 // more than one abandoned stream.
-func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsage, loops *loopDetector) (streamResult, error) {
+//
+// call names the request in its log record: "turn" or "aside".
+func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, usage *sendUsage, loops *loopDetector) (res streamResult, err error) {
 	finishReason := ""
 	usage.rejected = false
+	// This request's own usage, apart from usage's running sum, for its record.
+	var got llm.Usage
+	sawUsage := false
 
 	// The clock brackets exactly this loop, which is the whole of the time the
 	// provider owns: from the request going out to the last byte of the
@@ -152,6 +157,7 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 		elapsed := c.Clock.Now().Sub(started)
 		usage.modelTime += elapsed
 		c.messageModelTime += elapsed
+		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed)
 	}()
 
 	for ev, err := range c.Client.Send(ctx, req) {
@@ -194,6 +200,10 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 			finishReason = ev.FinishReason
 		case llm.EventUsage:
 			usage.add(ev.Usage)
+			if ev.Usage != nil {
+				got.Add(*ev.Usage)
+				sawUsage = true
+			}
 		}
 	}
 	if finishReason == "length" {
@@ -348,7 +358,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		c.partialToolCalls = nil
 		c.toolCallIndex = map[int]int{}
 
-		res, streamErr := c.streamOnce(ctx, c.buildRequest(messages), usage, loops)
+		res, streamErr := c.streamOnce(ctx, "turn", c.buildRequest(messages), usage, loops)
 		// Per stream, not sticky: a continuation that completes normally leaves
 		// this false, so only a reply whose *last* stream was capped is
 		// reported as truncated.

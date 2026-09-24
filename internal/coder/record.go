@@ -188,6 +188,39 @@ type Record struct {
 	Seconds float64 `json:"seconds,omitempty"`
 	// Error is the failure as the user was shown it, empty on success.
 	Error string `json:"error,omitempty"`
+
+	// request
+	//
+	// One record per request to the model, retries and continuations
+	// included, where the turn record has only the sums. A sum cannot say
+	// where a turn's cost went — fixed prompt, growing history, reasoning or
+	// answer — and it is the per-request split that answers it: the
+	// FrontierHarness run could say that output was 27-81% of a task's cost
+	// and not which requests made it so.
+	//
+	// Call is "turn" or "aside"; side calls keep their own record above.
+	// Model, Outcome, Sent, Received, Cost, CostKnown, Seconds and Error mean
+	// what they do elsewhere, per request. Outcome is how the stream ended:
+	// "done", "continuation", "context_exhausted", "output_exhausted",
+	// "interrupted", "looping" or "failed".
+
+	// Step is how many steps the turn had completed when the request went
+	// out, counted as the turn record's Steps is: absent (0) for a turn's
+	// first request and for an aside's. A retry repeats its step.
+	Step int `json:"step,omitempty"`
+	// FinishReason is the provider's own word for why the stream ended.
+	FinishReason string `json:"finish_reason,omitempty"`
+	// CacheRead and CacheWrite split Sent the way the provider reported it.
+	CacheRead  int `json:"cache_read,omitempty"`
+	CacheWrite int `json:"cache_write,omitempty"`
+	// Reasoning is the part of Received the provider counted as reasoning.
+	// Absent where the dialect has no split (Anthropic's).
+	Reasoning int `json:"reasoning,omitempty"`
+	// Provider is the upstream that served the request, where a router says
+	// (OpenRouter). With fallbacks allowed it is the only record of which
+	// provider a request went to, and providers differ in price, cache and
+	// rate limit.
+	Provider string `json:"provider,omitempty"`
 }
 
 // RecordToolCall is one call the model made, with its arguments verbatim —
@@ -295,20 +328,79 @@ type SideCallReporter func(SideCall)
 // CommitMessenger, NotesWriter and NewChatSummary.
 func (c *Coder) RecordSideCall(s SideCall) {
 	r := Record{
-		Type:     "side_call",
-		Call:     s.What,
-		Model:    s.Model,
-		Attempts: s.Attempts,
-		Seconds:  s.Duration.Round(time.Millisecond).Seconds(),
-		Outcome:  s.Outcome,
-		Error:    s.Err,
-		Sent:     s.Usage.PromptTokens,
-		Received: s.Usage.CompletionTokens,
+		Type:       "side_call",
+		Call:       s.What,
+		Model:      s.Model,
+		Attempts:   s.Attempts,
+		Seconds:    s.Duration.Round(time.Millisecond).Seconds(),
+		Outcome:    s.Outcome,
+		Error:      s.Err,
+		Sent:       s.Usage.PromptTokens,
+		Received:   s.Usage.CompletionTokens,
+		CacheRead:  s.Usage.CacheReadTokens,
+		CacheWrite: s.Usage.CacheWriteTokens,
+		Reasoning:  s.Usage.ReasoningTokens,
+		Provider:   s.Usage.Provider,
 	}
 	if s.Usage.Cost != nil {
 		r.Cost, r.CostKnown = *s.Usage.Cost, true
 	}
 	c.record(r)
+}
+
+// streamOutcomes are the request record's words for a streamResult.
+var streamOutcomes = map[streamResult]string{
+	resDone:             "done",
+	resContinuation:     "continuation",
+	resContextExhausted: "context_exhausted",
+	resOutputExhausted:  "output_exhausted",
+	resInterrupted:      "interrupted",
+	resLooping:          "looping",
+	resFailed:           "failed",
+}
+
+// recordRequest logs one request streamOnce made. usage is what the provider
+// reported for this request alone; sawUsage says whether it reported any, so
+// a request that failed before usage arrived records no counts rather than
+// zeroes that look measured.
+func (c *Coder) recordRequest(call string, res streamResult, err error, finishReason string,
+	usage llm.Usage, sawUsage bool, elapsed time.Duration,
+) {
+	if c.Recorder == nil {
+		return
+	}
+	r := Record{
+		Type:         "request",
+		Call:         call,
+		Model:        c.Model.QualifiedSlug(),
+		Outcome:      streamOutcomes[res],
+		FinishReason: finishReason,
+		Seconds:      elapsed.Round(time.Millisecond).Seconds(),
+	}
+	if call == "turn" {
+		r.Step = c.turnSteps
+	}
+	if err != nil {
+		r.Error = err.Error()
+	}
+	if sawUsage {
+		r.Sent = usage.PromptTokens
+		r.Received = usage.CompletionTokens
+		r.CacheRead = usage.CacheReadTokens
+		r.CacheWrite = usage.CacheWriteTokens
+		r.Reasoning = usage.ReasoningTokens
+		r.Provider = usage.Provider
+		if usage.Cost != nil {
+			r.Cost, r.CostKnown = *usage.Cost, true
+		}
+	}
+	// An aside's messages never pass through recordNewMessages, so there is
+	// no later flush to wait for.
+	if call != "turn" {
+		c.record(r)
+		return
+	}
+	c.pendingRequests = append(c.pendingRequests, r)
 }
 
 // record emits one record if a Recorder is wired.
@@ -388,6 +480,16 @@ func (c *Coder) recordNewMessages() {
 	// results are short anyway.
 	toolNames := map[string]string{}
 
+	// The send's requests follow the reply they produced, for the same reason
+	// reasoning precedes it: the first assistant message of the flush is the
+	// reply, and what comes after it — tool results — the requests never saw.
+	emitRequests := func() {
+		for _, r := range c.pendingRequests {
+			c.record(r)
+		}
+		c.pendingRequests = nil
+	}
+
 	for _, m := range c.curMessages[min(c.recordedMessages, len(c.curMessages)):] {
 		if m.Role == llm.RoleAssistant {
 			emitReasoning()
@@ -413,9 +515,14 @@ func (c *Coder) recordNewMessages() {
 			r.ToolCalls = append(r.ToolCalls, rec)
 		}
 		c.record(r)
+		if m.Role == llm.RoleAssistant {
+			emitRequests()
+		}
 	}
 	// A send interrupted before it produced anything leaves reasoning with no
-	// assistant message to sit in front of. It is still what happened.
+	// assistant message to sit in front of. It is still what happened. The same
+	// goes for a request that failed outright.
 	emitReasoning()
+	emitRequests()
 	c.recordedMessages = len(c.curMessages)
 }
