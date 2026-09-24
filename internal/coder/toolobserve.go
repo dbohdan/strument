@@ -520,6 +520,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 		ctx, cancel = context.WithTimeout(ctx, d)
 		defer cancel()
 	}
+	c.shown.commandRan()
 	cmd := exec.CommandContext(ctx, ch.Argv[0], ch.Argv[1:]...) //nolint:gosec // Argv from the user's config, never from the model.
 	cmd.Dir = c.Root
 	// The argv is trusted, but the output is not selected by it: a failing

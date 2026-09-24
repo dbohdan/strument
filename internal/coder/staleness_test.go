@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,6 +102,45 @@ func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
 	if strings.Contains(got, "not found") {
 		t.Errorf("result = %q, must not report this as a failed match", got)
 	}
+	// No command ran between the read and the edit, so the change came from
+	// outside, and the result may say so.
+	if !strings.Contains(got, "outside this conversation") {
+		t.Errorf("result = %q, want it to name an outside edit", got)
+	}
+}
+
+// The model's own command is the other way a read file moves: gofmt -w, sed -i,
+// a formatter behind a check. The edit is still refused — the text it matched
+// may have moved — but the result must not tell the model someone else did it,
+// which is what it said while the stamps knew only about reads and writes.
+func TestStaleAfterACommandDoesNotBlameAnOutsideEdit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(path, []byte("hello world\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	c.AddFile("a.txt")
+	c.shown.note("a.txt", path)
+
+	c.runAndShow(context.Background(), "echo 'hello world, reformatted' > a.txt", 0)
+	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "reformatted") {
+		t.Fatalf("the command did not change the file, so this test proves nothing: %q", got)
+	}
+
+	results := toolResults{}
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{editCall("call_1", "world", "mars")}, results, &matchFailure)
+	if len(edited) != 0 {
+		t.Errorf("edited = %v, want the edit refused: the file moved after it was read", edited)
+	}
+	got := results["call_1"].Text
+	if strings.Contains(got, "This is not a mistake in your edit") {
+		t.Errorf("result = %q, asserts an outside edit when a command may have made the change", got)
+	}
+	if !strings.Contains(got, "A command run since you read it") {
+		t.Errorf("result = %q, want it to name the command as a possible cause", got)
+	}
 }
 
 // Strument's own writes must not look like somebody else's. Two edits to one
@@ -181,11 +221,11 @@ func TestUndoDropsTheStamps(t *testing.T) {
 	}
 	s.note("a.txt", path)
 	touchLater(t, path, "yy\n")
-	if !s.changed("a.txt", path) {
+	if moved, _ := s.changed("a.txt", path); !moved {
 		t.Fatal("the stamp did not notice a change, so this test proves nothing")
 	}
 	s.forget()
-	if s.changed("a.txt", path) {
+	if moved, _ := s.changed("a.txt", path); moved {
 		t.Error("stamps survived forget()")
 	}
 }

@@ -1202,8 +1202,8 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		// under it sends it hunting for a mistake it did not make. write is
 		// exempt: it puts down a whole file and claims nothing about what was
 		// there before.
-		if !e.create && c.shown.changed(e.path, c.fullPath(e.path)) {
-			results.setText(e.callID, toolStaleFailure(e.path))
+		if moved, afterCommand := c.shown.changed(e.path, c.fullPath(e.path)); !e.create && moved {
+			results.setText(e.callID, toolStaleFailure(e.path, afterCommand))
 			*matchFailure = true
 			c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
 			continue

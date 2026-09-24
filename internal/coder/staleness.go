@@ -25,7 +25,8 @@ import (
 // before, so nothing that works today stops working: the gate can only fire
 // where the harness positively knows the file moved.
 
-// fileStamp identifies a version of a file. Modification time and size, the
+// fileStamp identifies a version of a file, and when it was noted relative to
+// the commands this session has run. Modification time and size, the
 // same pair repomap's tag cache keys on and the same heuristic git uses for its
 // index. It misses a change that preserves both — a same-size rewrite inside
 // one mtime tick — which is the direction to miss in: a missed change is
@@ -35,14 +36,29 @@ type fileStamp struct {
 	size    int64
 }
 
+// notedStamp is a stamp plus the command count at the moment it was taken.
+// The count does not decide whether the file moved; it decides how the
+// refusal explains it.
+type notedStamp struct {
+	fileStamp
+
+	commands int
+}
+
 // shownFiles records the version of each file the model was last shown.
 type shownFiles struct {
 	mu     sync.Mutex
-	stamps map[string]fileStamp
+	stamps map[string]notedStamp
+	// commands counts the commands run through bash and the checks. A file
+	// that moved after one of them may well have been moved by it — gofmt -w,
+	// sed -i, a formatter behind a check — and the refusal used to tell the
+	// model "the file was modified outside this conversation" when the model
+	// had done it itself two steps earlier.
+	commands int
 }
 
 func newShownFiles() *shownFiles {
-	return &shownFiles{stamps: map[string]fileStamp{}}
+	return &shownFiles{stamps: map[string]notedStamp{}}
 }
 
 func stampOf(full string) (fileStamp, bool) {
@@ -72,27 +88,40 @@ func (s *shownFiles) note(rel, full string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.stamps[rel] = stamp
+	s.stamps[rel] = notedStamp{fileStamp: stamp, commands: s.commands}
 }
 
-// changed reports whether rel has moved since it was noted. False when nothing
-// was recorded, or when the file cannot be stat'd: both are "we do not know",
-// and not knowing is not grounds for refusing an edit.
-func (s *shownFiles) changed(rel, full string) bool {
+// commandRan records that a command ran, one that could have rewritten any
+// file the model has read.
+func (s *shownFiles) commandRan() {
 	if s == nil {
-		return false
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commands++
+}
+
+// changed reports whether rel has moved since it was noted, and whether a
+// command has run since then. False when nothing was recorded, or when the
+// file cannot be stat'd: both are "we do not know", and not knowing is not
+// grounds for refusing an edit.
+func (s *shownFiles) changed(rel, full string) (moved, afterCommand bool) {
+	if s == nil {
+		return false, false
 	}
 	s.mu.Lock()
 	seen, ok := s.stamps[rel]
+	commands := s.commands
 	s.mu.Unlock()
 	if !ok {
-		return false
+		return false, false
 	}
 	now, ok := stampOf(full)
-	if !ok {
-		return false
+	if !ok || now == seen.fileStamp {
+		return false, false
 	}
-	return now != seen
+	return true, commands > seen.commands
 }
 
 // forget drops every stamp. Undo rewrites files behind the harness's back, so
@@ -112,9 +141,19 @@ func (s *shownFiles) forget() {
 // moved. It names the cause, because the model's next move depends on which
 // one it is: a mismatch it can fix by looking harder, or a file it must read
 // again because what it is holding is out of date.
-func toolStaleFailure(path string) string {
-	return "Nothing was changed: " + quoteToolArg(path) + " has changed on disk " +
-		"since you read it, so the text you matched may have moved or be gone.\n" +
-		"Read it again before editing. This is not a mistake in your edit — " +
+//
+// afterCommand says a command ran between the read and this edit. Then the
+// cause is not known — the model's own command is as likely as the user's
+// editor — and the result says so rather than asserting the one that sends a
+// model looking for someone else in the room.
+func toolStaleFailure(path string, afterCommand bool) string {
+	head := "Nothing was changed: " + quoteToolArg(path) + " has changed on disk " +
+		"since you read it, so the text you matched may have moved or be gone.\n"
+	if afterCommand {
+		return head + "Read it again before editing. A command run since you read it " +
+			"may have changed it — a formatter, sed -i, a build step — or it was " +
+			"edited outside this conversation.\n"
+	}
+	return head + "Read it again before editing. This is not a mistake in your edit — " +
 		"the file was modified outside this conversation.\n"
 }

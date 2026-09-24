@@ -59,6 +59,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 		// its own PipeRunner without an Env, keeping the full environment.
 		runner = PipeRunner{Env: FilterEnv(nil, c.EnvAllow)}
 	}
+	c.shown.commandRan()
 	exitCode, output, err := runner.Run(ctx, command, c.Root)
 	if err != nil {
 		c.Out.Errorf("Error running command: %v", err)
