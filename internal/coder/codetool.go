@@ -81,7 +81,7 @@ func codeTool(callable []string) llm.ToolDef {
 		"The interpreter is Monty, a restricted Python subset. Expressions, " +
 		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
 		"math, re, datetime, json, itertools and collections all work. Not " +
-		"available: with, match, del, eval/exec, open, subprocess, network " +
+		"available: match, del, eval/exec, open, subprocess, network " +
 		"access, and other imports — os, sys and pathlib import but reach no " +
 		"filesystem, so use glob(pattern=\"**/*.py\") to walk the tree and " +
 		"read() to open a file; the bash tool, not this one, runs commands. " +

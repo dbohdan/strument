@@ -590,6 +590,37 @@ func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
 	}
 }
 
+// The constructs the description calls unavailable, probed like the modules
+// above. The list said `with` was missing for as long as it has existed, and
+// the vendored Monty runs it — a claim no test held it to. Each construct
+// named as missing must fail, and with, which is not named, must work.
+func TestCodeDescriptionMatchesTheConstructsThatFail(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	desc := codeTool(InspectorTools()).Description
+
+	for _, tc := range []struct{ named, code string }{
+		{"match", "match 3:\n    case 3:\n        r = 1\nr"},
+		{"del", "x = [1]\ndel x[0]\nx"},
+		{"eval/exec", "eval('1')"},
+		{"eval/exec", "exec('a = 1')"},
+	} {
+		if !strings.Contains(desc, tc.named) {
+			t.Errorf("the probe for %q no longer matches the description", tc.named)
+		}
+		if got := c.runCode(context.Background(), codeCall{code: tc.code}); !strings.Contains(got, "The program failed") {
+			t.Errorf("the description calls %s unavailable, and %q ran: %s", tc.named, tc.code, got)
+		}
+	}
+	with := "class C:\n    def __enter__(self): return 1\n    def __exit__(self, *a): return None\n" +
+		"with C() as x:\n    y = x\ny"
+	if got := c.runCode(context.Background(), codeCall{code: with}); got != "1" {
+		t.Errorf("with no longer works; the description may name it again: %s", got)
+	}
+	if strings.Contains(desc, "with,") {
+		t.Error("the description calls with unavailable, and it works")
+	}
+}
+
 // TestCodeDataFuncsOverrideTheBridge pins the two-shape contract from both
 // sides: inside a program glob and ls return data (the bridge dispatches them
 // before Inspector.Run), and the description the model reads says so, because
