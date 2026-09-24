@@ -198,7 +198,12 @@ models = {{
     "mimo": model(openrouter, "xiaomi/mimo-v2.6-flash", context = 200000, cache = True),
     "k3": model(openrouter, "moonshotai/kimi-k3", context = 1048576, cache = True,
                 extra_params = {{"provider": {{"order": {order}, "allow_fallbacks": False}}}}),
+    "k3-high": model(openrouter, "moonshotai/kimi-k3", context = 1048576, cache = True, reasoning = "high",
+                extra_params = {{"provider": {{"order": {order}, "allow_fallbacks": False}}}}),
+    "k3-low": model(openrouter, "moonshotai/kimi-k3", context = 1048576, cache = True, reasoning = "low",
+                extra_params = {{"provider": {{"order": {order}, "allow_fallbacks": False}}}}),
 }}
+retry_timeout = {retry}
 default = "{model}"
 sandbox = ""
 '''
@@ -248,7 +253,7 @@ def run(task, model, out):
     shutil.copy(STRUMENT, os.path.join(fh, "strument"))
     shutil.copy("/etc/ssl/certs/ca-certificates.crt", os.path.join(fh, "ca.crt"))
     with open(os.path.join(fh, "cfg", "strument", "config.star"), "w") as f:
-        f.write(CONFIG.format(model=model, order=os.environ.get("FH_PROVIDERS", '["fireworks"]')))
+        f.write(CONFIG.format(model=model, order=os.environ.get("FH_PROVIDERS", '["fireworks"]'), retry=os.environ.get("FH_RETRY_TIMEOUT", "60")))
     with open(os.path.join(fh, "instruction.md"), "w") as f:
         f.write(open(os.path.join(tdir, "instruction.md")).read())
 

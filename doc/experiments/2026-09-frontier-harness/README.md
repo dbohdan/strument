@@ -257,6 +257,52 @@ Versions read:
 The pinned kimi-code 0.37.2 and DSH 0.1.0-rc.8 have no tags, so those two
 rows describe newer code than FrontierHarness ran.
 
+## Effort: max, high and low (partial)
+
+Since the field mostly runs K3 at its `max` default, does a lower effort cost
+less without failing more? The plan was three tasks where output dominated
+cost (constraints-scheduling, sqlite-db-truncate, polyglot-c-py), three arms
+(`k3` with no effort sent, which means max, plus `reasoning = "high"` and
+`reasoning = "low"`), three reps each: 27 trials. The trials ran in a
+shuffled order with seed 20260924, two at a time. The provider was pinned to
+Fireworks and `retry_timeout = 600` was set. The binary was built at
+`f674ae4`. Runner: [`data/effort.py`](data/effort.py).
+
+**It stopped after 17 trials.** The key hit its credit limit. OpenRouter
+refuses a request whose worst case (`max_tokens` 131,072 at $15/M) exceeds
+the remaining credit, returning `HTTP 402`. Five trials died that way and are
+marked invalid in [`data/effort.jsonl`](data/effort.jsonl). The twelve valid
+trials happened to land four per arm:
+
+| arm | valid | passed | median cost | median received | median seconds | total cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| max (default) | 4 | 3 | $0.140 | 6.3k | 95 | $0.70 |
+| high | 4 | 2 | $0.134 | 5.3k | 103 | $0.49 |
+| **low** | 4 | 2 | **$0.055** | **1.4k** | **29** | $0.23 |
+
+Per task, the arms agree completely. Every valid constraints-scheduling and
+sqlite-db-truncate trial passed. Every polyglot-c-py trial failed the same
+way, leaving `cmain`. The pass counts differ only because high and low each
+drew two polyglot trials and max drew one. A smoke run before the trial (low,
+constraints-scheduling) also passed, for $0.05.
+
+- **Low costs about 40% of max and runs about three times faster.** It
+  produced a quarter of the output tokens and a tenth of the reasoning text.
+  On these tasks it lost nothing.
+- **High is barely different from max.** Its reasoning is about 20% shorter,
+  and cost and wall time are about the same. This matches codex, the one
+  published configuration that sends `high`, which is also the most
+  output-heavy.
+- **The polyglot miss is not effort.** It happened at all three levels.
+  Counting the earlier runs, it is seven of seven completed runs, each
+  leaving `cmain`. No published harness's prompt tells the model to clean up,
+  so the difference lies elsewhere and is not yet explained.
+
+This is four trials per arm on easy tasks. It shows low is much cheaper where
+nothing is hard. It says nothing about whether low fails more on the tasks
+that separate harnesses, which is the counter-metric that would decide a
+default.
+
 ## Caveats
 
 - **One trial per task.** A single pass or fail says little. The polyglot
@@ -288,6 +334,8 @@ RUNTAG=-reg FH_WORKERS=1 python3 phase.py floor k3 1
 RUNTAG=-reg FH_WORKERS=1 FH_PROVIDERS='["fireworks","moonshotai","together","baseten"]' \
   python3 phase.py floor k3 1                  # reruns only what has no result.json
 python3 score.py k3-reg                        # the tables above
+FH_RETRY_TIMEOUT=600 python3 effort.py        # the effort trial (runs/effort)
+python3 score_effort.py
 ```
 
 Unattended runs should now set `retry_timeout` well above the default. At

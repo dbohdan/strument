@@ -115,7 +115,7 @@ with current project state.
 
 | experiment | question → result → decision |
 | --- | --- |
-| **characterization** — [2026-09-frontier-harness](2026-09-frontier-harness/) | How does Strument compare on FrontierHarness's twelve tasks every published harness passes, run with Kimi K3 through OpenRouter in a chroot, without Docker? 11/12 for $2.31, eighth of thirteen by cost (published: 12/12, $1.17–7.91). The miss was K3 leaving a compiled binary where the test wants one file, in both runs. Turns match the other harnesses; each turn costs more. One trial per task, not admissible. Nine trials died when a provider's 429s outlasted aider's one-minute retry ladder: `retry_timeout` became configurable. |
+| **characterization** — [2026-09-frontier-harness](2026-09-frontier-harness/) | How does Strument compare on FrontierHarness's twelve tasks every published harness passes, run with Kimi K3 through OpenRouter in a chroot, without Docker? 11/12 for $2.31, eighth of thirteen by cost (published: 12/12, $1.17–7.91). The miss was K3 leaving a compiled binary where the test wants one file, in both runs. Turns match the other harnesses; each turn costs more. One trial per task, not admissible. Nine trials died when a provider's 429s outlasted aider's one-minute retry ladder: `retry_timeout` became configurable. Only codex overrides K3's `max` default effort (to `high`), and opencode's published cost omits its reasoning tokens. A partial effort trial (12 valid of 27 before the key ran dry): `low` cost 40% of `max` and ran three times faster with the same per-task outcomes; `high` barely differed from `max`. |
 
 ## Designed, not yet run
 
