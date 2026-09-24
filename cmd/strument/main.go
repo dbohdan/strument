@@ -986,17 +986,14 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			if !keepState {
 				return errors.New("no session record available")
 			}
-			side := cdr.Model.SideModel
-			if side == nil {
-				return errors.New("no side model configured")
+			if cdr.Model.SideModel == nil {
+				return errNoSideModel
 			}
-			write := coder.NotesWriter(client.ForProvider(side.Provider), side, cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
 			transcript := sessionMarkdown(projectRoot, cdr.Session)
 			if transcript == "" {
 				return errors.New("the session record is empty")
 			}
-			notes, err := write(transcript)
-			cdr.FlushSideUsage()
+			notes, err := writeSessionNotes(cdr, transcript)
 			if err != nil {
 				return err
 			}
@@ -1006,7 +1003,6 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			cdr.SessionNotes = notes
 			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
 			cdr.SessionNotesSession = cdr.Session
-			cdr.ReportSideUsageDone()
 			return nil
 		},
 		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",

@@ -222,7 +222,6 @@ type sessionSwitcher struct {
 	cdr         *coder.Coder
 	projectRoot string
 	log         *sessionLog
-	notes       func(transcript string) (string, error)
 	saveResume  func(alias string)
 }
 
@@ -335,7 +334,7 @@ func (s *sessionSwitcher) fork(name, alias string) (string, error) {
 	if s.exists(name) {
 		return "", fmt.Errorf("a session named %q already exists", name)
 	}
-	if s.notes == nil {
+	if s.cdr.Model.SideModel == nil {
 		return "", errors.New("no side model is configured, so there are no notes to carry forward")
 	}
 	parent := s.cdr.Session
@@ -344,7 +343,7 @@ func (s *sessionSwitcher) fork(name, alias string) (string, error) {
 		return "", fmt.Errorf("%s has nothing recorded yet, so there is nothing to carry forward; "+
 			"/session new %s starts an empty one", parent, name)
 	}
-	notes, err := s.notes(transcript)
+	notes, err := writeSessionNotes(s.cdr, transcript)
 	if err != nil {
 		return "", err
 	}
@@ -393,9 +392,9 @@ func (s *sessionSwitcher) remove(name string) error {
 // sessionOps builds the /session surface, or nil when there is no state to
 // hold another conversation in.
 //
-// The notes writer is built here rather than passed in because it is the same
-// one `/notes generate` uses, and a fork that summarized differently from
-// `/notes generate` would be two answers to one question.
+// A fork's notes come from writeSessionNotes, the function `/notes generate`
+// uses, because a fork that summarized differently from `/notes generate` would
+// be two answers to one question.
 func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string, slog *sessionLog, keepState bool) *repl.SessionOps {
 	if !keepState {
 		return nil
@@ -405,18 +404,6 @@ func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string
 		projectRoot: projectRoot,
 		log:         slog,
 		saveResume:  func(string) {},
-	}
-	if side := cdr.Model.SideModel; side != nil {
-		sw.notes = func(transcript string) (string, error) {
-			write := coder.NotesWriter(client.ForProvider(side.Provider), side,
-				cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
-			notes, err := write(transcript)
-			cdr.FlushSideUsage()
-			if err == nil {
-				cdr.ReportSideUsageDone()
-			}
-			return notes, err
-		}
 	}
 	if save := saveResumeFunc(cdr, defaultAlias, projectRoot, keepState); save != nil {
 		sw.saveResume = save
@@ -429,4 +416,31 @@ func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string
 		Rename:  sw.rename,
 		Delete:  sw.remove,
 	}
+}
+
+// errNoSideModel is what asking for notes gets when the active model has no
+// side model to write them.
+var errNoSideModel = errors.New("no side model configured")
+
+// writeSessionNotes has the active model's side model write notes from a
+// session transcript, accounting its usage like any side call.
+//
+// The side model is read here, at the call, and not when the session was set
+// up. /model and /reload change it, and the fork path used to bind the startup
+// model's side model into a closure, so a fork after a switch was written by —
+// and billed to — a model the session had left.
+func writeSessionNotes(cdr *coder.Coder, transcript string) (string, error) {
+	side := cdr.Model.SideModel
+	if side == nil {
+		return "", errNoSideModel
+	}
+	write := coder.NotesWriter(client.ForProvider(side.Provider), side,
+		cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
+	notes, err := write(transcript)
+	cdr.FlushSideUsage()
+	if err != nil {
+		return "", err
+	}
+	cdr.ReportSideUsageDone()
+	return notes, nil
 }
