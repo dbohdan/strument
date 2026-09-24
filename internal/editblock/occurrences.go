@@ -50,7 +50,6 @@ func Occurrences(content, search string) string {
 		}
 		starts = append(starts, off+i)
 		off += i + 1 // overlapping sites are separate places; see CountOccurrences
-
 	}
 
 	var b strings.Builder
