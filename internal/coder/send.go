@@ -66,10 +66,18 @@ func (o SendOutcome) String() string {
 	}
 }
 
-// Retry/continuation constants. RETRY_TIMEOUT matches aider;
-// the continuation cap is a declared divergence (aider is unbounded).
+// Retry/continuation constants. The default retry timeout matches aider's
+// RETRY_TIMEOUT; the continuation cap is a declared divergence (aider is
+// unbounded).
+//
+// maxRetryDelay is the longest single wait. It only binds once retry_timeout is
+// raised past the default: under the default the ladder stops at 32s anyway,
+// and without a ceiling a ten-minute budget would double its way to one
+// 256-second sleep, which rides out a burst of 429s worse than several
+// minute-long ones do.
 const (
 	retryTimeout      = 60 * time.Second
+	maxRetryDelay     = 60 * time.Second
 	continuationCap   = 4
 	initialRetryDelay = 125 * time.Millisecond
 )
@@ -197,8 +205,16 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 // retryBackoff carries the doubling delay for transient stream errors across a
 // send's retry loop.
 //
-// cap bounds the delay; past it the call gives up. Zero means retryTimeout, the
-// turn's own bound. A side call passes a smaller one — see sideRetryCap.
+// cap bounds the total time spent waiting; once the waits reach it, the next
+// failure gives up. Zero means retryTimeout, the turn's own bound. The turn
+// passes the configured retry_timeout, and a side call a smaller one — see
+// sideRetryCap.
+//
+// Aider compares the cap with the next delay rather than with the waiting done
+// so far. For a doubling ladder from 0.25s the two agree — the waits before a
+// delay d sum to d-0.25s — so the default ladder is aider's to the retry. They
+// part once a delay is clamped to maxRetryDelay, which is the case the total is
+// for: with a ceiling on the delay, the delay alone would never reach the cap.
 //
 // what names the call in the messages, for a side call that the user did not
 // ask for directly and cannot otherwise place: "Retrying in 4.0 seconds..."
@@ -206,9 +222,10 @@ func (c *Coder) streamOnce(ctx context.Context, req llm.Request, usage *sendUsag
 // notes, the commit message or a compaction is the thing retrying. Empty is the
 // turn itself, which needs no naming because it is what the user is watching.
 type retryBackoff struct {
-	delay time.Duration
-	cap   time.Duration
-	what  string
+	delay  time.Duration
+	cap    time.Duration
+	waited time.Duration
+	what   string
 }
 
 func (rb *retryBackoff) limit() time.Duration {
@@ -231,11 +248,12 @@ func (rb *retryBackoff) retry(ctx context.Context, out Output, clock Clock, stre
 		out.Errorf("%s%v", rb.prefix(), streamErr)
 		return false
 	}
-	rb.delay *= 2
-	if rb.delay > rb.limit() {
+	if rb.waited >= rb.limit() {
 		out.Errorf("%s%s", rb.prefix(), se.Error())
 		return false
 	}
+	rb.delay = min(rb.delay*2, maxRetryDelay)
+	rb.waited += rb.delay
 	out.Warningf("%s%s", rb.prefix(), se.Error())
 	out.Printf("Retrying%s in %.1f seconds...", rb.suffix(), rb.delay.Seconds())
 	if !clock.Sleep(ctx, rb.delay) {
@@ -306,7 +324,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	usage := &sendUsage{estSent: c.countMessages(messages) + c.countTools()}
 	defer c.finalizeUsage(usage)
 
-	backoff := retryBackoff{delay: initialRetryDelay}
+	backoff := retryBackoff{delay: initialRetryDelay, cap: c.RetryTimeout}
 	continuations := 0
 	// Why the reply stopped short, for the notice below: the model does not
 	// continue a partial answer, or it does and the continuation cap ran out.

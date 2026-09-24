@@ -352,6 +352,10 @@ type Config struct {
 	// (the coder's two-minute default); -1 is the config's `shell_timeout = 0`,
 	// meaning no limit. /run is never bounded — the user typed it.
 	ShellTimeout int
+	// RetryTimeout is how many seconds a turn may spend waiting between
+	// retries of one failed request before giving up. 0 is unset (the coder's
+	// default, aider's 60).
+	RetryTimeout int
 	// GitSign is the commit-signing flag passed to `git commit`: "-S" to sign
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes
 	// from the `git_sign` setting (a boolean or a key-id string).

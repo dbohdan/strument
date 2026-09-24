@@ -46,7 +46,7 @@ func (c *Coder) runSide(ctx context.Context, prompt string) string {
 	c.multiResponseContent = ""
 
 	usage := &sendUsage{estSent: c.countMessages(messages)}
-	backoff := retryBackoff{delay: initialRetryDelay}
+	backoff := retryBackoff{delay: initialRetryDelay, cap: c.RetryTimeout}
 	for {
 		c.partialResponseContent = ""
 		c.partialReasoningContent = ""

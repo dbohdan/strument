@@ -175,6 +175,10 @@ type Coder struct {
 	// defaultShellTimeout; negative means no deadline. /run is never bounded.
 	ShellTimeout time.Duration
 
+	// RetryTimeout bounds how long a turn waits between retries of one failed
+	// request, summed over the waits. Zero takes retryTimeout, aider's minute.
+	RetryTimeout time.Duration
+
 	// Examples are config-provided few-shot messages (example_messages),
 	// appended to the active prompt set's examples on every format switch.
 	// nil in a session without them. See SetEditFormat.

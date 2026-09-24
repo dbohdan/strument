@@ -218,6 +218,9 @@ type fileGlobals struct {
 	hasShellTimeout bool
 	shellTimeoutVal int
 
+	hasRetryTimeout bool
+	retryTimeoutVal int
+
 	hasGitSign bool
 	gitSignVal string
 
@@ -541,6 +544,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasShellTimeout {
 		cfg.ShellTimeout = shellTimeoutSeconds(user.shellTimeoutVal)
 	}
+	if user.hasRetryTimeout {
+		cfg.RetryTimeout = user.retryTimeoutVal
+	}
 	if user.hasGitSign {
 		cfg.GitSign = user.gitSignVal
 	}
@@ -656,6 +662,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasShellTimeout {
 			cfg.ShellTimeout = shellTimeoutSeconds(project.shellTimeoutVal)
+		}
+		if project.hasRetryTimeout {
+			cfg.RetryTimeout = project.retryTimeoutVal
 		}
 		if project.hasGitSign {
 			cfg.GitSign = project.gitSignVal
@@ -1211,6 +1220,17 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasShellTimeout = true
 		out.shellTimeoutVal = n
+	}
+
+	if rt, ok := globals["retry_timeout"]; ok {
+		// Positive: a zero would mean giving up on the first transient error,
+		// which a config can want but should not get by accident.
+		n, err := parsePositiveInt(path, "retry_timeout", rt)
+		if err != nil {
+			return nil, err
+		}
+		out.hasRetryTimeout = true
+		out.retryTimeoutVal = n
 	}
 
 	if gs, ok := globals["git_sign"]; ok {

@@ -222,6 +222,7 @@ var projectKeyOrder = []string{
 	"hasSandbox",
 	"hasSandboxWrite",
 	"hasShellTimeout",
+	"hasRetryTimeout",
 	"hasGitSign",
 	"hasEnvAllow",
 	"hasAutoApprove",
@@ -385,6 +386,13 @@ var projectKeys = map[string]projectKey{
 				return "a model-run command may run forever"
 			}
 			return fmt.Sprintf("a model-run command is killed after %ds", g.shellTimeoutVal)
+		},
+	},
+	"hasRetryTimeout": {
+		name: "retry_timeout",
+		set:  func(g *fileGlobals) bool { return g.hasRetryTimeout },
+		detail: func(g *fileGlobals, _ func(string) string) string {
+			return fmt.Sprintf("a request is retried for up to %ds of waiting", g.retryTimeoutVal)
 		},
 	},
 	"hasGitSign": {

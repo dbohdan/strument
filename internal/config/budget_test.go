@@ -504,3 +504,39 @@ func TestEverySearchBackendLoads(t *testing.T) {
 		}
 	}
 }
+
+// retry_timeout reads like max_steps: unset is 0 for the coder's default, a
+// positive integer round-trips, a project overrides, and zero is refused
+// rather than read as "never retry".
+func TestRetryTimeout(t *testing.T) {
+	cfg, err := loadBudget(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RetryTimeout != 0 {
+		t.Errorf("unset retry_timeout = %d, want 0", cfg.RetryTimeout)
+	}
+	cfg, err = loadBudget(t, "retry_timeout = 600")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RetryTimeout != 600 {
+		t.Errorf("retry_timeout = 600, got %d", cfg.RetryTimeout)
+	}
+	for _, bad := range []string{"retry_timeout = 0", `retry_timeout = "10m"`} {
+		if _, err := loadBudget(t, bad); err == nil {
+			t.Errorf("%s should not load", bad)
+		}
+	}
+
+	opts := harness(t, budgetBase+"retry_timeout = 60\n", "retry_timeout = 900\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = Load(opts); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RetryTimeout != 900 {
+		t.Errorf("retry_timeout = %d, want the project's 900", cfg.RetryTimeout)
+	}
+}

@@ -63,6 +63,9 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 		// through as a negative duration, which shellTimeout reads as such.
 		c.ShellTimeout = time.Duration(cfg.ShellTimeout) * time.Second
 	}
+	// Unconditionally, unlike the line above: a reload that drops the setting
+	// goes back to the default rather than keeping the last value it saw.
+	c.RetryTimeout = time.Duration(cfg.RetryTimeout) * time.Second
 
 	c.LoopDetection = !cfg.NoLoopDetection
 	c.syncParser(!cfg.NoLanguageParser)

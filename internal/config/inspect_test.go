@@ -48,6 +48,7 @@ observation_via_run_code = True
 sandbox = ""
 sandbox_write = ["{{writable}}"]
 shell_timeout = 30
+retry_timeout = 600
 git_sign = "ABCD1234"
 env_allow = ["PATH", "HOME"]
 auto_approve = ["websearch"]

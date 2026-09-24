@@ -28,6 +28,7 @@ The loader reads these module-level variables after running your file:
 | `scraper` | list of strings | Optional. An external command (argv) run to fetch pages instead of the built-in HTTP scraper — the opt-in path for JavaScript-rendered pages. See below. |
 | `check` | dict of string to list of strings | Optional. Named verification commands (argv) the model may run without confirmation. See below. |
 | `shell_timeout` | non-negative integer | Optional. Maximum seconds for a model-caused command; `0` means unlimited. Default 120. See below. |
+| `retry_timeout` | positive integer | Optional. Seconds a turn may spend waiting to retry a failed request before giving up. Default 60. See below. |
 | `env_set` | dict of string to string | Optional. Environment variables set in Strument's process and inherited by subprocesses. See below. |
 | `check_auto` | list of strings | Optional. Names of `check` entries Strument runs itself at the end of a turn that changed files. See below. |
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
@@ -759,6 +760,29 @@ model can distinguish a timeout from a command failure.
 A timeout is not a resource limit. It bounds how long a runaway command wastes,
 not what it can do while running.
 
+### `retry_timeout`
+
+Seconds a turn may spend waiting between retries of one failed request before
+it gives up. Defaults to 60, aider's `RETRY_TIMEOUT`.
+
+```python
+retry_timeout = 600   # an unattended run that should outlast a burst of 429s
+```
+
+Only transient failures are retried: rate limits, network errors and server
+errors. A rejected key or a malformed request fails at once. The wait starts
+at a quarter of a second and doubles, up to one minute per wait, and Strument
+stops retrying once the waits add up to `retry_timeout`. Under the default
+that is aider's ladder: eight retries, the last one after 32 seconds.
+
+The default suits someone watching the session, who can see the failure and
+ask again. An unattended run has no one to do that. The unattended
+[FrontierHarness trial](experiments/2026-09-frontier-harness/README.md) lost
+three of twelve tasks to a provider's rate limits that outlasted the minute.
+
+Side calls (commit messages, session notes, compaction) keep their own shorter
+ladder, since each runs under a budget of its own.
+
 ### `git_sign`
 
 Sign the commits Strument makes with Git's own signing, passed through as
@@ -1010,7 +1034,7 @@ use `--yes add-output` to answer them automatically.
 
 `/reload` re-reads `config.star` into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
-`shell_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
+`shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 
