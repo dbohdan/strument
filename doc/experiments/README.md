@@ -111,6 +111,12 @@ with current project state.
 | --- | --- |
 | **trial** — [2026-09-image-dialects](2026-09-image-dialects/) | Does an image survive each of the three wire dialects, on both routes? One of three was broken, and it was the one with the dialect-specific special case: an image inside an Anthropic `tool_result` returns HTTP 400, while the same image re-homed into the following user turn is accepted. Delete the branch — 0/2 to 2/2 with no other cell moving. The capability declaration is separately shown to be load-bearing: declaring a text-only model as image-capable fails the request outright. |
 
+## Against other harnesses
+
+| experiment | question → result → decision |
+| --- | --- |
+| **characterization** — [2026-09-frontier-harness](2026-09-frontier-harness/) | How does Strument compare on FrontierHarness's twelve tasks every published harness passes, run with Kimi K3 through OpenRouter in a chroot, without Docker? 11/12 for $2.31, eighth of thirteen by cost (published: 12/12, $1.17–7.91). The miss was K3 leaving a compiled binary where the test wants one file, in both runs. Turns match the other harnesses; each turn costs more. One trial per task, not admissible. Nine trials died when a provider's 429s outlasted aider's one-minute retry ladder: `retry_timeout` became configurable. |
+
 ## Designed, not yet run
 
 | experiment | question → result → decision |
