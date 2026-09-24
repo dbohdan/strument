@@ -101,6 +101,21 @@ func repoRoot(t *testing.T) string {
 	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			// Hand out a real directory, never a symlink. os.Getwd honors
+			// an exported $PWD that names the same directory — fish
+			// exports the logical path, and the test process inherits it
+			// — so the working directory can arrive spelled through a
+			// symlink (checkout -> actual), and this up-walk finds go.mod
+			// on that spelling because os.Stat reads through symlinks.
+			// filepath.Walk Lstats its root and descends only a real
+			// directory: a symlinked root yields that one entry and
+			// visits nothing, tripping the citation floor as "found only
+			// 0 citations". The failure depends on the shell because not
+			// every one exports PWD; resolving here makes the root
+			// independent of both the shell and Getwd's answer.
+			if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+				dir = resolved
+			}
 			return dir
 		}
 		parent := filepath.Dir(dir)
@@ -108,5 +123,56 @@ func repoRoot(t *testing.T) string {
 			t.Fatal("no go.mod above the working directory")
 		}
 		dir = parent
+	}
+}
+
+// The symlinked-path failure above is invisible in a shell that does not
+// export PWD — bash didn't, fish does — so it is forced here rather than
+// left to the environment: chdir through the symlink and export the
+// logical PWD, which is the exact condition under which os.Getwd reports
+// the symlinked spelling.
+func TestRepoRootResolvesSymlinkedWorkingDirectory(t *testing.T) {
+	realRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(realRoot, "go.mod"), []byte("module example.test/resolved\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(realRoot, "internal", "fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "checkout")
+	if err := os.Symlink(realRoot, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	logicalWd := filepath.Join(link, "internal", "fixture")
+
+	t.Chdir(logicalWd)
+	t.Setenv("PWD", logicalWd)
+
+	// The precondition, so the test cannot pass vacuously if a future Go
+	// stops honoring PWD: the whole point is the logical spelling.
+	if d, err := os.Getwd(); err != nil || d != logicalWd {
+		t.Fatalf("Getwd = %q, err = %v; want the logical %q to exercise the symlink path", d, err, logicalWd)
+	}
+
+	root := repoRoot(t)
+	want, err := filepath.EvalSymlinks(realRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != want {
+		t.Errorf("repoRoot = %q, want the resolved %q", root, want)
+	}
+
+	// The property the resolution exists for: the walk must descend. A
+	// symlinked root visits exactly one entry — itself.
+	visited := 0
+	if err := filepath.Walk(root, func(string, os.FileInfo, error) error {
+		visited++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if visited < 3 { // the root, go.mod, internal/, internal/fixture/
+		t.Errorf("walk from repoRoot visited %d entries; a symlinked root visits exactly 1", visited)
 	}
 }
