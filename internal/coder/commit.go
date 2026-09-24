@@ -28,7 +28,12 @@ import (
 //
 // A no-op without a repo, with auto-commits off, or in dry-run — the edits are
 // still applied, and /undo still reaches them through the snapshot.
-func (c *Coder) commitTurn(message string) {
+//
+// The error is git refusing the commit — a pre-commit hook, most often — and
+// is returned as well as printed, because the commit tool has to tell the model
+// why. Returning nothing left it to infer "nothing to commit" from the hash
+// not moving, which is the one reading the hook's refusal rules out.
+func (c *Coder) commitTurn(message string) error {
 	// What is new since the last commit, not what the turn has touched.
 	//
 	// These were the same set while a turn made one commit. They stopped being
@@ -42,7 +47,7 @@ func (c *Coder) commitTurn(message string) {
 	// commit they never saw.
 	edited := c.committablePaths(c.turnSnap.paths())
 	if len(edited) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
-		return
+		return nil
 	}
 	slices.Sort(edited)
 
@@ -51,7 +56,7 @@ func (c *Coder) commitTurn(message string) {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.
 		c.Out.Errorf("Could not commit: %v", err)
-		return
+		return err
 	}
 	if !ok {
 		// The turn's writes since the last settle net out against what is
@@ -65,7 +70,7 @@ func (c *Coder) commitTurn(message string) {
 		} else {
 			c.Out.Toolf("The turn left the files as they were; nothing to commit.")
 		}
-		return
+		return nil
 	}
 
 	c.lastCommitHash = hash
@@ -74,6 +79,7 @@ func (c *Coder) commitTurn(message string) {
 	}
 	c.sessionCommits[hash] = true
 	c.Out.Toolf("Commit %s %s", hash, message)
+	return nil
 }
 
 // attributeShellCommits retro-attributes the commits a model-caused shell

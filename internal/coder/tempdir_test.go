@@ -134,7 +134,9 @@ func TestTurnCommitSkipsTempFiles(t *testing.T) {
 	c.turnSnap.record("in.go", snapEntry{}, "package in\n")
 	c.turnSnap.record(filepath.Join(t.TempDir(), "scratch.txt"), snapEntry{}, "scratch\n")
 
-	c.commitTurn("test: one repo file, one temp file")
+	if err := c.commitTurn("test: one repo file, one temp file"); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(repo.asked) != 1 || len(repo.asked[0]) != 1 || repo.asked[0][0] != "in.go" {
 		t.Errorf("git was asked to commit %v, want [in.go] — the temp path must be filtered", repo.asked)
@@ -172,7 +174,9 @@ func TestTurnCommitSkipsSymlinkEscapes(t *testing.T) {
 		t.Fatalf("the symlink target was not written: %q, %v", got, err)
 	}
 
-	c.commitTurn("test: skip symlink escape")
+	if err := c.commitTurn("test: skip symlink escape"); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(repo.asked) != 1 || len(repo.asked[0]) != 1 || repo.asked[0][0] != "in.go" {
 		t.Errorf("git was asked to commit %v, want [in.go] — the symlink target must be filtered", repo.asked)
@@ -191,7 +195,9 @@ func TestTurnCommitAnnouncesSkippedTempFiles(t *testing.T) {
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record(temp, snapEntry{}, "scratch\n")
 
-	c.commitTurn("test: only a temp file")
+	if err := c.commitTurn("test: only a temp file"); err != nil {
+		t.Fatal(err)
+	}
 
 	if c.lastCommitHash != "" {
 		t.Errorf("a temp-only batch produced commit %q", c.lastCommitHash)

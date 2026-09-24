@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -304,5 +305,68 @@ func TestSideInputBoundPrefersTheModelsOwnWindow(t *testing.T) {
 	}
 	if got := sideInputBound(nil); got != summaryFallbackInput {
 		t.Errorf("bound = %d for a nil model, want the %d fallback", got, summaryFallbackInput)
+	}
+}
+
+// A commit that git refuses — a pre-commit hook is the everyday case — is not
+// "nothing to commit". The commit tool inferred that from the hash not moving
+// and told the model "the files match what is already committed", while the
+// hook's reason went only to the screen; and settling cleared the turn's
+// pending writes anyway, so a retry was told nothing had been written and the
+// edits were never committed at all.
+func TestCommitToolReportsARefusedCommit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the hook is a shell script")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git unavailable: %v %s", err, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "t@example.com")
+	git("config", "user.name", "T")
+	git("config", "commit.gpgsign", "false")
+	if err := os.WriteFile(filepath.Join(dir, "base.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "base")
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho 'lint: trailing whitespace in a.go' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	c := toolCoder(t, dir)
+	c.Out = &captureOut{}
+	c.AutoCommits = true
+	repo, err := gitrepo.Discover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Repo = repo
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("one \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.turnSnap = newTurnSnapshot()
+	c.turnSnap.record("a.go", snapEntry{}, "one \n")
+
+	got := c.runCommitTool(commitArgs{subject: "add a"})
+	if strings.Contains(got, "match what is already committed") {
+		t.Errorf("result = %q; a refused commit was reported as having nothing to commit", got)
+	}
+	if !strings.Contains(got, "trailing whitespace") {
+		t.Errorf("result = %q, want the hook's reason, which is what the model can fix", got)
+	}
+
+	// The hook is satisfied; the same edits must still be there to commit.
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.runCommitTool(commitArgs{subject: "add a"}); !strings.HasPrefix(got, "Committed ") {
+		t.Errorf("retry = %q; the refused commit's edits were dropped from what is pending", got)
 	}
 }

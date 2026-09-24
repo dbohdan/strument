@@ -924,7 +924,12 @@ func (c *Coder) settleEdits(message string) {
 	if c.turnSnap.empty() {
 		return
 	}
-	c.commitTurn(message)
+	// A refused commit still closes the snapshot here. settleEdits runs at
+	// turn end and at an interrupt, and the push is /undo's boundary: keeping
+	// the writes pending would fold the next turn's into this one, and one
+	// /undo would take back two. commitTurn has already said why on screen;
+	// the commit tool, which can retry within the turn, does not come here.
+	_ = c.commitTurn(message)
 	c.pushTurnSnapshot()
 }
 

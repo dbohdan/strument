@@ -132,7 +132,14 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	}
 
 	before := c.lastCommitHash
-	c.settleEdits(args.message())
+	if err := c.commitTurn(args.message()); err != nil {
+		// The writes stay pending, unlike settleEdits: the model can fix what
+		// git objected to and call this again, and the commit has to find the
+		// same edits when it does.
+		return "The commit was refused, so nothing was committed. Your edits are still in the " +
+			"files and will be included when a commit succeeds. Git said:\n" + err.Error()
+	}
+	c.pushTurnSnapshot()
 	if c.lastCommitHash == before {
 		// commitTurn already told the user why. Say the same thing to the
 		// model rather than letting it believe a commit it can name happened.
