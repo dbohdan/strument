@@ -10,14 +10,19 @@ import (
 	"testing"
 	"time"
 
+	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/repomap"
 )
 
-// The run_code tool's tests. Monty's own behavior is pinned here at the level the
-// model sees — the returned value and the error text — because that is the
-// contract the tool description promises. The security claims (no filesystem,
-// no network) are tested, not assumed: each program below was verified to
-// fail, and stays red if a Monty upgrade ever makes it pass.
+// The run_code tool's tests. The interpreter's behavior is pinned here at the
+// level the model sees — the returned value and the error text — because that
+// is the contract the tool description promises. The security claims (no
+// filesystem, no network) are tested, not assumed: each program below was
+// verified to fail, and stays red if a goja upgrade ever makes it pass.
+
+func run(c *Coder, code string) string {
+	return c.runCode(context.Background(), codeCall{code: code})
+}
 
 func TestCodeArithmetic(t *testing.T) {
 	c, _ := observeEnv(t, nil)
@@ -27,63 +32,61 @@ func TestCodeArithmetic(t *testing.T) {
 	}{
 		{"1 + 2", "3"},
 		{"2.5 * 4", "10"},
-		{"round(3.14159, 2)", "3.14"},
-		{"sum(x * x for x in range(10))", "285"},
-		{"f'{42:08d}'", "00000042"},
-		{"'5'.zfill(3)", "005"},
-		{"import math\nmath.sqrt(1764)", "42"},
+		{"Math.round(3.14159 * 100) / 100", "3.14"},
+		{"[...Array(10).keys()].reduce((s, x) => s + x * x, 0)", "285"},
+		{"String(42).padStart(8, '0')", "00000042"},
+		{"Math.sqrt(1764)", "42"},
+		{"(0.1 + 0.2).toFixed(2)", "0.30"},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
-			got := c.runCode(context.Background(), codeCall{code: tc.code})
-			if got != tc.want {
+			if got := run(c, tc.code); got != tc.want {
 				t.Errorf("code %q: got %q, want %q", tc.code, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestCodePrintOutputIsDelivered pins the fix the CO smoke run caught: the
-// description says "use print() for intermediate values", most model programs
-// end in print(...) rather than a bare expression, and without a print
-// handler every such program returned "None" with its actual output dropped.
-// A print-driven program must see its output, printed section before the
-// final value; a bare-expression program is unchanged.
+// TestCodePrintOutputIsDelivered: most model programs end in console.log(...)
+// rather than a bare expression, and a program's printed output must reach the
+// model, printed section before the final value; a bare-expression program is
+// unchanged. The same fix was made for Monty's print(), whose missing handler
+// returned "None" for every print-driven program.
 func TestCodePrintOutputIsDelivered(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
-	if got := c.runCode(context.Background(), codeCall{code: "print(\"hello\")\nprint(\"world\")"}); got != "hello\nworld" {
-		t.Errorf("a print-driven program returned %q, want its printed output", got)
+	if got := run(c, "console.log(\"hello\")\nconsole.log(\"world\")"); got != "hello\nworld" {
+		t.Errorf("a console.log-driven program returned %q, want its printed output", got)
 	}
-	if got := c.runCode(context.Background(), codeCall{code: "x = 6\nprint(x)\nx * 7"}); got != "6\n42" {
-		t.Errorf("print plus a final value returned %q, want \"6\\n42\"", got)
+	if got := run(c, "const x = 6\nconsole.log(x)\nx * 7"); got != "6\n42" {
+		t.Errorf("console.log plus a final value returned %q, want \"6\\n42\"", got)
 	}
-	if got := c.runCode(context.Background(), codeCall{code: "1 + 2"}); got != "3" {
+	if got := run(c, "1 + 2"); got != "3" {
 		t.Errorf("a bare expression returned %q, want \"3\"", got)
 	}
-}
-
-// TestCodeRoundExists pins the probe result that decided the tool
-// description: round() is available. It is the single most likely call in
-// model-written number formatting, and its absence would have to be said so.
-func TestCodeRoundExists(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	got := c.runCode(context.Background(), codeCall{code: "round(3.7)"})
-	if got != "4" {
-		t.Errorf("round(3.7): got %q, want \"4\" — the tool description says round() is available", got)
+	// Objects print as JSON, Maps and Sets as what they hold, and several
+	// arguments on one line.
+	if got := run(c, `console.log("x", [1, 2], new Map([["k", 1]])); new Set([3])`); got != "x [1,2] {\"k\":1}\n[3]" {
+		t.Errorf("mixed console.log arguments returned %q", got)
+	}
+	if got := run(c, "let x"); got != "undefined" {
+		t.Errorf("a program with no value returned %q, want \"undefined\"", got)
 	}
 }
 
 // TestCodeInfiniteLoopTerminates is the duration limit's whole point: a
 // runaway loop ends on the limit rather than hanging the turn.
 func TestCodeInfiniteLoopTerminates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits out the time limit")
+	}
 	c, _ := observeEnv(t, nil)
 
 	start := time.Now()
-	got := c.runCode(context.Background(), codeCall{code: "while True: pass"})
+	got := run(c, "while (true) {}")
 	elapsed := time.Since(start)
 
-	if !strings.Contains(got, "failed") && !strings.Contains(got, "limit") {
-		t.Errorf("an infinite loop must return an error text, got: %q", got)
+	if !strings.Contains(got, "time limit") {
+		t.Errorf("an infinite loop must return the time-limit error, got: %q", got)
 	}
 	if elapsed > 30*time.Second {
 		t.Errorf("the duration limit did not fire; ran %v", elapsed)
@@ -91,25 +94,34 @@ func TestCodeInfiniteLoopTerminates(t *testing.T) {
 }
 
 // TestCodeMemoryBombTerminates is the memory limit: an allocation loop ends on
-// the limit rather than taking the process with it.
+// the limit rather than taking the process with it. goja has no memory limit
+// of its own; watchProgram's heap sampling is the one this pins.
 func TestCodeMemoryBombTerminates(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
-	got := c.runCode(context.Background(), codeCall{code: "x = []\nwhile True:\n    x = x + [0] * 1000"})
-	if !strings.Contains(got, "failed") && !strings.Contains(got, "limit") {
-		t.Errorf("a memory bomb must return an error text, got: %q", got)
+	got := run(c, "const xs = [];\nwhile (true) { xs.push(new Array(100000).fill(0)); }")
+	if !strings.Contains(got, "memory") && !strings.Contains(got, "time limit") {
+		t.Errorf("a memory bomb must end on a limit, got: %q", got)
 	}
 }
 
-// TestCodeUnsupportedSyntaxIsUsefulError is the contract the tool description
-// leans on: a wall returns Monty's own error, which names the construct, and
-// the turn survives it.
-func TestCodeUnsupportedSyntaxIsUsefulError(t *testing.T) {
+// TestCodeDeepRecursionIsAnError: recursion ends in an error the program's
+// author can read, not a crashed process.
+func TestCodeDeepRecursionIsAnError(t *testing.T) {
 	c, _ := observeEnv(t, nil)
+	got := run(c, "function f(n) { return f(n + 1) }\nf(0)")
+	if !strings.Contains(got, "The program failed") {
+		t.Errorf("unbounded recursion must fail, got: %q", got)
+	}
+}
 
-	got := c.runCode(context.Background(), codeCall{code: "match x:\n    case 1: pass"})
-	if !strings.Contains(got, "match") {
-		t.Errorf("a match statement must name itself in the error, got: %q", got)
+// TestCodeSyntaxErrorIsUseful: a syntax error names itself and the line, and
+// the turn survives it.
+func TestCodeSyntaxErrorIsUseful(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	got := run(c, "const a = 1;\nconst = 2;")
+	if !strings.Contains(got, "SyntaxError") {
+		t.Errorf("a syntax error must name itself, got: %q", got)
 	}
 }
 
@@ -118,95 +130,104 @@ func TestCodeUnsupportedSyntaxIsUsefulError(t *testing.T) {
 func TestCodeToolOfferedInAskMode(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 	c.OfferCode = true
-	c.editFormat = "ask"
-
-	found := false
-	for _, d := range c.toolDefs() {
-		if d.Name == toolRunCode {
-			found = true
+	for _, format := range []string{"ask", "tool"} {
+		c.editFormat = format
+		if !slices.ContainsFunc(c.toolDefs(), func(d llm.ToolDef) bool { return d.Name == toolRunCode }) {
+			t.Errorf("the run_code tool must be offered in %s mode", format)
 		}
-	}
-	if !found {
-		t.Error("the run_code tool must be offered in ask mode")
-	}
-
-	c.editFormat = "tool"
-	found = false
-	for _, d := range c.toolDefs() {
-		if d.Name == toolRunCode {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("the run_code tool must be offered in tool mode")
 	}
 }
 
-// TestCodeDescriptionNamesTheLimits checks the description stays honest about
-// the subset. A line that stops describing a real wall is a lie to the model;
-// each substring here corresponds to a probe in the tests below.
-func TestCodeDescriptionNamesTheLimits(t *testing.T) {
+// TestCodeDescriptionNamesTheHost checks the description stays honest about
+// what is missing. JavaScript is the whole language, so what it names is the
+// host, and each name here corresponds to a probe in TestCodeHasNoHost.
+func TestCodeDescriptionNamesTheHost(t *testing.T) {
 	desc := codeTool(InspectorTools()).Description
-	for _, want := range []string{"class", "with", "match", "math", "re", "datetime", "json"} {
+	for _, want := range []string{"goja", "not Node or a browser", "require", "fs", "process", "fetch", "bash tool", "console.log()"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
 		}
 	}
-}
-
-// TestCodeNoFilesystemAccess is the security claim, tested not assumed. Monty
-// routes the filesystem-reaching calls — os.listdir, Path.iterdir, open —
-// through the OsCallFunc this tool registers with codeOsCall, which refuses
-// them in words that name the substitute. If a Monty upgrade makes any of
-// these succeed, that upgrade must not ship.
-//
-// The refusal must arrive as an exception *inside* the program, with line
-// attribution — the wasm.go resumeWithError path. A harness-shaped flat line
-// ("but no handler configured") was the pre-fix failure mode, and one live
-// session met it verbatim, `OS call "Path.iterdir" but no handler configured`,
-// as the result of a program that was one wrong reach into a survey.
-func TestCodeNoFilesystemAccess(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-
-	for _, code := range []string{
-		"open('/etc/passwd')",
-		"import os\nos.getcwd()",
-		"import os\nos.listdir('/')",
-		"import os\nos.getenv('HOME')",
-		"import pathlib\npathlib.Path('/').exists()",
-	} {
-		t.Run(code, func(t *testing.T) {
-			got := c.runCode(context.Background(), codeCall{code: code})
-			if !strings.Contains(got, "The program failed") {
-				t.Errorf("filesystem access must fail and did not:\n%s", got)
-			}
-		})
-	}
-
-	// The OS-call channel's refusals are catchable and name the tools, which
-	// is the point of answering the channel rather than leaving it
-	// unconfigured.
-	got := c.runCode(context.Background(), codeCall{code: "try:\n    import os\n    os.listdir('/')\nexcept Exception as e:\n    print('caught:', 'glob' in str(e))\n"})
-	if !strings.Contains(got, "caught: True") {
-		t.Errorf("an os.listdir refusal must be catchable and name a substitute:\n%s", got)
+	for _, gone := range []string{"Python", "Monty", "print()"} {
+		if strings.Contains(desc, gone) {
+			t.Errorf("the description still says %q:\n%s", gone, desc)
+		}
 	}
 }
 
-// TestCodeNoNetworkAccess: the same claim for the network. There is no socket
-// module and no OsCallFunc to route anything through.
-func TestCodeNoNetworkAccess(t *testing.T) {
+// TestCodeHasNoHost is the security claim, tested not assumed: no filesystem,
+// no processes, no network, no timers. goja provides none of them, and a reach
+// for any is a ReferenceError the hint then answers. If an upgrade makes any of
+// these defined, that upgrade must not ship without a look.
+func TestCodeHasNoHost(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
 	for _, code := range []string{
-		"import socket\nsocket.socket()",
-		"import urllib.request\nurllib.request.urlopen('http://localhost:1')",
+		`require("fs")`,
+		`fs.readFileSync("/etc/passwd")`,
+		`process.cwd()`,
+		`process.env.HOME`,
+		`fetch("http://localhost:1")`,
+		`new XMLHttpRequest()`,
+		`setTimeout(() => 1, 0)`,
+		`Deno.readTextFile("/etc/passwd")`,
+		`import fs from "fs"`,
+		`import("fs")`,
 	} {
 		t.Run(code, func(t *testing.T) {
-			got := c.runCode(context.Background(), codeCall{code: code})
-			if !strings.Contains(got, "The program failed") {
-				t.Errorf("network access must fail and did not:\n%s", got)
+			if got := run(c, code); !strings.Contains(got, "The program failed") {
+				t.Errorf("host access must fail and did not:\n%s", got)
 			}
 		})
+	}
+}
+
+// TestCodeHostHintRidesTheRightError checks the error-channel hint lands on the
+// wrong-reach failures and on nothing else: a reach for Node or the browser
+// gets the substitutes, while a wall the model could not have avoided — a
+// typo'd name, a syntax error — is returned bare. The hint is model-facing
+// text; on the wrong failure it would be noise on every legitimate retry.
+func TestCodeHostHintRidesTheRightError(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	const hint = "This is not Node or a browser"
+
+	for _, code := range []string{`const fs = require("fs")`, `process.cwd()`, `import fs from "fs"`, `fetch("x")`} {
+		t.Run(code, func(t *testing.T) {
+			if got := run(c, code); !strings.Contains(got, hint) {
+				t.Errorf("the hint must ride the wrong-reach failure:\n%s", got)
+			}
+		})
+	}
+	for _, code := range []string{"undefinedName + 1", "const = 1", "null.x"} {
+		t.Run(code, func(t *testing.T) {
+			if got := run(c, code); strings.Contains(got, hint) {
+				t.Errorf("the hint must not ride an unrelated failure:\n%s", got)
+			}
+		})
+	}
+	// Python's two habits get their own answers.
+	if got := run(c, "print(1)"); !strings.Contains(got, "console.log()") {
+		t.Errorf("print() must be answered with console.log:\n%s", got)
+	}
+	if got := run(c, `grep(pattern="x")`); !strings.Contains(got, "options object") {
+		t.Errorf("a keyword-argument call must be answered with the options object:\n%s", got)
+	}
+}
+
+// TestCodeErrorNamesTheLine: the error carries the line it points at — what a
+// traceback would have shown — and not the Go closure goja names for a bridged
+// function.
+func TestCodeErrorNamesTheLine(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	if got := run(c, "const a = 1;\nundefinedName + 1"); !strings.Contains(got, "line 2: undefinedName + 1") {
+		t.Errorf("the error must quote the failing line:\n%s", got)
+	}
+	got := run(c, `read({path: "missing.txt"})`)
+	if !strings.Contains(got, "Could not read") {
+		t.Errorf("a bridged failure must carry the tool's sentence:\n%s", got)
+	}
+	if strings.Contains(got, "(native)") || strings.Contains(got, "runCode") {
+		t.Errorf("a Go frame leaked into the error:\n%s", got)
 	}
 }
 
@@ -218,21 +239,16 @@ func TestCodeBridgeReadReturnsFileContents(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
 		"a.go": "package a\n\nfunc F() {}\n",
 	})
-
-	got := c.runCode(context.Background(), codeCall{
-		code: `read(path="a.go")`,
-	})
-	if !strings.Contains(got, "package a") {
+	if got := run(c, `read({path: "a.go"})`); !strings.Contains(got, "package a") {
 		t.Errorf("a bridged read must return the file's contents, got:\n%s", got)
 	}
 }
 
 // TestCodeBridgeGrepFilterEndToEnd is the phenomenon the bridge exists for:
-// search inside the program, filter the results in Python, return the
-// computed answer — one round trip instead of two. A tool result crosses the
-// boundary as the same text the model would see, so the program parses it;
-// that coarseness is the design (a bridged call is a tool call, not a
-// per-element helper).
+// search inside the program, filter the results, return the computed answer —
+// one round trip instead of two. A tool result crosses the boundary as the
+// same text the model would see, so the program parses it; that coarseness is
+// the design (a bridged call is a tool call, not a per-element helper).
 func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
 		"a.go":  "package a\n\nfunc Target() {}\n",
@@ -240,24 +256,22 @@ func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
 		"c.txt": "Target here too\n",
 	})
 
-	got := c.runCode(context.Background(), codeCall{
-		code: `out = grep(pattern="Target", mode="files")
-lines = [l for l in out.splitlines() if l.endswith(".go")]
-(lines, "c.txt" in lines)`,
-	})
+	got := run(c, `const out = grep({pattern: "Target", mode: "files"});
+const lines = out.split("\n").filter(l => l.endsWith(".go"));
+[lines, lines.includes("c.txt")]`)
 	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"b.go"`) {
 		t.Errorf("expected both .go files in the filtered result, got:\n%s", got)
 	}
 	if !strings.Contains(got, "false") {
-		t.Errorf("the Python filter must have excluded c.txt, got:\n%s", got)
+		t.Errorf("the filter must have excluded c.txt, got:\n%s", got)
 	}
 }
 
 // TestCodeGlobReturnsData pins the fix for the incident this shape exists for:
-// a program calling glob() gets the paths as a list, not the tool's prose. The
-// live failure was sorted() over the prose — which iterates its characters —
-// turning one call into 49 junk tool calls under the cap. A list cannot be
-// mistaken for prose, and an empty match is an empty list, a value the
+// a program calling glob() gets the paths as an array, not the tool's prose.
+// The live failure was sorting the prose — which sorts its characters —
+// turning one call into 49 junk tool calls under the cap. An array cannot be
+// mistaken for prose, and an empty match is an empty array, a value the
 // program filters on, not an error.
 func TestCodeGlobReturnsData(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
@@ -266,73 +280,63 @@ func TestCodeGlobReturnsData(t *testing.T) {
 		"sub/deep.txt": "x\n",
 	})
 
-	got := c.runCode(context.Background(), codeCall{code: `glob("*.go")`})
-	if !strings.Contains(got, `["a.go"]`) {
-		t.Errorf("glob must return the paths as a JSON list, got:\n%s", got)
+	if got := run(c, `glob("*.go")`); !strings.Contains(got, `["a.go"]`) {
+		t.Errorf("glob must return the paths as a JSON array, got:\n%s", got)
 	}
-
-	got = c.runCode(context.Background(), codeCall{code: `[p for p in glob("**/*.go")]`})
+	got := run(c, `glob({pattern: "**/*.go"}).map(p => p)`)
 	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"sub/b.go"`) {
 		t.Errorf("glob must return every matching path, got:\n%s", got)
 	}
-
-	// The empty result is a value, not a failure.
-	got = c.runCode(context.Background(), codeCall{code: `glob("*.rs")`})
-	if strings.TrimSpace(got) != `[]` {
-		t.Errorf("an empty glob must be an empty list, got:\n%s", got)
+	if got := run(c, `glob("*.rs")`); strings.TrimSpace(got) != `[]` {
+		t.Errorf("an empty glob must be an empty array, got:\n%s", got)
 	}
-
 	// The failure mode the shape removed, pinned as the program that once
-	// mangled it: sorting a glob result yields paths, not characters.
-	got = c.runCode(context.Background(), codeCall{code: `sorted(glob("**/*.go"))`})
-	if strings.Contains(got, `"a.go"`) && !strings.Contains(got, `"sub/b.go"`) {
+	// mangled it: sorting a glob result sorts paths, not characters.
+	got = run(c, `glob("**/*.go").sort()`)
+	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"sub/b.go"`) {
 		t.Errorf("sorting the glob result must sort paths, got:\n%s", got)
 	}
 }
 
-// TestCodeLSReturnsData covers the data shape's other half: entries as dicts,
-// the is_dir flag a program needs to walk a tree, and link only on symlinks —
-// the same three facts the tool's prose renders, in the shape a program
-// computes over. The temp-directory exemption is asserted too, because it is
-// why the function exists at all: /tmp clones were what the misbehaving
+// TestCodeLSReturnsData covers the data shape's other half: entries as
+// objects, the is_dir flag a program needs to walk a tree, and link only on
+// symlinks — the same three facts the tool's prose renders, in the shape a
+// program computes over. The temp-directory exemption is asserted too, because
+// it is why the function exists at all: /tmp clones were what the misbehaving
 // program was actually trying to enumerate.
 func TestCodeLSReturnsData(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
 
-	entries := c.runCode(context.Background(), codeCall{code: `ls()`})
+	entries := run(c, `ls()`)
 	if !strings.Contains(entries, `"path":"a.go"`) || !strings.Contains(entries, `"is_dir":false`) {
-		t.Errorf("ls must return entries as dicts, got:\n%s", entries)
+		t.Errorf("ls must return entries as objects, got:\n%s", entries)
 	}
 
-	// A directory under the standard temp directory is reachable, as the tool
-	// is: the workspace root stays behind Files, and the exemption is what
-	// makes a /tmp checkout enumerable from a program.
 	temp := t.TempDir()
 	if err := os.WriteFile(filepath.Join(temp, "note.txt"), []byte("x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	entries = c.runCode(context.Background(), codeCall{code: fmt.Sprintf("ls(path=%q)", temp)})
+	entries = run(c, fmt.Sprintf("ls({path: %q})", temp))
 	if !strings.Contains(entries, "note.txt") || !strings.Contains(entries, `"is_dir":false`) {
 		t.Errorf("ls must reach a temp directory like the tool does, got:\n%s", entries)
 	}
 
 	// A missing directory is a failure the program can catch.
-	got := c.runCode(context.Background(), codeCall{code: "try:\n    ls(path=\"missing\")\nexcept Exception as e:\n    print(\"caught\")\n"})
+	got := run(c, "try { ls({path: \"missing\"}) } catch (e) { console.log(\"caught\") }")
 	if !strings.Contains(got, "caught") {
-		t.Errorf("a failed ls must raise inside the program, got:\n%s", got)
+		t.Errorf("a failed ls must throw inside the program, got:\n%s", got)
 	}
 }
 
 // TestCodeGlobLSOverrideTheToolNames: inside a program the data shape answers
 // the same names the tools answer, so a program written against the tool
-// description's prose — glob(pattern="...") — gets data, not the tool's
-// report about the search.
+// description — glob({pattern: "..."}) — gets data, not the tool's report
+// about the search.
 func TestCodeGlobLSOverrideTheToolNames(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"a.go": "package a\n"})
 
-	got := c.runCode(context.Background(), codeCall{code: `glob(pattern="*.go")`})
-	if !strings.Contains(got, `["a.go"]`) {
-		t.Errorf("glob(pattern=...) must return data like glob(...), got:\n%s", got)
+	if got := run(c, `glob({pattern: "*.go"})`); !strings.Contains(got, `["a.go"]`) {
+		t.Errorf("glob({pattern}) must return data like glob(...), got:\n%s", got)
 	}
 	if joined := strings.Join(out.lines, "\n"); strings.Contains(joined, "Matched") {
 		t.Errorf("the data shape must not run the tool's outcome line, got:\n%s", joined)
@@ -341,57 +345,40 @@ func TestCodeGlobLSOverrideTheToolNames(t *testing.T) {
 
 // TestCodeBridgeGrepStaysProse pins the boundary of the shape change: only
 // glob and ls return data; grep and read still cross as the same text a
-// direct call would produce, which the bridge's contract comment still
-// claims and the model may still parse.
+// direct call would produce.
 func TestCodeBridgeGrepStaysProse(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.go": "// Target\n"})
-
-	got := c.runCode(context.Background(), codeCall{code: `grep(pattern="Target", glob="a.go")`})
-	if !strings.Contains(got, "1 match in 1 file for Target") {
+	if got := run(c, `grep({pattern: "Target", glob: "a.go"})`); !strings.Contains(got, "1 match in 1 file for Target") {
 		t.Errorf("grep must still return the tool's prose shape, got:\n%s", got)
 	}
 }
 
 // TestCodeBridgeForbiddenToolsFail is the fail-closed claim, one test per
-// forbidden tool. Two layers both hold: a mutating tool is not registered
-// with Monty, so the interpreter itself raises NameError — nothing this side
-// can answer — and even a name that were registered cannot pass the
-// allowlist check in bridgeCall. The plan's "unknown-function error" is the
-// NameError shape; the point is that the call never reaches a mutating tool.
+// forbidden tool. Two layers both hold: a mutating tool is not registered in
+// the interpreter, so the program itself raises a ReferenceError — nothing
+// this side can answer — and even a name that were registered cannot pass the
+// allowlist check in bridgeCall.
 func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
 	for _, name := range []string{"bash", "edit", "write", "commit", "check"} {
 		t.Run(name, func(t *testing.T) {
-			code := name + `(command="rm -rf /")`
-			if name == "check" {
-				code = `check(name="build")`
-			}
-			got := c.runCode(context.Background(), codeCall{code: code})
-			if !strings.Contains(got, "The program failed") {
-				t.Errorf("calling %s from a program must fail and did not:\n%s", name, got)
-			}
-			if !strings.Contains(got, "not defined") {
-				t.Errorf("%s is not registered with Monty, so the error must be a NameError, got:\n%s", name, got)
+			got := run(c, name+`({command: "rm -rf /"})`)
+			if !strings.Contains(got, "The program failed") || !strings.Contains(got, "not defined") {
+				t.Errorf("calling %s from a program must be a ReferenceError, got:\n%s", name, got)
 			}
 		})
 	}
 }
 
 // TestCodeBridgeCapFires: one program cannot issue unbounded work. The cap is
-// maxBridgedCalls; a program that loops past it is stopped. Uncaught on
-// purpose: since tool-call errors became resumable (raised at the call site),
-// a try/except can swallow the cap error and keep calling — that is correct
-// Python semantics, and the 5s duration limit bounds it — so the cap's own
-// error is pinned in its uncaught form, where it stops the program.
+// maxBridgedCalls; a program that loops past it is stopped, at the line that
+// made the call. Uncaught on purpose: a try/catch can swallow the cap error
+// and keep calling — correct JavaScript, and the time limit bounds it — so the
+// cap's own error is pinned in its uncaught form, where it stops the program.
 func TestCodeBridgeCapFires(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"f.txt": "x\n"})
-
-	// One over the cap. If the cap is maxBridgedCalls, the loop fails on the
-	// call after the last allowed one.
-	code := "while True:\n    ls()"
-	got := c.runCode(context.Background(), codeCall{code: code})
-
+	got := run(c, "while (true) {\n  ls()\n}")
 	if !strings.Contains(got, "more than") || !strings.Contains(got, "line 2") {
 		t.Errorf("the bridged-call cap must fire with line attribution, got:\n%s", got)
 	}
@@ -406,12 +393,9 @@ func TestCodeBridgeCapFires(t *testing.T) {
 func TestCodeBridgeCallsAreNotAnnounced(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
 
-	c.runCode(context.Background(), codeCall{code: `ls()`})
+	run(c, `ls()`)
 
 	joined := strings.Join(out.lines, "\n")
-	// "‹run_code› ls()" is the program being announced — one line, no closing
-	// marker, thinking's one-line shape. The outcome line names the tools the
-	// program actually called, collected at the bridge.
 	if !strings.Contains(joined, "‹run_code› ls()\n") {
 		t.Errorf("the program must be announced, got:\n%s", joined)
 	}
@@ -425,17 +409,15 @@ func TestCodeBridgeCallsAreNotAnnounced(t *testing.T) {
 
 // TestCodeProgramShapes pins the two renderings of one run_code call, the
 // ask_user_question pattern: a shaped block for the screen (one line stays
-// one line; a multi-line program is bracketed, its lines preserved — the
-// flattening this replaced made Python's indentation-meaningful source
-// unreadable) and one prose line for the transcript.
+// one line; a multi-line program is bracketed, its lines preserved) and one
+// prose line for the transcript.
 func TestCodeProgramShapes(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
 
-	// Multi-line program, no tool calls: pure computation is said as such.
-	c.runCode(context.Background(), codeCall{code: "x = 40\ny = 2\nx + y"})
+	run(c, "const x = 40\nconst y = 2\nx + y")
 
 	joined := strings.Join(out.lines, "\n")
-	if !strings.Contains(joined, "‹run_code›\nx = 40\ny = 2\nx + y\n‹/›") {
+	if !strings.Contains(joined, "‹run_code›\nconst x = 40\nconst y = 2\nx + y\n‹/›") {
 		t.Errorf("a multi-line program must render as a bracketed block with its lines preserved, got:\n%s", joined)
 	}
 	if !strings.Contains(joined, "Ran 3 lines of code.") {
@@ -449,15 +431,13 @@ func TestCodeProgramShapes(t *testing.T) {
 func TestCodeSummaryAfterFailure(t *testing.T) {
 	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
 
-	c.runCode(context.Background(), codeCall{code: "a = read(path='f.txt')\nb = read(path='missing')\nb"})
+	run(c, "const a = read({path: 'f.txt'})\nconst b = read({path: 'missing'})\nb")
 
 	joined := strings.Join(out.lines, "\n")
 	if !strings.Contains(joined, "Ran 3 lines of code calling read.") {
 		t.Errorf("the outcome line must survive a failed program, got:\n%s", joined)
 	}
-	// The error text travels in the tool result (to the model), not the
-	// user-facing lines; runCode's return is what carries it.
-	if got := c.runCode(context.Background(), codeCall{code: "b = read(path='missing')\nb"}); !strings.Contains(got, "The program failed:") {
+	if got := run(c, "read({path: 'missing'})"); !strings.Contains(got, "The program failed:") {
 		t.Errorf("the error text must still reach the model, got:\n%s", got)
 	}
 }
@@ -468,10 +448,10 @@ func TestCodeSummaryAfterFailure(t *testing.T) {
 // the note, and — in the same table — the shapes it must stay quiet for.
 //
 // Both failures come from the same fact: only the final value reaches the
-// model. A loop of reads that keeps nothing returns the bare word "None" after
+// model. A loop of reads that keeps nothing returns an empty value after
 // reading four files successfully, which one model read as "the files do not
-// exist" before going to look for them again. Two calls on two lines return the
-// second one's result and drop the first, which is quieter and worse: the
+// exist" before going to look for them again. Two calls on two lines return
+// the second one's result and drop the first, which is quieter and worse: the
 // screen shows both searches happening, so neither the model nor the user can
 // see that half the evidence never arrived.
 //
@@ -489,45 +469,20 @@ func TestCodeDiscardedResultsAreNamed(t *testing.T) {
 		name, code string
 		wantNote   bool
 	}{
-		{
-			name:     "loop keeps nothing",
-			code:     "for p in [\"a.py\", \"b.py\"]:\n    read(path=p)",
-			wantNote: true,
-		},
-		{
-			name:     "two bare calls, first dropped",
-			code:     "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")",
-			wantNote: true,
-		},
-		{
-			name:     "results collected",
-			code:     "hits = {}\nfor p in [\"a.py\", \"b.py\"]:\n    hits[p] = read(path=p)\nhits",
-			wantNote: false,
-		},
-		{
-			name:     "results printed",
-			code:     "for p in [\"a.py\", \"b.py\"]:\n    print(read(path=p))",
-			wantNote: false,
-		},
-		{
-			name:     "one call, returned",
-			code:     "read(path=\"a.py\")",
-			wantNote: false,
-		},
-		{
-			name:     "no calls at all",
-			code:     "x = 1",
-			wantNote: false,
-		},
+		{"loop keeps nothing", `["a.py", "b.py"].forEach(p => read({path: p}))`, true},
+		{"for loop keeps only the last", `for (const p of ["a.py", "b.py"]) { read({path: p}) }`, true},
+		{"two bare calls, first dropped", "grep({pattern: \"NEEDLE\", glob: \"a.py\"})\ngrep({pattern: \"NEEDLE\", glob: \"b.py\"})", true},
+		{"results collected", `const hits = {}; for (const p of ["a.py", "b.py"]) { hits[p] = read({path: p}) } hits`, false},
+		{"results printed", `for (const p of ["a.py", "b.py"]) { console.log(read({path: p})) }`, false},
+		{"one call, returned", `read({path: "a.py"})`, false},
+		{"no calls at all", "const x = 1", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := observeEnv(t, files)
-			got := c.runCode(context.Background(), codeCall{code: tc.code})
-			noted := strings.Contains(got, "comes back to you")
-			if noted != tc.wantNote {
+			got := run(c, tc.code)
+			if noted := strings.Contains(got, "comes back to you"); noted != tc.wantNote {
 				t.Errorf("note present = %v, want %v:\n%s", noted, tc.wantNote, got)
 			}
-			// The value itself is never replaced by the note.
 			if tc.wantNote && strings.HasPrefix(tc.code, "grep") && !strings.Contains(got, "b.py") {
 				t.Errorf("the note swallowed the value it annotates:\n%s", got)
 			}
@@ -540,84 +495,19 @@ func TestCodeDiscardedResultsAreNamed(t *testing.T) {
 func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.py": "x = 1  # NEEDLE\n", "b.py": "y = 2  # NEEDLE\n"})
 
-	none := c.runCode(context.Background(), codeCall{code: "for p in [\"a.py\", \"b.py\"]:\n    read(path=p)"})
-	if !strings.Contains(none, "returned none of their results") {
-		t.Errorf("a program that kept nothing must be told so:\n%s", none)
+	// forEach is the JavaScript loop that keeps nothing: a for loop's value is
+	// its last statement's, so it keeps the last call — the other shape.
+	none := run(c, `["a.py", "b.py"].forEach(p => read({path: p}))`)
+	if !strings.Contains(none, "returned none of their results") || !strings.Contains(none, "2 calls") {
+		t.Errorf("a program that kept nothing must be told so, with the count:\n%s", none)
 	}
-	if !strings.Contains(none, "2 calls") {
-		t.Errorf("the note must say how many calls were made:\n%s", none)
+	if !strings.Contains(none, "console.log()") || strings.Contains(none, "print()") {
+		t.Errorf("the note must name the language's printing:\n%s", none)
 	}
 
-	last := c.runCode(context.Background(), codeCall{code: "grep(pattern=\"NEEDLE\", glob=\"a.py\")\ngrep(pattern=\"NEEDLE\", glob=\"b.py\")"})
+	last := run(c, "grep({pattern: \"NEEDLE\", glob: \"a.py\"})\ngrep({pattern: \"NEEDLE\", glob: \"b.py\"})")
 	if !strings.Contains(last, "That is the last call's result") {
 		t.Errorf("a program that returned only its last call must be told so:\n%s", last)
-	}
-}
-
-// The description's module list is a claim about the vendored monty.wasm, and
-// it has been wrong: it named math/re/datetime/json only, while itertools and
-// collections work and os/sys/pathlib import but reach nothing — which is what
-// invites a model to probe os for a filesystem it will not find. Probed here
-// against the interpreter itself rather than asserted, so the list cannot drift
-// from what a program can actually import.
-func TestCodeDescriptionMatchesTheModulesThatWork(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools()).Description
-
-	for _, m := range []string{"math", "re", "datetime", "json", "itertools", "collections"} {
-		if got := c.runCode(context.Background(), codeCall{code: "import " + m + "\n1"}); got != "1" {
-			t.Errorf("the description promises %q, which does not import: %s", m, got)
-		}
-		if !strings.Contains(desc, m) {
-			t.Errorf("module %q works and the description does not name it", m)
-		}
-	}
-	// The other direction: a module the description tells the model not to
-	// reach for must really be missing, or the advice is a lie that costs a
-	// retry. functools is representative of the batch that is absent.
-	if got := c.runCode(context.Background(), codeCall{code: "import functools\n1"}); !strings.Contains(got, "ModuleNotFoundError") {
-		t.Errorf("functools now imports; the description's list needs re-probing: %s", got)
-	}
-	// os/sys/pathlib import and reach nothing, and the description says exactly
-	// that rather than claiming they are unavailable.
-	if got := c.runCode(context.Background(), codeCall{code: "import os\n1"}); got != "1" {
-		t.Errorf("os no longer imports; the description's wording needs revisiting: %s", got)
-	}
-	for _, want := range []string{"os, sys and pathlib import but reach no filesystem", "bash tool"} {
-		if !strings.Contains(desc, want) {
-			t.Errorf("the description must say %q:\n%s", want, desc)
-		}
-	}
-}
-
-// The constructs the description calls unavailable, probed like the modules
-// above. The list said `with` was missing for as long as it has existed, and
-// the vendored Monty runs it — a claim no test held it to. Each construct
-// named as missing must fail, and with, which is not named, must work.
-func TestCodeDescriptionMatchesTheConstructsThatFail(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	desc := codeTool(InspectorTools()).Description
-
-	for _, tc := range []struct{ named, code string }{
-		{"match", "match 3:\n    case 3:\n        r = 1\nr"},
-		{"del", "x = [1]\ndel x[0]\nx"},
-		{"eval/exec", "eval('1')"},
-		{"eval/exec", "exec('a = 1')"},
-	} {
-		if !strings.Contains(desc, tc.named) {
-			t.Errorf("the probe for %q no longer matches the description", tc.named)
-		}
-		if got := c.runCode(context.Background(), codeCall{code: tc.code}); !strings.Contains(got, "The program failed") {
-			t.Errorf("the description calls %s unavailable, and %q ran: %s", tc.named, tc.code, got)
-		}
-	}
-	with := "class C:\n    def __enter__(self): return 1\n    def __exit__(self, *a): return None\n" +
-		"with C() as x:\n    y = x\ny"
-	if got := c.runCode(context.Background(), codeCall{code: with}); got != "1" {
-		t.Errorf("with no longer works; the description may name it again: %s", got)
-	}
-	if strings.Contains(desc, "with,") {
-		t.Error("the description calls with unavailable, and it works")
 	}
 }
 
@@ -625,68 +515,33 @@ func TestCodeDescriptionMatchesTheConstructsThatFail(t *testing.T) {
 // sides: inside a program glob and ls return data (the bridge dispatches them
 // before Inspector.Run), and the description the model reads says so, because
 // a program written expecting the tool's prose — the failure that motivated
-// the change — must meet a list, and a model reading the description must be
-// told the names are overridden. The summary strings, the registered params,
-// and the description sentence all read from codeDataFuncs.
+// the change — must meet an array, and a model reading the description must be
+// told the names are overridden.
 func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
 	desc := codeTool(InspectorTools()).Description
 
-	// The description states the override and the return shapes.
 	if !strings.Contains(desc, "return data rather than the tools' prose") {
 		t.Errorf("the description must state the override:\n%s", desc)
 	}
-	for _, want := range []string{"glob(pattern)", "list of strings", "{path, is_dir, link}"} {
+	for _, want := range []string{"glob({pattern})", "array of strings", "{path, is_dir, link}"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must name the data shape (%q):\n%s", want, desc)
 		}
 	}
-
-	// And the shapes hold: a list, not a dict whose keys a for-loop would
-	// iterate; entries, not a report about them.
 	for _, tc := range []struct{ code, want string }{
 		{`glob("*.go")`, `["a.go"]`},
-		{`[e["path"] for e in ls() if e["is_dir"]]`, `[]`},
+		{`ls().filter(e => e.is_dir).map(e => e.path)`, `[]`},
 	} {
-		if got := c.runCode(context.Background(), codeCall{code: tc.code}); !strings.Contains(got, tc.want) {
+		if got := run(c, tc.code); !strings.Contains(got, tc.want) {
 			t.Errorf("%s must return %s-shaped data, got:\n%s", tc.code, tc.want, got)
 		}
 	}
 }
 
-// TestCodeModuleHintRidesTheRightError checks the error-channel hint lands on
-// the wrong-reach failures and on nothing else: the subprocess/os reaches get
-// the substitute list, while a wall the model could not have avoided — a
-// missing module that is not the stdlib trap, a syntax error — is returned
-// bare. The hint is model-facing text; on the wrong failure it would be noise
-// on every legitimate retry.
-func TestCodeModuleHintRidesTheRightError(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-
-	// os.listdir and open go through the OS-call channel, whose refusal names
-	// the substitutes itself — the codeOsCall handler — so the module hint is
-	// not stacked on top of an error that already says what to do.
-	for _, code := range []string{"import subprocess\n1", "import glob\n1"} {
-		t.Run(code, func(t *testing.T) {
-			got := c.runCode(context.Background(), codeCall{code: code})
-			if !strings.Contains(got, "no subprocess, no filesystem") {
-				t.Errorf("the hint must ride the wrong-reach failure:\n%s", got)
-			}
-		})
-	}
-	for _, code := range []string{"import math\nmath.teeth(1)", "x = = 1"} {
-		t.Run(code, func(t *testing.T) {
-			got := c.runCode(context.Background(), codeCall{code: code})
-			if strings.Contains(got, "no subprocess, no filesystem") {
-				t.Errorf("the hint must not ride an unrelated failure:\n%s", got)
-			}
-		})
-	}
-}
-
 // symbol is offered exactly where a repo map is, and everything that tells the
 // model about the run_code bridge must follow that condition — the schema's
-// callable list, the Monty registration behind it, and the prompt bullet.
+// callable list, the registration behind it, and the prompt bullet.
 //
 // The asymmetry this fixes ran the unusual way round. internal/prompts leaves
 // symbol out of the run_code bullet deliberately, on the rule that prose must
@@ -711,7 +566,6 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 		t.Errorf("with no repo map the callable list must not offer symbol, got %v", got)
 	}
 
-	// The description the model reads follows, in both directions.
 	if desc := codeTool(withMap.codeCallableTools()).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
@@ -719,8 +573,6 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
-	// And the prompt bullet, which used to name four tools whatever the session
-	// had.
 	if got := withMap.codeToolsText(); !strings.Contains(got, "glob, ls, and symbol") {
 		t.Errorf("the bullet must name symbol where it works:\n%s", got)
 	}
@@ -729,13 +581,28 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 
 	// Registration follows too: a program calling symbol without a repo map
-	// meets a NameError, the fail-closed path, rather than a tool that answers
-	// only to say it cannot.
-	got := without.runCode(context.Background(), codeCall{code: `symbol(name="Target")`})
-	if !strings.Contains(got, "not defined") {
+	// meets a ReferenceError, the fail-closed path, rather than a tool that
+	// answers only to say it cannot.
+	if got := run(without, `symbol({name: "Target"})`); !strings.Contains(got, "not defined") {
 		t.Errorf("symbol must be unregistered without a repo map, got:\n%s", got)
 	}
-	if got := withMap.runCode(context.Background(), codeCall{code: `symbol(name="Target")`}); strings.Contains(got, "not defined") {
+	if got := run(withMap, `symbol({name: "Target"})`); strings.Contains(got, "not defined") {
 		t.Errorf("symbol must be registered with a repo map, got:\n%s", got)
+	}
+}
+
+// TestCodeStopsOnTurnCancellation: a Ctrl-C during a program stops it, as it
+// stops a shell command, rather than waiting out the time limit.
+func TestCodeStopsOnTurnCancellation(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(100*time.Millisecond, cancel)
+	start := time.Now()
+	got := c.runCode(ctx, codeCall{code: "while (true) {}"})
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("a cancelled turn waited %v for the program", elapsed)
+	}
+	if !strings.Contains(got, "interrupted") {
+		t.Errorf("a cancelled program must say so, got: %q", got)
 	}
 }

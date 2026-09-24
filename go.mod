@@ -8,11 +8,11 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/alecthomas/kong v1.15.0
 	github.com/creack/pty v1.1.24
+	github.com/dop251/goja v0.0.0-20260917113740-793a2a65c13b
 	github.com/gofrs/flock v0.13.0
 	github.com/landlock-lsm/go-landlock v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/odvcencio/gotreesitter v0.51.0
-	github.com/tetratelabs/wazero v1.11.0
 	go.starlark.net v0.0.0-20260708150628-5395d018f003
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
@@ -23,7 +23,9 @@ require (
 require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
 	github.com/andybalholm/cascadia v1.3.4 // indirect
-	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect

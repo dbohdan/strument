@@ -36,9 +36,8 @@ const (
 	// toolSkill loads one of the user's skills. Its catalog lives in the tool
 	// description rather than the prompt — see skills.go.
 	toolSkill = "skill"
-	// toolRunCode runs a short Python program in Monty, the restricted interpreter
-	// in internal/monty — see codetool.go. Computing mutates nothing, so it is
-	// offered in ask mode too.
+	// toolRunCode runs a short JavaScript program in goja — see codetool.go.
+	// Computing mutates nothing, so it is offered in ask mode too.
 	toolRunCode = "run_code"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
@@ -1014,27 +1013,27 @@ func (c *Coder) runObservationRedirect(tc llm.ToolCall) (string, []llm.ImageSour
 	}
 	return fmt.Sprintf("%q is not offered directly in this session: all file observation "+
 		"goes through the run_code tool. Call run_code with a program that calls %s(%s) — for "+
-		"example:\n\n```python\n%s\n```\n\nThe result of the call comes back to the "+
+		"example:\n\n```javascript\n%s\n```\n\nThe result of the call comes back to the "+
 		"program; return what you need from the program's final value.",
 		tc.Name, tc.Name, quoteToolArg(strings.TrimSpace(tc.Arguments)),
 		observationExample(tc.Name)), nil
 }
 
 // observationExample renders one bridged call for the redirect text, in the
-// dialect the program actually speaks: the result is assigned, because an
-// unassigned call's value is discarded and the model would see only "None".
+// dialect the program actually speaks: the result is assigned and ended on,
+// because only the program's last value comes back.
 func observationExample(name string) string {
 	switch name {
 	case toolRead:
-		return "text = read(path=\"a.go\", limit=20)\ntext"
+		return "const text = read({path: \"a.go\", limit: 20});\ntext"
 	case toolGrep:
-		return "hits = grep(pattern=\"TODO\", glob=\"**/*.go\")\nhits"
+		return "const hits = grep({pattern: \"TODO\", glob: \"**/*.go\"});\nhits"
 	case toolGlob:
-		return "paths = glob(pattern=\"**/*.go\")\npaths"
+		return "const paths = glob({pattern: \"**/*.go\"});\npaths"
 	case toolLS:
-		return "entries = ls(path=\"internal\")\nentries"
+		return "const entries = ls({path: \"internal\"});\nentries"
 	case toolSymbol:
-		return "found = symbol(name=\"runOne\", kind=\"definition\")\nfound"
+		return "const found = symbol({name: \"runOne\", kind: \"definition\"});\nfound"
 	default:
 		return name + "()"
 	}

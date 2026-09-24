@@ -1,7 +1,6 @@
 package coder
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,7 @@ import (
 
 // The code functions' tests — the run_code-only callable functions of
 // codefuncs.go. The mechanism's contract is pinned at the level the program
-// sees: data returned, errors raised, and the run_code-only constraint itself.
+// sees: data returned, errors thrown, and the run_code-only constraint itself.
 
 // codeEnv is observeEnv plus a binary file: observeEnv's map-of-strings
 // cannot express bytes that are not valid UTF-8 text.
@@ -37,14 +36,14 @@ func TestCodeFuncMagicNumber(t *testing.T) {
 	data := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, make([]byte, 16)...)
 	c := codeEnv(t, "probe.bin", data)
 
-	got := c.runCode(context.Background(), codeCall{code: `
-d = read_bin(path="probe.bin")
-is_elf = d["data"][:4] == [127, 69, 76, 70]
-print("elf:", is_elf)
-print("size:", d["size"])
-print("truncated:", d["truncated"])
-`})
-	for _, want := range []string{"elf: True", "size: 24", "truncated: False"} {
+	got := run(c, `
+const d = read_bin({path: "probe.bin"});
+const isElf = d.data.slice(0, 4).join() === [127, 69, 76, 70].join();
+console.log("elf:", isElf);
+console.log("size:", d.size);
+console.log("truncated:", d.truncated);
+`)
+	for _, want := range []string{"elf: true", "size: 24", "truncated: false"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("read_bin result missing %q:\n%s", want, got)
 		}
@@ -61,18 +60,18 @@ func TestCodeFuncPagesAndCaps(t *testing.T) {
 	}
 	c := codeEnv(t, "small.bin", data)
 
-	got := c.runCode(context.Background(), codeCall{code: `
-w1 = read_bin(path="small.bin", offset=6, limit=4)
-w2 = read_bin(path="small.bin", offset=6, limit=100000)
-w3 = read_bin(path="small.bin", offset=500)
-print(w1["data"], w1["truncated"])
-print(w2["data"], w2["truncated"])
-print(w3["data"], w3["truncated"], w3["size"])
-`})
+	got := run(c, `
+const w1 = read_bin({path: "small.bin", offset: 6, limit: 4});
+const w2 = read_bin({path: "small.bin", offset: 6, limit: 100000});
+const w3 = read_bin({path: "small.bin", offset: 500});
+console.log(w1.data, w1.truncated);
+console.log(w2.data, w2.truncated);
+console.log(w3.data, w3.truncated, w3.size);
+`)
 	for _, want := range []string{
-		"[6, 7, 8, 9] False", // ends exactly at EOF: complete, not truncated
-		"[6, 7, 8, 9] False", // clamped, and the clamp is not truncation of content
-		"[] False 10",        // past EOF: empty, not an error
+		"[6,7,8,9] false", // ends exactly at EOF: complete, not truncated
+		"[6,7,8,9] false", // clamped, and the clamp is not truncation of content
+		"[] false 10",     // past EOF: empty, not an error
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("paging result missing %q:\n%s", want, got)
@@ -81,19 +80,16 @@ print(w3["data"], w3["truncated"], w3["size"])
 }
 
 // TestCodeFuncErrorsAreExceptions pins the error channel: a missing path and
-// an out-of-root path raise, with the tool's own sentence as the message —
+// an out-of-root path throw, with the tool's own sentence as the message —
 // not a string return the program might treat as data.
 func TestCodeFuncErrorsAreExceptions(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
-	got := c.runCode(context.Background(), codeCall{code: `read_bin()`})
-	if !strings.Contains(got, "read_bin requires a \"path\" argument") {
-		t.Errorf("a missing path must raise, got:\n%s", got)
+	if got := run(c, `read_bin()`); !strings.Contains(got, "read_bin requires a \"path\" argument") {
+		t.Errorf("a missing path must throw, got:\n%s", got)
 	}
-
-	got = c.runCode(context.Background(), codeCall{code: `read_bin(path="../outside.bin")`})
-	if !strings.Contains(got, "Could not read") {
-		t.Errorf("an escaping path must raise the read failure, got:\n%s", got)
+	if got := run(c, `read_bin({path: "../outside.bin"})`); !strings.Contains(got, "Could not read") {
+		t.Errorf("an escaping path must throw the read failure, got:\n%s", got)
 	}
 }
 
@@ -129,24 +125,22 @@ func TestCodeFuncDocMatchesRegistry(t *testing.T) {
 }
 
 // TestCodeErrorAttribution pins the fix for the failure mode observed in the
-// 2026-09 tool trial: a tool-call failure inside a multi-call program used to
-// come back as a flat one-liner with no line attribution, because the Go side
-// dropped the snapshot instead of resuming it with the error. The error must
-// be raised at the call site, so the traceback names the program line that
-// made the failing call — the thing a model debugging a 20-line program
-// needs.
+// 2026-09 tool trial: a tool-call failure inside a multi-call program came
+// back as a flat one-liner with no line attribution. The error must be thrown
+// at the call site, and the result names the program line that made the
+// failing call — the thing a model debugging a 20-line program needs.
 func TestCodeErrorAttribution(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"x.txt": "hi\n"})
 
 	// Two successful calls, then the failure: the traceback must name the
 	// failing line (5), not the first call or nothing at all.
 	code := `
-files = glob(pattern="*.go")
-a = read(path="x.txt")
-b = read(path="no-such-file")
+const files = glob({pattern: "*.go"});
+const a = read({path: "x.txt"});
+const b = read({path: "no-such-file"});
 b`
-	got := c.runCode(context.Background(), codeCall{code: code})
-	if !strings.Contains(got, "line 4") || !strings.Contains(got, `read(path="no-such-file")`) {
+	got := run(c, code)
+	if !strings.Contains(got, "line 4") || !strings.Contains(got, `read({path: "no-such-file"})`) {
 		t.Errorf("a tool failure must be attributed to its call site, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Could not read") {
@@ -154,17 +148,15 @@ b`
 	}
 }
 
-// TestCodeErrorIsCatchable pins that a tool failure is an ordinary Python
-// exception: a program may catch it and continue. This is what makes the
-// attribution upgrade semantically safe — it did not just relabel errors, it
-// made them catchable — and it is why the bridge-call cap is pinned in its
-// uncaught form in TestCodeBridgeCapFires: a caught cap no longer stops the
-// program, the duration limit does.
+// TestCodeErrorIsCatchable pins that a tool failure is an ordinary thrown
+// Error: a program may catch it and continue. This is why the bridge-call cap
+// is pinned in its uncaught form in TestCodeBridgeCapFires: a caught cap does
+// not stop the program, the duration limit does.
 func TestCodeErrorIsCatchable(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"x.txt": "hi\n"})
 
-	code := "r = 'fallback'\ntry:\n    read(path='missing')\nexcept Exception as e:\n    r = 'caught'\nr"
-	if got := c.runCode(context.Background(), codeCall{code: code}); !strings.Contains(got, "caught") {
+	code := "let r = 'fallback';\ntry { read({path: 'missing'}) } catch (e) { r = 'caught' }\nr"
+	if got := run(c, code); !strings.Contains(got, "caught") {
 		t.Errorf("a tool failure must be catchable as an ordinary exception, got:\n%s", got)
 	}
 }

@@ -1,7 +1,6 @@
 package coder
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -30,13 +29,13 @@ func TestReadTextRoundTripsTheFile(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%q", body), func(t *testing.T) {
 			c, _ := observeEnv(t, map[string]string{"f.txt": body})
-			// Byte count and newline count rather than repr: Monty quotes the
-			// way Python does and Go's %q does not, and an assertion that
-			// compares quoting styles fails on a correct round-trip — which is
-			// what this test did on its first run, reporting a bug that was in
-			// itself.
-			got := c.runCode(context.Background(), codeCall{
-				code: `t = read_text("f.txt")` + "\n" + `print(len(t), t.count("\n"))`})
+			// Byte count and newline count rather than a quoted rendering: an
+			// assertion that compares quoting styles fails on a correct
+			// round-trip — which is what this test did on its first run,
+			// reporting a bug that was in itself. The fixtures are ASCII, so
+			// JavaScript's UTF-16 length is the byte count.
+			got := run(c, `const t = read_text("f.txt");`+"\n"+
+				`console.log(t.length, t.split("\n").length - 1)`)
 			want := fmt.Sprintf("%d %d", len(body), strings.Count(body, "\n"))
 			if got != want {
 				t.Errorf("stored %q: read_text gave (length, newlines) = %s, want %s", body, got, want)
@@ -51,10 +50,9 @@ func TestReadTextRoundTripsTheFile(t *testing.T) {
 // not the content.
 func TestReadTextCountsBlankLinesCorrectly(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"f.txt": "a\n\nb\n\n"})
-	got := c.runCode(context.Background(), codeCall{
-		code: "t = read_text(\"f.txt\")\nlines = t.split(\"\\n\")\n" +
-			"if lines and lines[-1] == \"\":\n    lines = lines[:-1]\n" +
-			"print(sum(1 for l in lines if l == \"\"))"})
+	got := run(c, "const lines = read_text(\"f.txt\").split(\"\\n\");\n"+
+		"if (lines.length && lines[lines.length - 1] === \"\") lines.pop();\n"+
+		"lines.filter(l => l === \"\").length")
 	if got != "2" {
 		t.Errorf("blank lines through read_text = %s, want 2 — the file has two", got)
 	}

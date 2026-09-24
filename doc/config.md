@@ -712,7 +712,7 @@ observation_via_run_code = True
 
 Experimental. With `True`, the direct read-only tools (`read`, `grep`, `glob`,
 `ls`, `symbol`) are withheld from the tool schema and all file observation goes
-through the `run_code` tool: the model writes a short Python program that calls
+through the `run_code` tool: the model writes a short JavaScript program that calls
 those tools itself, and the results come back to the program. A direct call a
 model makes anyway is answered with a pointer to the `run_code` route.
 
@@ -1688,30 +1688,34 @@ restarting.
 
 ## The `run_code` tool
 
-`run_code(code)` runs a short Python program and returns its value: a calculator, a
-formatter, or one program that computes over several pieces of data at once.
-The interpreter is [Monty](https://github.com/pydantic/monty), a restricted
-Python subset compiled to WebAssembly and run through `wazero` — pure Go, no
-cgo, vendored under `internal/monty/`.
+`run_code(code)` runs a short JavaScript program and returns its last
+evaluated value, with anything it printed through `console.log()` before it: a
+calculator, a formatter, or one program that computes over several pieces of
+data at once. The interpreter is [goja](https://github.com/dop251/goja), a
+JavaScript engine written in Go — no cgo, no WebAssembly.
 
-It is a **subset**, and the tool description lists the interpreter's
-limitations: no `with`, no `match`, no `eval`/`exec`, no `open`, no
-`os`/`pathlib` filesystem access, no network, no `subprocess`, and no
-third-party libraries. Imports beyond `math`/`re`/`datetime`/`json` (plus
-`itertools`/`collections`, which work unadvertised) raise
-`ModuleNotFoundError`; `os`, `sys`, and `pathlib` import but reach no
-filesystem — their path-string helpers work, and their filesystem calls are
-refused with the substitute named. A wrong reach is answered in the error
-channel rather than the description, because the mistake is the first program
-of a session, written before any description is consulted (see
-`doc/experiments/2026-09-code-namespace/README.md`).
-Available: f-strings, `while`, `try/except`, comprehensions, generators,
-classes, `lambda`, `round()`, `sum`/`min`/`max`/`sorted`/`enumerate`/`zip`/
-`abs`, and all of `math`. There is no `%-formatting` and no `.format()`.
+The language is standard JavaScript, not a subset: `let`/`const`, arrow
+functions, classes, template literals, destructuring, spread, `try`/`catch`,
+`Map` and `Set`, and `JSON`, `Math`, `RegExp` and `Date` all work. What is
+missing is the host: this is not Node or a browser, so `require`, `import`,
+`fs`, `path`, `process`, `fetch`, and timers do not exist. A reach for one is
+answered in the error channel, with the substitute named, rather than in the
+description, because the mistake is the first program of a session, written
+before any description is consulted (see
+`doc/experiments/2026-09-code-namespace/README.md`). The same channel answers
+Python habits: `print()` points to `console.log()`, and `grep(pattern="x")` to
+the options object.
+
+It replaced Monty, a restricted Python interpreter compiled to WebAssembly,
+after [`2026-09-run-code-arms`](experiments/2026-09-run-code-arms/README.md):
+models took Monty for full Python and reached for `os`, `open` and `glob`,
+while described as JavaScript they did not reach for Node, and correctness was
+the same in both.
 
 The program is sandboxed by construction: no filesystem, no network, and
-explicit resource limits (5 s, 32 MiB, recursion depth 100). A program that
-runs away terminates on a limit rather than hanging the turn.
+explicit resource limits — 5 s, 256 MiB of heap growth, and 1,000 stack
+frames. A program that runs away terminates on a limit rather than hanging
+the turn, and a Ctrl-C stops it.
 
 The tool never asks permission. It can compute and read through the exposed
 tools, but cannot modify files or access the network. It is announced like any
@@ -1720,7 +1724,9 @@ other tool call and is available in ask mode.
 ### The read-only bridge
 
 Inside a `run_code` program, the five observation tools — `read`, `grep`,
-`glob`, `ls`, `symbol` — are callable as functions, and each returns the same
+`glob`, `ls`, `symbol` — are callable as functions, each taking an options
+object (`grep({pattern: "TODO", glob: "**/*.go"})`) or a leading positional
+argument (`read("a.go")`), and each returns the same
 text the tool itself would return, with its outcome line under the program
 block that caused it — you see the same `Searched for …` line whether the
 model called `grep` directly or from inside a program, minus the per-call
@@ -1731,14 +1737,14 @@ attributes the run. A program may issue at most 50 bridged calls.
 
 Two of the five exist in a **data shape** inside a program, which overrides
 the tool's prose: `glob(pattern)` returns the matching paths as a list of
-strings, and `ls(path)` returns entries as `{path, is_dir, link}` dicts. The
+strings, and `ls(path)` returns entries as `{path, is_dir, link}` objects. The
 prose shape is for the model; a program computes over a result, and glob's
 prose (pattern echo, glob-syntax notes) was being iterated as a string — one
 live session turned a single call into 49 junk tool calls under the bridge
 cap. An empty match is `[]`, a value to filter on. A match past the 1,000-path
-results limit raises rather than truncating, for the same reason `read_text`
+results limit throws rather than truncating, for the same reason `read_text`
 does. `grep` and `read` still cross as prose, which a program parses with
-`.splitlines()`.
+`.split("\n")`.
 
 Only the five read-only observation tools are callable from a `run_code`
 program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a

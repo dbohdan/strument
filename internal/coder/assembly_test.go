@@ -403,7 +403,7 @@ func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
 // schema withholds.
 func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 	c := testCoder(t)
-	if !strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "run_code runs a short Python program") {
+	if !strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "run_code runs a short JavaScript program") {
 		t.Error("the run_code tool is offered, but the prompt does not mention it")
 	}
 
@@ -411,7 +411,7 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 	withheld := testCoder(t)
 	withheld.OfferCode = false
 	sys := withheld.fmtSystemPrompt(prompts.Tool.MainSystem)
-	if strings.Contains(sys, "run_code runs a short Python program") {
+	if strings.Contains(sys, "run_code runs a short JavaScript program") {
 		t.Error("the run_code tool is withheld, but the prompt names it")
 	}
 }
@@ -463,7 +463,7 @@ func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
 	tc := llm.ToolCall{ID: "t1", Name: toolGrep, Arguments: `{"pattern":"TODO"}`}
 	got, _ := c.runObservationRedirect(tc)
 	if !strings.Contains(got, `"grep" is not offered directly`) ||
-		!strings.Contains(got, `grep(pattern="TODO", glob="**/*.go")`) {
+		!strings.Contains(got, `grep({pattern: "TODO", glob: "**/*.go"})`) {
 		t.Errorf("the redirect does not teach the call shape:\n%s", got)
 	}
 

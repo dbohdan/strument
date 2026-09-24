@@ -9,7 +9,7 @@ import (
 // map, so the two can drift, and both directions of drift are silent.
 //
 // A parameter added to a schema and not here cannot be passed positionally —
-// Monty drops a positional past the end of the list, without an error. One
+// A positional past the end of the list is dropped, without an error. One
 // removed from a schema and left here binds a positional to a name the tool no
 // longer accepts, which the tool then reports as unknown while the argument the
 // program meant goes nowhere.

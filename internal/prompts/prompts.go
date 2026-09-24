@@ -151,7 +151,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // out — and leaving it out unconditionally hid a tool a program really can call
 // wherever grammars exist. Coder.codeCallableTools fills it from the same list
 // the schema and the bridge use.
-const CodeToolsBullet = "- run_code runs a short Python program, which can itself call %s" +
+const CodeToolsBullet = "- run_code runs a short JavaScript program, which can itself call %s" +
 	" — the results come back to the program, not to you, until it returns. " +
 	"It changes nothing and needs no permission. Reach for it when one answer " +
 	"needs several lookups combined — three greps you already know you need are " +
@@ -176,7 +176,7 @@ const CodeToolsBullet = "- run_code runs a short Python program, which can itsel
 // prompt's: under-promising costs a model nothing, and naming symbol lookup as
 // something this session does would be false wherever there is no repo map —
 // which is exactly where the slot leaves symbol out.
-const ObservationViaRunCodeParagraph = "- run_code runs a short Python program. In this session all file observation — " +
+const ObservationViaRunCodeParagraph = "- run_code runs a short JavaScript program. In this session all file observation — " +
 	"reading, searching, and listing — goes through it: the " +
 	"program calls %s itself, and the results " +
 	"come back to the program, not to you, until it returns. Write one program " +

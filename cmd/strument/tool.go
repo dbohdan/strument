@@ -42,7 +42,7 @@ type toolCmd struct {
 	// carry the underscore (revive), and the tool's exact name — not a
 	// kebab-cased reading of it — is the point of a door that shows what the
 	// model sees.
-	RunCode toolRunCodeCmd `cmd:"" help:"Run a short Python program through run_code, as the model's tool returns it."         name:"run_code"`
+	RunCode toolRunCodeCmd `cmd:"" help:"Run a short JavaScript program through run_code, as the model's tool returns it."     name:"run_code"`
 	About   toolAboutCmd   `cmd:"" help:"Report this binary's build, the time and the platform, as the about tool returns it."`
 }
 
@@ -246,11 +246,11 @@ func (t *toolSymbolCmd) Run(c *toolCmd) error {
 // command to tool is one-to-one here, which is the whole point of a door that
 // shows what the model sees.
 //
-// The program is the arg, read verbatim — it is Python, and a shell will eat
-// its own quoting before kong sees it, so the usual invocation is
-// `strument tool run_code 'print(1 + 2)'` with the program single-quoted.
+// The program is the arg, read verbatim — it is JavaScript, and a shell will
+// eat its own quoting before kong sees it, so the usual invocation is
+// `strument tool run_code 'console.log(1 + 2)'` with the program single-quoted.
 type toolRunCodeCmd struct {
-	Code string `arg:"" help:"The Python program, as the run_code tool would receive it."`
+	Code string `arg:"" help:"The JavaScript program, as the run_code tool would receive it."`
 }
 
 func (t *toolRunCodeCmd) Run(c *toolCmd) error {

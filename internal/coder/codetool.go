@@ -3,46 +3,57 @@ package coder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"regexp"
+	"runtime/metrics"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/dop251/goja"
+
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/monty"
 	"dbohdan.com/strument/internal/render"
 )
 
-// The run_code tool: the model writes one small program and it runs in Monty, a
-// restricted Python interpreter compiled to WebAssembly (internal/monty). Two
-// measured facts motivate it (doc/plans/code-mode.md): arithmetic costs a
-// quarter of the reasoning lines in this repository's own experiments, and
-// models spend full request round trips on runs of read-only calls a program
-// could make in one step. This file is both halves — pure computation, and
-// the read-only bridge.
+// The run_code tool: the model writes one small JavaScript program and it runs
+// in goja, a JavaScript engine written in Go. Two measured facts motivate the
+// tool (doc/plans/code-mode.md): arithmetic costs a quarter of the reasoning
+// lines in this repository's own experiments, and models spend full request
+// round trips on runs of read-only calls a program could make in one step.
+// This file is both halves — pure computation, and the read-only bridge.
 //
-// Monty is a Python *subset*, and the description below is load-bearing: a
-// model writing ordinary Python will hit walls, and the description is the
-// only thing that can prevent most of them. The list of what is missing is
-// empirical — probed against the vendored monty.wasm, not read off upstream's
-// docs — and each wall a model hits anyway returns Monty's own error text,
-// which names the construct.
+// It was Monty, a restricted Python interpreter compiled to WebAssembly, until
+// doc/experiments/2026-09-run-code-arms. Models took Monty for full Python and
+// reached for os, open and glob in their first program; described as
+// JavaScript, the same tasks drew no reach for Node's equivalents, and
+// correctness was the same. The trial did not show JavaScript better by a
+// significant margin. The switch rests on its being no worse on anything
+// measured while removing a Rust shim, a vendored 5 MB WebAssembly blob and a
+// WebAssembly runtime: goja is ordinary Go.
 //
-// "Empirical" is a standard the list failed once. It named math/re/datetime/json
-// and said "other imports" were unavailable, while itertools and collections
-// worked unadvertised and os, sys and pathlib imported fine before failing at
-// the first attribute — which is exactly the green light that sent a model
-// probing os for a filesystem. TestCodeDescriptionMatchesTheModulesThatWork now
-// runs the imports it promises, in both directions, so the prose cannot drift
-// from the interpreter again without a red test.
+// JavaScript is the whole language here, not a subset, so the description no
+// longer carries a list of missing constructs to keep true. What is missing is
+// the host — Node's require, fs and process, a browser's fetch — and each reach
+// for it is answered in the error channel, where it happens.
 
-// codeLimits bounds a program's resources. Explicit, never zero: the plan's
-// point is that a runaway program terminates on a limit rather than hanging
-// the turn.
-var codeLimits = monty.Limits{
-	MaxDuration:       5 * time.Second,
-	MaxMemoryBytes:    32 << 20, // 32 MiB
-	MaxRecursionDepth: 100,
+// codeLimits bounds a program's resources. Explicit, never zero: a runaway
+// program terminates on a limit rather than hanging the turn.
+var codeLimits = struct {
+	MaxDuration time.Duration
+	// MaxHeapGrowth is how far the process's heap may grow while a program
+	// runs. goja has no memory limit of its own, and Monty's was 32 MiB of its
+	// own linear memory; this is the nearest equivalent a Go-hosted engine
+	// allows. Process-wide, so it is generous: other goroutines allocate too.
+	MaxHeapGrowth uint64
+	// MaxCallStackSize is goja's frame limit: deep recursion raises a
+	// RangeError rather than exhausting the Go stack.
+	MaxCallStackSize int
+}{
+	MaxDuration:      5 * time.Second,
+	MaxHeapGrowth:    256 << 20,
+	MaxCallStackSize: 1000,
 }
 
 // maxBridgedCalls caps how many read-only tool calls one program may issue.
@@ -51,10 +62,10 @@ var codeLimits = monty.Limits{
 // with extra steps — and without a cap the number is unbounded.
 const maxBridgedCalls = 50
 
-// codeTool describes the tool. The Python-subset caveats live here rather than
-// in the system prompt, for the same reason the skill catalog does: prose must
-// not promise a tool that is only sometimes offered, and the schema is sent
-// with the tool regardless of mode.
+// codeTool describes the tool. The caveats live here rather than in the system
+// prompt, for the same reason the skill catalog does: prose must not promise a
+// tool that is only sometimes offered, and the schema is sent with the tool
+// regardless of mode.
 //
 // The order is the finding, not a style: the first version led with mechanism
 // ("Run a short Python program…") and prohibitions, and the bridge — the thing
@@ -62,9 +73,9 @@ const maxBridgedCalls = 50
 // symbol fix (doc/experiments/2026-08-symbol-uptake/README.md) established that the
 // description that moves uptake is the one that opens by mapping the felt need
 // ("I have several lookups to combine") to the tool; a spec sheet selects for
-// nobody. The negations are compressed to one sentence and paired with the
-// recovery path, because "grep always works; this opens with a failure
-// surface" was the risk asymmetry the first version created.
+// nobody. The text is the one doc/experiments/2026-09-run-code-js and
+// 2026-09-run-code-arms measured, sentence for sentence against the Monty
+// description it replaced.
 func codeTool(callable []string) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Do several lookups, or a computation, in one call instead of " +
@@ -72,29 +83,29 @@ func codeTool(callable []string) llm.ToolDef {
 		"results combined, or needs arithmetic, counting, sorting, or date " +
 		"math.\n\n" +
 		"The program can call the read-only tools directly — " +
-		"grep(pattern=\"TODO\", glob=\"**/*.go\"), read(path=\"a.go\", limit=20)" +
-		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. Example:\n\n", maxBridgedCalls) +
+		"grep({pattern: \"TODO\", glob: \"**/*.go\"}), read({path: \"a.go\", limit: 20})" +
+		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. ", maxBridgedCalls) +
+		"Each function takes an options object as shown; a single leading argument may also " +
+		"be passed on its own, as in read(\"a.go\"). Example:\n\n" +
 		codeExampleText() +
 		"Only the program's last evaluated value comes back to you, so end it " +
 		"with what you want to see — two calls on two lines return the second " +
-		"one's result and drop the first. print() shows intermediate values.\n\n" +
-		"The interpreter is Monty, a restricted Python subset. Expressions, " +
-		"statements, loops, f-strings, comprehensions, try/except, classes, and " +
-		"math, re, datetime, json, itertools and collections all work. Not " +
-		"available: match, del, eval/exec, open, subprocess, network " +
-		"access, and other imports — os, sys and pathlib import but reach no " +
-		"filesystem, so use glob(pattern=\"**/*.py\") to walk the tree and " +
-		"read() to open a file; the bash tool, not this one, runs commands. " +
-		"A missing construct raises an error naming it — simplify and rerun; a " +
-		"failed program costs one cheap retry.")
+		"one's result and drop the first. console.log() shows intermediate values.\n\n" +
+		"The interpreter is goja, a JavaScript engine embedded in the harness. Standard " +
+		"JavaScript works: let and const, arrow functions, classes, template literals, " +
+		"destructuring, spread, try/catch, Map and Set, and JSON, Math, RegExp and Date. " +
+		"This is not Node or a browser: require, import, fs, path, process, child_process, " +
+		"fetch, timers and network access do not exist, so use glob({pattern: \"**/*.py\"}) " +
+		"to walk the tree and read() to open a file; the bash tool, not this one, runs " +
+		"commands. A missing name raises an error naming it — simplify and rerun; a failed " +
+		"program costs one cheap retry.")
 
 	// The bridged names come from the caller, which builds one list for the
-	// description, the Monty registration, and the bridge's allow check — so
-	// the three cannot drift, the exact drift this repository has had three
-	// times elsewhere. The example above names two; the authoritative list
-	// rides behind it. The code functions (codefuncs.go) are run_code-only and
-	// ride in through codeFuncDoc, from the same registry the bridge
-	// dispatches on.
+	// description, the registration, and the bridge's allow check — so the
+	// three cannot drift, the exact drift this repository has had three times
+	// elsewhere. The example above names two; the authoritative list rides
+	// behind it. The code functions (codefuncs.go) are run_code-only and ride
+	// in through codeFuncDoc, from the same registry the bridge dispatches on.
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
@@ -107,8 +118,8 @@ func codeTool(callable []string) llm.ToolDef {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"code": strProp("The Python program to run. Its last evaluated value is " +
-					"returned; use print() for intermediate values."),
+				"code": strProp("The JavaScript program to run. Its last evaluated value is " +
+					"returned; use console.log() for intermediate values."),
 			},
 			"required": []any{"code"},
 		},
@@ -119,10 +130,11 @@ func codeTool(callable []string) llm.ToolDef {
 // because models copy the example, so it is the part most worth being able to
 // read on its own: it has to agree with the contract paragraph beside it.
 func codeExampleText() string {
-	return "```python\n" +
-		"caps = {}\n" +
-		"for name in [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]:\n" +
-		"    caps[name] = grep(pattern=name + \" =\", glob=\"**/*.go\")\n" +
+	return "```javascript\n" +
+		"const caps = {};\n" +
+		"for (const name of [\"maxToolOutputBytes\", \"MaxSteps\", \"maxChatHistoryTokens\"]) {\n" +
+		"  caps[name] = grep({pattern: name + \" =\", glob: \"**/*.go\"});\n" +
+		"}\n" +
 		"caps\n" +
 		"```\n\n"
 }
@@ -145,47 +157,244 @@ func parseCodeArgs(tc llm.ToolCall) (codeCall, string) {
 	return codeCall{callID: tc.ID, code: a.Code}, ""
 }
 
+// bridgedCall is one call a program made to a bridged function: its name and
+// its arguments by name, however the program wrote them (jsArgs).
+type bridgedCall struct {
+	Name string
+	Args map[string]any
+}
+
+// ArgsJSON is Args as the JSON a direct tool call carries, so a bridged call
+// is answered by the same Inspector.Run a direct call goes through.
+func (b *bridgedCall) ArgsJSON() string {
+	if len(b.Args) == 0 {
+		return "{}"
+	}
+	data, err := json.Marshal(b.Args)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// bridgeFunc answers one bridged call with data, or an error the program sees
+// as a thrown Error.
+type bridgeFunc func(ctx context.Context, call *bridgedCall) (any, error)
+
 // runCode executes the program and returns the value, or the error text for
-// the model to act on. Monty's errors carry the failing line and the
-// exception — a useful error string is part of the contract, not decoration —
-// so they pass through stripped of only the traceback's file framing, which
-// says "script.py" regardless of anything the model did.
+// the model to act on.
 //
 // No confirmation, like the other read-only tools: a program computes and
-// reads, it does not touch anything outside its own WASM instance and the
+// reads, it does not touch anything outside its own interpreter and the
 // project's observation tools. It is announced twice, the two renderings of
 // one event (the ask_user_question pattern): the shaped source block for the
 // screen before the run, and one prose line after — for the transcript and as
 // the outcome — naming what the program actually called, collected at the
 // bridge rather than scanned from the source.
-func (c *Coder) runCode(_ context.Context, cc codeCall) string {
+func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	c.Out.ToolBlock(render.CodeOpen, cc.code)
 
-	runner, err := montyRunner()
-	if err != nil {
-		return fmt.Sprintf("The Python interpreter failed to start: %v", err)
-	}
+	vm := goja.New()
+	vm.SetMaxCallStackSize(codeLimits.MaxCallStackSize)
 
-	// print() output is collected and shipped in the result text. The
-	// description tells the model to "use print() for intermediate values",
-	// and a program that ends in print(...) rather than a bare expression —
-	// most of them, observed live — would otherwise return None with its
-	// actual output dropped on the floor. Under the observation force arm
-	// print is the primary reporting channel, so this is not cosmetic.
 	var printed strings.Builder
 	var log bridgeLog
-	result, err := runner.Execute(context.Background(), cc.code, nil,
-		append(c.codeOptions(&log), monty.WithPrintFunc(func(s string) { printed.WriteString(s) }))...)
-	summary := codeCalledText(codeLines(cc.code), log.names)
+	names := c.codeCallableTools()
+	bridge := c.bridgeCall(names, &log)
+
+	stringifyV, err := vm.RunString(jsStringify)
 	if err != nil {
-		// The calls made before the failure still happened, and a program that
-		// aborted mid-way is precisely where the summary carries information
-		// the value cannot.
-		c.Out.Toolf("%s", summary)
-		return codeErrorText(err)
+		return fmt.Sprintf("The JavaScript interpreter failed to start: %v", err)
 	}
-	c.Out.Toolf("%s", summary)
-	return truncateResult(codeResultText(result, printed.String(), &log))
+	stringify, _ := goja.AssertFunction(stringifyV)
+	show := func(v goja.Value) string {
+		if v == nil || goja.IsUndefined(v) {
+			return "undefined"
+		}
+		if goja.IsNull(v) {
+			return "null"
+		}
+		if s, ok := v.Export().(string); ok {
+			return s
+		}
+		if _, ok := v.(*goja.Object); ok {
+			if out, err := stringify(goja.Undefined(), v); err == nil && !goja.IsUndefined(out) {
+				return out.String()
+			}
+		}
+		return v.String()
+	}
+	throw := func(msg string) {
+		errCtor, _ := goja.AssertConstructor(vm.Get("Error"))
+		obj, err := errCtor(nil, vm.ToValue(msg))
+		if err != nil {
+			panic(vm.ToValue(msg))
+		}
+		panic(obj)
+	}
+
+	register := func(name string, params []string) {
+		_ = vm.Set(name, func(call goja.FunctionCall) goja.Value {
+			v, err := bridge(ctx, &bridgedCall{Name: name, Args: jsArgs(call.Arguments, params)})
+			if err != nil {
+				throw(err.Error())
+			}
+			return vm.ToValue(v)
+		})
+	}
+	for _, n := range names {
+		register(n, codeToolParams[n])
+	}
+	for _, d := range codeDataFuncs {
+		register(d.name, d.params)
+	}
+	for _, d := range codeFuncs {
+		register(d.name, d.params)
+	}
+
+	console := vm.NewObject()
+	logf := func(call goja.FunctionCall) goja.Value {
+		parts := make([]string, len(call.Arguments))
+		for i, a := range call.Arguments {
+			parts[i] = show(a)
+		}
+		printed.WriteString(strings.Join(parts, " ") + "\n")
+		return goja.Undefined()
+	}
+	for _, m := range []string{"log", "info", "warn", "error", "debug"} {
+		_ = console.Set(m, logf)
+	}
+	_ = vm.Set("console", console)
+
+	stop := watchProgram(ctx, vm)
+	var value goja.Value
+	prog, err := goja.Compile("program.js", cc.code, true)
+	if err == nil {
+		value, err = vm.RunProgram(prog)
+	}
+	stop()
+
+	// The calls made before a failure still happened, and a program that
+	// aborted mid-way is precisely where the summary carries information the
+	// value cannot.
+	c.Out.Toolf("%s", codeCalledText(codeLines(cc.code), log.names))
+	if err != nil {
+		return jsErrorText(err, cc.code)
+	}
+
+	var result any
+	if value != nil && !goja.IsUndefined(value) && !goja.IsNull(value) {
+		result = value.Export()
+	}
+	// console.log output is collected and shipped in the result text. The
+	// description tells the model to use it for intermediate values, and a
+	// program that ends in console.log(...) rather than a bare expression —
+	// most of them — would otherwise return undefined with its actual output
+	// dropped on the floor. The printed section comes first: it is what the
+	// model chose to show, and the final value reads as the tail.
+	var b strings.Builder
+	if printed.Len() > 0 {
+		b.WriteString(strings.TrimRight(printed.String(), "\n"))
+		if result != nil {
+			b.WriteString("\n")
+		}
+	}
+	if result != nil || printed.Len() == 0 {
+		b.WriteString(show(value))
+	}
+	if note := codeLostCallsNote(result, printed.String(), &log); note != "" {
+		// One blank line between the value and the note, whether or not the
+		// value already ended in a newline — grep's content mode does, and two
+		// blank lines read as a missing paragraph.
+		return truncateResult(strings.TrimRight(b.String(), "\n") + "\n\n" + note)
+	}
+	return truncateResult(b.String())
+}
+
+// errHeapLimit is the interrupt value for a program that grew the heap past
+// codeLimits.MaxHeapGrowth.
+var errHeapLimit = errors.New("memory limit")
+
+// watchProgram interrupts the program on the time limit, on the turn being
+// cancelled, and on the heap growing past its limit, and returns the function
+// that stops watching. The heap is sampled rather than metered — goja offers
+// no allocation hook — through runtime/metrics, which reads without stopping
+// the world.
+func watchProgram(ctx context.Context, vm *goja.Runtime) (stop func()) {
+	done := make(chan struct{})
+	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	heap := func() uint64 {
+		metrics.Read(sample)
+		if sample[0].Value.Kind() != metrics.KindUint64 {
+			return 0
+		}
+		return sample[0].Value.Uint64()
+	}
+	base := heap()
+	go func() {
+		deadline := time.NewTimer(codeLimits.MaxDuration)
+		defer deadline.Stop()
+		tick := time.NewTicker(20 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				vm.Interrupt(ctx.Err())
+				return
+			case <-deadline.C:
+				vm.Interrupt("time limit")
+				return
+			case <-tick.C:
+				if h := heap(); h > base && h-base > codeLimits.MaxHeapGrowth {
+					vm.Interrupt(errHeapLimit)
+					return
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
+// jsStringify renders a value the way the result and console.log show it:
+// JSON, with Map and Set turned into what they hold rather than the {} that
+// JSON.stringify gives them. A list or object the model wants to read comes
+// back as JSON rather than Go's %v spacing.
+const jsStringify = `(function (v) {
+  return JSON.stringify(v, function (k, x) {
+    if (x instanceof Map) return Object.fromEntries(x);
+    if (x instanceof Set) return Array.from(x);
+    return x;
+  });
+})`
+
+// jsArgs maps a call's arguments onto the parameter names. An options object —
+// the convention the description shows — supplies them by name; leading
+// positionals fill params in order, and a trailing options object after them
+// is merged in, which is how read("a.go", {limit: 20}) is written.
+func jsArgs(args []goja.Value, params []string) map[string]any {
+	out := map[string]any{}
+	opts := func(v goja.Value) (map[string]any, bool) {
+		obj, ok := v.(*goja.Object)
+		if !ok {
+			return nil, false
+		}
+		m, ok := obj.Export().(map[string]any)
+		return m, ok
+	}
+	if n := len(args); n > 0 {
+		if m, ok := opts(args[n-1]); ok {
+			maps.Copy(out, m)
+			args = args[:n-1]
+		}
+	}
+	for i, a := range args {
+		if i < len(params) {
+			out[params[i]] = a.Export()
+		}
+	}
+	return out
 }
 
 // RunCode answers one run_code call and returns the text a model would
@@ -236,7 +445,7 @@ func codeCalledText(n int, called []string) string {
 	return fmt.Sprintf("Ran %s of code calling %s.", size, strings.Join(called, ", "))
 }
 
-// codeCallableTools is the one list behind the run_code description, the Monty
+// codeCallableTools is the one list behind the run_code description, the
 // registration, and the bridge's allow check.
 //
 // It is InspectorTools() minus symbol when there is no repo map, because that
@@ -264,7 +473,9 @@ func (c *Coder) codeCallableTools() []string {
 	return out
 }
 
-// codeToolParams is the positional order of each bridged tool's arguments.
+// codeToolParams is the positional order of each bridged tool's arguments,
+// for a program that passes them positionally rather than in an options
+// object (jsArgs).
 //
 // It has to be written out. A ToolDef's Parameters is a map, so it carries no
 // order at all — and what the model is shown is Go's JSON marshalling of that
@@ -284,9 +495,9 @@ func (c *Coder) codeCallableTools() []string {
 //   - read's follows read_bin's documented signature, which is already in the
 //     description the model reads.
 //
-// Monty drops a positional past the end of this list, silently, which is the
-// bug this table exists to fix — so the list is every parameter the schema has,
-// not just the required one. codeparams_test.go holds it to the schemas.
+// A positional past the end of this list is dropped, so the list is every
+// parameter the schema has, not just the required one. codeparams_test.go
+// holds it to the schemas.
 var codeToolParams = map[string][]string{
 	toolRead:   {"path", "offset", "limit"},
 	toolGrep:   {"pattern", "path", "glob", "mode", "ignore_case", "context_lines"},
@@ -295,75 +506,17 @@ var codeToolParams = map[string][]string{
 	toolSymbol: {"name", "kind"},
 }
 
-// codeOptions assembles the Execute options: the resource limits, plus the
-// read-only bridge. log collects what the program actually did, for the outcome
-// line and the result's note.
-func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
-	opts := make([]monty.ExecuteOption, 0, 3)
-	opts = append(opts, monty.WithLimits(codeLimits))
-	opts = append(opts, monty.WithOsCallFunc(codeOsCall))
-
-	names := c.codeCallableTools()
-	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs)+len(codeDataFuncs))
-	// The params list is what lets Monty bind a positional call's arguments to
-	// names. Registering without one does not make positional calls fail — it
-	// makes them vanish: `read("README.md")` arrives at the bridge as {}, the
-	// tool reports a missing path, and a step is gone. Observed with DeepSeek
-	// V4.1 Flash, which reaches for this tool readily (its own harness has one
-	// built in) and writes Python the way Python is written.
-	//
-	// Keywords are unaffected: an argument this side does not recognize still
-	// crosses as-is and is answered by the tool itself, exactly as a direct
-	// call with a wrong field would be.
-	for _, n := range names {
-		funcs = append(funcs, monty.Func(n, codeToolParams[n]...))
-	}
-	// Code functions ride the same registration, and need it more: their
-	// summaries state a signature — "read_bin(path, offset=0, limit=4096)" —
-	// so a program written to the documentation was the case that silently
-	// dropped every argument. The data functions are in the same position:
-	// `glob("*.go")` is the first call a model writes, and the whole reason
-	// the data shape exists.
-	for _, d := range codeFuncs {
-		funcs = append(funcs, monty.Func(d.name, d.params...))
-	}
-	for _, d := range codeDataFuncs {
-		funcs = append(funcs, monty.Func(d.name, d.params...))
-	}
-	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
-	return opts
-}
-
-// codeOsCall answers the OS-call channel Monty routes filesystem touches
-// through — os.listdir, Path.iterdir, open. Probed against the vendored
-// monty.wasm (TestCodeNoFilesystemAccess): these are the reaches that arrive
-// not as ModuleNotFoundError but as a half-working import, which is the worst
-// of the wrong reaches because the AttributeError-free first steps read as
-// success. Without a handler the error was "OS call %q but no handler
-// configured" — harness-shaped, naming nothing the program could do next, and
-// (before the wrapper learned to resume with the error) with no traceback at
-// all. The handler refuses, in the words of the failure mode, and names the
-// tool that serves the intent.
-//
-// It deliberately does not answer any OS call with data: the tools are the
-// filesystem here, and every one of them is already one bridged call away.
-func codeOsCall(_ context.Context, call *monty.OsCall) (any, error) {
-	return nil, fmt.Errorf("a program has no filesystem; use the glob, ls, and read "+
-		"functions instead of %s", call.Function)
-}
-
-// bridgeCall is the ExternalFunc that pauses the program and answers one
-// read-only tool call. It is an adapter, not a reimplementation: the call
-// crosses the boundary as JSON and is answered by the same Inspector.Run a
+// bridgeCall is the function that answers one bridged call. It is an adapter,
+// not a reimplementation: the call is answered by the same Inspector.Run a
 // direct tool call goes through, so what the program sees is byte-for-byte
 // what the model would have seen.
 //
 // The tools the program actually called are collected as they happen —
 // recording at the bridge rather than scanning the source, because a scan
 // overreports: a comment naming read, a variable called ls, a call in a branch
-// that never runs. The interpreter pauses at every real call, so this side has
-// the truth without parsing anything.
-func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc {
+// that never runs. Every real call passes through here, so this side has the
+// truth without parsing anything.
+func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 	funcs := codeFuncs
 	isAllowed := make(map[string]bool, len(allowed)+len(funcs)+len(codeDataFuncs))
 	for _, n := range allowed {
@@ -371,9 +524,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 	}
 	// The code functions are allowed by the same fail-closed check — they are
 	// called from the same bridge, counted in the same cap, and announced the
-	// same way. Their own dispatch happens below the check. From the arm's
-	// registry, so an arm that does not offer a function does not allow it
-	// either: the two lists have to be the same list.
+	// same way. Their own dispatch happens below the check.
 	for _, d := range funcs {
 		isAllowed[d.name] = true
 	}
@@ -382,12 +533,11 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 	}
 
 	seen := map[string]bool{}
-	return func(_ context.Context, call *monty.FunctionCall) (any, error) {
-		// Fail closed. This runs behind the registration check already — a
-		// name outside `allowed` is not registered with Monty at all and
-		// raises NameError inside the program — but the check lives here too
-		// so the invariant does not depend on the registration list staying
-		// in step with it.
+	return func(_ context.Context, call *bridgedCall) (any, error) {
+		// Fail closed. A name outside `allowed` is not registered at all and
+		// raises a ReferenceError inside the program — but the check lives
+		// here too so the invariant does not depend on the registration list
+		// staying in step with it.
 		if !isAllowed[call.Name] {
 			return nil, fmt.Errorf("unknown function %q: only the read-only tools "+
 				"(%s) can be called from a program", call.Name, strings.Join(allowed, ", "))
@@ -403,7 +553,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 
 		// Code functions answer with data, not model text, so they bypass
 		// Inspector.Run and the prefix classification — their errors are
-		// already Go errors and become exceptions with the right traceback.
+		// already Go errors and become thrown Errors at the calling line.
 		// No per-call announcement: every bridged call lands under the program
 		// block that caused it (the ‹run_code› the user just read), and the
 		// tools' own outcome lines plus the turn's "Ran N lines of code
@@ -424,23 +574,20 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) monty.ExternalFunc 
 			return v, err
 		}
 
-		// The call crosses the boundary as the same Inspector.Run a direct
-		// call goes through, so the outcome line and the model's answer are
-		// byte-for-byte what a direct call would produce — for the tools whose
-		// result *is* prose. The data-shaped ones (glob, ls) answered above,
-		// because a program that computes over a result needs the result, not
-		// the report about it: glob's prose names the pattern and explains
-		// syntax, and sorted() over prose iterates its characters.
-		tc := llm.ToolCall{Name: call.Name, Arguments: call.ArgsJSON()}
-		out := c.inspector().Run(call.Name, tc.Arguments)
+		// The call is answered by the same Inspector.Run a direct call goes
+		// through, so the outcome line and the model's answer are byte-for-byte
+		// what a direct call would produce — for the tools whose result *is*
+		// prose. The data-shaped ones (glob, ls) answered above, because a
+		// program that computes over a result needs the result, not the report
+		// about it: glob's prose names the pattern and explains syntax, and
+		// sorting that prose sorts its characters.
+		out := c.inspector().Run(call.Name, call.ArgsJSON())
 
-		// A tool failure raises instead of returning. Since the Go wrapper
-		// resumes the snapshot with the error (monty_resume_error), Monty
-		// raises it at the call site — the traceback names the program line
-		// that made the call, and a try/except can catch it like any other
-		// exception. An *empty result* is not a failure: "No matches" and a
-		// symbol miss are answers a program may legitimately filter on, so
-		// those stay values.
+		// A tool failure throws instead of returning, at the line that made
+		// the call, where a try/catch can catch it like any other exception.
+		// An *empty result* is not a failure: "No matches" and a symbol miss
+		// are answers a program may legitimately filter on, so those stay
+		// values.
 		if msg, bad := bridgeToolFailure(out); bad {
 			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
 		}
@@ -476,62 +623,19 @@ func bridgeToolFailure(out string) (string, bool) {
 	return "", false
 }
 
-// codeResultText renders a program's value, plus anything it printed. The
-// printed section comes first: it is what the model chose to show, and the
-// final value (often None in a print-driven program) reads as the tail. A
-// list or dict the model wants to read comes back as JSON rather than Go's
-// `%v` spacing, which a model would otherwise have to misread as Python.
-func codeResultText(result any, printed string, log *bridgeLog) string {
-	var b strings.Builder
-	if printed != "" {
-		b.WriteString(strings.TrimRight(printed, "\n"))
-		if result != nil {
-			b.WriteString("\n")
-		}
-	}
-	switch result.(type) {
-	case nil:
-		// A print-driven program's None is the tail of its own output, not a
-		// value worth naming; with nothing printed either, None is all there is.
-		if printed == "" {
-			b.WriteString("None")
-		}
-	case []any, map[string]any:
-		if data, err := json.Marshal(result); err == nil {
-			b.Write(data)
-		} else {
-			fmt.Fprintf(&b, "%v", result)
-		}
-	default:
-		fmt.Fprintf(&b, "%v", result)
-	}
-	if note := codeLostCallsNote(result, printed, log); note != "" {
-		// One blank line between the value and the note, whether or not the
-		// value already ended in a newline — grep's content mode does, and two
-		// blank lines read as a missing paragraph.
-		return strings.TrimRight(b.String(), "\n") + "\n\n" + note
-	}
-	return b.String()
-}
-
 // codeLostCallsNote says so when the program's value cannot account for the
 // calls the program made. Only the final value comes back, and a program whose
 // calls do not reach it looks, from the model's side, exactly like a program
 // whose calls found nothing.
 //
 // Both shapes were observed in the field, and they fail differently. A loop of
-// read(path=…) that keeps nothing returns the bare word "None" after four
+// read calls that keeps nothing returns a bare empty value after four
 // successful reads, and the model read that as "the files do not exist" and
 // went looking for them again — loud, and wrong in a way that costs a round
-// trip. Two grep(…) statements on consecutive lines return the second one's
-// output and silently drop the first, so a model verifying two files has
-// verified one and neither it nor the user can tell; the screen shows both
-// searches happening. The second is the worse of the two for being quiet.
-//
-// The note is model-facing text and therefore a hypothesis about behaviour
-// rather than a style choice: whether it moves anything, and whether it pushes
-// models toward printing everything (the counter-metric — result size), is
-// measurable and not yet measured.
+// trip. Two grep calls on consecutive lines return the second one's output and
+// silently drop the first, so a model verifying two files has verified one and
+// neither it nor the user can tell; the screen shows both searches happening.
+// The second is the worse of the two for being quiet.
 func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 	if log == nil || log.calls == 0 {
 		return ""
@@ -540,7 +644,7 @@ func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 	if result == nil && printed == "" {
 		return fmt.Sprintf("The program made %s and returned none of their results. "+
 			"Only the program's final value comes back to you, so end it with what you "+
-			"want to see, or print() as you go.",
+			"want to see, or console.log() as you go.",
 			render.Plural(log.calls, "call", "calls"))
 	}
 	// The value *is* the last call's output, verbatim, and there were earlier
@@ -550,7 +654,7 @@ func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 	if log.calls >= 2 && sameBridgedValue(result, log.last) {
 		return fmt.Sprintf("That is the last call's result. The program made %d, and the "+
 			"earlier ones stayed inside it — only the final value comes back to you. "+
-			"Collect what you need (a list or a dict) and end the program with that.",
+			"Collect what you need (an array or an object) and end the program with that.",
 			log.calls)
 	}
 	return ""
@@ -558,7 +662,7 @@ func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 
 // sameBridgedValue reports whether a program's value is one bridged call's
 // return, unchanged. Strings only: the observation tools answer with text, and
-// a code function's map is not a shape a program returns by accident.
+// a code function's object is not a shape a program returns by accident.
 func sameBridgedValue(result, last any) bool {
 	rs, ok := result.(string)
 	if !ok {
@@ -568,40 +672,82 @@ func sameBridgedValue(result, last any) bool {
 	return ok && rs == ls
 }
 
-// codeErrorText renders an execution failure for the model. The traceback's
-// leading file framing is dropped because it is constant — every program is
-// "script.py" from Monty's point of view — and the exception itself is what
-// the model needs.
-func codeErrorText(err error) string {
-	msg := err.Error()
-	msg = strings.TrimPrefix(msg, "monty: ")
-	// A traceback starts with the file framing and carries the failing line;
-	// keep from the first exception name onward.
-	if i := strings.Index(msg, "\n"); i >= 0 && strings.Contains(msg[:i], "script.py") {
-		msg = msg[i+1:]
-	}
-	return codeHintText("The program failed: "+msg, msg)
-}
+// jsNativeFrame is the stack frame goja appends for a Go function, which
+// names the closure — "at dbohdan.com/…runCode.func7 (native)" — rather than
+// anything the program did.
+var jsNativeFrame = regexp.MustCompile(` at [^ ]+ \(native\)`)
 
-// codeHintText appends the recovery hint to the error classes the model
-// self-corrects on anyway — the wrong-reach family, whose measured cost is one
-// step per session (doc/experiments/2026-09-code-namespace/README.md) and whose
+// jsPosition finds the program line goja's message points at.
+var jsPosition = regexp.MustCompile(`program\.js:(\d+):`)
+
+// jsImport is an import statement, which a script cannot hold.
+var jsImport = regexp.MustCompile(`(?m)^\s*import\s`)
+
+// jsHostName matches the ReferenceError of a Node or browser global — the
+// wrong reach JavaScript invites, as os and open were Python's.
+var jsHostName = regexp.MustCompile(`\b(require|process|fs|path|fetch|module|exports|__dirname|__filename|Deno|Bun|window|document|setTimeout|setInterval|Buffer)\b is not defined`)
+
+// jsKeywordCall is Python's keyword-argument habit in a JavaScript program:
+// grep(pattern="x") assigns to an undeclared name, which strict mode rejects.
+var jsKeywordCall = regexp.MustCompile(`\b(read|read_text|read_bin|grep|glob|ls|symbol)\s*\(\s*[a-z_]+\s*=[^=]`)
+
+// jsErrorText renders a failure for the model: goja's exception, which names
+// the error and the position, plus the line it points at — the line a
+// traceback would have shown.
+//
+// Hints ride the error classes the model would otherwise have to work out for
+// itself. They are the wrong-reach family, whose measured cost is one step per
+// session (doc/experiments/2026-09-code-namespace/README.md) and whose
 // description-side fixes all failed: the mistake is the first program of a
 // session, written before any description is consulted. The error channel is
 // the one that fires exactly when the mistake did, and costs nothing on
-// correct programs. Returned unchanged for every other failure, so the hint
-// never rides on a wall the model could not have avoided.
-func codeHintText(full, msg string) string {
-	if !strings.Contains(msg, "No module named '") {
-		return full
+// correct programs; a hint never rides a wall the model could not have
+// avoided.
+func jsErrorText(err error, code string) string {
+	var interrupted *goja.InterruptedError
+	if errors.As(err, &interrupted) {
+		if v, ok := interrupted.Value().(error); ok && errors.Is(v, errHeapLimit) {
+			return fmt.Sprintf("The program failed: it used more than %d MiB of memory.",
+				codeLimits.MaxHeapGrowth>>20)
+		}
+		if _, ok := interrupted.Value().(string); ok {
+			return fmt.Sprintf("The program failed: it ran past the %s time limit.", codeLimits.MaxDuration)
+		}
+		return "The program was stopped: the turn was interrupted."
 	}
-	return full + "\n\nMonty has no subprocess, no filesystem, and only a few modules " +
-		"(math, re, datetime, json, itertools, collections); os, sys and pathlib " +
-		"import but reach no filesystem. Use the glob, ls, read, and grep functions " +
-		"instead."
+	msg := err.Error()
+	line := 0
+	var ex *goja.Exception
+	if errors.As(err, &ex) {
+		msg = ex.Error()
+		// An error thrown by a bridged function names the Go closure, not the
+		// program; the program line that made the call is the first frame of
+		// the program's own on the stack.
+		for _, f := range ex.Stack() {
+			if f.SrcName() == "program.js" {
+				line = f.Position().Line
+				break
+			}
+		}
+	}
+	msg = jsNativeFrame.ReplaceAllString(msg, "")
+	if m := jsPosition.FindStringSubmatch(msg); line == 0 && m != nil {
+		_, _ = fmt.Sscan(m[1], &line)
+	}
+	full := "The program failed: " + msg
+	if lines := strings.Split(code, "\n"); line >= 1 && line <= len(lines) {
+		full += fmt.Sprintf("\n  line %d: %s", line, strings.TrimSpace(lines[line-1]))
+	}
+	if strings.Contains(msg, "is not defined") && jsKeywordCall.MatchString(code) {
+		full += "\n\nArguments go in an options object: grep({pattern: \"TODO\", glob: \"**/*.go\"}), " +
+			"not grep(pattern=\"TODO\")."
+	}
+	if strings.Contains(msg, "print is not defined") {
+		full += "\n\nconsole.log() is how a program prints here."
+	}
+	if jsHostName.MatchString(msg) || (jsImport.MatchString(code) && strings.Contains(msg, "SyntaxError")) {
+		full += "\n\nThis is not Node or a browser: require, import, fs, path, process, fetch and " +
+			"timers do not exist. Use the glob, ls, read, read_text, and grep functions instead."
+	}
+	return full
 }
-
-// montyRunner lazily builds the one process-wide Runner. Compiling monty.wasm
-// costs hundreds of milliseconds, and wazero compiles once and reuses; each
-// Execute gets its own isolated instance.
-var montyRunner = sync.OnceValues(monty.New)

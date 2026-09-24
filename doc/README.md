@@ -169,7 +169,18 @@ inherited from aider.
 - `internal/`
   - `coder/` — the orchestration spine: assemble → stream → reflect →
     apply → shell → commit → cost. Its seams with the outside world are
-    interfaces in `ports.go` (see below).
+    interfaces in `ports.go` (see below). `codetool.go` is the `run_code`
+    tool: a short JavaScript program run in
+    [goja](https://github.com/dop251/goja), a JavaScript engine in pure Go,
+    with the read-only tools reachable from inside it through a bridge and
+    the mutating tools not, on purpose. It replaced Monty, a restricted
+    Python interpreter compiled to WebAssembly, after
+    [`2026-09-run-code-arms`](experiments/2026-09-run-code-arms/). Uptake was
+    measured in
+    [`2026-08-code-mode`](experiments/2026-08-code-mode/README.md): 0/36 calls
+    on an exploration task built to need it (later trials moved it to 8/24;
+    tool-call error attribution inside programs:
+    [`2026-09-error-attribution`](experiments/2026-09-error-attribution/)).
   - `editblock/` — the edit engine: Python-`difflib` sequence matching that
     lands a replacement whose whitespace the model reproduced imperfectly, the
     did-you-mean an unmatched edit returns, and `LineOps` (difflib's
@@ -238,20 +249,6 @@ inherited from aider.
     `strument usage` and `/usage`.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
-  - `monty/` — the vendored Monty wrapper behind the `run_code` tool: a
-    restricted Python interpreter compiled to WebAssembly, run through
-    wazero. A hard fork of fugue-labs/monty-go (frozen; upstream has
-    stalled): the Go wrapper lives here and the Rust shim that builds the
-    `monty.wasm` blob lives in `monty/shim/`, rebuilt with
-    `make -C internal/monty/shim check`; see its `NOTICE` for provenance
-    and `shim/README.md` for the build. The
-    read-only tools are reachable from inside a program through the bridge
-    in `internal/coder/codetool.go`; the mutating tools are not, on purpose.
-    Uptake measured in
-    [`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md):
-    0/36 calls on an exploration task built to need it (later trials moved
-    it to 8/24; tool-call error attribution inside programs:
-    [`2026-09-error-attribution`](experiments/2026-09-error-attribution/)).
 - `script/` — release build, the grammar build-tag list,
   `setup-reference.sh`, and live probes that need a key and a network:
   `opencode-live-pass.sh` drives the real binary through opencode Go's three

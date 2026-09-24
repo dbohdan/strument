@@ -32,11 +32,11 @@ func TestToolRunCodeStdoutIsOnlyTheResult(t *testing.T) {
 		return o.String(), e.String()
 	}
 
-	// A print-driven program: its output is what the model would see. The
+	// A console.log-driven program: its output is what the model would see. The
 	// result carries no trailing newline through a pipe — what the model would
 	// be sent is not repainted — while a terminal gets the papercut newline.
-	out, errOut := run("tool", "run_code", `print("hello")
-print("world")`)
+	out, errOut := run("tool", "run_code", `console.log("hello")
+console.log("world")`)
 	if out != "hello\nworld" {
 		t.Errorf("stdout = %q, want the program's printed output; the result alone is what a pipe measures", out)
 	}
@@ -49,7 +49,7 @@ print("world")`)
 }
 
 // TestToolRunCodeDataShapes is the incident that motivated the command, end to
-// end from the shell: a glob result is a list to sort, not prose to iterate.
+// end from the shell: a glob result is an array to sort, not prose to iterate.
 func TestToolRunCodeDataShapes(t *testing.T) {
 	root := t.TempDir()
 	for name, content := range map[string]string{
@@ -61,7 +61,7 @@ func TestToolRunCodeDataShapes(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command(builtBinary, "tool", "run_code", `sorted(glob("*.go"))`)
+	cmd := exec.Command(builtBinary, "tool", "run_code", `glob("*.go").sort()`)
 	cmd.Dir = root
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut

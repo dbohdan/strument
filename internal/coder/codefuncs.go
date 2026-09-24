@@ -5,14 +5,14 @@ package coder
 // tools: the model never sees their names in the tool schema, and a direct
 // tool call of one of their names hits Inspector.Run's "Unknown tool" branch,
 // because that switch does not know them either. The single source of truth
-// is codeFuncs below; registration with Monty, dispatch in the bridge, and
+// is codeFuncs below; registration in the interpreter, dispatch in the bridge, and
 // the tool description all read from it, so the three cannot drift.
 //
 // Their contract differs from the observation tools' in the two ways that
 // matter. First, the result is *data for the program to compute over*, not
 // prose for the model — the program's conclusion, not the raw payload, is
 // what reaches the conversation. Second, errors are Go errors, which the
-// bridge turns into Monty exceptions naming the program line that made the
+// bridge throws as Errors at the program line that made the
 // call — the prefix-classified sentences the inspector tools use would be
 // the wrong shape here, since these never pass through bridgeToolFailure.
 
@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"dbohdan.com/strument/internal/monty"
 )
 
 // codeFuncDef is one run_code-only function.
@@ -33,14 +31,14 @@ type codeFuncDef struct {
 	summary string
 	// params is the positional order of the arguments, which must match the
 	// signature the summary states: the summary is the only place the model
-	// learns it, and Monty drops a positional it has no name for. See
+	// learns it, and a positional past the end of it is dropped. See
 	// codeToolParams.
 	params []string
 	// fn receives the decoded arguments and returns data. The Coder is passed
 	// so a function can reach c.Files and c.Root — the same fields an
 	// Inspector is built from — and containment is each function's own
 	// business; the mechanism provides access, not authority.
-	fn func(c *Coder, call *monty.FunctionCall) (any, error)
+	fn func(c *Coder, call *bridgedCall) (any, error)
 }
 
 // codeFuncs is the registry. The only place a run_code-only function is
@@ -49,8 +47,8 @@ type codeFuncDef struct {
 var codeFuncs = []codeFuncDef{
 	{
 		name: "read_bin",
-		summary: "read_bin(path, offset=0, limit=4096) reads a window of a file's raw bytes as " +
-			"{size, offset, truncated, data} where data is a list of 0-255 ints. For computing " +
+		summary: "read_bin({path, offset: 0, limit: 4096}) reads a window of a file's raw bytes as " +
+			"{size, offset, truncated, data} where data is an array of 0-255 numbers. For computing " +
 			"over binary files (magic numbers, entropy, embedded strings); read is the " +
 			"text-shaped one and refuses binaries.",
 		params: []string{"path", "offset", "limit"},
@@ -77,8 +75,8 @@ var codeFuncs = []codeFuncDef{
 var codeDataFuncs = []codeFuncDef{
 	{
 		name: "glob",
-		summary: "glob(pattern) returns the matching project-relative paths as a list of strings — " +
-			"data for the program, unlike the glob tool's prose. Empty list when nothing matches. " +
+		summary: "glob({pattern}) returns the matching project-relative paths as an array of strings — " +
+			"data for the program, unlike the glob tool's prose. Empty array when nothing matches. " +
 			"The pattern is matched against the whole path, segment by segment; \"**/*.go\" reaches " +
 			"every directory, \"*.go\" only the root, and a bare directory name matches nothing.",
 		params: []string{"pattern"},
@@ -86,7 +84,7 @@ var codeDataFuncs = []codeFuncDef{
 	},
 	{
 		name: "ls",
-		summary: "ls(path=\"\") returns one directory's entries as a list of dicts {path, is_dir, link} " +
+		summary: "ls({path: \"\"}) returns one directory's entries as an array of objects {path, is_dir, link} " +
 			"sorted by path — data for the program, unlike the ls tool's prose. Empty path is the " +
 			"project root; a directory under the standard temp directory is allowed too. " +
 			"link is the symlink target, present only on symlinks.",
@@ -152,7 +150,7 @@ func codeDataFuncDoc() string {
 // 4 KiB and is capped at 64 KiB by workspace.ReadBytes itself; each call
 // counts against the bridge's call cap, which bridgeCall enforces before this
 // is reached.
-func runReadBin(c *Coder, call *monty.FunctionCall) (any, error) {
+func runReadBin(c *Coder, call *bridgedCall) (any, error) {
 	path, _ := call.Args["path"].(string)
 	if path == "" {
 		return nil, errors.New("read_bin requires a \"path\" argument")
@@ -162,11 +160,10 @@ func runReadBin(c *Coder, call *monty.FunctionCall) (any, error) {
 
 	fb, err := c.Files.ReadBytes(path, offset, limit)
 	if err != nil {
-		// The tool's own error sentence, as an exception — Monty's traceback
-		// then names the program line that made the call. Capitalized on
-		// purpose: it continues Monty's "external function … failed:" frame,
-		// and a lowercase sentence there reads as a fragment. Wrapped with %w
-		// so the underlying cause stays unwrappable.
+		// The tool's own error sentence, thrown at the program line that made
+		// the call. Capitalized on purpose: it is a sentence the model reads
+		// whole, and a lowercase one reads as a fragment. Wrapped with %w so
+		// the underlying cause stays unwrappable.
 		return nil, fmt.Errorf("Could not read %s: %w", quoteToolArg(path), err) //nolint:staticcheck // ST1005, see above
 	}
 	data := make([]any, len(fb.Data))
@@ -191,6 +188,9 @@ func codeArgInt(v any) int64 {
 		return int64(n)
 	case int:
 		return int64(n)
+	case int64:
+		// What goja exports an integral JavaScript number as.
+		return n
 	}
 	return 0
 }
@@ -213,10 +213,11 @@ const maxReadTextLines = 1_000_000
 // read's line numbers *are* the answer, no model reached for this instead.
 var readTextFunc = codeFuncDef{
 	name: "read_text",
-	summary: "read_text(path, offset=0, limit=0) returns a file's text exactly as stored — no " +
+	summary: "read_text({path, offset: 0, limit: 0}) returns a file's text exactly as stored — no " +
 		"line numbers, no header — for computing over contents (lengths, parsing, hashing, " +
-		"counting). It keeps the file's final newline, so use .splitlines() rather than " +
-		".split(\"\\n\") to get lines. read is the one to use when the answer cites a line number.",
+		"counting). It keeps the file's final newline, so text.split(\"\\n\") ends with an empty " +
+		"string; drop it before counting lines. read is the one to use when the answer cites " +
+		"a line number.",
 	params: []string{"path", "offset", "limit"},
 	fn:     runReadText,
 }
@@ -231,7 +232,7 @@ var readTextFunc = codeFuncDef{
 // whole purpose here is computing over contents, and a length or a count taken
 // from silently truncated text is a wrong answer that looks like a right one —
 // the failure this function exists to remove, reintroduced one layer down.
-func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
+func runReadText(c *Coder, call *bridgedCall) (any, error) {
 	path, _ := call.Args["path"].(string)
 	if path == "" {
 		return nil, errors.New("read_text requires a \"path\" argument")
@@ -245,7 +246,7 @@ func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
 	}
 	ft, err := c.Files.Read(path, offset, limit)
 	if err != nil {
-		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not read %s: %w", quoteToolArg(path), err)
 	}
 	if ft.Truncated {
@@ -269,20 +270,20 @@ func runReadText(c *Coder, call *monty.FunctionCall) (any, error) {
 // runs the same Workspace.Glob the tool runs, so containment, ignore rules,
 // and the results limit are shared; only the rendering differs.
 //
-// The return is the bare list, not a dict carrying a truncation flag beside
-// it: iterating a dict yields its keys, so `for p in glob("**/*.go")` would
-// have produced ["paths"] — the same quiet wrong-shape iteration the prose
+// The return is the bare array, not an object carrying a truncation flag
+// beside it: a program iterating the result would iterate the object's keys
+// and get ["paths"] — the same quiet wrong-shape iteration the prose
 // shape produced, one level down. Truncation instead raises, naming the
 // repair: the tool's 1,000-path limit is real, and a program computing over
 // a silently cut list would take a wrong answer for a right one.
-func runGlobData(c *Coder, call *monty.FunctionCall) (any, error) {
+func runGlobData(c *Coder, call *bridgedCall) (any, error) {
 	pattern, _ := call.Args["pattern"].(string)
 	if strings.TrimSpace(pattern) == "" {
 		return nil, errors.New("glob requires a \"pattern\" argument")
 	}
 	paths, trunc, err := c.Files.Glob(pattern)
 	if err != nil {
-		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not match %s: %w", quoteToolArg(pattern), err)
 	}
 	if trunc.Any() {
@@ -290,7 +291,7 @@ func runGlobData(c *Coder, call *monty.FunctionCall) (any, error) {
 			"— with a directory path in grep, or a **/sub/ pattern — and work on a subtree",
 			len(paths))
 	}
-	// A nil slice marshals to JSON null, which Monty turns into Python None —
+	// A nil slice becomes null in the program —
 	// and a no-match result then looks exactly like the discarded-results
 	// failure the note is for. Empty is a value; make it the value it claims
 	// to be.
@@ -304,11 +305,11 @@ func runGlobData(c *Coder, call *monty.FunctionCall) (any, error) {
 // containment as the tool, including the temp-directory exemption, which is
 // what the live session's program was actually after when it went through
 // glob: listing cloned repositories under /tmp.
-func runLSData(c *Coder, call *monty.FunctionCall) (any, error) {
+func runLSData(c *Coder, call *bridgedCall) (any, error) {
 	dir, _ := call.Args["path"].(string)
 	entries, err := c.Files.List(dir)
 	if err != nil {
-		//nolint:staticcheck // ST1005: continues Monty's "external function … failed:" frame.
+		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not list %s: %w", quoteToolArg(dir), err)
 	}
 	out := make([]any, 0, len(entries))

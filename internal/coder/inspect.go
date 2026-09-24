@@ -70,7 +70,7 @@ func (i *Inspector) Run(name, argsJSON string) string {
 	switch name {
 	case toolRead:
 		// Text only here. Run backs the run_code bridge, whose results are
-		// strings a Python program computes over; an image block has nowhere
+		// strings a program computes over; an image block has nowhere
 		// to go. The program's route to bytes is read_bin.
 		text, _ := i.runRead(tc)
 		return text

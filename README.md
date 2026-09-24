@@ -29,7 +29,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   Project skills also require `strument trust`.
   A skill's `allowed-tools` field does not grant tool permissions.
 - A sandboxed `run_code` tool.
-  The model can run short Python programs for calculations, formatting, or processing several inputs at once in a restricted Wasm interpreter.
+  The model can run short JavaScript programs for calculations, formatting, or processing several inputs at once, in an embedded interpreter with no access to the host.
   Programs have no direct filesystem or network access.
   They can inspect project data through the five exposed read-only search tools.
   Tools that modify files or run shell commands are not exposed.
@@ -225,7 +225,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/model [alias]`, `/reload` | Switch models mid-session; reload the configuration without restarting ([what a reload applies](doc/config.md#what-reload-applies)). |
 
 `/help` lists all commands.
-The model also has a `run_code` tool, which runs a short Python program in a sandbox, in either mode.
+The model also has a `run_code` tool, which runs a short JavaScript program in a sandbox, in either mode.
 See the [`run_code` tool](doc/config.md#the-run_code-tool).
 
 ### Script mode
@@ -581,7 +581,3 @@ Four components are forked and vendored; three carry a `NOTICE` recording the ch
   Its redraw algorithm is a non-destructive single-write repaint after
   [bestline](https://github.com/jart/bestline) by jart (2-clause BSD):
   cells are overwritten in place and only the leftovers erased.
-- The `run_code` Python sandbox (`internal/monty/`) is a fork of
-  [monty-go](https://github.com/fugue-labs/monty-go) at `v0.2.0` (MIT),
-  which provides pure-Go wazero bindings for [Pydantic's Monty](https://github.com/pydantic/monty).
-  The fork is maintained in-tree, including the Rust shim used to build `monty.wasm`, in `internal/monty/shim/`.
