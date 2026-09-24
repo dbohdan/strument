@@ -15,12 +15,16 @@ func TestSessionNamesThatWouldReachOutOfTheStateDirectory(t *testing.T) {
 		"", "..", ".", "../../etc", "a/b", `a\b`, ".hidden",
 		"-leading-dash", "_leading-underscore", "has space", "tab\there",
 		"null\x00byte", strings.Repeat("x", maxSessionName+1),
+		// Windows names: a trailing dot is dropped, so "spike." is "spike";
+		// device names open a device, extension or not, in any case.
+		"spike.", "con", "NUL", "nul.txt", "Com1", "lpt9.log", "aux",
 	} {
 		if err := ValidSessionName(bad); err == nil {
 			t.Errorf("ValidSessionName(%q) allowed it", bad)
 		}
 	}
-	for _, good := range []string{"default", "review", "spike-2", "api_v2", "v1.2", "a", "9lives"} {
+	for _, good := range []string{"default", "review", "spike-2", "api_v2", "v1.2", "a", "9lives",
+		"console", "com10", "com0", "null", "lpt", "auxiliary"} {
 		if err := ValidSessionName(good); err != nil {
 			t.Errorf("ValidSessionName(%q) = %v, want it allowed", good, err)
 		}

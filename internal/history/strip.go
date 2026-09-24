@@ -1,8 +1,10 @@
 package history
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -96,10 +98,6 @@ func PlanStrip(projectRoot string, before time.Time) (StripPlan, error) {
 // into an orphan, and orphans are removed whatever the cutoff. The mtime rule
 // above fails toward keeping; a read error has to as well.
 func newestReferences(projectRoot string) (map[string]time.Time, error) {
-	sessions, err := ListSessions(projectRoot)
-	if err != nil {
-		return nil, err
-	}
 	newest := map[string]time.Time{}
 	note := func(hash string, when time.Time) {
 		if hash == "" {
@@ -110,11 +108,26 @@ func newestReferences(projectRoot string) (map[string]time.Time, error) {
 		}
 	}
 
-	for _, s := range sessions {
-		segments, err := LogSegments(projectRoot, s.Name)
+	// Every directory under sessions/, by path, not ListSessions: that skips a
+	// name ValidSessionName refuses, and the rule has tightened since sessions
+	// shipped (a trailing dot, the Windows device names). A session made
+	// before then is still a session whose references count.
+	sessionsDir, err := artifactPath(projectRoot, artSessions)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("cannot list %s, so nothing can be shown to be unreferenced: %w", sessionsDir, err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		segments, err := segmentsIn(filepath.Join(sessionsDir, e.Name(), sessionArtifacts[sartLog].name))
 		if err != nil {
 			return nil, fmt.Errorf("cannot list the records of session %s, so nothing can be shown "+
-				"to be unreferenced: %w", s.Name, err)
+				"to be unreferenced: %w", e.Name(), err)
 		}
 		for _, seg := range segments {
 			info, err := os.Stat(seg)

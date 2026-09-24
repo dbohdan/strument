@@ -444,6 +444,12 @@ func LogSegments(projectRoot, session string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return segmentsIn(dir)
+}
+
+// segmentsIn lists the record segments in a session's log directory, oldest
+// first. A directory that is not there holds none.
+func segmentsIn(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil

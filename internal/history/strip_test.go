@@ -2,6 +2,7 @@ package history
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -237,5 +238,32 @@ func TestStripReadsAroundATornTail(t *testing.T) {
 	}
 	if plan.Keep != 1 || len(plan.Remove) != 0 {
 		t.Errorf("plan = %+v, want the recent payload kept and nothing removed", plan)
+	}
+}
+
+// A session whose name the current rule refuses is still a session: the rule
+// has tightened since sessions shipped, and one named before that must not
+// have its payloads read as orphans because a listing skips it.
+func TestStripCountsSessionsWhoseNamesNoLongerValidate(t *testing.T) {
+	project := newStripProject(t)
+	hashes := stripFixture(t, project, "spike", time.Hour, "a recent result")
+	sessions, err := artifactPath(project, artSessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(sessions, "spike.")
+	if err := os.Rename(filepath.Join(sessions, "spike"), legacy); err != nil {
+		t.Fatal(err)
+	}
+	if ValidSessionName("spike.") == nil {
+		t.Fatal("the fixture needs a name the current rule refuses")
+	}
+
+	plan, err := PlanStrip(project, time.Now().Add(-90*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Keep != 1 || len(plan.Remove) != 0 {
+		t.Errorf("plan = %+v; the payload %s is referenced from %s an hour ago", plan, hashes[0], legacy)
 	}
 }

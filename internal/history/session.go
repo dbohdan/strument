@@ -43,8 +43,33 @@ func ValidSessionName(name string) error {
 	case !sessionNamePattern.MatchString(name):
 		return fmt.Errorf("%q is not a usable session name: start with a letter or digit, "+
 			"then letters, digits, dots, dashes and underscores", name)
+	case strings.HasSuffix(name, "."):
+		// Windows drops a trailing dot from a directory name, so "spike." would
+		// open the directory of "spike" while calling itself something else.
+		return fmt.Errorf("%q is not a usable session name: it cannot end with a dot", name)
+	case windowsDeviceName(name):
+		return fmt.Errorf("%q is not a usable session name: Windows reserves it for a device", name)
 	}
 	return nil
+}
+
+// windowsDeviceName reports a name Windows resolves to a device rather than a
+// file — CON, NUL, COM1 and the rest, in any case and with any extension, so
+// "nul.txt" counts.
+//
+// Refused on every platform rather than only on Windows. A session name is a
+// label a person picks once and then types for months; one that works on the
+// Linux box and fails on the laptop would be learned at the worst time.
+func windowsDeviceName(name string) bool {
+	base, _, _ := strings.Cut(strings.ToUpper(name), ".")
+	switch base {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) {
+		return base[3] >= '1' && base[3] <= '9'
+	}
+	return false
 }
 
 // Session is one conversation in a project, as a listing shows it.
