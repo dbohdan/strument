@@ -7,8 +7,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"mvdan.cc/sh/v3/expand"
@@ -185,22 +189,16 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	// model-run commands (filtered) and user-run ones (/run, unfiltered);
 	// ListEnviron(nil...) would instead give the block an empty environment.
 	//
-	// PWD is set for both Env shapes rather than left to inheritance
-	// (withPWD): an inherited value may name where Strument started rather
-	// than this block's cwd, and the filtered set may carry none at all —
-	// the allowlist only passes through, and a session started by a
+	// PWD is set on every child rather than left to inheritance
+	// (execWithPWD): an inherited value may name where Strument started
+	// rather than this block's cwd, and the filtered set may carry none at
+	// all — the allowlist only passes through, and a session started by a
 	// non-shell parent has no PWD to pass. Every real shell exports PWD;
 	// bash and fish synthesize it even from an empty environment. A suite
 	// that reads it — Go's os.Getwd honors an exported PWD naming the same
 	// directory — would otherwise pass under the harness and fail in the
 	// user's terminal, which is how a symlinked-repo test failure hid
 	// behind exactly this absence.
-	//
-	// Known gap: mvdan/sh drops the export attribute on the first cd, so a
-	// child stops seeing PWD once the block changes directory (the
-	// interpreter's own variable stays correct).
-	// TestPipeRunnerPWDSurvivesCd holds that assertion, skipped until
-	// upstream keeps the export.
 	env := r.Env
 	if env == nil {
 		env = os.Environ()
@@ -225,7 +223,10 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		// the self-reference from biting.
 		interp.StdIO(nil, capture, capture),
 		interp.Dir(cwd),
-		interp.Env(expand.ListEnviron(withPWD(env, cwd)...)),
+		interp.Env(expand.ListEnviron(env...)),
+		interp.ExecHandlers(func(interp.ExecHandlerFunc) interp.ExecHandlerFunc {
+			return execWithPWD
+		}),
 	}
 	runner, err := interp.New(opts...)
 	if err != nil {
@@ -249,6 +250,97 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		}
 	}
 	return exitCode, captured, err
+}
+
+// execKillTimeout is how long a cancelled child gets between the interrupt
+// and the kill: the interpreter's own default.
+const execKillTimeout = 2 * time.Second
+
+// execWithPWD is interp.DefaultExecHandler with one difference: the child's
+// environment carries PWD naming the directory it runs in.
+//
+// The interpreter cannot be trusted to pass it on. mvdan/sh (v3.13.1, and
+// master at aebdf2b) assigns its PWD with setVarString on start and on every
+// cd, which makes it unexported. At the top level of a block the exported
+// PWD from the environment shows through underneath; a pipeline stage is a
+// background subshell that flattens the two layers, and the unexported one
+// wins. So `env` saw PWD and `env | grep PWD` did not, and a cd dropped it
+// everywhere. Setting it where the child is started covers every path at
+// once, and hc.Dir is the directory the child actually gets.
+//
+// The one divergence from a real shell: a block that unexports or unsets PWD
+// still hands its children one. Nothing a model writes does that on purpose.
+func execWithPWD(ctx context.Context, args []string) error {
+	hc := interp.HandlerCtx(ctx)
+	path, err := interp.LookPathDir(hc.Dir, hc.Env, args[0])
+	if err != nil {
+		fmt.Fprintln(hc.Stderr, err)
+		return interp.ExitStatus(127)
+	}
+	cmd := exec.Cmd{
+		Path:   path,
+		Args:   args,
+		Env:    withPWD(exportedEnv(hc.Env), hc.Dir),
+		Dir:    hc.Dir,
+		Stdin:  hc.Stdin,
+		Stdout: hc.Stdout,
+		Stderr: hc.Stderr,
+	}
+	err = cmd.Start()
+	if err == nil {
+		stop := context.AfterFunc(ctx, func() {
+			if runtime.GOOS == "windows" {
+				_ = cmd.Process.Signal(os.Kill)
+				return
+			}
+			_ = cmd.Process.Signal(os.Interrupt)
+			time.Sleep(execKillTimeout)
+			_ = cmd.Process.Signal(os.Kill)
+		})
+		defer stop()
+		err = cmd.Wait()
+	}
+	var exitErr *exec.ExitError
+	var startErr *exec.Error
+	switch {
+	case errors.As(err, &exitErr):
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return exitStatus(128 + int(status.Signal()))
+		}
+		return exitStatus(exitErr.ExitCode())
+	case errors.As(err, &startErr):
+		fmt.Fprintf(hc.Stderr, "%v\n", err)
+		return interp.ExitStatus(127)
+	default:
+		return err
+	}
+}
+
+// exitStatus wraps a process's exit code into the shell's eight bits, as a
+// POSIX shell does. Windows codes run to 32 bits.
+func exitStatus(code int) interp.ExitStatus {
+	return interp.ExitStatus(code & 0xff)
+}
+
+// exportedEnv is the environment a child of the interpreter gets, the way
+// the interpreter's own (unexported) execEnv builds it: the exported string
+// variables, and a variable unset in the block removes an inherited one.
+func exportedEnv(env expand.Environ) []string {
+	var out []string
+	for name, vr := range env.Each {
+		if !vr.IsSet() {
+			out = slices.DeleteFunc(out, func(kv string) bool {
+				return strings.HasPrefix(kv, name+"=")
+			})
+		}
+		if vr.Exported && vr.Kind == expand.String {
+			out = append(out, name+"="+vr.String())
+		}
+	}
+	return out
 }
 
 // withPWD returns env with every entry named PWD replaced by one naming

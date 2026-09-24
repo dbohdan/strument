@@ -231,24 +231,35 @@ func TestPipeRunnerSeedsPWD(t *testing.T) {
 	}
 }
 
-// The gap the seed cannot close: mvdan/sh drops the export attribute on
-// the first cd, so a child process stops seeing PWD once the block
-// changes directory — observed directly (`export PWD; cd /tmp; env`
-// shows no PWD at all), where every POSIX shell keeps it exported and
-// updated. Skipped rather than pinned in either direction: the assertion
-// below is what must hold, and it stays here so the gap is a visible
-// SKIP rather than a silent divergence. Unskip when upstream keeps the
-// export.
-func TestPipeRunnerPWDSurvivesCd(t *testing.T) {
-	t.Skip("mvdan/sh drops PWD's export attribute on cd; enable when upstream keeps it")
-	into := t.TempDir()
-	_, out, err := (PipeRunner{Env: FilterEnv(nil, nil)}).
-		Run(context.Background(), fmt.Sprintf("cd %q && env", into), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "PWD="+into) {
-		t.Errorf("after cd, children no longer see PWD naming the new directory:\n%s", out)
+// Every way a block starts a child must pass PWD on, not only the simple
+// command the seed test runs. mvdan/sh assigns its own PWD unexported, on
+// start and on every cd, and the exported copy from the environment shows
+// through only at the top level: a pipeline stage is a background subshell
+// that flattens the two, and the unexported one wins. So `env | grep PWD`
+// found nothing while `env` found it — the probe a model reaches for first
+// was the one case that failed.
+func TestPipeRunnerPWDReachesEveryChild(t *testing.T) {
+	dir, into := t.TempDir(), t.TempDir()
+	env := FilterEnv(func() []string {
+		return []string{"PATH=" + os.Getenv("PATH"), "PWD=/stale/session/start"}
+	}, nil)
+	for _, tc := range []struct{ block, want string }{
+		{"env | grep '^PWD='", dir},
+		{"echo \"$(env)\" | grep '^PWD='", dir},
+		{fmt.Sprintf("cd %q && env", into), into},
+		{fmt.Sprintf("cd %q && env | grep '^PWD='", into), into},
+		{fmt.Sprintf("(cd %q; env)", into), into},
+	} {
+		_, out, err := (PipeRunner{Env: env}).Run(context.Background(), tc.block, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out, "PWD="+tc.want) {
+			t.Errorf("%s: the child does not see PWD naming %q:\n%s", tc.block, tc.want, out)
+		}
+		if strings.Contains(out, "/stale/session/start") {
+			t.Errorf("%s: the session's stale PWD reached the child:\n%s", tc.block, out)
+		}
 	}
 }
 
