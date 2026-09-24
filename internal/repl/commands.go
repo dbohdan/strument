@@ -354,17 +354,66 @@ func cmdHelp(_ context.Context, r *REPL, _ string) string {
 			width = n
 		}
 	}
+	// Two columns while the descriptions keep a readable measure beside the
+	// widest syntax; below that, each description goes under its command. The
+	// syntax column is set by /session's, which alone is over half of an
+	// 100-column terminal, and a fixed two-column table left every description
+	// running off the edge and wrapping back to column zero.
+	cols := r.termWidth()
+	descAt := 2 + width + 1 + 2
+	twoColumn := cols-descAt >= minHelpMeasure
 	for _, c := range commands {
 		left := "/" + c.name
 		if c.args != "" {
 			left += " " + c.args
 		}
-		r.printf("  %-*s  %s", width+1, left, c.help)
+		if twoColumn {
+			lines := wrapWords(c.help, cols-descAt)
+			r.printf("  %-*s  %s", width+1, left, lines[0])
+			for _, l := range lines[1:] {
+				r.printf("%s%s", strings.Repeat(" ", descAt), l)
+			}
+			continue
+		}
+		r.printf("  %s", left)
+		for _, l := range wrapWords(c.help, max(cols-6, minHelpMeasure)) {
+			r.printf("      %s", l)
+		}
 	}
-	r.printf("\nArguments: <required>, [optional]; ... means the argument can be repeated.")
-	r.printf("Put file paths containing spaces in quotes.")
-	r.printf("<command>, <question>, and <request> take the rest of the line.")
+	r.printf("")
+	for _, note := range []string{
+		"Arguments: <required>, [optional]; ... means the argument can be repeated.",
+		"Put file paths containing spaces in quotes.",
+		"<command>, <question>, and <request> take the rest of the line.",
+	} {
+		for _, l := range wrapWords(note, cols) {
+			r.printf("%s", l)
+		}
+	}
 	return ""
+}
+
+// minHelpMeasure is the narrowest description column /help will set beside the
+// command syntax before it stacks the two instead.
+const minHelpMeasure = 40
+
+// wrapWords breaks text into lines of at most width runes at spaces. A word
+// longer than width gets a line of its own rather than being cut.
+func wrapWords(text string, width int) []string {
+	var lines []string
+	line := ""
+	for w := range strings.FieldsSeq(text) {
+		switch {
+		case line == "":
+			line = w
+		case utf8.RuneCountInString(line)+1+utf8.RuneCountInString(w) <= width:
+			line += " " + w
+		default:
+			lines = append(lines, line)
+			line = w
+		}
+	}
+	return append(lines, line)
 }
 
 func cmdExit(_ context.Context, _ *REPL, _ string) string { return quitSentinel }

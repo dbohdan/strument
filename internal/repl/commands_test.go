@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
@@ -568,5 +570,52 @@ func TestReloadSaysEnvSetAndSandboxWriteCannotChange(t *testing.T) {
 				t.Errorf("a changed %s reloaded without saying it needs a restart:\n%s", tc.want, got)
 			}
 		})
+	}
+}
+
+// /help fits the terminal it is printed in. The syntax column is set by
+// /session's, over half of a 100-column terminal, and a fixed two-column table
+// ran every description off the edge to wrap back at column zero. Wide enough,
+// it stays two columns; narrower, each description goes under its command.
+func TestHelpFitsTheTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		cols    int
+		stacked bool
+	}{{200, false}, {100, true}, {60, true}} {
+		t.Run(strconv.Itoa(tc.cols), func(t *testing.T) {
+			r, _, out := newTestREPL(t, answerStub("ok\n"), nil)
+			defer r.Close()
+			r.opts.GetSize = func() (int, int) { return tc.cols, 40 }
+			cmdHelp(context.Background(), r, "")
+			var stackedLines int
+			for line := range strings.SplitSeq(strings.TrimRight(out.String(), "\n"), "\n") {
+				if n := utf8.RuneCountInString(line); n > tc.cols {
+					t.Errorf("%d columns: a line of %d runs past the edge: %q", tc.cols, n, line)
+				}
+				if strings.HasPrefix(line, "      ") && !strings.HasPrefix(line, "       ") {
+					stackedLines++
+				}
+			}
+			if got := stackedLines > 0; got != tc.stacked {
+				t.Errorf("%d columns: stacked = %v, want %v:\n%s", tc.cols, got, tc.stacked, out.String())
+			}
+		})
+	}
+}
+
+func TestWrapWords(t *testing.T) {
+	for _, tc := range []struct {
+		in    string
+		width int
+		want  []string
+	}{
+		{"one two three", 7, []string{"one two", "three"}},
+		{"one two three", 100, []string{"one two three"}},
+		{"a unbreakablewordhere b", 5, []string{"a", "unbreakablewordhere", "b"}},
+		{"", 10, []string{""}},
+	} {
+		if got := wrapWords(tc.in, tc.width); !slices.Equal(got, tc.want) {
+			t.Errorf("wrapWords(%q, %d) = %q, want %q", tc.in, tc.width, got, tc.want)
+		}
 	}
 }
