@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -26,7 +27,13 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "test setup:", err)
 		os.Exit(1)
 	}
+	// exec.Command on Windows resolves a path by trying PATHEXT's extensions
+	// and never the bare name, so a binary without .exe is "not found" there
+	// even at an absolute path.
 	builtBinary = filepath.Join(dir, "strument")
+	if runtime.GOOS == "windows" {
+		builtBinary += ".exe"
+	}
 	build := exec.Command("go", "build", "-o", builtBinary, ".")
 	build.Dir = "."
 	if out, err := build.CombinedOutput(); err != nil {

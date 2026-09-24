@@ -903,7 +903,13 @@ func TestFlagPlaceholdersUseAngleBrackets(t *testing.T) {
 	derived := regexp.MustCompile(`--[a-z][a-z-]*=([A-Z][A-Z]*)`)
 
 	for _, args := range cmds {
-		out, _ := exec.Command(builtBinary, append(args, "--help")...).CombinedOutput()
+		out, err := exec.Command(builtBinary, append(args, "--help")...).CombinedOutput()
+		// Checked, because an exec that fails produces no output, and no output
+		// contains no bad placeholder: on Windows this sweep passed for as long
+		// as the binary could not be found.
+		if err != nil {
+			t.Fatalf("strument %s --help: %v\n%s", strings.Join(args, " "), err, out)
+		}
 		for _, m := range derived.FindAllStringSubmatch(string(out), -1) {
 			t.Errorf("strument %s --help renders %q; give the flag a placeholder like \"<name>\"",
 				strings.Join(args, " "), m[0])
