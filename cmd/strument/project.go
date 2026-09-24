@@ -223,14 +223,14 @@ func resolveStateDir(arg string) (string, error) {
 		return "", err
 	}
 	if _, err := history.ReadRoot(dir); err != nil {
-		return "", fmt.Errorf("no recorded history for %s; `strument project list` shows what there is", arg)
+		return "", fmt.Errorf("no saved state for %s; `strument project list` lists the projects that have some", arg)
 	}
 	return dir, nil
 }
 
 func confirmAdopt() bool {
 	if !isTerminal(os.Stdin) {
-		fmt.Println("\nDeclined: there is no terminal to ask on. Pass --yes to adopt without one.")
+		fmt.Println("\nDeclined: this requires an interactive terminal. Pass --yes to adopt without confirmation.")
 		return false
 	}
 	fmt.Print("\nAdopt? (y/N) ")

@@ -1277,7 +1277,7 @@ func (c *trustCmd) Run() error {
 	default:
 		// Fail closed. This used to trust silently, which made `strument trust`
 		// in a setup script a grant nobody read. A script that means it says so.
-		return fmt.Errorf("refusing to trust %s without confirmation: there is no terminal to ask on. Pass `--yes` to trust it unattended",
+		return fmt.Errorf("refusing to trust %s without confirmation: this requires an interactive terminal. Pass `--yes` to trust it without one",
 			strings.TrimRight(filepath.ToSlash(root), "/")+"/")
 	}
 
@@ -1682,7 +1682,7 @@ func loadProjectConfig() (*config.Config, error) {
 		},
 	})
 	if len(missing) > 0 {
-		noticef("not set, read as empty: %s", strings.Join(missing, ", "))
+		noticef("these variables are not set and were read as empty: %s", strings.Join(missing, ", "))
 	}
 	return cfg, err
 }
@@ -1887,7 +1887,7 @@ func (c *modelConfigCmd) Run() error {
 		apiKey = os.Getenv("OPENROUTER_API_KEY")
 	}
 	if apiKey == "" {
-		return errors.New("model-config needs an OpenRouter API key (set OPENROUTER_API_KEY); anonymous catalog requests are rate-limited and can get your IP blocked")
+		return errors.New("model-config requires an OpenRouter API key in OPENROUTER_API_KEY: anonymous catalog requests are rate-limited and can get your IP address blocked")
 	}
 
 	src := &modelconfig.OpenRouterSource{
@@ -2023,13 +2023,13 @@ func main() {
 func discoverSkills(root string) []skill.Skill {
 	tsPath, err := config.DefaultTrustStorePath()
 	if err != nil {
-		noticef("cannot find the trust store, so no project skill is usable: %v", err)
+		noticef("could not find the trust store, so project skills are disabled: %v", err)
 	}
 	var trust skill.Truster
 	if tsPath != "" {
 		ts, tsErr := config.OpenTrustStore(tsPath)
 		if tsErr != nil {
-			noticef("cannot read the trust store, so no project skill is usable: %v", tsErr)
+			noticef("could not read the trust store, so project skills are disabled: %v", tsErr)
 		} else {
 			// Typed nil is not nil through an interface, so the store is
 			// assigned only when there is one — Discover reads a nil Truster

@@ -120,12 +120,12 @@ func (c *sessionDeleteCmd) Run() error {
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("no session named %q; `strument session list` shows what there is", c.Name)
+		return fmt.Errorf("no session named %q; `strument session list` lists the sessions", c.Name)
 	}
 
-	fmt.Println("This deletes the conversation, its pins and its undo record:")
+	fmt.Println("This deletes the session's conversation, pinned files, and undo record:")
 	fmt.Println(sessionLine(*target))
-	fmt.Println("\nStored tool payloads are shared between sessions and are left alone.")
+	fmt.Println("\nStored tool output is shared between sessions and is kept.")
 	if !c.Yes && !confirmDeleteSession() {
 		return nil
 	}
@@ -138,7 +138,7 @@ func (c *sessionDeleteCmd) Run() error {
 
 func confirmDeleteSession() bool {
 	if !isTerminal(os.Stdin) {
-		fmt.Println("\nDeclined: there is no terminal to ask on. Pass --yes to delete without one.")
+		fmt.Println("\nDeclined: this requires an interactive terminal. Pass --yes to delete without confirmation.")
 		return false
 	}
 	fmt.Print("\nDelete? (y/N) ")

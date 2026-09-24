@@ -57,9 +57,9 @@ func runUsageOne(provider string) error {
 	}
 	if !slices.Contains(known, provider) {
 		if len(known) == 0 {
-			return errors.New("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
+			return errors.New("no usage recorded yet for any provider")
 		}
-		return fmt.Errorf("no usage recorded for provider %q (with usage: %s)", provider, strings.Join(known, ", "))
+		return fmt.Errorf("no usage recorded for provider %q; providers with usage: %s", provider, strings.Join(known, ", "))
 	}
 	rows, err := history.ReadUsage(provider)
 	if err != nil {
@@ -77,7 +77,7 @@ func runUsageAll() error {
 		return err
 	}
 	if len(known) == 0 {
-		return errors.New("no usage recorded yet for any provider; usage tracking begins when the version that writes it runs")
+		return errors.New("no usage recorded yet for any provider")
 	}
 	for _, provider := range known {
 		rows, err := history.ReadUsage(provider)

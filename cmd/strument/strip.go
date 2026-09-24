@@ -58,34 +58,33 @@ func (c *historyStripCmd) Run() error {
 		return err
 	}
 	if plan.Empty() {
-		fmt.Printf("Nothing to strip: no stored payload is older than %s.\n", humanSpan(age))
+		fmt.Printf("Nothing to remove: no stored tool output is older than %s.\n", humanSpan(age))
 		if plan.Keep > 0 {
-			fmt.Printf("%s in use, %s.\n",
-				render.Plural(plan.Keep, "payload", "payloads"), humanBytes(plan.KeepBytes))
+			fmt.Printf("%s in use (%s).\n",
+				render.Plural(plan.Keep, "stored output", "stored outputs"), humanBytes(plan.KeepBytes))
 		}
 		return nil
 	}
 
-	fmt.Printf("This removes %s (%s) that nothing has referenced in %s.\n",
-		render.Plural(len(plan.Remove), "stored payload", "stored payloads"),
+	fmt.Printf("This removes %s (%s) not referenced in the last %s.\n",
+		render.Plural(len(plan.Remove), "stored tool output", "stored tool outputs"),
 		humanBytes(plan.Bytes), humanSpan(age))
 	if plan.Orphans > 0 {
 		// Named separately because they are removed whatever the cutoff, and
 		// somebody reading a number that did not match their --older-than
 		// deserves to know why.
-		fmt.Printf("%s of those %s referenced by no record at all, left by a deleted session "+
-			"or a run that died mid-write.\n",
-			render.Plural(plan.Orphans, "payload", "payloads"),
-			map[bool]string{true: "is", false: "are"}[plan.Orphans == 1])
+		fmt.Printf("Of those, %d %s not referenced by any record: left by a deleted session, "+
+			"or by a run that stopped partway through writing. These are removed at any age.\n",
+			plan.Orphans, map[bool]string{true: "is", false: "are"}[plan.Orphans == 1])
 	}
 	if plan.Keep > 0 {
 		// Phrased as "keeping N" rather than "N stays", because Plural fixes
 		// the noun and nothing fixes the verb.
-		fmt.Printf("Keeping %s still in use, %s.\n",
-			render.Plural(plan.Keep, "payload", "payloads"), humanBytes(plan.KeepBytes))
+		fmt.Printf("Keeping %s still in use (%s).\n",
+			render.Plural(plan.Keep, "stored output", "stored outputs"), humanBytes(plan.KeepBytes))
 	}
-	fmt.Println("\nEvery record is kept. Each stripped result keeps its hash, its size and its first line,")
-	fmt.Println("so the conversation still reads and still replays — the payload itself is what goes.")
+	fmt.Println("\nEvery record is kept. Each removed output keeps its hash, size, and first line,")
+	fmt.Println("so conversations still read and replay; only the stored output is deleted.")
 
 	if !c.Yes && !confirmStrip() {
 		return nil
@@ -94,17 +93,17 @@ func (c *historyStripCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Stripped %s, freeing %s.\n",
-		render.Plural(removed, "payload", "payloads"), humanBytes(freed))
+	fmt.Printf("Removed %s, freeing %s.\n",
+		render.Plural(removed, "stored output", "stored outputs"), humanBytes(freed))
 	return nil
 }
 
 func confirmStrip() bool {
 	if !isTerminal(os.Stdin) {
-		fmt.Println("\nDeclined: there is no terminal to ask on. Pass --yes to strip without one.")
+		fmt.Println("\nDeclined: this requires an interactive terminal. Pass --yes to remove without confirmation.")
 		return false
 	}
-	fmt.Print("\nStrip? (y/N) ")
+	fmt.Print("\nRemove them? (y/N) ")
 	line, err := stdinReader.ReadString('\n')
 	if err != nil {
 		return false
@@ -121,7 +120,7 @@ func confirmStrip() bool {
 func parseAge(s string) (time.Duration, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
-		return 0, errors.New("an age like 30d, 6w or 720h")
+		return 0, errors.New("give an age such as 30d, 6w, or 720h")
 	}
 	unit := time.Duration(0)
 	switch {
@@ -133,19 +132,19 @@ func parseAge(s string) (time.Duration, error) {
 	if unit > 0 {
 		n, err := strconv.ParseFloat(strings.TrimSuffix(trimmed[:len(trimmed)-1], " "), 64)
 		if err != nil {
-			return 0, fmt.Errorf("%q is not an age; try 30d, 6w or 720h", s)
+			return 0, fmt.Errorf("%q is not an age; use a value such as 30d, 6w, or 720h", s)
 		}
 		if n <= 0 {
-			return 0, fmt.Errorf("an age has to be positive, not %q", s)
+			return 0, fmt.Errorf("the age must be positive, not %q", s)
 		}
 		return time.Duration(n * float64(unit)), nil
 	}
 	d, err := time.ParseDuration(trimmed)
 	if err != nil {
-		return 0, fmt.Errorf("%q is not an age; try 30d, 6w or 720h", s)
+		return 0, fmt.Errorf("%q is not an age; use a value such as 30d, 6w, or 720h", s)
 	}
 	if d <= 0 {
-		return 0, fmt.Errorf("an age has to be positive, not %q", s)
+		return 0, fmt.Errorf("the age must be positive, not %q", s)
 	}
 	return d, nil
 }
