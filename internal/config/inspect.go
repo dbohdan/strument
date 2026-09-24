@@ -214,6 +214,7 @@ var projectKeyOrder = []string{
 	"hasWebfetchAllow",
 	"hasWebSearch",
 	"hasLoopDetection",
+	"hasLanguageParser",
 	"hasShell",
 	"hasAnchoredEdits",
 	"hasIndentColumn",
@@ -333,6 +334,8 @@ var projectKeys = map[string]projectKey{
 	},
 
 	"hasLoopDetection": {name: "loop_detection", set: func(g *fileGlobals) bool { return g.hasLoopDetection }},
+	// Turns a local parser on or off; grants nothing either way.
+	"hasLanguageParser": {name: "language_parser", set: func(g *fileGlobals) bool { return g.hasLanguageParser }},
 
 	"hasShell": {
 		name: "shell",

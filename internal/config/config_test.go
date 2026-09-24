@@ -142,7 +142,7 @@ func TestLoadUserConfig(t *testing.T) {
 	if flash.Provider.Adapter != "openrouter" || flash.Provider.APIKey != "test-key-not-real" {
 		t.Errorf("provider = %+v", flash.Provider)
 	}
-	if !flash.RepoMap || flash.EditFormat != "tool" {
+	if flash.EditFormat != "tool" {
 		t.Errorf("defaults wrong: %+v", flash)
 	}
 	// side_model resolution: string ref and None->self.
@@ -543,6 +543,20 @@ p = provider("openai", api_key = "k")
 models = {"m": model(p, "s", weak_model = "m")}
 default = "m"
 `, "side_model"},
+		// repo_map left model() for a top-level language_parser. The error
+		// names the new key; True is refused as well as False, since either
+		// way the setting would otherwise be silently doing nothing.
+		{"retired repo_map", `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s", repo_map = True)}
+default = "m"
+`, "language_parser = False"},
+		{"language_parser not a boolean", `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+language_parser = "off"
+`, "`language_parser` must be a boolean"},
 	}
 	for _, c := range cases {
 		_, err := Load(harness(t, c.src, "", nil))
@@ -1178,5 +1192,34 @@ func TestEveryUserKeyMergesFromAProjectToo(t *testing.T) {
 		if !user[k] {
 			t.Errorf("load.go merges %s from a project config but not from the user config", k)
 		}
+	}
+}
+
+// The parser is on unless a config turns it off, and a trusted project may turn
+// it off (or back on) like any other preference.
+func TestLanguageParserDefaultsOnAndMerges(t *testing.T) {
+	user := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+	cfg, err := Load(harness(t, user, "", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NoLanguageParser {
+		t.Error("the language parser must default on")
+	}
+
+	opts := harness(t, user+"language_parser = False\n", "language_parser = True\n", nil)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NoLanguageParser {
+		t.Error("a trusted project's language_parser = True did not win over the user's False")
 	}
 }

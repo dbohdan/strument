@@ -65,6 +65,7 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	}
 
 	c.LoopDetection = !cfg.NoLoopDetection
+	c.syncParser(!cfg.NoLanguageParser)
 	// --no-shell turns the tool off and cannot turn it on, so the flag is
 	// remembered on the Coder rather than consulted here: a reload must not
 	// undo a decision made on the command line, and a config saying

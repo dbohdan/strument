@@ -40,6 +40,7 @@ max_error_reflections = 2
 webfetch_allow = ["docs.example.com"]
 websearch = search("searxng", url = "http://localhost:8888")
 loop_detection = False
+language_parser = False
 shell = True
 anchored_edits = True
 indent_column = True

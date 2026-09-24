@@ -104,7 +104,6 @@ type Model struct {
 	Reasoning    string // request-side effort: "low"/"medium"/"high"; "off" disables; "" or "default" => provider default
 	ReasoningTag string // response-side inline tag to strip; "" => none
 	Temperature  *float64
-	RepoMap      bool
 	Cache        bool // enable prompt-cache breakpoints (1h TTL)
 	Context      int  // input window tokens; 0 => unknown
 	MaxOutput    int
@@ -283,6 +282,16 @@ type Config struct {
 	// MaxSteps and the rest. `loop_detection = False` is the only thing that
 	// sets it.
 	NoLoopDetection bool
+
+	// NoLanguageParser turns off the tree-sitter parse layer: the symbol
+	// tool, /symbol, and the after-an-edit parse check. Inverted for the same
+	// reason as NoLoopDetection, so the zero value is on;
+	// `language_parser = False` is the only thing that sets it.
+	//
+	// Global, not per model. It was model()'s repo_map, a leftover from when
+	// the ranked repo map went into the prompt and its size was a property of
+	// the model reading it. What remains reads the project, not the model.
+	NoLanguageParser bool
 
 	// NoShell withholds the bash tool from the schema, rather than offering it
 	// and refusing the calls. A prompt whose answer never changes teaches that

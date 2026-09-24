@@ -37,6 +37,7 @@ The loader reads these module-level variables after running your file:
 | `webfetch_allow` | list of strings | Optional. Host or host:port entries the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
+| `language_parser` | boolean | Optional. The tree-sitter parser behind `symbol`, `/symbol`, and the after-edit parse check. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
 | `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
@@ -681,6 +682,27 @@ Stopping leaves the partial reply in the chat. Strument tells the model what
 repeated and asks whether to stop, let it try again, or steer it with a message
 of your own.
 
+### `language_parser`
+
+Whether to build the tree-sitter parse layer.
+
+```python
+language_parser = True     # the default
+language_parser = False    # off
+```
+
+It is what the `symbol` tool, the `/symbol` command, and the check after an edit
+that a file still parses are read from. Nothing derived from it is sent with
+your requests; the model finds code with `grep`, `glob`, and `read`. Turning it
+off removes the `symbol` tool from what the model is offered, and `/reload`
+applies a change.
+
+This used to be `repo_map` on `model()`, from when a ranked map of the
+repository went into the prompt and its size depended on the model reading it.
+The map is gone and the parser reads the project, not the model, so the setting
+is global. A `model()` that still passes `repo_map` is refused with a message
+naming this key.
+
 ### `observation_via_run_code`
 
 ```python
@@ -987,7 +1009,7 @@ use `--yes add-output` to answer them automatically.
 
 `/reload` re-reads `config.star` into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
-`shell_timeout`, `loop_detection`, `env_allow`, `check` and `check_auto`,
+`shell_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 
@@ -1263,7 +1285,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, repo_map=True, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1302,10 +1324,6 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`reasoning_tag`** — the name of an inline tag (e.g. `"think"`) the model
   wraps its reasoning in; its contents are stripped from the answer body.
 - **`temperature`** — a float, or `None` to omit the field.
-- **`repo_map`** — build the tree-sitter parse layer (default `True`). It is what
-  the `symbol` tool, the `/symbol` command, and the after-an-edit parse check are
-  read from. Nothing derived from it is sent with your requests; the model finds
-  code with `grep`, `glob`, and `read`.
 - **`cache`** — add prompt-cache breakpoints with a one-hour TTL (default
   `False`). Strument marks the last message in the examples-or-system,
   read-only-files, and chat-files sections; it does not mark the completed or

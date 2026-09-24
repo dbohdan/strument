@@ -84,9 +84,9 @@ func (c *toolCmd) inspector() (*coder.Inspector, error) {
 	return &coder.Inspector{
 		Root:  root,
 		Files: workspace.New(root),
-		// Always built, unlike in a session: the per-model repo_map setting is
-		// about what a prompt carries, and has nothing to say about a lookup
-		// somebody asked for directly.
+		// Always built, whatever language_parser says: that setting is about
+		// what a session offers the model, and has nothing to say about a
+		// lookup somebody asked for directly.
 		RepoMap: repomap.New(root),
 		Out:     toolStderr{},
 	}, nil

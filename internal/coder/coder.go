@@ -474,7 +474,6 @@ func New(root string, model *config.Model) *Coder {
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},
 	}
-	c.syncParser()
 	c.setPrompts()
 	c.Platform = defaultPlatformInfo(c)
 	// The observation tools are contained to the project root, with the same
@@ -485,19 +484,16 @@ func New(root string, model *config.Model) *Coder {
 	return c
 }
 
-// syncParser makes the parse layer follow the model's `repo_map`: build it
-// when the model wants one and there is none, drop it when the model does not.
-// An existing layer is kept, tag cache and all, across a switch between two
-// models that both want it.
+// syncParser builds the parse layer when the config wants one and there is
+// none, and drops it when the config does not. An existing layer is kept, tag
+// cache and all, across a reload that leaves the setting on.
 //
-// It runs from New and SetModel because the setting is per model and /model
-// and /reload both switch through SetModel. It used to be built once in main
-// from the startup model, so a switch to a model with repo_map=False kept
-// offering symbol, and the reverse never offered it — the same stale-copy
-// shape as prefill.
-func (c *Coder) syncParser() {
+// Called from ApplyConfig, so startup and /reload share it. The setting used
+// to be model()'s repo_map and was followed from SetModel; it is global now,
+// because what it switches reads the project rather than the model.
+func (c *Coder) syncParser(on bool) {
 	switch {
-	case !c.Model.RepoMap:
+	case !on:
 		c.RepoMap = nil
 	case c.RepoMap == nil:
 		c.RepoMap = repomap.New(c.Root)

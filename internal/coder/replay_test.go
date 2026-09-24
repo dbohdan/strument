@@ -114,7 +114,6 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:       slug,
 		EditFormat: "tool",
-		RepoMap:    false,
 	}
 	model.SideModel = model
 

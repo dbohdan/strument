@@ -27,7 +27,6 @@ func askCoder(t *testing.T, dir string) *Coder {
 		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:       "test-model",
 		EditFormat: "diff",
-		RepoMap:    true,
 	}
 	model.SideModel = model
 	c := New(dir, model)

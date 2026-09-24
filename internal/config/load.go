@@ -195,6 +195,8 @@ type fileGlobals struct {
 	maxErrorReflectionsVal   int
 	hasLoopDetection         bool
 	loopDetectionVal         bool
+	hasLanguageParser        bool
+	languageParserVal        bool
 	hasShell                 bool
 	shellVal                 bool
 	hasAnchoredEdits         bool
@@ -515,6 +517,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasLoopDetection {
 		cfg.NoLoopDetection = !user.loopDetectionVal
 	}
+	if user.hasLanguageParser {
+		cfg.NoLanguageParser = !user.languageParserVal
+	}
 	if user.hasShell {
 		cfg.NoShell = !user.shellVal
 	}
@@ -627,6 +632,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasLoopDetection {
 			cfg.NoLoopDetection = !project.loopDetectionVal
+		}
+		if project.hasLanguageParser {
+			cfg.NoLanguageParser = !project.languageParserVal
 		}
 		if project.hasShell {
 			cfg.NoShell = !project.shellVal
@@ -1120,6 +1128,15 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasLoopDetection = true
 		out.loopDetectionVal = bool(b)
+	}
+
+	if lp, ok := globals["language_parser"]; ok {
+		b, ok := lp.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `language_parser` must be a boolean, got %s", path, lp.Type())
+		}
+		out.hasLanguageParser = true
+		out.languageParserVal = bool(b)
 	}
 
 	if ae, ok := globals["anchored_edits"]; ok {

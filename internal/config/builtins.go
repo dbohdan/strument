@@ -173,7 +173,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 // model(provider, slug, *, display_name=None, edit_format="tool",
 //
 //	side_model=None, reasoning=None, reasoning_tag=None, temperature=None,
-//	repo_map=True, cache=False, context=None, max_output=None, prefill=False,
+//	cache=False, context=None, max_output=None, prefill=False,
 //	input_cost=None, output_cost=None, extra_params={}).
 //
 // input_cost and output_cost are USD per million tokens.
@@ -188,7 +188,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var sideModel starlark.Value
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
-	repoMap := true
+	var repoMap starlark.Value
 	var cache bool
 	var contextTokens, maxOutput int
 	var prefill bool
@@ -236,6 +236,18 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 				"summaries, off to the side of the turn")
 	}
 
+	// repo_map is unpacked for the same reason. It moved out of model() and
+	// was renamed: it switches the local parser behind symbol and /symbol,
+	// which reads the project, not the model — the per-model setting was left
+	// over from the ranked map that went into the prompt.
+	if repoMap != nil && repoMap != starlark.None {
+		return nil, errors.New(
+			"model: repo_map is no longer a model() setting. The parser it controls reads " +
+				"the project, not the model, so it is one global setting now: write " +
+				"`language_parser = False` at the top level of the config to turn it off, " +
+				"and drop repo_map from model()")
+	}
+
 	pv, ok := providerV.(*providerValue)
 	if !ok {
 		return nil, fmt.Errorf("model: provider must be a provider value, got %s", providerV.Type())
@@ -257,7 +269,6 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		EditFormat:   editFormat,
 		Reasoning:    reasoning,
 		ReasoningTag: reasoningTag,
-		RepoMap:      repoMap,
 		Cache:        cache,
 		Context:      contextTokens,
 		MaxOutput:    maxOutput,
