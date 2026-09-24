@@ -43,7 +43,7 @@ The loader reads these module-level variables after running your file:
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
-| `auto_approve` | list of strings | Optional. Confirmation prompts answered without asking, the standing form of `--yes`. See below. |
+| `auto_approve` | list of strings | Optional. Prompts approved automatically, the standing form of `--yes`. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
@@ -92,8 +92,8 @@ projects/myproj-9428ba2d/
     current         the session a restart picks up
     input.txt       the REPL's input history (owner-only, like ~/.bash_history)
     cost.jsonl      one line per turn: session, tokens, cost, t/s, steps, files
-    blobs/          tool payloads of 1 KiB or more, named by their SHA-256
-    sessions/<name>/    one directory per conversation
+    blobs/          stored tool output of 1 KiB or more, named by its SHA-256
+    sessions/<name>/    one directory per session
         log/        the session record, one JSON Lines file per run
         resume.json pinned files and the model alias, so a restart costs no retyping
         undo.json   file contents to step back through
@@ -845,7 +845,7 @@ map is left as-is rather than refused.
 
 ### `auto_approve`
 
-The standing form of `--yes`: confirmation prompts answered without asking, for
+The standing form of `--yes`: prompts approved automatically, for
 every session in this config's scope.
 
 ```python
