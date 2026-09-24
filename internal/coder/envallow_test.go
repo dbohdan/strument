@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 var fixtureEnv = []string{
 	"PATH=/usr/bin",
 	"HOME=/home/u",
+	"PWD=/home/u/proj",
 	"LANG=C.UTF-8",
 	"LC_ALL=C.UTF-8",
 	"LC_MESSAGES=C.UTF-8",
@@ -55,6 +57,10 @@ func TestFilterEnvDefaults(t *testing.T) {
 		"TMPDIR", "CARGO_HOME",
 		"VIRTUAL_ENV", "TERM",
 		"SOCKS5_SERVER", "HTTPS_PROXY", "NO_PROXY",
+		// PWD: the block's own directory; see TestPipeRunnerSeedsPWD for
+		// the half the allowlist cannot do — passing through a value the
+		// session may not have.
+		"PWD",
 	} {
 		if !slices.Contains(gotNames, name) {
 			t.Errorf("%s was withheld; builds need it", name)
@@ -183,6 +189,62 @@ func TestPipeRunnerEnvIsTheAllowlist(t *testing.T) {
 	}
 	if !strings.Contains(out, "PATH=") {
 		t.Errorf("PATH did not reach the block:\n%s", out)
+	}
+}
+
+// TestPipeRunnerSeedsPWD asserts the fidelity seam directly: a model-run
+// block must see PWD naming its own directory, whatever the session's
+// environment carried. Both directions matter. An inherited PWD naming
+// somewhere else must not survive — a stale value trusted blindly is
+// worse than none — and an absent one must appear, because the session's
+// process legitimately has none when a non-shell parent started it (the
+// state the harness this test suite runs in was started in).
+func TestPipeRunnerSeedsPWD(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	stale := FilterEnv(func() []string {
+		return []string{"PATH=/usr/bin", "PWD=/stale/session/start"}
+	}, nil)
+	_, out, err := (PipeRunner{Env: stale}).Run(ctx, "env", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "PWD="+dir) {
+		t.Errorf("the block does not see PWD naming its directory %q:\n%s", dir, out)
+	}
+	if strings.Contains(out, "/stale/session/start") {
+		t.Errorf("the session's stale PWD reached the block:\n%s", out)
+	}
+
+	absent := FilterEnv(func() []string { return []string{"PATH=/usr/bin"} }, nil)
+	_, out, err = (PipeRunner{Env: absent}).Run(ctx, "env", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "PWD="+dir) {
+		t.Errorf("a session without PWD gave the block none:\n%s", out)
+	}
+}
+
+// The gap the seed cannot close: mvdan/sh drops the export attribute on
+// the first cd, so a child process stops seeing PWD once the block
+// changes directory — observed directly (`export PWD; cd /tmp; env`
+// shows no PWD at all), where every POSIX shell keeps it exported and
+// updated. Skipped rather than pinned in either direction: the assertion
+// below is what must hold, and it stays here so the gap is a visible
+// SKIP rather than a silent divergence. Unskip when upstream keeps the
+// export.
+func TestPipeRunnerPWDSurvivesCd(t *testing.T) {
+	t.Skip("mvdan/sh drops PWD's export attribute on cd; enable when upstream keeps it")
+	into := t.TempDir()
+	_, out, err := (PipeRunner{Env: FilterEnv(nil, nil)}).
+		Run(context.Background(), fmt.Sprintf("cd %q && env", into), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "PWD="+into) {
+		t.Errorf("after cd, children no longer see PWD naming the new directory:\n%s", out)
 	}
 }
 

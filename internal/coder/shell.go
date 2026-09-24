@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -184,6 +185,27 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	// model-run commands (filtered) and user-run ones (/run, unfiltered);
 	// ListEnviron(nil...) would instead give the block an empty environment.
 	//
+	// PWD is set for both Env shapes rather than left to inheritance
+	// (withPWD): an inherited value may name where Strument started rather
+	// than this block's cwd, and the filtered set may carry none at all —
+	// the allowlist only passes through, and a session started by a
+	// non-shell parent has no PWD to pass. Every real shell exports PWD;
+	// bash and fish synthesize it even from an empty environment. A suite
+	// that reads it — Go's os.Getwd honors an exported PWD naming the same
+	// directory — would otherwise pass under the harness and fail in the
+	// user's terminal, which is how a symlinked-repo test failure hid
+	// behind exactly this absence.
+	//
+	// Known gap: mvdan/sh drops the export attribute on the first cd, so a
+	// child stops seeing PWD once the block changes directory (the
+	// interpreter's own variable stays correct).
+	// TestPipeRunnerPWDSurvivesCd holds that assertion, skipped until
+	// upstream keeps the export.
+	env := r.Env
+	if env == nil {
+		env = os.Environ()
+	}
+
 	// The stdin nil below is deliberate rather than the output buffer: that
 	// wiring was self-referential (a command reading stdin reads what the block
 	// has printed so far, and reading a bytes.Buffer drains it), and a
@@ -203,9 +225,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		// the self-reference from biting.
 		interp.StdIO(nil, capture, capture),
 		interp.Dir(cwd),
-	}
-	if r.Env != nil {
-		opts = append(opts, interp.Env(expand.ListEnviron(r.Env...)))
+		interp.Env(expand.ListEnviron(withPWD(env, cwd)...)),
 	}
 	runner, err := interp.New(opts...)
 	if err != nil {
@@ -229,4 +249,24 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		}
 	}
 	return exitCode, captured, err
+}
+
+// withPWD returns env with every entry named PWD replaced by one naming
+// dir. Replace rather than append: an inherited PWD may name a different
+// directory than the block runs in, and a stale value a program trusts
+// blindly is worse than no value — Go stats the name and falls back to
+// the kernel, but not every reader does. The comparison folds only on
+// Windows, where environment names are case-insensitive at the API and
+// os.Environ may spell the name "pwd" — the same rule envAllowed
+// applies, through envNamesFold.
+func withPWD(env []string, dir string) []string {
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if name == "PWD" || (envNamesFold && strings.EqualFold(name, "PWD")) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "PWD="+dir)
 }

@@ -29,6 +29,13 @@ var defaultEnvAllowNames = []string{
 	// Identity, shell, terminal.
 	"PATH", "HOME", "SHELL", "USER", "LOGNAME", "TERM", "TERMINFO",
 	"COLUMNS", "LINES", "TMPDIR",
+	// PWD, the directory a command runs in: path-shaped, not
+	// credential-shaped, and load-bearing — a suite reading it must see
+	// the same answer under the harness as in the user's terminal, where
+	// bash and fish both export it unconditionally. The allowlist can
+	// only pass an inherited value through, and the session's process may
+	// have none; shell.go seeds the block's own cwd over it.
+	"PWD",
 	// Windows basics, where HOME/TERM do not exist.
 	"COMSPEC", "PATHEXT", "SystemRoot", "USERPROFILE", "TEMP", "TMP",
 	// Locale, and the zone. TZ is not locale — LC_TIME decides how a timestamp
