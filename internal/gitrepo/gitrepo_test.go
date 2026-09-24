@@ -746,3 +746,40 @@ func TestAttributeDirectCommitsLeavesPushedCommitsAlone(t *testing.T) {
 		t.Errorf("the unpushed commit lost its attribution:\n%s", body)
 	}
 }
+
+// Published is what /undo and /squash refuse on. They compared each commit
+// with the tip of origin/<current branch> and nothing else, so both published
+// cases below read as local and would have been rewritten.
+func TestPublishedSeesEveryRemoteAndBranchName(t *testing.T) {
+	ours := initRepo(t)
+	bare := t.TempDir()
+	run(t, bare, "git", "init", "-q", "--bare", "-b", "main")
+	run(t, ours, "git", "remote", "add", "upstream", bare)
+	g, err := gitrepo.Discover(ours)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commitFile(t, ours, "a.txt", "pushed under a remote not called origin")
+	underUpstream := g.HeadSHA()
+	run(t, ours, "git", "push", "-q", "upstream", "main")
+
+	commitFile(t, ours, "b.txt", "pushed under another branch name")
+	underOtherName := g.HeadSHA()
+	run(t, ours, "git", "push", "-q", "upstream", "HEAD:review")
+
+	commitFile(t, ours, "c.txt", "not pushed")
+	local := g.HeadSHA()
+
+	for name, sha := range map[string]string{
+		"a remote named upstream": underUpstream,
+		"a push as review":        underOtherName,
+	} {
+		if !g.Published(sha) {
+			t.Errorf("%s: commit %s is on the remote but reads as local", name, sha[:7])
+		}
+	}
+	if g.Published(local) {
+		t.Errorf("commit %s was never pushed but reads as published", local[:7])
+	}
+}

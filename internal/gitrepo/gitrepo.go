@@ -516,6 +516,22 @@ func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error)
 	return final, nil
 }
 
+// Published reports whether sha is contained in any remote-tracking branch —
+// pushed, under whatever remote or branch name, or pulled from one. Rewriting
+// such a commit (squash, undo) makes the next push a force-push.
+//
+// Any remote and any branch, rather than origin/<current branch>: a remote
+// called upstream, or `git push origin HEAD:review`, publishes a commit that
+// the narrower check reported as local. An error counts as published, for the
+// same reason reachableElsewhere's does.
+func (r *Repo) Published(sha string) bool {
+	out, err := r.git("for-each-ref", "--contains", sha, "--format=%(refname)", "refs/remotes")
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(out) != ""
+}
+
 // reachableElsewhere reports whether sha is contained in any ref other than
 // branchRef: a remote-tracking branch (it was pushed, or pulled), another local
 // branch or a tag (it was merged in, or lives on). Either way it is not a

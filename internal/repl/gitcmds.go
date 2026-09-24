@@ -61,11 +61,9 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 		}
 	}
 
-	if branch := g.CurrentBranch(); branch != "" {
-		if remote, err := g.RevParse("origin/" + branch); err == nil && remote == sha {
-			r.out.Errorf("The last commit has already been pushed to the origin. Undoing is not possible.")
-			return ""
-		}
+	if g.Published(sha) {
+		r.out.Errorf("The last commit has already been pushed. Undoing it would rewrite published history.")
+		return ""
 	}
 
 	var restored, unrestored []string
@@ -167,14 +165,12 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	}
 
 	base := fmt.Sprintf("HEAD~%d", n)
-	if branch := g.CurrentBranch(); branch != "" {
-		if remote, err := g.RevParse("origin/" + branch); err == nil {
-			for _, c := range commits {
-				if c.SHA == remote {
-					r.out.Errorf("Commit %s has already been pushed to the origin. Squashing is not possible.", c.Short)
-					return ""
-				}
-			}
+	// Oldest first: a pushed commit's ancestors are pushed too, so the first
+	// one found is the one to name.
+	for _, c := range slices.Backward(commits) {
+		if g.Published(c.SHA) {
+			r.out.Errorf("Commit %s has already been pushed. Squashing it would rewrite published history.", c.Short)
+			return ""
 		}
 	}
 
