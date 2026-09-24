@@ -348,7 +348,12 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		}
 
 		if res == resContinuation {
-			if !c.PrefillSupported {
+			// Read from the model on every send, not copied at New: /model and
+			// /reload swap c.Model, and a copy kept the startup model's answer —
+			// so starting on a model that continues and switching to one that
+			// restarts left prefill on, the silent half of the asymmetry
+			// config.Model.Prefill describes.
+			if !c.Model.Prefill {
 				declinedPrefill = true
 				term = resOutputExhausted
 				break
