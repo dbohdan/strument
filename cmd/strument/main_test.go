@@ -749,11 +749,13 @@ func stubEndpoint(t *testing.T, handler http.HandlerFunc) (out string, paths []s
 	defer srv.Close()
 
 	root := t.TempDir()
-	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
-	// the same pattern as writeTempUserConfig.
+	// os.UserConfigDir ignores XDG_CONFIG_HOME on macOS ($HOME) and on
+	// Windows (%AppData%); the same pattern as writeTempUserConfig.
 	switch runtime.GOOS {
 	case "darwin":
 		t.Setenv("HOME", filepath.Join(root, "cfg"))
+	case "windows":
+		t.Setenv("APPDATA", filepath.Join(root, "cfg"))
 	default:
 		t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "cfg"))
 	}
@@ -785,10 +787,12 @@ func stubEndpoint(t *testing.T, handler http.HandlerFunc) (out string, paths []s
 		"XDG_STATE_HOME="+filepath.Join(root, "state"),
 		"XDG_CACHE_HOME="+filepath.Join(root, "cache"),
 	)
-	// On macOS os.UserConfigDir ignores XDG_CONFIG_HOME and uses $HOME;
-	// the subprocess needs the same redirect.
-	if runtime.GOOS == "darwin" {
+	// The subprocess needs the same per-platform redirect.
+	switch runtime.GOOS {
+	case "darwin":
 		cmd.Env = append(cmd.Env, "HOME="+filepath.Join(root, "cfg"))
+	case "windows":
+		cmd.Env = append(cmd.Env, "APPDATA="+filepath.Join(root, "cfg"))
 	}
 	combined, runErr := cmd.CombinedOutput()
 
@@ -829,9 +833,6 @@ func answerOK(w http.ResponseWriter, _ *http.Request) {
 // arriving is the evidence — stronger than a connection error, which only
 // says a socket was attempted.
 func TestChatNoHistoryStillSends(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix listener")
-	}
 	combined, seen, err := stubEndpoint(t, reject401)
 
 	if len(seen) == 0 {
@@ -854,9 +855,6 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 // status that is non-zero whatever happens says nothing. Both arms run the
 // same command against the same binary, and only the endpoint differs.
 func TestChatExitStatusFollowsTheOutcome(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix listener")
-	}
 	for _, tc := range []struct {
 		name    string
 		handler http.HandlerFunc
