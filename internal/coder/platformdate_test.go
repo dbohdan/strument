@@ -9,7 +9,7 @@ import (
 
 // TestPlatformDateFollowsTheSessionZone is the other end of env_set's TZ.
 // config.ApplyTimeZone moves time.Local; this is the claim that moving it
-// reaches the one date the model is shown, "Current date" in the system prompt.
+// reaches the one date the model is shown, "Date Strument started" in the system prompt.
 //
 // The assertion is that two zones give two different answers, rather than that
 // one zone gives an expected one. Comparing Date against
@@ -37,6 +37,6 @@ func TestPlatformDateFollowsTheSessionZone(t *testing.T) {
 	east := dateIn("Pacific/Kiritimati") // UTC+14
 	west := dateIn("Pacific/Midway")     // UTC-11
 	if east == west {
-		t.Errorf("Current date is %q in both UTC+14 and UTC-11; it is not using the session's zone", east)
+		t.Errorf("The start date is %q in both UTC+14 and UTC-11; it is not using the session's zone", east)
 	}
 }

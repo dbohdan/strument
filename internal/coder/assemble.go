@@ -196,7 +196,12 @@ func (c *Coder) platformText() string {
 	if c.Platform.Language != "" {
 		b.WriteString("- Language: " + c.Platform.Language + "\n")
 	}
-	b.WriteString("- Current date: " + c.Platform.Date + "\n")
+	// Not "Current date", which is aider's label: the date is taken once, when
+	// Strument starts, so after midnight the label was the false part. The
+	// date stays because a model without one assumes the year its training
+	// ended, which is the costlier mistake; the about tool has the live clock.
+	b.WriteString("- Date Strument started: " + c.Platform.Date +
+		" (the about tool gives the current date and time)\n")
 	if c.Platform.WorkDir != "" {
 		b.WriteString("- Working directory: " + c.Platform.WorkDir + "\n")
 	}
