@@ -231,7 +231,7 @@ func (c *Coder) codeToolsText() string {
 	if !c.OfferCode {
 		return ""
 	}
-	return fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools()))
+	return c.codeToolsBullet(fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools())))
 }
 
 // andList writes names as English prose: "read, grep, glob, and ls". The prompt

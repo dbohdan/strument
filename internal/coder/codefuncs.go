@@ -191,6 +191,9 @@ func codeArgInt(v any) int64 {
 		return int64(n)
 	case int:
 		return int64(n)
+	case int64:
+		// What goja exports an integral JavaScript number as.
+		return n
 	}
 	return 0
 }

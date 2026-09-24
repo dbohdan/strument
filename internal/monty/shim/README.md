@@ -140,6 +140,18 @@ pydantic/monty release cannot be adapted without changing them, that is a
 Go-wrapper change too — stop and make it deliberately, not as a side
 effect of a rebuild.
 
+### A return value can be a `FileHandle` (a wire-format addition)
+
+Not an adaptation: a feature, for the monty-open arm of
+`doc/experiments/2026-09-run-code-arms`. Monty answers `open()` with a
+`MontyObject::FileHandle` the host supplies, and plain JSON cannot express
+one, so `json_to_monty` recognises exactly `{"$file": {"path": …, "mode": …}}`
+(`file_handle_from_json`) and builds the handle, parsing the mode with Monty's
+own `FileMode::from_str`. Any other object stays a dict. It extends the
+contract below rather than changing it: no Go value that existed before
+produces the tag. Built with rustc 1.95; the unchanged shim reproduced the
+vendored blob byte for byte on that toolchain before the change went in.
+
 ## Known drift candidates (watched, not yet hit)
 
 - New `RunProgress` variants (beyond `Complete`, `FunctionCall`, `OsCall`,

@@ -13,8 +13,9 @@ use std::time::Duration;
 
 use monty::{FunctionCall, MontyRun, OsCall, ResolveFutures, RunProgress};
 use monty_types::{
-    CompileOptions, DictPairs, ExcType, ExtFunctionResult, MontyException, MontyObject,
-    NameLookupResult, PrintWriter, PrintWriterCallback, ResourceLimits, ResourceTracker,
+    CompileOptions, DictPairs, ExcType, ExtFunctionResult, FileMode, MontyException,
+    MontyFileHandle, MontyObject, NameLookupResult, PrintWriter, PrintWriterCallback,
+    ResourceLimits, ResourceTracker,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -129,6 +130,9 @@ fn json_to_monty(val: &JsonValue) -> MontyObject {
             MontyObject::List(items.iter().map(json_to_monty).collect())
         }
         JsonValue::Object(map) => {
+            if let Some(handle) = file_handle_from_json(map) {
+                return handle;
+            }
             let pairs: Vec<(MontyObject, MontyObject)> = map
                 .iter()
                 .map(|(k, v)| (MontyObject::String(k.clone()), json_to_monty(v)))
@@ -136,6 +140,26 @@ fn json_to_monty(val: &JsonValue) -> MontyObject {
             MontyObject::Dict(DictPairs::from(pairs))
         }
     }
+}
+
+/// The host's answer to an `open` OS call: `{"$file": {"path": …, "mode": …}}`
+/// becomes the `FileHandle` Monty builds its file object from. A plain JSON
+/// value cannot express one, and without it `open()` could only be refused.
+/// The mode is parsed by Monty's own `FromStr`, so a mode the host sends is
+/// held to the rules `open()` itself applies. Anything not exactly that shape
+/// stays an ordinary dict.
+fn file_handle_from_json(map: &serde_json::Map<String, JsonValue>) -> Option<MontyObject> {
+    if map.len() != 1 {
+        return None;
+    }
+    let inner = map.get("$file")?.as_object()?;
+    let path = inner.get("path")?.as_str()?;
+    let mode = inner.get("mode")?.as_str()?.parse::<FileMode>().ok()?;
+    Some(MontyObject::FileHandle(MontyFileHandle {
+        path: path.to_string(),
+        mode,
+        position: 0,
+    }))
 }
 
 fn monty_args_to_json(args: &[MontyObject]) -> JsonValue {
