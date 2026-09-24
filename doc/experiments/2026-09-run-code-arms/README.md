@@ -1,12 +1,15 @@
 # Monty, Monty with `open()`, or JavaScript: which run_code fails least?
 
-**Result: keep Monty as it is. Making `open()` work made first programs fail
+**Decision, revised after the report: JavaScript replaced Monty** (`460c92c`),
+on the evidence below read against the right cost — see *What this licenses*.
+
+**Result: do not make `open()` work. Making it work made first programs fail
 more, not less — 18/73 against 5/70 (p = 0.006) — because a legitimate
 `open()` invites the rest of Python's file toolbox, and most of that is not
 there. JavaScript failed least (1/69), but the difference from Monty is not
 significant (p = 0.21), and correctness was identical in all three arms: every
 session that wrote a program answered correctly.** Neither arm meets the
-preregistered rule, so both are removed.
+preregistered rule, so both trial arms were removed.
 
 Preregistered in [`preregistration.md`](preregistration.md) and committed
 before the main run reported. Follows the text-only probe
@@ -112,15 +115,22 @@ sessions.
 - **Do not ship monty-open.** It is significantly worse on the primary
   metric, and the mechanism is clear enough to generalise: making one wrong
   reach succeed legitimises the neighbouring ones.
-- **Do not ship JavaScript on this evidence.** Its direction is the right
-  one (1/69 against 5/70) and it cost nothing in correctness, but the
-  difference is not significant, and confirming a gain of this size at 80%
-  power would take roughly three times the sample. The gain itself is at most
-  a step in fourteen sessions, against a second engine, three new
+- **JavaScript is not shown better, and is shown no worse.** Its direction
+  is the right one (1/69 against 5/70) and it cost nothing in correctness,
+  but the difference is not significant, and confirming a gain of this size
+  at 80% power would take roughly three times the sample. The preregistered
+  rule, which asked for a significant gain, is not met.
+- **Replace Monty with JavaScript anyway, on cost.** The first version of
+  this report weighed JavaScript against "a second engine, three new
   dependencies and a second implementation of the run_code contract to keep
-  in step.
-- **Keep Monty.** Both arms, the goja dependency and the shim's `$file` tag
-  are removed.
+  in step" and kept Monty. That priced running two engines side by side,
+  which was never the proposal: the proposal was replacing Monty. A
+  replacement *removes* the Monty wrapper, the vendored 5 MB WebAssembly
+  blob, the Rust shim with its toolchain (rustc 1.95 to rebuild), and wazero,
+  and adds goja and three small Go dependencies; the binary came out 1.25 MB
+  smaller. An engine no worse on anything measured, with a smaller stack, is
+  the better one to carry. Done in `460c92c`, after this report; the trial
+  arms themselves were removed in `583908a` as the rule said.
 
 The two JavaScript hazards the probe could not measure did not appear when
 the code ran: no silent wrong answers, and the numeric-sort trap never fired
