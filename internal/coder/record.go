@@ -127,6 +127,11 @@ type Record struct {
 	// counts between them cannot say, since one is what the model could see and
 	// the other is only how many edits landed.
 	Files []string `json:"files,omitempty"`
+	// CreatedFiles is what the turn's commands left behind: untracked,
+	// unignored files that appeared during the turn without passing through
+	// the edit tools, as they stood when the turn ended. Git projects only.
+	// See newfiles.go.
+	CreatedFiles []string `json:"created_files,omitempty"`
 	// Tools is the harness's own one-line summaries for the turn, in order:
 	// "Read poll/poll.go (5 lines)", "‹check› lint $ golangci-lint run",
 	// "failed (exit status 1)".

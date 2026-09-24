@@ -169,6 +169,7 @@ func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool) (string, s
 }
 func (r *committingRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
 func (r *committingRepo) TrailerValue() string                                    { return "" }
+func (r *committingRepo) UntrackedFiles() ([]string, error)                       { return nil, nil }
 
 // TestToolEditApplies replays a single edit tool call and asserts
 // the edit lands on disk, the outcome is a clean success, and the history is

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,6 +110,38 @@ func TestDiscoverAndPlumbing(t *testing.T) {
 	}
 	if !g.GitIgnored("build.log") || g.GitIgnored("main.txt") {
 		t.Error("GitIgnored wrong")
+	}
+}
+
+// Untracked means what `git status` means: not tracked, not ignored, listed
+// file by file even inside a new directory.
+func TestUntrackedFiles(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		".gitignore":    "*.log\n",
+		"new.txt":       "x\n",
+		"build.log":     "ignored\n",
+		"dir/inner.txt": "nested\n",
+	} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := g.UntrackedFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(got)
+	if want := []string{".gitignore", "dir/inner.txt", "new.txt"}; !slices.Equal(got, want) {
+		t.Errorf("UntrackedFiles = %v, want %v", got, want)
 	}
 }
 

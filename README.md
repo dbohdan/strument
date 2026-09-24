@@ -40,6 +40,8 @@ See [`doc/`](doc/README.md) for the developer overview.
   like a live configuration directory or a checkout under another SCM.
   In a Git repository, a turn is one commit.
   The command `/squash [n]` merges commits.
+  Files that the model's commands created, rather than its edits (a compiled binary, a scratch script), are not committed.
+  Strument lists those that git neither tracks nor ignores at the end of the turn, and tells the model about them once, when it thinks it is done, so it can remove any by-product it did not mean to leave.
 - Project checks.
   The `check` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
   The model can run them by name without a permission prompt.
@@ -279,7 +281,7 @@ Deleting a session keeps the stored tool output, which is shared between session
 Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per run.
 `strument history path` prints the newest one, and `strument history markdown` renders the whole session as a Markdown transcript (`-t <n>` limits it to the last *n* turns).
 Each record has a `type` field: a `session` header at the start, then `message` and `reasoning` records for every message the model sent or received (including tool calls), and a `turn` record at the end of each turn.
-A `turn` record carries the outcome, the number of steps, token counts, cost, throughput in tokens per second, the files the turn changed, the one-line summaries of the work that Strument printed, the mode (`edit_format`) and the tools the model was offered (`offered_tools`), and the prompt and answer as a reader sees them.
+A `turn` record carries the outcome, the number of steps, token counts, cost, throughput in tokens per second, the files the turn changed, the untracked files its commands created (`created_files`), the one-line summaries of the work that Strument printed, the mode (`edit_format`) and the tools the model was offered (`offered_tools`), and the prompt and answer as a reader sees them.
 `tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
 `outcome` is `Crashed` for a turn that ended in a panic, and its answer is the fragment the turn had produced.
 

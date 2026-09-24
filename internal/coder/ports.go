@@ -248,6 +248,9 @@ type Repo interface {
 	PathInRepo(rel string) bool
 	IsDirty(rel string) bool
 	GitIgnored(rel string) bool
+	// UntrackedFiles lists the files git neither tracks nor ignores,
+	// repo-root-relative. See newfiles.go.
+	UntrackedFiles() ([]string, error)
 	HeadSHA() string
 	// Commit commits fnames; returns hash and message, or ok=false when there
 	// was nothing to commit. attributed marks auto-commits of model edits,
