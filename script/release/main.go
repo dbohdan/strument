@@ -87,8 +87,10 @@ func build(dir string, target BuildTarget, version string) error {
 		return fmt.Errorf("failed to read grammar tags: %w", err)
 	}
 
+	// -X stamps the version the binary reports. Without it every release
+	// said 0.0.0-dev: VERSION named the file and nothing else.
 	cmd := exec.Command("go", "build", "-trimpath",
-		"-ldflags", "-s -w",
+		"-ldflags", "-s -w -X main.version="+version,
 		"-tags", strings.TrimSpace(string(tags)),
 		"-o", outputPath, "./cmd/strument")
 
