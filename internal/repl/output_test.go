@@ -648,3 +648,61 @@ func TestLinkHyperlinksOnlyWhatIsSafe(t *testing.T) {
 		t.Errorf("a control character was hyperlinked anyway: %q", got)
 	}
 }
+
+// commandSteps is a turn where a command's output is followed by a step that
+// opens with an answer, then by one that opens with thinking. The live pass
+// behind it read, in script mode and without color,
+//
+//	ok  	example.com/stats	0.002s
+//	Tests pass.
+//
+// with nothing marking where the command stopped and the model began: the
+// output went through Printf, which settles the gap, and text never paid it.
+func commandSteps(o coder.Output) {
+	o.StreamToolCall(0, "bash", `{"command":"go test ./..."}`)
+	o.FlushStream()
+	o.Toolf(`Running "go test ./..."`)
+	o.CommandOutput("ok  \texample.com/stats\t0.002s")
+
+	o.StreamText("Tests pass.")
+	o.StreamToolCall(0, "bash", `{"command":"go vet ./..."}`)
+	o.FlushStream()
+	o.Toolf(`Running "go vet ./..."`)
+	o.CommandOutput("vet: clean")
+
+	o.StreamReasoning("Both clean.")
+	o.StreamText("Done.")
+	o.FlushStream()
+}
+
+func TestCommandOutputIsSeparatedFromWhatFollows(t *testing.T) {
+	var buf bytes.Buffer
+	commandSteps(&termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 200})
+	want := []string{
+		`Running "go test ./..."`,
+		"ok  \texample.com/stats\t0.002s",
+		"",
+		"Tests pass.",
+		"",
+		`Running "go vet ./..."`,
+		"vet: clean",
+		"",
+		render.ThinkingOpen + " Both clean.",
+		"",
+		"Done.",
+	}
+	got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if !slices.Equal(got, want) {
+		t.Errorf("layout:\n got %#v\nwant %#v", got, want)
+	}
+}
+
+// The same turn, held to the same spacing in both outputs.
+func TestBothOutputsSeparateCommandOutput(t *testing.T) {
+	var term bytes.Buffer
+	commandSteps(&termOutput{w: &term, color: false, theme: render.DefaultTheme(), width: 200})
+	plain := captureStdout(t, func() { commandSteps(&coder.StdOutput{}) })
+	if got, want := strings.TrimRight(plain, "\n"), strings.TrimRight(term.String(), "\n"); got != want {
+		t.Errorf("the two outputs space a command differently:\n script   %q\n terminal %q", got, want)
+	}
+}

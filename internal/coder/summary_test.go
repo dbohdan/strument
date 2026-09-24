@@ -31,6 +31,7 @@ func (o *summaryOutput) Printf(format string, args ...any) {
 	o.lines = append(o.lines, fmt.Sprintf(format, args...))
 }
 func (o *summaryOutput) Warningf(format string, args ...any) { o.Printf(format, args...) }
+func (o *summaryOutput) CommandOutput(text string)           { o.Printf("%s", text) }
 func (o *summaryOutput) Errorf(format string, args ...any)   { o.Printf(format, args...) }
 func (o *summaryOutput) Toolf(format string, args ...any)    { o.Printf(format, args...) }
 func (o *summaryOutput) ToolBlock(title, body string)        { o.Printf("%s %s", title, body) }

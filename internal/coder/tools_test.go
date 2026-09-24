@@ -842,6 +842,7 @@ func (o *captureOut) Printf(format string, args ...any) {
 	o.lines = append(o.lines, fmt.Sprintf(format, args...))
 }
 func (o *captureOut) Toolf(format string, args ...any)    { o.Printf(format, args...) }
+func (o *captureOut) CommandOutput(text string)           { o.Printf("%s", text) }
 func (o *captureOut) Warningf(format string, args ...any) { o.Printf(format, args...) }
 func (o *captureOut) Errorf(format string, args ...any)   { o.Printf(format, args...) }
 func (o *captureOut) Link(target string)                  { o.Printf("%s", target) }

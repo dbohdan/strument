@@ -304,6 +304,13 @@ func (RealClock) Now() time.Time { return time.Now() }
 // Output is where the coder talks to the user. StreamText receives answer
 // deltas as they arrive; StreamReasoning receives reasoning deltas
 // (display-only, never parsed or persisted).
+//
+// Eleven methods, over the linter's ten, and kept as one interface on purpose:
+// it is the coder's single seam to the screen, implemented twice for real and
+// once per test double, and splitting it by count would give each of those
+// two interfaces to satisfy and nothing to vary independently.
+//
+//nolint:interfacebloat // One output seam; see above.
 type Output interface {
 	Printf(format string, args ...any)
 	Warningf(format string, args ...any)
@@ -329,6 +336,12 @@ type Output interface {
 	// page named at a prompt and the page named by a fetch nobody was asked
 	// about are drawn the same way.
 	Link(target string)
+	// CommandOutput prints what a command wrote, as part of the step that ran
+	// it. Not Printf: that is the harness's own voice and settles the gap
+	// before the next step, so whatever the model said next — thinking or an
+	// answer — was printed flush against the command's last line, and without
+	// color nothing marked where the output stopped and the model began.
+	CommandOutput(text string)
 	StreamText(delta string)
 	StreamReasoning(delta string)
 	// StreamToolCall receives a streamed tool-call argument fragment for the

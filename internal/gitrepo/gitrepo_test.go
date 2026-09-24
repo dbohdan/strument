@@ -326,6 +326,7 @@ func (yesConfirmer) Confirm(coder.ConfirmRequest) coder.ConfirmResult {
 type quietOutput struct{ testing.TB }
 
 func (o quietOutput) Printf(format string, args ...any)   { o.Logf(format, args...) }
+func (o quietOutput) CommandOutput(text string)           { o.Logf("%s", text) }
 func (o quietOutput) Toolf(format string, args ...any)    { o.Logf(format, args...) }
 func (o quietOutput) ToolBlock(title, _ string)           { o.Logf("%s …", title) }
 func (o quietOutput) Warningf(format string, args ...any) { o.Logf(format, args...) }

@@ -70,6 +70,7 @@ func (s scriptAsker) Ask(req AskRequest) []string {
 type testOutput struct{ t *testing.T }
 
 func (o testOutput) Printf(format string, args ...any)   { o.t.Logf("out: "+format, args...) }
+func (o testOutput) CommandOutput(text string)           { o.t.Logf("out: %s", text) }
 func (o testOutput) Toolf(format string, args ...any)    { o.t.Logf("tool: "+format, args...) }
 func (o testOutput) ToolBlock(title, _ string)           { o.t.Logf("tool block: %s", title) }
 func (o testOutput) Warningf(format string, args ...any) { o.t.Logf("warn: "+format, args...) }

@@ -101,7 +101,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 	if output != "" {
 		// Printf adds the trailing newline; trim the runner's so output that
 		// already ends in one doesn't print a blank line.
-		c.Out.Printf("%s", strings.TrimRight(output, "\n"))
+		c.Out.CommandOutput(strings.TrimRight(output, "\n"))
 	}
 	return exitCode, output
 }

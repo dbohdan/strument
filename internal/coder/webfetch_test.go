@@ -346,6 +346,7 @@ func TestAllowOriginExpandsLikeTheConfig(t *testing.T) {
 type captureOutput struct{ b strings.Builder }
 
 func (o *captureOutput) Printf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
+func (o *captureOutput) CommandOutput(text string)           { o.Printf("%s", text) }
 func (o *captureOutput) Toolf(format string, args ...any)    { fmt.Fprintf(&o.b, format+"\n", args...) }
 func (o *captureOutput) ToolBlock(title, body string)        { fmt.Fprintf(&o.b, "%s %s\n", title, body) }
 func (o *captureOutput) Warningf(format string, args ...any) { fmt.Fprintf(&o.b, format+"\n", args...) }

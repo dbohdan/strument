@@ -229,6 +229,14 @@ func (o *termOutput) Printf(format string, args ...any) {
 	o.sep.Clear()
 }
 
+// CommandOutput prints a command's output as part of its step; see the port.
+func (o *termOutput) CommandOutput(text string) {
+	o.guard()
+	o.clearWaiting()
+	fmt.Fprint(o.w, render.Sanitize(text)+"\n")
+	o.sep.Drew()
+}
+
 func (o *termOutput) Toolf(format string, args ...any) {
 	o.guard()
 	o.clearWaiting()
@@ -417,6 +425,10 @@ func (o *termOutput) StreamText(delta string) {
 	o.hideCursor()
 	if o.phase == phaseReasoning && o.endReasoning() {
 		o.separateFromAnswer()
+	} else if o.parser == nil {
+		// Text that opens a step pays the gap, as thinking does at its marker;
+		// StdOutput.StreamText says why.
+		o.sep.Before(o.w)
 	}
 	o.phase = phaseAnswer
 	o.ensureParser()

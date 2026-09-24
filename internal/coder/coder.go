@@ -1121,7 +1121,10 @@ type StdOutput struct {
 
 	diffs     *render.ToolDiffSet
 	wroteText bool
-	think     *render.Thinking
+	// textEndsLine is whether the answer text written so far ended with a
+	// newline, which decides how many it takes to leave a blank line after it.
+	textEndsLine bool
+	think        *render.Thinking
 	// streamed records that this send drew something, so the flush closes it
 	// with a blank line. sep is the gap before the next block of thinking. Both
 	// mirror repl/output.go exactly; the two outputs lay a turn out the same
@@ -1133,6 +1136,10 @@ type StdOutput struct {
 func (o *StdOutput) Printf(format string, args ...any) {
 	fmt.Print(render.Sanitize(fmt.Sprintf(format, args...)) + "\n")
 	o.sep.Clear() // the harness's own voice, outside any step
+}
+func (o *StdOutput) CommandOutput(text string) {
+	fmt.Print(render.Sanitize(text) + "\n")
+	o.sep.Drew() // part of the step: the next one owes a gap after it
 }
 func (o *StdOutput) Toolf(format string, args ...any) {
 	fmt.Print(render.Sanitize(fmt.Sprintf(format, args...)) + "\n") // no color outside the REPL
@@ -1167,11 +1174,17 @@ func (o *StdOutput) StreamText(delta string) {
 	if o.endReasoning() {
 		fmt.Println()
 		o.sep.Clear()
+	} else if delta != "" && !o.wroteText {
+		// Text that opens a step pays the gap the way thinking does at its
+		// marker. A step can start with either, and one that started with an
+		// answer used to sit flush against the last step's output.
+		o.sep.Before(os.Stdout)
 	}
 	if delta != "" {
 		o.wroteText = true
 		o.streamed = true
 		o.sep.Drew()
+		o.textEndsLine = strings.HasSuffix(delta, "\n")
 	}
 	fmt.Print(render.Sanitize(delta))
 }
@@ -1219,9 +1232,14 @@ func (o *StdOutput) StreamToolCall(index int, name, args string) {
 		o.streamed = false
 	}
 	if o.diffs == nil {
-		// Break to a fresh line so the first diff header isn't glued to the
-		// answer text (which need not end in a newline).
+		// A blank line between the answer text and the first diff header, as
+		// the terminal leaves. One Println only ended the line when the text
+		// had no newline of its own — the usual case — so the header sat
+		// directly under the prose, while this comment called it a blank.
 		if o.wroteText {
+			if !o.textEndsLine {
+				fmt.Println()
+			}
 			fmt.Println()
 			o.streamed = false // that blank separates; the flush need not repeat it
 		}
