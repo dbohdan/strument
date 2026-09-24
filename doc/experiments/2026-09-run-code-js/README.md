@@ -1,10 +1,10 @@
 # Would a JavaScript `run_code` stop the first program reaching for the host?
 
 **Result: yes, as far as the program's text goes. With the tool described as
-JavaScript, 0 of 100 first programs reached for the host, against 11 of 97
-described as Monty (p = 0.0003). The feared Node habit never appeared: no
+JavaScript, 0 of 100 first programs reached for the host, against 12 of 97
+described as Monty (p = 0.0001). The feared Node habit never appeared: no
 `require`, no `fs`, no `process` in any of them. But the whole effect is one
-model's: MiMo-V2.6-Flash went from 10/30 to 0/31, while DeepSeek (0/34) and
+model's: MiMo-V2.6-Flash went from 11/30 to 0/31, while DeepSeek (0/34) and
 GLM (1/33) had nothing to lose.** The preregistered rule calls for a full
 trial. The recommendation below is to try a cheaper fix aimed at the same
 habit first.
@@ -61,16 +61,16 @@ in flight. $0.20.
 
 | arm | sessions | wrote a program | first programs reaching for the host |
 | --- | --- | --- | --- |
-| monty | 144 | 98 | **11/97 (11.3%)** |
+| monty | 144 | 98 | **12/97 (12.4%)** |
 | js | 144 | 100 | **0/100 (0%)** |
 
-Fisher exact, two-sided: p = 0.0003. (One Monty session called `run_code`
+Fisher exact, two-sided: p = 0.0001. (One Monty session called `run_code`
 with an empty program, and two timed out at the provider; neither is a first
 program.)
 
 | model | monty | js |
 | --- | --- | --- |
-| MiMo-V2.6-Flash | **10/30** | **0/31** |
+| MiMo-V2.6-Flash | **11/30** | **0/31** |
 | GLM-5.3-flash | 1/33 | 0/32 |
 | DeepSeek-v4.1-flash | 0/34 | 0/37 |
 
@@ -79,19 +79,19 @@ two arms match (`walk` 3 against 4 of 24, where a grep answers it; the four
 computation tasks 23–24 of 24 in both). **The counter-metric held**: `cite`
 drew 0 programs under Monty and 1 under JS.
 
-### What the eleven were
+### What the twelve were
 
 | reach | count |
 | --- | --- |
 | `open(...)` | 7 |
-| `import glob` | 2 |
+| `import glob` | 3 |
 | `Path(...)` | 1 |
 | `from pathlib import Path`, never used | 1 |
 
-Ten of eleven are MiMo. The last row is a program that imported `pathlib` and
+Eleven of twelve are MiMo. The last row is a program that imported `pathlib` and
 then did everything through the bridge; it counts under the preregistered
 definition, but Monty lets `pathlib` import, so it would not have failed.
-Without it the comparison is 10/97 against 0/100, and nothing below changes.
+Without it the comparison is 11/97 against 0/100, and nothing below changes.
 
 The biggest group is the builtin `open`, five of the seven in the one idiom
 `open(path).read().splitlines()`. That is the mechanism the result points at.
@@ -135,11 +135,17 @@ shapes, and a class of silent errors this probe could not measure.
 
 ## Recommendation
 
+**Tried, and it lost:** the live trial
+[`../2026-09-run-code-arms`](../2026-09-run-code-arms/README.md) found a
+working `open()` raised first-program failures from 5/70 to 18/73, because it
+invites the rest of Python's file toolbox. Monty stays as it is. The
+recommendation as first written follows.
+
 The preregistered rule says a full trial. The better next step is cheaper and
 aimed at the same programs: **make the reach succeed in Monty.** Seven of
-the eleven are `open(path)` for reading and one is `Path(path)`; if a
+the twelve are `open(path)` for reading and one is `Path(path)`; if a
 read-only `open()` and `Path.read_text()` answered through `read_text`, eight
-of the eleven would become working programs instead of failed ones, and the
+of the twelve would become working programs instead of failed ones, and the
 description's "Not available: … open" would become a supported shortcut. Monty
 already routes `open` through its OS-call channel (`codeOsCall`, a43cf96),
 which is where such an answer would go. Whether that channel can hand back a
@@ -174,7 +180,13 @@ filesystem unless one is handed in. The survey behind that choice, read
   positive and negative, and `score.py` refuses to report if any fails
   ([`check-that-cannot-fail`](../../experimenting.md#check-that-cannot-fail)).
   String literals and comments are stripped first, so `print("no os here")`
-  is not a reach. All eleven hits were read by hand and are real.
+  is not a reach. All twelve hits were read by hand and are real.
+- **Corrected after publication.** The classifier first recognised a
+  forbidden module only at the head of an import list, so `import re, glob`
+  passed as clean. The live arms trial exposed it; the pattern now matches
+  any position, the self-test carries both shapes, and the rescore added one
+  Monty program (MiMo, `total`). Every number above is the corrected one;
+  the first version said 11/97 and p = 0.0003.
 - The interim tally was looked at once, at 18 sessions, to check the
   classifier on a live hit; nothing was decided from it.
 

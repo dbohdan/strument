@@ -3,7 +3,10 @@ must pass before score.py reports anything."""
 import re
 
 PY_HOST = [
-    re.compile(r"^\s*(import|from)\s+(os|glob|subprocess|pathlib|shutil|io)\b", re.M),
+    # Any position in an import list: "import re, glob" reaches as surely as
+    # "import glob", and the first version of this pattern missed it.
+    re.compile(r"^\s*import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(os|glob|subprocess|pathlib|shutil|io)\b", re.M),
+    re.compile(r"^\s*from\s+(os|glob|subprocess|pathlib|shutil|io)\b", re.M),
     re.compile(r"(?<![\w.])open\s*\("),
     re.compile(r"(?<![\w.])os\.\w"),
     re.compile(r"(?<![\w.])Path\s*\("),
@@ -76,6 +79,9 @@ CASES = [
     ("py", "# os is not available, so use glob\nx = glob('**/*.md')", "host", False),
     ("py", "print('use os.walk? no')\nx = 1", "host", False),
     ("py", "import re, json\nre.findall(r'\\d+', read_text('a'))", "host", False),
+    ("py", "import re, glob\nglob.glob('data/*.txt')", "host", True),
+    ("py", "import re as r, os.path\nx = 1", "host", True),
+    ("py", "import json, itertools\nx = 1", "host", False),
     ("py", "with open('x') as f: pass", "missing", True),
     ("py", "del x[0]", "missing", True),
     ("py", "x = [1, 2]\nx.pop()", "missing", False),
