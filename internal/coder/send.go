@@ -1158,6 +1158,8 @@ func (c *Coder) flushTurnUsage() {
 		EditsFuzzy:      c.editsFuzzy,
 		Files:           c.TurnEditedFiles(),
 		Tools:           c.TurnToolLines(),
+		EditFormat:      c.editFormat,
+		OfferedTools:    c.offeredToolNames(),
 		Prompt:          c.turnUserMessage,
 		Answer:          c.turnAnswer(),
 	})

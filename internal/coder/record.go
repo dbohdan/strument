@@ -140,6 +140,12 @@ type Record struct {
 	// dropping a payload leaves its description behind, is a different field
 	// for a different job.
 	Tools []string `json:"tools,omitempty"`
+	// OfferedTools names the tools the turn's model was given, and
+	// EditFormat (shared with the session header) the mode they came from.
+	// A session log once showed a model reporting that bash had vanished
+	// mid-session, and nothing in the record could say whether it had — the
+	// header gives only the mode at startup, and the requests are not kept.
+	OfferedTools []string `json:"offered_tools,omitempty"`
 	// Prompt and Answer are the turn as a reader sees it: the message that
 	// opened it, and the answer with every interrupted send's content in
 	// order and each steer as a blockquote.

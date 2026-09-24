@@ -928,6 +928,16 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	return OutcomeContinue
 }
 
+// offeredToolNames lists the tools toolDefs offers now, in its order.
+func (c *Coder) offeredToolNames() []string {
+	defs := c.toolDefs()
+	names := make([]string, 0, len(defs))
+	for _, d := range defs {
+		names = append(names, d.Name)
+	}
+	return names
+}
+
 // isObservationTool reports the five direct read-only tools.
 func isObservationTool(name string) bool {
 	switch name {
