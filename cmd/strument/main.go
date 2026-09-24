@@ -47,25 +47,25 @@ var version = "0.0.0-dev"
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message string `help:"Send one message, apply the edits, and exit (script mode)."            placeholder:"<text>" short:"m"`
-	Session string `help:"Conversation to work in, created if new (default: the last one used)." placeholder:"<name>" short:"s"`
+	Message string `help:"Send one message, apply the edits, and exit (script mode)."                     placeholder:"<text>" short:"m"`
+	Session string `help:"Session to work in; created if it does not exist (default: the last one used)." placeholder:"<name>" short:"s"`
 	// Hidden: an arm of doc/experiments/2026-09-compaction-source, removed or
 	// promoted when that trial reports. A flag in --help is a supported
 	// feature, and this is a question.
-	CompactionSource string   `default:"fold"                                                                                                                                                    enum:"fold,record"                                            help:"Where a compaction summary is built from."        hidden:""`
-	Continue         bool     `help:"Resume this session: restore its conversation from the record."                                                                                             name:"continue"                                               short:"c"`
-	Model            string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                         short:"M"`
+	CompactionSource string   `default:"fold"                                                                                                                                                    enum:"fold,record"                                        help:"Where a compaction summary is built from."        hidden:""`
+	Continue         bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
+	Model            string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
 	NoGit            bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
 	NoColor          bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode         bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                              xor:"palette"`
-	LightMode        bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                             xor:"palette"`
+	DarkMode         bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
+	LightMode        bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
 	NoAutoCommits    bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
-	NoHistory        bool     `help:"Do not write the session to the chat-history file."                                                                                                         name:"no-history"`
-	DryRun           bool     `help:"Report edits without writing files or committing."                                                                                                          name:"dry-run"`
+	NoHistory        bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
+	DryRun           bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
 	NoShell          bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
 	Yes              []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                        help:"Session context to include in /consult requests." name:"consult-scope"`
-	Files            []string `arg:""                                                                                                                                                            help:"Files for the model to edit (they need not exist yet)." optional:""`
+	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
+	Files            []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -1119,8 +1119,8 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 }
 
 type trustCmd struct {
-	Path string `arg:""                          help:"Project directory containing a Strument config or skills (default: current directory)." optional:""`
-	Yes  bool   `help:"Do not ask; for scripts." short:"y"`
+	Path string `arg:""                                          help:"Project directory containing a Strument config or skills (default: current directory)." optional:""`
+	Yes  bool   `help:"Proceed without asking for confirmation." short:"y"`
 
 	// confirm is the test seam for the prompt. Unexported, so kong does not see
 	// it as a flag.
@@ -1724,12 +1724,12 @@ type historyCmd struct {
 	// shape as configCmd's scope flags and the same cost: kong accepts it on
 	// `strip` too, where it means nothing because payloads are shared across
 	// a project and a sweep of one session's worth would be wrong.
-	Session string `help:"The conversation to act on (default: the last one used)." placeholder:"<name>" short:"s"`
+	Session string `help:"Session to act on (default: the last one used)." placeholder:"<name>" short:"s"`
 
 	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
 	Markdown historyMarkdownCmd `cmd:"" help:"Print a session's history as markdown."`
-	Strip    historyStripCmd    `cmd:"" help:"Remove stored tool payloads that nothing recent points at, keeping every record."`
+	Strip    historyStripCmd    `cmd:"" help:"Delete stored tool output that no recent session refers to. Conversation records are kept."`
 }
 
 // historySession resolves the project and the session `history` acts on: the
@@ -1844,10 +1844,10 @@ func (e *historyEditCmd) Run(parent *historyCmd) error {
 // looked up by hand. Output is copy-pastable Starlark on stdout — the user
 // reviews it and pastes it into their config.
 type modelConfigCmd struct {
-	Source       string   `default:"openrouter"                                                            help:"Metadata source (currently only \"openrouter\")."             placeholder:"<name>" short:"s"`
-	ProviderName string   `default:"openrouter"                                                            help:"Provider variable name to use in the generated model() call." name:"provider-name" placeholder:"<name>"`
-	Proxy        string   `help:"SOCKS5 proxy for the catalog fetch (default: the config's global proxy)." name:"proxy"                                                        placeholder:"<url>"`
-	Models       []string `arg:""                                                                          help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5."          name:"model"`
+	Source       string   `default:"openrouter"                                                              help:"Metadata source (currently only \"openrouter\")."             placeholder:"<name>" short:"s"`
+	ProviderName string   `default:"openrouter"                                                              help:"Provider variable name to use in the generated model() call." name:"provider-name" placeholder:"<name>"`
+	Proxy        string   `help:"SOCKS5 proxy for fetching the model catalog (default: the config's proxy)." name:"proxy"                                                        placeholder:"<url>"`
+	Models       []string `arg:""                                                                            help:"Exact model slugs, e.g. anthropic/claude-haiku-4.5."          name:"model"`
 }
 
 // openRouterKeyFromConfig returns the API key of an OpenRouter provider in the
@@ -1918,16 +1918,16 @@ func (c *modelConfigCmd) Run() error {
 }
 
 type cli struct {
-	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                            help:"Chat with a model about the given files (default command)."`
+	Chat        chatCmd          `cmd:""                         default:"withargs"                                                                        help:"Chat with a model about the given files (default command)."`
 	Trust       trustCmd         `cmd:""                         help:"Trust the project's config file and its skills."`
-	History     historyCmd       `cmd:""                         help:"Inspect or edit this project's chat-history file."`
+	History     historyCmd       `cmd:""                         help:"Show, edit, or prune this project's session history."`
 	Config      configCmd        `cmd:""                         help:"Inspect the resolved config, or find and edit a config file."`
-	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."          name:"model-config"`
+	ModelConfig modelConfigCmd   `cmd:""                         help:"Fetch model metadata from a provider and print a model() configuration block."      name:"model-config"`
 	Project     projectCmd       `cmd:""                         help:"List projects with saved state, or merge state from a project's previous path."`
-	Session     sessionCmd       `cmd:""                         help:"List, rename or delete this project's conversations."`
+	Session     sessionCmd       `cmd:""                         help:"List, rename, or delete this project's sessions."`
 	Tool        toolCmd          `cmd:""                         help:"Run a read-only tool and print the result a model would receive."`
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
-	Usage       usageCmd         `cmd:""                         help:"Show per-provider token and cost usage over rolling 24-hour, 7-day and 30-day windows."`
+	Usage       usageCmd         `cmd:""                         help:"Show token usage and cost per provider for the last 24 hours, 7 days, and 30 days."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
 }
 

@@ -166,7 +166,7 @@ func TestSessionDeleteDeclinesWithoutATerminal(t *testing.T) {
 func TestSessionIsDisabledWithoutState(t *testing.T) {
 	r, out := replWithSessions(t, nil)
 	cmdSession(context.Background(), r, "new spike")
-	if !strings.Contains(out.String(), "disabled") {
+	if !strings.Contains(out.String(), "Sessions are unavailable") {
 		t.Errorf("a REPL with no sessions said:\n%s", out.String())
 	}
 }

@@ -34,8 +34,8 @@ const defaultStripAge = 90 * 24 * time.Hour
 // That is the whole design: retention here is lossy compression rather than
 // forgetting.
 type historyStripCmd struct {
-	OlderThan string `help:"Strip payloads nothing has referenced in this long, e.g. 30d, 6w, 720h (default: 90d)." placeholder:"<age>"`
-	Yes       bool   `help:"Strip without asking."                                                                  short:"y"`
+	OlderThan string `help:"Remove tool output not referenced within this period, e.g. 30d, 6w, or 720h (default: 90d)." placeholder:"<age>"`
+	Yes       bool   `help:"Remove without asking for confirmation."                                                     short:"y"`
 }
 
 func (c *historyStripCmd) Run() error {

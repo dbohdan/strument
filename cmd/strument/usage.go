@@ -25,7 +25,7 @@ import (
 // beside a provider's calendar invoice would read as a discrepancy rather
 // than as a different question.
 type usageCmd struct {
-	Provider string `arg:"" help:"Provider name, or 'all' for every provider (default: the default model's)." optional:""`
+	Provider string `arg:"" help:"Provider name, or all for every provider (default: the default model's provider)." optional:""`
 }
 
 func (c *usageCmd) Run() error {

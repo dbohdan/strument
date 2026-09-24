@@ -90,8 +90,8 @@ func (c *sessionRenameCmd) Run() error {
 }
 
 type sessionDeleteCmd struct {
-	Name string `arg:""                        help:"The session to delete."`
-	Yes  bool   `help:"Delete without asking." short:"y"`
+	Name string `arg:""                                         help:"The session to delete."`
+	Yes  bool   `help:"Delete without asking for confirmation." short:"y"`
 }
 
 // Run deletes a session, after saying what that costs.

@@ -21,13 +21,13 @@ import (
 // ~/.local/state by hand. `list` makes the state visible and `adopt` re-binds an
 // orphan to the project's new path.
 type projectCmd struct {
-	List   projectListCmd   `cmd:"" help:"List the recorded projects and their state directories."`
-	Adopt  projectAdoptCmd  `cmd:"" help:"Merge a renamed project's recorded history into this one."`
-	Ignore projectIgnoreCmd `cmd:"" help:"Stop offering a renamed project's history at startup."`
+	List   projectListCmd   `cmd:"" help:"List projects with saved state and where that state is stored."`
+	Adopt  projectAdoptCmd  `cmd:"" help:"Merge saved state from a project's previous path into this one."`
+	Ignore projectIgnoreCmd `cmd:"" help:"Stop offering to merge a project's previous state at startup."`
 }
 
 type projectListCmd struct {
-	All bool `help:"Include projects whose directory still exists (default: orphans first, then the rest)." short:"a"`
+	All bool `help:"Also list projects still at their recorded path, which are otherwise shown only when no project has moved." short:"a"`
 }
 
 // Run prints one line per project. Orphans — the ones whose directory is gone —
@@ -39,7 +39,7 @@ func (c *projectListCmd) Run() error {
 		return err
 	}
 	if len(all) == 0 {
-		fmt.Println("No projects recorded yet.")
+		fmt.Println("No projects have saved state yet.")
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func (c *projectListCmd) Run() error {
 			printProject(p)
 		}
 		fmt.Println()
-		fmt.Println("To re-bind one, run this from the project's new location:")
+		fmt.Println("To merge one's state into its new location, run this from there:")
 		fmt.Println("  strument project adopt <old path>")
 		if len(live) > 0 {
 			fmt.Println()
@@ -125,8 +125,8 @@ func humanBytes(n int64) string {
 }
 
 type projectAdoptCmd struct {
-	Source string `arg:""                          help:"The project's old path, or its state directory."`
-	Yes    bool   `help:"Do not ask; for scripts." short:"y"`
+	Source string `arg:""                                          help:"The project's old path, or its state directory."`
+	Yes    bool   `help:"Proceed without asking for confirmation." short:"y"`
 }
 
 // Run merges the named orphan's state into the current project.

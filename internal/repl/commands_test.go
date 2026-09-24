@@ -415,7 +415,7 @@ func TestWebOriginCommands(t *testing.T) {
 	cmdWeb(ctx, r, "allow example.com")
 	out.Reset()
 	cmdWeb(ctx, r, "reset")
-	if !strings.Contains(out.String(), "Forgot 2 origins") {
+	if !strings.Contains(out.String(), "Revoked approval for 2 origins") {
 		t.Errorf("/web reset did not report both ports of a bare host:\n%s", out.String())
 	}
 	if got := cdr.SessionOrigins(); len(got) != 0 {

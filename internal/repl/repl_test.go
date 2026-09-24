@@ -248,7 +248,7 @@ func TestScriptedSession(t *testing.T) {
 		//                                    results, landing in the history)
 		"Hello! Some bold and code here.", // rendered plain (no color)
 		"Unknown command: /nonsense.",
-		"Unpinned everything.",
+		"Unpinned all files.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)

@@ -75,16 +75,16 @@ func init() {
 	commands = []command{
 		{"add", "<file> ...", "Pin files for the model to inspect or edit (globs allowed).", cmdAdd},
 		{"ask", "[<question>]", "Ask about the code without editing. With no question, switch to ask mode.", cmdAsk},
-		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message, or show and unstage what is attached.", cmdAttach},
+		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message. With no files, list what is attached; drop removes attachments.", cmdAttach},
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
-		{"check", "[<name>]", "Run a project check; optionally add its output to the chat.", cmdCheck},
+		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
 		{"clear", "", "Clear the conversation history.", cmdClear},
 		{"code", "[<request>]", "Request code changes. With no request, switch to code mode.", cmdCode},
-		{"commits", "[on | off]", "Show or change whether a turn's edits are committed (--no-auto-commits).", cmdCommits},
-		{"consult", "<alias> <question> | scope [<name>]", "Ask another model, and optionally add its answer to the chat; or show or set how much it sees.", cmdConsult},
-		{"context", "[<n>]", "Show the chat history sent to the model. Limit summaries to the first n if specified.", cmdContext},
+		{"commits", "[on | off]", "Show or change whether each turn's edits are committed automatically.", cmdCommits},
+		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
+		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
-		{"drop", "[<file> ...]", "Unpin files (all if none given).", cmdDrop},
+		{"drop", "[<file> ...]", "Unpin files. With no files, unpin all of them.", cmdDrop},
 		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this session.", cmdEnv},
 		{"exit", "", "Exit Strument.", cmdExit},
 		{"help", "", "Show this help.", cmdHelp},
@@ -94,19 +94,19 @@ func init() {
 		{"quit", "", "Exit Strument.", cmdExit},
 		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
-		{"reset", "", "Unpin everything, clear the history, and forget approved origins.", cmdReset},
+		{"reset", "", "Unpin all files, clear the history, and revoke this session's webfetch approvals.", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
-		{"session", "[new | switch | fork | rename | delete] [<name>]", "Show this project's conversations, or move between them.", cmdSession},
-		{"skill", "[<name>]", "Show the skills this session found, or add one's instructions to the chat.", cmdSkill},
+		{"session", "[new | switch | fork | rename | delete] [<name>]", "List this project's sessions, or create, switch to, fork, rename, or delete one.", cmdSession},
+		{"skill", "[<name>]", "List the available skills, or add a skill's instructions to the chat.", cmdSkill},
 		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2).", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
-		{"symbol", "<name> [definition | reference]", "Find where a name is defined (or used) with the language parser.", cmdSymbol},
+		{"symbol", "<name> [definition | reference]", "Find where a name is defined or used, using the language parser.", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage.", cmdTokens},
 		{"undo", "", "Undo the last turn's edits.", cmdUndo},
-		{"usage", "[<provider> | all]", "Show per-provider token and cost usage (last 24 hours, 7 days, 30 days). Default: this session's model's provider.", cmdUsage},
+		{"usage", "[<provider> | all]", "Show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider.", cmdUsage},
 		{"web", "[<url> | allow <origin> | drop <origin> | reset]", "Fetch a web page or #section. With no URL, list the origins webfetch can access without asking.", cmdWeb},
-		{"yes", "[add <name> ... | drop <name> ... | reset]", "Show or change which confirmation prompts are answered without asking.", cmdYes},
+		{"yes", "[add <name> ... | drop <name> ... | reset]", "Show or change which prompts are approved automatically.", cmdYes},
 	}
 }
 
@@ -478,7 +478,7 @@ func (r *REPL) expandDir(abs string) []string {
 		return out
 	}
 
-	r.out.Warningf("Adding %s without a git repo: files are not gitignore-filtered.", relDir)
+	r.out.Warningf("Adding every file under %s: without a git repository, .gitignore rules are not applied.", relDir)
 	var out []string
 	_ = filepath.WalkDir(abs, func(p string, de os.DirEntry, err error) error {
 		switch {
@@ -528,7 +528,7 @@ func cmdReadOnly(_ context.Context, r *REPL, args string) string {
 func cmdDrop(_ context.Context, r *REPL, args string) string {
 	if args == "" {
 		r.coder.DropAll()
-		r.printf("Unpinned everything.")
+		r.printf("Unpinned all files.")
 		return ""
 	}
 
@@ -557,7 +557,7 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 	chat := r.coder.ChatFiles()
 	ro := r.coder.ReadOnlyFiles()
 	if len(chat) == 0 && len(ro) == 0 {
-		r.printf("No files pinned in this session.")
+		r.printf("No files are pinned.")
 		return ""
 	}
 	if len(chat) > 0 {
@@ -673,7 +673,7 @@ func cmdUsage(_ context.Context, r *REPL, args string) string {
 		names = known
 	}
 	if len(names) == 0 {
-		r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
+		r.printf("No usage recorded yet.")
 		return ""
 	}
 	printed := false
@@ -691,9 +691,9 @@ func cmdUsage(_ context.Context, r *REPL, args string) string {
 	}
 	if !printed {
 		if provider == history.UsageAll {
-			r.printf("No usage recorded yet. Usage tracking begins when the version that writes it runs.")
+			r.printf("No usage recorded yet.")
 		} else {
-			r.printf("No usage recorded for provider %q. Run /usage all to see the providers that have some.", provider)
+			r.printf("No usage recorded for provider %q. Use /usage all to list the providers with recorded usage.", provider)
 		}
 	}
 	return ""
@@ -861,7 +861,7 @@ func cmdRun(ctx context.Context, r *REPL, args string) string {
 	}
 	exitCode, output, err := runner.Run(ctx, args, r.coder.Root)
 	if err != nil {
-		r.out.Errorf("Error running command: %v", err)
+		r.out.Errorf("Could not run the command: %v", err)
 		return ""
 	}
 	if output != "" {
@@ -1018,8 +1018,8 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 			return ""
 		}
 		if n := r.coder.ForgetOrigins(); n > 0 {
-			r.printf("Forgot %d %s. webfetch will ask again.",
-				n, render.PluralWord(n, "origin", "origins"))
+			r.printf("Revoked approval for %d %s. webfetch will ask again before fetching from %s.",
+				n, render.PluralWord(n, "origin", "origins"), render.PluralWord(n, "it", "them"))
 		} else {
 			r.printf("No origins were approved this session.")
 		}
@@ -1055,8 +1055,8 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 func webOrigins(r *REPL) string {
 	allow, session := r.coder.WebfetchAllow, r.coder.SessionOrigins()
 	if len(allow) == 0 && len(session) == 0 {
-		r.printf("webfetch asks before every origin. " +
-			"Answer `a` at a prompt, or `/web allow <origin>`, to stop being asked for one.")
+		r.printf("webfetch asks before fetching from any origin. " +
+			"To stop being asked about one, answer `a` at its prompt or use `/web allow <origin>`.")
 		return ""
 	}
 	if len(allow) > 0 {
@@ -1086,7 +1086,7 @@ func webAllow(r *REPL, entry string) string {
 	}
 	added, ok := r.coder.AllowOrigin(entry)
 	if !ok {
-		r.out.Errorf("%q is not an origin. Give a host or host:port, with no scheme and no path.", entry)
+		r.out.Errorf("%q is not an origin. Enter a host or host:port, without a scheme or path.", entry)
 		return ""
 	}
 	if len(added) == 0 {
@@ -1109,7 +1109,7 @@ func webDrop(r *REPL, entry string) string {
 	}
 	dropped, ok := r.coder.DropOrigin(entry)
 	if !ok {
-		r.out.Errorf("%q is not an origin. Give a host or host:port, with no scheme and no path.", entry)
+		r.out.Errorf("%q is not an origin. Enter a host or host:port, without a scheme or path.", entry)
 		return ""
 	}
 	if len(dropped) == 0 {
@@ -1224,7 +1224,7 @@ func humanBytes(n int64) string {
 func cmdSession(_ context.Context, r *REPL, args string) string {
 	ops := r.opts.Sessions
 	if ops == nil {
-		r.printf("Sessions are disabled for this session.")
+		r.printf("Sessions are unavailable: this run does not save state.")
 		return ""
 	}
 	verb, name := splitVerb(args)
@@ -1342,12 +1342,12 @@ func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
 		// Not found in the listing; let the host say so in its own words.
 		return true
 	}
-	r.printf("Deleting %s discards its conversation (%s), its pins and its undo record. "+
-		"Stored tool payloads are shared and are left alone.", name, lost)
+	r.printf("Deleting %s discards its conversation (%s), its pinned files, and its undo record. "+
+		"Stored tool output is shared between sessions and is kept.", name, lost)
 
 	if !r.canAsk() {
-		r.out.Warningf("Declined: deleting a session needs an interactive terminal. " +
-			"Use `strument session delete` outside a session.")
+		r.out.Warningf("Declined: deleting a session requires an interactive terminal. " +
+			"Use `strument session delete` from a shell instead.")
 		return false
 	}
 	cfg := r.rl.GetConfig()
@@ -1359,7 +1359,7 @@ func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
 		return false
 	}
 	if strings.TrimSpace(line) != name {
-		r.printf("Left %s alone.", name)
+		r.printf("Did not delete %s: the name did not match.", name)
 		return false
 	}
 	return true
