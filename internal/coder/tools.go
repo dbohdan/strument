@@ -763,8 +763,10 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				needsReflection = true
 				continue
 			}
+			// Not a mutation yet: queued is not run. The command may still be
+			// declined or refused, and a signal sent here reset the loop
+			// watcher for commands that changed nothing (see runShell).
 			commands = append(commands, cmd)
-			c.toolLoops.observeMutation()
 		case toolCommit:
 			ca, msg := parseCommitArgs(tc)
 			if msg != "" {
@@ -870,7 +872,11 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results.setText(cmd.callID, "Not run: the user stopped the turn before this command started.")
 			continue
 		}
-		results.setText(cmd.callID, c.runShellTool(ctx, cmd))
+		text, ran := c.runShell(ctx, cmd)
+		if ran {
+			c.toolLoops.observeMutation()
+		}
+		results.setText(cmd.callID, text)
 	}
 
 	// The commit closes the work, so it runs after both the edits and the
@@ -1051,8 +1057,20 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 // tool result. The output always returns to the model (it answers the tool
 // call); there is no separate add-to-chat step.
 func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
+	text, _ := c.runShell(ctx, cmd)
+	return text
+}
+
+// runShell is runShellTool that also reports whether anything ran — the
+// command, or the configured check it turned out to be. The loop watcher needs
+// the difference: a command that ran is progress and resets it, and one that
+// was declined, refused or disabled changed nothing. Signalling at queue time
+// instead is the mistake applyToolEdits already records for edits, and it hid
+// a loop of the same read between declined commands for ten minutes
+// (doc/experiments/2026-09-run-code-arms).
+func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if !c.SuggestShellCommands {
-		return "Shell commands are disabled in this session; the command was not run."
+		return "Shell commands are disabled in this session; the command was not run.", false
 	}
 	// Refused here rather than in runAndShow, which is where the same check
 	// also lives for the paths that do not come through this tool. Leaving it
@@ -1060,7 +1078,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 	// refused regardless — a prompt whose answer changes nothing, which is the
 	// precise way to teach someone that prompts are noise.
 	if c.Sandbox.blocksExecution() {
-		return c.Sandbox.refusal()
+		return c.Sandbox.refusal(), false
 	}
 	command := strings.TrimSpace(cmd.command)
 
@@ -1083,7 +1101,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		// does not need them: this sentence is showing the model a call it can
 		// copy, and check(test) is not one.
 		return fmt.Sprintf("That command is the configured check %q, so it ran without asking the "+
-			"user. Call check(%q) to run it directly.\n\n%s", name, name, transcript)
+			"user. Call check(%q) to run it directly.\n\n%s", name, name, transcript), true
 	}
 
 	// "a = all this turn" is offered only when the sandbox is enforcing, and the
@@ -1113,7 +1131,7 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		Group:   group,
 		Grant:   GrantBash,
 	}) {
-		return "The user chose not to run the command."
+		return "The user chose not to run the command.", false
 	}
 
 	// A model-caused shell command is the one way a model can commit without
@@ -1142,12 +1160,12 @@ func (c *Coder) runShellTool(ctx context.Context, cmd toolCommand) string {
 		exitCode, output := c.runAndShow(ctx, command, requested)
 		c.attributeShellCommits(before)
 		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
-			quoteToolArg(command), exitCode, output, notice)
+			quoteToolArg(command), exitCode, output, notice), true
 	}
 
 	exitCode, output := c.runAndShow(ctx, command, requested)
 	c.attributeShellCommits(before)
-	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output)
+	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
 }
 
 // toolResult is one tool call's answer: text, plus any images the tool

@@ -2,6 +2,8 @@ package coder
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -157,5 +159,63 @@ func TestToolLoopNoteRidesToolResults(t *testing.T) {
 	}
 	if !strings.Contains(appended[3].Text(), "same read call") {
 		t.Errorf("note = %q, want it to name the repeated tool", appended[3].Text())
+	}
+}
+
+// A declined command changed nothing, so it must not clear the watcher. It
+// did: bash signalled a mutation when it was queued, before the user was
+// asked, and GLM's loop in the run_code arms trial — the same read, then a
+// bash sort the user declined, three hundred records over ten minutes —
+// reset the counters every step and never met the note.
+func TestDeclinedCommandsDoNotResetTheLoopWatcher(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	runner := &countingRunner{}
+	c.Runner = runner
+	c.Confirm = &recordingConfirmer{answer: false}
+	c.SuggestShellCommands = true
+
+	noted := false
+	for step := range toolLoopMaxIdentical {
+		c.partialToolCalls = []llm.ToolCall{
+			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
+			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
+		}
+		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.partialToolCalls})
+		c.applyToolCalls(context.Background())
+		for _, m := range c.curMessages {
+			if m.Role == llm.RoleUser && strings.Contains(m.Text(), "same read call") {
+				noted = true
+			}
+		}
+	}
+	if runner.runs != 0 {
+		t.Fatalf("a declined command ran %d times", runner.runs)
+	}
+	if !noted {
+		t.Error("three identical reads between declined commands never met the loop note")
+	}
+
+	// A command that runs is still progress: the same loop with the command
+	// approved stays quiet.
+	c2 := toolCoder(t, dir)
+	c2.Runner = &countingRunner{}
+	c2.Confirm = &recordingConfirmer{answer: true}
+	c2.SuggestShellCommands = true
+	for step := range toolLoopMaxIdentical {
+		c2.partialToolCalls = []llm.ToolCall{
+			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
+			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
+		}
+		c2.curMessages = append(c2.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c2.partialToolCalls})
+		c2.applyToolCalls(context.Background())
+	}
+	for _, m := range c2.curMessages {
+		if m.Role == llm.RoleUser && strings.Contains(m.Text(), "same read call") {
+			t.Error("reads between commands that ran were called a loop")
+		}
 	}
 }
