@@ -148,3 +148,45 @@ func TestReplaceAllDefaultsOff(t *testing.T) {
 		t.Error("replace_all defaulted to true")
 	}
 }
+
+// An old_string whose matches overlap names two places, and the edit used to
+// take the first and report "Applied the edit" — the uniqueness check counted
+// copies with strings.Count, which finds one "}\n}\n" in "}\n}\n}\n". It is
+// refused as ambiguous now, and replace_all over the same file reports the
+// count it actually replaced, which is ReplaceAll's non-overlapping one.
+func TestOverlappingMatchesAreAmbiguous(t *testing.T) {
+	const file = "x\n}\n}\n}\n"
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(path, []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	c.AddFile("a.txt")
+
+	results := toolResults{}
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{
+		{callID: "c1", path: "a.txt", search: "}\n}\n", replace: "}\n// end\n}\n"},
+	}, results, &matchFailure)
+	if len(edited) != 0 {
+		t.Errorf("edited = %v; two overlapping matches are two places the model could mean", edited)
+	}
+	if got, _ := os.ReadFile(path); string(got) != file {
+		t.Errorf("file = %q, want it untouched", got)
+	}
+	if got := results["c1"].Text; !strings.Contains(got, "appears 2 times") {
+		t.Errorf("result = %q, want the ambiguity named with its count", got)
+	}
+
+	results = toolResults{}
+	c.applyToolEdits([]plannedEdit{
+		{callID: "c2", path: "a.txt", search: "}\n}\n", replace: "]\n]\n", replaceAll: true},
+	}, results, &matchFailure)
+	if got, _ := os.ReadFile(path); string(got) != "x\n]\n]\n}\n" {
+		t.Errorf("replace_all file = %q", got)
+	}
+	if got := results["c2"].Text; !strings.Contains(got, "Replaced 1 occurrence") {
+		t.Errorf("result = %q, want the one replacement ReplaceAll made", got)
+	}
+}

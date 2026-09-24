@@ -414,15 +414,29 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 	return newContent, MatchLines, true
 }
 
-// CountOccurrences reports how many times the search text appears verbatim in
-// content, so a failed edit can say "three places, narrow it down" instead of
-// "not found" — which is false and sends the model looking for a typo it did
-// not make.
+// CountOccurrences reports how many places the search text appears verbatim
+// in content, so a failed edit can say "three places, narrow it down" instead
+// of "not found" — which is false and sends the model looking for a typo it
+// did not make.
+//
+// Places, not copies: overlapping matches count separately. It decides whether
+// an edit is ambiguous, and "}\n}\n" in "}\n}\n}\n" is two places the model
+// could have meant although strings.Count finds one copy — so the edit landed
+// on the first and reported success. A caller that needs strings.ReplaceAll's
+// count (replace_all) uses strings.Count.
 func CountOccurrences(content, search string) int {
 	if search == "" {
 		return 0
 	}
-	return strings.Count(content, search)
+	n := 0
+	for off := 0; ; {
+		i := strings.Index(content[off:], search)
+		if i < 0 {
+			return n
+		}
+		n++
+		off += i + 1
+	}
 }
 
 // splitLines splits keeping line endings, on the same boundary set as

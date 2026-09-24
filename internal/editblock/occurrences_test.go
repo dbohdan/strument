@@ -96,3 +96,25 @@ func TestOccurrencesMultiLineRange(t *testing.T) {
 		t.Errorf("want the spanned range:\n%s", got)
 	}
 }
+
+// Overlapping matches are separate places. The count decides whether an edit
+// is ambiguous, and strings.Count's non-overlapping answer let "}\n}\n" in
+// "}\n}\n}\n" through as unique.
+func TestCountOccurrencesCountsOverlappingPlaces(t *testing.T) {
+	for _, tc := range []struct {
+		content, search string
+		want            int
+	}{
+		{"}\n}\n}\n", "}\n}\n", 2},
+		{"aaa", "aa", 2},
+		{"abab", "ab", 2},
+		{"one two one", "one", 2},
+		{"x", "y", 0},
+		{"x", "", 0},
+		{"héhéhé", "héhé", 2},
+	} {
+		if got := CountOccurrences(tc.content, tc.search); got != tc.want {
+			t.Errorf("CountOccurrences(%q, %q) = %d, want %d", tc.content, tc.search, got, tc.want)
+		}
+	}
+}

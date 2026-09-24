@@ -1281,7 +1281,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			if e.replaceAll && occurrences > 0 {
 				newContent = strings.ReplaceAll(content, e.search, e.replace)
 				c.editsExact++
-				callVerb[e.callID] = replacedVerb(occurrences)
+				// strings.Count, not occurrences: ReplaceAll replaces
+				// non-overlapping copies, and the count reported is the
+				// count replaced.
+				callVerb[e.callID] = replacedVerb(strings.Count(content, e.search))
 				if writeVerb[e.path] == "" {
 					writeVerb[e.path] = "Applied edit to"
 				}
