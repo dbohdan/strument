@@ -28,6 +28,7 @@ package coder
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"dbohdan.com/strument/internal/llm"
@@ -251,6 +252,26 @@ func (c *Coder) offload(tool, payload string, setInline func(string), setBlob fu
 	setBlob(hash, len(payload), payloadSummary(payload))
 }
 
+// isConversation reports whether m is part of the conversation proper — the
+// model's answer, or what the user typed — rather than payload. The
+// conversation is never stored separately, whatever its length.
+//
+// It went to the blob store once it passed the floor, because a message
+// with no tool name took the default rule, and a prune could then delete an
+// answer while the reasoning before it, recorded inline, stayed. The store is
+// for what the model read and ran; ask_user_question is in inlineTools for
+// the same reason this exists. A user-role message the harness wrote — /run
+// output added to the chat, a lint report — is payload, and keeps the rule.
+func isConversation(m llm.Message) bool {
+	switch m.Role {
+	case llm.RoleAssistant:
+		return true
+	case llm.RoleUser:
+		return !strings.HasPrefix(m.Text(), llm.HarnessMarker)
+	}
+	return false
+}
+
 // SideCall is one finished side request, as sendSide saw it.
 type SideCall struct {
 	What     string
@@ -372,11 +393,15 @@ func (c *Coder) recordNewMessages() {
 			emitReasoning()
 		}
 		r := Record{Type: "message", Role: m.Role, ToolCallID: m.ToolCallID}
-		c.offload(toolNames[m.ToolCallID], m.Text(),
-			func(text string) { r.Text = text },
-			func(blob string, size int, summary string) {
-				r.Blob, r.Bytes, r.Summary = blob, size, summary
-			})
+		if isConversation(m) {
+			r.Text = m.Text()
+		} else {
+			c.offload(toolNames[m.ToolCallID], m.Text(),
+				func(text string) { r.Text = text },
+				func(blob string, size int, summary string) {
+					r.Blob, r.Bytes, r.Summary = blob, size, summary
+				})
+		}
 		for _, tc := range m.ToolCalls {
 			toolNames[tc.ID] = tc.Name
 			rec := RecordToolCall{ID: tc.ID, Name: tc.Name}

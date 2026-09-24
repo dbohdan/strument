@@ -7,6 +7,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -177,5 +178,48 @@ func TestWithoutAStoreEveryPayloadStaysInline(t *testing.T) {
 		if r.Type == "message" && r.ToolCallID != "" && r.Text == "" {
 			t.Error("a tool result was recorded with neither text nor a blob")
 		}
+	}
+}
+
+// longAnswer answers once, at length, with no tool calls.
+type longAnswer struct{ text string }
+
+func (a longAnswer) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	return func(yield func(llm.StreamEvent, error) bool) {
+		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: a.text}, nil) {
+			return
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+	}
+}
+
+// The conversation itself stays in the record, whatever its length. The store
+// is for tool output, which a prune may delete; an answer or a pasted message
+// over the floor went there too, because a message with no tool name took the
+// default rule, and a record that could lose the model's answer while keeping
+// its reasoning had the fidelity backwards.
+func TestTheConversationStaysInline(t *testing.T) {
+	c := testCoder(t)
+	rec := &capture{}
+	c.Recorder = rec
+	answer := strings.Repeat("An answer that runs on for a while. ", 60)
+	c.Client = longAnswer{text: answer}
+	c.PutBlob = func([]byte) (string, error) { return "blobA", nil }
+	question := strings.Repeat("A pasted question that runs on. ", 60)
+
+	c.runOne(context.Background(), question)
+
+	var roles []string
+	for _, r := range rec.recs {
+		if r.Type != "message" {
+			continue
+		}
+		roles = append(roles, r.Role)
+		if r.Blob != "" {
+			t.Errorf("the %s's message went to the blob store (%d bytes)", r.Role, r.Bytes)
+		}
+	}
+	if !slices.Contains(roles, llm.RoleUser) || !slices.Contains(roles, llm.RoleAssistant) {
+		t.Fatalf("the exchange was not recorded: roles %v", roles)
 	}
 }

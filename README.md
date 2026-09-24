@@ -294,6 +294,7 @@ jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument hist
 
 Tool output of a kilobyte or more (a result, or a call's arguments) is stored beside the record rather than in it, in a `blobs/` directory under the project's state directory, named by the SHA-256 of its contents.
 The record then carries `blob` (that name), `bytes`, and `summary` (the output's first line) in place of `text` or `arguments`.
+The conversation itself — the model's answers and what you type — always stays in the record, whatever its length.
 This lets history be pruned without being forgotten: deleting the stored output leaves the timeline, the hash, and one line saying what was there.
 Identical output is stored once, so a file read in five turns is one file on disk, and removing something that should never have been recorded is one deletion rather than five.
 An answer you typed to `ask_user_question` is always kept in the record; it is your own words, not tool output.
