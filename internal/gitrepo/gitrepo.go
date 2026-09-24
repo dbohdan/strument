@@ -383,9 +383,22 @@ func (r *Repo) InCommit(commitish, rel string) bool {
 // a merge is arrangement, not authorship — but still receive rewritten
 // parents, so a fork's commits underneath one are not left dangling.
 //
-// Returns the final hashes of the commits in the range, newest first: the
-// replacement for each rewritten one, the original for each that passed
-// through. fromSHA empty or equal to the current HEAD means no new commits.
+// Commits that are not this session's are never touched, and are not
+// returned: one reachable from any ref other than the current branch (a
+// remote-tracking branch, another local branch, a tag), or committed under an
+// identity other than the repository's user.email. A command that ran
+// `git pull` fast-forwarded over other people's commits, and author equal to
+// committer is exactly what an ordinary teammate commit looks like; without
+// this, their commits were rewritten with this model's trailer and new hashes,
+// and the branch forked from its remote. The same holds for the model's own
+// commit if the command also pushed it: a published commit cannot be
+// rewritten without making the next push a force-push, so it goes unattributed
+// instead.
+//
+// Returns the final hashes of this session's commits in the range, newest
+// first: the replacement for each rewritten one, the original for each that
+// passed through. fromSHA empty or equal to the current HEAD means no new
+// commits.
 func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error) {
 	head, err := r.git("rev-parse", "HEAD")
 	if err != nil {
@@ -414,6 +427,15 @@ func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error)
 	// byte-exact through the round trip.
 	const fields = "%T%x00%P%x00%an%x00%ae%x00%aD%x00%cn%x00%ce%x00%cD%x00%B"
 	rewrite := map[string]string{} // original SHA -> replacement SHA (or itself)
+	notOurs := map[string]bool{}
+	branchRef := ""
+	if out, err := r.git("symbolic-ref", "--quiet", "HEAD"); err == nil {
+		branchRef = strings.TrimSpace(out)
+	}
+	ourEmail := ""
+	if out, err := r.git("config", "--get", "user.email"); err == nil {
+		ourEmail = strings.TrimSpace(out)
+	}
 	for _, sha := range shas {
 		out, err := r.git("show", "-s", "--format="+fields, sha)
 		if err != nil {
@@ -452,8 +474,23 @@ func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error)
 		isMerge := len(newParents) > 1
 		foreign := rc.authorName+"\x00"+rc.authorEmail != rc.committerName+"\x00"+rc.committerEmail
 		msg := rc.message
+		// Someone else's commit, or one already published: left exactly as it
+		// is. Its parents cannot have been rewritten — whatever reaches it
+		// reaches them — so keeping its hash keeps the chain intact.
+		if r.reachableElsewhere(sha, branchRef) || (ourEmail != "" && rc.committerEmail != ourEmail) {
+			notOurs[sha] = true
+			rewrite[sha] = sha
+			continue
+		}
 		if !isMerge && !foreign && trailerLine(msg, "Assisted-by") == "" {
 			msg = strings.TrimRight(msg, "\n") + "\n\n" + trailer + "\n"
+		} else if slices.Equal(newParents, strings.Fields(rc.parents)) {
+			// Nothing to add and nothing underneath it moved: the commit is
+			// already what it should be. Recreating it would be a new hash
+			// for no change wherever commit-tree does not round-trip a
+			// message byte for byte.
+			rewrite[sha] = sha
+			continue
 		}
 		newSHA, err := r.commitTree(rc, newParents, msg)
 		if err != nil {
@@ -465,15 +502,38 @@ func (r *Repo) AttributeDirectCommits(fromSHA, trailer string) ([]string, error)
 	// One ref update at the end: nothing above touched a ref, so any failure
 	// left the original history fully in place. The returned hashes are the
 	// final chain, newest first.
-	newHead := rewrite[shas[len(shas)-1]]
-	if err := r.moveHead(newHead); err != nil {
-		return nil, err
+	if newHead := rewrite[shas[len(shas)-1]]; newHead != head {
+		if err := r.moveHead(newHead); err != nil {
+			return nil, err
+		}
 	}
 	final := make([]string, 0, len(shas))
 	for i := range slices.Backward(shas) {
-		final = append(final, rewrite[shas[i]])
+		if !notOurs[shas[i]] {
+			final = append(final, rewrite[shas[i]])
+		}
 	}
 	return final, nil
+}
+
+// reachableElsewhere reports whether sha is contained in any ref other than
+// branchRef: a remote-tracking branch (it was pushed, or pulled), another local
+// branch or a tag (it was merged in, or lives on). Either way it is not a
+// commit this branch alone holds, which is the only kind that is safe to
+// rewrite.
+func (r *Repo) reachableElsewhere(sha, branchRef string) bool {
+	out, err := r.git("for-each-ref", "--contains", sha, "--format=%(refname)")
+	if err != nil {
+		// Unknown is treated as elsewhere: the cost is a missing trailer,
+		// against rewriting a commit that may be someone else's.
+		return true
+	}
+	for ref := range strings.FieldsSeq(out) {
+		if ref != branchRef {
+			return true
+		}
+	}
+	return false
 }
 
 // commitTree creates a commit object from a parsed commit's tree, parents, and

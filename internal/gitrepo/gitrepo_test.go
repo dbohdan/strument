@@ -655,3 +655,94 @@ func TestRootCommitRefusesAmbiguity(t *testing.T) {
 		t.Errorf("RootCommit() = %q with two roots, want \"\" — it must refuse, not pick", got)
 	}
 }
+
+// withRemote gives initRepo's repository a bare origin it tracks, and returns
+// the path of a second clone of that origin committing as someone else.
+func withRemote(t *testing.T, ours string) (mate string) {
+	t.Helper()
+	bare := t.TempDir()
+	run(t, bare, "git", "init", "-q", "--bare", "-b", "main")
+	run(t, ours, "git", "remote", "add", "origin", bare)
+	run(t, ours, "git", "push", "-q", "origin", "main")
+	run(t, ours, "git", "branch", "-q", "--set-upstream-to=origin/main")
+	mate = t.TempDir()
+	run(t, mate, "git", "clone", "-q", bare, ".")
+	run(t, mate, "git", "config", "user.name", "Teammate")
+	run(t, mate, "git", "config", "user.email", "mate@example.com")
+	run(t, mate, "git", "config", "commit.gpgsign", "false")
+	return mate
+}
+
+func commitFile(t *testing.T, dir, name, msg string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, dir, "git", "add", name)
+	run(t, dir, "git", "commit", "-q", "-m", msg)
+}
+
+// The case that made the model the author of a teammate's work. A bash
+// command ran `git pull`, HEAD fast-forwarded over their commit, and the range
+// the command added was all "new" — author equal to committer, as every
+// ordinary commit is. It was rewritten with this model's trailer and a new
+// hash, and the branch forked from its remote.
+func TestAttributeDirectCommitsLeavesPulledCommitsAlone(t *testing.T) {
+	ours := initRepo(t)
+	mate := withRemote(t, ours)
+	commitFile(t, mate, "theirs.txt", "teammate's work")
+	run(t, mate, "git", "push", "-q", "origin", "main")
+
+	g, err := gitrepo.Discover(ours)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := g.HeadSHA()
+	run(t, ours, "git", "pull", "-q", "--ff-only")
+	pulled := g.HeadSHA()
+
+	hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != 0 {
+		t.Errorf("hashes = %v; a pulled commit is not this session's", hashes)
+	}
+	if got := g.HeadSHA(); got != pulled {
+		t.Errorf("HEAD moved from %s to %s: the pulled commit was rewritten", pulled, got)
+	}
+	if st := run(t, ours, "git", "status", "-sb"); strings.Contains(st, "ahead") || strings.Contains(st, "behind") {
+		t.Errorf("the branch diverged from its remote: %s", st)
+	}
+}
+
+// The model's own commit, pushed by the same command, is published: rewriting
+// it would make the next push a force-push. It goes unattributed instead, and
+// a commit the command made and did not push is still attributed.
+func TestAttributeDirectCommitsLeavesPushedCommitsAlone(t *testing.T) {
+	ours := initRepo(t)
+	withRemote(t, ours)
+	g, err := gitrepo.Discover(ours)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := g.HeadSHA()
+	commitFile(t, ours, "pushed.txt", "pushed by the command")
+	run(t, ours, "git", "push", "-q", "origin", "main")
+	pushed := g.HeadSHA()
+	commitFile(t, ours, "local.txt", "made after the push")
+
+	hashes, err := g.AttributeDirectCommits(before, gitrepo.Trailer("test-model"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != 1 {
+		t.Fatalf("hashes = %v, want only the unpushed commit", hashes)
+	}
+	if got := strings.TrimSpace(run(t, ours, "git", "rev-parse", "HEAD~1")); got != pushed {
+		t.Errorf("the pushed commit was rewritten: HEAD~1 = %s, want %s", got, pushed)
+	}
+	if body := run(t, ours, "git", "log", "-1", "--format=%B"); !strings.Contains(body, "Assisted-by:") {
+		t.Errorf("the unpushed commit lost its attribution:\n%s", body)
+	}
+}
