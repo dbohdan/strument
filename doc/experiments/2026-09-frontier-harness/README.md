@@ -121,6 +121,12 @@ the model causes, so a variable would not reach them.
 Published costs are FrontierHarness's `cost_first_cold_usd`. Strument's are
 what OpenRouter billed.
 
+**opencode's published cost leaves out its reasoning tokens.** This was found
+after the run, while checking how each harness sets reasoning effort; see
+[*Reasoning effort across the field*](#reasoning-effort-across-the-field).
+opencode's figure is therefore a lower bound, and it is probably not the
+second-cheapest configuration.
+
 **Rate limits.** The first attempt ran three trials at a time. Nine trials
 died on their first request, each with exactly nine `rate_limit: HTTP 429`
 lines: eight retries on the ladder, 0.25s doubling to 32s, then the give-up.
@@ -190,6 +196,66 @@ Over the twelve registries-arm trials:
 Tool calls across the valid trials: `bash` 168, `read` 51, `edit` 29,
 `write` 29, `run_code` 26, `ls` 17, `grep` 4, `webfetch` 1,
 `ask_user_question` 1 (the strict cython run), `glob` 0.
+
+## Reasoning effort across the field
+
+OpenRouter's catalog gives K3's `default_effort` as `max`; the model accepts
+`max`, `high`, `low` and `off`. A harness that sends no effort therefore runs
+K3 at maximum, which is what this run's `k3` model did. The question was
+whether the published harnesses did the same: through the effort parameter,
+or through a prompt that tells the model to think less.
+
+FrontierHarness's public runner passes no agent kwargs or environment
+(`harbor run -a {harness} -m {model}`). What each harness sent is therefore
+Harbor's adapter default plus the harness's own. Read on 2026-09-24:
+
+| harness | effort sent to K3 | source |
+| --- | --- | --- |
+| codex | `high` | Harbor's adapter defaults `reasoning_effort="high"`, which becomes `-c model_reasoning_effort=high` |
+| opencode | none | `ProviderTransform` offers no reasoning variants for a `kimi` id, and Harbor passes no `--variant` |
+| pi-responses | unknown | pi defaults to `medium`, but 0.84.2 has no K3 entry; FrontierHarness registered K3 with an adapter whose configuration it did not publish |
+| kimi-code | none, probably | without catalog metadata its default resolves to `on`, which sends nothing. Harbor's docstring example sets `KIMI_MODEL_THINKING_EFFORT=max`; FrontierHarness's scripts do not |
+| dsh-* | none | an effort is sent only when a deployment profile sets one |
+| claude-code | none | the adapter's `--effort` flag has no default |
+
+**No harness's prompt limits reasoning.** The closest wording is in
+opencode's Kimi prompt: "Be thorough in your actions … not in your
+explanations", and "Think about the best approach, then take action
+decisively". That is about prose, not reasoning.
+
+FrontierHarness itself notes that the commands behind the published baselines
+are not established, so this describes its public scripts rather than proving
+what the frozen runs sent.
+
+**opencode's reasoning tokens are never priced.** The chain:
+
+1. opencode stores `output = outputTokens - reasoningTokens`, with reasoning
+   kept separately (`packages/opencode/src/session/session.ts:371`).
+2. Harbor's opencode adapter sums only `tokens.output` into
+   `total_completion_tokens`, which becomes `n_output_tokens`
+   (`src/harbor/agents/installed/opencode.py:314,434`). Reasoning goes into an
+   unpriced `extra` field.
+3. FrontierHarness prices tokens from those totals (`calculate-cost.py`)
+   rather than from opencode's own reported cost.
+
+The published data shows the symptom: opencode's mean output is 2.4k tokens
+over 11.2 turns, about 210 per turn, the lowest in the field by half. pi-ai
+counts reasoning inside output (`openai-completions.ts:1398`), so Pi's figure
+is complete. The other adapters' parsers were not checked this way.
+
+Versions read:
+
+| component | version | commit |
+| --- | --- | --- |
+| Harbor | v0.22.0 | `4407eb5` |
+| codex | rust-v0.148.0 | `3ba0f71` |
+| opencode | v1.18.19 | `2b72179` |
+| pi | v0.84.2 | `914cf14` |
+| kimi-code | HEAD, 2.1.1 | `be7d5f5` |
+| deepseek-harness | HEAD, 0.1.7-rc.2 | `477b4f4` |
+
+The pinned kimi-code 0.37.2 and DSH 0.1.0-rc.8 have no tags, so those two
+rows describe newer code than FrontierHarness ran.
 
 ## Caveats
 
