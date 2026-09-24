@@ -353,10 +353,6 @@ type ScrapeOptions struct {
 	// "80-120". It is how a model navigates a fetched file that has no
 	// anchors: the outline of a text page advertises line numbers, so the
 	// fetch that follows them takes this.
-	// Range narrows a plain-text page to the given 1-based lines, inclusive —
-	// "80-120". It is how a model navigates a fetched file that has no
-	// anchors: the outline of a text page advertises line numbers, so the
-	// fetch that follows them takes this.
 	Range string
 
 	// Follow decides whether a redirect to another origin is followed. nil
