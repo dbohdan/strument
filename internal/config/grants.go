@@ -22,7 +22,7 @@ const (
 	// so granting this is granting an unbounded number of steps — max_steps
 	// stops being a limit and becomes an interval.
 	GrantSteps = "steps"
-	// GrantContext answers "Try to proceed anyway?" when the estimated request
+	// GrantContext answers "Send it anyway?" when the estimated request
 	// exceeds the model's input limit. Also not a capability: the request is
 	// sent and the provider decides, which is what the prompt's own text says
 	// is probably fine.

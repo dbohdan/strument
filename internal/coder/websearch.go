@@ -93,7 +93,7 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 		c.Out.Toolf("Could not search the web for %s", quoteToolArg(s.query))
 		return fmt.Sprintf("Could not search for %q: %v", s.query, err)
 	}
-	c.Out.Toolf("Searched the web for %s — %s", quoteToolArg(s.query), searchSummary(res))
+	c.Out.Toolf("Searched the web for %s: %s", quoteToolArg(s.query), searchSummary(res))
 	return truncateResult(formatSearchResults(s.query, res))
 }
 

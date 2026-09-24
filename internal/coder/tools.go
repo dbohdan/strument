@@ -1366,8 +1366,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	}
 	if !c.DryRun {
 		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
-			c.Out.Errorf("Exception while updating files:")
-			c.Out.Errorf("%s", err.Error())
+			c.Out.Errorf("Could not write the edits, so none were applied: %v", err)
 			// The batch rolled back, so any digest already handed out describes
 			// content that is not on disk. Drop those anchors: the next edit is
 			// then told to read again, which is true, instead of resolving

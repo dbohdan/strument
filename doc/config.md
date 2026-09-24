@@ -983,7 +983,7 @@ permissions themselves:
 | `webfetch` | Fetch a URL the model chose |
 | `websearch` | Send the model's query to the configured backend |
 | `steps` | "Keep going?" at the step budget |
-| `context` | "Try to proceed anyway?" over the model's input limit |
+| `context` | "Send it anyway?" over the model's input limit |
 | `add-output` | "Add … to the chat?" after `/run`, `/check`, or `/consult` |
 | `all` | All of the above |
 

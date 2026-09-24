@@ -63,7 +63,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 	c.shown.commandRan()
 	exitCode, output, err := runner.Run(ctx, command, c.Root)
 	if err != nil {
-		c.Out.Errorf("Error running command: %v", err)
+		c.Out.Errorf("Could not run the command: %v", err)
 	}
 	// Said in the output rather than only on screen, because the output is what
 	// reaches the model: a command that was killed at two minutes and one that

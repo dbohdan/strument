@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"runtime"
 	"slices"
@@ -148,7 +149,13 @@ func (c *Coder) absFnamesContent() []string {
 			kept = append(kept, fname)
 			contents = append(contents, "")
 		default:
-			c.Out.Warningf("Dropping %s from the chat.", c.displayName(fname))
+			// Say why: "dropping" alone left a pinned file vanishing for no
+			// reason the user could act on.
+			var pe *fs.PathError
+			if errors.As(err, &pe) {
+				err = pe.Err
+			}
+			c.Out.Warningf("Unpinned %s: it could not be read (%v).", c.displayName(fname), err)
 		}
 	}
 	c.absFnames = kept

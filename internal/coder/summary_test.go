@@ -320,7 +320,7 @@ func TestMaybeSummarizeRejectsABiggerSummary(t *testing.T) {
 
 	c.maybeSummarize()
 
-	if !strings.Contains(strings.Join(out.lines, "\n"), "result was not smaller") {
+	if !strings.Contains(strings.Join(out.lines, "\n"), "summary was not smaller") {
 		t.Errorf("a summary bigger than the history was accepted:\n%s", strings.Join(out.lines, "\n"))
 	}
 	if len(c.doneMessages) != len(before) {

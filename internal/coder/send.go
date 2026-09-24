@@ -439,11 +439,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		// than as a cap, and with prefill off by default that is no longer a
 		// rare event. Each cause names the setting that changes it.
 		if declinedPrefill {
-			c.Out.Warningf("The reply reached the model's output limit and stops here. " +
+			c.Out.Warningf("The reply was cut off at the model's output limit. " +
 				"Ask for the rest, raise `max_output`, or set `prefill = True` on the model " +
-				"if it continues a partial answer.")
+				"if it can continue a partial answer.")
 		} else {
-			c.Out.Warningf("The reply reached the model's output limit %d times and stops here. "+
+			c.Out.Warningf("The reply was cut off: it reached the model's output limit %d times. "+
 				"Ask for the rest, or raise `max_output`.", continuationCap+1)
 		}
 		return OutcomeOutputExhausted, ""
@@ -533,7 +533,7 @@ func (c *Coder) warnLoop(f *loopFinding) {
 		c.Out.Warningf("Stopped the model's reply because it was repeating itself.")
 		return
 	}
-	c.Out.Warningf("The model's %s was repeating itself (%q %d times), so it was stopped.",
+	c.Out.Warningf("Stopped the model's %s because it was repeating itself (%q, %d times).",
 		f.Kind, f.Sample, f.Count)
 }
 
@@ -679,14 +679,15 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	if inputTokens < maxInput {
 		return true
 	}
-	c.Out.Errorf("Your estimated chat context of %d tokens exceeds the %d token limit for %s!",
-		inputTokens, maxInput, c.Model.QualifiedSlug())
-	c.Out.Printf("To reduce the chat context:")
-	c.Out.Printf("- Use /drop to remove unneeded files from the chat")
-	c.Out.Printf("- Use /clear to clear the chat history")
-	c.Out.Printf("- Break your code into smaller files")
-	c.Out.Printf("It's probably safe to try and send the request, most providers won't charge if the context limit is exceeded.")
-	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Try to proceed anyway?", Grant: GrantContext})
+	c.Out.Errorf("This request is about %d tokens; the context limit for %s is %d.",
+		inputTokens, c.Model.QualifiedSlug(), maxInput)
+	// The advice is what helps here, not aider's: pinned files go by name, so
+	// "break your code into smaller files" changed nothing, and the history is
+	// what fills the window. The closing claim about what providers charge
+	// for an over-limit request went too; it was a guess stated as reassurance.
+	c.Out.Printf("To make room, use /clear to clear the history, /drop to unpin files, " +
+		"or /tokens to see what takes the space.")
+	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Send it anyway?", Grant: GrantContext})
 	return res.Yes
 }
 
@@ -806,7 +807,7 @@ func (c *Coder) maybeSummarize() {
 	afterTokens := c.Summarizer.total(out)
 	if !validCompaction(out, beforeTokens, beforeMessages, afterTokens) {
 		c.summaryBackoff = true
-		c.Out.Warningf("Could not summarize chat history: the result was not smaller than the original history")
+		c.Out.Warningf("Could not summarize the chat history: the summary was not smaller than the history.")
 		return
 	}
 	c.doneMessages = out
@@ -1261,7 +1262,7 @@ func formatCost(v float64) string {
 }
 
 func (c *Coder) showExhaustedError() {
-	c.Out.Errorf("The chat session exhausted the model's context window. Use /clear or /drop to reduce it.")
+	c.Out.Errorf("The conversation no longer fits the model's context window. Use /clear or /drop to make room.")
 }
 
 // stripReasoning removes an inline reasoning tag from the answer before the
