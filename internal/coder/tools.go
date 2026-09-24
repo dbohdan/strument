@@ -81,6 +81,9 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// interrupt is always offered too, and for the same structural reason:
 		// it mutates nothing, and the turn it ends may be a discussion one.
 		defs = append(defs, interruptTool())
+		// about mutates nothing and answers what the model cannot find out by
+		// looking, which a discussion turn needs as much as any other.
+		defs = append(defs, aboutTool())
 		if c.RepoMap != nil {
 			// symbol reads the same tree-sitter layer the repo map is built from,
 			// so it is offered exactly when that layer is available.
@@ -89,6 +92,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	} else {
 		defs = append(defs, askTool())
 		defs = append(defs, interruptTool())
+		defs = append(defs, aboutTool())
 	}
 	// Offered in ask mode too: fetching mutates nothing, and reading a
 	// specification is exactly what a discussion turn is for. The port is
@@ -823,6 +827,9 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			// Not routed through ConfirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
 			results.setText(tc.ID, c.runAskUser(tc, &needsReflection))
+		case toolAbout:
+			c.Out.Toolf("About Strument")
+			results.setText(tc.ID, c.About(time.Now()))
 		case toolInterrupt:
 			// Answer every call so the wire stays well-formed, but record the
 			// interrupt: the turn ends after the results are appended.

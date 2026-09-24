@@ -399,6 +399,7 @@ Ten tools, in three natures:
   strument tool grep --mode content 'pattern' --glob '**/*' | wc -c
   strument tool symbol SomeName --kind reference
   strument tool --json ls internal
+  strument tool about   # the build, clock and platform the about tool reports
   ```
 
   The outcome line goes to stderr and the result to stdout, which is what makes

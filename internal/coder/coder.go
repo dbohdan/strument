@@ -135,6 +135,8 @@ type Coder struct {
 	// untrusted ones are kept so the session can tell the *user* they exist.
 	Skills   []skill.Skill
 	Platform PlatformInfo
+	// Build is what the about tool reports about the binary (about.go).
+	Build BuildInfo
 	// editsExact and editsFuzzy tally how this turn's edits found their text.
 	editsExact int
 	editsFuzzy int

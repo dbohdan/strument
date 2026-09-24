@@ -35,7 +35,7 @@ import (
 	"dbohdan.com/strument/internal/workspace"
 )
 
-var version = "0.0.0-dev"
+var version = devVersion
 
 // Flag values are written <lowercase> in angle brackets, matching what /help
 // prints for slash commands — the notation is documented at the top of
@@ -163,6 +163,7 @@ func (c *chatCmd) Run() error {
 	}
 
 	cdr := coder.New(root, model)
+	cdr.Build = buildInfo()
 	cdr.Session = session
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.ForProvider(model.Provider)
@@ -1994,6 +1995,9 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 }
 
 func main() {
+	// First, so that --version, the user agent and the about tool agree.
+	version = resolvedVersion()
+
 	// Before any request can go out: providers that ask callers to identify
 	// themselves get a name and a version rather than Go's default UA.
 	client.SetVersion(version)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
@@ -41,7 +42,8 @@ type toolCmd struct {
 	// carry the underscore (revive), and the tool's exact name — not a
 	// kebab-cased reading of it — is the point of a door that shows what the
 	// model sees.
-	RunCode toolRunCodeCmd `cmd:"" help:"Run a short Python program through run_code, as the model's tool returns it." name:"run_code"`
+	RunCode toolRunCodeCmd `cmd:"" help:"Run a short Python program through run_code, as the model's tool returns it."         name:"run_code"`
+	About   toolAboutCmd   `cmd:"" help:"Report this binary's build, the time and the platform, as the about tool returns it."`
 }
 
 // toolStderr carries the one-line outcome — "Searched for … — 100 matches in 5
@@ -148,8 +150,11 @@ func (c *toolCmd) run(name string, args map[string]any) error {
 	if err != nil {
 		return err
 	}
-	result := insp.Run(name, string(encoded))
+	return c.print(name, args, insp.Run(name, string(encoded)))
+}
 
+// print writes one tool's result: bare, or wrapped by --json.
+func (c *toolCmd) print(name string, args map[string]any, result string) error {
 	if c.JSON {
 		// The same string the text path prints, wrapped rather than re-rendered:
 		// one rendering means the two cannot drift. Counts a script might want —
@@ -267,4 +272,18 @@ func (t *toolRunCodeCmd) Run(c *toolCmd) error {
 		return err
 	}
 	return nil
+}
+
+type toolAboutCmd struct{}
+
+// Run prints the about report. Not through the Inspector, which holds the
+// tools that look at the project; this one looks at the process. Its session
+// half describes this process too, which has no model and no sandbox.
+func (t *toolAboutCmd) Run(c *toolCmd) error {
+	cdr, err := c.coder()
+	if err != nil {
+		return err
+	}
+	cdr.Build = buildInfo()
+	return c.print("about", map[string]any{}, cdr.About(time.Now()))
 }
