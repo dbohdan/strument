@@ -784,6 +784,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 		r.out.Errorf("Could not reload the config; the current config is unchanged: %v", err)
 		return ""
 	}
+	prev := r.opts.Config
 	r.opts.Config = cfg
 	// The config is the source of truth for the allowlist, so a reload
 	// discards /env session changes rather than carrying them over a
@@ -825,6 +826,16 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// rules only ever add, so a session cannot widen or drop its own sandbox.
 	if wasActive := r.coder.Sandbox.Active; wasActive != (cfg.Sandbox != "") {
 		r.out.Warningf("The `sandbox` setting changed. Restart Strument to apply it; this session's sandbox is unchanged.")
+	} else if wasActive && prev != nil && !slices.Equal(prev.SandboxWrite, cfg.SandboxWrite) {
+		r.out.Warningf("The `sandbox_write` setting changed. Restart Strument to apply it; this session's sandbox is unchanged.")
+	}
+	// env_set is applied to the process once, at startup, before anything it
+	// starts could inherit it; re-applying it mid-session would give a /run
+	// and the command before it different environments with no line between
+	// them. doc/config.md says a restart is needed. Saying it here too is what
+	// keeps an edited value from looking applied when it is not.
+	if prev != nil && !maps.Equal(prev.EnvSet, cfg.EnvSet) {
+		r.out.Warningf("The `env_set` setting changed. Restart Strument to apply it; this session's environment is unchanged.")
 	}
 
 	// Re-resolve the active alias so edits to that model take effect; if it was

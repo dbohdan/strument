@@ -524,3 +524,49 @@ func TestReloadSaysTheSandboxCannotChange(t *testing.T) {
 		t.Errorf("a changed sandbox setting was applied silently:\n%s", out.String())
 	}
 }
+
+// env_set and sandbox_write are the other two settings a reload reads and
+// cannot apply. Both used to reload to "Config reloaded" and no effect, the
+// shape the sandbox warning above was written against.
+func TestReloadSaysEnvSetAndSandboxWriteCannotChange(t *testing.T) {
+	base := func() *config.Config {
+		return &config.Config{
+			Models:       map[string]*config.Model{},
+			Sandbox:      "landlock",
+			SandboxWrite: []string{"/data"},
+			EnvSet:       map[string]string{"GOFLAGS": "-mod=mod"},
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*config.Config)
+		want string // "" means no restart warning at all
+	}{
+		{"env_set changed", func(c *config.Config) { c.EnvSet["GOFLAGS"] = "-mod=vendor" }, "`env_set`"},
+		{"env_set entry added", func(c *config.Config) { c.EnvSet["TZ"] = "UTC" }, "`env_set`"},
+		{"sandbox_write changed", func(c *config.Config) { c.SandboxWrite = []string{"/data", "/cache"} }, "`sandbox_write`"},
+		{"nothing changed", func(*config.Config) {}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
+			defer r.Close()
+			cdr.Sandbox = coder.SandboxState{Required: true, Active: true}
+			r.opts.Config = base()
+			next := base()
+			tc.edit(next)
+			r.opts.ReloadConfig = func() (*config.Config, error) { return next, nil }
+
+			cmdReload(context.Background(), r, "")
+			got := out.String()
+			if tc.want == "" {
+				if strings.Contains(got, "Restart Strument") {
+					t.Errorf("an unchanged config asked for a restart:\n%s", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tc.want) || !strings.Contains(got, "Restart Strument to apply it") {
+				t.Errorf("a changed %s reloaded without saying it needs a restart:\n%s", tc.want, got)
+			}
+		})
+	}
+}
