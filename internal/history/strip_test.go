@@ -177,3 +177,65 @@ func TestStripOnAQuietProject(t *testing.T) {
 		t.Errorf("an empty project planned %+v", plan)
 	}
 }
+
+// A segment the sweep cannot read to the end must stop the sweep, not shrink
+// it. Absence of a reference is what marks a payload an orphan, and orphans
+// go whatever the cutoff, so every reference past an unreadable line used to
+// read as "nothing points at this" — a payload referenced an hour ago was
+// deleted by a 90-day strip.
+func TestStripRefusesWhenASegmentIsUnreadableMidway(t *testing.T) {
+	project := newStripProject(t)
+	recent := stripFixture(t, project, "current", time.Hour, "a recent result")
+	segs, err := LogSegments(project, "current")
+	if err != nil || len(segs) != 1 {
+		t.Fatalf("segments = %v, %v", segs, err)
+	}
+	data, err := os.ReadFile(segs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Damage the line before the reference, not the last line: a torn tail is
+	// what a crash leaves and is read around; a bad line with rows after it is
+	// damage, and what follows it is unaccounted for.
+	first, rest, _ := strings.Cut(string(data), "\n")
+	damaged := first + "\n{\"type\":\"message\",\"text\":\"unterminated\n" + rest
+	if err := os.WriteFile(segs[0], []byte(damaged), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := PlanStrip(project, time.Now().Add(-90*24*time.Hour))
+	if err == nil {
+		t.Fatalf("the sweep planned over an unreadable segment: %+v", plan)
+	}
+	if !strings.Contains(err.Error(), segs[0]) {
+		t.Errorf("the error should name the segment, got: %v", err)
+	}
+	if _, ok := GetBlob(project, recent[0]); !ok {
+		t.Error("the recent payload is gone")
+	}
+}
+
+// A torn last line is what a crash leaves, and it must not block the sweep:
+// every run that died would otherwise make strip unusable until someone
+// hand-edited the record.
+func TestStripReadsAroundATornTail(t *testing.T) {
+	project := newStripProject(t)
+	stripFixture(t, project, "current", time.Hour, "a recent result")
+	segs, _ := LogSegments(project, "current")
+	f, err := os.OpenFile(segs[0], os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"type":"message","role":"to`)
+	_ = f.Close()
+	when := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(segs[0], when, when)
+
+	plan, err := PlanStrip(project, time.Now().Add(-90*24*time.Hour))
+	if err != nil {
+		t.Fatalf("a torn tail stopped the sweep: %v", err)
+	}
+	if plan.Keep != 1 || len(plan.Remove) != 0 {
+		t.Errorf("plan = %+v, want the recent payload kept and nothing removed", plan)
+	}
+}

@@ -1,6 +1,7 @@
 package history
 
 import (
+	"fmt"
 	"os"
 	"time"
 )
@@ -88,6 +89,12 @@ func PlanStrip(projectRoot string, before time.Time) (StripPlan, error) {
 
 // newestReferences maps each referenced blob to the newest moment a record
 // pointed at it, across every session in the project.
+//
+// Anything it cannot read fails the whole scan. That is the opposite of how a
+// history reader treats damage, and deliberately: this map is used to decide
+// what is unreferenced, so a segment skipped here turns every payload it names
+// into an orphan, and orphans are removed whatever the cutoff. The mtime rule
+// above fails toward keeping; a read error has to as well.
 func newestReferences(projectRoot string) (map[string]time.Time, error) {
 	sessions, err := ListSessions(projectRoot)
 	if err != nil {
@@ -106,16 +113,21 @@ func newestReferences(projectRoot string) (map[string]time.Time, error) {
 	for _, s := range sessions {
 		segments, err := LogSegments(projectRoot, s.Name)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("cannot list the records of session %s, so nothing can be shown "+
+				"to be unreferenced: %w", s.Name, err)
 		}
 		for _, seg := range segments {
 			info, err := os.Stat(seg)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("cannot read %s, so nothing can be shown to be unreferenced: %w", seg, err)
 			}
-			records, err := ReadRecords(seg)
+			records, complete, err := readRecords(seg)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("cannot read %s, so nothing can be shown to be unreferenced: %w", seg, err)
+			}
+			if !complete {
+				return nil, fmt.Errorf("%s has a record that does not decode with more after it, "+
+					"so the payloads those rows name cannot be counted; nothing was stripped", seg)
 			}
 			for _, r := range records {
 				note(r.Blob, info.ModTime())

@@ -67,31 +67,48 @@ func TurnsFromRecords(records []coder.Record) []Turn {
 // is a last one cut off when the process died — and a session that ended that
 // way is exactly the one whose history someone wants to read.
 func ReadRecords(path string) ([]coder.Record, error) {
+	out, _, err := readRecords(path)
+	return out, err
+}
+
+// readRecords is ReadRecords that also says whether the segment was read to
+// its end.
+//
+// Complete means nothing was skipped except a torn last line. A reader that
+// only shows history can take a prefix; the strip sweep cannot, because it
+// infers "nothing refers to this payload" from what it did not see, and a
+// reference past an unreadable line is one it did not see.
+func readRecords(path string) (out []coder.Record, complete bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer f.Close()
 
-	var out []coder.Record
 	sc := bufio.NewScanner(f)
 	// A tool result can be large, and the default 64 KiB token would end a
 	// segment at the first one that is not.
 	sc.Buffer(make([]byte, 0, 64*1024), maxRecordLine)
+	stopped := false
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" {
 			continue
 		}
+		if stopped {
+			// A row after the undecodable one: that was damage, not a tail.
+			return out, false, nil
+		}
 		var r coder.Record
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
-			break
+			stopped = true
+			continue
 		}
 		out = append(out, r)
 	}
-	// A scanner error is the same case as an undecodable line: what was read
-	// is what there is.
-	return out, nil
+	// A scanner error is the same case as an undecodable line for a reader —
+	// what was read is what there is — but the rest of the file went unread.
+	return out, sc.Err() == nil, nil
 }
 
 // maxRecordLine caps one record. The tool results the log carries verbatim are
