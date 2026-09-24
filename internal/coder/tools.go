@@ -935,6 +935,18 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		return OutcomeSelfInterrupted
 	}
 
+	// A loop the model kept up after the note ends the turn, the way a
+	// repeating reply does (OutcomeLooping): what happens next is the user's
+	// to say, and in an unattended run, where nobody is asked, the turn ends.
+	if c.toolLoops.takeStop() {
+		c.Out.Warningf("The model kept repeating the same tool calls after being told, and was stopped.")
+		c.curMessages = append(c.curMessages, llm.HarnessNote(
+			"Strument stopped the turn because you went on repeating the same tool calls after "+
+				"being told you were. The results you already have are all those calls will give. "+
+				"Take a different approach, and if you are stuck, say so plainly and stop."))
+		return OutcomeLooping
+	}
+
 	if needsReflection {
 		return OutcomeReflect
 	}

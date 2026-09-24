@@ -219,3 +219,89 @@ func TestDeclinedCommandsDoNotResetTheLoopWatcher(t *testing.T) {
 		}
 	}
 }
+
+// The note is the first word, not the last. A streak that trips its threshold
+// again after the note — three more identical calls, or as many reads again —
+// asks for the turn to end; a real change starts the count over, note first.
+func TestToolLoopWatcherStopsALoopThatOutlivesTheNote(t *testing.T) {
+	w := newToolLoopWatcher()
+	args := `{"path":"a.go"}`
+	for i := 1; i <= 2*toolLoopMaxIdentical; i++ {
+		note := w.observeCall(toolRead, args)
+		switch {
+		case i == toolLoopMaxIdentical && note == "":
+			t.Fatalf("call %d: no note", i)
+		case i != toolLoopMaxIdentical && note != "":
+			t.Fatalf("call %d: a second note %q", i, note)
+		}
+		if stopped := w.stop; stopped != (i == 2*toolLoopMaxIdentical) {
+			t.Fatalf("call %d: stop = %v", i, stopped)
+		}
+	}
+	if !w.takeStop() {
+		t.Fatal("takeStop did not report the stop")
+	}
+	if w.takeStop() {
+		t.Fatal("the stop was reported twice; takeStop must start the watcher over")
+	}
+
+	// The read-streak path stops the same way, at twice its cap.
+	w = newToolLoopWatcher()
+	for i := range 2 * toolLoopMaxReads {
+		w.observeCall(toolGrep, `{"pattern":"p`+strconv.Itoa(i)+`"}`)
+	}
+	if !w.takeStop() {
+		t.Error("twice the read cap with nothing changing did not stop")
+	}
+
+	// Progress resets the note: the loop after an edit is a new one, and it is
+	// warned before it is stopped.
+	w = newToolLoopWatcher()
+	for range toolLoopMaxIdentical {
+		w.observeCall(toolRead, args)
+	}
+	w.observeMutation()
+	var notes int
+	for range toolLoopMaxIdentical {
+		if w.observeCall(toolRead, args) != "" {
+			notes++
+		}
+	}
+	if notes != 1 || w.stop {
+		t.Errorf("after an edit: %d notes, stop = %v; want one note and no stop", notes, w.stop)
+	}
+}
+
+// Through the dispatcher: GLM's loop from the arms trial — the same read, a
+// declined command, again and again — ends the turn as a loop once it has
+// outlived the note, instead of running until something outside kills it.
+func TestAToolLoopAfterTheNoteEndsTheTurn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	c.Runner = &countingRunner{}
+	c.Confirm = &recordingConfirmer{answer: false}
+	c.SuggestShellCommands = true
+
+	var outcome SendOutcome
+	for step := range 2 * toolLoopMaxIdentical {
+		c.partialToolCalls = []llm.ToolCall{
+			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
+			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
+		}
+		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.partialToolCalls})
+		outcome = c.applyToolCalls(context.Background())
+		if outcome == OutcomeLooping && step < 2*toolLoopMaxIdentical-1 {
+			t.Fatalf("stopped at step %d, before the loop outlived the note", step+1)
+		}
+	}
+	if outcome != OutcomeLooping {
+		t.Fatalf("outcome = %v after %d identical reads, want Looping", outcome, 2*toolLoopMaxIdentical)
+	}
+	last := c.curMessages[len(c.curMessages)-1]
+	if last.Role != llm.RoleUser || !strings.Contains(last.Text(), "stopped the turn") {
+		t.Errorf("the model was not told why the turn ended: %q", last.Text())
+	}
+}

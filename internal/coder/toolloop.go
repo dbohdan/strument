@@ -54,10 +54,18 @@ type toolLoopWatcher struct {
 	counts map[string]int
 	// reads is the count since the last mutation.
 	reads int
-	// fired notes once: the reflection is injected once per turn, on the send
-	// after a threshold trips, and repeating it every step would itself be
-	// noise.
+	// fired notes once: the reflection is injected once per streak, on the
+	// send after a threshold trips, and repeating it every step would itself
+	// be noise.
 	fired bool
+	// stop is set when a streak trips its threshold a second time — the same
+	// call three more times after the note, or as many reads again — and asks
+	// the dispatcher to end the turn. The note used to be the last word, with
+	// the step budget as the backstop, and --yes steps removes the budget: in
+	// the run_code arms trial a model that had been told went on making the
+	// same read for ten minutes. A loop the model keeps up after being told is
+	// not work in progress, attended or not.
+	stop bool
 }
 
 func newToolLoopWatcher() *toolLoopWatcher {
@@ -99,9 +107,6 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
 	if w == nil || toolLoopExempt(name) {
 		return ""
 	}
-	if w.fired {
-		return "" // said once per turn; the step budget is the backstop
-	}
 	if name == toolInterrupt {
 		return "" // ending the turn is the loop's exit, not part of it
 	}
@@ -109,6 +114,14 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
 	w.counts[key]++
 	if countsAsRead(name) {
 		w.reads++
+	}
+	if w.fired {
+		// Said once; counting goes on, so the streak that earned the note can
+		// earn the stop.
+		if w.counts[key] >= 2*toolLoopMaxIdentical || w.reads >= 2*toolLoopMaxReads {
+			w.stop = true
+		}
+		return ""
 	}
 	if w.counts[key] >= toolLoopMaxIdentical {
 		w.fired = true
@@ -138,6 +151,21 @@ func (w *toolLoopWatcher) observeMutation() {
 	if w == nil {
 		return
 	}
+	// A new streak earns its own note: the loop that follows progress is not
+	// the one the earlier note was about.
+	w.fired = false
+	w.stop = false
 	w.reads = 0
 	w.counts = map[string]int{}
+}
+
+// takeStop reports whether the turn should end on a loop, and starts the
+// watcher over: if the user says to try again, the next streak is judged on
+// its own, note first.
+func (w *toolLoopWatcher) takeStop() bool {
+	if w == nil || !w.stop {
+		return false
+	}
+	*w = *newToolLoopWatcher()
+	return true
 }
