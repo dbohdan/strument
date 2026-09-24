@@ -339,16 +339,32 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 
 	for _, rel := range plan.WriteOrder {
 		full := c.fullPath(rel)
-		old, err := os.ReadFile(full)
-		existed := err == nil
+		// Whether the file exists comes from Stat, not from whether it could
+		// be read. The two differ exactly where it matters: a directory, or a
+		// file this process cannot read. Recorded as "did not exist", either
+		// one was removed rather than restored — by the rollback below when a
+		// later write failed (an empty directory the model wrote onto went
+		// with it), and by /undo when nothing did (the file went entirely).
+		// Refused instead, before anything is touched: a write whose old
+		// contents cannot be kept is a write /undo cannot take back.
+		fi, statErr := os.Stat(full)
+		existed := statErr == nil
+		var old []byte
 		mode := os.FileMode(newFileMode)
 		if existed {
-			if fi, err := os.Stat(full); err == nil {
-				// Perm plus the setuid/setgid/sticky bits: everything os.Chmod
-				// can put back. Strument did not make the file special and has
-				// no business making it ordinary.
-				mode = fi.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+			if fi.IsDir() {
+				restore()
+				return fmt.Errorf("%s is a directory", rel)
 			}
+			var err error
+			if old, err = os.ReadFile(full); err != nil {
+				restore()
+				return fmt.Errorf("%s exists but could not be read, so /undo could not restore it: %w", rel, err)
+			}
+			// Perm plus the setuid/setgid/sticky bits: everything os.Chmod
+			// can put back. Strument did not make the file special and has
+			// no business making it ordinary.
+			mode = fi.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
 		}
 		backups[rel] = snapEntry{before: old, existed: existed, mode: mode}
 		order = append(order, rel)

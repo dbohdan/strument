@@ -22,6 +22,7 @@ package coder
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -148,5 +149,56 @@ func TestCleanWriteEditedIsWrittenSet(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(got) != "new content\n" {
 		t.Errorf("a.txt = %q", got)
+	}
+}
+
+// A write onto a directory must fail without taking the directory with it.
+// Existence used to come from whether the target could be *read*, so a
+// directory counted as "did not exist" and the rollback removed it — an empty
+// one went, silently, under an error about the rename.
+func TestWriteAtomicallyLeavesADirectoryTargetAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	plan := writePlan{
+		Writes:     map[string]string{"new.txt": "created\n", "d": "x\n"},
+		WriteOrder: []string{"new.txt", "d"},
+	}
+	if err := c.writeAtomically(plan); err == nil {
+		t.Fatal("writing onto a directory must fail")
+	}
+	if fi, err := os.Stat(filepath.Join(dir, "d")); err != nil || !fi.IsDir() {
+		t.Errorf("the directory must survive the failed write: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "new.txt")); !os.IsNotExist(err) {
+		t.Errorf("the rest of the batch must still roll back: err=%v", err)
+	}
+}
+
+// A file that exists but cannot be read cannot be snapshotted, so writing it
+// would be a write /undo cannot take back: recorded as "did not exist", undo
+// deleted it. It is refused before anything is touched.
+func TestWriteAtomicallyRefusesAFileItCannotRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide Unix permission bits")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-0200 file anyway")
+	}
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked")
+	if err := os.WriteFile(locked, []byte("theirs\n"), 0o200); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	err := c.writeAtomically(writePlan{Writes: map[string]string{"locked": "ours\n"}, WriteOrder: []string{"locked"}})
+	if err == nil {
+		t.Fatal("a file whose contents cannot be kept for undo must not be overwritten")
+	}
+	_ = os.Chmod(locked, 0o600)
+	if got, _ := os.ReadFile(locked); string(got) != "theirs\n" {
+		t.Errorf("the file changed: %q", got)
 	}
 }
