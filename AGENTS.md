@@ -129,13 +129,17 @@ rules silently no-op at zero width.
 
 ### Which model to reach for
 
-**Default to MiMo-V2.5 (`xiaomi/mimo-v2.5`) wherever you would otherwise reach
-for a frontier model by instinct.** It benchmarks between Claude Haiku 4.5 and
-Sonnet 4.6, so it is an adequate stand-in for "a capable model", and on
-OpenRouter it costs $0.14/$0.28 per million against Haiku 4.5's $1.00/$5.00 —
-roughly seven times cheaper on input and eighteen on output. It is also *fast*,
-which matters more than it looks: in a sweep, wall-clock is what caps the sample
-you can afford to collect in one sitting.
+**Default to MiMo-V2.6-Flash (`xiaomi/mimo-v2.6-flash`) wherever you would
+otherwise reach for a frontier model by instinct.** It is the MiMo in the
+maintainer's own setup, so it is also the model behind the transcripts and logs
+you will be handed. Its predecessor, MiMo-V2.5, benchmarked between Claude Haiku
+4.5 and Sonnet 4.6, which made it an adequate stand-in for "a capable model".
+On OpenRouter it costs $0.14/$0.28 per million, the same as V2.5, against Haiku
+4.5's $1.00/$5.00 — roughly seven times cheaper on input and eighteen on
+output. MiMo is also *fast*, which matters more than it looks: in a sweep,
+wall-clock is what caps the sample you can afford to collect in one sitting.
+The experiments under `doc/experiments/` that name V2.5 ran on it; read their
+results as V2.5's.
 
 The reason this is a rule and not a preference: in
 [`doc/experiments/2026-08-prompt-scope/README.md`](doc/experiments/2026-08-prompt-scope/README.md)
