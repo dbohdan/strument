@@ -72,6 +72,10 @@ Before spending on a run, ask these questions in order:
 | Treatment was not reached, or the fixture never contained the phenomenon | [a clean null has many causes](#clean-null), [a fixture that cannot contain it](#fixture-cannot-contain-it) |
 | Runner stopped reporting, timed out, or cannot resume | [a runner that dies quietly](#runner-dies-quietly), [the resume path runs last](#resume-path) |
 | A bug report names the wrong subsystem | [a report infers the subsystem](#report-infers-subsystem) |
+| A check passed and the bug was real anyway | [your validator can carry the same bug](#validator-shares-the-bug), [a check that cannot fail](#check-that-cannot-fail) |
+| A diff shows two artifacts that look the same | [two documents can render identically](#identical-renderings) |
+| Turn or message counts do not match the fixture | [a fixture line is a message](#one-line-per-message) |
+| A column counts something other than its name | [a probe with two correct answers](#probe-with-two-answers), [a metric that counts the wrong thing](#clean-null) |
 
 ---
 
@@ -992,6 +996,131 @@ transcript of it. The measured hours stayed.
 a counter and which came off your memory of the work. The second kind is not
 forbidden — it carries real information about clustering — but it should not
 wear the same clothes as the first.
+
+---
+
+<a id="validator-shares-the-bug"></a>
+
+## 22. Your validator can carry the same bug as the code
+
+Section 1 says an instrument made of the system under test will agree with it.
+Here is the sharper version: an instrument written *by the same person, on the
+same afternoon, from the same mental model* will reproduce that model's specific
+defect.
+
+Restoring a conversation from the session record has to pair each tool call with
+the result that answers it. The first version matched call ids across the whole
+record, which is wrong — a provider need only make an id unique within one
+request, and the record spans every request a session ever made, so a later
+result answered an earlier call of the same name and an unanswered call came
+back as though it were fine. That makes every subsequent request malformed.
+
+A wire validator was built to catch exactly this, and it reported the request
+clean. It tested `id in answered` — set membership — where the property is a
+count: two calls sharing one id with one result between them satisfies "some
+result carries this id" and is still malformed. The code and the check were
+wrong the same way, so the check passed.
+
+What found it was not the validator. It was a number that did not add up: a
+drop count of 1 where the arithmetic said 2. Both were then fixed to count.
+
+**Do:** when you write a checker for a property, state the property as a
+quantity before you write the predicate. "Every call has a result" is a
+counting claim; `in` is not a counting operator. And when a check passes,
+ask what *else* would have to be true and verify one of those independently —
+a passing check written from the same model as the code is one observation,
+not two.
+
+---
+
+<a id="identical-renderings"></a>
+
+## 23. Two documents can render identically and still differ
+
+A golden-file comparison failed on Windows CI. The failure printed both
+documents in full. They were the same document, line for line, to the eye and
+to the log.
+
+The difference was line endings: Git for Windows checks out with
+`core.autocrlf=true`, so a `.md` golden arrived with CRLF while the renderer
+emitted LF. A log strips nothing and hides nothing, and still shows two
+identical blocks, because the bytes that differ are the ones a terminal does
+not draw.
+
+**Do:** never diff by printing both artifacts. Report the **first differing
+byte offset** and a quoted window either side, so `\r` appears as `\r`. And
+when a comparison rests on exact bytes, say so where the bytes live —
+`.gitattributes` with `-text` on the testdata, not a hope that nothing
+translates them.
+
+The second half is cheaper than it looks: the failure message can name the
+trap. When the golden holds CRLF and the renderer does not, the test now says
+so in a sentence, and whoever reads that log next does not have to rediscover
+this section.
+
+---
+
+<a id="one-line-per-message"></a>
+
+## 24. A fixture line is a message, and a newline is two messages
+
+A probe asked two questions, written across three lines of Python string
+concatenation for readability. The REPL reads one line per message. The model
+received three messages, answered the first fragment, and said so in its own
+reasoning: *"it seems like the message was cut off."*
+
+Both answers still came out correct, which is how this survives a glance at the
+output. It was caught by a count that should not have moved — twelve turns in
+the fixture, fourteen in the record.
+
+**Do:** assert the shape of your fixture before you spend on it. One line:
+
+```python
+for i, t in enumerate(TURNS):
+    if "\n" in t:
+        raise SystemExit(f"turn {i} would be sent as several messages")
+```
+
+This is the same class as [static checking before the trial](#type-check-runner):
+a property of the input, checkable in milliseconds, that otherwise becomes a
+result nobody can explain.
+
+---
+
+<a id="probe-with-two-answers"></a>
+
+## 25. A probe with two correct answers scores one of them as a lie
+
+The compaction-source trial planted a fact — a constant name considered and
+rejected — and asked for it back. The scorer had four columns: recalled,
+declined, confabulated, absent. Four sessions landed in `confabulated`, which
+the preregistered rule treats as disqualifying: converting loss into invention
+is a regression whatever recall does.
+
+None of the four was an invention. Every one named the constant the session had
+*actually* renamed in turn 1. The probe asked "which name did we consider and
+reject", and the fixture contained two defensible answers — the planted one and
+the real old name. The scorer had no column for the second, so a true statement
+about the session fell into the column reserved for lies.
+
+Two things follow, and the second is the uncomfortable one.
+
+**A probe needs exactly one correct answer, and the fixture is where that is
+decided.** Enumerate what a *correct* model could say, not only what a wrong
+one could. The planted fact was unique; the *question* was not.
+
+**A correction found after the results is worth least when it favours you.**
+Re-read with the missing column, no confabulation survived in either arm and the
+change looked shippable. That is the direction where a second reading deserves
+the most suspicion, so both scorings were reported, the preregistered one
+stood, and the change did not ship — because the check the ship rule depends on
+had not run. A large effect on the primary metric does not substitute for a
+counter-metric that measured the wrong thing.
+
+Note also what the broken column flattered: the control arm had *zero*
+confabulations because it recalled nothing and declined almost everything. An
+arm that knows nothing cannot invent anything, so "fewer inventions" was not a
+virtue there. Read a column against the others before believing it.
 
 ---
 
