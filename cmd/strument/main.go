@@ -52,23 +52,20 @@ type chatCmd struct {
 	// Hidden: an arm of doc/experiments/2026-09-compaction-source, removed or
 	// promoted when that trial reports. A flag in --help is a supported
 	// feature, and this is a question.
-	CompactionSource string `default:"fold" enum:"fold,record" help:"Where a compaction summary is built from." hidden:""`
-	// Hidden: the arms of doc/experiments/2026-09-run-code-arms, removed or
-	// promoted when that trial reports.
-	RunCodeArm    string   `default:"monty"                                                                                                                                                   enum:"monty,monty-open,js"                                help:"run_code's language arm."                         hidden:""`
-	Continue      bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
-	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
-	DryRun        bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
-	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
-	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
-	Files         []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
+	CompactionSource string   `default:"fold"                                                                                                                                                    enum:"fold,record"                                        help:"Where a compaction summary is built from."        hidden:""`
+	Continue         bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
+	Model            string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
+	NoGit            bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor          bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode         bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
+	LightMode        bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
+	NoAutoCommits    bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
+	NoHistory        bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
+	DryRun           bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
+	NoShell          bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
+	Yes              []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
+	Files            []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -167,7 +164,6 @@ func (c *chatCmd) Run() error {
 
 	cdr := coder.New(root, model)
 	cdr.Build = buildInfo()
-	cdr.CodeArm = c.RunCodeArm
 	cdr.Session = session
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.ForProvider(model.Provider)

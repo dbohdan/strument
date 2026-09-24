@@ -137,9 +137,6 @@ type Coder struct {
 	Platform PlatformInfo
 	// Build is what the about tool reports about the binary (about.go).
 	Build BuildInfo
-	// CodeArm selects run_code's language arm for the 2026-09-run-code-arms
-	// trial (codearm.go). Empty is the shipped Monty.
-	CodeArm string
 	// editsExact and editsFuzzy tally how this turn's edits found their text.
 	editsExact int
 	editsFuzzy int

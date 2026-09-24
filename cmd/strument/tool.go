@@ -251,9 +251,6 @@ func (t *toolSymbolCmd) Run(c *toolCmd) error {
 // `strument tool run_code 'print(1 + 2)'` with the program single-quoted.
 type toolRunCodeCmd struct {
 	Code string `arg:"" help:"The Python program, as the run_code tool would receive it."`
-	// Hidden, like the chat flag it mirrors: an arm of
-	// doc/experiments/2026-09-run-code-arms.
-	Arm string `default:"monty" enum:"monty,monty-open,js" help:"run_code's language arm." hidden:""`
 }
 
 func (t *toolRunCodeCmd) Run(c *toolCmd) error {
@@ -261,7 +258,6 @@ func (t *toolRunCodeCmd) Run(c *toolCmd) error {
 	if err != nil {
 		return err
 	}
-	cod.CodeArm = t.Arm
 	// The program block and the outcome line went to stderr, so stdout is the
 	// result alone — the same stdout discipline as run(): byte-exact through a
 	// pipe, one trailing newline added for a terminal. --json is deliberately

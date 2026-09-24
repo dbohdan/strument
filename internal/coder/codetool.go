@@ -159,9 +159,6 @@ func parseCodeArgs(tc llm.ToolCall) (codeCall, string) {
 // the outcome — naming what the program actually called, collected at the
 // bridge rather than scanned from the source.
 func (c *Coder) runCode(_ context.Context, cc codeCall) string {
-	if c.codeArm() == codeArmJS {
-		return c.runCodeJS(cc)
-	}
 	c.Out.ToolBlock(render.CodeOpen, cc.code)
 
 	runner, err := montyRunner()
@@ -185,8 +182,7 @@ func (c *Coder) runCode(_ context.Context, cc codeCall) string {
 		// aborted mid-way is precisely where the summary carries information
 		// the value cannot.
 		c.Out.Toolf("%s", summary)
-		msg := codeErrorMessage(err)
-		return c.codeHintFor("The program failed: "+msg, msg)
+		return codeErrorText(err)
 	}
 	c.Out.Toolf("%s", summary)
 	return truncateResult(codeResultText(result, printed.String(), &log))
@@ -305,10 +301,9 @@ var codeToolParams = map[string][]string{
 func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	opts := make([]monty.ExecuteOption, 0, 3)
 	opts = append(opts, monty.WithLimits(codeLimits))
+	opts = append(opts, monty.WithOsCallFunc(codeOsCall))
 
 	names := c.codeCallableTools()
-	bridge := c.bridgeCall(names, log)
-	opts = append(opts, monty.WithOsCallFunc(c.codeOsCallFunc(bridge)))
 	funcs := make([]monty.FuncDef, 0, len(names)+len(codeFuncs)+len(codeDataFuncs))
 	// The params list is what lets Monty bind a positional call's arguments to
 	// names. Registering without one does not make positional calls fail — it
@@ -335,7 +330,7 @@ func (c *Coder) codeOptions(log *bridgeLog) []monty.ExecuteOption {
 	for _, d := range codeDataFuncs {
 		funcs = append(funcs, monty.Func(d.name, d.params...))
 	}
-	opts = append(opts, monty.WithExternalFunc(bridge, funcs...))
+	opts = append(opts, monty.WithExternalFunc(c.bridgeCall(names, log), funcs...))
 	return opts
 }
 
@@ -573,11 +568,11 @@ func sameBridgedValue(result, last any) bool {
 	return ok && rs == ls
 }
 
-// codeErrorMessage is an execution failure as the model sees it. The traceback's
+// codeErrorText renders an execution failure for the model. The traceback's
 // leading file framing is dropped because it is constant — every program is
 // "script.py" from Monty's point of view — and the exception itself is what
 // the model needs.
-func codeErrorMessage(err error) string {
+func codeErrorText(err error) string {
 	msg := err.Error()
 	msg = strings.TrimPrefix(msg, "monty: ")
 	// A traceback starts with the file framing and carries the failing line;
@@ -585,7 +580,7 @@ func codeErrorMessage(err error) string {
 	if i := strings.Index(msg, "\n"); i >= 0 && strings.Contains(msg[:i], "script.py") {
 		msg = msg[i+1:]
 	}
-	return msg
+	return codeHintText("The program failed: "+msg, msg)
 }
 
 // codeHintText appends the recovery hint to the error classes the model
