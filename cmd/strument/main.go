@@ -781,7 +781,12 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 // project was opened, so that later editing `default` in config.star would
 // mysteriously not take effect there. It also gives an obvious way out —
 // switching back to the default stops the pinning.
-func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, keepState bool) func(alias string) {
+//
+// defaultAlias is asked at each save rather than read once, because /reload can
+// change `default` mid-session. Compared against the startup value, a session
+// still on the old default after the edit saved nothing, and the next start
+// quietly moved it to the new one.
+func saveResumeFunc(cdr *coder.Coder, defaultAlias func() string, projectRoot string, keepState bool) func(alias string) {
 	if !keepState {
 		return nil
 	}
@@ -795,7 +800,7 @@ func saveResumeFunc(cdr *coder.Coder, cfg *config.Config, projectRoot string, ke
 		res := resumeWithPins(cdr, projectRoot, history.Resume{
 			AutoPinned: history.LoadResume(projectRoot, cdr.Session).AutoPinned,
 		})
-		if alias != cfg.Default {
+		if alias != defaultAlias() {
 			res.Model = alias
 		}
 		_ = history.SaveResume(projectRoot, cdr.Session, res)
@@ -950,13 +955,18 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 	if keepState {
 		inputHistory, _ = history.InputHistoryPath(projectRoot)
 	}
+	// The REPL owns the config after startup (/reload replaces it), so anything
+	// built here that needs a config value later asks the REPL for it. Called
+	// only once r is assigned, from commands the REPL itself dispatches.
+	var r *repl.REPL
+	currentDefault := func() string { return r.Config().Default }
 	r, err := repl.New(repl.Options{
 		Coder:                cdr,
 		Config:               cfg,
 		Git:                  repo,
 		ModelAlias:           alias,
 		ResumeNote:           resumeNote,
-		SaveResume:           saveResumeFunc(cdr, cfg, projectRoot, keepState),
+		SaveResume:           saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
 		ApplyEgress:          applyEgressConfig,
 		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		RefreshCommitMessage: refreshCommitMessage,
@@ -971,7 +981,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		DropNotes: func() {
 			cdr.SessionNotes, cdr.SessionNotesDate, cdr.SessionNotesSession = "", "", ""
 		},
-		Sessions: sessionOps(cdr, cfg, projectRoot, slog, keepState),
+		Sessions: sessionOps(cdr, currentDefault, projectRoot, slog, keepState),
 		GenerateNotes: func(_ context.Context) error {
 			if !keepState {
 				return errors.New("no session record available")

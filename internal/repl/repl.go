@@ -284,6 +284,11 @@ func New(opts Options) (*REPL, error) {
 // Close releases the readline terminal state.
 func (r *REPL) Close() error { return r.rl.Close() }
 
+// Config is the configuration the session is running on now: the one it
+// started with, or the last one /reload read. Code outside the REPL that was
+// handed the startup config holds a copy /reload never touches.
+func (r *REPL) Config() *config.Config { return r.opts.Config }
+
 // Confirmer returns a coder.Confirmer that asks on this REPL's terminal;
 // wrap it in an AutoConfirmer for --yes handling.
 func (r *REPL) Confirmer() coder.Confirmer { return rlConfirmer{r} }

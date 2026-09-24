@@ -10,7 +10,6 @@ import (
 
 	"dbohdan.com/strument/internal/client"
 	"dbohdan.com/strument/internal/coder"
-	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/jsonlog"
 	"dbohdan.com/strument/internal/render"
@@ -397,7 +396,7 @@ func (s *sessionSwitcher) remove(name string) error {
 // The notes writer is built here rather than passed in because it is the same
 // one `/notes generate` uses, and a fork that summarized differently from
 // `/notes generate` would be two answers to one question.
-func sessionOps(cdr *coder.Coder, cfg *config.Config, projectRoot string, slog *sessionLog, keepState bool) *repl.SessionOps {
+func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string, slog *sessionLog, keepState bool) *repl.SessionOps {
 	if !keepState {
 		return nil
 	}
@@ -419,7 +418,7 @@ func sessionOps(cdr *coder.Coder, cfg *config.Config, projectRoot string, slog *
 			return notes, err
 		}
 	}
-	if save := saveResumeFunc(cdr, cfg, projectRoot, keepState); save != nil {
+	if save := saveResumeFunc(cdr, defaultAlias, projectRoot, keepState); save != nil {
 		sw.saveResume = save
 	}
 	return &repl.SessionOps{

@@ -197,12 +197,12 @@ func TestHistoryPathIsTheSameFromAnywhereInTheProject(t *testing.T) {
 func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root, _ := newRepo(t)
-	cfg := &config.Config{Default: "mimo"}
+	def := "mimo"
 	cdr := coder.New(root, &config.Model{Slug: "x"})
 	// The saved session is the coder's own now, so /session moves it.
 	cdr.Session = history.DefaultSession
 
-	save := saveResumeFunc(cdr, cfg, root, true)
+	save := saveResumeFunc(cdr, func() string { return def }, root, true)
 	if save == nil {
 		t.Fatal("no save function when state is kept")
 	}
@@ -219,6 +219,15 @@ func TestResumeRecordsOnlyANonDefaultAlias(t *testing.T) {
 	save("mimo")
 	if got := history.LoadResume(root, history.DefaultSession).Model; got != "" {
 		t.Errorf("switching back to the default left %q pinned", got)
+	}
+	// /reload moved `default` away from the model this session is on. That
+	// alias is now a choice the session made, and the next start must keep it
+	// rather than follow the edit; comparing against the startup default saved
+	// nothing here.
+	def = "sonnet"
+	save("mimo")
+	if got := history.LoadResume(root, history.DefaultSession).Model; got != "mimo" {
+		t.Errorf("after default moved to sonnet, a session on mimo saved model = %q, want mimo", got)
 	}
 }
 
@@ -242,7 +251,7 @@ func TestResumePathsAreProjectRelative(t *testing.T) {
 	cdr := coder.New(sub, &config.Model{Slug: "x"})
 	cdr.AddFile(filepath.Join(sub, "b.go"))
 
-	saveResumeFunc(cdr, &config.Config{Default: "m"}, root, true)("m")
+	saveResumeFunc(cdr, func() string { return "m" }, root, true)("m")
 
 	got := history.LoadResume(root, history.DefaultSession).Files
 	if len(got) != 1 || got[0] != "sub/b.go" {
