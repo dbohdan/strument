@@ -4,6 +4,7 @@
 package coder
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -386,4 +387,31 @@ func TestOneResultAnswersOneCall(t *testing.T) {
 		t.Errorf("%d calls restored against one result, want 1", n)
 	}
 	assertSendable(t, got)
+}
+
+// The note for pruned arguments reaches the model in front of the result of
+// the call it belongs to, and the call itself stays valid JSON.
+func TestRestoredCallWithPrunedArgumentsIsLabelled(t *testing.T) {
+	note := "[strument] This call's arguments are no longer stored. They were 3031 bytes."
+	msgs, stats := MessagesFromRecords([]Record{
+		{Type: "message", Role: llm.RoleUser, Text: "write it"},
+		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []RecordToolCall{
+			{ID: "c1", Name: "write", Arguments: "{}", Pruned: note},
+			{ID: "c2", Name: "read", Arguments: `{"path":"a"}`},
+		}},
+		{Type: "message", Role: llm.RoleTool, ToolCallID: "c1", Text: "Created big.txt."},
+		{Type: "message", Role: llm.RoleTool, ToolCallID: "c2", Text: "a (1 line)"},
+	})
+	if stats.Dropped != 0 || len(msgs) != 4 {
+		t.Fatalf("msgs = %d, dropped = %d", len(msgs), stats.Dropped)
+	}
+	if args := msgs[1].ToolCalls[0].Arguments; !json.Valid([]byte(args)) {
+		t.Errorf("restored arguments %q are not JSON; a provider refuses the request", args)
+	}
+	if got := msgs[2].Text(); got != note+"\n\nCreated big.txt." {
+		t.Errorf("c1's result = %q, want the note in front of it", got)
+	}
+	if got := msgs[3].Text(); got != "a (1 line)" {
+		t.Errorf("c2's result = %q; a call that kept its arguments gets no note", got)
+	}
 }

@@ -199,6 +199,12 @@ type RecordToolCall struct {
 	Blob      string `json:"blob,omitempty"`
 	Bytes     int    `json:"bytes,omitempty"`
 	Summary   string `json:"summary,omitempty"`
+
+	// Pruned is set when a restore found the arguments' blob gone, and says so
+	// in words. Never written: it exists between reading a record and
+	// rebuilding the conversation from it, where the note goes into this
+	// call's result — Arguments itself has to stay JSON a provider accepts.
+	Pruned string `json:"-"`
 }
 
 // Recorder receives the records. A nil Recorder on the Coder means no log,

@@ -224,3 +224,49 @@ func TestResolveLeavesAnInlineRecordAlone(t *testing.T) {
 		t.Errorf("text = %q, want it untouched", got.Text)
 	}
 }
+
+// Pruned arguments cannot take a note where they stood: they are replayed as
+// the call's JSON, and a provider refuses a call whose arguments do not parse.
+// The wire used to swap the note for "{}" silently, so a restored call read as
+// one that took no arguments. Now Arguments is "{}" on purpose and the note is
+// carried beside it, for the restore to put in front of the call's result.
+func TestResolveMarksPrunedArgumentsAndKeepsThemJSON(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	project := t.TempDir()
+	args := `{"path":"big.txt","content":"` + strings.Repeat("x", 3000) + `"}`
+	hash, err := PutBlob(project, []byte(args))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteBlob(project, hash); err != nil {
+		t.Fatal(err)
+	}
+	rec := coder.Record{Type: "message", Role: "assistant", ToolCalls: []coder.RecordToolCall{{
+		ID: "call_1", Name: "write", Blob: hash, Bytes: len(args), Summary: `{"path":"big.txt",…`,
+	}}}
+
+	got, whole := Resolve(project, rec)
+	if whole {
+		t.Error("pruned arguments were reported as present")
+	}
+	tc := got.ToolCalls[0]
+	if tc.Arguments != "{}" {
+		t.Errorf("Arguments = %q, want an empty object a provider accepts", tc.Arguments)
+	}
+	for _, want := range []string{"This call's arguments are no longer stored", "They were 3031 bytes", `big.txt`} {
+		if !strings.Contains(tc.Pruned, want) {
+			t.Errorf("Pruned = %q, want it to say %q", tc.Pruned, want)
+		}
+	}
+	if rec.ToolCalls[0].Arguments != "" || rec.ToolCalls[0].Pruned != "" {
+		t.Error("Resolve wrote into the caller's record")
+	}
+
+	// An assistant message's own text is a message, not a result.
+	textHash, _ := PutBlob(project, []byte("a long answer"))
+	_ = DeleteBlob(project, textHash)
+	got, _ = Resolve(project, coder.Record{Type: "message", Role: "assistant", Blob: textHash, Bytes: 13})
+	if !strings.HasPrefix(got.Text, "[strument] This message is no longer stored.") {
+		t.Errorf("Text = %q, want it called a message", got.Text)
+	}
+}

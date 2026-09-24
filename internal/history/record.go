@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -131,40 +132,68 @@ const maxRecordLine = 16 << 20
 // unchanged file — is found by the same name.
 func Resolve(projectRoot string, r coder.Record) (coder.Record, bool) {
 	whole := true
-	resolve := func(blob, summary string, size int) (string, bool) {
-		if blob == "" {
-			return "", false
-		}
+	// found reports the payload, or false when the blob is gone; blob empty
+	// means the payload was inline all along and there is nothing to do.
+	found := func(blob string) (string, bool) {
 		if data, ok := GetBlob(projectRoot, blob); ok {
 			return string(data), true
 		}
 		whole = false
-		return strippedNote(summary, size), true
+		return "", false
 	}
-	if text, ok := resolve(r.Blob, r.Summary, r.Bytes); ok {
+	if r.Blob != "" {
+		text, ok := found(r.Blob)
+		if !ok {
+			what := "This message"
+			if r.Role == "tool" {
+				what = "This result"
+			}
+			text = strippedNote(what, r.Summary, r.Bytes)
+		}
 		r.Text = text
 	}
+	if len(r.ToolCalls) > 0 {
+		// A copy, so resolving does not write into the caller's record.
+		r.ToolCalls = slices.Clone(r.ToolCalls)
+	}
 	for i, tc := range r.ToolCalls {
-		if args, ok := resolve(tc.Blob, tc.Summary, tc.Bytes); ok {
-			r.ToolCalls[i].Arguments = args
+		if tc.Blob == "" {
+			continue
 		}
+		if args, ok := found(tc.Blob); ok {
+			r.ToolCalls[i].Arguments = args
+			continue
+		}
+		// Arguments are replayed as the call's JSON, and a provider refuses a
+		// request carrying a call whose arguments do not parse — so the words
+		// cannot go here the way they do for a result. An empty object stands
+		// in, and the note rides along to be put in front of the call's result,
+		// where the model reads it; without it the model saw a call that
+		// apparently took no arguments and produced whatever it produced.
+		r.ToolCalls[i].Arguments = "{}"
+		r.ToolCalls[i].Pruned = strippedNote("This call's arguments", tc.Summary, tc.Bytes)
 	}
 	return r, whole
 }
 
-// strippedNote stands in for a payload that is gone.
+// strippedNote stands in for a payload that is gone. what names it as the
+// sentence's subject: "This result", "This message", "This call's arguments".
 //
 // It says so in words rather than leaving a blank, because this text can be
 // replayed to a model: a tool result that came back empty reads as a tool that
-// found nothing, which is a different and wrong thing. Saying the result is no
+// found nothing, which is a different and wrong thing. Saying the payload is no
 // longer stored is both true and something a model can reason about.
-func strippedNote(summary string, size int) string {
-	note := "[strument] This result is no longer stored."
+func strippedNote(what, summary string, size int) string {
+	verb, pronoun := "is", "It"
+	if strings.HasSuffix(what, "arguments") {
+		verb, pronoun = "are", "They"
+	}
+	note := "[strument] " + what + " " + verb + " no longer stored."
 	if size > 0 {
-		note += fmt.Sprintf(" It was %d bytes.", size)
+		note += fmt.Sprintf(" %s %s %d bytes.", pronoun, map[bool]string{true: "were", false: "was"}[pronoun == "They"], size)
 	}
 	if summary != "" {
-		note += " It began: " + summary
+		note += " " + pronoun + " began: " + summary
 	}
 	return note
 }

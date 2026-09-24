@@ -82,6 +82,9 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 	// id and one result between them is the same defect as a call with no
 	// result at all, and a set cannot tell them apart.
 	open := map[string]int{}
+	// The notes for calls whose arguments were pruned, scoped like open: they
+	// go in front of the result answering that call.
+	pruned := map[string]string{}
 
 	for i, r := range records {
 		if r.Type != "message" {
@@ -91,6 +94,7 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 		// follows, so the window closes at the next message that is not one.
 		if r.Role != llm.RoleTool {
 			open = map[string]int{}
+			pruned = map[string]string{}
 		}
 		switch r.Role {
 		case llm.RoleUser:
@@ -108,6 +112,9 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 				}
 				answered[tc.ID]--
 				open[tc.ID]++
+				if tc.Pruned != "" {
+					pruned[tc.ID] = tc.Pruned
+				}
 				msg.ToolCalls = append(msg.ToolCalls, llm.ToolCall{
 					ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments,
 				})
@@ -143,7 +150,12 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 				continue
 			}
 			open[r.ToolCallID]--
-			out = append(out, llm.ToolResult(r.ToolCallID, r.Text))
+			text := r.Text
+			if note := pruned[r.ToolCallID]; note != "" {
+				text = note + "\n\n" + text
+				delete(pruned, r.ToolCallID)
+			}
+			out = append(out, llm.ToolResult(r.ToolCallID, text))
 
 		case llm.RoleSystem:
 			// The one system message that legitimately sits inside a
