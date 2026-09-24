@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -109,7 +110,7 @@ func (c *Coder) noteNewFiles() (message string, keepGoing bool) {
 	}
 	c.newFilesNoted = true
 	c.Out.Toolf("Commands this turn created untracked files: %s.", formatNewFiles(files, ", "))
-	return "Strument noticed that commands run during this turn created files that git does not track " +
+	return llm.HarnessMarker + " Strument noticed that commands run during this turn created files that git does not track " +
 		"or ignore and that your edits did not write:\n\n- " + formatNewFiles(files, "\n- ") +
 		"\n\nThey may be meant to stay. If any is a by-product that should not be left behind, " +
 		"remove it; otherwise leave them as they are.", true

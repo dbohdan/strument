@@ -1105,7 +1105,7 @@ func (c *Coder) runAutoCheck(ctx context.Context) (message string, keepGoing boo
 	// again by the next round, and gave in — two rounds spent on an argument the
 	// harness started. Saying plainly that reporting is an acceptable answer
 	// settles it in one.
-	return "The automatic checks ran after your changes and did not pass:\n\n" + transcript +
+	return llm.HarnessMarker + " The automatic checks ran after your changes and did not pass:\n\n" + transcript +
 		"\nIf this is something you broke, fix it. If it was already failing and is unrelated to " +
 		"what you changed, say so and stop — don't fix it unless the user asks.", true
 }

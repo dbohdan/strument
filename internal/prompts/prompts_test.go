@@ -276,3 +276,14 @@ func TestSessionNotesPrefixAlwaysCarriesItsStandingClaims(t *testing.T) {
 		}
 	}
 }
+
+// The harness speaks to the model in marked user-role messages, and both modes
+// have to say what the mark means: without it, models read an unmarked note as
+// the user's words (doc/experiments/2026-09-note-attribution).
+func TestBothModesDefineTheHarnessMarker(t *testing.T) {
+	for name, set := range map[string]Set{"tool": Tool, "ask": Ask} {
+		if !strings.Contains(set.MainSystem, HarnessNoteLine) {
+			t.Errorf("%s main_system does not define the [strument] marker", name)
+		}
+	}
+}

@@ -234,9 +234,21 @@ const toolMainSystem = "You are an expert software developer working with a user
 	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did " +
 	"or what you found, without calling a tool — that is what ends the turn and hands back to the " +
 	"user.\n\n" +
+	HarnessNoteLine +
 	"Explain your changes briefly in prose alongside the tool calls.\n\n" +
 	"Keep in mind these details about the user's platform and environment:\n" +
 	"{platform}\n"
+
+// HarnessNoteLine says what the [strument] marker means. Strument speaks to the
+// model mid-conversation in user-role messages (see llm.HarnessNote), and
+// without this the model has only the marker to guess from. In
+// doc/experiments/2026-09-note-attribution, marking the new-files note cut
+// the sessions whose reasoning put the note's words in the user's mouth from
+// 4/39 to 1/39, and marking it and defining the marker with this sentence to
+// 0/39, with no change in whether the note was acted on. Small numbers, one
+// direction; the project's rule that the harness speaks marked decided it.
+const HarnessNoteLine = "Messages that begin with [strument] are written by Strument, the program " +
+	"running this session, not by the user.\n\n"
 
 // toolSystemReminder is the trailing reminder for the tool format: the
 // exact-match rule for search and the one-change-per-call discipline.
@@ -344,6 +356,7 @@ var Ask = Set{
 		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
 		"answering the question, without calling a tool — that is what ends the turn and " +
 		"hands back to the user.\n\n" +
+		HarnessNoteLine +
 		"This mode has no editing tools. If the user wants a change, describe it rather than " +
 		"making it: say what you would change and where, covering everything the change needs " +
 		"rather than trailing off, and the user can switch to code mode to have it done. " +

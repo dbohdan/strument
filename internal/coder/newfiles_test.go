@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // untrackedRepo answers UntrackedFiles from a script: the first call is the
@@ -90,6 +91,9 @@ func TestNewFilesAreNotedOnce(t *testing.T) {
 			t.Errorf("the note lists %s, which the turn's commands did not create:\n%s", not, note)
 		}
 	}
+	if !strings.HasPrefix(note, llm.HarnessMarker+" ") {
+		t.Errorf("the note is not marked as the harness's, so the model reads it as the user's:\n%s", note)
+	}
 	if !strings.Contains(note, "may be meant to stay") {
 		t.Errorf("the note should say that leaving the files is a fine answer:\n%s", note)
 	}
@@ -116,5 +120,14 @@ func TestNoNewFilesNoteWithoutARepo(t *testing.T) {
 
 	if len(client.reqs) != 2 {
 		t.Errorf("%d sends, want 2: nothing to note without git", len(client.reqs))
+	}
+}
+
+// The definition in the system prompt names the marker the notes carry. Two
+// spellings in two packages would drift apart silently.
+func TestHarnessNoteLineNamesTheMarker(t *testing.T) {
+	if !strings.Contains(prompts.HarnessNoteLine, llm.HarnessMarker) {
+		t.Errorf("prompts.HarnessNoteLine %q does not name llm.HarnessMarker %q",
+			prompts.HarnessNoteLine, llm.HarnessMarker)
 	}
 }
