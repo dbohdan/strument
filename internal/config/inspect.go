@@ -217,6 +217,7 @@ var projectKeyOrder = []string{
 	"hasShell",
 	"hasAnchoredEdits",
 	"hasIndentColumn",
+	"hasObservationViaRunCode",
 	"hasSandbox",
 	"hasSandboxWrite",
 	"hasShellTimeout",
@@ -346,6 +347,12 @@ var projectKeys = map[string]projectKey{
 
 	"hasAnchoredEdits": {name: "anchored_edits", set: func(g *fileGlobals) bool { return g.hasAnchoredEdits }},
 	"hasIndentColumn":  {name: "indent_column", set: func(g *fileGlobals) bool { return g.hasIndentColumn }},
+	// Withholds tools rather than granting any: the model loses the direct
+	// read-only calls and keeps the same reach through run_code.
+	"hasObservationViaRunCode": {
+		name: "observation_via_run_code",
+		set:  func(g *fileGlobals) bool { return g.hasObservationViaRunCode },
+	},
 
 	"hasSandbox": {
 		name: "sandbox",

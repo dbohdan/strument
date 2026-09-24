@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -1118,5 +1119,64 @@ default = "m"
 	}
 	if load(t, ", prefill = False").Prefill {
 		t.Error("prefill = False did not reach the model")
+	}
+}
+
+// observation_via_run_code was read from both files and merged from one: the
+// user block applied it and the project block never mentioned it, so a
+// trusted project's setting was silently dropped and `strument trust` did not
+// list it either.
+func TestProjectObservationViaRunCodeOverridesUser(t *testing.T) {
+	user := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+	opts := harness(t, user, "observation_via_run_code = True\n", nil)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !cfg.ObservationViaRunCode {
+		t.Error("a trusted project config's `observation_via_run_code = True` was ignored")
+	}
+}
+
+// Every key the user block of Load's merge applies, the project block applies
+// too, unless it is named here with a reason. The two blocks are parallel
+// lists edited by hand, and a key added to one and not the other is read from
+// a project file, trusted, and dropped without a word — observation_via_run_code
+// was, until this test. Read from the source because the drift is in the source:
+// no config value distinguishes "not merged" from "merged and false".
+func TestEveryUserKeyMergesFromAProjectToo(t *testing.T) {
+	userOnly := map[string]string{}
+	src, err := os.ReadFile("load.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	collect := func(who string) map[string]bool {
+		out := map[string]bool{}
+		for _, m := range regexp.MustCompile(`if `+who+`\.(has\w+) \{`).FindAllStringSubmatch(string(src), -1) {
+			out[m[1]] = true
+		}
+		return out
+	}
+	user, project := collect("user"), collect("project")
+	if len(user) < 10 {
+		t.Fatalf("found %d user keys; the pattern no longer matches load.go and this check is vacuous", len(user))
+	}
+	for k := range user {
+		if !project[k] && userOnly[k] == "" {
+			t.Errorf("load.go merges %s from the user config but not from a project config; "+
+				"add it to the project block, or to userOnly here with the reason", k)
+		}
+	}
+	for k := range project {
+		if !user[k] {
+			t.Errorf("load.go merges %s from a project config but not from the user config", k)
+		}
 	}
 }

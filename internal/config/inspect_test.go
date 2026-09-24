@@ -43,6 +43,7 @@ loop_detection = False
 shell = True
 anchored_edits = True
 indent_column = True
+observation_via_run_code = True
 sandbox = ""
 sandbox_write = ["{{writable}}"]
 shell_timeout = 30

@@ -637,6 +637,9 @@ func Load(opts Options) (*Config, error) {
 		if project.hasIndentColumn {
 			cfg.IndentColumn = project.indentColumnVal
 		}
+		if project.hasObservationViaRunCode {
+			cfg.ObservationViaRunCode = project.observationViaRunCodeVal
+		}
 		if project.hasSandbox {
 			cfg.Sandbox = project.sandboxVal
 		}
