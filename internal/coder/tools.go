@@ -147,8 +147,7 @@ func readOnlyTools() []llm.ToolDef {
 		{
 			Name: toolRead,
 			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
-				"use offset and limit to page through a long one. Absolute paths under the platform's " +
-				"standard temporary directory are also allowed. Images (PNG, JPEG, GIF, WebP) come " +
+				"use offset and limit to page through a long one. Images (PNG, JPEG, GIF, WebP) come " +
 				"back as pictures you can look at rather than as text, and offset and limit do not " +
 				"apply to them.",
 			Parameters: map[string]any{
@@ -205,9 +204,8 @@ func readOnlyTools() []llm.ToolDef {
 			},
 		},
 		{
-			Name: toolLS,
-			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree. " +
-				"Absolute paths under the platform's standard temporary directory are also allowed.",
+			Name:        toolLS,
+			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -242,9 +240,7 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 		{
 			Name: toolEdit,
 			Description: "Replace an exact span of text in a file. The edit applies immediately. " +
-				"Make one call per change; call it several times to make several changes. " +
-				"Paths must be inside the project root or the platform's standard " +
-				"temporary directory (e.g. /tmp), by absolute path for temp.",
+				"Make one call per change; call it several times to make several changes.",
 			Parameters: map[string]any{
 				"type": "object",
 				// Ordered, and path first: see orderedProps. This tool's
@@ -269,16 +265,14 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 			Name: toolWrite,
 			Description: "Write a file with the given full contents, creating it — or completely " +
 				"overwriting it if it already exists. Applies immediately. To change part of an " +
-				"existing file use edit instead; use this only when you are providing the whole file. " +
-				"Paths must be inside the project root or the platform's standard " +
-				"temporary directory (e.g. /tmp), by absolute path for temp.",
+				"existing file use edit instead; use this only when you are providing the whole file.",
 			Parameters: map[string]any{
 				"type": "object",
 				// Ordered, and path first: see orderedProps. Alphabetically
 				// sorted, "content" led — and a whole file's worth of diff
 				// waited on the path that followed it.
 				"properties": orderedProps{
-					{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project also works; relative is preferred.")},
+					{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files.")},
 					{"content", strProp("The complete contents of the file.")},
 				},
 				"required": []any{"path", "content"},
@@ -299,9 +293,7 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 			continue
 		}
 		defs[i].Description = "Replace whole lines of a file, addressed by the anchors that " +
-			"read prints. The edit applies immediately. Make one call per change. " +
-			"Paths must be inside the project root or the platform's standard " +
-			"temporary directory (e.g. /tmp), by absolute path for temp."
+			"read prints. The edit applies immediately. Make one call per change."
 		defs[i].Parameters = map[string]any{
 			"type": "object",
 			// Ordered, and path first: see orderedProps.
@@ -335,8 +327,9 @@ func bashTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolBash,
 		Description: "Run a shell command. Unless the command is one of the project's configured checks, " +
-			"the user is asked to confirm before it runs. Its output is returned to you. Commands run " +
-			"from the project's root directory. To read, search, or list files, use the read, grep, " +
+			"the user is asked to confirm before it runs. Its output is returned to you. Each call " +
+			"starts a fresh shell in the project's root directory, so cd and exported variables do " +
+			"not carry over to the next call. To read, search, or list files, use the read, grep, " +
 			"glob, and ls tools instead — they are never confirmed.\n\n" +
 			"Commands have a time limit set by the user's configuration. Give timeout (in seconds) to " +
 			"set a shorter limit for a command you know finishes quickly; you cannot extend the limit " +
@@ -444,7 +437,7 @@ func askTool() llm.ToolDef {
 							"multiSelect": map[string]any{
 								"type":        "boolean",
 								"default":     false,
-								"description": "Allow several answers to this one question (comma-separated indices).",
+								"description": "Allow several answers to this one question.",
 							},
 						},
 						"required": []any{"question", "options"},

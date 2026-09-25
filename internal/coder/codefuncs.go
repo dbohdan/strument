@@ -75,8 +75,8 @@ var codeFuncs = []codeFuncDef{
 var codeDataFuncs = []codeFuncDef{
 	{
 		name: "glob",
-		summary: "glob({pattern}) returns the matching project-relative paths as an array of strings — " +
-			"data for the program, unlike the glob tool's prose. Empty array when nothing matches. " +
+		summary: "glob({pattern}) returns the matching project-relative paths as an array of strings, " +
+			"empty when nothing matches. " +
 			"The pattern is matched against the whole path, segment by segment; \"**/*.go\" reaches " +
 			"every directory, \"*.go\" only the root, and a bare directory name matches nothing.",
 		params: []string{"pattern"},
@@ -85,7 +85,7 @@ var codeDataFuncs = []codeFuncDef{
 	{
 		name: "ls",
 		summary: "ls({path: \"\"}) returns one directory's entries as an array of objects {path, is_dir, link} " +
-			"sorted by path — data for the program, unlike the ls tool's prose. Empty path is the " +
+			"sorted by path. Empty path is the " +
 			"project root; a directory under the standard temp directory is allowed too. " +
 			"link is the symlink target, present only on symlinks.",
 		params: []string{"path"},
@@ -138,8 +138,8 @@ func codeFuncDoc() string {
 // codeFuncDoc, for the same reason.
 func codeDataFuncDoc() string {
 	var b strings.Builder
-	b.WriteString("\n\nInside a program, glob and ls return data rather than the tools' " +
-		"prose, and override them:\n")
+	b.WriteString("\n\nInside a program, the other tools return the same text they return to " +
+		"you, but glob and ls return data rather than the tools' prose:\n")
 	for _, d := range codeDataFuncs {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}
