@@ -29,9 +29,14 @@ type sessionCmd struct {
 	Delete sessionDeleteCmd `cmd:"" help:"Delete a session and everything recorded in it."`
 }
 
-type sessionListCmd struct{}
+type sessionListCmd struct {
+	// Names is for completions and scripts, which want the names and nothing
+	// else. A project with no sessions prints nothing in this mode: the
+	// sentence the listing prints instead would become a completion candidate.
+	Names bool `help:"Print only the session names, one per line."`
+}
 
-func (*sessionListCmd) Run() error {
+func (c *sessionListCmd) Run() error {
 	root, err := historyRoot()
 	if err != nil {
 		return err
@@ -39,6 +44,12 @@ func (*sessionListCmd) Run() error {
 	sessions, err := history.ListSessions(root)
 	if err != nil {
 		return err
+	}
+	if c.Names {
+		for _, s := range sessions {
+			fmt.Println(s.Name)
+		}
+		return nil
 	}
 	if len(sessions) == 0 {
 		// Not an error and not empty output: a project nobody has chatted in

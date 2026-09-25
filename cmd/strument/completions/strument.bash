@@ -14,6 +14,8 @@ _strument_history_commands="list path edit markdown strip"
 _strument_history_strip_options="--older-than -y --yes"
 _strument_history_options="-s --session -b --back"
 _strument_session_commands="list rename delete"
+_strument_session_list_options="--names"
+_strument_session_delete_options="-y --yes"
 _strument_history_markdown_options="-t --turns -b --back"
 _strument_config_commands="models default path edit"
 _strument_config_options="--user --project"
@@ -26,10 +28,16 @@ _strument_tool_options="--root --json"
 
 # Every option that takes a value, so the scanner does not read one as a
 # subcommand: `strument -M trust` names a model, not the trust command.
-_strument_value_options="-m --message -M --model --yes --consult-scope -s --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
+_strument_value_options="-m --message -M --model --yes --consult-scope -s --session --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
 
 _strument_find_models() {
     command -v strument >/dev/null 2>&1 && strument config models 2>/dev/null
+}
+
+# The sessions of the project the shell is in, which is the project the
+# command will act on.
+_strument_find_sessions() {
+    command -v strument >/dev/null 2>&1 && strument session list --names 2>/dev/null
 }
 
 _strument_words() {
@@ -37,12 +45,13 @@ _strument_words() {
 }
 
 _strument_complete() {
-    local cur prev command sub word i expecting
+    local cur prev command sub word i expecting args
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     command=""
     sub=""
     expecting=0
+    args=0
 
     # First pass: which command and subcommand are we inside? Options that take
     # a value consume the next word, so it is never mistaken for a command.
@@ -68,6 +77,8 @@ _strument_complete() {
             esac
         elif [[ -z $sub ]]; then
             sub=$word
+        else
+            args=$((args + 1)) # positional arguments after the subcommand
         fi
     done
 
@@ -88,7 +99,17 @@ _strument_complete() {
     --consult-scope) _strument_words "none files chat" ; return ;;
     --mode) _strument_words "files content count" ; return ;;
     --kind) _strument_words "definition reference" ; return ;;
-    -s | --source) _strument_words openrouter ; return ;;
+    # -s is --source to model-config and --session everywhere else.
+    -s)
+        if [[ $command == model-config ]]; then
+            _strument_words openrouter
+        else
+            _strument_words "$(_strument_find_sessions)"
+        fi
+        return
+        ;;
+    --source) _strument_words openrouter ; return ;;
+    --session) _strument_words "$(_strument_find_sessions)" ; return ;;
     --root | --path)
         compopt -o dirnames
         return
@@ -103,6 +124,11 @@ _strument_complete() {
     if [[ $cur == --model=* ]]; then
         COMPREPLY=($(compgen -W "$(_strument_find_models)" -- "${cur#--model=}"))
         COMPREPLY=("${COMPREPLY[@]/#/--model=}")
+        return
+    fi
+    if [[ $cur == --session=* ]]; then
+        COMPREPLY=($(compgen -W "$(_strument_find_sessions)" -- "${cur#--session=}"))
+        COMPREPLY=("${COMPREPLY[@]/#/--session=}")
         return
     fi
 
@@ -135,9 +161,18 @@ _strument_complete() {
         fi
         ;;
     session)
-        # Only while no subcommand has been chosen: the arguments after one are
-        # session names, which this cannot know.
-        [[ -n $sub ]] || _strument_words "$_strument_session_commands"
+        # rename takes an existing name and then a new one, which nothing can
+        # offer; delete takes an existing name.
+        if [[ -z $sub ]]; then
+            _strument_words "$_strument_session_commands"
+        elif [[ $cur == -* ]]; then
+            case "$sub" in
+            list) _strument_words "$_strument_session_list_options" ;;
+            delete) _strument_words "$_strument_session_delete_options" ;;
+            esac
+        elif [[ $sub == delete || ($sub == rename && $args -eq 0) ]]; then
+            _strument_words "$(_strument_find_sessions)"
+        fi
         ;;
     config)
         if [[ $cur == -* ]]; then

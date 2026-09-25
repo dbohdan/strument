@@ -638,3 +638,36 @@ func TestHistoryListShowsStableNumbers(t *testing.T) {
 		t.Error("history list accepted --back, which picks one run of the list it shows")
 	}
 }
+
+// session list --names prints the names and nothing else, for completions: an
+// empty project prints nothing at all, where the listing prints a sentence
+// that would otherwise be offered as a session name.
+func TestSessionListNames(t *testing.T) {
+	writeTempUserConfig(t, "# empty\n")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	out, err := captureStdout(t, func() error { return (&sessionListCmd{Names: true}).Run() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "" {
+		t.Errorf("--names in a project with no sessions printed %q, want nothing", out)
+	}
+
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"review", "spike"} {
+		if _, err := history.EnsureSessionDir(root, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err = captureStdout(t, func() error { return (&sessionListCmd{Names: true}).Run() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "review\nspike\n" {
+		t.Errorf("--names printed %q, want one bare name per line", out)
+	}
+}

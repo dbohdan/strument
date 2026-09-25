@@ -273,6 +273,7 @@ Inside Strument, `/session` lists the sessions and switches between them without
 `/model` does not fork: many conversations on one strong model is the common case, so forking belongs to sessions.
 
 From the shell, `strument session list` shows the sessions with their turn counts and sizes, `strument session rename` renames one, and `strument session delete` deletes one after saying what that removes.
+`strument session list --names` prints only the names, one per line; the shell completions use it to offer session names after `-s`/`--session` and for `session rename` and `session delete`.
 Deleting a session keeps the stored tool output, which is shared between sessions.
 `strument history --session <name>` reads another session's record without switching to it, for `path`, `edit`, and `markdown`.
 
