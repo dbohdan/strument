@@ -1128,14 +1128,14 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
-	if !c.ConfirmGrouped(ConfirmRequest{
+	if res := c.confirmGrouped(ConfirmRequest{
 		Prompt:  "Run shell command?",
 		Command: command,
 		Purpose: cmd.purpose,
 		Group:   group,
 		Grant:   GrantBash,
-	}) {
-		return "The user chose not to run the command.", false
+	}); !res.Yes && !res.Always {
+		return declined(res, "run the command", GrantBash), false
 	}
 
 	// A model-caused shell command is the one way a model can commit without

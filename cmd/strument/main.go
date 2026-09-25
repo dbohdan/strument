@@ -1100,10 +1100,10 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// of two.
 		if req.Grant == "" {
 			fmt.Println("Declined: this prompt requires an interactive terminal and cannot be approved with `--yes`.")
-			return coder.ConfirmResult{}
+			return coder.ConfirmResult{Unattended: true}
 		}
 		fmt.Printf("Declined: this prompt requires an interactive terminal. Pass `--yes %s` to approve it automatically.\n", req.Grant)
-		return coder.ConfirmResult{}
+		return coder.ConfirmResult{Unattended: true}
 	}
 
 	fmt.Printf("%s (Y/n) ", req.Prompt)

@@ -57,6 +57,13 @@ type ConfirmResult struct {
 	// because the user is answering the question they were shown, and it is the
 	// asker that decided how long that answer is good for.
 	Always bool
+	// Unattended says the prompt was declined because no one could be asked:
+	// there was no terminal, and --yes did not name the prompt. A decline the
+	// model is told about must say which kind it was. "The user chose not to"
+	// is false when no user saw the question, and a model reading it said so
+	// back — "since you've declined them twice" — to a user who had declined
+	// nothing.
+	Unattended bool
 }
 
 // The permission names --yes takes are defined in internal/config, which

@@ -178,7 +178,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		// user never saw.
 		group := "webfetch:" + org
 		granted := c.sessionAutoApprove[group]
-		if !c.ConfirmGrouped(ConfirmRequest{
+		if res := c.confirmGrouped(ConfirmRequest{
 			Prompt:       "Fetch this page?",
 			URL:          f.url,
 			Origin:       org,
@@ -186,9 +186,9 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 			Group:        group,
 			GroupSession: true,
 			Grant:        GrantWebfetch,
-		}) {
+		}); !res.Yes && !res.Always {
 			c.Out.Toolf("Did not fetch %s (declined)", org)
-			return "The user chose not to fetch that page."
+			return declined(res, "fetch that page", GrantWebfetch)
 		}
 		// Said once, when the grant is made. A turn boundary used to give this
 		// visibility for free: a grant that expired on its own never needed

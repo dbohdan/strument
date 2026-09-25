@@ -700,8 +700,15 @@ func (c *Coder) initBeforeMessage() {
 // written to one of them, so this cannot widen a grant; what it does is keep a
 // session grant honored by a request that forgot to set GroupSession.
 func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
+	res := c.confirmGrouped(req)
+	return res.Yes || res.Always
+}
+
+// confirmGrouped is ConfirmGrouped with the whole answer, for the callers that
+// tell the model how a decline came about.
+func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
 	if req.Group != "" && (c.turnAutoApprove[req.Group] || c.sessionAutoApprove[req.Group]) {
-		return true
+		return ConfirmResult{Yes: true}
 	}
 	res := c.Confirm.Confirm(req)
 	if res.Always && req.Group != "" {
@@ -711,7 +718,19 @@ func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
 			c.turnAutoApprove[req.Group] = true
 		}
 	}
-	return res.Yes || res.Always
+	return res
+}
+
+// declined is the model's text for a prompt that was answered no. what is the
+// action as the sentence needs it ("run the command"). When no one could be
+// asked, it says that, and which --yes would have approved it, rather than
+// crediting a user who never saw the question.
+func declined(res ConfirmResult, what, grant string) string {
+	if res.Unattended {
+		return fmt.Sprintf("Strument declined to %s: no one is at a terminal to approve it, and the "+
+			"session was not started with `--yes %s`. Do without it, or say what you would have done.", what, grant)
+	}
+	return "The user chose not to " + what + "."
 }
 
 // Run executes one scripted message (script mode) and returns the turn's

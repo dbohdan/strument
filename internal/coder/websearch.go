@@ -72,14 +72,14 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 	// Plain --yes covers it. webfetch withholds itself from --yes because the
 	// model picks where the bytes go; a search only ever reaches the instance
 	// the user configured.
-	if !c.ConfirmGrouped(ConfirmRequest{
+	if res := c.confirmGrouped(ConfirmRequest{
 		Prompt: "Search the web?",
 		Query:  s.query,
 		Group:  "websearch",
 		Grant:  GrantWebsearch,
-	}) {
+	}); !res.Yes && !res.Always {
 		c.Out.Toolf("Did not search the web for %s (declined)", quoteToolArg(s.query))
-		return "The user chose not to run that search."
+		return declined(res, "run that search", GrantWebsearch)
 	}
 
 	res, err := c.Search(ctx, s.query)

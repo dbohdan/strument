@@ -740,10 +740,10 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// luck; now the prompt carries its own name and the advice is precise.
 		if req.Grant == "" {
 			r.out.Warningf("Declined: this prompt requires an interactive terminal and cannot be approved with `--yes`.")
-			return coder.ConfirmResult{}
+			return coder.ConfirmResult{Unattended: true}
 		}
 		r.out.Warningf("Declined: this prompt requires an interactive terminal. Pass `--yes %s` to approve it automatically.", req.Grant)
-		return coder.ConfirmResult{}
+		return coder.ConfirmResult{Unattended: true}
 	}
 
 	cfg := r.rl.GetConfig()
