@@ -481,9 +481,9 @@ func TestHistoryActsOnTheSessionNamed(t *testing.T) {
 	}
 }
 
-// --back counts runs back from the newest, skipping runs that recorded
-// nothing, and reads 1 and -1 as one request. markdown takes it too, and
-// renders that run alone.
+// --back takes a run's number, counted from 1 by the first run, or 0 and
+// negatives counting back from the latest; runs that recorded nothing are not
+// counted. markdown takes it too, and renders that run alone.
 func TestHistoryBackCountsRuns(t *testing.T) {
 	writeTempUserConfig(t, "# empty\n")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
@@ -520,11 +520,13 @@ func TestHistoryBackCountsRuns(t *testing.T) {
 		back *int
 		want string
 	}{
-		{nil, runs[2]},     // the newest run with a turn, not the empty one after it
-		{back(0), runs[2]}, // the same
-		{back(1), runs[1]}, // the one before
-		{back(-1), runs[1]},
-		{back(2), runs[0]}, // the empty run between first and second is not counted
+		{nil, runs[2]},      // the latest run with a turn, not the empty one after it
+		{back(0), runs[2]},  // the same
+		{back(-1), runs[1]}, // the one before
+		{back(-2), runs[0]}, // the empty run between first and second is not counted
+		{back(1), runs[0]},  // numbers count from the first run
+		{back(2), runs[1]},
+		{back(3), runs[2]},
 	} {
 		got, err := historyRun("", tc.back)
 		if err != nil {
@@ -538,18 +540,20 @@ func TestHistoryBackCountsRuns(t *testing.T) {
 			t.Errorf("--back %s = %s, want %s", name, filepath.Base(got), filepath.Base(tc.want))
 		}
 	}
-	if _, err := historyRun("", back(3)); err == nil || !strings.Contains(err.Error(), "up to 2") {
-		t.Errorf("--back past the first run: err = %v, want one saying the limit", err)
+	for _, n := range []int{4, -3} {
+		if _, err := historyRun("", back(n)); err == nil || !strings.Contains(err.Error(), "1 to 3, or 0 to -2") {
+			t.Errorf("--back %d is out of range: err = %v, want one saying the range", n, err)
+		}
 	}
 
 	out, err := captureStdout(t, func() error {
-		return (&historyMarkdownCmd{}).Run(&historyCmd{Back: back(1)})
+		return (&historyMarkdownCmd{}).Run(&historyCmd{Back: back(2)})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out, "second") || strings.Contains(out, "first") || strings.Contains(out, "third") {
-		t.Errorf("markdown --back 1 should render the second run alone:\n%s", out)
+		t.Errorf("markdown --back 2 should render the second run alone:\n%s", out)
 	}
 	whole, err := captureStdout(t, func() error { return (&historyMarkdownCmd{}).Run(&historyCmd{}) })
 	if err != nil {
@@ -562,9 +566,10 @@ func TestHistoryBackCountsRuns(t *testing.T) {
 	}
 }
 
-// history list numbers runs the way --back counts them: newest first, from
-// 0, with the empty run skipped, and each row carrying the run's prompt.
-func TestHistoryListNumbersRunsAsBackCounts(t *testing.T) {
+// history list shows each run's number, counted from 1 by the first run and
+// listed newest first, with the empty run skipped and each row carrying the
+// run's prompt. A later run does not renumber the earlier ones.
+func TestHistoryListShowsStableNumbers(t *testing.T) {
 	writeTempUserConfig(t, "# empty\n")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root, err := historyRoot()
@@ -576,7 +581,8 @@ func TestHistoryListNumbersRunsAsBackCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
-	for i, prompt := range []string{"first", "", "second"} {
+	addRun := func(i int, prompt string) {
+		t.Helper()
 		seg, err := history.NewLogSegment(root, session, start.Add(time.Duration(i)*time.Minute))
 		if err != nil {
 			t.Fatal(err)
@@ -590,23 +596,41 @@ func TestHistoryListNumbersRunsAsBackCounts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for i, prompt := range []string{"first", "", "second"} {
+		addRun(i, prompt)
+	}
+	list := func() []string {
+		t.Helper()
+		out, err := captureStdout(t, func() error { return (&historyListCmd{}).Run(&historyCmd{}) })
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Split(strings.TrimSpace(out), "\n")
+	}
 
-	out, err := captureStdout(t, func() error { return (&historyListCmd{}).Run(&historyCmd{}) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSpace(out), "\n")
+	lines := list()
 	if len(lines) != 2 {
-		t.Fatalf("%d rows, want 2 (the empty run is not one):\n%s", len(lines), out)
+		t.Fatalf("%d rows, want 2 (the empty run is not one):\n%s", len(lines), strings.Join(lines, "\n"))
 	}
-	for i, want := range []string{"second", "first"} {
+	for i, want := range []struct {
+		number int
+		prompt string
+	}{{2, "second"}, {1, "first"}} {
 		f := strings.Fields(lines[i])
-		if f[0] != strconv.Itoa(i) || !strings.HasSuffix(lines[i], want) {
-			t.Errorf("row %d = %q, want index %d and prompt %q", i, lines[i], i, want)
+		if f[0] != strconv.Itoa(want.number) || !strings.HasSuffix(lines[i], want.prompt) {
+			t.Errorf("row %d = %q, want number %d and prompt %q", i, lines[i], want.number, want.prompt)
 		}
 		if !strings.Contains(lines[i], "$0.50") || !strings.Contains(lines[i], " flash ") {
 			t.Errorf("row %d = %q, want the cost and the model without its provider", i, lines[i])
 		}
+	}
+
+	// A new run joins at the top with the next number; the others keep theirs.
+	addRun(3, "third")
+	lines = list()
+	if len(lines) != 3 || !strings.HasPrefix(strings.TrimSpace(lines[0]), "3 ") ||
+		!strings.HasPrefix(strings.TrimSpace(lines[2]), "1 ") || !strings.HasSuffix(lines[2], "first") {
+		t.Errorf("a new run renumbered the old ones:\n%s", strings.Join(lines, "\n"))
 	}
 
 	back := 1

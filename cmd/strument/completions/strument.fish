@@ -72,7 +72,7 @@ complete -c strument -n "__fish_seen_subcommand_from trust" -s y -l yes -d "Do n
 
 # history.
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
-    -a list -d "List this session's runs, numbered as --back counts them"
+    -a list -d "List this session's runs with the numbers --back takes"
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
     -a path -d "Print the path to this session's record"
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
@@ -84,7 +84,7 @@ complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_see
 complete -c strument -n "__fish_seen_subcommand_from history" \
     -s s -l session -d "The conversation to act on" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list strip" \
-    -s b -l back -d "An earlier run: 0 is the latest, 1 the one before" -x
+    -s b -l back -d "One run: its number from history list, or 0, -1, … back from the latest" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from strip" \

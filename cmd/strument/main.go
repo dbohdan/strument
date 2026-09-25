@@ -1720,17 +1720,22 @@ type historyCmd struct {
 	// `strip` too, where it means nothing because payloads are shared across
 	// a project and a sweep of one session's worth would be wrong.
 	Session string `help:"Session to act on (default: the last one used)." placeholder:"<name>" short:"s"`
-	// Back counts runs, not files: a run that recorded nothing is skipped (see
-	// history.Runs). A pointer so markdown can tell "not given", which keeps
-	// the whole session, from 0, which is the latest run alone. The sign is
-	// accepted either way because "back" already names the direction; 1 and
-	// -1 are one request. kong reads a separate "-1" as a flag, so the negative
-	// form is spelled -b-1 or --back=-1; kong.WithHyphenPrefixedParameters
-	// would allow "-b -1" but for every flag, letting "-s -c" take "-c" as a
-	// session name.
-	Back *int `help:"Act on an earlier run: 0 is the latest, 1 the one before, and so on (-1 works too, written -b-1 or --back=-1). Runs that recorded nothing are skipped." placeholder:"<n>" short:"b"`
+	// Back picks a run by number. A positive number is the run's place in the
+	// session counted from 1 by the oldest, which `history list` shows beside
+	// it and which a later run does not change: runs only ever join at the
+	// end, since a run that recorded nothing is not counted (history.Runs) and
+	// the live run is the newest. 0 and negatives count back from the latest,
+	// the question "what did I just do" asks. Counting from 1 is what leaves
+	// the sign free to tell the two apart.
+	//
+	// A pointer so markdown can tell "not given", which keeps the whole
+	// session, from 0, which is the latest run alone. kong reads a separate
+	// "-1" as a flag, so the negative form is spelled -b-1 or --back=-1;
+	// kong.WithHyphenPrefixedParameters would allow "-b -1" but for every
+	// flag, letting "-s -c" take "-c" as a session name.
+	Back *int `help:"Act on one run: its number from history list (1 is the first run), or 0 for the latest and -1, -2, … for the runs before it (written -b-1 or --back=-1). Runs that recorded nothing are not counted." placeholder:"<n>" short:"b"`
 
-	List     historyListCmd     `cmd:"" help:"List a session's runs, newest first, numbered as --back counts them."`
+	List     historyListCmd     `cmd:"" help:"List a session's runs, newest first, with the numbers --back takes."`
 	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
 	Markdown historyMarkdownCmd `cmd:"" help:"Print a session's history as markdown."`
@@ -1753,8 +1758,9 @@ func historySession(named string) (root, session string, err error) {
 	return root, history.CurrentSession(root), nil
 }
 
-// historyRun resolves the segment of the run --back names, counted from the
-// newest run that recorded anything. nil means the newest.
+// historyRun resolves the segment of the run --back names: a positive number
+// is the run's place from the first, 0 and negatives count back from the
+// latest. nil means the latest.
 //
 // One segment rather than all of them because this answers "where is what I
 // just did", which is what a jq one-liner wants to be pointed at. `history
@@ -1777,18 +1783,19 @@ func historyRun(named string, back *int) (string, error) {
 	if len(runs) == 0 {
 		return "", errNoRecord
 	}
-	n := 0
+	i := len(runs) - 1
 	if back != nil {
-		n = max(*back, -*back)
-	}
-	if n >= len(runs) {
-		noun := "runs"
-		if len(runs) == 1 {
-			noun = "run"
+		if *back > 0 {
+			i = *back - 1
+		} else {
+			i = len(runs) - 1 + *back
 		}
-		return "", fmt.Errorf("session %q has %d %s, so --back goes up to %d", session, len(runs), noun, len(runs)-1)
 	}
-	return runs[len(runs)-1-n], nil
+	if i < 0 || i >= len(runs) {
+		return "", fmt.Errorf("session %q has %s: --back takes 1 to %d, or 0 to -%d counting back from the latest",
+			session, render.Plural(len(runs), "run", "runs"), len(runs), len(runs)-1)
+	}
+	return runs[i], nil
 }
 
 // errNoRecord is a project nobody has chatted in yet, which is the ordinary
@@ -1838,14 +1845,14 @@ func (*historyListCmd) Run(parent *historyCmd) error {
 		return nil
 	}
 	for i, r := range slices.Backward(runs) {
-		fmt.Println(runLine(len(runs)-1-i, r))
+		fmt.Println(runLine(i+1, r))
 	}
 	return nil
 }
 
-// runLine is one row: the --back index, the start in local time, turns, cost,
+// runLine is one row: the run's number, the start in local time, turns, cost,
 // the model without its provider, and the first line of the prompt.
-func runLine(back int, r history.RunSummary) string {
+func runLine(number int, r history.RunSummary) string {
 	started := "unknown time    "
 	if !r.Started.IsZero() {
 		// The zone of the person reading, as the markdown headers show turns.
@@ -1860,7 +1867,7 @@ func runLine(back int, r history.RunSummary) string {
 	if runes := []rune(prompt); len(runes) > promptWidth {
 		prompt = string(runes[:promptWidth-1]) + "…"
 	}
-	return fmt.Sprintf("%3d  %s  %-9s %-9s %-18s %s", back, started,
+	return fmt.Sprintf("%3d  %s  %-9s %-9s %-18s %s", number, started,
 		render.Plural(r.Turns, "turn", "turns"), cost, model, prompt)
 }
 
