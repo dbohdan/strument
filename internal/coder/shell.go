@@ -67,6 +67,15 @@ func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTim
 	// /run gets no deadline: the user typed that command and may well have
 	// meant the twenty-minute build.
 	deadline := c.shellTimeout(requestedTimeout)
+	// Whatever the command started is stopped when it returns, background
+	// jobs included, deadline or not. That was already so under a deadline,
+	// whose context ends with the call, and it is what the bash description
+	// now says; without one, a job lived on until the turn ended, which no
+	// one could predict. A server started with & and used by the next call
+	// fails with "connection refused", which reads as a bug in the server,
+	// so the description says to start and use it in one command.
+	ctx, stopAll := context.WithCancel(ctx)
+	defer stopAll()
 	if deadline > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, deadline)

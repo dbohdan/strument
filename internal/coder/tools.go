@@ -329,8 +329,10 @@ func bashTool() llm.ToolDef {
 		Description: "Run a shell command. Unless the command is one of the project's configured checks, " +
 			"the user is asked to confirm before it runs. Its output is returned to you. Each call " +
 			"starts a fresh shell in the project's root directory, so cd and exported variables do " +
-			"not carry over to the next call. To read, search, or list files, use the read, grep, " +
-			"glob, and ls tools instead — they are never confirmed.\n\n" +
+			"not carry over to the next call, and anything it leaves running in the background is " +
+			"stopped when it returns: start a server and use it in the same command. To read, " +
+			"search, or list files, use the read, grep, glob, and ls tools instead — they are " +
+			"never confirmed.\n\n" +
 			"Commands have a time limit set by the user's configuration. Give timeout (in seconds) to " +
 			"set a shorter limit for a command you know finishes quickly; you cannot extend the limit " +
 			"beyond the configuration.\n\n" +
