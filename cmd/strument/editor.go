@@ -91,7 +91,7 @@ func editorArgvFor(path string, lookup func(string) string, look func(string) (s
 // runEditor opens path and waits, wiring the editor to the real terminal.
 //
 // The editor inherits the whole environment, deliberately. The rule in
-// CLAUDE.md is about who caused the command: everything the *model* causes runs
+// AGENTS.md is about who caused the command: everything the *model* causes runs
 // under the env_allow filter, and everything the *user* typed inherits
 // everything, because they typed it. `strument config edit` is the user
 // reaching for their own editor, which may well read a variable this program

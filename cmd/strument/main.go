@@ -716,9 +716,8 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 
 	// AGENTS.md is the cross-tool convention for a project's standing
 	// instructions to a coding agent (Codex, Cursor, Amp, Gemini CLI read it;
-	// Claude Code's CLAUDE.md is the outlier, and this repository's own
-	// CLAUDE.md is a symlink to it). Supporting it costs one rule and adds no
-	// filename of Strument's own.
+	// Claude Code, which long read only CLAUDE.md, now reads it too). Supporting
+	// it costs one rule and adds no filename of Strument's own.
 	//
 	// It is pinned for *editing*, not read-only, and that needs no new safety
 	// story: updating it is then an ordinary edit, which already shows a diff,

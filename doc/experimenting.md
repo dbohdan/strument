@@ -10,7 +10,7 @@ rule without one gets deleted by the next person in a hurry. If you shorten a
 section, keep the number: the count is the part that is hard to argue with.
 
 The companion reading is the **Which model to reach for** and **Comparing two
-prompts** sections of `CLAUDE.md`, which cover cost strata and arm
+prompts** sections of `AGENTS.md`, which cover cost strata and arm
 randomization. This handbook covers failures in fixtures, scorers, runners, and
 interpretation.
 
@@ -275,7 +275,7 @@ batch.
 
 ## 8. Read individual transcripts. Then read more of them
 
-This is in `CLAUDE.md` already and it earned its place twice more in one session:
+This is in `AGENTS.md` already and it earned its place twice more in one session:
 
 - The three "failures" that were the parser ([score a marker, not a position](#marker-not-position)).
 - A per-model split so clean it looked like a real finding: base scored 6/6 on

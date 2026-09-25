@@ -327,8 +327,8 @@ func TestFileInProjectThroughSymlink(t *testing.T) {
 }
 
 // AGENTS.md is the cross-tool convention for a project's standing instructions
-// (agents.md), and this repository's own CLAUDE.md is a symlink to it. Strument
-// pins it once and then gets out of the way.
+// (agents.md), and the one this repository keeps. Strument pins it once and
+// then gets out of the way.
 //
 // The lifecycle is the point, not the pin: an assistant that re-adds a file you
 // dropped is worse than one that never offered.
