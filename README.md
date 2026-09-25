@@ -169,15 +169,7 @@ In a Git repository, each turn that changes a file ends in a commit.
 While the model is responding or a tool is running, press `Ctrl-C` once to interrupt it.
 Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction.
 Press `Ctrl-C` twice within two seconds to exit Strument.
-In script mode (`-m`), an interrupt stops the turn without asking a follow-up question.
-
-`SIGUSR1` interrupts the current send the same way a single `Ctrl-C` does.
-It does not count toward the double-`Ctrl-C` exit, and it does nothing between turns.
-This is how a script or a remote assistant can stop a run whose keyboard it cannot reach:
-
-```sh
-pkill -USR1 strument
-```
+A script can interrupt a run with `SIGUSR1` instead; see [script mode](doc/config.md#script-mode--m).
 
 You can stop a long response and redirect the model without starting over:
 
@@ -232,153 +224,31 @@ See the [`run_code` tool](doc/config.md#the-run_code-tool).
 
 ### Script mode
 
-For scripts and one-offs, `-m` runs a single turn and exits:
-
-```sh
-strument -m 'Add a --version flag to cmd/pollctl.'
-strument --dry-run -m 'Fix the race in internal/poll.'  # Show the edits; write nothing.
-strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the step limit; grants no tools.
-strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
-```
-
-The process exits with a nonzero status if the request produces no answer: for example, because authentication fails, the endpoint remains unreachable after retries, the model returns an empty reply, or the request was too large and sending it anyway was declined.
-A nonempty answer, even if truncated, exits with status 0.
-Without a terminal on standard input, every prompt is declined unless `--yes` approves it, and Strument names the `--yes` value that would.
-
-The option `--yes <name>` approves the named prompt automatically: `bash`, `webfetch`, `websearch`, `steps`, `context`, `add-output`, or `all`.
-It can be repeated and accepts comma-separated lists, so `--yes bash --yes webfetch,websearch` and `--yes bash,webfetch,websearch` mean the same thing.
-An unknown name is a startup error.
-
-`--yes bash` lets the model run shell commands unattended.
-Combined with `-m`, it gives the model up to `max_steps` unattended steps (25 by default), including arbitrary shell commands.
-`--yes steps` removes that bound, since the step count resets each time the prompt is answered.
-Strument is not designed for long-running autonomous use.
-These options are meant for a terminal you are watching, not for CI or cron, where prompt injection could cause unintended shell commands to run.
+`strument -m '<request>'` runs a single turn and exits, and `--dry-run` shows the edits without writing them.
+Without a terminal, every prompt is declined unless `--yes <name>` approves it; read [script mode](doc/config.md#script-mode--m) before giving an unattended run `--yes bash`.
 
 ### Sessions
 
-A project can hold several sessions, each with its own name, conversation, pinned files, and undo history.
-`--session <name>` (`-s`) says which one to work in, creating it the first time, and the name is remembered as the one a bare `strument` picks up next.
-The cost ledger is one file per project and names the session on every row, so it answers both "what has this project cost me" and "was that session worth it".
+A project can hold several sessions, each with its own conversation, pinned files, and undo history.
+`-s <name>` (`--session`) picks one, creating it the first time, and a bare `strument` returns to the last one used.
+A session starts with an empty conversation; `-c` (`--continue`) restores its conversation from the session record, so your work survives a crash, a closed laptop, or a restart.
 
-`--session` selects a session; it does not resume its conversation.
-`strument --continue` (`-c`) does: it rebuilds the conversation from the [session record](#session-records), so a session survives the process that had it, whether that was a crash, a closed laptop, or a power loss.
-`strument --session review -c` picks up the `review` session's conversation, and `strument --session review` starts fresh in it.
-If the restored conversation is already too big to send, Strument compacts it first, rather than letting the first turn fail, and it says how many messages it restored.
-If the conversation was made by a different model than the one now running, Strument adds a line saying so, since the next model would otherwise read an earlier assistant turn as its own.
-Without `--continue`, a session starts with an empty conversation.
-
-Inside Strument, `/session` lists the sessions and switches between them without restarting; switching restores the conversation of the session you move to.
-`/session fork <name>` starts a new session that carries this one's notes forward, with the parent recorded so the notes say where they came from.
-`/model` does not fork: many conversations on one strong model is the common case, so forking belongs to sessions.
-
-From the shell, `strument session list` shows the sessions with their turn counts and sizes, `strument session rename` renames one, and `strument session delete` deletes one after saying what that removes.
-`strument session list --names` prints only the names, one per line; the shell completions use it to offer session names after `-s`/`--session` and for `session rename` and `session delete`.
-Deleting a session keeps the stored tool output, which is shared between sessions.
-`strument history --session <name>` reads another session's record without switching to it, for `path`, `edit`, and `markdown`.
+Inside Strument, `/session` lists, switches, forks, renames, and deletes sessions, and `/notes` carries context from one session into another.
+From the shell, `strument session list`, `rename`, and `delete` do the same.
+[`doc/history.md`](doc/history.md) has the details, and [`doc/sessions.md`](doc/sessions.md) explains why sessions work this way.
 
 ### Session records
 
-Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per run.
-`strument history path` prints the newest one, and `strument history markdown` renders the whole session as a Markdown transcript (`-t <n>` limits it to the last *n* turns).
-`strument history list` shows the session's runs, newest first, each with its number, when it started, its turns, cost and model, and what it was asked.
-Runs are numbered from 1 by the first, and a number does not change when later runs are added; runs that recorded nothing, such as starting Strument and quitting, are not counted.
-`-b <n>` (`--back`) picks one run for `path`, `edit` and `markdown`: a positive number is the run with that number, and `0`, `-1`, `-2`, … count back from the latest (write the negatives as `-b-1` or `--back=-1`).
-Without `-b`, `path` and `edit` act on the latest run and `markdown` renders the whole session; with it, `markdown` renders that one run.
-Each record has a `type` field: a `session` header at the start, then `message` and `reasoning` records for every message the model sent or received (including tool calls), and a `turn` record at the end of each turn.
-A `turn` record carries the outcome, the number of steps, token counts, cost, throughput in tokens per second, the files the turn changed, the untracked files its commands created (`created_files`), the one-line summaries of the work that Strument printed, the mode (`edit_format`) and the tools the model was offered (`offered_tools`), and the prompt and answer as a reader sees them.
-`tokens_per_second` is absent when there is no rate to report: nothing received, or too little elapsed time to divide by.
-`outcome` is `Crashed` for a turn that ended in a panic, and its answer is the fragment the turn had produced.
-
-A `side_call` record covers each request Strument makes for itself: a commit message, session notes, or a compaction summary.
-These requests are separate from the conversation, so they appear nowhere else in the log; without these records, a failed one showed only as its consequence, such as a commit reading `(no commit message provided)`.
-The record names the `call` and the `model`, and carries `seconds`, `attempts`, an `outcome` of `ok`, `empty`, `error`, or `deadline`, and the `error` text when there is one.
-
-A `request` record covers each request to the model a turn or an aside makes, retries and continuations included; it follows the assistant message it produced.
-The turn record has only the sums, and the per-request split is what shows where a turn's cost went: the fixed prompt, the growing history, reasoning or the answer.
-It carries the `call` (`turn` or `aside`), the `step` the turn had completed when the request went out, an `outcome` (`done`, `continuation`, `failed`, `interrupted`, and others), the provider's `finish_reason`, `seconds`, and the `error` for a failed request.
-When the provider reported usage, it adds `sent` and `received`, their `cache_read`, `cache_write` and `reasoning` parts, the `cost`, and the `provider` that actually served it where a router reports one (OpenRouter does).
-A request that failed before usage arrived has no counts rather than zeroes.
-`side_call` records carry the same usage fields.
-
-```sh
-jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
-jq -s 'map(select(.type=="request")) | group_by(.provider) | map({provider: .[0].provider, requests: length, reasoning: (map(.reasoning // 0) | add)})' "$(strument history path)"
-jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
-```
-
-Tool output of a kilobyte or more (a result, or a call's arguments) is stored beside the record rather than in it, in a `blobs/` directory under the project's state directory, named by the SHA-256 of its contents.
-The record then carries `blob` (that name), `bytes`, and `summary` (the output's first line) in place of `text` or `arguments`.
-The conversation itself — the model's answers and what you type — always stays in the record, whatever its length.
-This lets history be pruned without being forgotten: deleting the stored output leaves the timeline, the hash, and one line saying what was there.
-Identical output is stored once, so a file read in five turns is one file on disk, and removing something that should never have been recorded is one deletion rather than five.
-An answer you typed to `ask_user_question` is always kept in the record; it is your own words, not tool output.
-
-```sh
-# What has this project stored, largest first?
-jq -r 'select(.blob) | [.bytes, .summary] | @tsv' "$(strument history path)" | sort -rn
-```
-
-`strument history strip` deletes stored tool output that no recent record refers to, and keeps every record.
-Without `--older-than`, it removes output not referenced in the last 90 days, so a bare invocation removes what is plainly old rather than everything; pass an age such as `30d`, `6w`, or `720h` to choose.
-It says what it will remove and asks first.
-Stored output is shared across the project's sessions, so `strip` takes no session.
-
-Each removed output keeps its hash, size, and first line in the record, so the conversation still reads and replays.
-A restored conversation shows `[strument] This result is no longer stored. It was 13710 bytes. It began: big.txt (200 lines)` where the output was, and a call whose arguments were removed is labeled the same way.
-Output is removed only when no recent record anywhere in the project refers to it, and removing something that should never have been recorded removes every copy of it at once.
-For a single small item that was kept inline, `strument history edit` opens the record in your editor.
-
-Recording does not change the terminal output.
-The log lives outside your project on purpose: inside the tree it would be part of the workspace, so `grep` and `glob` would match it and the model could read its own transcript.
-(In a 300-session trial, a search hit the log in 46 of them.)
-`--no-history` records nothing at all.
+Strument records every session outside your project as [JSON Lines](https://jsonlines.org/): each message, tool call, and result, plus a summary row with the cost of each turn.
+`strument history list` shows a session's runs, `strument history markdown` renders them as a transcript, and `strument history path` prints the file for `jq`; `-b <n>` picks one run.
+`--no-history` records nothing.
+The record format, stored tool output, `strument history strip`, and what to do if you rename a project directory are in [`doc/history.md`](doc/history.md).
 
 ### Usage reports
 
 `strument usage [<provider>]` reports token usage and cost per provider, across every project: `usage all` covers every provider, and with no argument it reports the default model's provider.
 `/usage [<provider>]` prints the same report inside Strument, defaulting to the current model's provider.
 It shows rolling windows (the last 24 hours, 7 days, and 30 days), which will not match a provider's calendar-month invoice; see [`doc/config.md`](doc/config.md#strument-usage).
-
-### Config and history files
-
-`strument config models` prints the keys of `models`, one per line and sorted, so scripts can rely on the order, and `strument config default` prints the default model alias.
-Both read the merged user and trusted project config for the current project, so the answer matches what a session would use.
-
-`strument config path` prints where a config file is, whether or not it exists yet, and `strument config edit` opens it.
-They take `--user` (the default) or `--project`; without an existing project config, `--project` picks `.strument/config.star` in a project that already has a `.strument/` directory and `.strument.star` otherwise.
-Editing a project config untrusts it, so `config --project edit` says when to run `strument trust` again.
-`strument history path` and `strument history edit` do the same for the current session's record.
-
-The `edit` commands open the file with `$VISUAL`, then `$EDITOR`, then a platform default: `vi` on Unix, and on Windows the first of `edit` (Microsoft Edit) and `notepad` that is installed.
-The variable holds a command rather than a program name, so `EDITOR="code --wait"` works, and a path with spaces can be quoted.
-Windows has no editor that every installation includes, so set `EDITOR` if you reach a Windows machine over SSH and it has no `edit`: `notepad` would open a window you cannot see.
-
-### If you rename a project directory
-
-Strument keeps a project's transcript, input history, cost ledger, resume state and undo stack outside your tree, under `$XDG_STATE_HOME/strument/projects/`, keyed by the project's path.
-Renaming the project directory therefore gives it a new state directory.
-
-When Strument recognizes a renamed project, it shows a notice at startup:
-
-```
-strument: this project also has 47 turns recorded under ~/src/proj, which no longer exists.
-  Merge saved state: strument project adopt ~/src/proj
-  Dismiss this notice: strument project ignore ~/src/proj
-```
-
-`strument project adopt` previews the changes and asks for confirmation.
-When confirmed, it combines the transcript, input history, and cost ledger in time order.
-For `resume.json` and `undo.json`, it keeps the newer file from each pair.
-
-You can run `project adopt` even after you have started sessions at the new path.
-The old state directory is retained as `<name>.adopted-<timestamp>`.
-
-`strument project list` lists projects whose directory has moved or been deleted, and the rest with `--all` or when none has moved.
-Each entry includes the turn count, size, and state directory.
-
-Use this list when automatic detection cannot identify the old project.
-Detection uses the repository's first commit; projects without Git, histories formed by merging unrelated repositories, and multiple moved clones may not produce a notice.
 
 ### Shell completions
 
@@ -393,7 +263,7 @@ source <(strument shell bash)
 strument shell fish | source
 ```
 
-The `-M`/`--model` option completes model aliases from the effective config by running `strument config models`.
+The `-M`/`--model` option completes model aliases from the effective config by running `strument config models`, and `-s`/`--session` completes session names.
 Subcommands, their flags, and enumerable option values (`--yes`, `--mode`, `--consult-scope`) complete too, and paths complete where a command takes one.
 To load completions automatically, add the command to your shell configuration.
 
@@ -403,6 +273,7 @@ To load completions automatically, add the command to your shell configuration.
 Strument is configured in Starlark, a small sandboxed dialect of Python.
 A config file is a short program that builds model objects and assigns values to the configuration variables.
 [`doc/config.md`](doc/config.md) is the reference for the settings and every built-in function specific to Strument.
+`strument config edit` opens your config in your editor (`--project` for the project's), and `strument config path` prints where it is.
 
 A more complete configuration:
 

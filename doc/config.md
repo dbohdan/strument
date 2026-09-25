@@ -385,15 +385,11 @@ so the model can still check something mid-turn.
 
 ### `--continue` / `-c`
 
-When starting an interactive session, `--continue` regenerates the session notes
-from the project's existing transcript and loads them into context. Without it,
-a session starts without notes and makes no model call for them.
-
-The notes live in memory for the session and are never persisted; the next
-`--continue` regenerates them from a transcript that includes the full prior
-session. `/notes generate` does the same thing mid-session at the user's
-request. The option does nothing when history is disabled, unavailable, or
-empty. Strument displays token usage and cost for the notes request.
+`--continue` restores the session's conversation from its record, compacting it
+first if it is already too big to send. Without it, a session starts with an
+empty conversation. It does nothing when history is disabled or the session has
+no record. See [`history.md`](history.md#sessions); for why restoring replaced
+regenerated notes as the way to resume, see [`sessions.md`](sessions.md).
 
 ### `reasoning_display`
 
@@ -996,6 +992,37 @@ machine that has no zone files of its own.
 
 `env_set` changes need a restart; `/reload` does not re-apply them.
 
+### Script mode (`-m`)
+
+For scripts and one-offs, `-m` runs a single turn and exits:
+
+```sh
+strument -m 'Add a --version flag to cmd/pollctl.'
+strument --dry-run -m 'Fix the race in internal/poll.'  # Show the edits; write nothing.
+strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the step limit; grants no tools.
+strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
+```
+
+The process exits with a nonzero status if the request produces no answer:
+authentication failed, the endpoint stayed unreachable after retries, the model
+returned an empty reply, or the request was too large and sending it anyway was
+declined. A nonempty answer, even a truncated one, exits with status 0.
+
+Without a terminal on standard input, every prompt is declined unless `--yes`
+approves it, and Strument names the `--yes` value that would have. An interrupt
+stops the turn without the follow-up question an interactive session asks.
+`SIGUSR1` interrupts the current send as a single Ctrl-C does, without counting
+toward the double-Ctrl-C exit, and does nothing between turns. That is how a
+script or a remote assistant stops a run whose keyboard it cannot reach:
+`pkill -USR1 strument`.
+
+`--yes bash` lets the model run shell commands unattended. Combined with `-m`,
+that is up to `max_steps` unattended steps (25 by default), including
+arbitrary shell commands, and `--yes steps` removes even that bound. Strument
+is not designed for long-running autonomous use: these options are meant for a
+terminal you are watching, not for CI or cron, where prompt injection could
+cause unintended shell commands to run.
+
 ### Naming what may happen unattended
 
 `--yes NAME` answers one named prompt without asking. The names are the
@@ -1513,6 +1540,21 @@ strument config default   # the value of `default`
 The output is plain text on stdout, one line per model alias, so it composes
 with scripts and pipelines. `models` is sorted alphabetically, not in config
 declaration order, so a script can rely on the order across edits.
+
+`strument config path` prints where a config file is, whether or not it exists
+yet, and `strument config edit` opens it. They take `--user` (the default) or
+`--project`. Without an existing project config, `--project` picks
+`.strument/config.star` in a project that already has a `.strument/` directory,
+and `.strument.star` otherwise. Editing a project config untrusts it, so
+`config --project edit` says when to run `strument trust` again.
+
+The `edit` commands — this one and `strument history edit` — open the file with
+`$VISUAL`, then `$EDITOR`, then a platform default: `vi` on Unix, and on Windows
+the first of `edit` (Microsoft Edit) and `notepad` that is installed. The
+variable holds a command rather than a program name, so `EDITOR="code --wait"`
+works, and a path with spaces can be quoted. Windows has no editor that every
+installation includes, so set `EDITOR` if you reach a Windows machine over SSH
+and it has no `edit`: `notepad` would open a window you cannot see.
 
 ## `strument model-config`
 

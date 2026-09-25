@@ -708,8 +708,10 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 		cdr.RestoreSessionCommits(u.Commits, u.Last)
 	}
 
-	// Notes are in memory when --continue regenerated them from the transcript
-	// at startup. Report them; the REPL serves /notes from the same field.
+	// Notes are in memory only when something put them there before the REPL
+	// started. --continue no longer does (it restores the conversation), so
+	// this reports what is in the field rather than assuming it is empty; the
+	// REPL serves /notes from the same field.
 	notesRestored = strings.TrimSpace(cdr.SessionNotes) != ""
 
 	// AGENTS.md is the cross-tool convention for a project's standing

@@ -1218,10 +1218,13 @@ so a rename cannot orphan it and a merge has nothing to do.
   `unsafepath_test.go`, `usage_test.go`) have tests that fail if the
   invariant drifts.
 - **Sessions and compaction**: [`doc/sessions.md`](sessions.md) is why picking a
-  project back up works the way it does — compaction at a turn boundary, session
-  notes instead of a replayed conversation, and the alternatives that were
-  rejected. Read it before changing anything in that area; the arguments are not
-  reconstructible from the code alone.
+  project back up works the way it does — compaction at a turn boundary, a
+  conversation restored from the record rather than paraphrased into notes, and
+  the alternatives that were rejected. Read it before changing anything in that
+  area; the arguments are not reconstructible from the code alone.
+  [`doc/history.md`](history.md) is the user-facing reference beside it: the
+  session and `history` commands, the record format, stored tool output, and
+  renamed project directories.
 - **Live experiments** are the other half, and the one that keeps finding what
   the suite cannot. [`doc/experimenting.md`](experimenting.md) is the handbook:
   what has actually gone wrong when running them, and in what order to doubt a

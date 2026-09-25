@@ -156,18 +156,21 @@ layering, where the snapshot substrate is primary and Git sits on top.
 Notes live in memory for one session. They are never persisted to disk; the
 transcript is the durable artifact, and notes are derived from it.
 
-Two paths create notes:
+Two paths create notes, and both are the user's explicit request:
 
-- **`--continue` at startup.** Regenerates from the project's transcript, which
-  covers every prior session. The user asked to resume, so the cost is expected.
-- **`/notes generate` mid-session.** The user's explicit request, available in
-  any session, including one that started clean. It reads the transcript that
-  exists at that point, which may include the current session's turns because
-  the history writer appends them after each turn.
+- **`/session fork <name>`.** Generates notes from the current session's record
+  and carries them into the new session, with the parent named. This is the
+  job notes are for: context from one conversation, taken into a different one.
+- **`/notes generate` mid-session.** Available in any session, including one
+  that started clean. It reads the record that exists at that point, which may
+  include the current session's turns because the history writer appends them
+  after each turn.
 
-A session without `--continue` starts clean: no notes in context, no side-model
-call, and no delay. The user who wants notes types `/notes generate`; the user
-who does not is never charged for them.
+`--continue` used to be a third path, regenerating notes at startup. It now
+restores the conversation itself (see the top of this document), so a session
+starts with no notes in context, no side-model call, and no delay, whether or
+not it is resumed. The user who wants notes asks for them; the user who does
+not is never charged for them.
 
 `/clear` keeps the notes. After clearing the conversation, the notes from the
 session's opening turns are still in context, which is usually what the user
