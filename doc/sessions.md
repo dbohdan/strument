@@ -136,6 +136,27 @@ future sessions belong in a reviewed project file such as `AGENTS.md`.
 Changes to `AGENTS.md` use the existing file-editing workflow: a visible diff, a
 snapshot, `/undo`, and a commit when Git is available.
 
+### `AGENTS.local.md`, the private one
+
+`AGENTS.local.md` beside it holds instructions for this checkout only: a
+machine's paths, your own preferences, anything not meant for the team. It is
+pinned the same way, offered once, and named in the prompt as the user's
+private instructions, which win where the two disagree. Edits to it are
+ordinary edits too, with the same diff and `/undo`, but it is never
+committed: the first time Strument sees it untracked and not ignored, it adds
+it to `.git/info/exclude` and says so, and a commit that would include it
+leaves it out. If you track it on purpose, it is committed like any other
+file.
+
+This is Strument's answer to a memory tool. A note meant to outlive the
+session is a line in one of these two files, reviewed as it is written,
+rather than an entry in a store the model fills unseen.
+
+No standard names this file. The [AGENTS.md spec](https://agents.md/)
+defines no per-user or local file. DeepSeek Harness reads `AGENTS.local.md`
+after the shared file, as Claude Code does `CLAUDE.local.md`; Codex and Pi read
+`AGENTS.override.md` in place of `AGENTS.md`.
+
 Pinning it is not enough on its own, and that is measured
 (`experiments/2026-08-agents-md/README.md`): compliance with a rule contrary to habit
 was 0/8 with no `AGENTS.md`, 2/8 with it merely pinned, and 6/8 once the prompt

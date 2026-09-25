@@ -514,6 +514,18 @@ func (c *Coder) pinnedFilesNote() string {
 		fmt.Fprintf(&b, "%s holds the project's standing instructions. "+
 			"Follow them for every change you make here.\n", AgentsFileName)
 	}
+	// The private file is named for the same reason, and told apart from the
+	// shared one so that a note lands in the right place: a machine's paths or
+	// the user's own preferences in the file nobody else reads, conventions
+	// for everyone in the one that is committed.
+	if slices.Contains(existing, AgentsLocalFileName) {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "%s holds the user's private instructions for this checkout. It is not "+
+			"committed or shared. Follow it too, and where it conflicts with %s, it wins.\n",
+			AgentsLocalFileName, AgentsFileName)
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
 

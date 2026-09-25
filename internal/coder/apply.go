@@ -226,7 +226,10 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 
 	// Still refused, and not as a prompt: an ignored file is one the project
 	// declared out of scope, and the observation tools do not show it either.
-	if c.Repo != nil && c.Repo.GitIgnored(rel) {
+	// AGENTS.local.md is the exception, being ignored so that it stays private
+	// rather than because it is out of scope: refusing it left a model asked
+	// to remember something reaching for `printf >>` in bash instead.
+	if c.Repo != nil && c.Repo.GitIgnored(rel) && filepath.ToSlash(rel) != AgentsLocalFileName {
 		c.Out.Warningf("Skipping edits to %s: it matches an ignore rule.", rel)
 		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
@@ -268,7 +271,10 @@ func (c *Coder) dirtyCommit(need map[string]bool) {
 	if c.Repo == nil || len(need) == 0 {
 		return
 	}
-	files := slices.Sorted(maps.Keys(need))
+	files := c.dropAgentsLocal(slices.Sorted(maps.Keys(need)))
+	if len(files) == 0 {
+		return
+	}
 	if _, _, _, err := c.Repo.Commit(files, "", "", false); err != nil {
 		c.Out.Errorf("Could not commit existing changes: %v", err)
 	}

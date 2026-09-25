@@ -191,6 +191,45 @@ func (r *Repo) GitIgnored(rel string) bool {
 	return r.ok("check-ignore", "-q", "--", rel)
 }
 
+// ExcludeLocally adds a pattern to this checkout's info/exclude, which git
+// honors like .gitignore but never commits. Found through --git-path so a
+// worktree writes its own. A pattern already there is not added twice.
+func (r *Repo) ExcludeLocally(pattern string) error {
+	out, err := r.git("rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return err
+	}
+	path := strings.TrimSpace(out)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(r.root, path)
+	}
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for line := range strings.SplitSeq(string(existing), "\n") {
+		if strings.TrimSpace(line) == pattern {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	prefix := ""
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		prefix = "\n"
+	}
+	_, err = f.WriteString(prefix + pattern + "\n")
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
 // HeadSHA returns the full HEAD hash, or "" on an unborn branch.
 func (r *Repo) HeadSHA() string {
 	out, err := r.git("rev-parse", "HEAD")

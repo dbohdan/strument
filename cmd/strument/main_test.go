@@ -18,6 +18,7 @@ import (
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/history"
 )
 
@@ -345,7 +346,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// First session: nothing recorded, so it is offered.
 	c1 := newCoder()
 	_, offered, _ := restoreSession(c1, root, history.DefaultSession, history.Resume{})
-	if !offered {
+	if len(offered) == 0 {
 		t.Fatal("a project with AGENTS.md and no record should be offered it")
 	}
 	if got := c1.ChatFiles(); len(got) != 1 || got[0] != coder.AgentsFileName {
@@ -356,7 +357,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// dropped stays dropped.
 	c2 := newCoder()
 	_, offered, _ = restoreSession(c2, root, history.DefaultSession, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
-	if offered {
+	if len(offered) > 0 {
 		t.Error("the offer must not repeat once recorded")
 	}
 	if got := c2.ChatFiles(); len(got) != 0 {
@@ -369,7 +370,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	_, offered, _ = restoreSession(c3, root, history.DefaultSession, history.Resume{
 		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
 	})
-	if offered {
+	if len(offered) > 0 {
 		t.Error("a file already in Files is a restore, not an offer")
 	}
 	if got := c3.ChatFiles(); len(got) != 1 {
@@ -385,7 +386,7 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	root := t.TempDir()
 	c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
 
-	if _, offered, _ := restoreSession(c, root, history.DefaultSession, history.Resume{}); offered {
+	if _, offered, _ := restoreSession(c, root, history.DefaultSession, history.Resume{}); len(offered) > 0 {
 		t.Error("nothing to offer in a project with no AGENTS.md")
 	}
 	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {
@@ -944,5 +945,55 @@ func TestPickVersionIsBare(t *testing.T) {
 		if got := pickVersion(tc.stamped, tc.module); got != tc.want {
 			t.Errorf("pickVersion(%q, %q) = %q, want %q", tc.stamped, tc.module, got, tc.want)
 		}
+	}
+}
+
+// AGENTS.local.md is pinned once like AGENTS.md, and on first sight is kept
+// out of git's view through info/exclude, which is itself never committed.
+// The write is said in the note, because it is a change to the user's
+// repository.
+func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"config", "user.name", "T"}, {"config", "user.email", "t@example.com"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, coder.AgentsLocalFileName), []byte("# mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCoder := func() *coder.Coder {
+		c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+		c.Repo = repo
+		return c
+	}
+
+	note, offered, _ := restoreSession(newCoder(), root, history.DefaultSession, history.Resume{})
+	if !slices.Contains(offered, coder.AgentsLocalFileName) {
+		t.Fatalf("offered = %v, want %s", offered, coder.AgentsLocalFileName)
+	}
+	if !strings.Contains(note, "info/exclude") {
+		t.Errorf("the exclude was not announced: %q", note)
+	}
+	status, err := exec.Command("git", "-C", root, "status", "--porcelain").Output()
+	if err != nil || strings.Contains(string(status), coder.AgentsLocalFileName) {
+		t.Errorf("git still offers the file: %q (%v)", status, err)
+	}
+
+	note, offered, _ = restoreSession(newCoder(), root, history.DefaultSession,
+		history.Resume{AutoPinned: []string{coder.AgentsLocalFileName}})
+	if len(offered) > 0 || strings.Contains(note, "info/exclude") {
+		t.Errorf("second session: offered %v, note %q; want neither", offered, note)
 	}
 }

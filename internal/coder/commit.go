@@ -156,6 +156,7 @@ func (c *Coder) committablePaths(paths []string) []string {
 		}
 		keep = append(keep, p)
 	}
+	keep = c.dropAgentsLocal(keep)
 	if len(dropped) > 0 {
 		c.Out.Toolf("Not committing %s: outside the repository. These changes can still be restored with /undo.",
 			strings.Join(dropped, ", "))

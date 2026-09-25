@@ -467,7 +467,8 @@ func (c *chatCmd) Run() error {
 		// for without seeing it.
 		note := restoreNote
 		if len(c.Files) == 0 && rootErr == nil {
-			var offered, notesRestored bool
+			var offered []string
+			var notesRestored bool
 			var pins string
 			pins, offered, notesRestored = restoreSession(cdr, projectRoot, session, res)
 			note = strings.TrimSpace(note + "\n" + pins)
@@ -482,8 +483,8 @@ func (c *chatCmd) Run() error {
 			// nothing would otherwise never write it down, and AGENTS.md would
 			// be offered again next time — which is only "once" in the sense
 			// that it happens once per session.
-			if offered && keepState {
-				res.AutoPinned = append(res.AutoPinned, coder.AgentsFileName)
+			if len(offered) > 0 && keepState {
+				res.AutoPinned = append(res.AutoPinned, offered...)
 				_ = history.SaveResume(projectRoot, session, resumeWithPins(cdr, projectRoot, res))
 			}
 		}
@@ -676,7 +677,7 @@ func fileInProject(root, file string) bool {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered, notesRestored bool) {
+func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered []string, notesRestored bool) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
 		if !filepath.IsAbs(p) {
@@ -729,9 +730,18 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 	//
 	// Never created, only noticed. On a live configuration directory with no
 	// AGENTS.md, nothing happens.
-	if p, ok := abs(coder.AgentsFileName); ok && !slices.Contains(res.AutoPinned, coder.AgentsFileName) {
-		cdr.AddFile(p)
-		offered = true
+	//
+	// AGENTS.local.md, the user's private counterpart, gets the same lifecycle,
+	// and on first sight is kept out of git's view if nothing ignores it yet.
+	var excluded string
+	for _, name := range []string{coder.AgentsFileName, coder.AgentsLocalFileName} {
+		if p, ok := abs(name); ok && !slices.Contains(res.AutoPinned, name) {
+			cdr.AddFile(p)
+			offered = append(offered, name)
+			if name == coder.AgentsLocalFileName && cdr.KeepAgentsLocalUncommitted() {
+				excluded = fmt.Sprintf("Added %s to .git/info/exclude, so it stays out of commits.", name)
+			}
+		}
 	}
 
 	var files, readOnly int
@@ -764,14 +774,16 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 	// used.
 	switch {
 	case files == 0 && readOnly == 0:
-		return "", offered, notesRestored
 	case readOnly == 0:
-		return fmt.Sprintf("Restored %s from your last session.", render.Plural(files, "pin", "pins")), offered, notesRestored
+		note = fmt.Sprintf("Restored %s from your last session.", render.Plural(files, "pin", "pins"))
 	case files == 0:
-		return fmt.Sprintf("Restored %s from your last session, read-only.", render.Plural(readOnly, "pin", "pins")), offered, notesRestored
+		note = fmt.Sprintf("Restored %s from your last session, read-only.", render.Plural(readOnly, "pin", "pins"))
+	default:
+		note = fmt.Sprintf("Restored %s from your last session, %d of them read-only.",
+			render.Plural(files+readOnly, "pin", "pins"), readOnly)
 	}
-	return fmt.Sprintf("Restored %s from your last session, %d of them read-only.",
-		render.Plural(files+readOnly, "pin", "pins"), readOnly), offered, notesRestored
+	// A write to the user's repository is said, however small.
+	return strings.TrimSpace(note + "\n" + excluded), offered, notesRestored
 }
 
 // saveResumeFunc returns the callback the REPL calls after a command changes
