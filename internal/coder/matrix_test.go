@@ -44,7 +44,6 @@ func (r *fakeRepo) Commit([]string, string, string, bool) (string, string, bool,
 }
 func (r *fakeRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
 func (r *fakeRepo) TrailerValue() string                                    { return "" }
-func (r *fakeRepo) UntrackedFiles() ([]string, error)                       { return nil, nil }
 
 // yesConfirmer answers yes to everything (including explicit-yes prompts).
 type yesConfirmer struct{}

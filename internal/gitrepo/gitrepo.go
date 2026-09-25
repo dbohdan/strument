@@ -158,22 +158,6 @@ func (r *Repo) TrackedFiles() []string {
 	return files
 }
 
-// UntrackedFiles returns the files that are neither tracked nor ignored,
-// repo-root-relative — what `git status` lists as untracked, file by file.
-func (r *Repo) UntrackedFiles() ([]string, error) {
-	out, err := r.git("ls-files", "--others", "--exclude-standard", "-z")
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for f := range strings.SplitSeq(out, "\x00") {
-		if f != "" {
-			files = append(files, f)
-		}
-	}
-	return files, nil
-}
-
 // PathInRepo reports whether rel is tracked.
 func (r *Repo) PathInRepo(rel string) bool {
 	return r.ok("ls-files", "--error-unmatch", "--", rel)

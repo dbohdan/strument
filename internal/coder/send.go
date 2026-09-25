@@ -1156,15 +1156,9 @@ func (c *Coder) flushTurnUsage() {
 	c.messageSends = 0 // idempotent: never report the same turn twice
 
 	report := c.messageUsageReport("turn", "") + c.turnSummary()
-	created := c.filesCreatedByCommands()
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)
-	if len(created) > 0 {
-		// Still there at the end, whether or not the model was told: the
-		// reviewer is the one who decides what stays.
-		c.Out.Printf("Untracked files created by commands: %s.", formatNewFiles(created, ", "))
-	}
 
 	c.record(Record{
 		Type: "turn",
@@ -1177,14 +1171,13 @@ func (c *Coder) flushTurnUsage() {
 		// transcript's header showed the slug, and once a project holds
 		// several sessions the model is a property of the turn rather than of
 		// the process.
-		Model:        c.Model.QualifiedSlug(),
-		Outcome:      c.turnOutcome(),
-		Steps:        c.turnSteps,
-		CreatedFiles: created,
-		Sent:         c.messageTokensSent,
-		Received:     c.messageTokensReceived,
-		Cost:         c.messageCost,
-		CostKnown:    c.costKnown,
+		Model:     c.Model.QualifiedSlug(),
+		Outcome:   c.turnOutcome(),
+		Steps:     c.turnSteps,
+		Sent:      c.messageTokensSent,
+		Received:  c.messageTokensReceived,
+		Cost:      c.messageCost,
+		CostKnown: c.costKnown,
 		// From the same two numbers the usage line above divides, so the row
 		// and the screen cannot disagree.
 		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),

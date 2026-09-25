@@ -103,8 +103,7 @@ The **`turn`** record carries:
 
 - the outcome and the number of steps;
 - token counts, cost, and throughput in tokens per second;
-- the files the turn changed, and the untracked files its commands created
-  (`created_files`);
+- the files the turn changed;
 - the one-line summaries of the work that Strument printed;
 - the mode (`edit_format`) and the tools the model was offered
   (`offered_tools`);

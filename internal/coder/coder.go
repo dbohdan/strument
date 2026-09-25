@@ -218,11 +218,6 @@ type Coder struct {
 	// writes its messages, so each lands after the reply it produced rather
 	// than ahead of the user message that prompted it.
 	pendingRequests []Record
-	// untrackedBefore is the turn's starting set of untracked files, nil
-	// without a repository; newFilesNoted says the model has been told about
-	// the ones commands created. See newfiles.go.
-	untrackedBefore map[string]bool
-	newFilesNoted   bool
 
 	// editFormat is the active mode, "tool" or "ask". It starts as the model's
 	// EditFormat but /ask and /code switch it at runtime without changing the
@@ -686,7 +681,6 @@ func (c *Coder) initBeforeMessage() {
 	if c.Repo != nil {
 		c.commitBeforeMessage = append(c.commitBeforeMessage, c.Repo.HeadSHA())
 	}
-	c.snapshotUntracked()
 }
 
 // ConfirmGrouped wraps c.Confirm with group-scoped auto-approve. If the user
@@ -841,12 +835,15 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 
 		case OutcomeSuccess:
 			// The model has nothing more to call, so it believes it is done.
-			// That is the moment to check, if the project asked us to, and to
-			// mention what its commands left behind.
+			// That is the moment to check, if the project asked us to.
+			//
+			// It was also the moment to list the untracked files the turn's
+			// commands had created, until a live session showed the list could
+			// not be attributed: files the user made in the same minutes, test
+			// archives in another terminal, arrived as the model's, and MiMo
+			// spent the turn's end puzzling over what it had "created". A
+			// snapshot before and after cannot say who wrote a file.
 			report, ok := c.runAutoCheck(ctx)
-			if !ok {
-				report, ok = c.noteNewFiles()
-			}
 			if !ok {
 				return
 			}

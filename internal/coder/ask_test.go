@@ -155,7 +155,6 @@ func (r *recordingRepo) Commit([]string, string, string, bool) (string, string, 
 }
 func (r *recordingRepo) AttributeDirectCommits(string, string) ([]string, error) { return nil, nil }
 func (r *recordingRepo) TrailerValue() string                                    { return "" }
-func (r *recordingRepo) UntrackedFiles() ([]string, error)                       { return nil, nil }
 
 // recordingRunner counts shell executions.
 type recordingRunner struct{ calls int }

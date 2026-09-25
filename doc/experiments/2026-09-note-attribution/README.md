@@ -14,6 +14,13 @@ mark means.** The two unmarked notes, the new-files note and the
 automatic-check report, now carry `[strument]`. Both modes' system prompts
 define the marker. This is arm C, which the preregistered rule selects.
 
+**Later (2026-09-25): the new-files note was removed.** In an interactive
+session, files the user created in another terminal during a MiMo turn were
+listed as the turn's own, and MiMo spent the turn's end confused about what it
+had made. A snapshot of untracked files before and after a turn cannot say who
+wrote them. The marker and its definition stay for the automatic-check report
+and the other harness notes.
+
 ## Design
 
 The new-files note (`083fdf8`) was the subject, in three arms:
