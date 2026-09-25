@@ -204,7 +204,7 @@ _strument_complete() {
         case "$sub" in
         read)
             if [[ $cur == -* ]]; then
-                _strument_words "$_strument_tool_options --offset --limit --outline"
+                _strument_words "$_strument_tool_options --offset --limit"
             else
                 compopt -o default
             fi

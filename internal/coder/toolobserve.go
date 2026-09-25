@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -73,22 +72,15 @@ func decodeArgs(tc llm.ToolCall, dst any) string {
 // runRead answers a read call with a numbered window of the file.
 func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	var a struct {
-		Path    string `json:"path"`
-		Offset  int    `json:"offset"`
-		Limit   int    `json:"limit"`
-		Outline bool   `json:"outline"`
+		Path   string `json:"path"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
 	}
 	if msg := decodeArgs(tc, &a); msg != "" {
 		return msg, nil
 	}
 	if strings.TrimSpace(a.Path) == "" {
 		return "The required \"path\" argument was missing.", nil
-	}
-	if a.Outline && readOutlineParam() {
-		if _, err := i.Files.Read(a.Path, 1, 1); err != nil {
-			return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
-		}
-		return i.outlineResult(filepath.ToSlash(filepath.Clean(a.Path))), nil
 	}
 
 	// An image answers as an image, before the text path refuses it for not
@@ -98,10 +90,6 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 		return text, images
 	}
 
-	if a.Limit <= 0 && readLimitRequired() {
-		return "Give limit: how many lines to read, from offset (1 by default). Use the " +
-			"outline (outline: true) or grep to find the lines you need.", nil
-	}
 	ft, err := i.Files.Read(a.Path, a.Offset, a.Limit)
 	if err != nil {
 		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
@@ -130,7 +118,11 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	if i.AnchorRows != nil {
 		if rows := i.AnchorRows(ft.Path, ft.Start-1, len(ft.Lines)); rows != "" {
 			b.WriteString(rows)
-			i.windowNotes(&b, ft, a.Limit > 0)
+			if ft.Truncated {
+				next := ft.Start + len(ft.Lines)
+				fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
+					ft.Start, next-1, ft.Total, next)
+			}
 			return b.String(), nil
 		}
 	}
@@ -140,26 +132,12 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	for i, line := range ft.Lines {
 		fmt.Fprintf(&b, "%*d\t%s\n", width, ft.Start+i, line)
 	}
-	i.windowNotes(&b, ft, a.Limit > 0)
-	return b.String(), nil
-}
-
-// windowNotes says where a partial read stopped, and, in the arms that do,
-// what the rest of the file holds.
-//
-// The outline goes only on a read the default window cut short. One that
-// named its own limit got the lines it asked for, and the pilot showed what
-// outlining it costs: every ranged read carried the whole file's map, about
-// 11 KB on click's core.py, on top of the 16 lines wanted.
-func (i *Inspector) windowNotes(b *strings.Builder, ft workspace.FileText, ranged bool) {
-	last := ft.Start + len(ft.Lines) - 1
 	if ft.Truncated {
-		fmt.Fprintf(b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
-			ft.Start, last, ft.Total, last+1)
+		next := ft.Start + len(ft.Lines)
+		fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
+			ft.Start, next-1, ft.Total, next)
 	}
-	if readOutlineOnTruncation() && ft.Truncated && !ranged {
-		b.WriteString(i.restOutline(ft.Path, ft.Start, last))
-	}
+	return b.String(), nil
 }
 
 // readSummary is the one-line outcome shown to the user.
