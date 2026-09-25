@@ -161,6 +161,13 @@ const CodeToolsBullet = "- run_code runs a short JavaScript program, which can i
 	"exploration where each search depends on the last result, is a direct call " +
 	"to the tool itself.\n"
 
+// ReadOutlineBullet names read's outline parameter, in the read-outline
+// trial's arms that offer it (coder/readoutline.go). Like the run_code bullet,
+// it maps a need to the tool rather than announcing it.
+const ReadOutlineBullet = "- read with outline: true lists a file's classes, functions and methods " +
+	"with their signatures and the lines each spans. Reach for it when a file is long, or when " +
+	"the question is what a class or module defines; then read the part you need by its lines.\n"
+
 // ObservationViaRunCodeParagraph is what the {code_tools} slot renders under the
 // force arm (coder.ObservationViaRunCode): all direct observation tools
 // withheld, all observation through code programs. It replaces the run_code

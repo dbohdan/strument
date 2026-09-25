@@ -86,3 +86,14 @@ func TestReadSchemaFollowsTheArm(t *testing.T) {
 		}
 	}
 }
+
+// The system prompt names the outline exactly where the schema offers it.
+func TestOutlineBulletFollowsTheArm(t *testing.T) {
+	for arm, want := range map[string]bool{"A": false, "B": false, "C": true, "D": true} {
+		withReadArm(t, arm)
+		c := testCoder(t)
+		if got := strings.Contains(c.codeToolsText(), "read with outline: true"); got != want {
+			t.Errorf("arm %s: bullet present %v, want %v", arm, got, want)
+		}
+	}
+}

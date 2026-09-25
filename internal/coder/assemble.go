@@ -228,10 +228,17 @@ func (c *Coder) codeToolsText() string {
 	if c.ObservationViaRunCode {
 		return fmt.Sprintf(prompts.ObservationViaRunCodeParagraph, andList(c.codeCallableTools()))
 	}
-	if !c.OfferCode {
-		return ""
+	// The read-outline trial's arms C and D name the outline here as well as
+	// in the schema: its pilot offered the parameter with only a description,
+	// and 0 of 8 sessions called it, on tasks a map answers directly.
+	outline := ""
+	if readOutlineParam() {
+		outline = prompts.ReadOutlineBullet
 	}
-	return fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools()))
+	if !c.OfferCode {
+		return outline
+	}
+	return fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools())) + outline
 }
 
 // andList writes names as English prose: "read, grep, glob, and ls". The prompt
