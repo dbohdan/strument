@@ -114,6 +114,11 @@ reading each hit.
   the system prompt, through `prompt_system_prefix`. The shipped prompt
   places it in the body, beside the paragraph about how a turn ends.
 - **Two cheap models.** Frontier models may never make this mistake.
+- **Reasoning ran at each provider's default,** against the handbook's
+  [pin reasoning low](../../experimenting.md#pin-reasoning-low). The metrics
+  are counts of what the reasoning and answers said, so the comparison between
+  arms holds, but the reasoning text they were read from is longer than it
+  would be at `low`, and there is more of it to misattribute.
 - **The strict rule is post hoc.** It was built after reading the hits, so it
   agrees with them by construction. The preregistered count is reported
   beside it, not replaced.

@@ -38,6 +38,10 @@ experiment will not point at it.
 
 Before spending on a run, ask these questions in order:
 
+- **Is reasoning pinned low on every model?** Set `reasoning = "low"` in the
+  shared config unless reasoning is what you are measuring, and check one
+  transcript per model ([pin reasoning low](#pin-reasoning-low)). Defaults
+  differ by model and change without notice, and they cost wall-clock.
 - **Did the mechanism fire?** Instrument it and confirm it in the pilot ([the mechanism must fire](#mechanism-must-fire)).
 - **Did the model use the thing being tested?** A feature that can be declined
   was offered, not applied ([a clean null has many causes](#clean-null)).
