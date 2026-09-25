@@ -1155,6 +1155,23 @@ set. It is the same shape as [a check that cannot fail](#check-that-cannot-fail)
 the check that ran was real, and it tested a weaker claim than the one relied
 on.
 
+<a id="inert-arm-is-a-placebo"></a>
+
+## 27. An arm that never fired is a placebo. Read it as one
+
+In the read-outline follow-up, arm B's mechanism — an outline on a read the
+default window cut short — fired in none of 189 sessions, so B was the
+baseline on the wire. For Ling 3.0 Flash, B's median input tokens still fell by
+half against A (279k to 135k), on the control tasks as much as on the target
+ones. Arm C, which did change something, showed the same drop (138k, p = 0.068
+for that model alone).
+
+Without B, C's number reads as a near-significant effect on the one model that
+used the feature most. With B, it reads as what it is: the size of that model's
+run-to-run variance at this sample. **Check which arms actually fired before
+comparing them, and when one did not, use it:** it measures the noise floor for
+free, in the same run, under the same randomization.
+
 ---
 
 <a id="short-version"></a>
