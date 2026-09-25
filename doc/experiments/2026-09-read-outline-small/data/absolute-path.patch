@@ -1,0 +1,52 @@
+diff --git a/internal/coder/readoutline_test.go b/internal/coder/readoutline_test.go
+index f323543..dcd05a7 100644
+--- a/internal/coder/readoutline_test.go
++++ b/internal/coder/readoutline_test.go
+@@ -1,6 +1,7 @@
+ package coder
+ 
+ import (
++	"path/filepath"
+ 	"slices"
+ 	"strings"
+ 	"testing"
+@@ -97,3 +98,13 @@ func TestOutlineBulletFollowsTheArm(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// An absolute path inside the project outlines like a relative one.
++func TestOutlineTakesAnAbsolutePath(t *testing.T) {
++	withReadArm(t, "C")
++	c, _ := observeEnv(t, map[string]string{"m.py": outlineFile(30)})
++	got := readTool(c, call("read", `{"path":`+jsonString(filepath.Join(c.Root, "m.py"))+`,"outline":true}`))
++	if !strings.Contains(got, "- class Store  [31-33]") {
++		t.Errorf("an absolute path lost the outline:\n%s", got)
++	}
++}
+diff --git a/internal/coder/toolobserve.go b/internal/coder/toolobserve.go
+index 8dbffc3..fa8338a 100644
+--- a/internal/coder/toolobserve.go
++++ b/internal/coder/toolobserve.go
+@@ -7,7 +7,6 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"os/exec"
+-	"path/filepath"
+ 	"strconv"
+ 	"strings"
+ 
+@@ -85,10 +84,11 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
+ 		return "The required \"path\" argument was missing.", nil
+ 	}
+ 	if a.Outline && readOutlineParam() {
+-		if _, err := i.Files.Read(a.Path, 1, 1); err != nil {
++		ft, err := i.Files.Read(a.Path, 1, 1)
++		if err != nil {
+ 			return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
+ 		}
+-		return i.outlineResult(filepath.ToSlash(filepath.Clean(a.Path))), nil
++		return i.outlineResult(ft.Path), nil
+ 	}
+ 
+ 	// An image answers as an image, before the text path refuses it for not
