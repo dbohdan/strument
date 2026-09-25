@@ -348,6 +348,12 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 	i.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 
 	if len(paths) == 0 {
+		// A walk that stopped short has not shown the files are absent, and
+		// saying "No files match" there sent a model looking for a bug in its
+		// pattern.
+		if trunc.Entries {
+			return globStoppedNote(a.Pattern, i.Files.Limits.EntryLimit())
+		}
 		// The same rules that make a grep glob silently admit nothing apply
 		// here, so the same explanation does. It is cheaper to say it than to
 		// let a caller conclude the files do not exist.
@@ -357,10 +363,24 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 	fmt.Fprintf(&b, "%s matching %s:\n\n", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 	b.WriteString(strings.Join(paths, "\n"))
 	b.WriteString("\n")
-	if trunc.Any() {
-		b.WriteString("\n(Results were cut short by a limit; narrow the pattern to see the rest.)\n")
+	switch {
+	case trunc.Results:
+		fmt.Fprintf(&b, "\n(These are the first %d, the limit, in name order; narrow the pattern to see the rest.)\n",
+			i.Files.Limits.ResultLimit())
+	case trunc.Entries:
+		b.WriteString("\n" + globStoppedNote(a.Pattern, i.Files.Limits.EntryLimit()) + "\n")
 	}
 	return truncateResult(b.String())
+}
+
+// globStoppedNote says a glob's walk stopped at the entry limit before it had
+// looked everywhere, and how to aim it. A pattern that starts with a
+// directory is searched inside that directory only.
+func globStoppedNote(pattern string, limit int) string {
+	return fmt.Sprintf("(The search for %s stopped after looking at %d files and directories, before "+
+		"it had looked everywhere, so there may be matches it did not reach. Start the pattern "+
+		"with a directory, as in \"forum/**/*.jpg\", to search only inside it.)",
+		quoteToolArg(pattern), limit)
 }
 
 // runLS answers an ls call.

@@ -62,6 +62,13 @@ const (
 	defaultMaxFileBytes  = 5 << 20 // 5 MiB
 )
 
+// EntryLimit is how many files and directories one walk visits before it
+// stops, for messages that have to say so.
+func (l Limits) EntryLimit() int { return l.entries() }
+
+// ResultLimit is how many results a glob or listing keeps.
+func (l Limits) ResultLimit() int { return l.results() }
+
 func (l Limits) entries() int {
 	if l.MaxEntries > 0 {
 		return l.MaxEntries
@@ -197,6 +204,7 @@ func (t Truncated) Any() bool { return t.Entries || t.Results }
 type walker struct {
 	w       *Workspace
 	fn      func(rel string, d fs.DirEntry) bool
+	scope   string // root-relative; "" for the whole tree
 	visited int
 	stopped bool // the entry budget ran out
 	done    bool // fn asked to stop; unwinds the whole walk, not just one level
@@ -208,11 +216,26 @@ type walker struct {
 // pruned rather than descended — the same shortcut git takes, and the reason a
 // node_modules tree costs nothing here.
 func (w *Workspace) walk(fn func(rel string, d fs.DirEntry) bool) (Truncated, error) {
+	return w.walkScoped("", fn)
+}
+
+// walkScoped is walk confined to scope, a root-relative path: entries that are
+// neither inside it nor on the way to it are skipped without being counted
+// against the entry limit.
+//
+// A glob or a grep with a path used to walk the whole project and discard
+// what lay outside the pattern, so a search of one small directory in a
+// project of 200,000 entries ran into the entry limit before reaching it. A
+// session with a 146,658-file mirror beside other data had every
+// per-directory glob refused that way, and read the refusals as the tool
+// being unreliable. The walk still starts at the root, so ignore rules still
+// apply from the top down.
+func (w *Workspace) walkScoped(scope string, fn func(rel string, d fs.DirEntry) bool) (Truncated, error) {
 	root, err := gitignore.ReadRoot(w.Root)
 	if err != nil {
 		return Truncated{}, err
 	}
-	wk := &walker{w: w, fn: fn}
+	wk := &walker{w: w, fn: fn, scope: strings.Trim(scope, "/")}
 	if err := wk.dir(w.Root, nil, root); err != nil {
 		return Truncated{}, err
 	}
@@ -255,6 +278,9 @@ func (wk *walker) dir(dir string, domain []string, patterns []gitignore.Pattern)
 		if name == skipAlways {
 			continue
 		}
+		if wk.scope != "" && !inScope(strings.Join(append(slices.Clone(domain), name), "/"), wk.scope, e.IsDir()) {
+			continue
+		}
 
 		wk.visited++
 		if wk.visited > wk.w.Limits.entries() {
@@ -280,6 +306,29 @@ func (wk *walker) dir(dir string, domain []string, patterns []gitignore.Pattern)
 		}
 	}
 	return nil
+}
+
+// inScope reports whether rel is inside scope, or is a directory on the way
+// to it.
+func inScope(rel, scope string, isDir bool) bool {
+	if rel == scope || strings.HasPrefix(rel, scope+"/") {
+		return true
+	}
+	return isDir && strings.HasPrefix(scope, rel+"/")
+}
+
+// literalPrefix is the leading run of a glob's segments that contain no
+// pattern syntax: "click/src/**/*.py" gives "click/src", "**/*.go" gives "".
+// Everything the pattern can match lies under it.
+func literalPrefix(pattern string) string {
+	var keep []string
+	for seg := range strings.SplitSeq(pattern, "/") {
+		if strings.ContainsAny(seg, "*?[\\") {
+			break
+		}
+		keep = append(keep, seg)
+	}
+	return strings.Join(keep, "/")
 }
 
 // Files lists every non-ignored file in the tree, root-relative, sorted.
@@ -376,7 +425,7 @@ func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 func (w *Workspace) Glob(pattern string) ([]string, Truncated, error) {
 	pattern = path(pattern)
 	var out []string
-	trunc, err := w.walk(func(rel string, d fs.DirEntry) bool {
+	trunc, err := w.walkScoped(literalPrefix(pattern), func(rel string, d fs.DirEntry) bool {
 		if d.IsDir() {
 			return true
 		}

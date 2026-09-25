@@ -123,7 +123,13 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 	var res GrepResult
 	emitted := 0
 	capped := false
-	trunc, err := w.walk(func(rel string, d fs.DirEntry) bool {
+	// Walk only where a match can be: the path given, or else the glob's
+	// directory prefix. See walkScoped.
+	scope := dir
+	if scope == "" {
+		scope = literalPrefix(glob)
+	}
+	trunc, err := w.walkScoped(scope, func(rel string, d fs.DirEntry) bool {
 		if d.IsDir() {
 			return true
 		}

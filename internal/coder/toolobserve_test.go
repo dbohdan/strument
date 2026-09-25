@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -574,5 +575,24 @@ func TestLSSaysWhenItStopsShort(t *testing.T) {
 	c.Files.Limits.MaxResults = 10
 	if got := c.runObservation("ls", `{}`); strings.Contains(got, "first") {
 		t.Errorf("ls within the limit mentioned a cut:\n%s", got)
+	}
+}
+
+// A glob that stopped at the entry limit says so, rather than "No files
+// match", and a program's glob says which limit it hit. "matched at least 0
+// paths, past the limit" was the walk stopping, read by MiMo as a tool bug.
+func TestGlobSaysWhichLimitItHit(t *testing.T) {
+	files := map[string]string{}
+	for i := range 30 {
+		files[fmt.Sprintf("d%02d/f.txt", i)] = "x\n"
+	}
+	c, _ := observeEnv(t, files)
+	c.Files.Limits.MaxEntries = 10
+	if got := c.runObservation("glob", `{"pattern":"**/*.jpg"}`); !strings.Contains(got, "stopped after looking at 10") ||
+		strings.Contains(got, "No files match") {
+		t.Errorf("want the stopped note, got:\n%s", got)
+	}
+	if got := run(c, "glob({pattern: '**/*.jpg'})"); !strings.Contains(got, "stopped after looking at 10") {
+		t.Errorf("a program's glob should say the walk stopped, got:\n%s", got)
 	}
 }

@@ -298,10 +298,16 @@ func runGlobData(c *Coder, call *bridgedCall) (any, error) {
 		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not match %s: %w", quoteToolArg(pattern), err)
 	}
-	if trunc.Any() {
-		return nil, fmt.Errorf("glob matched at least %d paths, past the limit; narrow the pattern "+
-			"— with a directory path in grep, or a **/sub/ pattern — and work on a subtree",
-			len(paths))
+	// Two different limits, which the message used to run together: "matched
+	// at least 0 paths, past the limit" was the walk stopping before any match,
+	// read by the model as a bug in the tool.
+	switch {
+	case trunc.Results:
+		return nil, fmt.Errorf("glob matched more than %d paths, its limit; narrow the pattern "+
+			"to a directory, as in \"forum/**/*.jpg\", and work on a part at a time",
+			c.Files.Limits.ResultLimit())
+	case trunc.Entries:
+		return nil, errors.New(strings.Trim(globStoppedNote(pattern, c.Files.Limits.EntryLimit()), "()"))
 	}
 	// A nil slice becomes null in the program —
 	// and a no-match result then looks exactly like the discarded-results
