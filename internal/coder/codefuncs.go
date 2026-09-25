@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // codeFuncDef is one run_code-only function.
@@ -83,6 +85,16 @@ var codeDataFuncs = []codeFuncDef{
 		fn:     runGlobData,
 	},
 	{
+		name: "grep",
+		summary: "grep({pattern, path, glob, mode, ignore_case, context_lines}) returns, by mode: " +
+			"\"files\" (the default) an array of paths; \"count\" an array of {path, count}; " +
+			"\"content\" an array of {path, line, text, match} for the matching lines, with " +
+			"context_lines adding the lines around them as match: false. A line's text is clipped " +
+			"at 200 bytes, ending in \" …\"; read_text has the whole file.",
+		params: codeToolParams[toolGrep],
+		fn:     runGrepData,
+	},
+	{
 		name: "ls",
 		summary: "ls({path: \"\"}) returns one directory's entries as an array of objects {path, is_dir, link} " +
 			"sorted by path. Empty path is the " +
@@ -138,8 +150,8 @@ func codeFuncDoc() string {
 // codeFuncDoc, for the same reason.
 func codeDataFuncDoc() string {
 	var b strings.Builder
-	b.WriteString("\n\nInside a program, the other tools return the same text they return to " +
-		"you, but glob and ls return data rather than the tools' prose:\n")
+	b.WriteString("\n\nInside a program, glob, grep and ls return data rather than the tools' " +
+		"prose, and the other tools return the same text they return to you:\n")
 	for _, d := range codeDataFuncs {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}
@@ -299,6 +311,78 @@ func runGlobData(c *Coder, call *bridgedCall) (any, error) {
 		paths = []string{}
 	}
 	return paths, nil
+}
+
+// runGrepData answers a grep call from a program with the matches as data.
+//
+// grep's prose was the last one a program had to parse, and parsing it is
+// where programs went wrong: MiMo, splitting count-mode output on ":", took
+// the header line "485 matches in 53 files:" for a file and spent a second
+// program repairing its parser. glob and ls became data for the same reason.
+//
+// Content mode defaults to no context here, where the tool defaults to two
+// lines: a program wants the matches, and context rows it did not ask for are
+// rows it must remember to filter out. Asked for, they come as match: false.
+//
+// Two results raise instead of returning, each naming the repair. A cut
+// result, for glob's reason: a program computing over it would take a wrong
+// answer for a right one. And a scope that admitted no files at all, which
+// the tool explains in prose: an empty array there would read as "not
+// found" when the pattern was never tested.
+func runGrepData(c *Coder, call *bridgedCall) (any, error) {
+	str := func(k string) string { s, _ := call.Args[k].(string); return s }
+	pattern := str("pattern")
+	if strings.TrimSpace(pattern) == "" {
+		return nil, errors.New("grep requires a \"pattern\" argument")
+	}
+	mode := workspace.GrepFiles
+	switch str("mode") {
+	case "", "files":
+	case "content":
+		mode = workspace.GrepContent
+	case "count":
+		mode = workspace.GrepCount
+	default:
+		return nil, fmt.Errorf("unknown grep mode %q; use \"files\", \"content\", or \"count\"", str("mode"))
+	}
+	context := int(codeArgInt(call.Args["context_lines"]))
+	if context < 0 || context > maxGrepContext {
+		return nil, fmt.Errorf("context_lines must be between 0 and %d", maxGrepContext)
+	}
+	if context > 0 {
+		mode = workspace.GrepContent
+	}
+	ignoreCase, _ := call.Args["ignore_case"].(bool)
+	res, err := c.Files.Grep(workspace.GrepQuery{
+		Pattern: pattern, Glob: str("glob"), Dir: str("path"), Mode: mode,
+		IgnoreCase: ignoreCase, ContextLines: context,
+	})
+	if err != nil {
+		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
+		return nil, fmt.Errorf("The search pattern was not valid: %w", err)
+	}
+	if res.InScope == 0 {
+		return nil, fmt.Errorf("grep searched no files: nothing is in that scope, so the pattern was "+
+			"never tested. %s", globSyntaxNote)
+	}
+	if res.Truncated.Any() {
+		return nil, fmt.Errorf("grep matched past its limit (%d lines in %d files so far); narrow it "+
+			"with glob or path and work on a part at a time", res.Total, len(res.Files))
+	}
+	out := make([]any, 0, len(res.Files))
+	for _, f := range res.Files {
+		switch mode {
+		case workspace.GrepFiles:
+			out = append(out, f.Path)
+		case workspace.GrepCount:
+			out = append(out, map[string]any{"path": f.Path, "count": f.Count})
+		case workspace.GrepContent:
+			for _, l := range f.Lines {
+				out = append(out, map[string]any{"path": f.Path, "line": l.Number, "text": l.Text, "match": l.Match})
+			}
+		}
+	}
+	return out, nil
 }
 
 // runLSData answers an ls call from a program with the entries as data. Same

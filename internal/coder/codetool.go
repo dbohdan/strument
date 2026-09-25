@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -661,15 +662,21 @@ func codeLostCallsNote(result any, printed string, log *bridgeLog) string {
 }
 
 // sameBridgedValue reports whether a program's value is one bridged call's
-// return, unchanged. Strings only: the observation tools answer with text, and
-// a code function's object is not a shape a program returns by accident.
+// return, unchanged. Compared as JSON, because a call now answers with data as
+// often as with text — glob, grep and ls return arrays in a program — and the
+// program's value has crossed goja on its way here, which changes Go types
+// (an int comes back an int64) without changing what the model sees.
 func sameBridgedValue(result, last any) bool {
-	rs, ok := result.(string)
-	if !ok {
+	if result == nil || last == nil {
 		return false
 	}
-	ls, ok := last.(string)
-	return ok && rs == ls
+	if rs, ok := result.(string); ok {
+		ls, ok := last.(string)
+		return ok && rs == ls
+	}
+	rj, err1 := json.Marshal(result)
+	lj, err2 := json.Marshal(last)
+	return err1 == nil && err2 == nil && bytes.Equal(rj, lj)
 }
 
 // jsNativeFrame is the stack frame goja appends for a Go function, which

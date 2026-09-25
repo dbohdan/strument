@@ -1807,16 +1807,21 @@ action the model had initiated, when it was downstream of the program already
 on screen, and the turn's `Ran N lines of code calling …` summary already
 attributes the run. A program may issue at most 50 bridged calls.
 
-Two of the five exist in a **data shape** inside a program, which overrides
+Three of the five exist in a **data shape** inside a program, which overrides
 the tool's prose: `glob(pattern)` returns the matching paths as a list of
-strings, and `ls(path)` returns entries as `{path, is_dir, link}` objects. The
-prose shape is for the model; a program computes over a result, and glob's
-prose (pattern echo, glob-syntax notes) was being iterated as a string — one
-live session turned a single call into 49 junk tool calls under the bridge
-cap. An empty match is `[]`, a value to filter on. A match past the 1,000-path
-results limit throws rather than truncating, for the same reason `read_text`
-does. `grep` and `read` still cross as prose, which a program parses with
-`.split("\n")`.
+strings, `ls(path)` returns entries as `{path, is_dir, link}` objects, and
+`grep` returns paths in files mode, `{path, count}` in count mode, and
+`{path, line, text, match}` rows in content mode. The prose shape is for the
+model; a program computes over a result. glob's prose (pattern echo,
+glob-syntax notes) was being iterated as a string — one live session turned a
+single call into 49 junk tool calls under the bridge cap — and a program
+splitting grep's count output took its header line, "485 matches in 53
+files:", for a file. An empty match is `[]`, a value to filter on. A result
+past its limit throws rather than truncating, for the same reason `read_text`
+does, and so does a grep whose `glob` or `path` admitted no files, since `[]`
+there would read as "not found" when the pattern was never tested. Content
+mode has no context lines in a program unless `context_lines` asks for them.
+`read` and `symbol` still cross as prose.
 
 Only the five read-only observation tools are callable from a `run_code`
 program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a

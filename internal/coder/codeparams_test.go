@@ -101,7 +101,11 @@ func TestCodeDataFuncsMatchTheirSchemas(t *testing.T) {
 			t.Errorf("no tool schema found for the data function %q", d.name)
 			continue
 		}
-		if !slices.Equal(d.params, want) {
+		// As sets: the schema's properties are a map, so they have no order;
+		// the positional order is codeToolParams' to state.
+		got := slices.Sorted(slices.Values(d.params))
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
 			t.Errorf("codeDataFuncs[%q].params = %v, but the tool schema declares %v; "+
 				"a program passing a documented argument must not lose it to the override",
 				d.name, d.params, want)

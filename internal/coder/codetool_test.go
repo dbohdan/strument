@@ -246,9 +246,8 @@ func TestCodeBridgeReadReturnsFileContents(t *testing.T) {
 
 // TestCodeBridgeGrepFilterEndToEnd is the phenomenon the bridge exists for:
 // search inside the program, filter the results, return the computed answer —
-// one round trip instead of two. A tool result crosses the boundary as the
-// same text the model would see, so the program parses it; that coarseness is
-// the design (a bridged call is a tool call, not a per-element helper).
+// one round trip instead of two. grep answers a program with data, so the
+// filter works on paths rather than on the tool's prose.
 func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{
 		"a.go":  "package a\n\nfunc Target() {}\n",
@@ -257,7 +256,7 @@ func TestCodeBridgeGrepFilterEndToEnd(t *testing.T) {
 	})
 
 	got := run(c, `const out = grep({pattern: "Target", mode: "files"});
-const lines = out.split("\n").filter(l => l.endsWith(".go"));
+const lines = out.filter(l => l.endsWith(".go"));
 [lines, lines.includes("c.txt")]`)
 	if !strings.Contains(got, `"a.go"`) || !strings.Contains(got, `"b.go"`) {
 		t.Errorf("expected both .go files in the filtered result, got:\n%s", got)
@@ -343,13 +342,41 @@ func TestCodeGlobLSOverrideTheToolNames(t *testing.T) {
 	}
 }
 
-// TestCodeBridgeGrepStaysProse pins the boundary of the shape change: only
-// glob and ls return data; grep and read still cross as the same text a
-// direct call would produce.
-func TestCodeBridgeGrepStaysProse(t *testing.T) {
-	c, _ := observeEnv(t, map[string]string{"a.go": "// Target\n"})
-	if got := run(c, `grep({pattern: "Target", glob: "a.go"})`); !strings.Contains(got, "1 match in 1 file for Target") {
-		t.Errorf("grep must still return the tool's prose shape, got:\n%s", got)
+// TestCodeBridgeGrepReturnsData pins grep's data shape in each mode, and the
+// two results that raise rather than return: a scope that admitted nothing,
+// and a cut result. It replaced a test pinning grep's prose, after a live
+// program took count mode's header line for a file. read still crosses as the
+// text a direct call produces.
+func TestCodeBridgeGrepReturnsData(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{
+		"a.go": "// Target one\nx\n// Target two\n",
+		"b.go": "// Target\n",
+	})
+	for _, tc := range []struct{ code, want string }{
+		{`grep({pattern: "Target"})`, `["a.go","b.go"]`},
+		// Fields read out explicitly: the objects' key order is Go's map order.
+		{`grep({pattern: "Target", mode: "count"}).map(r => r.path + "=" + r.count)`, `["a.go=2","b.go=1"]`},
+		{`grep({pattern: "Target", glob: "b.go", mode: "content"}).map(r => [r.path, r.line, r.text, r.match].join("|"))`,
+			`["b.go|1|// Target|true"]`},
+		{`grep({pattern: "one", glob: "a.go", context_lines: 1}).map(r => r.line + ":" + r.match)`, `["1:true","2:false"]`},
+		{`grep("Target", "", "b.go")`, `["b.go"]`}, // positional, in the tool's order
+	} {
+		got := strings.ReplaceAll(run(c, "JSON.stringify("+tc.code+")"), `\"`, `"`)
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("%s\n got %s\nwant %s", tc.code, got, tc.want)
+		}
+	}
+
+	if got := run(c, `grep({pattern: "Target", glob: "*.rs"})`); !strings.Contains(got, "never tested") {
+		t.Errorf("a scope that admits no files must raise, not return an empty array:\n%s", got)
+	}
+	c.Files.Limits.MaxMatches = 1
+	if got := run(c, `grep({pattern: "Target", mode: "content"})`); !strings.Contains(got, "past its limit") {
+		t.Errorf("a cut result must raise:\n%s", got)
+	}
+
+	if got := run(c, `read({path: "b.go"})`); !strings.Contains(got, "1\t// Target") {
+		t.Errorf("read must still return the tool's text, got:\n%s", got)
 	}
 }
 
