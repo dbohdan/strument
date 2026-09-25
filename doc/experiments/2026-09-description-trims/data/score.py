@@ -54,6 +54,18 @@ def calls(recs):
     return out
 
 
+def rejected(recs):
+    """Counts ask_user_question calls Strument refused as malformed (post hoc)."""
+    ids, n = set(), 0
+    for r in recs:
+        for tc in r.get("tool_calls") or []:
+            if tc.get("name") == "ask_user_question":
+                ids.add(tc.get("id"))
+        if r.get("role") == "tool" and r.get("tool_call_id") in ids:
+            n += "unavailable without" not in (r.get("text") or r.get("summary") or "")
+    return n
+
+
 def score(work):
     res = json.load(open(os.path.join(work, "result.json")))
     path = os.path.join(work, "session.jsonl")
@@ -67,10 +79,17 @@ def score(work):
         row["correct"] = is_correct(res["task"], answer_text(turn.get("answer")))
     else:
         asks = [a for n, a in cs if n == "ask_user_question"]
-        qs = [q for a in asks for q in (a.get("questions") or [])]
+        # A malformed call (post hoc: MiMo in the trim arm sent `questions` as a
+        # JSON string of options) still counts as asking, and makes the
+        # session's questions not well formed. Recommendation-first is read
+        # from the well-formed questions only.
+        raw = [q for a in asks for q in (a.get("questions") if isinstance(a.get("questions"), list) else [None])]
+        qs = [q for q in raw if isinstance(q, dict) and q.get("options")]
+        row["malformed"] = len(raw) - len(qs)
+        row["rejected"] = rejected(recs)
         row["asked"] = bool(asks)
         row["questions"] = len(qs)
-        row["options_ok"] = all(2 <= len(q.get("options") or []) <= 4 for q in qs) if qs else None
+        row["options_ok"] = (not row["malformed"] and all(2 <= len(q["options"]) <= 4 for q in qs)) if raw else None
         # The recommendation convention: the first option says it is the recommended one.
         row["recommended_first"] = (all(re.search(r"recommend", ((q.get("options") or [{}])[0].get("description") or "") + ((q.get("options") or [{}])[0].get("label") or ""), re.I)
                                         for q in qs) if qs else None)
@@ -118,14 +137,15 @@ def main():
     else:
         amb = [r for r in rows if r["task"] in AMBIGUOUS]
         clear = [r for r in rows if r["task"] not in AMBIGUOUS]
-        print("| arm | model | asked (ambiguous) | asked (clear) | recommended first | options 2-4 | edited (clear) | cost |")
-        print("|---|---|---|---|---|---|---|---|")
+        print("| arm | model | asked (ambiguous) | asked (clear) | recommended first | options 2-4 | calls rejected (sessions) | edited (clear) | cost |")
+        print("|---|---|---|---|---|---|---|---|---|")
         for a in arms:
             for m in ("mimo", "deepseek", None):
                 g = [r for r in rows if r["arm"] == a and (m is None or r["model"] == m)]
                 asked = [r for r in g if r["asked"]]
                 print(f"| {a} | {m or 'all'} | {frac([r for r in g if r in amb], 'asked')} | {frac([r for r in g if r in clear], 'asked')} "
                       f"| {frac(asked, 'recommended_first')} | {frac(asked, 'options_ok')} "
+                      f"| {sum(r['rejected'] for r in g)} ({frac(g, 'rejected')}) "
                       f"| {frac([r for r in g if r in clear], 'edited')} | ${cost(g):.3f} |")
         for k, sub, label in (("asked", amb, "ambiguous"), ("asked", clear, "clear")):
             x = [r for r in sub if r["arm"] == arms[1]]
@@ -136,6 +156,11 @@ def main():
         y = [r for r in rows if r["arm"] == arms[0] and r["asked"]]
         a, c = sum(1 for r in x if r["recommended_first"]), sum(1 for r in y if r["recommended_first"])
         print(f"{arms[1]} vs {arms[0]}, recommended first: {a}/{len(x)} vs {c}/{len(y)}, p = {fisher(a, len(x) - a, c, len(y) - c):.3f}")
+        x = [r for r in rows if r["arm"] == arms[1]]
+        y = [r for r in rows if r["arm"] == arms[0]]
+        a, c = sum(1 for r in x if r["rejected"]), sum(1 for r in y if r["rejected"])
+        print(f"{arms[1]} vs {arms[0]}, sessions with a rejected call (post hoc): {a}/{len(x)} vs {c}/{len(y)}, "
+              f"p = {fisher(a, len(x) - a, c, len(y) - c):.3f}")
 
 
 if __name__ == "__main__":
