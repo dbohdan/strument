@@ -78,7 +78,7 @@ type Session struct {
 	// Current marks the session a bare `strument` would pick up.
 	Current bool
 	// Turns counts the turn rows across the session's segments, and Runs the
-	// segments themselves — one per time Strument was started in it.
+	// runs that recorded anything — see history.Runs.
 	Turns int
 	Runs  int
 	// LastUsed is the newest modification time anywhere in the session, and
@@ -153,11 +153,19 @@ func countTurns(projectRoot, session string) (runs, turns int) {
 		if err != nil {
 			continue
 		}
-		runs++
+		// A run counts if it recorded anything past the header, the rule
+		// Runs uses, so this count and the range of --back agree.
+		ran := false
 		for line := range strings.SplitSeq(string(data), "\n") {
 			if strings.Contains(line, `"type":"turn"`) {
 				turns++
 			}
+			if line != "" && !strings.Contains(line, `"type":"session"`) {
+				ran = true
+			}
+		}
+		if ran {
+			runs++
 		}
 	}
 	return runs, turns

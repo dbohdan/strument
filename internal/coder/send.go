@@ -1286,6 +1286,10 @@ func formatTokens(n int) string {
 	return fmt.Sprintf("%.1fk", float64(n)/1000.0)
 }
 
+// FormatCost renders a dollar amount the way the usage line does, with enough
+// digits that a fraction of a cent is not shown as 0.00.
+func FormatCost(v float64) string { return formatCost(v) }
+
 func formatCost(v float64) string {
 	if v == 0 {
 		return "0.00"

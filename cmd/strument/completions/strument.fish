@@ -71,18 +71,20 @@ complete -c strument -n "__fish_seen_subcommand_from trust" -a "(__fish_complete
 complete -c strument -n "__fish_seen_subcommand_from trust" -s y -l yes -d "Do not ask; for scripts"
 
 # history.
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+    -a list -d "List this session's runs, numbered as --back counts them"
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
     -a path -d "Print the path to this session's record"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
     -a edit -d "Open it in \$VISUAL, \$EDITOR, or your platform's default editor"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
     -a markdown -d "Print this session's history as markdown"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
     -a strip -d "Remove stored tool payloads that nothing recent points at"
 complete -c strument -n "__fish_seen_subcommand_from history" \
     -s s -l session -d "The conversation to act on" -x
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from strip" \
-    -s b -l back -d "An earlier run: 0 is the latest, 1 (or -1) the one before" -x
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list strip" \
+    -s b -l back -d "An earlier run: 0 is the latest, 1 the one before" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from strip" \
@@ -110,9 +112,9 @@ complete -c strument -n "__fish_seen_subcommand_from config; and not __fish_seen
     -a path -d "Print the path to a config file, whether or not it exists"
 complete -c strument -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from models default path edit" \
     -a edit -d "Open a config file in \$VISUAL, \$EDITOR, or your platform's default editor"
-complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from list path edit markdown strip" \
     -l user -d "Act on the user config (the default)"
-complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from list path edit markdown strip" \
     -l project -d "Act on this project's config"
 
 # model-config. Its positional is a provider's model slug, which nothing here

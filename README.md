@@ -280,6 +280,7 @@ Deleting a session keeps the stored tool output, which is shared between session
 
 Strument records each session as a [JSON Lines](https://jsonlines.org/) log under its project's state directory, one file per run.
 `strument history path` prints the newest one, and `strument history markdown` renders the whole session as a Markdown transcript (`-t <n>` limits it to the last *n* turns).
+`strument history list` shows the session's runs, newest first, with the number `-b` takes for each, when it started, its turns, cost and model, and what it was asked.
 `-b <n>` (`--back`) picks an earlier run for `path`, `edit` and `markdown`: `0` is the latest, `1` the one before, and so on; `-1` means the same as `1`, written `-b-1` or `--back=-1`.
 Runs that recorded nothing, such as starting Strument and quitting, are not counted, and with `-b` `markdown` renders that one run.
 Each record has a `type` field: a `session` header at the start, then `message` and `reasoning` records for every message the model sent or received (including tool calls), and a `turn` record at the end of each turn.

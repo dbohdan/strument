@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/llm"
 )
 
 // This file reads the session record back. The record is written by
@@ -247,6 +249,59 @@ func Runs(projectRoot, session string) ([]string, error) {
 				break
 			}
 		}
+	}
+	return out, nil
+}
+
+// RunSummary is one run of a session, as `strument history list` shows it.
+type RunSummary struct {
+	Path string
+	// Started is when the run opened its segment, read from the file name.
+	Started time.Time
+	Turns   int
+	// Prompt is the first thing typed in the run, and Model the model of its
+	// last turn — the session header's when the run finished no turn.
+	Prompt    string
+	Model     string
+	Cost      float64
+	CostKnown bool
+}
+
+// RunSummaries describes the session's runs, oldest first, counting only the
+// runs Runs counts, so an index into it is an index `--back` accepts.
+func RunSummaries(projectRoot, session string) ([]RunSummary, error) {
+	runs, err := Runs(projectRoot, session)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RunSummary, 0, len(runs))
+	for _, seg := range runs {
+		records, err := ReadRecords(seg)
+		if err != nil {
+			continue
+		}
+		s := RunSummary{Path: seg}
+		s.Started, _ = time.Parse(logSegmentStamp, strings.TrimSuffix(filepath.Base(seg), ".jsonl"))
+		for _, r := range records {
+			switch {
+			case r.Type == "session" && s.Model == "":
+				s.Model = r.Model
+			case r.Type == "turn":
+				s.Turns++
+				s.Model = r.Model
+				s.Cost += r.Cost
+				s.CostKnown = s.CostKnown || r.CostKnown
+				if s.Prompt == "" {
+					s.Prompt = r.Prompt
+				}
+			case r.Type == "message" && r.Role == "user" && s.Prompt == "" && s.Turns == 0 &&
+				!strings.HasPrefix(r.Text, llm.HarnessMarker) && r.ToolCallID == "":
+				// A run killed mid-turn has no turn row, but its prompt is
+				// still the first message.
+				s.Prompt = r.Text
+			}
+		}
+		out = append(out, s)
 	}
 	return out, nil
 }

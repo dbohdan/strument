@@ -104,6 +104,15 @@ func TestListSessionsCountsRunsAndTurns(t *testing.T) {
 	}
 	seedSession(t, project, "review", 2, 3)
 	seedSession(t, project, "spike", 1, 1)
+	// A run started and quit: the header and nothing else. Not a run, so the
+	// count agrees with the range `history --back` accepts.
+	empty, err := NewLogSegment(project, "review", time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(empty, []byte(`{"type":"session","version":1}`+"\n"), fileMode); err != nil {
+		t.Fatal(err)
+	}
 	if err := SetCurrentSession(project, "spike"); err != nil {
 		t.Fatal(err)
 	}

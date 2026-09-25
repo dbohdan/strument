@@ -561,3 +561,56 @@ func TestHistoryBackCountsRuns(t *testing.T) {
 		}
 	}
 }
+
+// history list numbers runs the way --back counts them: newest first, from
+// 0, with the empty run skipped, and each row carrying the run's prompt.
+func TestHistoryListNumbersRunsAsBackCounts(t *testing.T) {
+	writeTempUserConfig(t, "# empty\n")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := history.CurrentSession(root)
+	if _, err := history.EnsureSessionDir(root, session); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
+	for i, prompt := range []string{"first", "", "second"} {
+		seg, err := history.NewLogSegment(root, session, start.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := `{"type":"session","version":1,"model":"flash"}` + "\n"
+		if prompt != "" {
+			body += `{"type":"turn","time":"2026-09-25T09:00:00Z","model":"openrouter/x/flash",` +
+				`"outcome":"Success","cost":0.5,"cost_known":true,"prompt":"` + prompt + `","answer":"ok"}` + "\n"
+		}
+		if err := os.WriteFile(seg, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out, err := captureStdout(t, func() error { return (&historyListCmd{}).Run(&historyCmd{}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("%d rows, want 2 (the empty run is not one):\n%s", len(lines), out)
+	}
+	for i, want := range []string{"second", "first"} {
+		f := strings.Fields(lines[i])
+		if f[0] != strconv.Itoa(i) || !strings.HasSuffix(lines[i], want) {
+			t.Errorf("row %d = %q, want index %d and prompt %q", i, lines[i], i, want)
+		}
+		if !strings.Contains(lines[i], "$0.50") || !strings.Contains(lines[i], " flash ") {
+			t.Errorf("row %d = %q, want the cost and the model without its provider", i, lines[i])
+		}
+	}
+
+	back := 1
+	if err := (&historyListCmd{}).Run(&historyCmd{Back: &back}); err == nil {
+		t.Error("history list accepted --back, which picks one run of the list it shows")
+	}
+}

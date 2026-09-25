@@ -1730,6 +1730,7 @@ type historyCmd struct {
 	// session name.
 	Back *int `help:"Act on an earlier run: 0 is the latest, 1 the one before, and so on (-1 works too, written -b-1 or --back=-1). Runs that recorded nothing are skipped." placeholder:"<n>" short:"b"`
 
+	List     historyListCmd     `cmd:"" help:"List a session's runs, newest first, numbered as --back counts them."`
 	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
 	Markdown historyMarkdownCmd `cmd:"" help:"Print a session's history as markdown."`
@@ -1809,6 +1810,58 @@ func (*historyPathCmd) Run(parent *historyCmd) error {
 	}
 	fmt.Println(p)
 	return nil
+}
+
+// historyListCmd lists the runs --back chooses between. An index nobody can see
+// is guesswork, so the numbers --back takes are printed beside what each run
+// was: when it started, how much it did, and what it was asked.
+type historyListCmd struct{}
+
+// promptWidth caps the prompt column, so a row fits a terminal with the
+// columns before it.
+const promptWidth = 60
+
+func (*historyListCmd) Run(parent *historyCmd) error {
+	if parent.Back != nil {
+		return errors.New("--back picks one run; history list shows them all")
+	}
+	root, session, err := historySession(parent.Session)
+	if err != nil {
+		return err
+	}
+	runs, err := history.RunSummaries(root, session)
+	if err != nil {
+		return err
+	}
+	if len(runs) == 0 {
+		fmt.Printf("No runs in session %q yet.\n", session)
+		return nil
+	}
+	for i, r := range slices.Backward(runs) {
+		fmt.Println(runLine(len(runs)-1-i, r))
+	}
+	return nil
+}
+
+// runLine is one row: the --back index, the start in local time, turns, cost,
+// the model without its provider, and the first line of the prompt.
+func runLine(back int, r history.RunSummary) string {
+	started := "unknown time    "
+	if !r.Started.IsZero() {
+		// The zone of the person reading, as the markdown headers show turns.
+		started = r.Started.Local().Format("2006-01-02 15:04") //nolint:gosmopolitan // A listing for the terminal's user, in their zone.
+	}
+	cost := ""
+	if r.CostKnown {
+		cost = "$" + coder.FormatCost(r.Cost)
+	}
+	model := r.Model[strings.LastIndex(r.Model, "/")+1:]
+	prompt, _, _ := strings.Cut(strings.TrimSpace(r.Prompt), "\n")
+	if runes := []rune(prompt); len(runes) > promptWidth {
+		prompt = string(runes[:promptWidth-1]) + "…"
+	}
+	return fmt.Sprintf("%3d  %s  %-9s %-9s %-18s %s", back, started,
+		render.Plural(r.Turns, "turn", "turns"), cost, model, prompt)
 }
 
 // historyMarkdownCmd renders the record as the transcript used to look.
