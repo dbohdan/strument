@@ -21,6 +21,13 @@ type DefOutline struct {
 	Kind  string // "function", "method", "class", "constant", ... — the query's node kind
 	Start int    // first line, 1-based
 	End   int    // last line, 1-based, inclusive
+	// Depth is how many definitions enclose this one: 0 at file scope, 1 for
+	// a method of a top-level class. Only types enclose anything listed; a
+	// function's own definitions are not listed.
+	Depth int
+	// Signature is the definition's source up to its body, whitespace
+	// collapsed: what to recognize it by without reading it.
+	Signature string
 }
 
 // DefOutlines extracts a fetched file's top-level definitions with the same
@@ -59,18 +66,13 @@ func DefOutlines(fname string, src []byte) (defs []DefOutline, known bool) {
 	}
 
 	type rawDef struct {
-		name, kind string
-		start, end int
-		depth      int // tree depth of the definition node
+		name, kind   string
+		start, end   int // rows
+		sb, eb       uint32
+		signature    string
+		functionLike bool
 	}
 	var raws []rawDef
-	// Root depth, so "top-level" can be measured rather than assumed: the
-	// program node is the root, but grammars disagree on whether definitions
-	// are its direct children or sit one wrapper down (Go's source_file, C#'s
-	// namespace). Definitions are kept when their node is within two levels
-	// of the root — file scope, or a member of one top-level type/namespace —
-	// which is what an outline of a single file is for. Deeper matches are
-	// the local variables and parameters the tags queries also name.
 	cursor := entry.query.Exec(tree.RootNode(), entry.language, src)
 	for {
 		m, ok := cursor.NextMatch()
@@ -84,69 +86,118 @@ func DefOutlines(fname string, src []byte) (defs []DefOutline, known bool) {
 			kind := strings.TrimPrefix(c.Name, "name.definition.")
 			// The capture names the identifier; the definition node around it
 			// carries the span. Some queries capture the definition node
-			// itself, in which case the identifier *is* the span and the
-			// parent adds nothing.
+			// itself, which has children where an identifier has none. This
+			// was a rows test (does the parent reach further down?), which
+			// took a one-line definition for a bare name.
 			node := c.Node
-			start := int(node.StartPoint().Row)
-			end := int(node.EndPoint().Row)
-			if p := node.Parent(); p != nil && p != node {
-				if e := int(p.EndPoint().Row); e > start {
-					start, end = int(p.StartPoint().Row), e
-				}
-			}
-			depth := 0
-			for n := node; n != nil; n = n.Parent() {
-				depth++
+			def := node
+			if p := node.Parent(); p != nil && p != node && node.NamedChildCount() == 0 {
+				def = p
 			}
 			raws = append(raws, rawDef{
-				name:  node.Text(src),
-				kind:  kind,
-				start: start,
-				end:   end,
-				depth: depth,
+				name:         node.Text(src),
+				kind:         kind,
+				start:        int(def.StartPoint().Row),
+				end:          int(def.EndPoint().Row),
+				sb:           def.StartByte(),
+				eb:           def.EndByte(),
+				signature:    signatureOf(def, entry.language, src),
+				functionLike: kind == "function" || kind == "method",
 			})
 		}
 	}
-	// Measure rather than assume where file scope sits: the shallowest
-	// definition found sets the bar, and everything more than a level or two
-	// beneath it is a nested or local definition the outline does not list.
-	minDepth := 0
-	for _, r := range raws {
-		if minDepth == 0 || r.depth < minDepth {
-			minDepth = r.depth
-		}
-	}
-	kept := raws[:0]
-	for _, r := range raws {
-		if r.depth <= minDepth+1 {
-			kept = append(kept, r)
-		}
-	}
-	raws = kept
-	if len(raws) == 0 {
-		return nil, true // parses, has a grammar, just nothing at top level
-	}
 
-	// One definition per line, ordered as the file presents them. The queries
-	// can capture a name twice (a method matched by two patterns); the second
-	// copy carries the same span, so it is dropped rather than shown twice.
+	// What an outline lists is everything not inside a function: file-scope
+	// definitions and the members of types, at any depth of type nesting, but
+	// not a function's local helpers. This used to be a depth rule (within one
+	// level of the shallowest definition), which grammars disagree about: it
+	// kept Go's methods, which sit at file scope, and dropped every Python,
+	// TypeScript and Rust method, which sit two or three nodes further down.
+	// An outline of a class that names the class and none of its methods is
+	// the one a model most needs and least got.
 	sort.SliceStable(raws, func(i, j int) bool {
-		if raws[i].start != raws[j].start {
-			return raws[i].start < raws[j].start
+		if raws[i].sb != raws[j].sb {
+			return raws[i].sb < raws[j].sb
 		}
-		return raws[i].name < raws[j].name
+		return raws[i].eb > raws[j].eb
 	})
 	defs = make([]DefOutline, 0, len(raws))
+	var open []rawDef // enclosing definitions of the current one, outermost first
 	for i, r := range raws {
 		if i > 0 && raws[i-1].name == r.name && raws[i-1].start == r.start {
+			continue // captured twice by two patterns, with the same span
+		}
+		for len(open) > 0 && open[len(open)-1].eb <= r.sb {
+			open = open[:len(open)-1]
+		}
+		inFunction := false
+		for _, o := range open {
+			if o.functionLike {
+				inFunction = true
+			}
+		}
+		open = append(open, r)
+		if inFunction {
 			continue
 		}
 		defs = append(defs, DefOutline{
-			Name:  r.name,
-			Kind:  r.kind,
-			Start: r.start + 1,
-			End:   r.end + 1,
+			Name:      r.name,
+			Kind:      r.kind,
+			Start:     r.start + 1,
+			End:       r.end + 1,
+			Depth:     len(open) - 1,
+			Signature: r.signature,
 		})
 	}
+	if len(defs) == 0 {
+		return nil, true // parses, has a grammar, just nothing at top level
+	}
 	return defs, true
+}
+
+// maxSignature caps one signature in the outline. A signature is for
+// recognizing the definition, and a parameter list long enough to hit this
+// is still recognizable from its start.
+const maxSignature = 120
+
+// signatureOf is a definition's text up to its body — "def fetch(self, url,
+// *, timeout=30) -> bytes", "func (c *Coder) runOne(ctx context.Context,
+// msg string)" — with whitespace collapsed. A definition without a body
+// field (a constant, a type alias, a Go type spec) gives its first line.
+// The trailing ":" or "{" that opened the body is dropped.
+//
+// Generic on purpose: every grammar here names a function's or class's body
+// field "body", so one rule covers them without an extractor per language,
+// which is what maki keeps 34 of.
+func signatureOf(def *ts.Node, lang *ts.Language, src []byte) string {
+	start, end := def.StartByte(), def.EndByte()
+	if body := def.ChildByFieldName("body", lang); body != nil && body.StartByte() > start {
+		// Up to the last child before the body that is not a comment: a
+		// comment between a Python def's colon and its block belongs to
+		// neither, and read as part of the signature.
+		end = start
+		for _, ch := range def.Children() {
+			if ch.StartByte() >= body.StartByte() {
+				break
+			}
+			if !strings.Contains(ch.Type(lang), "comment") {
+				end = ch.EndByte()
+			}
+		}
+	}
+	text := string(src[start:end])
+	if i := strings.IndexByte(text, '\n'); i >= 0 && end == def.EndByte() {
+		text = text[:i]
+	}
+	// A parameter list laid out one per line collapses to "( self, a, )";
+	// the brackets close up the way the one-line form writes them.
+	text = strings.Join(strings.Fields(text), " ")
+	text = strings.NewReplacer("( ", "(", " )", ")", "[ ", "[", " ]", "]").Replace(text)
+	text = strings.NewReplacer(",)", ")", ",]", "]").Replace(text) // a second pass: the first makes these
+	text = strings.TrimRight(text, " {:=")
+	if utf8.RuneCountInString(text) > maxSignature {
+		r := []rune(text)
+		text = string(r[:maxSignature-1]) + "…"
+	}
+	return text
 }
