@@ -154,6 +154,13 @@ any price answers nothing. Reach past the default deliberately: to check
 something specific to a vendor, or when a result hinges on capability and you
 want a frontier model to confirm it.
 
+Whichever models you pick, **pin `reasoning = "low"` in the shared config**
+unless reasoning is what you are measuring. Defaults differ by model, change
+without notice, and trend long: DeepSeek-v4.1-Flash's default reasons for
+impractically long, and a September trial run at defaults lost sessions to a
+ten-minute timeout. The handbook's
+[pin reasoning low](doc/experimenting.md#pin-reasoning-low) has the rest.
+
 ### Which harnesses to compare against
 
 When a design question is "what does everyone else do here?", check the same
