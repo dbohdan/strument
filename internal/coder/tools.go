@@ -140,26 +140,47 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	return defs
 }
 
+// readToolDef describes read. Its schema depends on the read-outline trial's arm
+// (readoutline.go): the outline parameter from arm C, a required limit in D.
+func readToolDef() llm.ToolDef {
+	desc := "Read a file's contents, with line numbers. Returns a window of the file; " +
+		"use offset and limit to page through a long one. Images (PNG, JPEG, GIF, WebP) come " +
+		"back as pictures you can look at rather than as text, and offset and limit do not " +
+		"apply to them."
+	props := map[string]any{
+		"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
+		"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
+		"limit":  intProp("How many lines to return. Omit for a default window."),
+	}
+	required := []any{"path"}
+	if readOutlineParam() {
+		desc += " For a long source file, ask for its outline first and read the part you need."
+		props["outline"] = map[string]any{
+			"type": "boolean",
+			"description": "Return the file's definitions — classes, functions, methods, with " +
+				"their signatures — and the lines each spans, instead of its contents.",
+		}
+	}
+	if readLimitRequired() {
+		props["limit"] = intProp("How many lines to return, from offset.")
+		required = append(required, "limit")
+	}
+	return llm.ToolDef{
+		Name:        toolRead,
+		Description: desc,
+		Parameters: map[string]any{
+			"type":       "object",
+			"properties": props,
+			"required":   required,
+		},
+	}
+}
+
 // readOnlyTools are the four ways to look at the project. They never mutate
 // anything, so they never ask for confirmation.
 func readOnlyTools() []llm.ToolDef {
 	return []llm.ToolDef{
-		{
-			Name: toolRead,
-			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
-				"use offset and limit to page through a long one. Images (PNG, JPEG, GIF, WebP) come " +
-				"back as pictures you can look at rather than as text, and offset and limit do not " +
-				"apply to them.",
-			Parameters: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
-					"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
-					"limit":  intProp("How many lines to return. Omit for a default window."),
-				},
-				"required": []any{"path"},
-			},
-		},
+		readToolDef(),
 		{
 			Name: toolGrep,
 			Description: "Search file contents with a regular expression. Files the project ignores " +

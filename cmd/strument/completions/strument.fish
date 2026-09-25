@@ -169,6 +169,7 @@ complete -c strument -n "__fish_seen_subcommand_from tool" -l json -d "Print the
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from read" -F
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from read" -l offset -d "First line to return (1-based)" -x
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from read" -l limit -d "How many lines to return" -x
+complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from read" -l outline -d "Return the definitions and their lines instead of the contents"
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from ls" -a "(__fish_complete_directories)"
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from grep" -l glob -d "Only search paths matching this glob" -x
 complete -c strument -n "__fish_seen_subcommand_from tool; and __fish_seen_subcommand_from grep" -l path -d "Only search under this directory" -r -a "(__fish_complete_directories)"

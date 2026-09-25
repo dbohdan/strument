@@ -194,10 +194,14 @@ type toolReadCmd struct {
 	Path   string `arg:""                                                          help:"File to read, relative to the project root. An absolute path inside the project also works."`
 	Offset int    `help:"First line to return (1-based). 0 starts at the top."     placeholder:"<n>"`
 	Limit  int    `help:"How many lines to return. 0 uses the tool's own default." placeholder:"<n>"`
+	// Outline is the read tool's outline parameter, which a build offers the
+	// model only in the read-outline trial's arms C and D. Here it is always
+	// accepted, and a build without it reads the file as usual.
+	Outline bool `help:"Return the file's definitions and the lines they span instead of its contents."`
 }
 
 func (t *toolReadCmd) Run(c *toolCmd) error {
-	return c.run("read", map[string]any{"path": t.Path, "offset": t.Offset, "limit": t.Limit})
+	return c.run("read", map[string]any{"path": t.Path, "offset": t.Offset, "limit": t.Limit, "outline": t.Outline})
 }
 
 type toolGrepCmd struct {
