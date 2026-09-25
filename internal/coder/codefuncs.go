@@ -307,10 +307,17 @@ func runGlobData(c *Coder, call *bridgedCall) (any, error) {
 // glob: listing cloned repositories under /tmp.
 func runLSData(c *Coder, call *bridgedCall) (any, error) {
 	dir, _ := call.Args["path"].(string)
-	entries, err := c.Files.List(dir)
+	entries, total, err := c.Files.List(dir)
 	if err != nil {
 		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not list %s: %w", quoteToolArg(dir), err)
+	}
+	// Raised rather than returned short, for the reason glob raises: a
+	// program computing over a silently cut list takes a wrong answer for a
+	// right one.
+	if total > len(entries) {
+		return nil, fmt.Errorf("ls found %d entries in %s, past its limit of %d; list a subdirectory, "+
+			"or match part of it with glob", total, displayDir(dir), len(entries))
 	}
 	out := make([]any, 0, len(entries))
 	for _, e := range entries {

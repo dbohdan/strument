@@ -550,3 +550,29 @@ func readTool(c *Coder, tc llm.ToolCall) string {
 	text, _ := c.runRead(tc)
 	return text
 }
+
+// ls past the results limit says so with both numbers, and a program's ls
+// raises rather than computing over a cut list. Before, the tool stopped at
+// 1,000 entries without a word, and a model shown exactly 1,000 guessed
+// whether that was the directory or the tool (MiMo, live).
+func TestLSSaysWhenItStopsShort(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"a": "", "b": "", "c": "", "d": "", "e": ""})
+	c.Files.Limits.MaxResults = 3
+
+	got := c.runObservation("ls", `{}`)
+	if !strings.Contains(got, "first 3 of 5") {
+		t.Errorf("ls past the limit did not say how far it got:\n%s", got)
+	}
+	if !strings.Contains(strings.Join(out.lines, "\n"), "3 of 5 entries") {
+		t.Errorf("the tool line should show the cut too: %q", out.lines)
+	}
+
+	if prog := run(c, `ls("")`); !strings.Contains(prog, "past its limit") {
+		t.Errorf("a program's ls returned a cut list instead of raising:\n%s", prog)
+	}
+
+	c.Files.Limits.MaxResults = 10
+	if got := c.runObservation("ls", `{}`); strings.Contains(got, "first") {
+		t.Errorf("ls within the limit mentioned a cut:\n%s", got)
+	}
+}

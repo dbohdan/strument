@@ -47,7 +47,7 @@ func TestReadAndListAreContained(t *testing.T) {
 				t.Errorf("Read(%q) err = %v, want one mentioning %q", tc.path, err, tc.wantErr)
 			}
 			// ls takes the same paths and needs the same answer.
-			if _, err := w.List(tc.path); err == nil {
+			if _, _, err := w.List(tc.path); err == nil {
 				t.Errorf("List(%q) should be refused too", tc.path)
 			}
 		})
@@ -62,7 +62,7 @@ func TestReadAndListAreContained(t *testing.T) {
 		if _, err := w.Read("in-link/nested.txt", 0, 0); err != nil {
 			t.Errorf("a symlink pointing inside the project must still work: %v", err)
 		}
-		if _, err := w.List("in-link"); err != nil {
+		if _, _, err := w.List("in-link"); err != nil {
 			t.Errorf("List through an inside symlink: %v", err)
 		}
 	}
@@ -74,7 +74,7 @@ func TestReadAndListAreContained(t *testing.T) {
 			t.Errorf("Read(%q) = %v, want it to work", ok, err)
 		}
 	}
-	if _, err := w.List("sub"); err != nil {
+	if _, _, err := w.List("sub"); err != nil {
 		t.Errorf("List(\"sub\") = %v", err)
 	}
 }
@@ -106,7 +106,7 @@ func TestAbsolutePathsInsideTheRootAreContained(t *testing.T) {
 		t.Errorf("Path = %q, want the root-relative form %q", got.Path, want)
 	}
 	// ls answers the same file ls(relative) does.
-	entries, err := w.List(filepath.Join(root, "sub"))
+	entries, _, err := w.List(filepath.Join(root, "sub"))
 	if err != nil {
 		t.Fatalf("List(absolute in-root) = %v", err)
 	}

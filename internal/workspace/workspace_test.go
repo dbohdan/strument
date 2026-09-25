@@ -146,7 +146,7 @@ func TestListIsOneLevel(t *testing.T) {
 	})
 	w := New(root)
 
-	entries, err := w.List("")
+	entries, _, err := w.List("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestListIsOneLevel(t *testing.T) {
 		t.Errorf("List(\"\") = %v, want %v", got, want)
 	}
 
-	entries, err = w.List("src")
+	entries, _, err = w.List("src")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestReadAndListAllowAbsoluteTempPaths(t *testing.T) {
 		t.Errorf("Read(%q) = %+v", file, got)
 	}
 
-	entries, err := w.List(temp)
+	entries, _, err := w.List(temp)
 	if err != nil {
 		t.Fatalf("List(%q): %v", temp, err)
 	}
@@ -468,5 +468,34 @@ func TestNoGitNeeded(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "cfg/app.conf" {
 		t.Errorf("Files() = %v in a non-repo directory", got)
+	}
+}
+
+// A directory past the results limit comes back cut to the first entries in
+// name order, with the real count beside them, so the caller can say so. It
+// used to stop at the limit silently, and a model shown exactly 1,000 entries
+// could not tell the directory from the tool.
+func TestListReportsTheTotalPastTheLimit(t *testing.T) {
+	files := map[string]string{".gitignore": "*.log\n", "skip.log": ""}
+	for _, name := range []string{"e", "a", "d", "c", "b", "f"} {
+		files[name+".txt"] = ""
+	}
+	root := tree(t, files)
+	w := &Workspace{Root: root, Limits: Limits{MaxResults: 3}}
+
+	entries, total, err := w.List("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Path)
+	}
+	if want := []string{".gitignore", "a.txt", "b.txt"}; !slices.Equal(got, want) {
+		t.Errorf("List = %v, want the first %v in name order", got, want)
+	}
+	// Seven visible: .gitignore and six .txt files; skip.log is ignored.
+	if total != 7 {
+		t.Errorf("total = %d, want 7, counting past the limit and not the ignored file", total)
 	}
 }

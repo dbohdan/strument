@@ -372,7 +372,7 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 		return msg
 	}
 
-	entries, err := i.Files.List(a.Path)
+	entries, total, err := i.Files.List(a.Path)
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
@@ -383,7 +383,11 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if strings.TrimSpace(a.Path) != "" {
 		dir = quoteToolArg(dir)
 	}
-	i.Out.Toolf("Listed %s (%s)", dir, plural(len(entries), "entry", "entries"))
+	count := plural(len(entries), "entry", "entries")
+	if total > len(entries) {
+		count = fmt.Sprintf("%d of %s", len(entries), plural(total, "entry", "entries"))
+	}
+	i.Out.Toolf("Listed %s (%s)", dir, count)
 
 	if len(entries) == 0 {
 		return displayDir(a.Path) + " is empty."
@@ -403,6 +407,13 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 		default:
 			b.WriteString(e.Path + "\n")
 		}
+	}
+	if total > len(entries) {
+		// Said with both numbers, since a round 1,000 on its own reads as
+		// either the directory or the tool; a live model could not tell.
+		fmt.Fprintf(&b, "\n(ls shows at most %d entries: these are the first %d of %d, in name order. "+
+			"To see the rest, list a subdirectory, or match part of this one with glob, "+
+			"such as a name prefix.)\n", len(entries), len(entries), total)
 	}
 	return truncateResult(b.String())
 }

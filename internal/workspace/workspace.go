@@ -308,11 +308,17 @@ func (w *Workspace) Files() ([]string, Truncated, error) {
 // It is not redundant with Glob: models use ls to orient themselves in an
 // unfamiliar tree, and answer "what is in here" badly when they have to guess
 // a pattern first.
-func (w *Workspace) List(dir string) ([]Entry, error) {
+//
+// At most the results limit of entries come back, the first in name order.
+// total is how many the directory holds past the ignore rules, so a caller
+// can say that the list stops short and by how much. It used to stop at the
+// limit without saying so, and a model shown exactly 1,000 entries could only
+// guess whether that was the directory or the tool.
+func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 	raw := dir
 	full, rel, reason := w.contain(raw)
 	if reason != "" {
-		return nil, errors.New(reason)
+		return nil, 0, errors.New(reason)
 	}
 	temp := (filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)) && UnderTempDir(full)
 	var domain []string
@@ -325,22 +331,29 @@ func (w *Workspace) List(dir string) ([]Entry, error) {
 		var err error
 		matcher, err = w.matcherFor(domain)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 
-	entries, err := os.ReadDir(full)
+	// os.ReadDir returns the whole directory sorted by name, so the entries
+	// kept are the first in name order, and counting past the limit reads
+	// nothing more.
+	dirents, err := os.ReadDir(full)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	out := make([]Entry, 0, len(entries))
-	for _, e := range entries {
+	out := make([]Entry, 0, min(len(dirents), w.Limits.results()))
+	for _, e := range dirents {
 		name := e.Name()
 		if name == skipAlways {
 			continue
 		}
 		components := append(slices.Clone(domain), name)
 		if !temp && matcher.Match(components, e.IsDir()) {
+			continue
+		}
+		total++
+		if len(out) >= w.Limits.results() {
 			continue
 		}
 		ent := Entry{Path: strings.Join(components, "/"), IsDir: e.IsDir()}
@@ -351,12 +364,9 @@ func (w *Workspace) List(dir string) ([]Entry, error) {
 			}
 		}
 		out = append(out, ent)
-		if len(out) >= w.Limits.results() {
-			break
-		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, nil
+	return out, total, nil
 }
 
 // Glob returns the non-ignored files matching pattern, root-relative and
