@@ -14,10 +14,11 @@ func withReadArm(t *testing.T, arm string) {
 	t.Cleanup(func() { readArm = old })
 }
 
-// A Python file with a class past line 30, for windows that stop short of it.
-func outlineFile() string {
+// A Python file with a class past line filler, for windows that stop short
+// of it.
+func outlineFile(filler int) string {
 	var b strings.Builder
-	for range 30 {
+	for range filler {
 		b.WriteString("# filler\n")
 	}
 	b.WriteString("class Store:\n    def get(self, key):\n        return key\n\n\ndef make(n):\n    return Store()\n")
@@ -25,7 +26,8 @@ func outlineFile() string {
 }
 
 func TestReadOutlineArms(t *testing.T) {
-	src := map[string]string{"m.py": outlineFile()}
+	src := map[string]string{"m.py": outlineFile(30)}
+	long := map[string]string{"m.py": outlineFile(2030)}
 
 	t.Run("A: a partial read says where it stopped and nothing more", func(t *testing.T) {
 		withReadArm(t, "A")
@@ -35,18 +37,18 @@ func TestReadOutlineArms(t *testing.T) {
 			t.Errorf("the baseline must not outline:\n%s", got)
 		}
 	})
-	t.Run("B: a partial read outlines the rest", func(t *testing.T) {
+	t.Run("B: a read the default window cut short outlines the rest", func(t *testing.T) {
 		withReadArm(t, "B")
-		c, _ := observeEnv(t, src)
-		got := readTool(c, call("read", `{"path":"m.py","limit":10}`))
-		for _, want := range []string{"Outside these lines", "- class Store  [31-33]", "  - def get(self, key)  [32-33]", "- def make(n)  [36-37]"} {
+		c, _ := observeEnv(t, long)
+		got := readTool(c, call("read", `{"path":"m.py"}`))
+		for _, want := range []string{"Outside these lines", "- class Store  [2031-2033]", "  - def get(self, key)  [2032-2033]", "- def make(n)  [2036-2037]"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("missing %q:\n%s", want, got)
 			}
 		}
-		whole := readTool(c, call("read", `{"path":"m.py"}`))
-		if strings.Contains(whole, "Outside these lines") {
-			t.Errorf("a whole read has no rest to outline:\n%s", whole)
+		// A read that named its limit got what it asked for, and no map.
+		if ranged := readTool(c, call("read", `{"path":"m.py","limit":10}`)); strings.Contains(ranged, "Outside these lines") {
+			t.Errorf("a ranged read must not carry the outline:\n%s", ranged)
 		}
 	})
 	t.Run("C: outline: true returns the map alone", func(t *testing.T) {
