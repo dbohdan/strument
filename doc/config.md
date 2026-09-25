@@ -522,6 +522,30 @@ A trusted project config replaces the user's list rather than adding to it.
 This setting controls which hosts stop being asked about, so merging the lists
 would only widen the approval.
 
+#### Local addresses
+
+A fetch nobody saw approved does not reach a **local address**: loopback,
+private networks, link-local (where cloud metadata services such as
+`169.254.169.254` live), carrier-grade NAT, and unique-local IPv6. That covers
+fetches approved by `--yes webfetch` or `auto_approve`, by an earlier `a`
+answer, and redirects followed on the strength of either. Such a fetch asks
+again, naming the address, and no `--yes` answers that question. With no one
+at a terminal it is declined, and the model is told to use `webfetch_allow`.
+
+A local address is fine without a second question when:
+
+- `webfetch_allow` names the origin, as `localhost:3000` does above;
+- you approved this fetch at its own prompt, having seen the URL;
+- you answered `a` for an origin that is local as written, such as
+  `localhost:3000` or `127.0.0.1:8080`. An `a` for a name that turned out to
+  resolve locally does not count, because the prompt never showed that.
+
+The address checked is the one actually connected to, so a name that answers
+differently between the check and the connection is caught. Behind a proxy
+the proxy resolves the name; Strument checks its own lookup of the name and
+never refuses the proxy itself. A `scraper` command does its own networking
+and is not checked.
+
 #### Approving a host without editing the config
 
 Answering `a` at a fetch prompt approves that host for the rest of the session.

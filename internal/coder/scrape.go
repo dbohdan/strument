@@ -52,10 +52,19 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
 	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {
 		client := client
-		if opts.Follow != nil {
-			follow := *client
-			follow.CheckRedirect = redirectPolicy(opts.Follow)
-			client = &follow
+		if opts.Follow != nil || opts.LocalOK != nil {
+			c := *client
+			if opts.Follow != nil {
+				c.CheckRedirect = redirectPolicy(opts.Follow)
+			}
+			if opts.LocalOK != nil {
+				guarded, err := guardedTransport(transport, opts.LocalOK)
+				if err != nil {
+					return "", err
+				}
+				c.Transport = guarded
+			}
+			client = &c
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -72,6 +81,10 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 			var refused *RedirectRefusedError
 			if errors.As(err, &refused) {
 				return "", refused
+			}
+			var local *localAddressError
+			if errors.As(err, &local) {
+				return "", local
 			}
 			return "", err
 		}

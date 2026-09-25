@@ -708,7 +708,7 @@ func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
 // tell the model how a decline came about.
 func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
 	if req.Group != "" && (c.turnAutoApprove[req.Group] || c.sessionAutoApprove[req.Group]) {
-		return ConfirmResult{Yes: true}
+		return ConfirmResult{Yes: true, Auto: true}
 	}
 	res := c.Confirm.Confirm(req)
 	if res.Always && req.Group != "" {

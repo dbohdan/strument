@@ -166,6 +166,10 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	if err != nil {
 		return "That URL cannot be fetched: " + err.Error() + "."
 	}
+	// Where this fetch may connect without a second question: the origins a
+	// person has seen as local, plus this one when a person approved this
+	// very fetch. See localaddr.go.
+	localOK := c.localSeen
 	// An allowlisted origin skips the prompt entirely — which is also why it
 	// needs no --yes flag. The flag question only ever arises for an origin the
 	// user never named.
@@ -189,6 +193,8 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		}); !res.Yes && !res.Always {
 			c.Out.Toolf("Did not fetch %s (declined)", org)
 			return declined(res, "fetch that page", GrantWebfetch)
+		} else if !res.Auto {
+			localOK = func(o string) bool { return o == org || c.localSeen(o) }
 		}
 		// Said once, when the grant is made. A turn boundary used to give this
 		// visibility for free: a grant that expired on its own never needed
@@ -222,9 +228,28 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	}
 	c.Out.Link(f.url)
 
-	content, err := c.Scrape(ctx, f.url, ScrapeOptions{
-		Outline: f.outline, Range: rangeArg(f), Follow: c.fetchesWithoutAsking,
-	})
+	opts := ScrapeOptions{
+		Outline: f.outline, Range: rangeArg(f), Follow: c.fetchesWithoutAsking, LocalOK: localOK,
+	}
+	content, err := c.Scrape(ctx, f.url, opts)
+	var local *localAddressError
+	if errors.As(err, &local) {
+		// Asked rather than refused, and asked without a Grant, so no --yes
+		// answers it: the point is that someone sees the address.
+		res := c.Confirm.Confirm(ConfirmRequest{
+			Prompt:  fmt.Sprintf("Fetch this page? %s connects to %s, a local address.", local.Origin, local.Addr),
+			URL:     f.url,
+			Origin:  local.Origin,
+			Purpose: f.purpose,
+		})
+		if !res.Yes && !res.Always {
+			c.Out.Toolf("Did not fetch %s (%s is a local address)", local.Origin, local.Addr)
+			return localDeclined(res, f.url, local)
+		}
+		seen := local.Origin
+		opts.LocalOK = func(o string) bool { return o == seen || localOK(o) }
+		content, err = c.Scrape(ctx, f.url, opts)
+	}
 	var refused *RedirectRefusedError
 	if errors.As(err, &refused) {
 		// Not a failure to report as one: the page exists, it lives somewhere
@@ -400,6 +425,30 @@ func navigationHint(kind contentKind) string {
 	}
 	return "Outline of the whole of it follows; fetch a part of it by giving webfetch a range " +
 		"of lines, as the outline lists"
+}
+
+// localSeen reports whether an origin is one a person has seen as local:
+// named in webfetch_allow, or approved for the session with "a" when its host
+// is local as written. An origin approved by name that turns out to resolve
+// locally was not seen that way.
+func (c *Coder) localSeen(org string) bool {
+	if origin.Allowed(org, c.WebfetchAllow) {
+		return true
+	}
+	host, _, err := net.SplitHostPort(org)
+	return err == nil && c.sessionAutoApprove["webfetch:"+org] && namesLocalHost(host)
+}
+
+// localDeclined is the model's text for a fetch that reached a local address
+// and was then declined, or could not be asked about.
+func localDeclined(res ConfirmResult, url string, local *localAddressError) string {
+	if res.Unattended {
+		return fmt.Sprintf("Strument did not fetch %s: %s connects to %s, a local address, and no one "+
+			"is at a terminal to approve that. A fetch reaches a local address only when someone "+
+			"approved it at a prompt or the user listed %s in webfetch_allow.",
+			url, local.Origin, local.Addr, local.Origin)
+	}
+	return fmt.Sprintf("The user chose not to fetch %s, which connects to %s, a local address.", url, local.Addr)
 }
 
 // fetchesWithoutAsking reports whether a fetch of url would go ahead without

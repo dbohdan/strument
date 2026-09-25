@@ -64,6 +64,11 @@ type ConfirmResult struct {
 	// back — "since you've declined them twice" — to a user who had declined
 	// nothing.
 	Unattended bool
+	// Auto says no one was shown this prompt: a --yes grant or an earlier "a"
+	// answered it. What was approved unseen is held to a narrower rule where
+	// it matters — a webfetch approved that way does not reach a local
+	// address (localaddr.go).
+	Auto bool
 }
 
 // The permission names --yes takes are defined in internal/config, which
@@ -233,7 +238,7 @@ func (a AutoConfirmer) Confirm(req ConfirmRequest) ConfirmResult {
 	// than an oversight: a prompt with no Grant has no name a user could have
 	// typed, so answering it would be answering something they never asked for.
 	if req.Grant != "" && a.Granted != nil && a.Granted()[req.Grant] {
-		return ConfirmResult{Yes: true}
+		return ConfirmResult{Yes: true, Auto: true}
 	}
 	if a.Fallback != nil {
 		return a.Fallback.Confirm(req)
@@ -385,6 +390,13 @@ type ScrapeOptions struct {
 	// not carry the fetch to an origin nobody approved. A redirect within the
 	// same origin is always followed; this is asked only about the others.
 	Follow func(url string) bool
+
+	// LocalOK decides whether a connection to a local address may go ahead,
+	// given the origin (host:port) the URL named. nil allows every one, which
+	// is right for /web and for a fetch the user approved at a prompt. See
+	// localaddr.go. A `scraper` command does its own networking, so this
+	// binds the built-in fetcher only.
+	LocalOK func(origin string) bool
 }
 
 // lineRange is the parsed Range field: (0, 0) when unset.
