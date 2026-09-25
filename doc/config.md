@@ -780,6 +780,13 @@ model can distinguish a timeout from a command failure.
 A timeout is not a resource limit. It bounds how long a runaway command wastes,
 not what it can do while running.
 
+With or without a limit, a job a command leaves running in the background (`server &`) is
+stopped when the command returns. `0` lets the command itself run as long as it takes;
+it does not let a process outlive the call. Before, a background job did outlive it
+under `0`, until the turn ended, which no model could predict, so a
+server started in one call and used in the next failed at random. There is no
+supported way to keep a service running between calls yet.
+
 ### `retry_timeout`
 
 Seconds a turn may spend waiting between retries of one failed request before
