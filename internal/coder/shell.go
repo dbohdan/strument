@@ -27,6 +27,22 @@ import (
 // zero when it gave none; it can only narrow the configured deadline, never
 // widen it (see shellTimeout). Returns the exit code and captured output.
 func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout time.Duration) (int, string) {
+	return c.runAndShowTail(ctx, command, requestedTimeout, 0)
+}
+
+// runAndShowTail is runAndShow that returns only the output's last tail
+// lines, when tail is positive. The user is shown all of it regardless.
+//
+// This is what `cmd | tail -20` is for, without its two costs. The pipeline's
+// exit status is tail's, so a failing test run reads as a pass: the shell has
+// no pipefail, and a model that trusts "Exit status: 0" moves on. And the
+// user, who reviews what ran, sees only what the model chose to keep. Here
+// the status is the command's own and the screen has everything.
+//
+// Strument's own notices — the timeout, a Ctrl-C, the sandbox hint — come
+// after the tail rather than inside it, so asking for 20 lines never costs
+// the line that says why the command stopped.
+func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTimeout time.Duration, tail int) (int, string) {
 	c.Out.Printf("")
 	c.Out.Toolf("Running %s", quoteToolArg(command))
 
@@ -77,8 +93,9 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 	// A denial arrives as a bare errno, and an unexplained failure is the thing
 	// a coding model responds to by editing code. Naming the sandbox turns
 	// thrashing into a config change.
+	var notice string
 	if exitCode != 0 && c.Sandbox.Active && looksDenied(output) {
-		output += c.Sandbox.deniedHint()
+		notice += c.Sandbox.deniedHint()
 	}
 	// Who stopped it, said in the output rather than only on screen, because
 	// the output is what reaches the model: a command killed at two minutes, a
@@ -87,7 +104,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 	// unexplained failure is to change the code.
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		output += fmt.Sprintf("\nThe command was stopped after %s by Strument's shell_timeout.", deadline)
+		notice += fmt.Sprintf("\nThe command was stopped after %s by Strument's shell_timeout.", deadline)
 		if exitCode == 0 {
 			exitCode = -1
 		}
@@ -98,17 +115,31 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 		// user what they meant and can carry on — so the model is left with a
 		// command that died for no stated reason, which is exactly what it
 		// answers by editing code.
-		output += "\nThe user pressed Ctrl-C and stopped this command. The output above is how far the command got."
+		notice += "\nThe user pressed Ctrl-C and stopped this command. The output above is how far the command got."
 		if exitCode == 0 {
 			exitCode = -1
 		}
 	}
-	if output != "" {
+	if shown := output + notice; shown != "" {
 		// Printf adds the trailing newline; trim the runner's so output that
 		// already ends in one doesn't print a blank line.
-		c.Out.CommandOutput(strings.TrimRight(output, "\n"))
+		c.Out.CommandOutput(strings.TrimRight(shown, "\n"))
 	}
-	return exitCode, output
+	return exitCode, lastLines(output, tail) + notice
+}
+
+// lastLines keeps the last n lines of output, saying how many it left out.
+// n <= 0, or output no longer than n lines, returns output unchanged.
+func lastLines(output string, n int) string {
+	if n <= 0 {
+		return output
+	}
+	lines := strings.SplitAfter(strings.TrimSuffix(output, "\n"), "\n")
+	if len(lines) <= n {
+		return output
+	}
+	return fmt.Sprintf("(The last %d of %d lines. The user saw all of them.)\n", n, len(lines)) +
+		strings.Join(lines[len(lines)-n:], "") + "\n"
 }
 
 // defaultShellTimeout bounds a model-caused command. Two minutes is what
@@ -234,10 +265,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	}
 	err = runner.Run(ctx, file)
 
-	captured := output.String()
-	if len(captured) > maxBytes {
-		captured = captured[:maxBytes] + "\n… output truncated"
-	}
+	captured := capMiddle(output.String(), maxBytes)
 
 	exitCode := 0
 	if err != nil {
@@ -250,6 +278,29 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		}
 	}
 	return exitCode, captured, err
+}
+
+// capMiddle keeps the first and last halves of output longer than maxBytes
+// and drops the middle, cut at line boundaries where there is one nearby.
+//
+// It used to keep the head only. The end of a build or test run is where the
+// verdict is — the failure summary, the final error, "FAIL" — and a head-only
+// cut dropped exactly that from the output most likely to be long. The head
+// stays too, because a compiler's first error is the one to fix.
+func capMiddle(output string, maxBytes int) string {
+	if len(output) <= maxBytes {
+		return output
+	}
+	half := maxBytes / 2
+	head, tail := output[:half], output[len(output)-half:]
+	if i := strings.LastIndexByte(head, '\n'); i > 0 {
+		head = head[:i+1]
+	}
+	if i := strings.IndexByte(tail, '\n'); i >= 0 && i < len(tail)-1 {
+		tail = tail[i+1:]
+	}
+	omitted := len(output) - len(head) - len(tail)
+	return fmt.Sprintf("%s… %d bytes of output omitted …\n%s", head, omitted, tail)
 }
 
 // execKillTimeout is how long a cancelled child gets between the interrupt

@@ -349,6 +349,9 @@ func bashTool() llm.ToolDef {
 					"writes, deletes, installs, or sends anything."),
 				"timeout": intProp("Optional time limit for this command, in seconds. Shortens the " +
 					"configured limit for a command you know finishes quickly; it cannot extend it."),
+				"tail": intProp("Optional. Return only the last this many lines of output. Use it " +
+					"instead of piping to tail, which replaces the command's exit status with tail's " +
+					"and hides the rest of the output from the user."),
 			},
 			"required": []any{"command", "purpose"},
 		},
@@ -611,6 +614,9 @@ type toolCommand struct {
 	// clamped by shellTimeout and reported to the model (see runShellTool),
 	// not refused.
 	timeout int
+	// tail is how many of the output's last lines the model asked to get
+	// back; zero for all of it. The user sees everything either way.
+	tail int
 }
 
 // editArgs is the decoded argument object shared by the edit tools.
@@ -1045,6 +1051,7 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 		Command string `json:"command"`
 		Purpose string `json:"purpose"`
 		Timeout int    `json:"timeout"`
+		Tail    int    `json:"tail"`
 	}
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
 		return toolCommand{}, fmt.Sprintf("The arguments were not valid JSON: %v", err)
@@ -1055,7 +1062,13 @@ func parseCommandArgs(tc llm.ToolCall) (toolCommand, string) {
 	if a.Timeout < 0 {
 		return toolCommand{}, "The \"timeout\" argument must be a non-negative number of seconds."
 	}
-	return toolCommand{callID: tc.ID, command: a.Command, purpose: strings.TrimSpace(a.Purpose), timeout: a.Timeout}, ""
+	if a.Tail < 0 {
+		return toolCommand{}, "The \"tail\" argument must be a non-negative number of lines."
+	}
+	return toolCommand{
+		callID: tc.ID, command: a.Command, purpose: strings.TrimSpace(a.Purpose),
+		timeout: a.Timeout, tail: a.Tail,
+	}, ""
 }
 
 // runShellTool confirms and runs a shell command, returning its output as the
@@ -1162,13 +1175,13 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if ceiling := c.shellTimeout(requested); cmd.timeout > 0 && ceiling < requested {
 		notice := fmt.Sprintf("\nThe requested timeout of %d seconds was clamped to the configured limit of %s.",
 			cmd.timeout, ceiling)
-		exitCode, output := c.runAndShow(ctx, command, requested)
+		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
 		c.attributeShellCommits(before)
 		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
 			quoteToolArg(command), exitCode, output, notice), true
 	}
 
-	exitCode, output := c.runAndShow(ctx, command, requested)
+	exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
 	c.attributeShellCommits(before)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
 }
