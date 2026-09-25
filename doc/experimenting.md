@@ -59,6 +59,9 @@ Before spending on a run, ask these questions in order:
   process and record worker failures ([a runner that dies quietly](#runner-dies-quietly)).
 - **Has the resume path been exercised deliberately?** Run it with a stub before
   the batch needs it ([the resume path runs last](#resume-path)).
+- **Does each planted change alter the answer, not only the source?** Run
+  the planted code once and read the value ([a plant must change the
+  answer](#plant-changes-behavior)).
 - **Did you read three transcripts, including an anomalous one?** A transcript
   can settle what an aggregate cannot ([read the transcripts](#read-transcripts)).
 
@@ -80,6 +83,7 @@ Before spending on a run, ask these questions in order:
 | A diff shows two artifacts that look the same | [two documents can render identically](#identical-renderings) |
 | Turn or message counts do not match the fixture | [a fixture line is a message](#one-line-per-message) |
 | A column counts something other than its name | [a probe with two correct answers](#probe-with-two-answers), [a metric that counts the wrong thing](#clean-null) |
+| The key disagrees with what the planted code does | [a plant must change the answer](#plant-changes-behavior), [a probe with two correct answers](#probe-with-two-answers) |
 
 ---
 
@@ -1125,6 +1129,31 @@ Note also what the broken column flattered: the control arm had *zero*
 confabulations because it recalled nothing and declined almost everything. An
 arm that knows nothing cannot invent anything, so "fewer inventions" was not a
 virtue there. Read a column against the others before believing it.
+
+<a id="plant-changes-behavior"></a>
+
+## 26. A plant must change the answer, not only the text
+
+The read-outline trial planted one change per task so that a model answering
+from memory of upstream would be wrong. One plant made click's
+`flag_activation_value` return `"on"` instead of `True`, and the task asked
+what a boolean flag's function receives. The fixture builder asserted that the
+replacement happened, exactly once. It did.
+
+The function still receives `True`. A boolean flag's type is `BOOL`, which
+converts `"on"` back. The key was wrong, 37 of 40 sessions "failed" a task the
+models had answered correctly, and the one session that said why was scored as
+a miss. The damage went past correctness, too: the contradiction between the
+code and the question made that task the run's most expensive by far, with
+MiMo spending up to 370k tokens reconciling the two, which is noise in exactly
+the token metric the trial was about.
+
+**A count assertion proves that the text changed, not that the behavior did.**
+When a plant is meant to change an answer, run the planted code once and look
+at the value that comes out — here, one call of a click command with the flag
+set. It is the same shape as [a check that cannot fail](#check-that-cannot-fail):
+the check that ran was real, and it tested a weaker claim than the one relied
+on.
 
 ---
 
