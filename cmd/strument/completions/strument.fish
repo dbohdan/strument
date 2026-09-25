@@ -81,6 +81,8 @@ complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_see
     -a strip -d "Remove stored tool payloads that nothing recent points at"
 complete -c strument -n "__fish_seen_subcommand_from history" \
     -s s -l session -d "The conversation to act on" -x
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from strip" \
+    -s b -l back -d "An earlier run: 0 is the latest, 1 (or -1) the one before" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from markdown" \
     -s t -l turns -d "Show only the last <n> turns" -x
 complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from strip" \

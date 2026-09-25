@@ -1720,6 +1720,15 @@ type historyCmd struct {
 	// `strip` too, where it means nothing because payloads are shared across
 	// a project and a sweep of one session's worth would be wrong.
 	Session string `help:"Session to act on (default: the last one used)." placeholder:"<name>" short:"s"`
+	// Back counts runs, not files: a run that recorded nothing is skipped (see
+	// history.Runs). A pointer so markdown can tell "not given", which keeps
+	// the whole session, from 0, which is the latest run alone. The sign is
+	// accepted either way because "back" already names the direction; 1 and
+	// -1 are one request. kong reads a separate "-1" as a flag, so the negative
+	// form is spelled -b-1 or --back=-1; kong.WithHyphenPrefixedParameters
+	// would allow "-b -1" but for every flag, letting "-s -c" take "-c" as a
+	// session name.
+	Back *int `help:"Act on an earlier run: 0 is the latest, 1 the one before, and so on (-1 works too, written -b-1 or --back=-1). Runs that recorded nothing are skipped." placeholder:"<n>" short:"b"`
 
 	Path     historyPathCmd     `cmd:"" help:"Print the path to a session's record."`
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
@@ -1743,30 +1752,42 @@ func historySession(named string) (root, session string, err error) {
 	return root, history.CurrentSession(root), nil
 }
 
-// historyPath resolves the newest record segment for the current session.
+// historyRun resolves the segment of the run --back names, counted from the
+// newest run that recorded anything. nil means the newest.
 //
-// Newest rather than all of them because this answers "where is what I just
-// did", which is what a jq one-liner wants to be pointed at. `history
-// markdown` reads every segment; someone who wants the same of the raw
-// records has the directory this path sits in.
+// One segment rather than all of them because this answers "where is what I
+// just did", which is what a jq one-liner wants to be pointed at. `history
+// markdown` reads every segment unless --back picks one; someone who wants the
+// same of the raw records has the directory this path sits in.
 //
 // A session that has never been chatted in has no segment yet. The path of the
 // one the next run would open is not a useful answer — it does not exist and
 // its name is a timestamp that has not happened — so this reports that there
 // is nothing, and the caller says so.
-func historyPath(named string) (string, error) {
+func historyRun(named string, back *int) (string, error) {
 	root, session, err := historySession(named)
 	if err != nil {
 		return "", err
 	}
-	segments, err := history.LogSegments(root, session)
+	runs, err := history.Runs(root, session)
 	if err != nil {
 		return "", err
 	}
-	if len(segments) == 0 {
+	if len(runs) == 0 {
 		return "", errNoRecord
 	}
-	return segments[len(segments)-1], nil
+	n := 0
+	if back != nil {
+		n = max(*back, -*back)
+	}
+	if n >= len(runs) {
+		noun := "runs"
+		if len(runs) == 1 {
+			noun = "run"
+		}
+		return "", fmt.Errorf("session %q has %d %s, so --back goes up to %d", session, len(runs), noun, len(runs)-1)
+	}
+	return runs[len(runs)-1-n], nil
 }
 
 // errNoRecord is a project nobody has chatted in yet, which is the ordinary
@@ -1782,7 +1803,7 @@ type historyPathCmd struct{}
 // named after the moment it was opened. There is nothing to print for a
 // project nobody has chatted in, so it says that instead.
 func (*historyPathCmd) Run(parent *historyCmd) error {
-	p, err := historyPath(parent.Session)
+	p, err := historyRun(parent.Session, parent.Back)
 	if err != nil {
 		return err
 	}
@@ -1806,7 +1827,19 @@ func (c *historyMarkdownCmd) Run(parent *historyCmd) error {
 	if err != nil {
 		return err
 	}
-	turns, err := history.ReadTurns(root, session)
+	var turns []history.Turn
+	if parent.Back == nil {
+		turns, err = history.ReadTurns(root, session)
+	} else {
+		// One run instead of the whole session, and -t still counts within it.
+		var seg string
+		if seg, err = historyRun(parent.Session, parent.Back); err == nil {
+			var records []coder.Record
+			if records, err = history.ReadRecords(seg); err == nil {
+				turns = history.TurnsFromRecords(records)
+			}
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -1823,7 +1856,7 @@ type historyEditCmd struct {
 }
 
 func (e *historyEditCmd) Run(parent *historyCmd) error {
-	p, err := historyPath(parent.Session)
+	p, err := historyRun(parent.Session, parent.Back)
 	if err != nil {
 		return err
 	}

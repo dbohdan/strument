@@ -222,6 +222,35 @@ func ReadTurns(projectRoot, session string) ([]Turn, error) {
 	return turns, nil
 }
 
+// Runs lists a session's record segments that hold anything past the session
+// header, oldest first: one per run that did something.
+//
+// Every run opens a segment, including one that was started and quit without
+// a message, and that segment holds the header alone. Counting it made the
+// newest segment an empty file after a run that did nothing, so "the latest
+// run" meant the least interesting one. A run killed mid-turn still counts:
+// its messages are there even though its turn record is not.
+func Runs(projectRoot, session string) ([]string, error) {
+	segments, err := LogSegments(projectRoot, session)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, seg := range segments {
+		records, err := ReadRecords(seg)
+		if err != nil {
+			continue
+		}
+		for _, r := range records {
+			if r.Type != "session" {
+				out = append(out, seg)
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
 // ReadSessionRecords reads a session's whole record, oldest first, with every
 // payload put back from the blob store.
 //

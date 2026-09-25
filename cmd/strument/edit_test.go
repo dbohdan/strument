@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -326,7 +327,7 @@ func TestEditOpensThePathThatPathPrints(t *testing.T) {
 		{
 			name: "history",
 			run:  func() error { return (&historyEditCmd{edit: seam}).Run(&historyCmd{}) },
-			want: func() (string, error) { return historyPath("") },
+			want: func() (string, error) { return historyRun("", nil) },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -459,11 +460,11 @@ func TestHistoryActsOnTheSessionNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	named, err := historyPath("review")
+	named, err := historyRun("review", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := historyPath("")
+	current, err := historyRun("", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +476,88 @@ func TestHistoryActsOnTheSessionNamed(t *testing.T) {
 	}
 	// A name that could reach out of the state directory is refused here too,
 	// not only at the chat flag.
-	if p, err := historyPath("../../etc"); err == nil {
+	if p, err := historyRun("../../etc", nil); err == nil {
 		t.Errorf("historyPath escaped to %q", p)
+	}
+}
+
+// --back counts runs back from the newest, skipping runs that recorded
+// nothing, and reads 1 and -1 as one request. markdown takes it too, and
+// renders that run alone.
+func TestHistoryBackCountsRuns(t *testing.T) {
+	writeTempUserConfig(t, "# empty\n")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := history.CurrentSession(root)
+	if _, err := history.EnsureSessionDir(root, session); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
+	var runs []string
+	for i, prompt := range []string{"first", "", "second", "third", ""} {
+		seg, err := history.NewLogSegment(root, session, start.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Every run opens with the header; an empty prompt is a run that was
+		// started and quit, and holds nothing else.
+		body := `{"type":"session","version":1,"model":"flash"}` + "\n"
+		if prompt != "" {
+			body += `{"type":"turn","time":"2026-09-25T09:00:00Z","model":"flash",` +
+				`"outcome":"Success","prompt":"` + prompt + `","answer":"ok"}` + "\n"
+			runs = append(runs, seg)
+		}
+		if err := os.WriteFile(seg, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	back := func(n int) *int { return &n }
+
+	for _, tc := range []struct {
+		back *int
+		want string
+	}{
+		{nil, runs[2]},     // the newest run with a turn, not the empty one after it
+		{back(0), runs[2]}, // the same
+		{back(1), runs[1]}, // the one before
+		{back(-1), runs[1]},
+		{back(2), runs[0]}, // the empty run between first and second is not counted
+	} {
+		got, err := historyRun("", tc.back)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tc.want {
+			name := "unset"
+			if tc.back != nil {
+				name = strconv.Itoa(*tc.back)
+			}
+			t.Errorf("--back %s = %s, want %s", name, filepath.Base(got), filepath.Base(tc.want))
+		}
+	}
+	if _, err := historyRun("", back(3)); err == nil || !strings.Contains(err.Error(), "up to 2") {
+		t.Errorf("--back past the first run: err = %v, want one saying the limit", err)
+	}
+
+	out, err := captureStdout(t, func() error {
+		return (&historyMarkdownCmd{}).Run(&historyCmd{Back: back(1)})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "second") || strings.Contains(out, "first") || strings.Contains(out, "third") {
+		t.Errorf("markdown --back 1 should render the second run alone:\n%s", out)
+	}
+	whole, err := captureStdout(t, func() error { return (&historyMarkdownCmd{}).Run(&historyCmd{}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"first", "second", "third"} {
+		if !strings.Contains(whole, p) {
+			t.Errorf("markdown without --back lost the %s run:\n%s", p, whole)
+		}
 	}
 }
