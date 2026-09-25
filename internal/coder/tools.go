@@ -394,20 +394,21 @@ func checkTool(checks []config.Check) llm.ToolDef {
 // The questions-per-call and options-per-question caps keep one call legible
 // as a single block of scroll in a plain scrolling terminal: a question whose
 // options the user must scroll back to read whole is a badly formed question.
+//
+// The description was trimmed from 773 characters of untested guidance in
+// doc/experiments/2026-09-description-trims, which found no loss in asking
+// when it should, not asking when it shouldn't, or putting the recommendation
+// first. The sentence naming the options and their label and description was
+// put back after the trial: without it MiMo sent the options as the questions
+// in three sessions of 25, and none in the untrimmed arm.
 func askTool() llm.ToolDef {
 	return llm.ToolDef{
 		Name: toolAskUser,
-		Description: "Ask the user a multiple-choice question. Use it when a task has a genuinely " +
-			"ambiguous, multiple-valid-approaches decision point — not for questions you could " +
-			"resolve by reading the codebase with read/grep/glob/symbol. Prefer 1 question over " +
-			"several when the decisions are independent; batch only questions that are genuinely " +
-			"related. Options should be mutually exclusive and skimmable: label is the fast scan, " +
-			"description carries the actual tradeoff. Order options with your recommended choice " +
-			"first when you have one, and say so in the description (e.g. \"— recommended, matches " +
-			"existing config style\"). The user can always answer with their own free text instead " +
-			"of picking an option. Do not use this tool to ask permission to do something — that " +
-			"is what the confirmation prompt is for. Use it only when you cannot proceed without " +
-			"the user's input.",
+		Description: "Ask the user a multiple-choice question when the task has a decision with " +
+			"several valid answers that reading the project cannot settle. Each question offers 2 to 4 " +
+			"options, each a short label and a description of its tradeoff. Put your recommended " +
+			"option first and say so in its description. The user can also answer in their own " +
+			"words. Not for asking permission: the confirmation prompt does that.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -69,20 +69,18 @@ const maxBridgedCalls = 50
 // regardless of mode.
 //
 // The order is the finding, not a style: the first version led with mechanism
-// ("Run a short Python program…") and prohibitions, and the bridge — the thing
-// that answers the measured 4-removable-round-trips problem — came last. The
-// symbol fix (doc/experiments/2026-08-symbol-uptake/README.md) established that the
-// description that moves uptake is the one that opens by mapping the felt need
-// ("I have several lookups to combine") to the tool; a spec sheet selects for
-// nobody. The text is the one doc/experiments/2026-09-run-code-js and
-// 2026-09-run-code-arms measured, sentence for sentence against the Monty
-// description it replaced.
+// and prohibitions, and the bridge — the thing that answers the measured
+// 4-removable-round-trips problem — came last. The symbol fix
+// (doc/experiments/2026-08-symbol-uptake/README.md) established that what moves
+// uptake is mapping the felt need ("I have several lookups to combine") to the
+// tool. That mapping now lives once, in the system prompt's bullet, which
+// doc/experiments/2026-09-code-mode2 measured; the description opened with the
+// same sentence until doc/experiments/2026-09-description-trims found that
+// dropping the copy lost no uptake. So the description starts from the
+// bridge.
 func codeTool(callable []string) llm.ToolDef {
 	var b strings.Builder
-	b.WriteString("Do several lookups, or a computation, in one call instead of " +
-		"several. Use this when one answer needs multiple read/grep/glob/ls " +
-		"results combined, or needs arithmetic, counting, sorting, or date " +
-		"math.\n\n" +
+	b.WriteString("Run a short JavaScript program. " +
 		"The program can call the read-only tools directly — " +
 		"grep({pattern: \"TODO\", glob: \"**/*.go\"}), read({path: \"a.go\", limit: 20})" +
 		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. ", maxBridgedCalls) +
