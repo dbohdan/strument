@@ -236,6 +236,10 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 		_ = vm.Set(name, func(call goja.FunctionCall) goja.Value {
 			v, err := bridge(ctx, &bridgedCall{Name: name, Args: jsArgs(call.Arguments, params)})
 			if err != nil {
+				log.failed++
+				if log.firstFailure == "" {
+					log.firstFailure = name + ": " + err.Error()
+				}
 				throw(err.Error())
 			}
 			return vm.ToValue(v)
@@ -278,7 +282,17 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	// value cannot.
 	c.Out.Toolf("%s", codeCalledText(codeLines(cc.code), log.names))
 	if err != nil {
-		return jsErrorText(err, cc.code)
+		// The user sees why, not only that it ran. A program that failed used
+		// to leave "Ran 82 lines of code." on screen and the error in the
+		// model's result alone, so the person watching saw the model try
+		// again with no idea what had gone wrong the first time.
+		text := jsErrorText(err, cc.code)
+		c.Out.Warningf("%s", firstLine(text))
+		return text
+	}
+	failures := codeFailuresNote(&log)
+	if failures != "" {
+		c.Out.Warningf("%s", failures)
 	}
 
 	var result any
@@ -301,13 +315,48 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	if result != nil || printed.Len() == 0 {
 		b.WriteString(show(value))
 	}
+	var notes []string
 	if note := codeLostCallsNote(result, printed.String(), &log); note != "" {
-		// One blank line between the value and the note, whether or not the
+		notes = append(notes, note)
+	}
+	if failures != "" {
+		notes = append(notes, failures)
+	}
+	if len(notes) > 0 {
+		// One blank line between the value and the notes, whether or not the
 		// value already ended in a newline — grep's content mode does, and two
 		// blank lines read as a missing paragraph.
-		return truncateResult(strings.TrimRight(b.String(), "\n") + "\n\n" + note)
+		return truncateResult(strings.TrimRight(b.String(), "\n") + "\n\n" + strings.Join(notes, "\n\n"))
 	}
 	return truncateResult(b.String())
+}
+
+// codeFailuresNote reports the tool calls that raised inside a program that
+// went on to finish, or "" when none did. A program that wraps each call in
+// try/catch turns a refusal into whatever its catch returns: in the live case
+// that prompted this, every call past the 50-call limit became a -1, and the
+// model built a census out of the -1s and then disbelieved the tools. The
+// note says what the catch hid, to the model and to the user alike.
+func codeFailuresNote(log *bridgeLog) string {
+	if log.failed == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s inside the program raised an error, and the program went on, so it "+
+		"may have caught %s. The first: %s",
+		render.Plural(log.failed, "tool call", "tool calls"), pluralPronoun(log.failed), log.firstFailure)
+}
+
+func pluralPronoun(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
+}
+
+// firstLine is text up to its first newline.
+func firstLine(text string) string {
+	line, _, _ := strings.Cut(text, "\n")
+	return line
 }
 
 // errHeapLimit is the interrupt value for a program that grew the heap past
@@ -420,6 +469,11 @@ type bridgeLog struct {
 	names []string // distinct tool names, in first-call order
 	calls int
 	last  any // what the last bridged call returned
+	// failed counts the calls that raised into the program, and firstFailure
+	// is the first one's error. A program that catches them goes on as if
+	// nothing happened, and so, until these, did everyone reading it.
+	failed       int
+	firstFailure string
 }
 
 // codeLines counts the program's lines, discounting the leading and trailing

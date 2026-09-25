@@ -666,3 +666,32 @@ func TestCodeTopLevelReturnIsTheResult(t *testing.T) {
 		t.Errorf("want the remaining syntax error, not the return:\n%s", got)
 	}
 }
+
+// A failed program shows its error to the user, not only to the model: the
+// person watching MiMo retry saw "Ran 82 lines of code." and nothing about why.
+func TestCodeFailureIsShownToTheUser(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
+	run(c, "const x = ;")
+	joined := strings.Join(out.lines, "\n")
+	if !strings.Contains(joined, "The program failed") || !strings.Contains(joined, "SyntaxError") {
+		t.Errorf("the user should see the error, got:\n%s", joined)
+	}
+}
+
+// A call that raised into a program which caught it is reported anyway: the
+// catch turned refusals into -1s, and the model built a census from them.
+func TestCaughtCallFailuresAreReported(t *testing.T) {
+	c, out := observeEnv(t, map[string]string{"f.txt": "x\n"})
+	got := run(c, "const r = [];\nfor (const p of ['f.txt', 'nope1', 'nope2']) {\n"+
+		"  try { r.push(read({path: p}).length) } catch (e) { r.push(-1) }\n}\nr")
+	if !strings.Contains(got, "2 tool calls inside the program raised an error") ||
+		!strings.Contains(got, "The first: read: ") {
+		t.Errorf("the model should hear what the catch hid, got:\n%s", got)
+	}
+	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "2 tool calls inside the program raised an error") {
+		t.Errorf("so should the user, got:\n%s", joined)
+	}
+	if ok := run(c, "read({path: 'f.txt'}).length"); strings.Contains(ok, "raised an error") {
+		t.Errorf("a clean program must carry no failure note, got:\n%s", ok)
+	}
+}
