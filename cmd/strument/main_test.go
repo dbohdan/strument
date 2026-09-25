@@ -928,3 +928,21 @@ func TestDevNullIsNotATerminal(t *testing.T) {
 		t.Errorf("%s was taken for a terminal", os.DevNull)
 	}
 }
+
+// The version is bare wherever it comes from, because the banner adds its own
+// "v": a checkout's `go build` records a module pseudo-version that starts with
+// one, and the banner printed "Strument vv0.0.0-20260924235244-10c205370749+dirty".
+func TestPickVersionIsBare(t *testing.T) {
+	for _, tc := range []struct{ stamped, module, want string }{
+		{devVersion, "v0.0.0-20260924235244-10c205370749+dirty", "0.0.0-20260924235244-10c205370749+dirty"},
+		{devVersion, "v1.2.3", "1.2.3"},
+		{devVersion, "(devel)", devVersion},
+		{devVersion, "", devVersion},
+		{"1.2.3", "v9.9.9", "1.2.3"},
+		{"v1.2.3", "", "1.2.3"},
+	} {
+		if got := pickVersion(tc.stamped, tc.module); got != tc.want {
+			t.Errorf("pickVersion(%q, %q) = %q, want %q", tc.stamped, tc.module, got, tc.want)
+		}
+	}
+}

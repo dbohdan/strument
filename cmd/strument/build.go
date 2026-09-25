@@ -4,6 +4,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"dbohdan.com/strument/internal/coder"
@@ -22,13 +23,25 @@ const devVersion = "0.0.0-dev"
 // variable: an installed build has a real version and never passes through
 // the release script.
 func resolvedVersion() string {
-	if version != devVersion {
-		return version
+	module := ""
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		module = bi.Main.Version
 	}
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
-		return bi.Main.Version
+	return pickVersion(version, module)
+}
+
+// pickVersion chooses between the stamped version and the module's, and
+// returns it bare: "1.2.3", never "v1.2.3". Whoever displays it adds the "v"
+// — the banner, the release file name — so a source that carries its own
+// printed "Strument vv0.0.0-…". Go's module versions always do (a checkout's
+// `go build` records a pseudo-version like "v0.0.0-20260924235244-10c205370749"),
+// and a VERSION given as "v1.2.3" would.
+func pickVersion(stamped, module string) string {
+	v := stamped
+	if stamped == devVersion && module != "" && module != "(devel)" {
+		v = module
 	}
-	return version
+	return strings.TrimPrefix(v, "v")
 }
 
 // buildInfo is what this binary knows about how it was built, for the about

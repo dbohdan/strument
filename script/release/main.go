@@ -29,7 +29,9 @@ type BuildTarget struct {
 }
 
 func main() {
-	version := os.Getenv("VERSION")
+	// Bare, as the binary reports it: the file name adds its own "v", and a
+	// stamped "v1.2.3" would print as "Strument vv1.2.3".
+	version := strings.TrimPrefix(os.Getenv("VERSION"), "v")
 	if version == "" {
 		fmt.Fprintln(os.Stderr, "'VERSION' environment variable must be set")
 		os.Exit(1)
