@@ -3,6 +3,8 @@ package coder
 import (
 	"path/filepath"
 	"slices"
+
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // AgentsLocalFileName is the user's private counterpart to AGENTS.md: standing
@@ -31,7 +33,13 @@ func (c *Coder) agentsLocalRel() string {
 	if c.Repo == nil || c.Repo.Root() == "" {
 		return ""
 	}
-	rel, err := filepath.Rel(c.Repo.Root(), filepath.Join(c.Root, AgentsLocalFileName))
+	// Both sides resolved: git reports its root with symlinks followed, and
+	// the coder's root is the path Strument was given. On macOS /var is
+	// /private/var, and on Windows a temporary directory can arrive as an 8.3
+	// short name, so the unresolved pair led out of the repository and the
+	// file went unexcluded.
+	rel, err := filepath.Rel(workspace.ResolveSymlinks(c.Repo.Root()),
+		workspace.ResolveSymlinks(filepath.Join(c.Root, AgentsLocalFileName)))
 	if err != nil || !filepath.IsLocal(rel) {
 		return ""
 	}

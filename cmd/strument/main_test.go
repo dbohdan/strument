@@ -958,6 +958,13 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 	}
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
+	// Reached through a symlink where the platform allows one, as macOS's
+	// temporary directory is (/var is /private/var): git reports the resolved
+	// path, and a comparison against the unresolved one failed on macOS and
+	// Windows (8.3 short names) while passing on Linux.
+	if link := filepath.Join(t.TempDir(), "link"); os.Symlink(root, link) == nil {
+		root = link
+	}
 	for _, args := range [][]string{
 		{"init", "-q", "-b", "main"},
 		{"config", "user.name", "T"}, {"config", "user.email", "t@example.com"},
