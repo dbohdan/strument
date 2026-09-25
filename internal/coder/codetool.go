@@ -268,7 +268,7 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 
 	stop := watchProgram(ctx, vm)
 	var value goja.Value
-	prog, err := goja.Compile("program.js", cc.code, true)
+	prog, err := compileProgram(cc.code)
 	if err == nil {
 		value, err = vm.RunProgram(prog)
 	}
@@ -703,6 +703,28 @@ var jsKeywordCall = regexp.MustCompile(`\b(read|read_text|read_bin|grep|glob|ls|
 // the one that fires exactly when the mistake did, and costs nothing on
 // correct programs; a hint never rides a wall the model could not have
 // avoided.
+// compileProgram compiles a program, accepting a top-level return.
+//
+// A program's value is its last expression, and the description says so, but
+// models write `return x` anyway: many code-execution tools run a program as a
+// function body, and a return at the top level can only mean "this is the
+// result". MiMo did it with the description in front of it and spent a step on
+// goja's "Illegal return statement". So a program that fails on exactly that is
+// compiled again as the body of a function called at once, and its value is
+// what it returns.
+//
+// The wrapper opens on the program's first line, so every line number an
+// error reports is still the program's own; only columns on line 1 move. A
+// program with a return and another syntax error fails on the other one,
+// which, once return is legal, is the error worth reporting.
+func compileProgram(code string) (*goja.Program, error) {
+	prog, err := goja.Compile("program.js", code, true)
+	if err == nil || !strings.Contains(err.Error(), "Illegal return statement") {
+		return prog, err
+	}
+	return goja.Compile("program.js", "(function () {"+code+"\n})()", true)
+}
+
 func jsErrorText(err error, code string) string {
 	var interrupted *goja.InterruptedError
 	if errors.As(err, &interrupted) {

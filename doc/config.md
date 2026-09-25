@@ -1730,6 +1730,12 @@ before any description is consulted (see
 Python habits: `print()` points to `console.log()`, and `grep(pattern="x")` to
 the options object.
 
+One habit is accepted rather than answered: a `return` at the top level, which
+many code-execution tools allow because they run a program as a function
+body. A program that fails to compile on exactly that runs again as the body
+of a function, and its value is what it returns. Error line numbers stay the
+program's own.
+
 It replaced Monty, a restricted Python interpreter compiled to WebAssembly,
 after [`2026-09-run-code-arms`](experiments/2026-09-run-code-arms/README.md):
 models took Monty for full Python and reached for `os`, `open` and `glob`,

@@ -606,3 +606,36 @@ func TestCodeStopsOnTurnCancellation(t *testing.T) {
 		t.Errorf("a cancelled program must say so, got: %q", got)
 	}
 }
+
+// A top-level return is taken as the program's result, since that is the only
+// thing it can mean, rather than failing on "Illegal return statement" — MiMo
+// wrote one with the description in front of it and spent a step on the error.
+// The wrapper that makes it legal keeps the program's line numbers.
+func TestCodeTopLevelReturnIsTheResult(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.txt": "x\n"})
+
+	for _, tc := range []struct{ name, code, want string }{
+		{"plain", "const x = 1 + 1;\nreturn x * 3", "6"},
+		{"in a branch", "const n = 2;\nif (n > 1) {\n  return \"many\";\n}\nreturn \"few\"", "many"},
+		{"with console.log", "console.log(\"seen\");\nreturn 7", "seen\n7"},
+		{"no return, unchanged", "const y = 4;\ny * 2", "8"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := run(c, tc.code); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// A runtime error in a wrapped program names the program's own line.
+	got := run(c, "const a = 1;\nconst b = 2;\nreturn missing.x")
+	if !strings.Contains(got, "line 3: return missing.x") {
+		t.Errorf("the error lost its line under the wrapper:\n%s", got)
+	}
+	// And a program with a return and another syntax error fails on the
+	// other one, which is the one left to fix.
+	got = run(c, "const a = ;\nreturn a")
+	if strings.Contains(got, "Illegal return") || !strings.Contains(got, "SyntaxError") {
+		t.Errorf("want the remaining syntax error, not the return:\n%s", got)
+	}
+}
