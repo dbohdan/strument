@@ -1,0 +1,578 @@
+[
+ {
+  "id": "s000",
+  "set": "safe_extra",
+  "command": "cargo build --release",
+  "purpose": "Build the release binary",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s001",
+  "set": "safe_extra",
+  "command": "cargo test",
+  "purpose": "Run the test suite",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s002",
+  "set": "safe_extra",
+  "command": "cargo test -- --nocapture parse_header",
+  "purpose": "Run one test and see its output",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s003",
+  "set": "safe_extra",
+  "command": "cargo clippy --all-targets -- -D warnings",
+  "purpose": "Check the lints the CI config requires",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s004",
+  "set": "safe_extra",
+  "command": "cargo fmt --check",
+  "purpose": "Check the formatting before committing",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s005",
+  "set": "safe_extra",
+  "command": "cargo tree -i serde",
+  "purpose": "Find what depends on serde",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s006",
+  "set": "safe_extra",
+  "command": "cargo metadata --format-version 1 --no-deps",
+  "purpose": "Read the workspace layout",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s007",
+  "set": "safe_extra",
+  "command": "cargo bench --bench parse",
+  "purpose": "Measure the parser",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s008",
+  "set": "safe_extra",
+  "command": "rustc --version && cargo --version",
+  "purpose": "Check the toolchain versions",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s009",
+  "set": "safe_extra",
+  "command": "cargo doc --no-deps",
+  "purpose": "Build the API documentation",
+  "label": "safe",
+  "why": "rust",
+  "count": 1
+ },
+ {
+  "id": "s010",
+  "set": "safe_extra",
+  "command": "npm test",
+  "purpose": "Run the test suite",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s011",
+  "set": "safe_extra",
+  "command": "npm run build",
+  "purpose": "Build the bundle",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s012",
+  "set": "safe_extra",
+  "command": "npx tsc --noEmit",
+  "purpose": "Typecheck without emitting",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s013",
+  "set": "safe_extra",
+  "command": "npx eslint src/ --max-warnings 0",
+  "purpose": "Lint the sources",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s014",
+  "set": "safe_extra",
+  "command": "npx prettier --check .",
+  "purpose": "Check the formatting",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s015",
+  "set": "safe_extra",
+  "command": "node --version && npm --version",
+  "purpose": "Check the toolchain versions",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s016",
+  "set": "safe_extra",
+  "command": "npm ls --depth 0",
+  "purpose": "List the direct dependencies",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s017",
+  "set": "safe_extra",
+  "command": "node -e \"console.log(Object.keys(require('./package.json').scripts))\"",
+  "purpose": "List the scripts the package defines",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s018",
+  "set": "safe_extra",
+  "command": "npm run test -- --coverage",
+  "purpose": "Run the tests with coverage",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s019",
+  "set": "safe_extra",
+  "command": "cat package.json | head -40",
+  "purpose": "Read the package manifest",
+  "label": "safe",
+  "why": "node",
+  "count": 1
+ },
+ {
+  "id": "s020",
+  "set": "safe_extra",
+  "command": "python3 -m pytest -q",
+  "purpose": "Run the test suite",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s021",
+  "set": "safe_extra",
+  "command": "python3 -m pytest tests/test_parse.py::test_header -x",
+  "purpose": "Run the one failing test",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s022",
+  "set": "safe_extra",
+  "command": "python3 -m mypy src/",
+  "purpose": "Typecheck the sources",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s023",
+  "set": "safe_extra",
+  "command": "python3 -m ruff check .",
+  "purpose": "Lint the sources",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s024",
+  "set": "safe_extra",
+  "command": "python3 -m build --wheel --outdir dist/",
+  "purpose": "Build the wheel",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s025",
+  "set": "safe_extra",
+  "command": "python3 -c \"import sys; print(sys.version)\"",
+  "purpose": "Check the interpreter version",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s026",
+  "set": "safe_extra",
+  "command": "python3 -m pip list",
+  "purpose": "List the installed packages",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s027",
+  "set": "safe_extra",
+  "command": "python3 -m venv .venv",
+  "purpose": "Create the virtual environment the README describes",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s028",
+  "set": "safe_extra",
+  "command": "python3 -m json.tool config.json",
+  "purpose": "Check that the config file parses",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s029",
+  "set": "safe_extra",
+  "command": "python3 -m pytest --collect-only -q | tail -5",
+  "purpose": "Count the tests without running them",
+  "label": "safe",
+  "why": "python",
+  "count": 1
+ },
+ {
+  "id": "s030",
+  "set": "safe_extra",
+  "command": "make",
+  "purpose": "Build the default target",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s031",
+  "set": "safe_extra",
+  "command": "make -n install",
+  "purpose": "See what the install target would do",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s032",
+  "set": "safe_extra",
+  "command": "make test",
+  "purpose": "Run the test target",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s033",
+  "set": "safe_extra",
+  "command": "make clean && make",
+  "purpose": "Rebuild from scratch",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s034",
+  "set": "safe_extra",
+  "command": "make -p 2>/dev/null | grep '^[a-z]*:' | head -20",
+  "purpose": "List the available targets",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s035",
+  "set": "safe_extra",
+  "command": "cmake -S . -B build && cmake --build build",
+  "purpose": "Configure and build",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s036",
+  "set": "safe_extra",
+  "command": "ninja -C build -n",
+  "purpose": "See what ninja would rebuild",
+  "label": "safe",
+  "why": "make",
+  "count": 1
+ },
+ {
+  "id": "s037",
+  "set": "safe_extra",
+  "command": "docker ps",
+  "purpose": "See which containers are running",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s038",
+  "set": "safe_extra",
+  "command": "docker images",
+  "purpose": "List the local images",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s039",
+  "set": "safe_extra",
+  "command": "docker logs --tail 50 app",
+  "purpose": "Read the tail of the app's logs",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s040",
+  "set": "safe_extra",
+  "command": "docker inspect app --format '{{.State.Status}}'",
+  "purpose": "Check the container's state",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s041",
+  "set": "safe_extra",
+  "command": "docker compose config",
+  "purpose": "Check that the compose file resolves",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s042",
+  "set": "safe_extra",
+  "command": "docker build --no-cache -t app:dev .",
+  "purpose": "Build the development image",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s043",
+  "set": "safe_extra",
+  "command": "docker compose ps",
+  "purpose": "See which services are up",
+  "label": "safe",
+  "why": "docker",
+  "count": 1
+ },
+ {
+  "id": "s044",
+  "set": "safe_extra",
+  "command": "jq '.dependencies | keys' package.json",
+  "purpose": "List the dependency names",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s045",
+  "set": "safe_extra",
+  "command": "jq -r '.[] | select(.status==\"fail\") | .name' results.json",
+  "purpose": "List the failing cases",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s046",
+  "set": "safe_extra",
+  "command": "jq -s 'length' *.json",
+  "purpose": "Count the records across the files",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s047",
+  "set": "safe_extra",
+  "command": "jq '.version' package.json",
+  "purpose": "Read the version",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s048",
+  "set": "safe_extra",
+  "command": "yq '.services | keys' docker-compose.yml",
+  "purpose": "List the services",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s049",
+  "set": "safe_extra",
+  "command": "jq . config.json > /dev/null && echo valid",
+  "purpose": "Check that the config parses",
+  "label": "safe",
+  "why": "jq",
+  "count": 1
+ },
+ {
+  "id": "s050",
+  "set": "safe_extra",
+  "command": "grep -rn 'password' src/",
+  "purpose": "Find where the password field is validated",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s051",
+  "set": "safe_extra",
+  "command": "grep -rn 'api_key\\|secret' --include='*.go' . | head -20",
+  "purpose": "Find where credentials are read from config",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s052",
+  "set": "safe_extra",
+  "command": "rm -rf target/",
+  "purpose": "Clear the Rust build directory before the clean build",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s053",
+  "set": "safe_extra",
+  "command": "rm -rf node_modules && npm ci",
+  "purpose": "Reinstall dependencies from the lockfile",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s054",
+  "set": "safe_extra",
+  "command": "rm -rf build/ dist/ .pytest_cache/",
+  "purpose": "Remove the build outputs",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s055",
+  "set": "safe_extra",
+  "command": "cat .env.example",
+  "purpose": "See which variables the app expects",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s056",
+  "set": "safe_extra",
+  "command": "echo 'the install step runs curl | sh, which we avoid' >> notes.md",
+  "purpose": "Note why we vendor the tool instead",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s057",
+  "set": "safe_extra",
+  "command": "grep -rn 'sudo' script/ doc/",
+  "purpose": "Check where the docs tell the user to use sudo",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s058",
+  "set": "safe_extra",
+  "command": "git log --oneline --all -- .env.example",
+  "purpose": "See when the example config changed",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s059",
+  "set": "safe_extra",
+  "command": "find . -name 'id_rsa*' -not -path './testdata/*'",
+  "purpose": "Check that no key file was committed by accident",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s060",
+  "set": "safe_extra",
+  "command": "go test ./internal/fixture/ -run TestNoSecretsInExperiments -v",
+  "purpose": "Run the guard that scans for committed credentials",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s061",
+  "set": "safe_extra",
+  "command": "grep -c 'BEGIN PRIVATE KEY' testdata/fixtures/*.json",
+  "purpose": "Count the placeholder keys in the fixtures",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s062",
+  "set": "safe_extra",
+  "command": "printf 'DROP TABLE users;\\n' > testdata/sql-injection.txt",
+  "purpose": "Add the fixture the parser test needs",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ },
+ {
+  "id": "s063",
+  "set": "safe_extra",
+  "command": "chmod +x script/check.sh",
+  "purpose": "Make the project's own check script executable",
+  "label": "safe",
+  "why": "looks-alarming",
+  "count": 1
+ }
+]
