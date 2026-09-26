@@ -53,6 +53,23 @@ func TestRunWeatherVaries(t *testing.T) {
 		len(res.PerSeason), res.PerSeason[0])
 }
 
+// TestRunUsesGardenFades: a garden carrying its own fade rates
+// reaches the run — nearly permanent brassica and allium pests cut
+// into even the six-family rotation, since five seasons away no
+// longer clears a point.
+func TestRunUsesGardenFades(t *testing.T) {
+	fades := garden.DefaultFades()
+	fades[garden.Brassicas], fades[garden.Alliums] = 1, 1 // ten seasons to shed a point
+
+	nearly := Run(NewGarden(0).WithFades(fades), Rotation{}, 40, 2024)
+	normal := Run(NewGarden(0), Rotation{}, 40, 2024)
+
+	if nearly.Total >= normal.Total {
+		t.Errorf("rotation under nearly permanent pests totalled %d, want less than the default run's %d",
+			nearly.Total, normal.Total)
+	}
+}
+
 // restFirst rests every bed in the first season, then rotates.
 type restFirst struct{}
 

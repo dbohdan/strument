@@ -8,6 +8,12 @@
 // strategy with a Unicode sparkline of that strategy's mean harvest
 // per season, all lines on one shared scale so the shapes can be
 // compared. Plain text, no color.
+//
+// With -sweep it instead reruns the comparison with the persistent
+// families' fade rate — the model's least certain number — at each
+// of several rates across its plausible range, printing every
+// strategy's percentage of rotation per rate and which strategy
+// comes out first.
 package main
 
 import (
@@ -18,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"larkspur/garden"
 	"larkspur/sim"
 )
 
@@ -30,11 +37,25 @@ type row struct {
 	perSeason []int   // mean harvest per season across seeds
 }
 
+// strategies are the ones under comparison, rotation first: the
+// percentage column and the sweep's first place both use it as the
+// reference.
+var strategies = []struct {
+	name string
+	s    sim.Strategy
+}{
+	{"rotation", sim.Rotation{}}, // the committee's rule
+	{"monoculture", sim.Monoculture{}},
+	{"alternation", sim.Alternation{}},
+	{"greedy", sim.Greedy{}},
+}
+
 func main() {
 	seasons := flag.Int("seasons", 20, "seasons per run, one per year")
 	seeds := flag.Int("seeds", 200, "seeds (runs) per strategy")
 	beds := flag.Int("beds", sim.DefaultBeds, "beds per garden")
 	seed := flag.Int64("seed", 0, "first seed; the rest follow in order")
+	sweep := flag.Bool("sweep", false, "sweep the persistent-family fade rate instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -47,19 +68,23 @@ func main() {
 		fatalf("-beds must be at least 1")
 	}
 
-	strategies := []struct {
-		name string
-		s    sim.Strategy
-	}{
-		{"rotation", sim.Rotation{}}, // the committee's rule
-		{"monoculture", sim.Monoculture{}},
-		{"alternation", sim.Alternation{}},
-		{"greedy", sim.Greedy{}},
+	if *sweep {
+		sweepFade(*seasons, *seeds, *beds, *seed)
+		return
 	}
 
+	rows := measure(*seasons, *seeds, *beds, *seed, nil)
+	printTable(rows)
+	printSparklines(rows)
+}
+
+// measure runs every strategy over every seed with the given fade
+// rates (nil for the package defaults) and works out each row's
+// percentage of rotation.
+func measure(seasons, seeds, beds int, first int64, fades garden.Fades) []row {
 	rows := make([]row, len(strategies))
 	for i, st := range strategies {
-		rows[i] = run(st.name, st.s, *seasons, *seeds, *beds, *seed)
+		rows[i] = run(st.name, st.s, seasons, seeds, beds, first, fades)
 	}
 	// rows[0] is the committee rotation, the reference for the
 	// percentage column.
@@ -68,17 +93,58 @@ func main() {
 			rows[i].pct = 100 * rows[i].mean / rows[0].mean
 		}
 	}
+	return rows
+}
 
-	printTable(rows)
-	printSparklines(rows)
+// sweepFade reruns the comparison with the persistent families'
+// fade rate — brassicas and alliums — at each rate in turn, from
+// nearly permanent to a whole point per season, and reports each
+// strategy's percentage of rotation plus which strategy wins.
+func sweepFade(seasons, seeds, beds int, first int64) {
+	// Rates in tenths of pressure per season away: 0.1 takes ten
+	// seasons to shed a point, 1.0 is the rate the fast families
+	// already get.
+	rates := []int{1, 2, 3, 5, 7, 10}
+
+	const rateW, colW = 11, 12
+	fmt.Printf("%*s", rateW, "fade/season")
+	for _, st := range strategies {
+		fmt.Printf(" %*s", colW, st.name)
+	}
+	fmt.Printf(" %*s\n", colW, "first")
+
+	for _, rate := range rates {
+		fades := garden.DefaultFades()
+		fades[garden.Brassicas], fades[garden.Alliums] = rate, rate
+
+		rows := measure(seasons, seeds, beds, first, fades)
+
+		best := 0
+		for i := range rows {
+			if rows[i].mean > rows[best].mean {
+				best = i
+			}
+		}
+
+		fmt.Printf("%*.1f", rateW, float64(rate)/10)
+		for _, r := range rows {
+			fmt.Printf(" %*s", colW, fmt.Sprintf("%.0f%%", r.pct))
+		}
+		fmt.Printf(" %*s\n", colW, rows[best].name)
+	}
 }
 
 // run plays one strategy over every seed and summarizes the totals.
-func run(name string, strategy sim.Strategy, seasons, seeds, beds int, first int64) row {
+// Fades of nil mean the package defaults.
+func run(name string, strategy sim.Strategy, seasons, seeds, beds int, first int64, fades garden.Fades) row {
 	totals := make([]int, seeds)
 	perSeason := make([]int, seasons)
 	for i := 0; i < seeds; i++ {
-		res := sim.Run(sim.NewGarden(beds), strategy, seasons, first+int64(i))
+		g := sim.NewGarden(beds)
+		if fades != nil {
+			g = g.WithFades(fades)
+		}
+		res := sim.Run(g, strategy, seasons, first+int64(i))
 		totals[i] = res.Total
 		for s, harvest := range res.PerSeason {
 			perSeason[s] += harvest

@@ -94,6 +94,34 @@ func TestPressureFadesAtFamilyRates(t *testing.T) {
 	}
 }
 
+// TestBedFades checks that a bed can carry its own fade rates: the
+// override drives decay, survives a season and a rest, and leaves
+// families it doesn't name on the package default.
+func TestBedFades(t *testing.T) {
+	bed := NewBed(FertileSoil)
+	bed.Fades = Fades{Brassicas: 5} // this bed's own rate
+
+	_, bed = Season(bed, Brassicas) // brassicas build a point
+	if bed.Fades[Brassicas] != 5 {
+		t.Fatalf("fade rates lost growing a crop: %v", bed.Fades)
+	}
+
+	_, bed = Season(bed, Alliums)
+	if got := bed.Pressure[Brassicas]; got != pressureUnit-5 {
+		t.Errorf("brassicas pressure = %d tenths, want %d (the bed's own rate of 5)", got, pressureUnit-5)
+	}
+
+	_, bed = Season(bed, Roots)
+	if got := bed.Pressure[Alliums]; got != pressureUnit-fadePersistent {
+		t.Errorf("alliums pressure = %d tenths, want %d (package default)", got, pressureUnit-fadePersistent)
+	}
+
+	_, rested := Rest(bed)
+	if rested.Fades[Brassicas] != 5 {
+		t.Errorf("fade rates lost resting the bed: %v", rested.Fades)
+	}
+}
+
 // TestSpreadCompost checks the committee's spring spread: Compost
 // added to each nutrient, never past SoilCap.
 func TestSpreadCompost(t *testing.T) {

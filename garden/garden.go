@@ -191,11 +191,40 @@ const (
 	fadePersistent = 2
 )
 
-// Bed is one garden bed: its soil and the pest and disease pressure
-// accumulated against each family.
+// Bed is one garden bed: its soil, the pest and disease pressure
+// accumulated against each family, and optionally its own fade
+// rates. A nil Fades means the package defaults from Crops.
 type Bed struct {
 	Soil     Nutrients
 	Pressure map[Family]int
+	Fades    Fades
+}
+
+// Fades holds per-family fade rates in tenths of pressure per
+// season a family is out of the bed. A bed may carry its own copy —
+// see DefaultFades — so a run can explore other rates without
+// touching the package defaults.
+type Fades map[Family]int
+
+// DefaultFades returns the package's rule-of-thumb fade rates for
+// every family: fadePersistent for brassicas and alliums,
+// fadeOneSeason for the rest.
+func DefaultFades() Fades {
+	f := make(Fades, len(Crops))
+	for family, crop := range Crops {
+		f[family] = crop.Fade
+	}
+	return f
+}
+
+// fade is the rate at which pressure against f fades while f is out
+// of the bed: the bed's own rate for f if it sets one, otherwise the
+// package default.
+func (b Bed) fade(f Family) int {
+	if r, ok := b.Fades[f]; ok {
+		return r
+	}
+	return Crops[f].Fade
 }
 
 // NewBed returns a bed with the given soil and no pest pressure on
@@ -221,9 +250,10 @@ func NewBed(soil Nutrients) Bed {
 //
 //   - Pressure against the grown family rises by pressureUnit a
 //     season, up to PressureMax (pests breed, but only so far);
-//     while a family is out of the bed, its pressure fades by that
-//     family's Fade rate (rotation starves it — slowly for the
-//     persistent diseases). Nothing drops below zero.
+//     while a family is out of the bed, its pressure fades by the
+//     bed's rate for that family — Crop.Fade unless the bed carries
+//     its own Fades (rotation starves it; slowly for the persistent
+//     diseases). Nothing drops below zero.
 func Season(b Bed, family Family) (int, Bed) {
 	crop, ok := Crops[family]
 	if !ok {
@@ -239,13 +269,14 @@ func Season(b Bed, family Family) (int, Bed) {
 	after := Bed{
 		Soil:     apply(b.Soil, crop),
 		Pressure: make(map[Family]int, len(b.Pressure)+1),
+		Fades:    b.Fades,
 	}
 	for f, p := range b.Pressure {
 		after.Pressure[f] = p
 	}
 	for f, p := range after.Pressure {
 		if f != family {
-			after.Pressure[f] = max(0, p-Crops[f].Fade)
+			after.Pressure[f] = max(0, p-b.fade(f))
 		}
 	}
 	after.Pressure[family] = min(PressureMax, b.Pressure[family]+pressureUnit)
@@ -264,17 +295,18 @@ func SpreadCompost(b Bed) Bed {
 // Rest puts the bed under a cover crop for one season, planted with
 // nothing for harvest. It returns a yield of 0; the soil gains Cover,
 // more than a spring's compost; and pressure against every family
-// fades by that family's Fade rate — the same decay it gets when it
-// is rotated out, now applied to all of them at once, which is why
-// one rested season barely touches the persistent brassica and
-// allium diseases.
+// fades by the bed's rate for that family — the same decay it gets
+// when it is rotated out, now applied to all of them at once, which
+// is why one rested season barely touches the persistent brassica
+// and allium diseases.
 func Rest(b Bed) (int, Bed) {
 	after := Bed{
 		Soil:     add(b.Soil, Cover),
 		Pressure: make(map[Family]int, len(b.Pressure)),
+		Fades:    b.Fades,
 	}
 	for f, p := range b.Pressure {
-		after.Pressure[f] = max(0, p-Crops[f].Fade)
+		after.Pressure[f] = max(0, p-b.fade(f))
 	}
 	return 0, after
 }
