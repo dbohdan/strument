@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -232,5 +235,47 @@ func TestApproveModelSkipsLongCommands(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(out.lines, "\n"), "more than it may read whole") {
 		t.Errorf("no line said why the model was not asked: %v", out.lines)
+	}
+}
+
+// TestApproveRubricIsTheOneEvaluated: the rubric's pass is evidence about
+// its exact text, so the constants here must match the eval's runner word for
+// word. Editing either without the other is how a shipped classifier would
+// quietly become an untested one.
+func TestApproveRubricIsTheOneEvaluated(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "doc", "experiments", "2026-09-approve-model", "data", "run.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	// pyString joins the adjacent literals of NAME = ( "…" "…" ).
+	pyString := func(name string) string {
+		i := strings.Index(src, name+" = (")
+		if i < 0 {
+			t.Fatalf("run.py has no %s", name)
+		}
+		block := src[i : i+strings.Index(src[i:], "\n)")]
+		var b strings.Builder
+		for _, m := range regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`).FindAllStringSubmatch(block, -1) {
+			b.WriteString(m[1])
+		}
+		return b.String()
+	}
+	if got := pyString("SAFE_TEXT"); got != approveSafeText {
+		t.Errorf("safe text differs from the eval's:\n go: %q\npy: %q", approveSafeText, got)
+	}
+	if got := pyString("ASK_TEXT"); got != approveAskText {
+		t.Errorf("ask text differs from the eval's:\n go: %q\npy: %q", approveAskText, got)
+	}
+	i := strings.Index(src, `"instructions": (`)
+	if i < 0 {
+		t.Fatal("run.py's D1 has no instructions")
+	}
+	var b strings.Builder
+	for _, m := range regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`).FindAllStringSubmatch(src[i+len(`"instructions": (`):i+strings.Index(src[i:], "),")], -1) {
+		b.WriteString(m[1])
+	}
+	if b.String() != approveInstructions {
+		t.Errorf("instructions differ from the eval's:\n go: %q\npy: %q", approveInstructions, b.String())
 	}
 }

@@ -999,8 +999,22 @@ tested one model (Jev 1.13), with the rubric Strument sends, at threshold 0.9:
 Any other model is untested. Its probabilities are calibrated differently, so
 the same threshold means something else: Laya, run locally, rated
 `go test ./...` at 0.81 and `rm -rf ~/.ssh` at 0.75. That is why `threshold`
-is set on the model rather than globally. Run the evaluation's corpus against
-a model before trusting its threshold.
+is set on the model rather than globally.
+
+Run the evaluation's corpus against a model before trusting its threshold.
+The runner takes the same endpoint, slug and threshold as your
+`decision_model()`, and the scorer applies the evaluation's five criteria:
+
+```sh
+cd doc/experiments/2026-09-approve-model/data
+DECISION_URL=http://localhost:11435/v1/systemone DECISION_SLUG=laya \
+  DECISION_DESIGNS=D1 python3 run.py run laya.jsonl
+DECISION_THRESHOLD=0.9 python3 score.py laya.jsonl
+```
+
+The ask set is model-written, and it has no items long enough to test
+truncation. The 800-character cap covers that instead. Treat a pass as
+necessary, not sufficient.
 
 **Local servers load models on demand.** On a CPU, Laya took 10–19 seconds
 to load. Ollaya unloads idle models after `OLLAYA_KEEP_ALIVE` (default five

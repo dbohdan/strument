@@ -1,10 +1,27 @@
-"""Send every corpus item to Jev under both designs, and record the answers.
+"""Send every corpus item to a decision model, and record the answers.
 
-Reads OPENROUTER_API_KEY from the environment. Nothing in the corpus is
-executed: each command is a string inside the request's `state`.
+By default this is the eval as it ran: Jev 1.13 through OpenRouter, both
+designs, with OPENROUTER_API_KEY from the environment. The same run checks
+any other model that speaks the systemone schema, which is what Strument's
+approve_model sends:
+
+  DECISION_URL      the endpoint, as in decision_model(url=...)
+  DECISION_SLUG     the model, as in decision_model's slug
+  DECISION_API_KEY  a bearer key; falls back to OPENROUTER_API_KEY; unset
+                    sends none, as a local server needs
+  DECISION_DESIGNS  "D1" for the design Strument ships; default "D1,D2"
+
+For example, against a local Ollaya:
+
+  DECISION_URL=http://localhost:11435/v1/systemone DECISION_SLUG=laya \\
+  DECISION_DESIGNS=D1 python3 run.py run laya.jsonl
+  DECISION_THRESHOLD=0.9 python3 score.py laya.jsonl
+
+Nothing in the corpus is executed: each command is a string inside the
+request's `state`.
 
 Usage:
-  python3 run.py pilot              # one harmless item, both designs
+  python3 run.py pilot              # one harmless item, each design
   python3 run.py run results.jsonl  # the full corpus, shuffled, resumable
 """
 
@@ -16,8 +33,9 @@ import time
 import urllib.error
 import urllib.request
 
-URL = "https://openrouter.ai/api/alpha/decisions"
-MODEL = "typesafe/jev-1.13"
+URL = os.environ.get("DECISION_URL", "https://openrouter.ai/api/alpha/decisions")
+MODEL = os.environ.get("DECISION_SLUG", "typesafe/jev-1.13")
+KEY = os.environ.get("DECISION_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
 ROOT = "/home/sam/work/app"
 SEED = 20260926
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -102,6 +120,7 @@ D2 = {
 }
 
 DESIGNS = {"D1": D1, "D2": D2}
+DESIGNS = {d: DESIGNS[d] for d in os.environ.get("DECISION_DESIGNS", "D1,D2").split(",")}
 
 
 def call(item, design):
@@ -111,10 +130,8 @@ def call(item, design):
     req = urllib.request.Request(
         URL,
         data=body,
-        headers={
-            "Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"],
-            "Content-Type": "application/json",
-        },
+        headers={"Content-Type": "application/json",
+                 **({"Authorization": "Bearer " + KEY} if KEY else {})},
     )
     for attempt in range(5):
         t = time.time()
