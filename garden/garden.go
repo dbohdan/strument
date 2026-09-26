@@ -19,7 +19,14 @@
 //     brassica soil, onion root rot in allium beds) multiply while
 //     that family stays in the bed and starve when it is rotated out:
 //     1 point of pressure gained per season grown, 1 lost per season
-//     rested.
+//     it isn't in the bed.
+//
+//   - Soil comes back two ways. The committee spreads a small fixed
+//     amount of compost on every bed every spring (Compost), and a
+//     season left under a cover crop (Rest) harvests nothing,
+//     restores more than that compost, and lets pressure against
+//     every family fall. Soil never climbs past SoilCap, so a bed
+//     can't be composted without bound.
 //
 //   - The yield arithmetic (BaseYield of 10, 2 points of yield lost
 //     per point of pressure, 1 point per unit of nutrient the bed
@@ -38,6 +45,18 @@ type Nutrients struct {
 // FertileSoil is the ordinary starting point: ten points of each
 // nutrient, enough for a couple of seasons of any family.
 var FertileSoil = Nutrients{Nitrogen: 10, Phosphorus: 10, Potassium: 10}
+
+// SoilCap is the most of any one nutrient a bed can hold. Whatever is
+// spread beyond it is assumed to leach or burn off.
+const SoilCap = 20
+
+// Compost is what the committee spreads every spring: a small fixed
+// amount of each nutrient. See SpreadCompost.
+var Compost = Nutrients{Nitrogen: 1, Phosphorus: 1, Potassium: 1}
+
+// Cover is what a season under a cover crop leaves in the soil —
+// more than a spring's worth of compost. See Rest.
+var Cover = Nutrients{Nitrogen: 2, Phosphorus: 2, Potassium: 2}
 
 // Family identifies one of the six crop families the committee
 // rotates through.
@@ -144,7 +163,7 @@ func NewBed(soil Nutrients) Bed {
 //     nutrient the bed cannot supply. It never goes below zero.
 //
 //   - The bed gives up what the crop draws and gains what it gives
-//     back, per nutrient, never dropping below zero.
+//     back, per nutrient, clamped to [0, SoilCap].
 //
 //   - Pressure against the grown family rises by 1 (pests breed);
 //     pressure against every other family falls by 1 (rotation starves
@@ -177,6 +196,33 @@ func Season(b Bed, family Family) (int, Bed) {
 	return yield, after
 }
 
+// SpreadCompost returns the bed after the committee's spring spread:
+// Compost added to each nutrient, up to SoilCap. When to spread is
+// the caller's decision — the committee does it every spring.
+func SpreadCompost(b Bed) Bed {
+	b.Soil = add(b.Soil, Compost)
+	return b
+}
+
+// Rest puts the bed under a cover crop for one season, planted with
+// nothing for harvest. It returns a yield of 0; the soil gains Cover,
+// more than a spring's compost; and pest pressure against every
+// family falls by 1 — the same decay a family gets when it is rotated
+// out, now applied to all of them at once.
+func Rest(b Bed) (int, Bed) {
+	after := Bed{
+		Soil:     add(b.Soil, Cover),
+		Pressure: make(map[Family]int, len(b.Pressure)),
+	}
+	for f, p := range b.Pressure {
+		if p > 0 {
+			p--
+		}
+		after.Pressure[f] = p
+	}
+	return 0, after
+}
+
 // shortfall reports how much of the crop's meal the bed cannot supply:
 // one yield point lost per missing unit of nutrient.
 func shortfall(draw, soil Nutrients) int {
@@ -185,12 +231,30 @@ func shortfall(draw, soil Nutrients) int {
 		max(0, draw.Potassium-soil.Potassium)
 }
 
-// apply returns the soil after one season of the crop: draw removed,
-// give added, never below zero.
+// apply returns the soil after one season of the crop: give added,
+// draw removed, clamped to [0, SoilCap].
 func apply(soil Nutrients, crop Crop) Nutrients {
+	return clamp(Nutrients{
+		Nitrogen:   soil.Nitrogen + crop.Give.Nitrogen - crop.Draw.Nitrogen,
+		Phosphorus: soil.Phosphorus + crop.Give.Phosphorus - crop.Draw.Phosphorus,
+		Potassium:  soil.Potassium + crop.Give.Potassium - crop.Draw.Potassium,
+	})
+}
+
+// add returns the soil with extra mixed in, clamped to [0, SoilCap].
+func add(soil, extra Nutrients) Nutrients {
+	return clamp(Nutrients{
+		Nitrogen:   soil.Nitrogen + extra.Nitrogen,
+		Phosphorus: soil.Phosphorus + extra.Phosphorus,
+		Potassium:  soil.Potassium + extra.Potassium,
+	})
+}
+
+// clamp keeps each nutrient within [0, SoilCap].
+func clamp(n Nutrients) Nutrients {
 	return Nutrients{
-		Nitrogen:   max(0, soil.Nitrogen+crop.Give.Nitrogen-crop.Draw.Nitrogen),
-		Phosphorus: max(0, soil.Phosphorus+crop.Give.Phosphorus-crop.Draw.Phosphorus),
-		Potassium:  max(0, soil.Potassium+crop.Give.Potassium-crop.Draw.Potassium),
+		Nitrogen:   min(SoilCap, max(0, n.Nitrogen)),
+		Phosphorus: min(SoilCap, max(0, n.Phosphorus)),
+		Potassium:  min(SoilCap, max(0, n.Potassium)),
 	}
 }

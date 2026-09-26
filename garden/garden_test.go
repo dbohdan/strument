@@ -55,6 +55,96 @@ func TestSameFamilyTwiceRaisesPressureAndLowersYield(t *testing.T) {
 	}
 }
 
+// TestSpreadCompost checks the committee's spring spread: Compost
+// added to each nutrient, never past SoilCap.
+func TestSpreadCompost(t *testing.T) {
+	tests := []struct {
+		name  string
+		start Nutrients
+		want  Nutrients
+	}{
+		{"hungry bed", Nutrients{5, 6, 7}, Nutrients{6, 7, 8}},
+		{"nearly full bed",
+			Nutrients{SoilCap - 1, SoilCap, SoilCap},
+			Nutrients{SoilCap, SoilCap, SoilCap}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SpreadCompost(NewBed(tt.start)).Soil; got != tt.want {
+				t.Errorf("soil after compost = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRest checks a season under a cover crop: nothing harvested,
+// more restored than compost brings, and every family's pressure
+// falls.
+func TestRest(t *testing.T) {
+	bed := NewBed(Nutrients{5, 6, 7})
+	bed.Pressure[Brassicas], bed.Pressure[Alliums], bed.Pressure[Roots] = 3, 2, 0
+
+	yield, after := Rest(bed)
+
+	if yield != 0 {
+		t.Errorf("yield = %d, want 0 — nothing is harvested", yield)
+	}
+	for _, n := range []struct {
+		name           string
+		got, start     int
+		compostPerUnit int
+	}{
+		{"nitrogen", after.Soil.Nitrogen, bed.Soil.Nitrogen, Compost.Nitrogen},
+		{"phosphorus", after.Soil.Phosphorus, bed.Soil.Phosphorus, Compost.Phosphorus},
+		{"potassium", after.Soil.Potassium, bed.Soil.Potassium, Compost.Potassium},
+	} {
+		if d := n.got - n.start; d <= n.compostPerUnit {
+			t.Errorf("rest added %d %s, want more than the %d compost brings", d, n.name, n.compostPerUnit)
+		}
+	}
+	want := map[Family]int{Brassicas: 2, Alliums: 1, Roots: 0}
+	for f, w := range want {
+		if got := after.Pressure[f]; got != w {
+			t.Errorf("pressure on %s after rest = %d, want %d", f, got, w)
+		}
+	}
+	if p := bed.Pressure[Brassicas]; p != 3 {
+		t.Errorf("caller's bed was mutated: brassica pressure = %d, want 3", p)
+	}
+}
+
+// TestRotationBeatsFortySeasonsOfBrassicas runs two beds for forty
+// seasons, both under the committee's spring compost: one planted
+// with brassicas every season, one following the six-family
+// rotation. The rotation must harvest more in total.
+func TestRotationBeatsFortySeasonsOfBrassicas(t *testing.T) {
+	const seasons = 40
+
+	run := func(plant func(season int) Family) int {
+		bed := NewBed(FertileSoil)
+		total := 0
+		for s := 0; s < seasons; s++ {
+			bed = SpreadCompost(bed)
+			yield, after := Season(bed, plant(s))
+			total += yield
+			bed = after
+		}
+		return total
+	}
+
+	repeated := run(func(int) Family { return Brassicas })
+	rotated := run(func(s int) Family { return FamilyOrder[s%len(FamilyOrder)] })
+
+	t.Logf("brassicas every season: %d over %d seasons", repeated, seasons)
+	t.Logf("six-family rotation:    %d over %d seasons", rotated, seasons)
+	t.Logf("rotation advantage:     %d", rotated-repeated)
+
+	if rotated <= repeated {
+		t.Errorf("rotation total = %d, want more than %d for brassicas every season",
+			rotated, repeated)
+	}
+}
+
 // TestFamilyOrder checks the six families against the rotation order
 // fixed in the README, and that every family has a soil budget.
 func TestFamilyOrder(t *testing.T) {
