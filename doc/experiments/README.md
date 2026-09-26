@@ -132,6 +132,7 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **design** — [2026-09-consult](2026-09-consult/) | Does `/consult`'s source label survive to the next turn, and how much session context should the advisor see? The plan separates attribution from scope and is not yet run. |
+| **design** — [2026-09-tool-disclosure](2026-09-tool-disclosure/) | Do models lose track of their own tools partway through a turn, and is it the model or the disclosure? GLM-5.3-Flash claimed four of its sixteen tools; MiMo believed it could not run `bash`. A replay probe separates small active size (H1) from `run_code`'s "the callable functions are exactly" sentence reading as the tool list (H2). Not yet run. |
 
 ## The documents themselves
 
