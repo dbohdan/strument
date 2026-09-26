@@ -1197,6 +1197,10 @@ The same repro with a customer message shows it outside security:
   scored p(refund) 0.97 against 0.23 without it.
 - After 40, it scored 0.2367 with the request and 0.2367 without.
 
+Reported upstream with a standalone repro, it was fixed the same day
+(`ollaya-dev/ollaya#16`): after 0.7.1, `/v1` refuses a truncated state with
+`422 STATE_TRUNCATED`. That changes one server, not the lesson.
+
 **An answer cannot report what the model never saw.** No accuracy figure on
 short inputs speaks to this, because the failure is not a wrong judgment. It
 is a judgment about a different, shorter input. So:

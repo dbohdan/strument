@@ -975,7 +975,10 @@ Every outcome is printed and recorded in the session log with its p(safe):
   purpose longer than 800 characters is always asked about, because decision
   models cut long input without saying so. Ollaya's Laya reads 512 tokens,
   and a harmless prefix followed by a destructive command scored exactly what
-  the prefix alone scored.
+  the prefix alone scored. (Ollaya fixed this after a report on 2026-09-26: a
+  release after 0.7.1 answers such a request with `422 STATE_TRUNCATED`, which
+  Strument treats as a failure and asks. The cap stays, for servers that
+  still truncate silently.)
 
 It never overrides a refusal, a disabled shell, or a "no" at the prompt.
 

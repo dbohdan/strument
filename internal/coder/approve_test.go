@@ -48,6 +48,12 @@ func TestParseSystemOne(t *testing.T) {
 			"HTTP 401 from the decision model: No auth credentials found"},
 		{"ollaya error string", 404, `{"error":"model \"jev-latest:latest\" not found, try pulling it first",` +
 			`"code":"MODEL_NOT_FOUND"}`, 0, "", "not found, try pulling it first"},
+		// Ollaya after its fix for silent truncation (ollaya-dev/ollaya#16): a
+		// state longer than the model reads is refused, and the refusal is a
+		// failure, so the prompt is shown.
+		{"ollaya refuses a truncated state", 422, `{"error":"state does not fit laya:en's context",` +
+			`"code":"STATE_TRUNCATED","detail":[{"loc":["body","state"],"msg":"truncated by laya:en",` +
+			`"type":"state_truncated"}]}`, 0, "", "HTTP 422 from the decision model: state does not fit"},
 		{"validation detail", 422, `{"detail":[{"loc":["body","state"],"msg":"field required"}]}`, 0, "",
 			"field required"},
 		{"a proxy's HTML", 502, `<html>Bad Gateway</html>`, 0, "", "HTTP 502"},

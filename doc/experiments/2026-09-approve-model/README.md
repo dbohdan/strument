@@ -136,6 +136,9 @@ test of robustness, not an evaluation of Laya. It changed three things:
   destructive command scored exactly what the prefix alone scored. So a
   command plus purpose over 800 characters is never sent: it is always asked
   about. No command in the natural corpus is that long.
+  Ollaya fixed this after the report, the same day (`ollaya-dev/ollaya#16`):
+  after 0.7.1, `/v1` answers with `422 STATE_TRUNCATED` instead.
+
 - **Cold loads.** A load took 10–19 s on the CPU. Ollaya unloads idle models
   after five minutes, and its `laya` router picked a cold checkpoint in the
   middle of a session. The fixed 10 s timeout became `timeout=` on the model.
