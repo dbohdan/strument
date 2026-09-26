@@ -55,6 +55,45 @@ func TestSameFamilyTwiceRaisesPressureAndLowersYield(t *testing.T) {
 	}
 }
 
+// TestPressureFadesAtFamilyRates pins the per-family fade: one
+// season grown leaves a point of pressure; a fast family is clean
+// after a single season away, while brassicas and alliums need five
+// to shed the same point — one trip around the rotation.
+func TestPressureFadesAtFamilyRates(t *testing.T) {
+	tests := []struct {
+		name   string
+		family Family
+		away   int // seasons spent growing something else
+		want   int // pressure in tenths when the family comes back
+	}{
+		{"legumes away one season", Legumes, 1, 0},
+		{"nightshades away one season", Nightshades, 1, 0},
+		{"brassicas away one season", Brassicas, 1, pressureUnit - fadePersistent},
+		{"brassicas away four seasons", Brassicas, 4, pressureUnit - 4*fadePersistent},
+		{"brassicas away five seasons", Brassicas, 5, pressureUnit - 5*fadePersistent},
+		{"alliums away two seasons", Alliums, 2, pressureUnit - 2*fadePersistent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bed := NewBed(FertileSoil)
+			_, bed = Season(bed, tt.family) // pressure builds to a point
+
+			other := Legumes
+			if tt.family == Legumes {
+				other = Roots
+			}
+			for i := 0; i < tt.away; i++ {
+				_, bed = Season(bed, other)
+			}
+
+			if got := bed.Pressure[tt.family]; got != tt.want {
+				t.Errorf("%s pressure after %d seasons away = %d tenths, want %d",
+					tt.family, tt.away, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestSpreadCompost checks the committee's spring spread: Compost
 // added to each nutrient, never past SoilCap.
 func TestSpreadCompost(t *testing.T) {
@@ -79,10 +118,11 @@ func TestSpreadCompost(t *testing.T) {
 
 // TestRest checks a season under a cover crop: nothing harvested,
 // more restored than compost brings, and every family's pressure
-// falls.
+// fading at its own rate.
 func TestRest(t *testing.T) {
 	bed := NewBed(Nutrients{5, 6, 7})
-	bed.Pressure[Brassicas], bed.Pressure[Alliums], bed.Pressure[Roots] = PressureMax, 1, 0
+	bed.Pressure[Brassicas], bed.Pressure[Alliums] = PressureMax, pressureUnit
+	bed.Pressure[Legumes], bed.Pressure[Roots] = pressureUnit, 0
 
 	yield, after := Rest(bed)
 
@@ -102,7 +142,12 @@ func TestRest(t *testing.T) {
 			t.Errorf("rest added %d %s, want more than the %d compost brings", d, n.name, n.compostPerUnit)
 		}
 	}
-	want := map[Family]int{Brassicas: 1, Alliums: 0, Roots: 0}
+	want := map[Family]int{
+		Brassicas: PressureMax - fadePersistent, // one rested season sheds only the slow rate
+		Alliums:   pressureUnit - fadePersistent,
+		Legumes:   0, // a fast family is gone in one season
+		Roots:     0,
+	}
 	for f, w := range want {
 		if got := after.Pressure[f]; got != w {
 			t.Errorf("pressure on %s after rest = %d, want %d", f, got, w)
