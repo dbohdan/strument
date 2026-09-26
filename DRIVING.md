@@ -61,7 +61,8 @@ name which tests changed and for what reason.
 - The cost line's "session" is the process, not the named session. Under
   `--continue -m`, one process per turn, it equals the turn cost every time;
   a reader of these logs would think each turn started a new session.
-  Worth a look on `dev`.
+  Fixed on `dev` since: the line now says "run", the word the session
+  record already used for one process's part of a session.
 - `--yes steps,bash` was the right grant for an unattended builder in a
   scratch worktree: no prompt ever blocked, and every command it ran was gofmt,
   vet, test, `go run`, or a read-only git status or diff inside the tree.
