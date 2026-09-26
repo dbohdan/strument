@@ -294,10 +294,60 @@ func (r *REPL) completer() readline.AutoCompleter {
 				readline.PcItem("drop", namesDrop),
 				readline.PcItem("reset"),
 			)
-		case "consult", "model":
-			// The advisor is named from the same closed set /model switches
-			// between, so it completes the same way.
+		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
+		case "consult":
+			// The advisor is named from the same closed set /model switches
+			// between, so it completes the same way; "scope" is the one word
+			// beside the aliases, and it takes a scope name.
+			scopes := make([]*readline.PrefixCompleter, 0, len(coder.ConsultScopeNames))
+			for _, n := range coder.ConsultScopeNames {
+				scopes = append(scopes, readline.PcItem(n))
+			}
+			sub = append(sub, readline.PcItem("scope", scopes...), readline.PcItemDynamic(r.completeAliases))
+		case "session":
+			// The subcommands first, then a name where an existing one is
+			// meant. new and fork take a name that does not exist yet, which
+			// nothing can complete.
+			names := func(excludeCurrent bool) func(string) []string {
+				return func(string) []string { return r.completeSessions(excludeCurrent) }
+			}
+			sub = append(sub,
+				readline.PcItem("new"),
+				readline.PcItem("switch", readline.PcItemDynamic(names(true))),
+				readline.PcItem("fork"),
+				readline.PcItem("rename", readline.PcItemDynamic(names(false))),
+				readline.PcItem("delete", readline.PcItemDynamic(names(true))),
+			)
+		case "notes":
+			sub = append(sub, readline.PcItem("generate"), readline.PcItem("drop"))
+		case "commits":
+			sub = append(sub, readline.PcItem("on"), readline.PcItem("off"))
+		case "yes":
+			// The /env split: add offers what is not granted yet, drop what is.
+			grants := func(granted bool) *readline.PrefixCompleter {
+				d := readline.PcItemDynamic(func(string) []string {
+					var out []string
+					for _, n := range config.GrantNames {
+						if r.coder.Grants.Granted(n) == granted {
+							out = append(out, n)
+						}
+					}
+					if !granted {
+						out = append(out, config.GrantAll)
+					}
+					return out
+				})
+				d.SetChildren([]*readline.PrefixCompleter{d})
+				return d
+			}
+			sub = append(sub,
+				readline.PcItem("add", grants(false)),
+				readline.PcItem("drop", grants(true)),
+				readline.PcItem("reset"),
+			)
+		case "usage":
+			sub = append(sub, readline.PcItemDynamic(r.completeUsageProviders))
 		case "skill":
 			sub = append(sub, readline.PcItemDynamic(r.completeSkills))
 		case "web":
@@ -330,6 +380,36 @@ func recursiveDynamic(cb func(string) []string) *readline.PrefixCompleter {
 	d := readline.PcItemDynamic(cb)
 	d.SetChildren([]*readline.PrefixCompleter{d})
 	return d
+}
+
+// completeSessions lists the project's sessions for /session, leaving out the
+// current one where naming it would be refused (switching to it, deleting it).
+func (r *REPL) completeSessions(excludeCurrent bool) []string {
+	ops := r.opts.Sessions
+	if ops == nil {
+		return nil
+	}
+	list, err := ops.List()
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, s := range list {
+		if excludeCurrent && s.Current {
+			continue
+		}
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// completeUsageProviders offers the providers with a usage ledger, and "all".
+func (r *REPL) completeUsageProviders(string) []string {
+	known, err := history.UsageProviders()
+	if err != nil {
+		known = nil
+	}
+	return append(slices.Clone(known), history.UsageAll)
 }
 
 func (r *REPL) completeAddable(line string) []string {
