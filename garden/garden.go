@@ -30,7 +30,26 @@
 //     between plantings, while six slots clear every family.
 //     Pressure stops climbing at PressureMax — the pests that can
 //     live in this bed already do — so a monoculture settles at a
-//     poor harvest instead of nothing.
+//     poor harvest instead of nothing. The one perennial below is
+//     the exception.
+//
+//   - Asparagus is the garden's one perennial, outside the rotation.
+//     From crowns it needs two seasons to root before it crops — our
+//     establishment — and once established we let it harvest like a
+//     well-tended annual bed (BaseYield), because a mature bed is a
+//     dependable cropper and we have no reason to invent a premium.
+//     It feeds like a brassica: heavy nitrogen for the ferns and
+//     potassium for the crowns (Draw 3-1-2), with the cut ferns left
+//     on the bed returning a little nitrogen (Give 1-0-0) — and it
+//     draws whether or not it crops, since roots are what the
+//     establishment seasons are buying. Its fusarium crown rot
+//     builds the whole time it stands: three tenths a season,
+//     deliberately uncapped, which at BaseYield 10 and pressureCost
+//     2 takes the harvest to zero in about eighteen seasons — the
+//     15-to-25-year field life growers quote — because real fields
+//     decline rather than settling at some floor. Once the planting
+//     is moved, fusarium fades from the old bed at the slow
+//     persistent rate, the same as clubroot and white rot.
 //
 //   - Soil comes back two ways. The committee spreads a small fixed
 //     amount of compost on every bed every spring (Compost), and a
@@ -89,8 +108,14 @@ var FamilyOrder = [...]Family{
 	Brassicas, Legumes, Roots, Alliums, Nightshades, Cucurbits,
 }
 
+// Asparagus is the garden's perennial: planted once, it crops in the
+// same bed for years without replanting, outside the committee's
+// six-family rotation.
+const Asparagus Family = Cucurbits + 1
+
 var familyNames = [...]string{
 	"brassicas", "legumes", "roots", "alliums", "nightshades", "cucurbits",
+	"asparagus",
 }
 
 // String returns the family's name, or "unknown" if f is out of range.
@@ -102,51 +127,76 @@ func (f Family) String() string {
 }
 
 // Crop describes one family: what it draws from the soil over a
-// season, what it gives back in residues after the harvest, and how
-// fast its pest pressure fades while it is out of the bed.
+// season, what it gives back in residues after the harvest, how its
+// pest pressure behaves while it is in and out of the bed, and how
+// long it needs to establish before it crops.
 type Crop struct {
-	Name string // representative member of the family
-	Draw Nutrients
-	Give Nutrients
-	Fade int // tenths of pressure lost per season out of the bed
+	Name      string // representative member of the family
+	Draw      Nutrients
+	Give      Nutrients
+	Fade      int // tenths of pressure lost per season out of the bed
+	Build     int // tenths of pressure gained per season in the bed
+	Cap       int // ceiling on pressure; 0 means no ceiling
+	Establish int // seasons of no harvest while the crop roots
 }
 
-// Crops maps each family to its soil budget. See the package comment
-// for where the numbers come from.
+// Crops maps each family to its soil and pest budget. See the
+// package comment for where the numbers come from.
 var Crops = map[Family]Crop{
 	Brassicas: {
-		Name: "cabbage",
-		Draw: Nutrients{Nitrogen: 3, Phosphorus: 1, Potassium: 2},
-		Give: Nutrients{Nitrogen: 1}, // bulky leaves and roots left to dig in
-		Fade: fadePersistent,         // clubroot spores outlast a two-family cycle
+		Name:  "cabbage",
+		Draw:  Nutrients{Nitrogen: 3, Phosphorus: 1, Potassium: 2},
+		Give:  Nutrients{Nitrogen: 1}, // bulky leaves and roots left to dig in
+		Fade:  fadePersistent,         // clubroot spores outlast a two-family cycle
+		Build: pressureUnit,
+		Cap:   PressureMax,
 	},
 	Legumes: {
-		Name: "beans",
-		Draw: Nutrients{Phosphorus: 1, Potassium: 1}, // fixes its own nitrogen
-		Give: Nutrients{Nitrogen: 2},                 // ~50-150 lb N/acre/season
-		Fade: fadeOneSeason,
+		Name:  "beans",
+		Draw:  Nutrients{Phosphorus: 1, Potassium: 1}, // fixes its own nitrogen
+		Give:  Nutrients{Nitrogen: 2},                 // ~50-150 lb N/acre/season
+		Fade:  fadeOneSeason,
+		Build: pressureUnit,
+		Cap:   PressureMax,
 	},
 	Roots: {
-		Name: "carrots",
-		Draw: Nutrients{Nitrogen: 1, Phosphorus: 1, Potassium: 1},
-		Fade: fadeOneSeason,
+		Name:  "carrots",
+		Draw:  Nutrients{Nitrogen: 1, Phosphorus: 1, Potassium: 1},
+		Fade:  fadeOneSeason,
+		Build: pressureUnit,
+		Cap:   PressureMax,
 		// lifted whole, almost nothing left behind
 	},
 	Alliums: {
-		Name: "onions",
-		Draw: Nutrients{Nitrogen: 1, Phosphorus: 1, Potassium: 2},
-		Fade: fadePersistent, // white rot sclerotia last for years
+		Name:  "onions",
+		Draw:  Nutrients{Nitrogen: 1, Phosphorus: 1, Potassium: 2},
+		Fade:  fadePersistent, // white rot sclerotia last for years
+		Build: pressureUnit,
+		Cap:   PressureMax,
 	},
 	Nightshades: {
-		Name: "tomatoes",
-		Draw: Nutrients{Nitrogen: 3, Phosphorus: 2, Potassium: 1},
-		Fade: fadeOneSeason,
+		Name:  "tomatoes",
+		Draw:  Nutrients{Nitrogen: 3, Phosphorus: 2, Potassium: 1},
+		Fade:  fadeOneSeason,
+		Build: pressureUnit,
+		Cap:   PressureMax,
 	},
 	Cucurbits: {
-		Name: "squash",
-		Draw: Nutrients{Nitrogen: 2, Phosphorus: 1, Potassium: 2},
-		Give: Nutrients{Nitrogen: 1}, // vines left on the bed as mulch
-		Fade: fadeOneSeason,
+		Name:  "squash",
+		Draw:  Nutrients{Nitrogen: 2, Phosphorus: 1, Potassium: 2},
+		Give:  Nutrients{Nitrogen: 1}, // vines left on the bed as mulch
+		Fade:  fadeOneSeason,
+		Build: pressureUnit,
+		Cap:   PressureMax,
+	},
+	Asparagus: {
+		Name:      "asparagus",
+		Draw:      Nutrients{Nitrogen: 3, Phosphorus: 1, Potassium: 2}, // feeds like a brassica
+		Give:      Nutrients{Nitrogen: 1},                              // cut ferns left as mulch
+		Fade:      fadePersistent,                                      // fusarium lives on in the soil
+		Build:     buildAsparagus,                                      // crown rot accumulates while it stands
+		Establish: 2,                                                   // two seasons rooting before the first crop
+		// Cap stays 0: a standing field declines instead of settling.
 	},
 }
 
@@ -191,12 +241,24 @@ const (
 	fadePersistent = 2
 )
 
+// buildAsparagus is how fast fusarium pressure piles up in a
+// standing asparagus bed, in tenths per season, uncapped. At
+// BaseYield 10 and pressureCost 2 the harvest reaches zero once
+// pressure hits fifty tenths: about eighteen seasons standing,
+// against the 15-to-25-year field life growers quote before the
+// crowns give out. Annuals build faster but settle at PressureMax;
+// a real field declines instead.
+const buildAsparagus = 3
+
 // Bed is one garden bed: its soil, the pest and disease pressure
-// accumulated against each family, and optionally its own fade
-// rates. A nil Fades means the package defaults from Crops.
+// accumulated against each family, how many seasons each family has
+// stood in it without a break (for establishment), and optionally
+// its own fade rates. A nil Fades means the package defaults from
+// Crops.
 type Bed struct {
 	Soil     Nutrients
 	Pressure map[Family]int
+	Stood    map[Family]int // consecutive seasons stood, ending last season
 	Fades    Fades
 }
 
@@ -230,7 +292,11 @@ func (b Bed) fade(f Family) int {
 // NewBed returns a bed with the given soil and no pest pressure on
 // any family.
 func NewBed(soil Nutrients) Bed {
-	return Bed{Soil: soil, Pressure: make(map[Family]int)}
+	return Bed{
+		Soil:     soil,
+		Pressure: make(map[Family]int),
+		Stood:    make(map[Family]int),
+	}
 }
 
 // Season grows family in bed for one season. It returns the harvest
@@ -243,25 +309,35 @@ func NewBed(soil Nutrients) Bed {
 //     whole point of pressure the family already carries (tenths
 //     round down, so under half a point of pressure is free), and
 //     1 point per unit of any nutrient the bed cannot supply. It
-//     never goes below zero.
+//     never goes below zero — and a crop still establishing
+//     (Crop.Establish) harvests nothing at all, though it still
+//     draws on the soil and its pressure still builds. Moving to a
+//     new bed starts the establishment count again.
 //
 //   - The bed gives up what the crop draws and gains what it gives
 //     back, per nutrient, clamped to [0, SoilCap].
 //
-//   - Pressure against the grown family rises by pressureUnit a
-//     season, up to PressureMax (pests breed, but only so far);
-//     while a family is out of the bed, its pressure fades by the
-//     bed's rate for that family — Crop.Fade unless the bed carries
-//     its own Fades (rotation starves it; slowly for the persistent
-//     diseases). Nothing drops below zero.
+//   - Pressure against the grown family rises by the crop's Build a
+//     season in the bed, up to the crop's Cap (PressureMax for the
+//     annuals, no ceiling for the perennial); while a family is out
+//     of the bed, its pressure fades by the bed's rate for that
+//     family — Crop.Fade unless the bed carries its own Fades
+//     (rotation starves it; slowly for the persistent diseases).
+//     Nothing drops below zero.
 func Season(b Bed, family Family) (int, Bed) {
 	crop, ok := Crops[family]
 	if !ok {
 		panic("garden: unknown crop family")
 	}
 
-	pressure := min(PressureMax, b.Pressure[family])
+	pressure := b.Pressure[family]
+	if crop.Cap > 0 {
+		pressure = min(crop.Cap, pressure)
+	}
 	yield := BaseYield - pressureCost*pressure/pressureUnit - shortfall(crop.Draw, b.Soil)
+	if b.Stood[family] < crop.Establish {
+		yield = 0 // establishing: roots first, no harvest
+	}
 	if yield < 0 {
 		yield = 0
 	}
@@ -269,6 +345,7 @@ func Season(b Bed, family Family) (int, Bed) {
 	after := Bed{
 		Soil:     apply(b.Soil, crop),
 		Pressure: make(map[Family]int, len(b.Pressure)+1),
+		Stood:    map[Family]int{family: b.Stood[family] + 1},
 		Fades:    b.Fades,
 	}
 	for f, p := range b.Pressure {
@@ -279,7 +356,11 @@ func Season(b Bed, family Family) (int, Bed) {
 			after.Pressure[f] = max(0, p-b.fade(f))
 		}
 	}
-	after.Pressure[family] = min(PressureMax, b.Pressure[family]+pressureUnit)
+	grown := b.Pressure[family] + crop.Build
+	if crop.Cap > 0 {
+		grown = min(crop.Cap, grown)
+	}
+	after.Pressure[family] = grown
 
 	return yield, after
 }
@@ -294,15 +375,17 @@ func SpreadCompost(b Bed) Bed {
 
 // Rest puts the bed under a cover crop for one season, planted with
 // nothing for harvest. It returns a yield of 0; the soil gains Cover,
-// more than a spring's compost; and pressure against every family
-// fades by the bed's rate for that family — the same decay it gets
-// when it is rotated out, now applied to all of them at once, which
-// is why one rested season barely touches the persistent brassica
-// and allium diseases.
+// more than a spring's compost; pressure against every family fades
+// by the bed's rate for that family — the same decay it gets when it
+// is rotated out, now applied to all of them at once, which is why
+// one rested season barely touches the persistent brassica and
+// allium diseases — and nothing stands, so every family's
+// establishment count starts over.
 func Rest(b Bed) (int, Bed) {
 	after := Bed{
 		Soil:     add(b.Soil, Cover),
 		Pressure: make(map[Family]int, len(b.Pressure)),
+		Stood:    make(map[Family]int),
 		Fades:    b.Fades,
 	}
 	for f, p := range b.Pressure {

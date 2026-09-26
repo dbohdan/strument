@@ -122,6 +122,62 @@ func TestBedFades(t *testing.T) {
 	}
 }
 
+// TestAsparagusEstablishes checks the perennial's two seasons of
+// nothing: the bed still pays for them, then it crops — and moving
+// the planting costs them again.
+func TestAsparagusEstablishes(t *testing.T) {
+	bed := NewBed(FertileSoil)
+
+	first, after := Season(bed, Asparagus)
+	if first != 0 {
+		t.Errorf("first season yield = %d, want 0", first)
+	}
+	if n := after.Soil.Nitrogen; n >= FertileSoil.Nitrogen {
+		t.Errorf("nitrogen after the first season = %d, want less than %d — establishment still draws", n, FertileSoil.Nitrogen)
+	}
+	bed = after
+
+	second, after := Season(bed, Asparagus)
+	if second != 0 {
+		t.Errorf("second season yield = %d, want 0", second)
+	}
+	bed = after
+
+	third, _ := Season(bed, Asparagus)
+	if third == 0 {
+		t.Error("third season yield = 0, want a crop")
+	}
+
+	moved, _ := Season(NewBed(FertileSoil), Asparagus)
+	if moved != 0 {
+		t.Errorf("first season after a move = %d, want 0 — establishment starts again", moved)
+	}
+}
+
+// TestAsparagusPressureBuildsAndFades checks that fusarium climbs
+// past the annual ceiling while the bed stands, and fades from the
+// old bed at the persistent rate once the planting moves.
+func TestAsparagusPressureBuildsAndFades(t *testing.T) {
+	const standing = 20
+	bed := NewBed(FertileSoil)
+	for i := 0; i < standing; i++ {
+		_, bed = Season(bed, Asparagus)
+	}
+
+	if p := bed.Pressure[Asparagus]; p != standing*buildAsparagus {
+		t.Errorf("after %d seasons standing, pressure = %d tenths, want %d", standing, p, standing*buildAsparagus)
+	}
+	if p := bed.Pressure[Asparagus]; p <= PressureMax {
+		t.Errorf("pressure = %d tenths, want more than PressureMax (%d) — a standing field has no ceiling", p, PressureMax)
+	}
+
+	_, after := Season(bed, Brassicas)
+	want := standing*buildAsparagus - fadePersistent
+	if got := after.Pressure[Asparagus]; got != want {
+		t.Errorf("pressure after one season away = %d tenths, want %d (the persistent rate)", got, want)
+	}
+}
+
 // TestSpreadCompost checks the committee's spring spread: Compost
 // added to each nutrient, never past SoilCap.
 func TestSpreadCompost(t *testing.T) {

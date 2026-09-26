@@ -65,6 +65,66 @@ func (Greedy) Choose(g Garden, bed, season int) Planting {
 	return Use(best)
 }
 
+// Perennial keeps one bed of the garden in asparagus while every
+// other bed follows Rotation. A planting stands for Seasons seasons
+// (the establishment seasons among them), then moves to the bed that
+// has gone longest without one — never having had one counts as
+// longest, ties to the lowest bed — and the bed it leaves rejoins
+// the rotation. Seasons should be at least 2: below that the
+// planting is moved before it ever crops.
+type Perennial struct {
+	Seasons int
+}
+
+func (p Perennial) Choose(g Garden, bed, season int) Planting {
+	if holder, standing := p.standing(g); standing {
+		if bed == holder {
+			return Use(garden.Asparagus)
+		}
+	} else if p.longestAbsent(g) == bed {
+		return Use(garden.Asparagus)
+	}
+	return (Rotation{}).Choose(g, bed, season)
+}
+
+// standing returns the bed whose asparagus planting hasn't finished
+// its stand yet, if there is one.
+func (p Perennial) standing(g Garden) (int, bool) {
+	for i, h := range g.History {
+		n := 0
+		for j := len(h) - 1; j >= 0 && h[j].Planting.Family == garden.Asparagus; j-- {
+			n++
+		}
+		if n > 0 && n < p.Seasons {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// longestAbsent returns the bed whose asparagus season is oldest,
+// never having had one counting as oldest.
+func (p Perennial) longestAbsent(g Garden) int {
+	best, bestLast := 0, lastAsparagus(g.History[0])
+	for i := 1; i < len(g.History); i++ {
+		if last := lastAsparagus(g.History[i]); last < bestLast {
+			best, bestLast = i, last
+		}
+	}
+	return best
+}
+
+// lastAsparagus is the season index of h's most recent asparagus
+// planting, or -1 if the bed never held one.
+func lastAsparagus(h History) int {
+	for j := len(h) - 1; j >= 0; j-- {
+		if h[j].Planting.Family == garden.Asparagus {
+			return j
+		}
+	}
+	return -1
+}
+
 // lastPlanted returns the most recently planted family in h and
 // whether anything has been planted at all.
 func lastPlanted(h History) (garden.Family, bool) {

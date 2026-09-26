@@ -173,3 +173,56 @@ func TestGreedyStrategy(t *testing.T) {
 		t.Errorf("after a poor legume season plants %s, want nightshades (best last harvest, 30)", got.Family)
 	}
 }
+
+// TestPerennialStrategy: one bed holds asparagus for its Seasons,
+// then hands it to the bed that has waited longest while the bed it
+// leaves rejoins the rotation.
+func TestPerennialStrategy(t *testing.T) {
+	const k = 4
+	p := Perennial{Seasons: k}
+	g := NewGarden(4)
+
+	// Choose for every bed from the same end-of-last-season state,
+	// the way Run does, then record the season.
+	plant := func(season int) {
+		plantings := make([]Planting, len(g.Beds))
+		for bed := range g.Beds {
+			plantings[bed] = p.Choose(g, bed, season)
+		}
+		for bed, planting := range plantings {
+			g.History[bed] = append(g.History[bed], Record{Planting: planting})
+		}
+	}
+
+	for season := 0; season < k; season++ {
+		plant(season)
+		if got := g.History[0][season].Planting.Family; got != garden.Asparagus {
+			t.Fatalf("season %d: bed 0 plants %s, want asparagus", season, got)
+		}
+		for bed := 1; bed < len(g.Beds); bed++ {
+			if g.History[bed][season].Planting.Family == garden.Asparagus {
+				t.Fatalf("season %d: bed %d also holds asparagus", season, bed)
+			}
+		}
+	}
+
+	plant(k)
+	if g.History[0][k].Planting.Family == garden.Asparagus {
+		t.Errorf("after %d seasons bed 0 still holds asparagus", k)
+	}
+	if want := garden.FamilyOrder[k%len(garden.FamilyOrder)]; g.History[0][k].Planting.Family != want {
+		t.Errorf("bed 0 rejoins the rotation planting %s, want %s", g.History[0][k].Planting.Family, want)
+	}
+	if got := g.History[1][k].Planting.Family; got != garden.Asparagus {
+		t.Errorf("season %d: bed 1 plants %s, want asparagus — it has waited longest", k, got)
+	}
+
+	// After a full circuit of the garden the original bed takes a
+	// second planting.
+	for season := k + 1; season <= 4*k; season++ {
+		plant(season)
+	}
+	if got := g.History[0][4*k].Planting.Family; got != garden.Asparagus {
+		t.Errorf("season %d: bed 0 plants %s, want asparagus back after a full circuit", 4*k, got)
+	}
+}
