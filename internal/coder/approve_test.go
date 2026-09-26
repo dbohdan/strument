@@ -77,9 +77,10 @@ func TestParseSystemOne(t *testing.T) {
 func TestSystemOneRequest(t *testing.T) {
 	for _, key := range []string{"k-123", ""} {
 		var got map[string]any
-		var auth string
+		var auth, title, referer string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth = r.Header.Get("Authorization")
+			title, referer = r.Header.Get("X-Title"), r.Header.Get("Http-Referer")
 			raw, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(raw, &got)
 			_, _ = w.Write([]byte(`{"model":"m","answers":{"decision":{"type":"choice","probabilities":{"safe":0.91,"ask":0.09}}}}`))
@@ -92,6 +93,10 @@ func TestSystemOneRequest(t *testing.T) {
 		}
 		if (key == "") != (auth == "") || (key != "" && auth != "Bearer "+key) {
 			t.Errorf("key %q sent Authorization %q", key, auth)
+		}
+		// OpenRouter lists a request without these as app "Unknown".
+		if title != "Strument" || referer == "" {
+			t.Errorf("attribution headers X-Title=%q HTTP-Referer=%q; want Strument's", title, referer)
 		}
 		state, _ := got["state"].(map[string]any)
 		if got["model"] != "laya" || state["project_root"] != "/p" || state["command"] != "go test ./..." ||
@@ -138,7 +143,7 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 		outcome    string
 		line       string
 	}{
-		{"approved", 0.95, nil, true, false, 1, false, "approved", "Approved by laya:en, p(safe) 0.95:"},
+		{"approved", 0.95, nil, true, false, 1, false, "approved", "Approved by laya:en, p(safe) 0.95.\nRunning"},
 		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) 0.90"},
 		{"below", 0.5, nil, true, false, 1, true, "asked", "Not approved by laya:en, p(safe) 0.50 < 0.90:"},
 		{"failed", 0, errors.New("connection refused"), true, false, 1, true, "failed", "did not answer"},

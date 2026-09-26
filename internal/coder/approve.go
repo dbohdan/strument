@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/httpx"
 )
 
 // approve_model: a decision model asked before a shell command's prompt is
@@ -152,6 +154,11 @@ func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, us
 		if apiKey != "" {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
+		// Sent to every endpoint, not only when the URL looks like
+		// OpenRouter's: the dialect names no vendor, and the headers say no
+		// more than the User-Agent does. Without them OpenRouter lists the
+		// requests under "Unknown".
+		httpx.SetAppAttribution(req.Header)
 		resp, err := client.Do(req)
 		if err != nil {
 			return Decision{}, err
@@ -281,8 +288,9 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) boo
 	r.PSafe = &p
 	if p >= am.Threshold {
 		r.Outcome = "approved"
-		// Printed before the command's own lines, so it points forward.
-		c.Out.Toolf("Approved by %s, p(safe) %.2f:", r.Model, p)
+		// Printed by runAndShowTail, after the blank line that opens the
+		// command's block, so the approval sits with the command it approved.
+		c.approvalNote = fmt.Sprintf("Approved by %s, p(safe) %.2f.", r.Model, p)
 		return true
 	}
 	r.Outcome = "asked"

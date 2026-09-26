@@ -131,6 +131,9 @@ type Coder struct {
 	Search Searcher
 	// Approve is nil unless approve_model is configured (approve.go).
 	Approve *ApproveModel
+	// approvalNote is approve_model's line for the command about to run,
+	// printed and cleared by runAndShowTail inside the command's block.
+	approvalNote string
 
 	// turns are the settled history's turns, oldest first, for /rewind
 	// (rewind.go). compactedTurns says a compaction absorbed earlier ones, so

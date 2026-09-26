@@ -39,8 +39,8 @@ const (
 // OpenRouter app-attribution headers, so requests show as this app in the
 // provider's logs and rankings instead of "Unknown".
 const (
-	appName = "Strument"
-	appURL  = "https://dbohdan.com/strument"
+	appName = httpx.AppName
+	appURL  = httpx.AppURL
 )
 
 // userAgent identifies Strument on every request. Without it Go sends
@@ -399,11 +399,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 			httpReq.Header.Set("X-Opencode-Session", sessionID())
 		}
 		if c.Provider.Adapter == config.AdapterOpenRouter {
-			// OpenRouter's app-attribution headers. Its docs write
-			// "HTTP-Referer"; Go canonicalizes it to "Http-Referer" and
-			// header names are case-insensitive (RFC 9110), so it matches.
-			httpReq.Header.Set("Http-Referer", appURL)
-			httpReq.Header.Set("X-Title", appName)
+			httpx.SetAppAttribution(httpReq.Header)
 		}
 
 		httpClient := &http.Client{Transport: c.Transport}
