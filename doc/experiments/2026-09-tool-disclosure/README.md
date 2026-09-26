@@ -87,6 +87,92 @@ something other than a tool.
   still names it.** Ling will name it, and may call it. Whether Strument has
   such a mode was not checked here.
 
+## What the panel does
+
+A survey of the six harnesses AGENTS.md names, read on 2026-09-26. Each
+entry is a dated observation of the source at the commit given, not a fact
+about the project.
+
+| harness | commit | how tools are disclosed |
+| --- | --- | --- |
+| deepseek-harness | `477b4f4` (2026-09-24) | `native`, `ptc` (code mode) or `both`, one choice per agent |
+| OpenCode | `b65de4d` (2026-09-26) | code mode shows a token-budgeted catalog that says whether it is complete |
+| Codex | `e72da2b` (2026-09-26) | each tool declares its exposure surfaces |
+| Kimi Code | `be7d5f5` (2026-09-24) | a core set, then `<tools_added>`/`<tools_removed>` diffs |
+| Pi | `2b0a123` (2026-09-26) | an "Available tools" prose section, built from the selected tools |
+| Claude Code | closed source | deferred tools named in a reminder, schemas loaded on request |
+
+**deepseek-harness** is the closest to this trial's question, and it has
+three rules worth keeping:
+
+- **It separates program bindings from tools in so many words.** The code
+  mode prompt says: "The declarations below are SDK bindings for this program.
+  A declaration does not make its name a directly callable tool; only names
+  supplied as separate tool schemas may be called directly." The
+  declarations sit under the heading "Program-only SDK bindings:". This is
+  exactly the confusion behind the two `read_text`/`read_bin` answers here.
+- **The prompt's rule and the enforcement share one predicate.** The comment
+  at `packages/core/tools/src/index.ts:880`: "The SAME predicate the executor
+  denies by, so the prompt cannot state a rule the registry does not
+  enforce." Arm C is what happens without that guarantee.
+- **Order is part of the disclosure.** In pure code mode, the rule that only
+  `run_code` may be called comes earlier in the prompt than the declarations,
+  "so the model reads which tools it may call before it reads what each one is
+  for". A second presentation declared for the same agent is refused: "two
+  answers to 'which form does the model see' is a contradiction, not an
+  override."
+
+**OpenCode's** code mode catalog "states exactly how comprehensive it is —
+overall (COMPLETE vs PARTIAL) and per namespace". Every namespace is listed,
+even at a budget of zero, and a search call is always available. Strument's
+`run_code` sentence says "exactly" about a list that is complete only for
+program bindings, and OpenCode's rule would make it say which.
+
+**Codex** models the question in its types. Each tool has exposure surfaces:
+- `Direct`, in the tool list;
+- `Deferred`, found through `tool_search`;
+- `CodeModeOnly`, callable from programs "without including it in the initial
+  model-visible tool list".
+
+Strument's `read_text` and `read_bin` are `CodeModeOnly` in those terms. Its
+search tool tells the model its list is partial ("Some of the tools may not
+have been provided to you upfront"). Its base instructions correct a name
+directly: "NEVER try `applypatch` or `apply-patch`, only `apply_patch`".
+
+**Kimi Code** discloses incrementally. Tools beyond a core set are announced
+as `<tools_added>` and `<tools_removed>` blocks, and the model is told to
+"fold all announcements in this conversation in order to get the current
+list". Its wording is the most prohibitive in the panel: "never passed to
+select_tools", "plugin, skill, or category names do not work", and "Names
+listed as removed are no longer loadable — do not select them". An example
+script probes each model live, per model, much as this trial did.
+
+**Pi** keeps a prose "Available tools" section, as Strument does, but builds
+it and its guideline bullets from the selected tools, so the prose follows
+the schema. Its default selection is `read, bash, edit, write`.
+
+**Claude Code** is closed source. As its own sessions show, tools beyond a
+core set are named in a system reminder. Their schemas load through a search
+tool, and the reminder says that calling a named tool before loading it
+fails.
+
+### What the survey suggests for Strument
+
+Nothing here is measured. These are candidates, not decisions.
+
+1. **Label the program-only names.** Say in `run_code`'s description that
+   `read_text`, `read_bin` and the bridged names exist inside programs and are
+   not tools to call directly, in deepseek-harness's terms. Arm B did no harm,
+   and this targets the one confusion the probe actually saw.
+2. **Build prose mentions of tools from the same predicate as the schema.**
+   That is Pi's and deepseek-harness's rule, and arm C shows why. First, check
+   whether any Strument mode (ask mode, `observation_via_run_code`) names a
+   withheld tool in its prompt.
+3. **A guess, not a finding.** GLM's narrowed answers resemble Pi's default
+   of `read, bash, edit, write`. Models trained on transcripts from minimal
+   harnesses may fall back on that set when their picture of the actual tools
+   blurs. Nothing here tests that.
+
 ## Files
 
 | file | contents |
