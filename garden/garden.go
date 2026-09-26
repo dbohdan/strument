@@ -19,7 +19,9 @@
 //     brassica soil, onion root rot in allium beds) multiply while
 //     that family stays in the bed and starve when it is rotated out:
 //     1 point of pressure gained per season grown, 1 lost per season
-//     it isn't in the bed.
+//     it isn't in the bed. Pressure stops climbing at PressureMax —
+//     the pests that can live in this bed already do — so a
+//     monoculture settles at a poor harvest instead of nothing.
 //
 //   - Soil comes back two ways. The committee spreads a small fixed
 //     amount of compost on every bed every spring (Compost), and a
@@ -139,6 +141,14 @@ const BaseYield = 10
 // roughly a fifth of the crop per point.
 const pressureCost = 2
 
+// PressureMax is the ceiling on pest and disease pressure. Pressure
+// climbs by one each season a family stays in the bed, but stops
+// here: past a certain infestation the pests and diseases that can
+// live in this bed already do. A monoculture therefore settles at a
+// poor harvest — BaseYield - pressureCost*PressureMax, less any
+// nutrient shortfall — instead of dropping to zero and staying there.
+const PressureMax = 2
+
 // Bed is one garden bed: its soil and the pest and disease pressure
 // accumulated against each family.
 type Bed struct {
@@ -165,16 +175,18 @@ func NewBed(soil Nutrients) Bed {
 //   - The bed gives up what the crop draws and gains what it gives
 //     back, per nutrient, clamped to [0, SoilCap].
 //
-//   - Pressure against the grown family rises by 1 (pests breed);
-//     pressure against every other family falls by 1 (rotation starves
-//     them). Nothing drops below zero.
+//   - Pressure against the grown family rises by 1, up to
+//     PressureMax (pests breed, but only so far); pressure against
+//     every other family falls by 1 (rotation starves them). Nothing
+//     drops below zero.
 func Season(b Bed, family Family) (int, Bed) {
 	crop, ok := Crops[family]
 	if !ok {
 		panic("garden: unknown crop family")
 	}
 
-	yield := BaseYield - pressureCost*b.Pressure[family] - shortfall(crop.Draw, b.Soil)
+	pressure := min(PressureMax, b.Pressure[family])
+	yield := BaseYield - pressureCost*pressure - shortfall(crop.Draw, b.Soil)
 	if yield < 0 {
 		yield = 0
 	}
@@ -191,7 +203,7 @@ func Season(b Bed, family Family) (int, Bed) {
 			after.Pressure[f] = p - 1
 		}
 	}
-	after.Pressure[family] = b.Pressure[family] + 1
+	after.Pressure[family] = min(PressureMax, b.Pressure[family]+1)
 
 	return yield, after
 }

@@ -82,7 +82,7 @@ func TestSpreadCompost(t *testing.T) {
 // falls.
 func TestRest(t *testing.T) {
 	bed := NewBed(Nutrients{5, 6, 7})
-	bed.Pressure[Brassicas], bed.Pressure[Alliums], bed.Pressure[Roots] = 3, 2, 0
+	bed.Pressure[Brassicas], bed.Pressure[Alliums], bed.Pressure[Roots] = PressureMax, 1, 0
 
 	yield, after := Rest(bed)
 
@@ -102,21 +102,23 @@ func TestRest(t *testing.T) {
 			t.Errorf("rest added %d %s, want more than the %d compost brings", d, n.name, n.compostPerUnit)
 		}
 	}
-	want := map[Family]int{Brassicas: 2, Alliums: 1, Roots: 0}
+	want := map[Family]int{Brassicas: 1, Alliums: 0, Roots: 0}
 	for f, w := range want {
 		if got := after.Pressure[f]; got != w {
 			t.Errorf("pressure on %s after rest = %d, want %d", f, got, w)
 		}
 	}
-	if p := bed.Pressure[Brassicas]; p != 3 {
-		t.Errorf("caller's bed was mutated: brassica pressure = %d, want 3", p)
+	if p := bed.Pressure[Brassicas]; p != PressureMax {
+		t.Errorf("caller's bed was mutated: brassica pressure = %d, want %d", p, PressureMax)
 	}
 }
 
 // TestRotationBeatsFortySeasonsOfBrassicas runs two beds for forty
 // seasons, both under the committee's spring compost: one planted
 // with brassicas every season, one following the six-family
-// rotation. The rotation must harvest more in total.
+// rotation. With pressure capped at PressureMax the monoculture
+// declines but settles at a poor level — it should finish roughly
+// between a third and a half of the rotation's total, not at zero.
 func TestRotationBeatsFortySeasonsOfBrassicas(t *testing.T) {
 	const seasons = 40
 
@@ -139,9 +141,9 @@ func TestRotationBeatsFortySeasonsOfBrassicas(t *testing.T) {
 	t.Logf("six-family rotation:    %d over %d seasons", rotated, seasons)
 	t.Logf("rotation advantage:     %d", rotated-repeated)
 
-	if rotated <= repeated {
-		t.Errorf("rotation total = %d, want more than %d for brassicas every season",
-			rotated, repeated)
+	if lo, hi := rotated/3, rotated/2; repeated < lo || repeated > hi {
+		t.Errorf("brassicas total = %d, want roughly a third to half of the rotation's %d (between %d and %d)",
+			repeated, rotated, lo, hi)
 	}
 }
 
