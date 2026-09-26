@@ -129,6 +129,8 @@ type Coder struct {
 	// Search is nil unless the user configured a backend, and that nil is what
 	// decides whether the tool is offered at all.
 	Search Searcher
+	// Approve is nil unless approve_model is configured (approve.go).
+	Approve *ApproveModel
 	// Skills are what discovery found, trusted and not. Only the trusted ones
 	// are ever offered to the model — skill.Usable is the filter, and every
 	// path putting skill text in front of a model goes through it. The

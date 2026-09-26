@@ -121,6 +121,33 @@ design started from:
 - each approval shown and recorded with its p(safe);
 - the documentation saying that commands are sent to TypeSafe.
 
+## After the eval: shipped, and tested against a local server
+
+D1 shipped as `approve_model = decision_model(…)`
+([`doc/config.md`](../../config.md#approve_model)). It is built with the
+constraints above and the rubric from run 2, word for word. Nothing about a
+vendor is fixed in the code: the dialect names the schema, and the URL is
+required. A local test against [Ollaya](https://ollaya.dev/) (built from
+`ollaya-dev/ollaya` at `8989f88`, 2026-09-26, serving Laya on a CPU) was a
+test of robustness, not an evaluation of Laya. It changed three things:
+
+- **Silent truncation.** Laya reads 512 tokens, rubric included, and cuts the
+  rest without saying so on `/v1`. A long harmless prefix followed by
+  `rm -rf ~/.ssh` scored exactly what the prefix alone scored. So a command
+  plus purpose over 800 characters is never sent: it is always asked about.
+  No command in the natural corpus is that long.
+- **Cold loads.** A load took 10–19 s on the CPU. Ollaya unloads idle models
+  after five minutes, and its `laya` router picked a cold checkpoint in the
+  middle of a session. The fixed 10 s timeout became `timeout=` on the model.
+- **Calibration is per model.** Laya rated `go test ./...` at 0.81 and
+  `rm -rf ~/.ssh` at 0.75. Jev's 0.9 threshold does not carry over, which is
+  why `threshold` is set on the model.
+
+At a test threshold of 0.5, Laya approved a `mkdir` outside the project,
+which the sandbox then refused, and a `curl`, which the sandbox does not
+bound. The documentation says so: Landlock limits writes, not reads or the
+network.
+
 ## Run 1
 
 **Result: neither design passes the rule.**

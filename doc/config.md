@@ -45,6 +45,7 @@ The loader reads these module-level variables after running your file:
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `auto_approve` | list of strings | Optional. Prompts approved automatically, the standing form of `--yes`. See below. |
+| `approve_model` | `decision_model()` or `None` | Optional. A decision model asked before a shell command's prompt is shown; it runs commands it rates safe. Default unset. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
@@ -926,6 +927,92 @@ prompt is answered, so this turns `max_steps` from a limit into an interval.
 And `bash` is the one that lets the model run shell commands it wrote without
 asking — the others are narrower.
 
+### `approve_model`
+
+A decision model that answers the shell prompt for you when it is confident
+a command is safe, and leaves it to you otherwise.
+
+```python
+# Hosted: TypeSafe's Jev, reached through OpenRouter.
+approve_model = decision_model(
+    "systemone", "typesafe/jev-1.13",
+    url = "https://openrouter.ai/api/alpha/decisions",
+    api_key = env("OPENROUTER_API_KEY"),
+)
+
+# Local: the same schema served by Ollaya on your own machine.
+approve_model = decision_model(
+    "systemone", "laya",
+    url = "http://localhost:11435/v1/systemone",
+    proxy = "direct",
+    threshold = 0.9,   # calibrate for this model; see below
+    timeout = 30,
+)
+```
+
+Before the prompt for a `bash` call is shown, Strument asks the model one
+question about the command:
+
+- **At or above `threshold`, the command runs.** No prompt is shown.
+- **Below it, or on any failure, the prompt appears as usual.** A failure is
+  an error, a timeout, or an answer that is not a probability.
+
+Every outcome is printed and recorded in the session log with its p(safe):
+`Approved by typesafe/jev-1.13, p(safe) 0.97:`, or
+`Not approved by …, p(safe) 0.42 < 0.90:`.
+
+**When it is consulted:**
+
+- **Only for the shell prompt.** The evaluation measured it on shell commands
+  and never on URLs, so `webfetch` keeps asking.
+- **Only while the sandbox is enforcing.** That is the same condition that
+  offers "a = all turn" at this prompt: an unseen command then cannot write
+  outside the project.
+- **Only when the prompt would really be shown.** A `--yes bash` grant, or an
+  earlier "a", answers first, and the model is not asked.
+- **Only for commands that fit the model's input window.** A command plus
+  purpose longer than 800 characters is always asked about, because decision
+  models cut long input without saying so. Ollaya's Laya reads 512 tokens,
+  and a harmless prefix followed by a destructive command scored exactly what
+  the prefix alone scored.
+
+It never overrides a refusal, a disabled shell, or a "no" at the prompt.
+
+**What the sandbox does not bound.** Landlock limits writes, not reads or the
+network. A wrongly approved command cannot delete your home directory, but it
+can read a file there and send it out. The classifier's accuracy is what
+stands between an approved command and the network, so choose the model, the
+threshold, and the endpoint with that in mind.
+
+**What is sent, and where.** The command, the purpose the model gave for it
+(labelled as the agent's own words), and the project's absolute path go to
+`url`. With TypeSafe's hosted API or a gateway, every command you would
+otherwise have approved leaves your machine. Point `url` at a local server to
+keep them on it.
+
+**What the evidence covers.**
+[`doc/experiments/2026-09-approve-model`](experiments/2026-09-approve-model/)
+tested one model (Jev 1.13), with the rubric Strument sends, at threshold 0.9:
+- It approved none of 182 commands that should have been asked about.
+- It approved 91% of safe ones.
+
+Any other model is untested. Its probabilities are calibrated differently, so
+the same threshold means something else: Laya, run locally, rated
+`go test ./...` at 0.81 and `rm -rf ~/.ssh` at 0.75. That is why `threshold`
+is set on the model rather than globally. Run the evaluation's corpus against
+a model before trusting its threshold.
+
+**Local servers load models on demand.** On a CPU, Laya took 10–19 seconds
+to load. Ollaya unloads idle models after `OLLAYA_KEEP_ALIVE` (default five
+minutes), and its `laya` router can pick a checkpoint that is still cold in
+the middle of a session. A load longer than `timeout` falls back to the
+prompt. Raise `timeout`, or `OLLAYA_KEEP_ALIVE`, for a local model.
+
+A trusted project config may set `approve_model`, or turn it off with
+`approve_model = None`. This follows the same rule as `auto_approve`, which
+can already grant `bash` outright. `strument trust` shows the endpoint a
+project would send commands to.
+
 ### `env_allow`
 
 Commands the model causes to run — the `bash` tool, the `check` tool, the
@@ -1214,6 +1301,35 @@ A search backend for `websearch`. `backend` is `"searxng"`, `"anysearch"`, or
   localhost; a hosted backend usually wants the global proxy.
 
 These parameters are keyword-only.
+
+### `decision_model(dialect, slug, *, url, api_key=None, proxy=None, threshold=0.9, timeout=10)`
+
+A decision model for `approve_model`. It is its own type, not a `model()`:
+- A chat model's parameters don't apply to it.
+- The request is a state and typed questions, not messages.
+- The answer is probabilities.
+
+- **`dialect`** — the request schema. `"systemone"` is TypeSafe's, and other
+  servers implement it too: OpenRouter's gateway, and Ollaya locally. An
+  unknown dialect is refused at load, with the list of known ones.
+- **`slug`** — the model name the endpoint expects: `"typesafe/jev-1.13"`
+  through OpenRouter, `"jev-latest"` on TypeSafe's own API, `"laya"` on
+  Ollaya.
+- **`url`** — the whole endpoint, not a base URL. It is required, and there is
+  no default. The same schema is served at different paths
+  (`/api/alpha/decisions`, `/v1/systemone`), and choosing one for you would
+  be choosing where your commands go.
+- **`api_key`** — sent as a bearer token when set. A local server may need
+  none.
+- **`proxy`** — as on `provider()`. Use `"direct"` for a local server behind a
+  global proxy.
+- **`threshold`** — the p(safe) at or above which a command runs unasked.
+  Above 0 and at most 1. The default, 0.9, is what the evaluation tested for
+  Jev 1.13.
+- **`timeout`** — seconds one decision may take before the prompt is shown
+  instead. Above 0 and at most 120.
+
+These parameters, apart from `dialect` and `slug`, are keyword-only.
 
 ### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
 

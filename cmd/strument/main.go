@@ -2084,6 +2084,19 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 	// Set to nil when no backend is configured, so removing search() and
 	// reloading withdraws the tool rather than leaving the old instance wired
 	// up under a config that no longer names it.
+	// Nil unless configured, for the same reason Search is reset: removing
+	// approve_model and reloading must stop auto-approval, not leave the old
+	// endpoint deciding under a config that no longer names it.
+	cdr.Approve = nil
+	if am := cfg.ApproveModel; am != nil {
+		transport, _ := httpx.ProxyTransport(am.Proxy)
+		cdr.Approve = &coder.ApproveModel{
+			Decide:    coder.NewSystemOne(am.URL, am.Slug, am.APIKey, transport, "Strument/"+version),
+			Slug:      am.Slug,
+			Threshold: am.Threshold,
+			Timeout:   time.Duration(am.Timeout * float64(time.Second)),
+		}
+	}
 	cdr.Search = nil
 	if ws := cfg.WebSearch; ws != nil {
 		// Resolved and validated at load, so the error is dead here — the same

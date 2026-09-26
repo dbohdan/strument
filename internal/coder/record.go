@@ -189,6 +189,14 @@ type Record struct {
 	// Error is the failure as the user was shown it, empty on success.
 	Error string `json:"error,omitempty"`
 
+	// decision
+	//
+	// One record per approve_model call, with Call, Model, Seconds, Outcome
+	// ("approved", "asked", "failed"), Error and Cost as above. PSafe is what
+	// the model answered; a pointer because 0 is an answer and absence (a
+	// failed call) is not.
+	PSafe *float64 `json:"p_safe,omitempty"`
+
 	// request
 	//
 	// One record per request to the model, retries and continuations

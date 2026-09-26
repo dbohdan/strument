@@ -226,6 +226,7 @@ var projectKeyOrder = []string{
 	"hasGitSign",
 	"hasEnvAllow",
 	"hasAutoApprove",
+	"hasApproveModel",
 	"hasEnvSet",
 	"hasExampleMessages",
 	"hasPromptSystemPrefix",
@@ -331,6 +332,21 @@ var projectKeys = map[string]projectKey{
 			// searchValue.String and from everything else that prints a search
 			// config.
 			return "searches through " + g.webSearchVal.Backend + " at " + red(g.webSearchVal.URL)
+		},
+	},
+
+	"hasApproveModel": {
+		name: "approve_model",
+		set:  func(g *fileGlobals) bool { return g.hasApproveModel },
+		detail: func(g *fileGlobals, red func(string) string) string {
+			if g.approveModelVal == nil {
+				return "every shell command is asked about"
+			}
+			d := g.approveModelVal
+			// The URL is red because it is where the commands are sent, and a
+			// project pointing it somewhere is the thing a reviewer must see.
+			return fmt.Sprintf("shell commands run unasked when %s at %s rates them safe (p ≥ %g)",
+				d.Slug, red(d.URL), d.Threshold)
 		},
 	},
 

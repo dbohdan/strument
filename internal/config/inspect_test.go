@@ -52,6 +52,7 @@ retry_timeout = 600
 git_sign = "ABCD1234"
 env_allow = ["PATH", "HOME"]
 auto_approve = ["websearch"]
+approve_model = decision_model("systemone", "laya", url = "http://localhost:11435/v1/systemone")
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
 example_messages = [["user", "hi"], ["assistant", "hello"]]
 prompt_system_prefix = "House rules."

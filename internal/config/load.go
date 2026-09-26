@@ -209,6 +209,8 @@ type fileGlobals struct {
 	webfetchAllowVal         []string
 	hasWebSearch             bool
 	webSearchVal             *WebSearch
+	hasApproveModel          bool
+	approveModelVal          *DecisionModel
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -514,6 +516,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasWebfetchAllow {
 		cfg.WebfetchAllow = user.webfetchAllowVal
 	}
+	if user.hasApproveModel {
+		cfg.ApproveModel = user.approveModelVal
+	}
 	if user.hasWebSearch {
 		cfg.WebSearch = user.webSearchVal
 	}
@@ -683,6 +688,12 @@ func Load(opts Options) (*Config, error) {
 		if project.hasAutoApprove {
 			cfg.AutoApprove = project.autoApproveVal
 		}
+		// Under the same trust as auto_approve, which can already grant bash
+		// outright: a classifier in front of the prompt is narrower than that.
+		// None turns it off again.
+		if project.hasApproveModel {
+			cfg.ApproveModel = project.approveModelVal
+		}
 		// Per-entry, unlike env_allow, and for the opposite reason: env_allow is
 		// one decision about what the model may see, which a project must be
 		// able to narrow wholesale. env_set is a bag of independent settings, so
@@ -776,6 +787,19 @@ func Load(opts Options) (*Config, error) {
 	// otherwise. "direct" matters more here than anywhere else — a self-hosted
 	// instance is usually on localhost or the LAN, and a proxy configured for
 	// external traffic has no business carrying that request.
+	// The decision model resolves the same way: non-provider egress, and
+	// usually a local server when it is not the hosted API.
+	if am := cfg.ApproveModel; am != nil {
+		switch am.Proxy {
+		case "direct":
+			am.Proxy = ""
+		case "":
+			am.Proxy = cfg.Proxy
+		}
+		if _, err := httpx.ProxyTransport(am.Proxy); err != nil {
+			return nil, fmt.Errorf("approve_model %w", err)
+		}
+	}
 	if ws := cfg.WebSearch; ws != nil {
 		switch ws.Proxy {
 		case "direct":
@@ -830,10 +854,11 @@ func Load(opts Options) (*Config, error) {
 // evaluate an expression against exactly what a real config sees.
 func predeclaredGlobals(env envResolver, root string) starlark.StringDict {
 	return starlark.StringDict{
-		"provider": starlark.NewBuiltin("provider", builtinProvider),
-		"model":    starlark.NewBuiltin("model", builtinModel),
-		"search":   starlark.NewBuiltin("search", builtinSearch),
-		"env":      builtinEnv(env),
+		"provider":       starlark.NewBuiltin("provider", builtinProvider),
+		"model":          starlark.NewBuiltin("model", builtinModel),
+		"search":         starlark.NewBuiltin("search", builtinSearch),
+		"decision_model": starlark.NewBuiltin("decision_model", builtinDecisionModel),
+		"env":            builtinEnv(env),
 		// The project's root, not the config file's directory, in both configs:
 		// a user-level `check = project_checks()` should adapt to whatever
 		// project the session opened.
@@ -1118,6 +1143,24 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 			cp := sv.s
 			out.hasWebSearch = true
 			out.webSearchVal = &cp
+		}
+	}
+
+	if am, ok := globals["approve_model"]; ok {
+		if am == starlark.None {
+			out.hasApproveModel = true
+			out.approveModelVal = nil
+		} else {
+			dv, ok := am.(*decisionModelValue)
+			if !ok {
+				return nil, fmt.Errorf(
+					"%s: `approve_model` must be a decision_model() value, got %s — write "+
+						"approve_model = decision_model(\"systemone\", \"laya\", "+
+						"url=\"http://localhost:11435/v1/systemone\")", path, am.Type())
+			}
+			cp := dv.d
+			out.hasApproveModel = true
+			out.approveModelVal = &cp
 		}
 	}
 

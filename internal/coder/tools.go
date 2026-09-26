@@ -1144,14 +1144,20 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
-	if res := c.confirmGrouped(ConfirmRequest{
-		Prompt:  "Run shell command?",
-		Command: command,
-		Purpose: cmd.purpose,
-		Group:   group,
-		Grant:   GrantBash,
-	}); !res.Yes && !res.Always {
-		return declined(res, "run the command", GrantBash), false
+	// approve_model is asked only where the prompt would really be shown, and
+	// only under the sandbox, the same property that licenses "a" above.
+	approved := c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) &&
+		c.approveByModel(ctx, command, cmd.purpose)
+	if !approved {
+		if res := c.confirmGrouped(ConfirmRequest{
+			Prompt:  "Run shell command?",
+			Command: command,
+			Purpose: cmd.purpose,
+			Group:   group,
+			Grant:   GrantBash,
+		}); !res.Yes && !res.Always {
+			return declined(res, "run the command", GrantBash), false
+		}
 	}
 
 	// A model-caused shell command is the one way a model can commit without

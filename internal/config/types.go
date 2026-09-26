@@ -276,6 +276,10 @@ type Config struct {
 	// to here.
 	WebSearch *WebSearch
 
+	// ApproveModel is a decision model asked before a shell command's prompt
+	// is shown; nil means every prompt is shown. See DecisionModel.
+	ApproveModel *DecisionModel
+
 	// NoLoopDetection turns off stopping a reply that has degenerated into
 	// repeating itself. Named for what it overrides, not for what it does, so
 	// that the zero value means the built-in default (on) — the same shape as
@@ -537,4 +541,49 @@ type WebSearch struct {
 	// usually on localhost or the LAN, and a proxy configured for external
 	// traffic has no business carrying that.
 	Proxy string
+}
+
+// DecisionSystemOne is the one decision-model dialect so far: the request and
+// response schema a decision_model() speaks, named the way provider() adapters
+// are named for theirs. It is TypeSafe's, which other servers implement too
+// (Ollaya serves it locally), so the name is the schema's, not a vendor's.
+const DecisionSystemOne = "systemone"
+
+// DecisionDialects lists them for help text and errors.
+var DecisionDialects = []string{DecisionSystemOne}
+
+// DecisionDefaultThreshold is the p(safe) at or above which approve_model
+// runs a command unasked. It is the threshold doc/experiments/2026-09-approve-model
+// tested, for one model with one rubric; another model's probabilities are
+// calibrated differently, which is why the threshold is set on the model.
+const DecisionDefaultThreshold = 0.9
+
+// DecisionDefaultTimeout bounds one decision, in seconds. A hosted model
+// answers in well under one. A local server on a CPU can take 10-20 seconds to
+// load a model it unloaded while idle, and a router such as Ollaya's "laya"
+// can pick a checkpoint that is still cold mid-session; timeout= raises it.
+const DecisionDefaultTimeout = 10
+
+// DecisionModel is a configured decision model, from decision_model(). It is
+// its own type rather than a model() because nothing about a chat model
+// applies: the request is a state and typed questions, not messages, and the
+// answer is probabilities, not text.
+type DecisionModel struct {
+	Dialect string // one of DecisionDialects
+	Slug    string // the model name the endpoint expects
+	// URL is the whole endpoint, not a base: the same schema is served at
+	// different paths (/v1/systemone, /api/alpha/decisions), so there is no
+	// path Strument could append. Required, with no default, so that no vendor
+	// or gateway is chosen for the user.
+	URL string
+	// APIKey is sent as a bearer token when set. A local server may need none.
+	// Nothing prints it.
+	APIKey string
+	// Proxy works as on WebSearch; "direct" is the case for a local server.
+	Proxy string
+	// Threshold is the p(safe) at or above which a command runs unasked.
+	Threshold float64
+	// Timeout is how long one decision may take, in seconds, before the
+	// prompt is shown instead.
+	Timeout float64
 }

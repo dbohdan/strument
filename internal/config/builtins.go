@@ -498,6 +498,108 @@ func builtinSearch(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 	}}, nil
 }
 
+// decisionModelValue is the opaque Starlark value returned by decision_model().
+type decisionModelValue struct{ d DecisionModel }
+
+func (v *decisionModelValue) String() string {
+	return fmt.Sprintf("decision_model(%q, %q)", v.d.Dialect, v.d.Slug)
+}
+func (v *decisionModelValue) Type() string         { return "decision_model" }
+func (v *decisionModelValue) Freeze()              {}
+func (v *decisionModelValue) Truth() starlark.Bool { return starlark.True }
+func (v *decisionModelValue) Hash() (uint32, error) {
+	return 0, errors.New("unhashable type: decision_model")
+}
+
+// builtinDecisionModel implements decision_model(dialect, slug, *, url,
+// api_key=None, proxy=None, threshold=0.9, timeout=10).
+//
+// Patterned on search() rather than on model(): a decision model is a service
+// with a URL, a key and a proxy, and it shares none of a chat model's
+// parameters. The dialect is a discriminator for the reason search()'s backend
+// is one: a second schema becomes a table entry, and a typo can be answered
+// with what would have worked.
+//
+// url has no default. The same schema is served by a hosted API, by gateways at
+// their own paths, and by local servers, and picking one of those for the user
+// would be choosing where their commands are sent.
+func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) > 2 {
+		return nil, errors.New("decision_model: only 'dialect' and 'slug' may be positional")
+	}
+	var dialect, slug, rawURL, apiKey, proxy string
+	var threshold, timeout starlark.Value
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
+		"dialect", &dialect,
+		"slug", &slug,
+		"url?", &rawURL,
+		"api_key?", &apiKey,
+		"proxy?", &proxy,
+		"threshold?", &threshold,
+		"timeout?", &timeout,
+	); err != nil {
+		return nil, err
+	}
+	if !slices.Contains(DecisionDialects, dialect) {
+		return nil, fmt.Errorf("decision_model: unknown dialect %q (want one of %s)",
+			dialect, strings.Join(DecisionDialects, ", "))
+	}
+	if strings.TrimSpace(slug) == "" {
+		return nil, errors.New("decision_model: slug is empty; name the model the endpoint serves")
+	}
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil, errors.New("decision_model: needs url=, the whole endpoint, such as " +
+			"\"http://localhost:11435/v1/systemone\" for a local server")
+	}
+	u, err := url.Parse(rawURL)
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("decision_model: url %q: %w", rawURL, err)
+	case u.Scheme != "http" && u.Scheme != "https":
+		return nil, fmt.Errorf("decision_model: url %q needs an http:// or https:// scheme", rawURL)
+	case u.Host == "":
+		return nil, fmt.Errorf("decision_model: url %q has no host", rawURL)
+	case u.Fragment != "":
+		return nil, fmt.Errorf("decision_model: url %q should not have a fragment", rawURL)
+	}
+	t := DecisionDefaultThreshold
+	switch v := threshold.(type) {
+	case nil, starlark.NoneType:
+	case starlark.Float:
+		t = float64(v)
+	case starlark.Int:
+		t, _ = starlark.AsFloat(v)
+	default:
+		return nil, fmt.Errorf("decision_model: threshold must be a number, got %s", threshold.Type())
+	}
+	// Above 0 because a threshold of 0 approves everything, which is
+	// auto_approve = ["bash"] with extra steps and a network call; at most 1
+	// because a probability cannot exceed it, and 1 then means "never unless
+	// certain", which is a legitimate if strict setting.
+	if t <= 0 || t > 1 {
+		return nil, fmt.Errorf("decision_model: threshold %v must be above 0 and at most 1", t)
+	}
+	secs := float64(DecisionDefaultTimeout)
+	switch v := timeout.(type) {
+	case nil, starlark.NoneType:
+	case starlark.Float:
+		secs = float64(v)
+	case starlark.Int:
+		secs, _ = starlark.AsFloat(v)
+	default:
+		return nil, fmt.Errorf("decision_model: timeout must be a number of seconds, got %s", timeout.Type())
+	}
+	// Capped because every second of it is a second a turn stands still before
+	// the prompt it would have shown anyway.
+	if secs <= 0 || secs > 120 {
+		return nil, fmt.Errorf("decision_model: timeout %v must be above 0 and at most 120 seconds", secs)
+	}
+	return &decisionModelValue{d: DecisionModel{
+		Dialect: dialect, Slug: slug, URL: u.String(), APIKey: apiKey, Proxy: proxy, Threshold: t, Timeout: secs,
+	}}, nil
+}
+
 // knownModalities is what input_modalities may name. The strings are the
 // llm.Block* kinds on purpose: the send-path projection looks a content block
 // up by its own Type, so a modality that did not match a kind name would be a
