@@ -64,7 +64,7 @@ func TestRunAsideIsolatedFromContext(t *testing.T) {
 	c.Client = asideStub{}
 	c.curMessages = []llm.Message{llm.TextMessage("user", "prior turn")}
 	c.doneMessages = []llm.Message{llm.TextMessage("user", "older"), llm.TextMessage("assistant", "reply")}
-	sentBefore, _ := c.SessionTokens()
+	sentBefore, _ := c.RunTokens()
 
 	ans := c.RunAside(context.Background(), "what is 6 times 7?")
 
@@ -78,8 +78,8 @@ func TestRunAsideIsolatedFromContext(t *testing.T) {
 	if len(c.doneMessages) != 2 {
 		t.Errorf("RunAside changed doneMessages: len %d, want 2", len(c.doneMessages))
 	}
-	// But usage is still reported: the session totals advance.
-	if sentAfter, _ := c.SessionTokens(); sentAfter <= sentBefore {
+	// But usage is still reported: the run totals advance.
+	if sentAfter, _ := c.RunTokens(); sentAfter <= sentBefore {
 		t.Errorf("usage not reported: session tokens %d -> %d", sentBefore, sentAfter)
 	}
 }

@@ -205,8 +205,8 @@ func (env *replayEnv) assertExpectations(t *testing.T) {
 			t.Errorf("usage = %d sent %d received, want %d/%d",
 				c.totalTokensSent, c.totalTokensReceived, e.Sent, e.Received)
 		}
-		if c.sessionKnown != e.CostKnown {
-			t.Errorf("costKnown = %v, want %v", c.sessionKnown, e.CostKnown)
+		if c.runKnown != e.CostKnown {
+			t.Errorf("costKnown = %v, want %v", c.runKnown, e.CostKnown)
 		}
 		if e.CostKnown && !almostEqual(c.totalCost, e.USD) {
 			t.Errorf("cost = %v, want %v", c.totalCost, e.USD)

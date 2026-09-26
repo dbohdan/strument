@@ -105,7 +105,7 @@ $ go test ./...
 passed
 Commit 6c1e0a4 refactor(poll): rename defaultTimeout to pollInterval
 
-Tokens: 12.4k sent, 1.8k received, 30 t/s. Cost: $0.03 turn, $0.03 session. 4 steps, 2 files changed.
+Tokens: 12.4k sent, 1.8k received, 30 t/s. Cost: $0.03 turn, $0.03 run. 4 steps, 2 files changed.
 ```
 
 

@@ -237,15 +237,15 @@ func (c *Coder) SkillCounts() (usable, untrusted int) {
 	return len(skill.Usable(c.Skills)), len(skill.Untrusted(c.Skills))
 }
 
-// SessionCost returns the running session cost and whether any cost was
-// priced this session; the history writer diffs it across a turn.
-func (c *Coder) SessionCost() (usd float64, known bool) {
-	return c.totalCost, c.sessionKnown
+// RunCost returns this run's cost so far and whether any cost was priced in
+// it. A run is one process: a session continued with --continue starts a new
+// run, and its earlier runs' costs are in the record, not here.
+func (c *Coder) RunCost() (usd float64, known bool) {
+	return c.totalCost, c.runKnown
 }
 
-// SessionTokens returns the running session token totals; the history
-// writer diffs them across a turn.
-func (c *Coder) SessionTokens() (sent, received int) {
+// RunTokens returns this run's token totals.
+func (c *Coder) RunTokens() (sent, received int) {
 	return c.totalTokensSent, c.totalTokensReceived
 }
 
@@ -293,8 +293,8 @@ func (c *Coder) TokensReport() string {
 	if c.peakTokensSent > 0 {
 		fmt.Fprintf(&b, "\nLargest request so far: %d tokens (reported by the provider)", c.peakTokensSent)
 	}
-	if c.sessionKnown {
-		fmt.Fprintf(&b, "\nSession cost: $%.4f", c.totalCost)
+	if c.runKnown {
+		fmt.Fprintf(&b, "\nRun cost: $%.4f", c.totalCost)
 	}
 	return b.String()
 }

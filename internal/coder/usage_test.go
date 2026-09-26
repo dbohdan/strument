@@ -1,7 +1,7 @@
 // Pins the aborted-turn usage report: when no provider usage arrives (the
 // turn was interrupted before the final usage chunk), finalizeUsage falls
 // back to the pre-send estimate and the streamed-reply estimate, marks the
-// line "(estimated)", and still folds the cost into the session totals.
+// line "(estimated)", and still folds the cost into the run totals.
 
 package coder
 
@@ -23,14 +23,14 @@ func TestFinalizeUsageEstimatesWhenAborted(t *testing.T) {
 
 	c.finalizeUsage(&sendUsage{estSent: 1234}) // all-zero usage => estimate path
 
-	sent, received := c.SessionTokens()
+	sent, received := c.RunTokens()
 	if sent != 1234 {
 		t.Errorf("session sent = %d, want 1234 (pre-send estimate)", sent)
 	}
 	if received == 0 {
 		t.Errorf("received should be estimated from the streamed reply, got 0")
 	}
-	if cost, known := c.SessionCost(); !known || cost <= 0 {
+	if cost, known := c.RunCost(); !known || cost <= 0 {
 		t.Errorf("estimated cost should be known and > 0, got %v (known=%v)", cost, known)
 	}
 	if !strings.Contains(c.lastUsageReport, "(estimated)") {
@@ -43,7 +43,7 @@ func TestFinalizeUsageRealUsageNotMarked(t *testing.T) {
 
 	c.finalizeUsage(&sendUsage{prompt: 100, completion: 50, estSent: 9999})
 
-	if sent, received := c.SessionTokens(); sent != 100 || received != 50 {
+	if sent, received := c.RunTokens(); sent != 100 || received != 50 {
 		t.Errorf("session tokens = (%d, %d), want (100, 50) from real usage", sent, received)
 	}
 	if strings.Contains(c.lastUsageReport, "(estimated)") {
@@ -66,10 +66,10 @@ func TestRefusedRequestReportsNothing(t *testing.T) {
 
 	c.finalizeUsage(&sendUsage{estSent: 735, rejected: true})
 
-	if sent, recv := c.SessionTokens(); sent != 0 || recv != 0 {
+	if sent, recv := c.RunTokens(); sent != 0 || recv != 0 {
 		t.Errorf("session tokens = (%d, %d), want (0, 0)", sent, recv)
 	}
-	if _, known := c.SessionCost(); known {
+	if _, known := c.RunCost(); known {
 		t.Error("a refused request must not put a cost on the session")
 	}
 	if c.lastUsageReport != "" {
@@ -90,7 +90,7 @@ func TestStreamBrokenMidReplyStillEstimates(t *testing.T) {
 
 	c.finalizeUsage(&sendUsage{estSent: 735, rejected: true})
 
-	if sent, recv := c.SessionTokens(); sent != 735 || recv == 0 {
+	if sent, recv := c.RunTokens(); sent != 735 || recv == 0 {
 		t.Errorf("session tokens = (%d, %d), want (735, >0)", sent, recv)
 	}
 	if !strings.Contains(c.lastUsageReport, "(estimated)") {
@@ -118,7 +118,7 @@ func TestFailedSendAccountsForNothing(t *testing.T) {
 	if out, _ := c.sendMessage(context.Background(), "hello"); out != OutcomeFailed {
 		t.Errorf("outcome = %v, want OutcomeFailed", out)
 	}
-	if sent, recv := c.SessionTokens(); sent != 0 || recv != 0 {
+	if sent, recv := c.RunTokens(); sent != 0 || recv != 0 {
 		t.Errorf("session tokens = (%d, %d), want (0, 0)", sent, recv)
 	}
 	if c.messageSends != 0 {
@@ -150,7 +150,7 @@ func TestSentDoesNotDoubleCountTheCache(t *testing.T) {
 			u := tc.usage
 			c.finalizeUsage(&u)
 
-			if sent, _ := c.SessionTokens(); sent != 14021 {
+			if sent, _ := c.RunTokens(); sent != 14021 {
 				t.Errorf("sent = %d, want 14021 (prompt_tokens, cache included)", sent)
 			}
 		})
@@ -171,7 +171,7 @@ func TestFallbackCostPricesEachTokenOnce(t *testing.T) {
 	c.finalizeUsage(&sendUsage{prompt: 1000, completion: 10, cacheWrite: 600, cacheRead: 300})
 
 	want := 600*pin*1.25 + 300*pin*0.10 + 100*pin + 10*pout
-	got, known := c.SessionCost()
+	got, known := c.RunCost()
 	if !known {
 		t.Fatal("cost should be known from configured pricing")
 	}
@@ -191,10 +191,10 @@ func TestSideUsageReachesTheTurnTotals(t *testing.T) {
 	cost := 0.0001
 	c.RecordTurnSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &cost})
 
-	if sent, recv := c.SessionTokens(); sent != 2794 || recv != 113 {
+	if sent, recv := c.RunTokens(); sent != 2794 || recv != 113 {
 		t.Errorf("session tokens = (%d, %d), want (2794, 113)", sent, recv)
 	}
-	if got, known := c.SessionCost(); !known || got != cost {
+	if got, known := c.RunCost(); !known || got != cost {
 		t.Errorf("cost = %v (known=%v), want %v", got, known, cost)
 	}
 	// The peak is a high-water mark, not a sum: the 794-token side request
@@ -246,7 +246,7 @@ func TestFlushSideUsageReportsTheSideCall(t *testing.T) {
 	if !strings.Contains(lines, "Tokens: 794 sent, 13 received.") {
 		t.Errorf("side usage line missing token counts:\n%s", lines)
 	}
-	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 session.") {
+	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 run.") {
 		t.Errorf("side usage line missing the cost:\n%s", lines)
 	}
 }
@@ -274,9 +274,9 @@ func TestFlushSideUsageConsumesOnlySideUsage(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Tokens: 794 sent, 13 received.",
-		"Cost: $0.00030 message, $0.00030 session.",
+		"Cost: $0.00030 message, $0.00030 run.",
 		"Tokens: 500 sent, 7 received.",
-		"Cost: $0.00040 message, $0.00070 session.",
+		"Cost: $0.00040 message, $0.00070 run.",
 	} {
 		if !strings.Contains(lines, want) {
 			t.Errorf("side usage line missing %q:\n%s", want, lines)
@@ -285,7 +285,7 @@ func TestFlushSideUsageConsumesOnlySideUsage(t *testing.T) {
 	if strings.Contains(lines, "Tokens: 2.3k sent") {
 		t.Errorf("side usage was compounded:\n%s", lines)
 	}
-	if sent, received := c.SessionTokens(); sent != 3294 || received != 120 {
+	if sent, received := c.RunTokens(); sent != 3294 || received != 120 {
 		t.Errorf("session tokens = (%d, %d), want (3294, 120)", sent, received)
 	}
 }
@@ -303,7 +303,7 @@ func TestFlushSideUsageReportsCostOnly(t *testing.T) {
 	if !strings.Contains(lines, "Tokens: 0 sent, 0 received.") {
 		t.Errorf("cost-only usage line missing token counts:\n%s", lines)
 	}
-	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 session.") {
+	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 run.") {
 		t.Errorf("cost-only usage line missing the cost:\n%s", lines)
 	}
 }

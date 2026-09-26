@@ -946,8 +946,8 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 		c.messageCost += cost
 		c.totalCost += cost
 		c.costKnown = true
-		c.sessionKnown = true
-		report += fmt.Sprintf(" Cost: $%s message, $%s session.", formatCost(cost), formatCost(c.totalCost))
+		c.runKnown = true
+		report += fmt.Sprintf(" Cost: $%s message, $%s run.", formatCost(cost), formatCost(c.totalCost))
 	}
 	if estimated {
 		report += " (estimated)"
@@ -983,7 +983,7 @@ func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int
 ) string {
 	report := prefix + formatTokenLine(sent, cacheWrite, cacheRead, received, modelTime)
 	if costKnown {
-		report += fmt.Sprintf(" Cost: $%s %s, $%s session.", formatCost(cost), label, formatCost(totalCost))
+		report += fmt.Sprintf(" Cost: $%s %s, $%s run.", formatCost(cost), label, formatCost(totalCost))
 	}
 	if estimated {
 		report += " (estimated)"
@@ -1041,12 +1041,12 @@ func (c *Coder) RecordTurnSideUsage(u llm.Usage) {
 	if u.Cost != nil {
 		c.messageCost += *u.Cost
 		c.totalCost += *u.Cost
-		c.costKnown, c.sessionKnown = true, true
+		c.costKnown, c.runKnown = true, true
 	}
 }
 
 // RecordSideUsage records one session-notes request in its independent
-// accumulator and folds it into the session totals. FlushSideUsage consumes the
+// accumulator and folds it into the run totals. FlushSideUsage consumes the
 // accumulator after the request is complete.
 func (c *Coder) RecordSideUsage(u llm.Usage) {
 	c.sideTokensSent += u.PromptTokens
@@ -1060,7 +1060,7 @@ func (c *Coder) RecordSideUsage(u llm.Usage) {
 		c.sideCost += *u.Cost
 		c.totalCost += *u.Cost
 		c.sideCostKnown = true
-		c.sessionKnown = true
+		c.runKnown = true
 	}
 	if u.PromptTokens != 0 || u.CompletionTokens != 0 || u.CacheReadTokens != 0 ||
 		u.CacheWriteTokens != 0 || u.Cost != nil {

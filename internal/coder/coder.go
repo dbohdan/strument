@@ -344,10 +344,13 @@ type Coder struct {
 	// every send in it and reset by initBeforeMessage. They used to be assigned
 	// per send, which made "Cost so far" at the step checkpoint report only the
 	// last one — a turn of twelve sends showed the cost of the twelfth.
-	messageCost           float64
+	messageCost float64
+	// totalCost is the run's: this process's, not the session's. The usage
+	// line labels it "run" for that reason, since a session continued across
+	// processes starts it from zero each time.
 	totalCost             float64
 	costKnown             bool // in-band or priced cost seen this turn
-	sessionKnown          bool
+	runKnown              bool
 	messageTokensSent     int
 	messageTokensReceived int
 	messageCacheRead      int
