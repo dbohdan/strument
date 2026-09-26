@@ -133,6 +133,7 @@ with current project state.
 | --- | --- |
 | **design** — [2026-09-consult](2026-09-consult/) | Does `/consult`'s source label survive to the next turn, and how much session context should the advisor see? The plan separates attribution from scope and is not yet run. |
 | **design** — [2026-09-tool-disclosure](2026-09-tool-disclosure/) | Do models lose track of their own tools partway through a turn, and is it the model or the disclosure? GLM-5.3-Flash claimed four of its sixteen tools; MiMo believed it could not run `bash`. A replay probe separates small active size (H1) from `run_code`'s "the callable functions are exactly" sentence reading as the tool list (H2). Not yet run. |
+| **design** — [2026-09-run-code-lodash](2026-09-run-code-lodash/) | Would a helper library make `run_code` programs shorter and more correct? goja lacks `Object.groupBy`, and past transcripts show 32 hand-rolled `.reduce(` and no attempt at a missing helper, so the cost is length and silent bugs rather than errors. Arms: none, a `groupBy` polyfill, and Lodash 4 as `_`. Not yet run. |
 
 ## The documents themselves
 
