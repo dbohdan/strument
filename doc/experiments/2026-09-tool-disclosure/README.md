@@ -84,8 +84,25 @@ something other than a tool.
   in use. The next test of that would be a probe mid-task, not a question,
   and it has not been run.
 - **Arm C is a warning for any mode that withholds a tool while the prompt
-  still names it.** Ling will name it, and may call it. Whether Strument has
-  such a mode was not checked here.
+  still names it.** Ling will name it, and may call it.
+
+  **Checked afterwards, and fixed.** Real requests were captured under five
+  configurations:
+  - the default;
+  - `observation_via_run_code`;
+  - `shell = False`;
+  - `language_parser = False`;
+  - ask mode, dumped through the coder's own request builder, because `-m`
+    sends `/ask …` as plain text rather than as a command.
+
+  Each request's offered tools were compared with every tool name its system
+  prompt and tool descriptions mention. There was one mismatch.
+  `run_code`'s description said "the bash tool, not this one, runs commands"
+  wherever `bash` was withheld: under `shell = False` and in ask mode. It now
+  takes that clause from `offersShell`, the same predicate `toolDefs` uses,
+  and says "nothing in this session runs shell commands" when there is no
+  shell. Under `observation_via_run_code`, the description names `read`,
+  `grep`, `glob` and `ls` as functions inside a program, which is true there.
 
 ## What the panel does
 

@@ -119,13 +119,13 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// ObservationViaRunCode forces it past that flag: the redirect arm has no
 	// other way to look at anything.
 	if c.OfferCode || c.ObservationViaRunCode {
-		defs = append(defs, codeTool(c.codeCallableTools()))
+		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell()))
 	}
 	if c.editFormat == "ask" {
 		return defs
 	}
 	defs = append(defs, editTools(c.AnchoredEdits, c.IndentColumn)...)
-	if c.SuggestShellCommands {
+	if c.offersShell() {
 		defs = append(defs, bashTool())
 	}
 	if len(c.Check) > 0 {
@@ -955,6 +955,13 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 }
 
 // offeredToolNames lists the tools toolDefs offers now, in its order.
+// offersShell is the one predicate for whether bash is offered. toolDefs uses
+// it to add the tool and run_code's description uses it to say where commands
+// run, so the prose names only tools the schema carries.
+func (c *Coder) offersShell() bool {
+	return c.editFormat != "ask" && c.SuggestShellCommands
+}
+
 func (c *Coder) offeredToolNames() []string {
 	defs := c.toolDefs()
 	names := make([]string, 0, len(defs))

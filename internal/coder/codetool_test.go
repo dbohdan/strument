@@ -142,7 +142,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // what is missing. JavaScript is the whole language, so what it names is the
 // host, and each name here corresponds to a probe in TestCodeHasNoHost.
 func TestCodeDescriptionNamesTheHost(t *testing.T) {
-	desc := codeTool(InspectorTools()).Description
+	desc := codeTool(InspectorTools(), true).Description
 	for _, want := range []string{"goja", "not Node or a browser", "require", "fs", "process", "fetch", "bash tool", "console.log()"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -546,7 +546,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // told the names are overridden.
 func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
-	desc := codeTool(InspectorTools()).Description
+	desc := codeTool(InspectorTools(), true).Description
 
 	if !strings.Contains(desc, "return data rather than the tools' prose") {
 		t.Errorf("the description must state the override:\n%s", desc)
@@ -593,10 +593,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 		t.Errorf("with no repo map the callable list must not offer symbol, got %v", got)
 	}
 
-	if desc := codeTool(withMap.codeCallableTools()).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), true).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools()).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools(), true).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 
@@ -693,5 +693,43 @@ func TestCaughtCallFailuresAreReported(t *testing.T) {
 	}
 	if ok := run(c, "read({path: 'f.txt'}).length"); strings.Contains(ok, "raised an error") {
 		t.Errorf("a clean program must carry no failure note, got:\n%s", ok)
+	}
+}
+
+// TestRunCodeNamesBashOnlyWhenOffered: the description's pointer to "the bash
+// tool" follows the same predicate that offers bash. Ask mode and shell =
+// False both withhold it, and a model told about a tool it does not have may
+// call it (doc/experiments/2026-09-tool-disclosure, arm C).
+func TestRunCodeNamesBashOnlyWhenOffered(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		shell    bool
+		ask      bool
+		wantBash bool
+	}{
+		{"code mode with shell", true, false, true},
+		{"shell = False", false, false, false},
+		{"ask mode", true, true, false},
+	} {
+		c := testCoder(t)
+		c.OfferCode = true
+		c.SuggestShellCommands = tc.shell
+		if tc.ask {
+			c.SetEditFormat("ask")
+		}
+		var desc string
+		offered := false
+		for _, d := range c.toolDefs() {
+			if d.Name == toolRunCode {
+				desc = d.Description
+			}
+			if d.Name == toolBash {
+				offered = true
+			}
+		}
+		if offered != tc.wantBash || strings.Contains(desc, "bash tool") != tc.wantBash {
+			t.Errorf("%s: bash offered=%v, description names it=%v; want both %v",
+				tc.name, offered, strings.Contains(desc, "bash tool"), tc.wantBash)
+		}
 	}
 }

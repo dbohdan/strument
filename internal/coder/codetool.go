@@ -78,7 +78,21 @@ const maxBridgedCalls = 50
 // same sentence until doc/experiments/2026-09-description-trims found that
 // dropping the copy lost no uptake. So the description starts from the
 // bridge.
-func codeTool(callable []string) llm.ToolDef {
+// codeCommandsClause says where commands run: in bash when it is offered, and
+// otherwise that this session runs none.
+func codeCommandsClause(shell bool) string {
+	if shell {
+		return "the bash tool, not this one, runs commands."
+	}
+	return "nothing in this session runs shell commands."
+}
+
+// shell says whether this session offers bash, from offersShell: the sentence
+// that sends commands elsewhere names bash only when bash is there. Ask mode
+// and shell = False both withhold it, and the description used to point at
+// "the bash tool" anyway — the kind of mismatch
+// doc/experiments/2026-09-tool-disclosure's arm C showed one model will act on.
+func codeTool(callable []string, shell bool) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Run a short JavaScript program. " +
 		"The program can call the read-only tools directly — " +
@@ -95,8 +109,8 @@ func codeTool(callable []string) llm.ToolDef {
 		"destructuring, spread, try/catch, Map and Set, and JSON, Math, RegExp and Date. " +
 		"This is not Node or a browser: require, import, fs, path, process, child_process, " +
 		"fetch, timers and network access do not exist, so use glob({pattern: \"**/*.py\"}) " +
-		"to walk the tree and read() to open a file; the bash tool, not this one, runs " +
-		"commands. A missing name raises an error naming it — simplify and rerun; a failed " +
+		"to walk the tree and read() to open a file; " + codeCommandsClause(shell) +
+		" A missing name raises an error naming it — simplify and rerun; a failed " +
 		"program costs one cheap retry.")
 
 	// The bridged names come from the caller, which builds one list for the
