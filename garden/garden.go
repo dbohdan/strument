@@ -253,13 +253,14 @@ const buildAsparagus = 3
 // Bed is one garden bed: its soil, the pest and disease pressure
 // accumulated against each family, how many seasons each family has
 // stood in it without a break (for establishment), and optionally
-// its own fade rates. A nil Fades means the package defaults from
-// Crops.
+// its own fade and build rates. Nil Fades and Builds mean the
+// package defaults from Crops.
 type Bed struct {
 	Soil     Nutrients
 	Pressure map[Family]int
 	Stood    map[Family]int // consecutive seasons stood, ending last season
 	Fades    Fades
+	Builds   Builds
 }
 
 // Fades holds per-family fade rates in tenths of pressure per
@@ -267,6 +268,11 @@ type Bed struct {
 // see DefaultFades — so a run can explore other rates without
 // touching the package defaults.
 type Fades map[Family]int
+
+// Builds holds per-family pressure build rates in tenths per season
+// a family is in the bed. A bed may carry its own copy for the same
+// reason as Fades.
+type Builds map[Family]int
 
 // DefaultFades returns the package's rule-of-thumb fade rates for
 // every family: fadePersistent for brassicas and alliums,
@@ -279,6 +285,16 @@ func DefaultFades() Fades {
 	return f
 }
 
+// DefaultBuilds returns the package's rule-of-thumb pressure build
+// rates for every family.
+func DefaultBuilds() Builds {
+	b := make(Builds, len(Crops))
+	for family, crop := range Crops {
+		b[family] = crop.Build
+	}
+	return b
+}
+
 // fade is the rate at which pressure against f fades while f is out
 // of the bed: the bed's own rate for f if it sets one, otherwise the
 // package default.
@@ -287,6 +303,16 @@ func (b Bed) fade(f Family) int {
 		return r
 	}
 	return Crops[f].Fade
+}
+
+// build is the rate at which pressure against f grows while f is in
+// the bed: the bed's own rate for f if it sets one, otherwise the
+// package default.
+func (b Bed) build(f Family) int {
+	if r, ok := b.Builds[f]; ok {
+		return r
+	}
+	return Crops[f].Build
 }
 
 // NewBed returns a bed with the given soil and no pest pressure on
@@ -317,13 +343,14 @@ func NewBed(soil Nutrients) Bed {
 //   - The bed gives up what the crop draws and gains what it gives
 //     back, per nutrient, clamped to [0, SoilCap].
 //
-//   - Pressure against the grown family rises by the crop's Build a
-//     season in the bed, up to the crop's Cap (PressureMax for the
-//     annuals, no ceiling for the perennial); while a family is out
-//     of the bed, its pressure fades by the bed's rate for that
-//     family — Crop.Fade unless the bed carries its own Fades
-//     (rotation starves it; slowly for the persistent diseases).
-//     Nothing drops below zero.
+//   - Pressure against the grown family rises by the bed's build
+//     rate for that family each season in the bed — Crop.Build
+//     unless the bed carries its own Builds — up to the crop's Cap
+//     (PressureMax for the annuals, no ceiling for the perennial);
+//     while a family is out of the bed, its pressure fades by the
+//     bed's rate for that family — Crop.Fade unless the bed carries
+//     its own Fades (rotation starves it; slowly for the persistent
+//     diseases). Nothing drops below zero.
 func Season(b Bed, family Family) (int, Bed) {
 	crop, ok := Crops[family]
 	if !ok {
@@ -347,6 +374,7 @@ func Season(b Bed, family Family) (int, Bed) {
 		Pressure: make(map[Family]int, len(b.Pressure)+1),
 		Stood:    map[Family]int{family: b.Stood[family] + 1},
 		Fades:    b.Fades,
+		Builds:   b.Builds,
 	}
 	for f, p := range b.Pressure {
 		after.Pressure[f] = p
@@ -356,7 +384,7 @@ func Season(b Bed, family Family) (int, Bed) {
 			after.Pressure[f] = max(0, p-b.fade(f))
 		}
 	}
-	grown := b.Pressure[family] + crop.Build
+	grown := b.Pressure[family] + b.build(family)
 	if crop.Cap > 0 {
 		grown = min(crop.Cap, grown)
 	}
@@ -387,6 +415,7 @@ func Rest(b Bed) (int, Bed) {
 		Pressure: make(map[Family]int, len(b.Pressure)),
 		Stood:    make(map[Family]int),
 		Fades:    b.Fades,
+		Builds:   b.Builds,
 	}
 	for f, p := range b.Pressure {
 		after.Pressure[f] = max(0, p-b.fade(f))

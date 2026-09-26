@@ -70,6 +70,22 @@ func TestRunUsesGardenFades(t *testing.T) {
 	}
 }
 
+// TestRunUsesGardenBuilds: a garden carrying its own build rates
+// reaches the run — twice the fusarium rate shortens every
+// asparagus planting's useful life, so the garden total drops.
+func TestRunUsesGardenBuilds(t *testing.T) {
+	builds := garden.DefaultBuilds()
+	builds[garden.Asparagus] = 6 // twice the package's rate
+
+	fast := Run(NewGarden(0).WithBuilds(builds), Perennial{Seasons: 12}, 40, 2024)
+	normal := Run(NewGarden(0), Perennial{Seasons: 12}, 40, 2024)
+
+	if fast.Total >= normal.Total {
+		t.Errorf("under twice the fusarium rate the garden totalled %d, want less than the default run's %d",
+			fast.Total, normal.Total)
+	}
+}
+
 // restFirst rests every bed in the first season, then rotates.
 type restFirst struct{}
 

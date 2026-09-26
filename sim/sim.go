@@ -85,6 +85,17 @@ func (g Garden) WithFades(f garden.Fades) Garden {
 	return out
 }
 
+// WithBuilds returns a copy of the garden whose beds all use the
+// given pressure build rates (see garden.Builds). The same map
+// backs every bed, so treat it as read-only.
+func (g Garden) WithBuilds(b garden.Builds) Garden {
+	out := clone(g)
+	for i := range out.Beds {
+		out.Beds[i].Builds = b
+	}
+	return out
+}
+
 // Strategy decides what each bed is planted with, season by season.
 // The garden it sees is the run as of the end of last season:
 // g.History[bed] is everything that has happened in that bed so far.

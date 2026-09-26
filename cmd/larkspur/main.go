@@ -14,6 +14,11 @@
 // of several rates across its plausible range, printing every
 // strategy's percentage of rotation per rate and which strategy
 // comes out first.
+//
+// With -perennial it sweeps how long one asparagus planting stands
+// before it moves — 4 to 20 seasons, at three fusarium build rates
+// — printing the garden's mean total harvest per stand length,
+// against the rotation-only garden as a reference.
 package main
 
 import (
@@ -56,6 +61,7 @@ func main() {
 	beds := flag.Int("beds", sim.DefaultBeds, "beds per garden")
 	seed := flag.Int64("seed", 0, "first seed; the rest follow in order")
 	sweep := flag.Bool("sweep", false, "sweep the persistent-family fade rate instead of printing the table")
+	perennial := flag.Bool("perennial", false, "sweep how long an asparagus planting stands (4-20 seasons) instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -72,10 +78,61 @@ func main() {
 		sweepFade(*seasons, *seeds, *beds, *seed)
 		return
 	}
+	if *perennial {
+		perennialStand(*seasons, *seeds, *beds, *seed)
+		return
+	}
 
 	rows := measure(*seasons, *seeds, *beds, *seed, nil)
 	printTable(rows)
 	printSparklines(rows)
+}
+
+// perennialStand sweeps how many seasons one asparagus planting
+// stands before it moves, from 4 to 20, at three fusarium build
+// rates (0.3, the package's, in the middle), and prints the garden's
+// mean total for each. The rotation-only garden, with no perennial
+// at all, is build-independent and comes first as the reference.
+func perennialStand(seasons, seeds, beds int, first int64) {
+	rates := []int{2, 3, 4} // tenths of pressure per season standing
+
+	gardenAt := func(build int) func() sim.Garden {
+		return func() sim.Garden {
+			builds := garden.DefaultBuilds()
+			builds[garden.Asparagus] = build
+			return sim.NewGarden(beds).WithBuilds(builds)
+		}
+	}
+	fresh := func() sim.Garden { return sim.NewGarden(beds) }
+
+	fmt.Println("mean garden total by stand length; fusarium build rate in points")
+	fmt.Printf("per season (0.3 is the committed rate). Rotation with no asparagus: %.0f\n\n",
+		meanTotal(fresh, sim.Rotation{}, seasons, seeds, first))
+
+	fmt.Printf("%-6s", "K")
+	for _, r := range rates {
+		fmt.Printf(" %11s", fmt.Sprintf("build %.1f", float64(r)/10))
+	}
+	fmt.Println()
+	for k := 4; k <= 20; k++ {
+		fmt.Printf("%-6d", k)
+		for _, r := range rates {
+			mean := meanTotal(gardenAt(r), sim.Perennial{Seasons: k}, seasons, seeds, first)
+			fmt.Printf(" %11.0f", mean)
+		}
+		fmt.Println()
+	}
+}
+
+// meanTotal runs newGarden's strategy over every seed and returns
+// the mean garden total harvest.
+func meanTotal(newGarden func() sim.Garden, strategy sim.Strategy, seasons, seeds int, first int64) float64 {
+	var sum float64
+	for i := 0; i < seeds; i++ {
+		res := sim.Run(newGarden(), strategy, seasons, first+int64(i))
+		sum += float64(res.Total)
+	}
+	return sum / float64(seeds)
 }
 
 // measure runs every strategy over every seed with the given fade
