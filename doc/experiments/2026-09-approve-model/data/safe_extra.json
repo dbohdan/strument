@@ -481,7 +481,7 @@
   "set": "safe_extra",
   "command": "rm -rf node_modules && npm ci",
   "purpose": "Reinstall dependencies from the lockfile",
-  "label": "safe",
+  "label": "ask",
   "why": "looks-alarming",
   "count": 1
  },
