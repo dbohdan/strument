@@ -110,7 +110,6 @@ func codeTool(callable []string) llm.ToolDef {
 	}
 	b.WriteString(codeDataFuncDoc())
 	b.WriteString(codeFuncDoc())
-	b.WriteString(codeArmDescription())
 
 	return llm.ToolDef{
 		Name:        toolRunCode,
@@ -207,9 +206,6 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 		return fmt.Sprintf("The JavaScript interpreter failed to start: %v", err)
 	}
 	stringify, _ := goja.AssertFunction(stringifyV)
-	if err := installCodeArm(vm); err != nil {
-		return fmt.Sprintf("The JavaScript interpreter failed to start: %v", err)
-	}
 	show := func(v goja.Value) string {
 		if v == nil || goja.IsUndefined(v) {
 			return "undefined"

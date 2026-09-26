@@ -1,9 +1,83 @@
 # Would a helper library make `run_code` programs shorter and more correct?
 
-**Status: designed, not run.** Written down for later. The measurements under
-*What prompted it* were taken on 2026-09-26. Nothing else has been run.
+**Status: trial.** Preregistered in [`preregistration.md`](preregistration.md),
+with the arms at `3460ec2`. The design is below the results, as written before
+the run.
 
-## What prompted it
+**Result: a clean null, and the premise did not hold.** Neither arm changed
+program length:
+- median bytes on the helper tasks: 588 (A), 538 (B), 576 (C);
+- p = 0.78 for both B and C against A.
+
+Correctness was 60/60 in every arm. The models rarely write the code a
+library would replace: 7 of 210 programs used `.reduce(`, and the rest looped
+with `for` and accumulated into an object. Arm C's Lodash was called twice in
+60 sessions, and B's polyfill never.
+
+**Decision: nothing ships.** The arm code is reverted, as preregistered.
+
+## Results
+
+180 sessions, all finished, no timeouts, $0.71 in total. The helper tasks are
+the four other than `control`.
+
+| arm | median program bytes, helper tasks | mean | correct, all tasks | helper sessions that wrote a program | `_.` calls | `groupBy` calls |
+| --- | --- | --- | --- | --- | --- | --- |
+| A, unchanged | 588 | 693 | 60/60 | 48/48 | 0 | 0 |
+| B, `groupBy` polyfill | 538.5 | 698 | 60/60 | 48/48 | 0 | 0 |
+| C, Lodash 4 as `_` | 576 | 672 | 60/60 | 48/48 | 2 | 0 |
+
+Per model, the medians move in opposite directions:
+
+| model | A | B | C |
+| --- | --- | --- | --- |
+| MiMo-V2.6-Flash | 505.5 | 538.5 | 564 |
+| Qwen3.8-27B | 736.5 | 580 | 607.5 |
+
+C against B: p = 0.92. No Lodash 3 names appeared, and every program resolved.
+
+## Why nothing moved
+
+- **The idiom the design was built on is rare.** The design came from one
+  MiMo program that counted with
+  `reduce((m,r)=>(m[r.why]=(m[r.why]||0)+1,m),{})`. Across 210 programs here,
+  7 used `.reduce(`, spread over the arms (A 2, B 4, C 1). The usual shape is
+  a `for…of` over the twelve files and a plain object:
+  `counts[rec.family] = (counts[rec.family] || 0) + 1`. Lodash shortens that
+  by a line, not by a program.
+- **B never fired.** No program called `Object.groupBy`, which matches the
+  transcripts the design surveyed, and B is read as a placebo
+  ([handbook §27](../../experimenting.md#inert-arm-is-a-placebo)). Its
+  50-byte difference from A is the noise floor. C's differences are the same
+  size.
+- **C fired twice, where it fits.** Both `_.groupBy` calls were Qwen's, on the
+  group-and-pick task, and both answers were correct. MiMo never used `_`.
+  The description line was read, occasionally, and did no harm.
+- **The tasks were easy.** Every session was correct. That leaves correctness
+  as a guard only, which is what it was preregistered as, but it means the
+  "silently wrong reduce" worry had nothing to show.
+
+## What this licenses
+
+- **It licenses not shipping a helper library.** Models of this class don't
+  write the code it replaces.
+- **It does not license "Lodash is useless to a model".** A task shaped for
+  it (nested grouping, joins over many keys) or a model that writes
+  functional JavaScript by habit could come out differently. That would be
+  another trial, and this one gives no reason to run it.
+
+## Files
+
+| file | contents |
+| --- | --- |
+| [`preregistration.md`](preregistration.md) | arms, tasks and rule, committed before the run |
+| [`data/fixture.py`](data/fixture.py) | Larkspur's harvest logs and the answer key |
+| [`data/run.py`](data/run.py), [`data/score.py`](data/score.py) | the runner, and the scorer with its self-test |
+| [`data/scored.jsonl`](data/scored.jsonl) | one row per session |
+
+# The design, as written before the run
+
+### What prompted it
 
 In a real session, MiMo-V2.6-Flash wrote one `run_code` program that answered
 five questions about the approve-model corpus. It returned a single object: the
@@ -38,7 +112,7 @@ silently write the long version. The cost to measure is therefore program
 length, and wrong answers from hand-rolled reduces. Missing-name errors are
 not the cost.
 
-## Arms
+### Arms
 
 | arm | change | why |
 | --- | --- | --- |
@@ -63,7 +137,7 @@ never gave them a reason to do.
   description line must not read as extending the tool list. Settle that
   entry's H2 first, or word C's line after its result.
 
-## Fixture and tasks
+### Fixture and tasks
 
 The saving only shows where the reduce idiom appears, so the tasks need
 counting, grouping and joining. A plain lookup shows nothing. Candidates, all
@@ -81,7 +155,7 @@ Each answer should be computed from planted data and checked by running the
 planted data once, as the handbook requires. A plant has to change the value
 that comes out, not just a line on the path to it.
 
-## Metrics
+### Metrics
 
 - **Primary: program tokens.** The summed length of the `run_code` programs
   in a session, on the helper tasks.
@@ -99,13 +173,13 @@ that comes out, not just a line on the path to it.
     uptake.
   - Round trips, cost, and the first program's failure rate.
 
-## Rule, to be fixed in the preregistration
+### Rule, to be fixed in the preregistration
 
 C ships if it lowers program tokens on the helper tasks at p < 0.05 without
 lowering correctness at p < 0.1. B ships under the same test. If both pass, B
 ships, because it is smaller, unless C beats it on the same test.
 
-## What this cannot answer
+### What this cannot answer
 
 - **Whether helpers change what models attempt.** A model that knows `_` is
   there might take on a bigger program in one step. Tokens per program could
