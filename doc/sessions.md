@@ -199,6 +199,26 @@ wants because the intent and constraints survive the cleared stretch. `/notes
 drop` removes them, and `/notes generate` replaces them with a newly generated
 summary.
 
+`/clear` starts a new session rather than emptying the current one: `foo`
+becomes `foo-2`, and `foo-2` becomes `foo-3`. The session log is append-only,
+and a clear that only emptied memory came back with the conversation on the
+next restore. Now the earlier conversation stays whole under its own name,
+where `/session switch` reopens it. The new session keeps the pins and the
+notes as they were, unregenerated, so driving a fresh conversation from notes
+still works: `/notes generate`, then `/clear`. `/reset` moves the same way but
+gives back the pins and the webfetch approvals.
+
+- **Naming.** A trailing `-N` counts as a sequence number only when N is 2 to
+  99 and the base session exists. So `release-2026` becomes
+  `release-2026-2`, and a hand-named `spike-2` with no `spike` beside it
+  becomes `spike-2-2`.
+- **Numbering.** The number is the highest in the sequence plus one, so a
+  deleted `foo-2` is not reused.
+- **An empty session is emptied in place.** A session with no turns recorded
+  has nothing to keep, so no new name is made.
+- **Without saved state** (`--no-history`), there is no record for a
+  conversation to come back from, and `/clear` empties memory as before.
+
 Regeneration can use turns recorded since the previous notes were generated,
 though the resulting summary may still omit useful details. Compaction and note
 generation use different inputs: compaction operates on the coder's in-memory

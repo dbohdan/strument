@@ -78,7 +78,7 @@ func init() {
 		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message. With no files, list what is attached; drop removes attachments.", cmdAttach},
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
-		{"clear", "", "Clear the conversation history.", cmdClear},
+		{"clear", "", "Start a fresh conversation in a new session (foo → foo-2), keeping pins and notes.", cmdClear},
 		{"code", "[<request>]", "Request code changes. With no request, switch to code mode.", cmdCode},
 		{"commits", "[on | off]", "Show or change whether each turn's edits are committed automatically.", cmdCommits},
 		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
@@ -94,7 +94,7 @@ func init() {
 		{"quit", "", "Exit Strument.", cmdExit},
 		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
-		{"reset", "", "Unpin all files, clear the history, and revoke this session's webfetch approvals.", cmdReset},
+		{"reset", "", "Unpin all files, start a fresh session, and revoke this session's webfetch approvals.", cmdReset},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
 		{"session", "[new | switch | fork | rename | delete] [<name>]", "List this project's sessions, or create, switch to, fork, rename, or delete one.", cmdSession},
@@ -633,7 +633,21 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
+// cmdClear starts a fresh conversation. With saved state it moves to the next
+// session in this one's sequence (foo to foo-2), keeping the pins and notes,
+// because the log is append-only: a clear that only emptied memory brought the
+// conversation back on the next restore. Without saved state there is no
+// record to come back from, and emptying memory is the whole of it.
 func cmdClear(_ context.Context, r *REPL, _ string) string {
+	if ops := r.opts.Sessions; ops != nil && ops.Clear != nil {
+		line, err := ops.Clear(r.opts.ModelAlias, true)
+		if err != nil {
+			r.out.Errorf("Could not clear: %v", err)
+			return ""
+		}
+		r.printf("%s", strings.TrimSpace("Chat history cleared. "+line))
+		return ""
+	}
 	r.coder.ClearHistory()
 	r.printf("Chat history cleared.")
 	return ""
@@ -646,10 +660,22 @@ func cmdClear(_ context.Context, r *REPL, _ string) string {
 // surprise. There is no "/reset pins": that is /drop with no arguments
 // already, and a second spelling would only make the first harder to find.
 func cmdReset(_ context.Context, r *REPL, _ string) string {
+	moved := ""
+	if ops := r.opts.Sessions; ops != nil && ops.Clear != nil {
+		line, err := ops.Clear(r.opts.ModelAlias, false)
+		if err != nil {
+			r.out.Errorf("Could not reset: %v", err)
+			return ""
+		}
+		moved = line
+	}
 	r.coder.DropAll()
 	r.coder.ClearHistory()
 	forgotten := r.coder.ForgetOrigins()
 	msg := "Unpinned everything and cleared the chat history."
+	if moved != "" {
+		msg += " " + moved
+	}
 	if forgotten > 0 {
 		msg += fmt.Sprintf(" Forgot %d %s approved for fetching.",
 			forgotten, render.PluralWord(forgotten, "origin", "origins"))

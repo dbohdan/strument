@@ -159,6 +159,11 @@ type SessionOps struct {
 	Switch func(name string, create bool, alias string) (string, error)
 	// Fork starts a new conversation carrying this one's notes.
 	Fork func(name, alias string) (string, error)
+	// Clear moves to a fresh session in this one's sequence, carrying the
+	// notes as they are and, with keepPins, the pins. It returns the line to
+	// show, empty when the session had nothing recorded and was emptied in
+	// place.
+	Clear func(alias string, keepPins bool) (string, error)
 	// Rename renames one, following the process into it when it is the one in
 	// use.
 	Rename func(from, to string) error

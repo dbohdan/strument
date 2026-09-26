@@ -126,7 +126,9 @@ func ListSessions(projectRoot string) ([]Session, error) {
 	}
 	slices.SortFunc(out, func(a, b Session) int {
 		if a.LastUsed.Equal(b.LastUsed) {
-			return strings.Compare(a.Name, b.Name)
+			// Natural order, so a tie between "foo-9" and "foo-10" lists them
+			// in the order /clear made them.
+			return compareNatural(a.Name, b.Name)
 		}
 		if a.LastUsed.After(b.LastUsed) {
 			return -1
