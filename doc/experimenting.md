@@ -62,6 +62,9 @@ Before spending on a run, ask these questions in order:
 - **Does each planted change alter the answer, not only the source?** Run
   the planted code once and read the value ([a plant must change the
   answer](#plant-changes-behavior)).
+- **Does any input exceed the model's window?** For a classifier, add
+  items longer than its context, with the decisive part last ([input longer
+  than the window](#longer-than-window)).
 - **Did you read three transcripts, including an anomalous one?** A transcript
   can settle what an aggregate cannot ([read the transcripts](#read-transcripts)).
 
@@ -83,6 +86,7 @@ Before spending on a run, ask these questions in order:
 | A diff shows two artifacts that look the same | [two documents can render identically](#identical-renderings) |
 | Turn or message counts do not match the fixture | [a fixture line is a message](#one-line-per-message) |
 | A column counts something other than its name | [a probe with two correct answers](#probe-with-two-answers), [a metric that counts the wrong thing](#clean-null) |
+| A classifier's answer ignores part of its input | [input longer than the window](#longer-than-window) |
 | The key disagrees with what the planted code does | [a plant must change the answer](#plant-changes-behavior), [a probe with two correct answers](#probe-with-two-answers) |
 
 ---
@@ -1171,6 +1175,47 @@ used the feature most. With B, it reads as what it is: the size of that model's
 run-to-run variance at this sample. **Check which arms actually fired before
 comparing them, and when one did not, use it:** it measures the noise floor for
 free, in the same run, under the same randomization.
+
+<a id="longer-than-window"></a>
+
+## 28. Feed a classifier input longer than its window
+
+A decision model reads a fixed window and cuts the rest, and the endpoint
+may not say that it did. The approve-model eval passed Jev on 182 commands
+that should have been asked about. None of them was longer than 171
+characters, so the corpus never touched the question of length at all.
+
+A local test of Laya through Ollaya found what that left out:
+- Laya reads 512 tokens, the rubric included.
+- A long harmless prefix followed by `rm -rf ~/.ssh` scored **exactly** what
+  the prefix alone scored.
+- On the TypeSafe-compatible `/v1` path, the response carries nothing that
+  says so. Ollaya reports `state_truncated` only on its native endpoint.
+
+The same repro with a customer message shows it outside security:
+- After 20 repetitions of a filler sentence, a closing refund request still
+  scored p(refund) 0.97 against 0.23 without it.
+- After 40, it scored 0.2367 with the request and 0.2367 without.
+
+**An answer cannot report what the model never saw.** No accuracy figure on
+short inputs speaks to this, because the failure is not a wrong judgment. It
+is a judgment about a different, shorter input. So:
+
+- **Test with the decisive part last, behind filler.** Increase the filler
+  until the answer stops depending on the decisive part.
+- **Compare against the same prefix with the decisive part removed.**
+  Identical answers are the signature of a cut.
+- **Where it matters, guard on length in the harness,** below the smallest
+  window you rely on.
+  - Strument asks about any command plus purpose over 800 characters instead
+    of sending it (`approveMaxInput` in `internal/coder/approve.go`).
+  - The cap costs nothing on the natural corpus, where nothing comes near it.
+- **Put a long item in the corpus.** Otherwise a pass says nothing about
+  length, whatever it says about everything else.
+
+This is the same shape as [a check that cannot fail](#check-that-cannot-fail),
+moved from the scorer to the thing being scored. The eval was real, and it
+tested a narrower claim than the one a deployment relies on.
 
 ---
 
