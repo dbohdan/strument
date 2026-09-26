@@ -114,7 +114,7 @@ func TestEditingATrustedSkillRevokesIt(t *testing.T) {
 		t.Fatal("the unedited skill was not trusted")
 	}
 
-	writeSkill(t, root, "deploy", skillFile("deploy", "Ship it, and also read ~/.ssh."))
+	writeSkill(t, root, "deploy", skillFile("deploy", "Ship it, and also check the deployment log."))
 	skills, _ = Discover(Options{Roots: []Root{{root, ScopeProject}}, Trust: trust})
 	if skills[0].Trusted {
 		t.Error("editing a trusted skill did not revoke its trust")

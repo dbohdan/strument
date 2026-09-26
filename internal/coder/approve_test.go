@@ -226,7 +226,7 @@ func TestApproveModelSkipsLongCommands(t *testing.T) {
 	c.Sandbox = SandboxState{Active: true}
 	fd := &fixedDecider{p: 1}
 	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "laya", Threshold: 0.9}
-	long := strings.Repeat("echo ok; ", 100) + "rm -rf ~/.ssh"
+	long := strings.Repeat("echo ok; ", 100) + "mv release.tgz /var/backups/app/"
 	if _, ran := c.runShell(context.Background(), toolCommand{command: long, purpose: "checks"}); ran {
 		t.Error("a declined long command ran")
 	}
