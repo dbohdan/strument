@@ -50,6 +50,11 @@ type RestoreStats struct {
 	// conversation never shows, and attributing the seam note to it would
 	// claim turns that are not there.
 	Models []string
+	// Turns are the surviving turns' ranges in the returned messages, oldest
+	// first, so a restored session can be rewound like a live one.
+	Turns []TurnSpan
+	// Rewound counts the turns /rewind records took out.
+	Rewound int
 }
 
 // MessagesFromRecords rebuilds a conversation from a record stream.
@@ -86,7 +91,19 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 	// go in front of the result answering that call.
 	pruned := map[string]string{}
 
+	records = applyRewinds(records, &stats)
+	turnStart := 0
 	for i, r := range records {
+		if r.Type == "turn" {
+			// A turn row closes the messages recorded since the previous one:
+			// the same grouping applyRewinds uses, so a turn restored here is
+			// the turn a later /rewind will take out.
+			if len(out) > turnStart {
+				stats.Turns = append(stats.Turns, TurnSpan{Start: turnStart, End: len(out), Files: r.Files})
+			}
+			turnStart = len(out)
+			continue
+		}
 		if r.Type != "message" {
 			continue
 		}
@@ -175,9 +192,77 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 		}
 	}
 
+	before := len(out)
 	out = trimToFirstUserTurn(out, &stats)
+	if cut := before - len(out); cut > 0 {
+		kept := stats.Turns[:0]
+		for _, t := range stats.Turns {
+			t.Start, t.End = max(t.Start-cut, 0), t.End-cut
+			if t.End > t.Start {
+				kept = append(kept, t)
+			}
+		}
+		stats.Turns = kept
+	}
 	stats.Messages = len(out)
 	return out, stats
+}
+
+// applyRewinds takes out the turns /rewind records removed, before anything
+// else reads the records.
+//
+// The record is append-only, so a rewind is a tombstone: {"type":"rewind",
+// "rewound":n} says the n turns before it are no longer in the conversation.
+// A turn is the rows recorded since the previous turn row, up to and including
+// its own: the grouping the live history uses, where a turn's messages move
+// into history together at its end. Rows after the last turn row belong to no
+// closed turn and are never taken out by a later rewind; they only become part
+// of the next turn. Tombstones apply in order, so a rewind of a rewind's
+// survivors works as the user saw it.
+//
+// Working on rows rather than on rebuilt messages leaves everything downstream
+// as it was: the repairs, the model attribution and the trimming see a record
+// in which the rewound turns never happened.
+func applyRewinds(records []Record, stats *RestoreStats) []Record {
+	hasRewind := false
+	for _, r := range records {
+		if r.Type == "rewind" {
+			hasRewind = true
+			break
+		}
+	}
+	if !hasRewind {
+		return records
+	}
+	type group struct{ from, to int } // record indices, [from, to)
+	var closed []group
+	drop := make([]bool, len(records))
+	open := 0
+	for i, r := range records {
+		switch r.Type {
+		case "turn":
+			closed = append(closed, group{open, i + 1})
+			open = i + 1
+		case "rewind":
+			drop[i] = true
+			n := min(r.Rewound, len(closed))
+			for _, g := range closed[len(closed)-n:] {
+				for j := g.from; j < g.to; j++ {
+					drop[j] = true
+				}
+			}
+			closed = closed[:len(closed)-n]
+			stats.Rewound += n
+			open = i + 1
+		}
+	}
+	out := make([]Record, 0, len(records))
+	for i, r := range records {
+		if !drop[i] {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // answeredAfter counts, per call id, the tool results in the run immediately
@@ -267,11 +352,12 @@ func trimToFirstUserTurn(msgs []llm.Message, stats *RestoreStats) []llm.Message 
 // does not help because compaction fires at a turn boundary and there has not
 // been one yet. CheckRestoredContext warns about the same trap and used to be
 // able to say Strument restored less than a conversation; it no longer can.
-func (c *Coder) RestoreHistory(msgs []llm.Message) {
+func (c *Coder) RestoreHistory(msgs []llm.Message, turns []TurnSpan) {
 	if len(msgs) == 0 {
 		return
 	}
 	c.doneMessages = msgs
+	c.turns = turns
 	c.maybeSummarize()
 }
 

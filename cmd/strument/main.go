@@ -893,7 +893,7 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 	if len(msgs) == 0 {
 		return ""
 	}
-	cdr.RestoreHistory(msgs)
+	cdr.RestoreHistory(msgs, stats.Turns)
 	if cdr.RestoredFromAnotherModel(stats) {
 		cdr.NoteRestoredFromAnotherModel()
 	}

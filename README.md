@@ -207,6 +207,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/read-only <file> ...` | Pin a file the model can read but not edit, such as a spec or a header from a sibling repository. This is the way to show the model something outside the project; the search tools see only the project itself. |
 | `/commits [on \| off]` | Show or change whether a turn that edits a file ends in a commit. With no argument, it shows the current setting. `--no-auto-commits` starts a session with commits off. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work. |
 | `/undo` | Revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one. |
+| `/rewind [<n>]` | Take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns folded into a compaction summary cannot be rewound. |
 | `/squash [<n>]` | Combine the last `n` turns' commits into one. |
 | `/usage [<provider> \| all]` | Show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports). |
 | `/diff`, `/tokens` | Show what changed and how full the context window is. |

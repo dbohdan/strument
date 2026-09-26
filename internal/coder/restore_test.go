@@ -273,7 +273,7 @@ func TestAnInterruptedTurnWithNoAnswerLeavesNoSeam(t *testing.T) {
 
 func TestTheSeamNoteIsAMarkedUserTurn(t *testing.T) {
 	c := testCoder(t)
-	c.RestoreHistory([]llm.Message{llm.TextMessage(llm.RoleUser, "hi")})
+	c.RestoreHistory([]llm.Message{llm.TextMessage(llm.RoleUser, "hi")}, nil)
 	c.NoteRestoredFromAnotherModel()
 
 	last := c.doneMessages[len(c.doneMessages)-1]
@@ -302,7 +302,7 @@ func TestRestoreDoesNotPutTheConversationInTheCurrentTurn(t *testing.T) {
 	c.RestoreHistory([]llm.Message{
 		llm.TextMessage(llm.RoleUser, "an earlier prompt"),
 		llm.TextMessage(llm.RoleAssistant, "an earlier answer"),
-	})
+	}, nil)
 
 	if len(c.curMessages) != 0 {
 		t.Errorf("restore left %d messages in the current turn", len(c.curMessages))

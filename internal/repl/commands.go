@@ -95,6 +95,7 @@ func init() {
 		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
 		{"reset", "", "Unpin all files, start a fresh session, and revoke this session's webfetch approvals.", cmdReset},
+		{"rewind", "[<n>]", "Take the last n turns (default 1) out of the conversation. Files are not changed.", cmdRewind},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
 		{"session", "[new | switch | fork | rename | delete] [<name>]", "List this project's sessions, or create, switch to, fork, rename, or delete one.", cmdSession},
@@ -1447,4 +1448,36 @@ func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
 		return false
 	}
 	return true
+}
+
+// cmdRewind takes the last turns out of the conversation (coder.Rewind). It
+// does not touch the files: /undo is the command for edits, and the two stay
+// separate verbs. What it does say is which files the rewound turns changed,
+// since the model no longer remembers changing them.
+func cmdRewind(_ context.Context, r *REPL, args string) string {
+	n := 1
+	if args != "" {
+		v, err := strconv.Atoi(args)
+		if err != nil || v < 1 {
+			r.out.Errorf("Usage: /rewind [<n>], where n is a positive number of turns.")
+			return ""
+		}
+		n = v
+	}
+	res, err := r.coder.Rewind(n)
+	if err != nil {
+		r.out.Errorf("Could not rewind: %v.", err)
+		return ""
+	}
+	msg := "Rewound " + render.PluralWord(res.Turns, "1 turn", fmt.Sprintf("%d turns", res.Turns)) + "."
+	if len(res.Files) > 0 {
+		subject := "It"
+		if res.Turns > 1 {
+			subject = "They"
+		}
+		msg += fmt.Sprintf(" %s changed %s; those edits are still in the files (/undo reverts the latest batch).",
+			subject, strings.Join(res.Files, ", "))
+	}
+	r.printf("%s", msg)
+	return ""
 }

@@ -219,6 +219,22 @@ gives back the pins and the webfetch approvals.
 - **Without saved state** (`--no-history`), there is no record for a
   conversation to come back from, and `/clear` empties memory as before.
 
+`/rewind [n]` takes the last `n` turns out of the conversation without
+leaving the session.
+- **A tombstone, not a deletion.** It appends a `rewind` row naming how many
+  turns it removed. The record keeps the turns, and restore applies the
+  tombstones in order, so `--continue` rebuilds the conversation the user was
+  left with.
+- **Whole turns, from the end.** A turn is the rows since the previous turn
+  row, which is how the live history groups them too, so a tool call and its
+  result are never separated and the cached prefix of the next request
+  survives.
+- **Files are left alone.** The model's picture of the tree goes stale in
+  every session. The rewind says which files the rewound turns changed, and
+  `/undo` is the command that reverts them.
+- **A compaction summary is a boundary.** A rewind that would reach turns a
+  summary absorbed is refused, and says so.
+
 Regeneration can use turns recorded since the previous notes were generated,
 though the resulting summary may still omit useful details. Compaction and note
 generation use different inputs: compaction operates on the coder's in-memory

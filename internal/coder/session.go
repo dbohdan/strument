@@ -104,6 +104,7 @@ func (c *Coder) TrackedFiles() []string {
 func (c *Coder) ClearHistory() {
 	c.doneMessages = nil
 	c.curMessages = nil
+	c.turns, c.compactedTurns = nil, false
 }
 
 // AppendContext adds material to the current history without sending

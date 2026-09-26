@@ -730,7 +730,11 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 // turns the model never took. The commit is reported to the user instead, where
 // the hash is worth something.
 func (c *Coder) moveBackCurMessages() {
+	// The turn's range, for /rewind. The files are the turn's own, still
+	// valid here: turnEditedFiles resets when the next turn starts.
+	start := len(c.doneMessages)
 	c.doneMessages = append(c.doneMessages, c.curMessages...)
+	c.turns = append(c.turns, TurnSpan{Start: start, End: len(c.doneMessages), Files: c.TurnEditedFiles()})
 	c.curMessages = nil
 	c.recordedMessages = 0
 	c.maybeSummarize()
@@ -839,6 +843,8 @@ func (c *Coder) maybeSummarize() {
 		return
 	}
 	c.doneMessages = out
+	// The summary absorbed the turns, so there are none left to rewind.
+	c.turns, c.compactedTurns = nil, true
 	c.Out.Printf("Chat history compacted: %d tokens/%s -> %d tokens/%s; %s retained.",
 		beforeTokens, plural(beforeMessages, "message", "messages"),
 		afterTokens, plural(len(out), "message", "messages"),

@@ -197,6 +197,13 @@ type Record struct {
 	// failed call) is not.
 	PSafe *float64 `json:"p_safe,omitempty"`
 
+	// rewind
+	//
+	// Rewound is how many turns a /rewind took out of the conversation. The
+	// turns stay in the record; restore reads this row as a tombstone
+	// (applyRewinds).
+	Rewound int `json:"rewound,omitempty"`
+
 	// request
 	//
 	// One record per request to the model, retries and continuations

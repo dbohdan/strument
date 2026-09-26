@@ -131,6 +131,12 @@ type Coder struct {
 	Search Searcher
 	// Approve is nil unless approve_model is configured (approve.go).
 	Approve *ApproveModel
+
+	// turns are the settled history's turns, oldest first, for /rewind
+	// (rewind.go). compactedTurns says a compaction absorbed earlier ones, so
+	// a rewind that cannot reach them can say why.
+	turns          []TurnSpan
+	compactedTurns bool
 	// Skills are what discovery found, trusted and not. Only the trusted ones
 	// are ever offered to the model — skill.Usable is the filter, and every
 	// path putting skill text in front of a model goes through it. The
