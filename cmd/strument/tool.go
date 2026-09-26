@@ -61,12 +61,18 @@ func (toolStderr) ToolBlock(title, body string) {
 	render.ToolBlock(os.Stderr, title, body)
 }
 
+// Warningf carries a failed program's error line, which runCode shows the user
+// as well as returning it to the model. It is announcement, like the outcome
+// line, so it goes to stderr and the result on stdout stays what the model gets.
+func (toolStderr) Warningf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+}
+
 // The rest of coder.Output is unreachable from these commands — they never
 // stream an answer, print a link, or render a diff — and panics rather than
 // staying silent would hide a future runCode path growing one.
 func (toolStderr) Printf(string, ...any)              { panic("tool: output used as a full Output") }
 func (toolStderr) CommandOutput(string)               { panic("tool: output used as a full Output") }
-func (toolStderr) Warningf(string, ...any)            { panic("tool: output used as a full Output") }
 func (toolStderr) Errorf(string, ...any)              { panic("tool: output used as a full Output") }
 func (toolStderr) Link(string)                        { panic("tool: output used as a full Output") }
 func (toolStderr) StreamText(string)                  { panic("tool: output used as a full Output") }

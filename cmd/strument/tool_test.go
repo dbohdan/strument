@@ -46,6 +46,17 @@ console.log("world")`)
 	if strings.Contains(out, "Ran") {
 		t.Errorf("the outcome line must not mix into stdout, got:\n%s", out)
 	}
+
+	// A failing program: runCode warns the user with the error's first line
+	// (104063b), and that warning once reached this command's panicking stub.
+	// The error still reaches stdout, as the model would receive it.
+	out, errOut = run("tool", "run_code", `nosuchname`)
+	if !strings.Contains(out, "nosuchname") {
+		t.Errorf("stdout = %q, want the error the model would be sent", out)
+	}
+	if strings.Contains(errOut, "panic") || !strings.Contains(errOut, "nosuchname") {
+		t.Errorf("stderr must carry the warning line, not a panic, got:\n%s", errOut)
+	}
 }
 
 // TestToolRunCodeDataShapes is the incident that motivated the command, end to
