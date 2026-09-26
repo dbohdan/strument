@@ -501,7 +501,14 @@ func (c *chatCmd) Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
 	defer stop()
 
-	cdr.Run(ctx, c.Message)
+	msg, format, err := scriptMessage(c.Message)
+	if err != nil {
+		return err
+	}
+	if format != "" {
+		cdr.SetEditFormat(format)
+	}
+	cdr.Run(ctx, msg)
 	// A scripted run that got no answer must not exit 0. `strument -m …` used
 	// to report success after a refused key or a dead endpoint: the diagnostic
 	// went to stderr and the status said everything was fine, so a script
@@ -2179,4 +2186,36 @@ func discoverSkills(root string) []skill.Skill {
 		)
 	}
 	return skills
+}
+
+// scriptMessage reads -m's text the way the REPL reads a line, as far as script
+// mode can follow it. /ask and /code with a message switch the format for that
+// message, as their one-shot forms do in the REPL. Any other command is refused
+// rather than sent: -m once passed "/ask ..." to the model as plain text in
+// code mode, and nothing said so. A slash that begins something other than a
+// command name, such as a path, is sent as written.
+//
+// format is "" to keep the session's default, which is what /code restores.
+func scriptMessage(text string) (msg, format string, err error) {
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, "/") {
+		return text, "", nil
+	}
+	name, args, _ := strings.Cut(strings.TrimPrefix(trimmed, "/"), " ")
+	args = strings.TrimSpace(args)
+	if !repl.IsCommand(name) {
+		return text, "", nil
+	}
+	switch name {
+	case "ask", "code":
+		if args == "" {
+			return "", "", fmt.Errorf("-m /%s needs a message after it; script mode sends one message and exits", name)
+		}
+		if name == "ask" {
+			return args, "ask", nil
+		}
+		return args, "", nil
+	}
+	return "", "", fmt.Errorf("-m does not run /%s: script mode sends one message. "+
+		"Use the REPL for commands, or /ask or /code followed by a message", name)
 }

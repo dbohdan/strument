@@ -1135,6 +1135,13 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
+A message that begins with `/ask` or `/code` runs in that mode, as the one-shot
+form does in the REPL: `strument -m '/ask Why does the poller back off?'`.
+Any other command, such as `/add`, is refused with a nonzero exit, because
+script mode sends one message and nothing else. A message that begins with a
+slash but no command name, such as a path (`/etc/hosts has a typo`), is sent as
+written.
+
 The process exits with a nonzero status if the request produces no answer:
 authentication failed, the endpoint stayed unreachable after retries, the model
 returned an empty reply, or the request was too large and sending it anyway was

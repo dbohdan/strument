@@ -1004,3 +1004,31 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		t.Errorf("second session: offered %v, note %q; want neither", offered, note)
 	}
 }
+
+// TestScriptMessage pins how -m reads a leading slash: the one-shot format
+// commands work, other commands are refused rather than sent as text, and a
+// slash that begins a path is sent as written.
+func TestScriptMessage(t *testing.T) {
+	for _, tc := range []struct {
+		in, msg, format, err string
+	}{
+		{"fix the bug", "fix the bug", "", ""},
+		{"/ask what does this do?", "what does this do?", "ask", ""},
+		{"/code add a test", "add a test", "", ""},
+		{"/etc/hosts has a typo, fix it", "/etc/hosts has a typo, fix it", "", ""},
+		{"/tmp/out.log shows a panic", "/tmp/out.log shows a panic", "", ""},
+		{"/add main.go", "", "", "does not run /add"},
+		{"/ask", "", "", "needs a message"},
+	} {
+		msg, format, err := scriptMessage(tc.in)
+		if tc.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("%q: err = %v, want one containing %q", tc.in, err, tc.err)
+			}
+			continue
+		}
+		if err != nil || msg != tc.msg || format != tc.format {
+			t.Errorf("%q: got (%q, %q, %v), want (%q, %q)", tc.in, msg, format, err, tc.msg, tc.format)
+		}
+	}
+}

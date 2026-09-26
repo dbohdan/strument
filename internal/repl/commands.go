@@ -170,6 +170,11 @@ func findCommand(name string) *command {
 	return nil
 }
 
+// IsCommand reports whether name (without the slash) is a REPL command.
+// Script mode uses it to tell a command it cannot run from text that merely
+// starts with a slash, such as a path.
+func IsCommand(name string) bool { return findCommand(name) != nil }
+
 // dispatch runs a "/..." input line. It returns the message the command
 // wants sent (usually "") and whether the REPL should exit.
 func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool) {
