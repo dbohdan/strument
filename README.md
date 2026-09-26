@@ -64,5 +64,42 @@ cannot measure from here. The curve is stepwise rather than smooth
 because the arithmetic is integers: the yield penalty floors to whole
 points.
 
+### Perennials: how long should asparagus stand?
+
+The committee pins perennials, and asparagus is the hard case: two seasons
+with no harvest while the crowns establish, then a crop every season, while
+fusarium crown rot builds in the bed with no rotation to clear it. At some
+point the planting has to move, and every move pays the two barren seasons
+again. `go run ./cmd/larkspur -perennial` sweeps the stand length K; one bed
+holds asparagus, and when K is up it moves to the bed that has gone longest
+without it. The fusarium rate is swept too, from a 27-season field life to a
+14-season one.
+
+The asparagus constants were committed before the sweep first ran
+(`5215019`, then `e91209e`), after the fade rate above had turned out to be
+fitted to its answer.
+
+```
+K        build 0.2   build 0.3   build 0.4
+4             2283        2277        2272
+7             2310        2298        2287
+10            2310        2292        2273
+13            2306        2286        2271
+16            2285        2264        2252
+20            2276        2255        2244
+```
+
+(Every fourth row shown; the program prints K from 4 to 20.) Move it every
+five to thirteen seasons: that range is flat to within about 1%, and the peak
+is at K = 7 for every build rate. Past fourteen seasons the decline is steady.
+The rate moves the level, not the peak.
+
+What the table cannot say is whether asparagus is worth growing. The rotation
+with no asparagus totals 2399, above every cell, but that is by construction:
+the model gives established asparagus the same harvest per season as an annual,
+so two barren seasons and a slow decline can only lose. Whether an asparagus
+season is worth more than a cabbage season is a question for the committee, not
+the soil.
+
 Built in sessions driven through [Strument](https://dbohdan.com/strument);
 see DRIVING.md for notes on those sessions.

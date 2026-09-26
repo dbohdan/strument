@@ -23,8 +23,9 @@ trials, never watched it build something from nothing.
 | 5 | alternation tied rotation — make persistent diseases persist | `d022503` | 16 | $0.02 |
 | 6 | the fade rate was chosen to make rotation win; sweep it | `c1ca898` | 16 | $0.02 |
 | 7 | write the results into the README | `730164b` | 6 | $0.0053 |
+| 8 | asparagus: how long should a perennial stand? | `5215019`, `e91209e` | 36 | $0.05 |
 
-About $0.10 in all, for roughly 1,250 lines of Go with tests. Prompt-cache
+About $0.15 in all, for roughly 1,600 lines of Go with tests. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
 
 ## What I would tell someone driving the same way
@@ -55,6 +56,21 @@ it reran the program for the README numbers instead of copying mine.
 It committed after every other turn anyway, split turn 3's pressure fix from
 the new sim package into two commits, and wrote messages that say why and
 name which tests changed and for what reason.
+
+**The discipline carries over when you state it.** Turn 8 asked for the
+asparagus constants to be chosen from the crop and committed before the sweep
+ran. The log shows exactly that order, and the constants did not move after the
+results came in; they only became parameters so the build rate could be swept.
+MiMo also spent a long stretch of reasoning on what "commit the sweep as a
+second commit" meant before settling on a reasonable split. The ambiguity was
+mine.
+
+**A result can be true by construction and still read as a finding.** Its
+turn-8 report called "no stand length beats not planting asparagus" the finding
+it had not gone looking for. It had built that in: established asparagus yields
+the annuals' ceiling, so it can only lose. MiMo's last sentence got the reading
+right ("the case for asparagus has to be its value per season"), but a headline
+like that is worth checking against the model's own ceilings before believing it.
 
 ## What I noticed about Strument
 
