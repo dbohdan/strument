@@ -33,7 +33,7 @@ func cmdCommits(_ context.Context, r *REPL, args string) string {
 			// Not recoverable mid-session: the repository handle is built at
 			// startup, so there is nothing for a commit to go to. Say that
 			// rather than setting a flag that cannot have an effect.
-			r.out.Errorf("Git integration is disabled for this session, so there is nothing to commit to.")
+			r.out.Errorf("Git integration is disabled for this run, so there is nothing to commit to.")
 			r.printf("  Start without --no-git, in a directory that is a git repository, to commit.")
 			return ""
 		}
@@ -53,7 +53,7 @@ func cmdCommits(_ context.Context, r *REPL, args string) string {
 func (r *REPL) printCommitState() {
 	switch {
 	case r.coder.Repo == nil:
-		r.printf("Commits: off. Git integration is disabled for this session.")
+		r.printf("Commits: off. Git integration is disabled for this run.")
 		r.printf("  Edits are still written to the working tree, and /undo can still reverse a turn.")
 	case r.coder.DryRun:
 		// DryRun outranks the setting in commitTurn, so reporting the setting

@@ -35,7 +35,7 @@ func TestYesAddAndDrop(t *testing.T) {
 	if !cdr.Grants.Granted(coder.GrantWebsearch) {
 		t.Fatal("/yes add did not grant")
 	}
-	if got := out.String(); !strings.Contains(got, "websearch") || !strings.Contains(got, "session") {
+	if got := out.String(); !strings.Contains(got, "websearch") || !strings.Contains(got, "(run)") {
 		t.Errorf("the report does not name the grant and its source:\n%s", got)
 	}
 	// The other prompts have to be named too: which ones still stop a turn is

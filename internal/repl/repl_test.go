@@ -1400,11 +1400,11 @@ func TestWebfetchPromptSuffixNamesTheOriginAndTheSession(t *testing.T) {
 		GroupSession: true,
 		Grant:        coder.GrantWebfetch,
 	}
-	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this session) " {
+	if got := confirmSuffix(req); got != " (Y/n/a=all on go.dev:443 this run) " {
 		t.Errorf("suffix = %q, want it to name the origin and the session", got)
 	}
 
-	// The shell gate keeps the turn, and says so. If this ever reads "session"
+	// The shell gate keeps the turn, and says so. If this ever reads "run"
 	// the two scopes have been merged, which is the regression the separate
 	// maps exist to prevent.
 	shell := coder.ConfirmRequest{Prompt: "Run shell command?", Command: "go test ./...", Group: "shell"}

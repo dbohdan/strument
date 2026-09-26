@@ -549,13 +549,13 @@ and is not checked.
 
 #### Approving a host without editing the config
 
-Answering `a` at a fetch prompt approves that host for the rest of the session.
-Use `/web` to inspect session grants and revoke them:
+Answering `a` at a fetch prompt approves that host for the rest of the run.
+Use `/web` to inspect the run's grants and revoke them:
 
 | Command | What it does |
 | --- | --- |
-| `/web` | List what may be fetched unasked: the config's entries and this session's grants, kept apart |
-| `/web allow <host[:port]>` | Approve a host for the session without waiting to be asked |
+| `/web` | List what may be fetched unasked: the config's entries and this run's grants, kept apart |
+| `/web allow <host[:port]>` | Approve a host for the run without waiting to be asked |
 | `/web drop <host[:port]>` | Withdraw one session grant |
 | `/web reset` | Withdraw all of them |
 | `/reset` | Withdraws them too, along with the pins and the history |
@@ -913,7 +913,7 @@ indistinguishable from the prompt being asked for a good reason.
 
 `--yes` and `auto_approve` **union**. The flag is "also this, now"; the config
 is a standing preference, and neither is the other's ceiling. `/yes` shows what
-is granted and where each grant came from, and changes it for the session;
+is granted and where each grant came from, and changes it for the run;
 `/reload` re-reads `auto_approve` and leaves `--yes` alone.
 
 A **trusted project config** may set it, on the same whole-value rule as

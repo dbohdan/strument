@@ -65,7 +65,7 @@ func (r *REPL) envDisplay() string {
 		for _, name := range cfgAllow {
 			mark := ""
 			if r.envDropped[name] {
-				mark = "  (dropped this session)"
+				mark = "  (dropped this run)"
 			} else if os.Getenv(name) == "" {
 				mark = "  (not set)"
 			}

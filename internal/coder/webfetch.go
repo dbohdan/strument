@@ -202,7 +202,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		// line is also where the way out gets named — a permission with no
 		// visible escape is one whose only recourse is restarting.
 		if !granted && c.sessionAutoApprove[group] {
-			c.Out.Printf("Fetching %s without asking for the rest of this session.", org)
+			c.Out.Printf("Fetching %s without asking for the rest of this run.", org)
 		}
 	}
 

@@ -17,9 +17,10 @@ const (
 	// GrantFromConfig is auto_approve in the config. Replaced wholesale on
 	// /reload, because that is what re-reading the config means.
 	GrantFromConfig GrantSource = "config"
-	// GrantFromSession is /yes add. It outranks nothing; it is simply another
-	// source, and /yes reset clears it.
-	GrantFromSession GrantSource = "session"
+	// GrantFromRun is /yes add. It outranks nothing; it is simply another
+	// source, and /yes reset clears it. It lasts for the run: /clear keeps it,
+	// and a restart, even with --continue, does not.
+	GrantFromRun GrantSource = "run"
 )
 
 // Grants is the set of prompts answered without asking, and where each came
@@ -120,7 +121,7 @@ func (g *Grants) Sources() []struct {
 		if !g.Granted(name) {
 			continue
 		}
-		src := GrantFromSession
+		src := GrantFromRun
 		switch {
 		case g.flag[name]:
 			src = GrantFromFlag

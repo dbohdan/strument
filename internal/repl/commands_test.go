@@ -380,7 +380,7 @@ func TestWebOriginCommands(t *testing.T) {
 	out.Reset()
 
 	cmdWeb(ctx, r, "allow go.dev:443")
-	if !strings.Contains(out.String(), "rest of this session") {
+	if !strings.Contains(out.String(), "rest of this run") {
 		t.Errorf("/web allow said nothing useful:\n%s", out.String())
 	}
 	if got := cdr.SessionOrigins(); !slices.Equal(got, []string{"go.dev:443"}) {
@@ -392,7 +392,7 @@ func TestWebOriginCommands(t *testing.T) {
 	// last and in how they are taken back, which is what a reader needs.
 	cmdWeb(ctx, r, "")
 	s := out.String()
-	if !strings.Contains(s, "this session") || !strings.Contains(s, "webfetch_allow") {
+	if !strings.Contains(s, "this run") || !strings.Contains(s, "webfetch_allow") {
 		t.Errorf("the listing folded the two sources together:\n%s", s)
 	}
 	out.Reset()

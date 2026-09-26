@@ -53,6 +53,6 @@ func cmdSandbox(_ context.Context, r *REPL, _ string) string {
 	for _, p := range sb.Skipped {
 		r.out.Errorf("Not writable: %s does not exist, so no access was granted for it.", p)
 	}
-	r.printf("Add a path with sandbox_write in your config; it cannot be changed mid-session.")
+	r.printf("Add a path with sandbox_write in your config; it cannot be changed mid-run.")
 	return ""
 }

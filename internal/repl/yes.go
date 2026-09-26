@@ -77,7 +77,7 @@ func (r *REPL) printYesState() {
 	sources := g.Sources()
 	if len(sources) == 0 {
 		r.printf("Nothing is approved automatically; every prompt asks first.")
-		r.printf("  /yes add %s approves one for this session.", coder.GrantWebsearch)
+		r.printf("  /yes add %s approves one for this run.", coder.GrantWebsearch)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (r *REPL) printYesState() {
 		r.printf("Still asks first: %s.", strings.Join(asking, ", "))
 	}
 	if dropped := g.Dropped(); len(dropped) > 0 {
-		r.printf("  %s came from --yes or the config; this session asks first again.",
+		r.printf("  %s came from --yes or the config; this run asks first again.",
 			strings.Join(dropped, ", "))
 	}
 }

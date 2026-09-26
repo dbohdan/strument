@@ -114,7 +114,7 @@ func TestEnvDropDropsConfigEntriesToo(t *testing.T) {
 	if containsName(cdr.EnvAllow, "CFG_ONLY") {
 		t.Errorf("a config entry survived /env drop: %v", cdr.EnvAllow)
 	}
-	if !strings.Contains(out.String(), "(dropped this session)") {
+	if !strings.Contains(out.String(), "(dropped this run)") {
 		t.Errorf("the display should show the drop:\n%s", out.String())
 	}
 }

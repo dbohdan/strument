@@ -277,7 +277,7 @@ see.
 **A redirect does not widen an approval.** Approving an origin approves that
 origin, so a redirect from it to another origin is followed only when a fetch
 of the target would have gone ahead without a prompt anyway — the target is on
-`webfetch_allow`, was approved for the session, or `webfetch` is granted
+`webfetch_allow`, was approved for the run, or `webfetch` is granted
 outright. Otherwise the fetch stops, and the model is told where the page
 went; fetching that URL is then a call of its own, with its own prompt showing
 the real destination. Without this, one open redirect on an approved or

@@ -85,7 +85,7 @@ func init() {
 		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"drop", "[<file> ...]", "Unpin files. With no files, unpin all of them.", cmdDrop},
-		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this session.", cmdEnv},
+		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this run.", cmdEnv},
 		{"exit", "", "Exit Strument.", cmdExit},
 		{"help", "", "Show this help.", cmdHelp},
 		{"ls", "", "List the pinned files.", cmdLs},
@@ -94,7 +94,7 @@ func init() {
 		{"quit", "", "Exit Strument.", cmdExit},
 		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
-		{"reset", "", "Unpin all files, start a fresh session, and revoke this session's webfetch approvals.", cmdReset},
+		{"reset", "", "Unpin all files, start a fresh session, and revoke this run's webfetch approvals.", cmdReset},
 		{"rewind", "[<n>]", "Take the last n turns (default 1) out of the conversation. Files are not changed.", cmdRewind},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
@@ -780,7 +780,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 	switch strings.TrimSpace(args) {
 	case "generate":
 		if r.opts.GenerateNotes == nil {
-			r.printf("Session notes are disabled for this session.")
+			r.printf("Session notes are disabled for this run.")
 			return ""
 		}
 		if err := r.opts.GenerateNotes(ctx); err != nil {
@@ -789,7 +789,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 		}
 	case "drop":
 		if r.opts.DropNotes == nil {
-			r.printf("Session notes are disabled for this session.")
+			r.printf("Session notes are disabled for this run.")
 			return ""
 		}
 		r.opts.DropNotes()
@@ -797,7 +797,7 @@ func cmdNotes(ctx context.Context, r *REPL, args string) string {
 	case "":
 		notes := r.opts.Notes
 		if notes == nil {
-			r.printf("Session notes are disabled for this session.")
+			r.printf("Session notes are disabled for this run.")
 			return ""
 		}
 		if strings.TrimSpace(notes()) == "" {
@@ -990,9 +990,9 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// be discovered: Landlock is applied to the process at startup and its
 	// rules only ever add, so a session cannot widen or drop its own sandbox.
 	if wasActive := r.coder.Sandbox.Active; wasActive != (cfg.Sandbox != "") {
-		r.out.Warningf("The `sandbox` setting changed. Restart Strument to apply it; this session's sandbox is unchanged.")
+		r.out.Warningf("The `sandbox` setting changed. Restart Strument to apply it; this run's sandbox is unchanged.")
 	} else if wasActive && prev != nil && !slices.Equal(prev.SandboxWrite, cfg.SandboxWrite) {
-		r.out.Warningf("The `sandbox_write` setting changed. Restart Strument to apply it; this session's sandbox is unchanged.")
+		r.out.Warningf("The `sandbox_write` setting changed. Restart Strument to apply it; this run's sandbox is unchanged.")
 	}
 	// env_set is applied to the process once, at startup, before anything it
 	// starts could inherit it; re-applying it mid-session would give a /run
@@ -1000,7 +1000,7 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	// them. doc/config.md says a restart is needed. Saying it here too is what
 	// keeps an edited value from looking applied when it is not.
 	if prev != nil && !maps.Equal(prev.EnvSet, cfg.EnvSet) {
-		r.out.Warningf("The `env_set` setting changed. Restart Strument to apply it; this session's environment is unchanged.")
+		r.out.Warningf("The `env_set` setting changed. Restart Strument to apply it; this run's environment is unchanged.")
 	}
 
 	// Re-resolve the active alias so edits to that model take effect; if it was
@@ -1186,7 +1186,7 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 			r.printf("Revoked approval for %d %s. webfetch will ask again before fetching from %s.",
 				n, render.PluralWord(n, "origin", "origins"), render.PluralWord(n, "it", "them"))
 		} else {
-			r.printf("No origins were approved this session.")
+			r.printf("No origins were approved this run.")
 		}
 		return ""
 	case "allow":
@@ -1231,7 +1231,7 @@ func webOrigins(r *REPL) string {
 		}
 	}
 	if len(session) > 0 {
-		r.printf("Approved for this session (use `/web reset` to revoke the approvals):")
+		r.printf("Approved for this run (use `/web reset` to revoke the approvals):")
 		for _, org := range session {
 			r.printf("  %s", org)
 		}
@@ -1258,7 +1258,7 @@ func webAllow(r *REPL, entry string) string {
 		r.printf("%s was already approved.", entry)
 		return ""
 	}
-	r.printf("Fetching %s without asking for the rest of this session.", strings.Join(added, " and "))
+	r.printf("Fetching %s without asking for the rest of this run.", strings.Join(added, " and "))
 	return ""
 }
 
@@ -1284,7 +1284,7 @@ func webDrop(r *REPL, entry string) string {
 				return ""
 			}
 		}
-		r.printf("%s was not approved this session.", entry)
+		r.printf("%s was not approved this run.", entry)
 		return ""
 	}
 	r.printf("webfetch will ask again before %s.", strings.Join(dropped, " and "))
