@@ -1,10 +1,106 @@
 # Do models lose track of their own tools mid-turn?
 
-**Status: designed, not run.** Written down so it can be picked up later
-without redoing the diagnosis. Nothing below has been measured, except where
-it says so.
+**Status: trial.** Preregistered in [`preregistration.md`](preregistration.md)
+(`3cb4fab`). The design this started from is below the results, as written
+before the run.
 
-## What prompted it
+**Result: neither hypothesis is supported, and the probe reproduced the
+anomaly anyway.**
+
+- **H2 is not supported.** Rewording `run_code`'s "the callable functions
+  are exactly" sentence changed nothing: 14 wrong answers in 119 against 12 in
+  120, p = 0.68.
+- **H1 is not supported.** The request as sent was wrong in 12 of 120 answers,
+  and a fresh context in 5 of 120 (p = 0.13). The errors do not rank with
+  active size: Qwen3.8-27B (dense) and Ling 3.0 Flash (small-active) made
+  none, GLM-5.3-Flash made most, and GPT-6 Luna, the frontier model, came
+  second.
+- **What the probe did find, found after the fact:** late in a session, GLM
+  reports a **working set** rather than its tools. In `glm-docs-0` it
+  answered `read, glob, edit, write, bash, commit` three times out of three.
+  That is the tools it had used, plus the core tools for changing files, and
+  it is close to the original claim of "only read, ls, edit, write". This
+  matches neither hypothesis. It is an observation to test, not a result.
+
+**Decision:** no wording change. Neither the rule nor the data supports one.
+
+## Results
+
+Two prefixes per session (the middle request and the last), 4 arms, 3 reps:
+480 calls, 1 with no answer. "Wrong" means an answer that named a tool not
+offered, or left one out.
+
+| arm | wrong | tools invented | tools left out |
+| --- | --- | --- | --- |
+| A, the request as sent | 12/120 | 4 | 54 |
+| B, the sentence reworded | 14/119 | 2 | 78 |
+| C, `run_code` removed from the tools | 22/120 | 31 | 33 |
+| D, a fresh context | 5/120 | 4 | 3 |
+
+Wrong answers per model, out of 24 answers per arm (23 for GLM under B):
+
+| model | A | B | C | D |
+| --- | --- | --- | --- | --- |
+| GLM-5.3-Flash | 7 | 10 | 6 | 2 |
+| GPT-6 Luna | 4 | 3 | 0 | 2 |
+| Ling 3.0 Flash | 0 | 1 | **15** | 0 |
+| MiMo-V2.6-Flash | 1 | 0 | 1 | 1 |
+| Qwen3.8-27B | 0 | 0 | 0 | 0 |
+
+**GLM narrows late.** Every GLM error under A came from a session's last
+request, not its middle one. The tools it drops are always the same
+auxiliaries: `about`, `ask_user_question`, `interrupt`, `symbol`,
+`webfetch`, and often `run_code`. What it keeps are the tools it used and the
+ones that change files:
+
+| session | tools used before the probe | GLM's answer, three times out of three |
+| --- | --- | --- |
+| `glm-docs-0` | `read`, `glob` | `read, glob, edit, write, bash, commit` (once with `run_code` added) |
+| `glm-code-0` | `bash`, `read`, `edit` | `read, grep, glob, ls, edit, bash, commit` |
+
+In its other two sessions GLM listed all fourteen, at least twice of three. The
+same prefix gives the same narrowed answer each time, so the history is what
+causes it, not sampling.
+
+**Ling believes the prose over the tool list.** With `run_code` removed from
+the tools but still named in the system prompt, Ling listed it in 15 of 24
+answers. Of the other four models, only GLM did, 4 times in 24.
+
+**Names from inside a program leak out, rarely.** Twice, once from Luna under
+A and once from GLM under B, an answer listed `read_text` and `read_bin`.
+Those are functions `run_code` offers only to programs. That is H2's worry in
+the other direction: the description's list read as more tools, not fewer.
+Two answers in 480 do not make a case for a change.
+
+**Luna omits `ask_user_question`.** Its errors are one or three tools, most
+often that one, including in a fresh context. It appears to read it as
+something other than a tool.
+
+## What this licenses
+
+- **It licenses leaving `run_code`'s description as it is.**
+- **It does not explain GLM's original session.** It shows a behavior of the
+  same shape: late in a session, GLM's picture of its tools narrows to the ones
+  in use. The next test of that would be a probe mid-task, not a question,
+  and it has not been run.
+- **Arm C is a warning for any mode that withholds a tool while the prompt
+  still names it.** Ling will name it, and may call it. Whether Strument has
+  such a mode was not checked here.
+
+## Files
+
+| file | contents |
+| --- | --- |
+| [`preregistration.md`](preregistration.md) | the pilot, the arms and the rule, committed before the run |
+| [`data/fixture.py`](data/fixture.py) | Larkspur, the invented project |
+| [`data/gen.py`](data/gen.py) | records the sessions through `strumentrec` |
+| [`data/probe.py`](data/probe.py), [`data/score.py`](data/score.py) | the replay, the arms, and the scorer with its self-test |
+| [`data/probe.jsonl`](data/probe.jsonl) | all 480 answers |
+| [`data/sessions.json`](data/sessions.json) | the 20 recorded sessions |
+
+# The design, as written before the run
+
+### What prompted it
 
 Two models, two sessions, the same kind of false belief. Each was about the
 model's own abilities rather than about the task.
@@ -27,7 +123,7 @@ same provider, to list its tools named all seventeen it was sent, four times
 out of four. So every tool reaches the model. What goes wrong is the model's
 picture of its tools later in a turn.
 
-## Hypotheses
+### Hypotheses
 
 **H1: active parameters, not size or benchmark strength.** GLM is 320B total
 but 18B active. Ling 3.0 Flash, which in
@@ -63,7 +159,7 @@ bash tool, not this one" sits next to the list.
 
 H1 and H2 can both hold.
 
-## Design
+### Design
 
 **A replay probe.** Take a real session up to the step where the false belief
 appeared. Send it with one extra user message: "List the exact names of the
@@ -95,7 +191,7 @@ Arms, each on the same prefix:
 - **Repetitions:** enough per cell to see a rate. The answers are short, so
   this costs cents.
 
-## What each outcome would mean
+### What each outcome would mean
 
 - **B fixes what A gets wrong:** H2. A one-line wording change, and the cheap
   outcome. Check that B does not cost `run_code` uptake before shipping it.
@@ -109,7 +205,7 @@ Arms, each on the same prefix:
   The question then is what in those turns produced it, and the next step is
   reading the steps just before the anomaly, not changing prompts.
 
-## Caveats
+### Caveats
 
 - **Asking for the list is not the same as acting on a false one.** A model
   can recite its tools correctly when asked and still act as if one is
