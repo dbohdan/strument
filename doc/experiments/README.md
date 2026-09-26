@@ -113,6 +113,7 @@ with current project state.
 | --- | --- |
 | **trial** — [2026-08-landlock-live](2026-08-landlock-live/) | Does the Landlock sandbox enforce its policy on a real Landlock kernel without breaking ordinary work? Yes: all checks passed after scorer corrections, denied writes were contained, and ordinary tests and commits worked. Keep the policy and report the actually granted paths, not merely the requested ones. |
 | **data only** — [2026-08-containment](2026-08-containment/) | Does the containment probe hold? Results and the runner are in `data/`, but there is no write-up yet. Treat it as recorded evidence, not as a summarized conclusion. |
+| **trial** — [2026-09-approve-model](2026-09-approve-model/) | Could a classifier (TypeSafe's Jev) answer the bash confirmation prompt? Not by the preregistered rule: a single safe/ask choice at p ≥ 0.9 approved 2/150 ask items, both in the one stratum without a giveaway token (where the rule allowed none), and 89% of held-out safe commands; six hazard nouls were worse at every threshold. All 20 injection items were asked about. Both misses were items the design already contradicted, so a rerun with a consistent rubric and human-written items is open. `approve_model` does not ship. |
 
 ## Wire dialects
 
