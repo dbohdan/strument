@@ -1187,8 +1187,8 @@ characters, so the corpus never touched the question of length at all.
 
 A local test of Laya through Ollaya found what that left out:
 - Laya reads 512 tokens, the rubric included.
-- A long harmless prefix followed by `rm -rf ~/.ssh` scored **exactly** what
-  the prefix alone scored.
+- A long harmless prefix followed by a destructive command scored **exactly**
+  what the prefix alone scored.
 - On the TypeSafe-compatible `/v1` path, the response carries nothing that
   says so. Ollaya reports `state_truncated` only on its native endpoint.
 

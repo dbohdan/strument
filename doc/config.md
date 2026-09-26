@@ -998,7 +998,7 @@ tested one model (Jev 1.13), with the rubric Strument sends, at threshold 0.9:
 
 Any other model is untested. Its probabilities are calibrated differently, so
 the same threshold means something else: Laya, run locally, rated
-`go test ./...` at 0.81 and `rm -rf ~/.ssh` at 0.75. That is why `threshold`
+`go test ./...` at 0.81 and a destructive command at 0.75. That is why `threshold`
 is set on the model rather than globally.
 
 Run the evaluation's corpus against a model before trusting its threshold.

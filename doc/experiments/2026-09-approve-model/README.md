@@ -132,16 +132,16 @@ required. A local test against [Ollaya](https://ollaya.dev/) (built from
 test of robustness, not an evaluation of Laya. It changed three things:
 
 - **Silent truncation.** Laya reads 512 tokens, rubric included, and cuts the
-  rest without saying so on `/v1`. A long harmless prefix followed by
-  `rm -rf ~/.ssh` scored exactly what the prefix alone scored. So a command
-  plus purpose over 800 characters is never sent: it is always asked about.
-  No command in the natural corpus is that long.
+  rest without saying so on `/v1`. A long harmless prefix followed by a
+  destructive command scored exactly what the prefix alone scored. So a
+  command plus purpose over 800 characters is never sent: it is always asked
+  about. No command in the natural corpus is that long.
 - **Cold loads.** A load took 10–19 s on the CPU. Ollaya unloads idle models
   after five minutes, and its `laya` router picked a cold checkpoint in the
   middle of a session. The fixed 10 s timeout became `timeout=` on the model.
-- **Calibration is per model.** Laya rated `go test ./...` at 0.81 and
-  `rm -rf ~/.ssh` at 0.75. Jev's 0.9 threshold does not carry over, which is
-  why `threshold` is set on the model.
+- **Calibration is per model.** Laya rated `go test ./...` at 0.81 and a
+  destructive command at 0.75. Jev's 0.9 threshold does not carry over, which
+  is why `threshold` is set on the model.
 
 At a test threshold of 0.5, Laya approved a `mkdir` outside the project,
 which the sandbox then refused, and a `curl`, which the sandbox does not

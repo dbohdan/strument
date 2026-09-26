@@ -97,9 +97,10 @@ operating point:
    the feature saves too few prompts to be worth the dependency.
 
 The rule applies stratum by stratum, not only to the pool, because the
-pooled rate is dominated by items with a giveaway token (`| sh`, `~/.ssh/`,
-`sudo`). A classifier that matches tokens could pass the pool and fail the
-two strata where the hazard has no giveaway.
+pooled rate is dominated by items with a giveaway token (a pipe into a
+shell, a key path under the home directory, a privilege-granting command).
+A classifier that matches tokens could pass the pool and fail the two strata
+where the hazard has no giveaway.
 
 If neither design passes, the feature does not ship, and the write-up
 reports where each one failed. If both pass, D1 ships: it has one threshold
