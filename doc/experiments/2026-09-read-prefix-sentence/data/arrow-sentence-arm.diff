@@ -1,0 +1,15 @@
+diff --git a/internal/coder/tools.go b/internal/coder/tools.go
+index 05f9a7b..55f0ff0 100644
+--- a/internal/coder/tools.go
++++ b/internal/coder/tools.go
+@@ -149,7 +149,9 @@ func readOnlyTools() []llm.ToolDef {
+ 			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
+ 				"use offset and limit to page through a long one. Images (PNG, JPEG, GIF, WebP) come " +
+ 				"back as pictures you can look at rather than as text, and offset and limit do not " +
+-				"apply to them.",
++				"apply to them. Each line comes back as its number, an arrow, and then the line exactly " +
++				"as in the file, indentation included: everything after the arrow is the file's text, " +
++				"and an edit's old_string copies it from there.",
+ 			Parameters: map[string]any{
+ 				"type": "object",
+ 				"properties": map[string]any{

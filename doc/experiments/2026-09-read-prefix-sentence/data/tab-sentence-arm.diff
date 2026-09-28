@@ -1,0 +1,28 @@
+diff --git a/internal/coder/toolobserve.go b/internal/coder/toolobserve.go
+index b3c09ea..eec4e9f 100644
+--- a/internal/coder/toolobserve.go
++++ b/internal/coder/toolobserve.go
+@@ -136,7 +136,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
+ 	// doc/experiments/2026-09-read-separator, against 4 and 0 with the arrow.
+ 	width := len(strconv.Itoa(ft.Start + len(ft.Lines) - 1))
+ 	for i, line := range ft.Lines {
+-		fmt.Fprintf(&b, "%*d→%s\n", width, ft.Start+i, line)
++		fmt.Fprintf(&b, "%*d\t%s\n", width, ft.Start+i, line)
+ 	}
+ 	if ft.Truncated {
+ 		next := ft.Start + len(ft.Lines)
+diff --git a/internal/coder/tools.go b/internal/coder/tools.go
+index 05f9a7b..4a9b27a 100644
+--- a/internal/coder/tools.go
++++ b/internal/coder/tools.go
+@@ -149,7 +149,9 @@ func readOnlyTools() []llm.ToolDef {
+ 			Description: "Read a file's contents, with line numbers. Returns a window of the file; " +
+ 				"use offset and limit to page through a long one. Images (PNG, JPEG, GIF, WebP) come " +
+ 				"back as pictures you can look at rather than as text, and offset and limit do not " +
+-				"apply to them.",
++				"apply to them. Each line comes back as its number, one tab, and then the line exactly " +
++				"as in the file, indentation included: everything after that first tab is the file's text, " +
++				"and an edit's old_string copies it from there.",
+ 			Parameters: map[string]any{
+ 				"type": "object",
+ 				"properties": map[string]any{
