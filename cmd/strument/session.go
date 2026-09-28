@@ -330,11 +330,10 @@ func (s *sessionSwitcher) open(name string) string {
 
 // fork starts a new conversation carrying this one's notes.
 //
-// It is the ritual it replaces: generate notes, clear the history, keep
-// working. Doing it by hand meant /notes generate, /clear, and remembering
-// that the notes now describe a session you are no longer in — which nothing
-// recorded, so the header could not say so. Here the parent is known, and the
-// notes arrive in the new session labelled with where they came from.
+// It is the ritual it replaces — /notes generate, then a fresh conversation
+// — with what the hand ritual cannot do: the conversation gets its own
+// session, so --continue tells it apart from this one, and the notes arrive
+// labelled with the session they were written from.
 //
 // /model does not do this. Many conversations on one strong model is the
 // common case, so forking belongs to the session rather than to the model.
@@ -370,52 +369,6 @@ func (s *sessionSwitcher) fork(name, alias string) (string, error) {
 	s.cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
 	s.cdr.SessionNotesSession = parent
 	return note + fmt.Sprintf("\nNotes from %s are in context.", parent), nil
-}
-
-// clear moves the process to a fresh session in the current one's sequence
-// (history.NextSessionName): "foo" to "foo-2", "foo-2" to "foo-3". It is how
-// /clear and /reset forget a conversation now that the log is the record. The
-// earlier conversation stays whole under its own name, where emptying memory
-// alone left it to come back on the next restore.
-//
-// It is /session fork with nothing generated: the notes already in context go
-// with it as they are, labelled with the session they came from, because
-// driving a new conversation from notes is what /clear was used for. keepPins
-// separates the two commands: /clear forgets what was said and keeps the pins,
-// /reset gives the pins back too.
-//
-// A session that has recorded no turns has nothing to keep, so it is emptied
-// in place rather than left behind as one more name.
-func (s *sessionSwitcher) clear(alias string, keepPins bool) (string, error) {
-	current := s.cdr.Session
-	if history.SessionTurns(s.projectRoot, current) == 0 {
-		s.cdr.ClearHistory()
-		if !keepPins {
-			s.cdr.DropAll()
-		}
-		return "", nil
-	}
-	name, err := history.NextSessionName(s.projectRoot, current)
-	if err != nil {
-		return "", err
-	}
-	chat, readOnly := s.cdr.ChatFiles(), s.cdr.ReadOnlyFiles()
-	notes, date, from := s.cdr.SessionNotes, s.cdr.SessionNotesDate, s.cdr.SessionNotesSession
-
-	if _, err := s.switchTo(name, true, alias); err != nil {
-		return "", err
-	}
-	s.cdr.SessionNotes, s.cdr.SessionNotesDate, s.cdr.SessionNotesSession = notes, date, from
-	if keepPins {
-		for _, f := range chat {
-			s.cdr.AddFile(f)
-		}
-		for _, f := range readOnly {
-			s.cdr.AddReadOnlyFile(f)
-		}
-	}
-	s.saveResume(alias)
-	return fmt.Sprintf("Now in %s; %s keeps the earlier conversation.", name, current), nil
 }
 
 // rename renames a session, following the process into it when it is the one
@@ -470,7 +423,6 @@ func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string
 		List:    sw.list,
 		Switch:  sw.switchTo,
 		Fork:    sw.fork,
-		Clear:   sw.clear,
 		Rename:  sw.rename,
 		Delete:  sw.remove,
 	}

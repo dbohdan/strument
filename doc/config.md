@@ -564,8 +564,8 @@ Use `/web` to inspect the run's grants and revoke them:
 both default ports. Nothing here writes to `config.star`; use
 `webfetch_allow` for a persistent approval.
 
-`/clear` starts a fresh conversation in a new session (`foo` becomes `foo-2`)
-but preserves pinned files, notes, and session grants. See
+`/clear` starts a fresh conversation in the current session, preserving
+pinned files, notes, and session grants. See
 [sessions](sessions.md#the-notes-lifecycle).
 
 Automatically approved fetches still print their purpose and URL.
