@@ -106,6 +106,8 @@ Each record has a `type` field:
 - A **`turn`** record at the end of each turn.
 - A **`request`** record for each request to the model.
 - A **`side_call`** record for each request Strument makes for itself.
+- An **`edit`** record for each `edit` or `write` call, saying how its target
+  was found.
 
 The **`turn`** record carries:
 
@@ -152,8 +154,20 @@ commit reading `(no commit message provided)`. The record carries:
 - the `error` text when there is one;
 - the same usage fields as a `request` record.
 
+An **`edit`** record covers one `edit` or `write` call: its `tool_call_id`,
+the `path`, and an `outcome` — `exact`, `loose`, `replaced_all`, `anchored`,
+`created`, `overwrote`, `not_found`, `ambiguous`, `stale`, `not_resolved` or
+`skipped`. A `loose` match is one the line matcher placed after the text sent
+did not occur in the file, usually because its indentation was off; its
+`summary` is the explanation the model was given, such as "line 142 has 3
+tabs, and you sent 4 tabs". The record describes the match, not the write: a
+batch that then failed to write says so in the tool results. The `turn` record
+counts exact and loose matches (`edits_exact`, `edits_fuzzy`); these say which
+call was which.
+
 ```sh
 jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
+jq -c 'select(.type=="edit" and .outcome=="loose") | {path, summary}' "$(strument history path)"
 jq -s 'map(select(.type=="request")) | group_by(.provider) | map({provider: .[0].provider, requests: length, reasoning: (map(.reasoning // 0) | add)})' "$(strument history path)"
 jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
 ```

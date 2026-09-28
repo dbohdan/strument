@@ -324,3 +324,56 @@ func TestFuzzyAmbiguityIsRefused(t *testing.T) {
 		t.Error("the model must get a chance to disambiguate")
 	}
 }
+
+// A loose match tells the model what it got wrong, and every edit leaves a
+// record saying how its target was found. In the GPT-6 Luna run behind this,
+// four of six loose matches repeated one corrected a step or two before,
+// because "Applied the edit" was all the model heard; and naming the six took a
+// byte-exact replay, because the record only counted them.
+func TestLooseEditIsExplainedAndRecorded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(path, []byte("func f() {\n\tfor {\n\t\tgo g()\n\t}\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	rec := &capture{}
+	c.Recorder = rec
+	c.AddFile("a.txt")
+
+	results := toolResults{}
+	matchFailure := false
+	c.applyToolEdits([]plannedEdit{
+		editCall("loose", "\t\t\tgo g()\n", "\t\t\tgo h()\n"),            // a tab too many
+		editCall("exact", "func f() {\n", "func F() {\n"),                // verbatim
+		editCall("absent", "\tnothing like this\n", "\tstill nothing\n"), // not in the file
+	}, results, &matchFailure)
+
+	got := results["loose"].Text
+	if !strings.HasPrefix(got, "Applied the edit to") ||
+		!strings.Contains(got, "line 3 has 2 tabs, and you sent 3 tabs") {
+		t.Errorf("loose result = %q; want success plus the indentation it corrected", got)
+	}
+	if strings.Contains(results["exact"].Text, "indented") {
+		t.Errorf("exact result = %q; an exact match has nothing to explain", results["exact"].Text)
+	}
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "\t\tgo h()") {
+		t.Errorf("file = %q; want the loose edit at the file's own indentation", b)
+	}
+
+	outcomes := map[string]Record{}
+	for _, r := range rec.recs {
+		if r.Type == "edit" {
+			outcomes[r.ToolCallID] = r
+		}
+	}
+	for id, want := range map[string]string{"loose": "loose", "exact": "exact", "absent": "not_found"} {
+		r, ok := outcomes[id]
+		if !ok || r.Outcome != want || r.Path != "a.txt" {
+			t.Errorf("edit record for %s = %+v (present %v); want outcome %q on a.txt", id, r, ok, want)
+		}
+	}
+	if !strings.Contains(outcomes["loose"].Summary, "you sent 3 tabs") {
+		t.Errorf("the loose record's summary = %q; want the same explanation the model got", outcomes["loose"].Summary)
+	}
+}

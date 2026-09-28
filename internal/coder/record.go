@@ -63,6 +63,8 @@ type Record struct {
 	// ToolCallID is set on a tool-result message and matches the call it
 	// answers, so results can be paired with arguments without guessing.
 	ToolCallID string `json:"tool_call_id,omitempty"`
+	// Path is the file an "edit" record's call targeted.
+	Path string `json:"path,omitempty"`
 
 	// Blob, Bytes and Summary describe a payload that is stored separately,
 	// under internal/history's blob store, instead of inline in Text. Set

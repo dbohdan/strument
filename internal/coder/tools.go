@@ -1283,6 +1283,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	applied := map[string]bool{}     // call ids whose edit made it into the batch
 	orig := map[string]string{}      // path -> contents before the batch's first write
 	lastCall := map[string]string{}  // path -> the call that produced its final contents
+	callNote := map[string]string{}  // call id -> what a loose match changed, told to the model
 	var writeOrder []string
 	editedSet := map[string]bool{}
 	var edited []string
@@ -1293,6 +1294,14 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		}
 		return reader.ReadFile(path)
 	}
+	// One "edit" record per call, saying how its target was found. The turn
+	// record already counts exact and loose matches; this says which call was
+	// which, without which finding the loose ones in a GPT-6 Luna run took a
+	// byte-exact replay of every edit. It records the match, not the write: a
+	// batch that later fails to write is reported in the tool results.
+	recordEdit := func(e plannedEdit, outcome, note string) {
+		c.record(Record{Type: "edit", ToolCallID: e.callID, Path: e.path, Outcome: outcome, Summary: note})
+	}
 
 	for _, e := range edits {
 		// Fold an absolute spelling away before anything keys on it. unsafePath
@@ -1302,10 +1311,12 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		if reason := c.unsafePath(e.path); reason != "" {
 			c.Out.Errorf("Skipping edit to %s: %s", quoteToolArg(e.path), reason)
 			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), reason))
+			recordEdit(e, "skipped", reason)
 			continue
 		}
 		if ok, why := c.allowedToEdit(e.path, needDirtyCommit); !ok {
 			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why))
+			recordEdit(e, "skipped", why)
 			continue
 		}
 
@@ -1317,6 +1328,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		// there before.
 		if moved, afterCommand := c.shown.changed(e.path, c.fullPath(e.path)); !e.create && moved {
 			results.setText(e.callID, toolStaleFailure(e.path, afterCommand))
+			recordEdit(e, "stale", "")
 			*matchFailure = true
 			c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
 			continue
@@ -1331,6 +1343,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			resolved, failure := c.resolveEdit(e, content)
 			if failure != "" {
 				results.setText(e.callID, failure)
+				recordEdit(e, "not_resolved", strings.SplitN(failure, "\n", 2)[0])
 				*matchFailure = true
 				// The first line verbatim. Lowercasing it mangled the quoted
 				// examples the message exists to show ("2 tabs" is not "2 TABS"
@@ -1341,6 +1354,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			}
 			newContent = resolved
 			c.editsExact++ // an address, not a guess
+			recordEdit(e, "anchored", "")
 			callVerb[e.callID] = "Applied the edit to"
 			if writeVerb[e.path] == "" {
 				writeVerb[e.path] = "Applied edit to"
@@ -1355,8 +1369,10 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 				// assume the old contents survived somewhere.
 				callVerb[e.callID] = "Overwrote"
 				writeVerb[e.path] = "Overwrote"
+				recordEdit(e, "overwrote", "")
 			} else {
 				callVerb[e.callID] = "Created"
+				recordEdit(e, "created", "")
 				if writeVerb[e.path] == "" {
 					writeVerb[e.path] = "Created"
 				}
@@ -1398,6 +1414,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 				// non-overlapping copies, and the count reported is the
 				// count replaced.
 				callVerb[e.callID] = replacedVerb(strings.Count(content, e.search))
+				recordEdit(e, "replaced_all", "")
 				if writeVerb[e.path] == "" {
 					writeVerb[e.path] = "Applied edit to"
 				}
@@ -1417,6 +1434,11 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			}
 			if ambiguous || !ok || newContent == "" {
 				results.setText(e.callID, toolMatchFailure(e, content, fen, ambiguous))
+				if ambiguous {
+					recordEdit(e, "ambiguous", "")
+				} else {
+					recordEdit(e, "not_found", "")
+				}
 				*matchFailure = true
 				// The model is told through the tool result, and will usually
 				// re-read and try again. The user has to be told separately, or
@@ -1438,12 +1460,20 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			// run, a dropped blank line, a "..." elision. The edit still lands,
 			// but the harness picked the target, and in a loop whose whole claim
 			// is reviewability that is worth a line rather than silence.
+			//
+			// The model is told as well, with the difference spelled out.
+			// "Applied the edit" alone taught it nothing, and the same miscount
+			// came back an edit or two later (see editblock.ExplainLoose).
 			if how == editblock.MatchLines {
 				c.editsFuzzy++
+				note := editblock.ExplainLoose(content, e.search)
+				callNote[e.callID] = note
+				recordEdit(e, "loose", note)
 				c.Out.Warningf("Matched %s loosely: the text sent did not occur in the file, "+
 					"so the line matcher chose the target. Check the diff.", e.path)
 			} else {
 				c.editsExact++
+				recordEdit(e, "exact", "")
 			}
 			callVerb[e.callID] = "Applied the edit to"
 			if writeVerb[e.path] == "" {
@@ -1469,7 +1499,11 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			results.setText(e.callID, c.anchorDigest(e.path, pending[e.path]))
 			continue
 		}
-		results.setText(e.callID, fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path)))
+		text := fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
+		if note := callNote[e.callID]; note != "" {
+			text += " " + note
+		}
+		results.setText(e.callID, text)
 	}
 
 	c.dirtyCommit(needDirtyCommit)
