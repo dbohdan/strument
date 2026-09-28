@@ -1,0 +1,159 @@
+diff --git a/internal/coder/coder.go b/internal/coder/coder.go
+index c2b6cf3..d532e00 100644
+--- a/internal/coder/coder.go
++++ b/internal/coder/coder.go
+@@ -391,6 +391,7 @@ type Coder struct {
+ 	lastCommitHash      string
+ 	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
+ 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
++	tasks               []taskItem      // TRIAL: the task checklist
+ 	// sessionAutoApprove is the same thing outliving the turn, and
+ 	// initBeforeMessage deliberately does not clear it. Only webfetch writes
+ 	// here; see ConfirmRequest.GroupSession for why the shell gate does not.
+diff --git a/internal/coder/toolloop.go b/internal/coder/toolloop.go
+index 8a489e5..53990da 100644
+--- a/internal/coder/toolloop.go
++++ b/internal/coder/toolloop.go
+@@ -85,7 +85,7 @@ func newToolLoopWatcher() *toolLoopWatcher {
+ // that could was excused from looking.
+ func toolLoopExempt(name string) bool {
+ 	switch name {
+-	case toolBash, toolCheck, toolCommit:
++	case toolBash, toolCheck, toolCommit, toolTask:
+ 		return true
+ 	}
+ 	return false
+diff --git a/internal/coder/tools.go b/internal/coder/tools.go
+index 05f9a7b..14f1c8a 100644
+--- a/internal/coder/tools.go
++++ b/internal/coder/tools.go
+@@ -125,6 +125,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
+ 		return defs
+ 	}
+ 	defs = append(defs, editTools(c.AnchoredEdits, c.IndentColumn)...)
++	defs = append(defs, taskTool())
+ 	if c.offersShell() {
+ 		defs = append(defs, bashTool())
+ 	}
+@@ -830,6 +831,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
+ 			// Not routed through ConfirmGrouped: a question is not a permission
+ 			// prompt, and --yes must not answer it.
+ 			results.setText(tc.ID, c.runAskUser(tc, &needsReflection))
++		case toolTask:
++			results.setText(tc.ID, c.runTask(tc))
+ 		case toolAbout:
+ 			c.Out.Toolf("About Strument")
+ 			results.setText(tc.ID, c.About(time.Now()))
+--- new file: internal/coder/tasklist.go
+package coder
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"dbohdan.com/strument/internal/llm"
+)
+
+// TRIAL PROTOTYPE (doc/experiments/2026-09-task-checklist): a short checklist
+// the model may keep for a turn, visible to the user as it changes and
+// recorded in the session log. Offered without any mention outside its own
+// description: no system-prompt line, no reminders.
+const toolTask = "task"
+
+const taskMaxItems = 12
+
+type taskItem struct {
+	Subject string
+	Status  string // pending, in_progress, done, dropped
+}
+
+func taskTool() llm.ToolDef {
+	return llm.ToolDef{
+		Name: toolTask,
+		Description: "Keep a short checklist of this turn's work, which the user sees as it changes. " +
+			"Add the parts of a request as items, then set each to in_progress and to done as you go, " +
+			"or to dropped, saying why in your answer. Every call returns the whole list. " +
+			"At most 12 items. Optional: for a request with several parts.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"add": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Subjects of new items, each a short imperative phrase.",
+				},
+				"set": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"id":     map[string]any{"type": "integer", "description": "The item's number, from 1."},
+							"status": map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "done", "dropped"}},
+						},
+						"required": []any{"id", "status"},
+					},
+					"description": "Status changes for existing items.",
+				},
+			},
+		},
+	}
+}
+
+var taskMarks = map[string]string{"pending": "[ ]", "in_progress": "[~]", "done": "[x]", "dropped": "[-]"}
+
+func (c *Coder) renderTasks() string {
+	var b strings.Builder
+	for i, t := range c.tasks {
+		fmt.Fprintf(&b, "%d. %s %s\n", i+1, taskMarks[t.Status], t.Subject)
+	}
+	return b.String()
+}
+
+func (c *Coder) runTask(tc llm.ToolCall) string {
+	var args struct {
+		Add []string `json:"add"`
+		Set []struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		} `json:"set"`
+	}
+	if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+		return "The arguments were not valid JSON, so the list is unchanged."
+	}
+	var problems []string
+	for _, s := range args.Add {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if len(c.tasks) >= taskMaxItems {
+			problems = append(problems, fmt.Sprintf("not added, the list holds %d items: %q", taskMaxItems, s))
+			continue
+		}
+		c.tasks = append(c.tasks, taskItem{Subject: s, Status: "pending"})
+		c.Out.Toolf("Task %d added: %s", len(c.tasks), s)
+	}
+	for _, u := range args.Set {
+		if u.ID < 1 || u.ID > len(c.tasks) {
+			problems = append(problems, fmt.Sprintf("no item %d", u.ID))
+			continue
+		}
+		if _, ok := taskMarks[u.Status]; !ok {
+			problems = append(problems, fmt.Sprintf("unknown status %q for item %d", u.Status, u.ID))
+			continue
+		}
+		c.tasks[u.ID-1].Status = u.Status
+		c.Out.Toolf("Task %d %s: %s", u.ID, strings.ReplaceAll(u.Status, "_", " "), c.tasks[u.ID-1].Subject)
+	}
+	list := c.renderTasks()
+	c.record(Record{Type: "task", ToolCallID: tc.ID, Summary: list})
+	out := list
+	if out == "" {
+		out = "The list is empty.\n"
+	}
+	if len(problems) > 0 {
+		out += "\nNot applied: " + strings.Join(problems, "; ") + "."
+	}
+	return out
+}

@@ -137,6 +137,7 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **design** — [2026-09-consult](2026-09-consult/) | Does `/consult`'s source label survive to the next turn, and how much session context should the advisor see? The plan separates attribution from scope and is not yet run. |
+| **pilot** — [2026-09-task-checklist](2026-09-task-checklist/) | Would a small checklist tool, offered with no nudges, help models finish multi-part requests? Two pilots found nothing to help: 10 runs, 11- and 17-item requests, four models (Luna, MiMo, GLM-5.3-Flash, Ling 3.0 Flash), every item landed every time. Unprompted uptake was thin: two models never called it, Luna kept a three-phase progress bar, and Ling's one detailed attempt was refused by a prototype bug. Its plausible value, surviving compaction, depends on re-injection that Strument does not do. Not built. |
 
 ## The documents themselves
 

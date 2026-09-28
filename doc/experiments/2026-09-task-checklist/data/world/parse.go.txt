@@ -1,0 +1,44 @@
+package main
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Entry is one line of the ledger.
+type Entry struct {
+	Date  time.Time
+	Cents int64
+	Memo  string
+}
+
+// dateLayouts are the date formats a line may use.
+var dateLayouts = []string{"2006-01-02", "02.01.2006"}
+
+// ParseLine reads "DATE AMOUNT MEMO...", where AMOUNT is in cents.
+func ParseLine(line string) (Entry, error) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return Entry{}, fmt.Errorf("want at least a date and an amount: %q", line)
+	}
+	date, err := parseDate(fields[0])
+	if err != nil {
+		return Entry{}, err
+	}
+	cents, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil {
+		return Entry{}, fmt.Errorf("amount %q: %w", fields[1], err)
+	}
+	return Entry{Date: date, Cents: cents, Memo: strings.Join(fields[2:], " ")}, nil
+}
+
+func parseDate(s string) (time.Time, error) {
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("date %q is in no known layout", s)
+}

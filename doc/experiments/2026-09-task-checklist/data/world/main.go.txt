@@ -1,0 +1,49 @@
+// Command ledger prints a summary of a plain-text ledger file.
+package main
+
+import (
+	"bufio"
+	"flag"
+	"fmt"
+	"os"
+)
+
+const version = "0.3.0"
+
+// pageSize is how many entries are printed before a blank line.
+const pageSize = 20
+
+func main() {
+	verbose := flag.Bool("v", false, "print every entry")
+	flag.Parse()
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: ledger [-v] FILE")
+		os.Exit(2)
+	}
+	f, err := os.Open(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	var entries []Entry
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		e, err := ParseLine(sc.Text())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "bad input")
+			os.Exit(1)
+		}
+		entries = append(entries, e)
+	}
+	for i, e := range entries {
+		if *verbose {
+			fmt.Println(e.Date.Format("2006-01-02"), FormatAmount(e.Cents), e.Memo)
+			if (i+1)%pageSize == 0 {
+				fmt.Println()
+			}
+		}
+	}
+	fmt.Println("total:", FormatAmount(sumAll(entries)))
+}

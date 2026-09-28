@@ -1,0 +1,19 @@
+package main
+
+import "testing"
+
+func TestParseLine(t *testing.T) {
+	e, err := ParseLine("2024-03-05 1250 coffee beans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Cents != 1250 || e.Memo != "coffee beans" {
+		t.Errorf("got %+v", e)
+	}
+}
+
+func TestSumAll(t *testing.T) {
+	if got := sumAll([]Entry{{Cents: 100}, {Cents: 250}}); got != 350 {
+		t.Errorf("sumAll = %d, want 350", got)
+	}
+}

@@ -1,0 +1,22 @@
+package main
+
+import "fmt"
+
+// FormatAmount renders cents as a decimal amount.
+func FormatAmount(cents int64) string {
+	return fmt.Sprintf("%.1f", float64(cents)/100)
+}
+
+// sumAll adds up every entry's amount.
+func sumAll(entries []Entry) int64 {
+	var total int64
+	for _, e := range entries {
+		total += e.Cents
+	}
+	return total
+}
+
+// legacyFormat is the pre-0.2 renderer, kept for reference.
+func legacyFormat(cents int64) string {
+	return fmt.Sprintf("%d cents", cents)
+}
