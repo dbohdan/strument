@@ -86,6 +86,19 @@ func TestRunUsesGardenBuilds(t *testing.T) {
 	}
 }
 
+// TestResultAsparagusShare: a single bed for three seasons — two
+// establishing, then one crop — so the whole garden's harvest is
+// the asparagus bed's, and Run's share must say exactly that.
+func TestResultAsparagusShare(t *testing.T) {
+	res := Run(NewGarden(1), Perennial{Seasons: 3}, 3, 7)
+	if res.Asparagus == 0 {
+		t.Fatal("no asparagus harvest after the establishment seasons")
+	}
+	if res.Asparagus != res.Total {
+		t.Errorf("asparagus share = %d, want the whole one-bed total %d", res.Asparagus, res.Total)
+	}
+}
+
 // restFirst rests every bed in the first season, then rotates.
 type restFirst struct{}
 

@@ -103,11 +103,14 @@ type Strategy interface {
 	Choose(g Garden, bed, season int) Planting
 }
 
-// Result is a run's harvest: one total per season, plus the sum
-// over the whole run.
+// Result is a run's harvest: one total per season, the sum over the
+// whole run, and that sum's asparagus share — tallied from the run's
+// own history of what each bed harvested under which planting, so
+// yields are computed exactly as they always were.
 type Result struct {
 	PerSeason []int
 	Total     int
+	Asparagus int
 }
 
 // Run plays seasons of g under strategy s, drawing each season's
@@ -149,6 +152,13 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 
 		res.PerSeason = append(res.PerSeason, total)
 		res.Total += total
+	}
+	for _, h := range g.History {
+		for _, r := range h {
+			if !r.Planting.Rest && r.Planting.Family == garden.Asparagus {
+				res.Asparagus += r.Harvest
+			}
+		}
 	}
 	return res
 }

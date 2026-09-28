@@ -19,6 +19,11 @@
 // before it moves — 4 to 20 seasons, at three fusarium build rates
 // — printing the garden's mean total harvest per stand length,
 // against the rotation-only garden as a reference.
+//
+// With -breakeven it prints, for the same stands and rates, the
+// multiplier a unit of asparagus harvest needs for the garden with
+// one asparagus bed to match the garden with none — a ratio of
+// totals the runs already produce, with no price table anywhere.
 package main
 
 import (
@@ -55,6 +60,32 @@ var strategies = []struct {
 	{"greedy", sim.Greedy{}},
 }
 
+// beds in the sweeps: rotation alone, then the perennial garden at
+// each fusarium build rate, in tenths of pressure per season.
+var gardens = []struct {
+	name  string
+	build int
+}{
+	{"rotation", 0},
+	{"build 0.2", 2},
+	{"build 0.3", 3},
+	{"build 0.4", 4},
+}
+
+// freshGarden returns a garden for the sweep row with the given
+// build rate: 0 means plain rotation beds with the package
+// defaults; otherwise the asparagus beds build at that rate.
+func freshGarden(beds, build int) func() sim.Garden {
+	return func() sim.Garden {
+		if build == 0 {
+			return sim.NewGarden(beds)
+		}
+		builds := garden.DefaultBuilds()
+		builds[garden.Asparagus] = build
+		return sim.NewGarden(beds).WithBuilds(builds)
+	}
+}
+
 func main() {
 	seasons := flag.Int("seasons", 20, "seasons per run, one per year")
 	seeds := flag.Int("seeds", 200, "seeds (runs) per strategy")
@@ -62,6 +93,7 @@ func main() {
 	seed := flag.Int64("seed", 0, "first seed; the rest follow in order")
 	sweep := flag.Bool("sweep", false, "sweep the persistent-family fade rate instead of printing the table")
 	perennial := flag.Bool("perennial", false, "sweep how long an asparagus planting stands (4-20 seasons) instead of printing the table")
+	breakeven := flag.Bool("breakeven", false, "print the asparagus value multiplier per stand length instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -82,6 +114,10 @@ func main() {
 		perennialStand(*seasons, *seeds, *beds, *seed)
 		return
 	}
+	if *breakeven {
+		breakEven(*seasons, *seeds, *beds, *seed)
+		return
+	}
 
 	rows := measure(*seasons, *seeds, *beds, *seed, nil)
 	printTable(rows)
@@ -94,45 +130,99 @@ func main() {
 // mean total for each. The rotation-only garden, with no perennial
 // at all, is build-independent and comes first as the reference.
 func perennialStand(seasons, seeds, beds int, first int64) {
-	rates := []int{2, 3, 4} // tenths of pressure per season standing
-
-	gardenAt := func(build int) func() sim.Garden {
-		return func() sim.Garden {
-			builds := garden.DefaultBuilds()
-			builds[garden.Asparagus] = build
-			return sim.NewGarden(beds).WithBuilds(builds)
-		}
-	}
-	fresh := func() sim.Garden { return sim.NewGarden(beds) }
-
 	fmt.Println("mean garden total by stand length; fusarium build rate in points")
 	fmt.Printf("per season (0.3 is the committed rate). Rotation with no asparagus: %.0f\n\n",
-		meanTotal(fresh, sim.Rotation{}, seasons, seeds, first))
+		meanTotal(freshGarden(beds, 0), sim.Rotation{}, seasons, seeds, first))
 
 	fmt.Printf("%-6s", "K")
-	for _, r := range rates {
-		fmt.Printf(" %11s", fmt.Sprintf("build %.1f", float64(r)/10))
+	for _, gr := range gardens[1:] {
+		fmt.Printf(" %11s", gr.name)
 	}
 	fmt.Println()
 	for k := 4; k <= 20; k++ {
 		fmt.Printf("%-6d", k)
-		for _, r := range rates {
-			mean := meanTotal(gardenAt(r), sim.Perennial{Seasons: k}, seasons, seeds, first)
+		for _, gr := range gardens[1:] {
+			mean := meanTotal(freshGarden(beds, gr.build), sim.Perennial{Seasons: k}, seasons, seeds, first)
 			fmt.Printf(" %11.0f", mean)
 		}
 		fmt.Println()
 	}
 }
 
+// breakEven sweeps the stand length K and, per fusarium build rate,
+// prints the multiplier a unit of asparagus harvest needs for the
+// garden with one asparagus bed to match the rotation-only garden.
+// It also reports the K where each column's multiplier is lowest.
+func breakEven(seasons, seeds, beds int, first int64) {
+	none := meanTotal(freshGarden(beds, 0), sim.Rotation{}, seasons, seeds, first)
+
+	fmt.Println("value multiplier: the times an annual's harvest a unit of asparagus")
+	fmt.Printf("must be worth for the garden with one asparagus bed to match rotation")
+	fmt.Printf(" alone (mean total %.0f). Annual units count 1.\n\n", none)
+
+	fmt.Printf("%-6s", "K")
+	for _, gr := range gardens[1:] {
+		fmt.Printf(" %11s", gr.name)
+	}
+	fmt.Println()
+
+	bestK := make([]int, len(gardens)-1)
+	bestM := make([]float64, len(gardens)-1)
+	for i := range bestK {
+		bestM[i] = math.Inf(1)
+	}
+	for k := 4; k <= 20; k++ {
+		fmt.Printf("%-6d", k)
+		for i, gr := range gardens[1:] {
+			total, asparagus := means(freshGarden(beds, gr.build), sim.Perennial{Seasons: k}, seasons, seeds, first)
+			m := multiplier(total, asparagus, none)
+			if m < bestM[i] {
+				bestK[i], bestM[i] = k, m
+			}
+			fmt.Printf(" %11.2f", m)
+		}
+		fmt.Println()
+	}
+
+	fmt.Printf("%-6s", "lowest")
+	for _, k := range bestK {
+		fmt.Printf(" %11d", k)
+	}
+	fmt.Println()
+	fmt.Printf("%-6s", "at")
+	for _, m := range bestM {
+		fmt.Printf(" %11.2f", m)
+	}
+	fmt.Println()
+}
+
+// multiplier is the value one asparagus unit needs, in annual
+// units: at multiplier m the garden's worth is m*asparagus plus the
+// annual harvest beside it (withTotal - asparagus), and setting
+// that equal to the rotation-only total gives this ratio.
+func multiplier(withTotal, asparagus, noneTotal float64) float64 {
+	return 1 + (noneTotal-withTotal)/asparagus
+}
+
 // meanTotal runs newGarden's strategy over every seed and returns
 // the mean garden total harvest.
 func meanTotal(newGarden func() sim.Garden, strategy sim.Strategy, seasons, seeds int, first int64) float64 {
-	var sum float64
+	total, _ := means(newGarden, strategy, seasons, seeds, first)
+	return total
+}
+
+// means runs newGarden's strategy over every seed and returns the
+// mean garden total and the mean asparagus share of it — the share
+// tallied by Run from each run's own history.
+func means(newGarden func() sim.Garden, strategy sim.Strategy, seasons, seeds int, first int64) (total, asparagus float64) {
 	for i := 0; i < seeds; i++ {
 		res := sim.Run(newGarden(), strategy, seasons, first+int64(i))
-		sum += float64(res.Total)
+		total += float64(res.Total)
+		asparagus += float64(res.Asparagus)
 	}
-	return sum / float64(seeds)
+	total /= float64(seeds)
+	asparagus /= float64(seeds)
+	return
 }
 
 // measure runs every strategy over every seed with the given fade
