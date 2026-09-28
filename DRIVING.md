@@ -26,7 +26,7 @@ trials, never watched it build something from nothing.
 | 8 | asparagus: how long should a perennial stand? | `5215019`, `e91209e` | 36 | $0.05 |
 | 9 | what would asparagus have to be worth to pay its way? | `3d40231` | 17 | $0.11 |
 
-About $0.26 in all, for roughly 1,850 lines of Go with tests. Prompt-cache
+About $0.26 in all, for roughly 1,750 lines of Go with tests. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
 
 ## What I would tell someone driving the same way
