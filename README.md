@@ -101,5 +101,34 @@ so two barren seasons and a slow decline can only lose. Whether an asparagus
 season is worth more than a cabbage season is a question for the committee, not
 the soil.
 
+So the model now answers that as far as it can: how much would a unit of
+asparagus have to be worth, in units of an annual's harvest, for the garden
+with an asparagus bed to match the garden without one?
+`go run ./cmd/larkspur -breakeven` prints that multiplier for every stand
+length and fusarium rate. It needs no prices, only the totals the simulation
+already produces.
+
+```
+K        build 0.2   build 0.3   build 0.4
+4             2.27        2.42        2.57
+7             1.75        1.94        2.17
+10            1.72        2.02        2.44
+13            1.84        2.24        2.67
+16            2.21        2.87        3.43
+20            2.58        3.59        4.44
+lowest          10           7           7
+at            1.72        1.94        2.17
+```
+
+At the committed rate, asparagus pays for its bed if a harvest of it is worth
+about twice a harvest of cabbage, and it has to be moved about every seven
+seasons for that to hold. Across the plausible range of the disease it needs
+1.7 to 2.2 times. Leave it standing past fourteen seasons and the needed
+premium climbs quickly. The slowest disease rate puts the cheapest stand at ten
+seasons rather than seven: the garden totals are nearly tied there, and the
+longer stand grows more asparagus to spread its cost over. Whether asparagus
+is worth twice cabbage at market is a question for the committee's accounts,
+and for a price list this model does not have.
+
 Built in sessions driven through [Strument](https://dbohdan.com/strument);
 see DRIVING.md for notes on those sessions.

@@ -24,8 +24,9 @@ trials, never watched it build something from nothing.
 | 6 | the fade rate was chosen to make rotation win; sweep it | `c1ca898` | 16 | $0.02 |
 | 7 | write the results into the README | `730164b` | 6 | $0.0053 |
 | 8 | asparagus: how long should a perennial stand? | `5215019`, `e91209e` | 36 | $0.05 |
+| 9 | what would asparagus have to be worth to pay its way? | `3d40231` | 17 | $0.11 |
 
-About $0.15 in all, for roughly 1,600 lines of Go with tests. Prompt-cache
+About $0.26 in all, for roughly 1,850 lines of Go with tests. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
 
 ## What I would tell someone driving the same way
@@ -72,6 +73,16 @@ the annuals' ceiling, so it can only lose. MiMo's last sentence got the reading
 right ("the case for asparagus has to be its value per season"), but a headline
 like that is worth checking against the model's own ceilings before believing it.
 
+**Turn a question the model cannot answer into one it can.** Turn 8 ended on
+"is an asparagus season worth more than a cabbage one?", which needs prices
+the model does not have. Turn 9 asked instead what the price would have to be,
+a ratio of totals it already computed, and said not to add a price table. The
+answer is a number to hold against the world rather than a number chosen
+from it, which is the same guard as committing constants before a sweep. MiMo
+also said plainly where its answer disagreed with the earlier sweep (the
+slowest disease rate, by 2%) and why that disagreement was real rather than
+noise.
+
 ## What I noticed about Strument
 
 - The cost line's "session" is the process, not the named session. Under
@@ -84,3 +95,11 @@ like that is worth checking against the model's own ceilings before believing it
   vet, test, `go run`, or a read-only git status or diff inside the tree.
 - Restoring the conversation each turn, 166 messages by turn 7, cost nothing noticeable, thanks to the
   cache: turn 7 sent a million tokens and paid half a cent.
+- Until the cache goes cold. Turn 9 came two days after turn 8: its first
+  request sent 90k tokens with nothing cached, and the turn cost $0.11, more
+  than the eight before it together. A long `--continue` session is cheap only
+  while its turns come close together.
+- Turn 9 ran on a build with the read tool's new arrow separator, which a trial
+  on `dev` found cuts one-tab-too-deep edits in tab-indented code. All eight of
+  MiMo's edits to this Go code matched exactly. One turn is an anecdote, not a
+  result.
