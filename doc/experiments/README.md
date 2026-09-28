@@ -69,6 +69,7 @@ without introducing regressions.
 | experiment | question → result → decision |
 | --- | --- |
 | **trial** — [2026-09-note-attribution](2026-09-note-attribution/) | Does the model read a user-role harness note as the user's words, and does the `[strument]` marker, or the marker plus a sentence defining it, change that? Unmarked, reasoning put the note's words in the user's mouth in 4/39 sessions; marked, 1/39; marked and defined, 0/39 (post hoc strict count; the preregistered count, 14 vs 5 vs 5, p = 0.033, overcounted). Behavior did not move: the note was acted on in every plain session and never overrode the user's own instruction, and no final answer misattributed it. Every harness note is now marked, and both system prompts define the marker. |
+| **trial** — [2026-09-read-nudge-steps](2026-09-read-nudge-steps/) | Should the read-only loop nudge count steps instead of calls, since a parallel reader reaches 20 calls in four steps? Counting steps removed every nudge on a read-only task (Luna 4/9 to 0/9, MiMo 2/9 to 0/9), but the nudge changed nothing measurable about either model's exploration (steps, files read, answer length, all p > 0.13), and MiMo, meant as the serial control, read in parallel too. The count stays in calls: a false nudge costs a sentence, a missed parallel loop costs the turn. |
 
 ## Tools, and whether they get reached for
 

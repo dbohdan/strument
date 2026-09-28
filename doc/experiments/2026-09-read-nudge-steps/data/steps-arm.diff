@@ -1,0 +1,59 @@
+diff --git a/internal/coder/toolloop.go b/internal/coder/toolloop.go
+index 8a489e5..db5adcc 100644
+--- a/internal/coder/toolloop.go
++++ b/internal/coder/toolloop.go
+@@ -54,6 +54,8 @@ type toolLoopWatcher struct {
+ 	counts map[string]int
+ 	// reads is the count since the last mutation.
+ 	reads int
++	// stepRead notes that the current step has already counted a read.
++	stepRead bool
+ 	// fired notes once: the reflection is injected once per streak, on the
+ 	// send after a threshold trips, and repeating it every step would itself
+ 	// be noise.
+@@ -112,8 +114,9 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
+ 	}
+ 	key := name + "\x00" + argsJSON
+ 	w.counts[key]++
+-	if countsAsRead(name) {
++	if countsAsRead(name) && !w.stepRead {
+ 		w.reads++
++		w.stepRead = true
+ 	}
+ 	if w.fired {
+ 		// Said once; counting goes on, so the streak that earned the note can
+@@ -134,7 +137,7 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
+ 	}
+ 	if w.reads >= toolLoopMaxReads {
+ 		w.fired = true
+-		return "This turn has made " + strconv.Itoa(w.reads) + " read-only tool calls since " +
++		return "This turn has spent " + strconv.Itoa(w.reads) + " steps on read-only tool calls since " +
+ 			"anything last changed. If you are gathering more than that without " +
+ 			"acting on what you have, take a different approach — and if there is " +
+ 			"nothing useful left to do, call the interrupt tool to end the turn."
+@@ -142,6 +145,13 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
+ 	return ""
+ }
+ 
++// beginStep marks a new step: its reads count once, however many there are.
++func (w *toolLoopWatcher) beginStep() {
++	if w != nil {
++		w.stepRead = false
++	}
++}
++
+ // observeMutation records that the world changed: the since-last-mutation
+ // streak resets, including the exact-repeat counts, because a re-read after
+ // an edit is a fresh question about a fresh file. Called for the exempt
+diff --git a/internal/coder/tools.go b/internal/coder/tools.go
+index 05f9a7b..289b2ea 100644
+--- a/internal/coder/tools.go
++++ b/internal/coder/tools.go
+@@ -723,6 +723,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
+ 	for _, d := range c.toolDefs() {
+ 		offered[d.Name] = true
+ 	}
++	c.toolLoops.beginStep()
+ 	for _, tc := range c.partialToolCalls {
+ 		if note := c.toolLoops.observeCall(tc.Name, tc.Arguments); note != "" {
+ 			loopNote = note
