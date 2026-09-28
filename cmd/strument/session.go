@@ -188,18 +188,14 @@ func (l *sessionLog) Record(r coder.Record) {
 	}
 }
 
-// Open starts a segment in session, closing whichever one was in progress.
+// Open starts a segment in session and closes whichever one was in progress.
 //
-// A failure leaves the log closed rather than pointing at the old session: a
-// record written into the wrong conversation is worse than one not written,
-// because nothing downstream could tell it was misfiled.
+// The new segment is opened first. A failure leaves the old one open and
+// recording, so a /session switch that cannot open its record is refused
+// with the run still recorded where it was. Closing first, as this used to,
+// left a refused switch in the old session with nothing written for the rest
+// of the run and nothing on screen to say so.
 func (l *sessionLog) Open(session string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.w != nil {
-		_ = l.w.Close()
-		l.w = nil
-	}
 	seg, err := history.NewLogSegment(l.projectRoot, session, time.Now())
 	if err != nil {
 		return err
@@ -208,12 +204,17 @@ func (l *sessionLog) Open(session string) error {
 	if err != nil {
 		return err
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.w != nil {
+		_ = l.w.Close()
+	}
 	l.w = w
 	return nil
 }
 
-// Recording reports whether a segment is open. Open closes the old segment
-// before it tries the new one, so a failed switch leaves nothing open.
+// Recording reports whether a segment is open. A log that failed to open at
+// startup has none.
 func (l *sessionLog) Recording() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -293,8 +294,11 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 		if err := s.log.Open(name); err != nil {
 			// Refused rather than continued: carrying on would write this
 			// conversation's turns into the previous session's record, and
-			// nothing downstream could tell they were misfiled.
-			return "", fmt.Errorf("could not open a record for %s, so the switch did not happen: %w", name, err)
+			// nothing downstream could tell they were misfiled. Open leaves
+			// the current segment open when it fails, so the run stays in
+			// its session and stays recorded there.
+			return "", fmt.Errorf("could not open a record for %s, so the switch did not happen; still in %s: %w",
+				name, s.cdr.Session, err)
 		}
 	}
 	if err := history.SetCurrentSession(s.projectRoot, name); err != nil {
