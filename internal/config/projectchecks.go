@@ -57,15 +57,36 @@ type detector struct {
 // and two lists that almost match are worse than either: the gap shows up as
 // one ecosystem failing for one person, months later, with nothing to connect
 // it to this file.
+// goFmtCheck fails listing the Go files gofmt would change, skipping testdata
+// and vendor, where unformatted Go is often deliberate. One line, because the
+// check tool's description shows every check's command to the model on every
+// request. A syntax error goes to stderr and passes here; go vet and go test
+// report it.
+const goFmtCheck = `bad=$(gofmt -l . | grep -Ev '(^|/)(testdata|vendor)/'); ` +
+	`[ -z "$bad" ] || { echo "gofmt would change:"; echo "$bad"; exit 1; }`
+
 var detectors = []detector{
 	{"go", func(root string) []Check {
 		if !exists(root, "go.mod") {
 			return nil
 		}
-		return []Check{
+		checks := []Check{
 			{Name: "go-vet", Argv: []string{"go", "vet", "./..."}},
 			{Name: "go-test", Argv: []string{"go", "test", "./..."}},
 		}
+		// Formatting, last: a bare check() stops at the first failure, and a
+		// misaligned struct field should not hide a failing test. Without it a
+		// model has no way to learn that gofmt would have aligned the fields
+		// it spent three edits aligning by hand, as GPT-6 Luna did.
+		//
+		// gofmt ships with Go, but it exits 0 whatever it finds, so the check
+		// is a POSIX shell wrapper that fails when it lists a file — and, like
+		// gradlew above, it is left out on Windows rather than failing there
+		// for want of sh.
+		if runtime.GOOS != "windows" {
+			checks = append(checks, Check{Name: "go-fmt", Argv: []string{"sh", "-c", goFmtCheck}})
+		}
+		return checks
 	}},
 
 	{"rust", func(root string) []Check {

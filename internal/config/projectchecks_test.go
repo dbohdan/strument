@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -52,7 +53,7 @@ func TestProjectChecksDetection(t *testing.T) {
 	}{
 		"go": {
 			map[string]string{"go.mod": "module x\n"},
-			[]string{"go-vet", "go-test"},
+			goChecks(),
 		},
 		"rust": {
 			map[string]string{"Cargo.toml": "[package]\nname = \"x\"\n"},
@@ -369,7 +370,7 @@ func TestProjectChecksIsDeterministic(t *testing.T) {
 	})
 	first := checkNamesOf(ProjectChecks(root))
 	// A polyglot repository keeps both suites, which is what prefixing buys.
-	want := []string{"go-vet", "go-test", "node-test", "make-test"}
+	want := append(goChecks(), "node-test", "make-test")
 	if !slices.Equal(first, want) {
 		t.Fatalf("detected %v, want %v", first, want)
 	}
@@ -493,5 +494,48 @@ func TestGradleNeedsTheWrapper(t *testing.T) {
 	got := ProjectChecks(projectWith(t, map[string]string{"build.gradle": "", wrapper: ""}))
 	if !slices.Equal(checkNamesOf(got), []string{"gradle-test"}) {
 		t.Errorf("detected %v with a wrapper present", checkNamesOf(got))
+	}
+}
+
+// goChecks is what a Go module is offered here: go-fmt needs sh, so it is
+// left out on Windows.
+func goChecks() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"go-vet", "go-test"}
+	}
+	return []string{"go-vet", "go-test", "go-fmt"}
+}
+
+// The go-fmt check fails on an unformatted file and names it relative to the
+// module, passes once it is formatted, and ignores testdata, where unformatted
+// Go is often the point. It runs the real gofmt: a check whose script is only
+// read, never run, is a check nobody has seen fail.
+func TestGoFmtCheckRuns(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("go-fmt is not offered on Windows")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go on PATH")
+	}
+	root := projectWith(t, map[string]string{
+		"go.mod":        "module x\n\ngo 1.21\n",
+		"a.go":          "package x\nfunc  f( ) {}\n",
+		"testdata/t.go": "package t\nfunc  g(){}\n",
+	})
+	run := func() (string, error) {
+		cmd := exec.Command("sh", "-c", goFmtCheck)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	out, err := run()
+	if err == nil || !strings.Contains(out, "\na.go") || strings.Contains(out, "testdata") {
+		t.Fatalf("unformatted module: err=%v out=%q; want a failure naming a.go and not testdata", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package x\n\nfunc f() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(); err != nil {
+		t.Errorf("formatted module: err=%v out=%q; want a pass (testdata is not the module's)", err, out)
 	}
 }

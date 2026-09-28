@@ -255,7 +255,7 @@ detected checks have the paths they need.
 
 | Ecosystem | Marker | Checks | Writable paths |
 | --- | --- | --- | --- |
-| Go | `go.mod` | `go-vet`, `go-test` | `GOCACHE`, `GOMODCACHE`, subdirectories of `GOPATH` |
+| Go | `go.mod` | `go-vet`, `go-test`, `go-fmt` (not on Windows; fails listing files `gofmt` would change) | `GOCACHE`, `GOMODCACHE`, subdirectories of `GOPATH` |
 | Rust | `Cargo.toml` | `cargo-check`, `cargo-test` | subdirectories of `CARGO_HOME`, `RUSTUP_HOME` |
 | Python | `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` declaring pytest | `py-test`, plus `py-test-uv` / `py-test-poetry` when `uv.lock` / `poetry.lock` is present | `PIP_CACHE_DIR`, `UV_CACHE_DIR`, `POETRY_CACHE_DIR` |
 | Node | `package.json` with a `test` script | `node-test` (`npm`/`pnpm`/`yarn`/`bun` per the lockfile) | `npm_config_cache`, `YARN_CACHE_FOLDER`, subdirectories of `PNPM_HOME`, `BUN_INSTALL`, `~/.yarn` |
