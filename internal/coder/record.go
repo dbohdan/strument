@@ -268,6 +268,20 @@ type Recorder interface {
 	Record(r Record)
 }
 
+// Recording reports whether this run's records are being kept. A Recorder
+// can be wired and still write nothing: the session log closes its segment
+// when a switch cannot open the next one, and the recorder stays in place. One
+// that can tell says so through a Recording method.
+func (c *Coder) Recording() bool {
+	if c.Recorder == nil {
+		return false
+	}
+	if r, ok := c.Recorder.(interface{ Recording() bool }); ok {
+		return r.Recording()
+	}
+	return true
+}
+
 // BlobStore stores a payload and returns the name to find it under.
 //
 // A callback rather than a path, for the reason RecordUsage and SaveUndo are:

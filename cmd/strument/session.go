@@ -212,6 +212,14 @@ func (l *sessionLog) Open(session string) error {
 	return nil
 }
 
+// Recording reports whether a segment is open. Open closes the old segment
+// before it tries the new one, so a failed switch leaves nothing open.
+func (l *sessionLog) Recording() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w != nil
+}
+
 func (l *sessionLog) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

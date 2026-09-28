@@ -715,11 +715,13 @@ func cmdLs(_ context.Context, r *REPL, _ string) string {
 }
 
 // clearedMsg is the record's half of a clear's message: the session log is
-// append-only, so what was cleared is restored by --continue. A session that
-// leaves no record (--no-history) has nothing to keep, and the plain line is
-// the whole of it.
+// append-only, so what was cleared is restored by --continue. A run that
+// writes no record has nothing to restore, and the plain line is the whole of
+// it: --no-history, and also a session log that failed to open, which keeps
+// resume state but not the conversation. The promise rests on the record
+// itself, not on whether state is kept.
 func (r *REPL) clearedMsg(base string) string {
-	if r.opts.SaveResume == nil {
+	if !r.coder.Recording() {
 		return base
 	}
 	return base + " The record keeps the conversation; --continue restores it."

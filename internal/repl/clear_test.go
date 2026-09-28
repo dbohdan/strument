@@ -24,6 +24,7 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 	cdr.Client = answerStub("Reply.\n")
 	cdr.Session = "foo"
 	cdr.SessionNotes, cdr.SessionNotesSession = "Keep the API stable.", "earlier"
+	cdr.Recorder = &records{}
 
 	out := &syncBuffer{}
 	r, err := New(Options{
@@ -87,5 +88,56 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 	if cdr.SessionNotes != "Keep the API stable." || cdr.SessionNotesSession != "earlier" {
 		t.Errorf("notes = %q from %q; want them kept — neither command drops notes",
 			cdr.SessionNotes, cdr.SessionNotesSession)
+	}
+}
+
+// closedLog is a recorder whose segment is closed: wired, and writing nothing,
+// as the session log is after a switch that could not open the next segment.
+type closedLog struct{ records }
+
+func (*closedLog) Recording() bool { return false }
+
+// TestClearPromisesOnlyWhatTheRecordHolds: the --continue sentence rests on
+// the record, not on resume state being kept. Both runs below keep resume
+// state (SaveResume is wired, as it is whenever --no-history is absent); one
+// has no recorder and one has a recorder that has stopped writing. Neither can
+// give the conversation back, so neither may say it will.
+func TestClearPromisesOnlyWhatTheRecordHolds(t *testing.T) {
+	for name, rec := range map[string]coder.Recorder{
+		"no recorder":   nil,
+		"closed record": &closedLog{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			model := testModel()
+			cdr := coder.New(t.TempDir(), model)
+			cdr.Client = answerStub("Reply.\n")
+			cdr.Recorder = rec
+			out := &syncBuffer{}
+			r, err := New(Options{
+				Coder:      cdr,
+				Config:     testConfig(model),
+				ModelAlias: "test",
+				SaveResume: func(string) {},
+				Stdin:      strings.NewReader("/clear\n/reset\n/exit\n"),
+				Stdout:     out,
+				Stderr:     out,
+				IsTerminal: func() bool { return false },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if err := r.Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			got := out.String()
+			if !strings.Contains(got, "Chat history cleared.") ||
+				!strings.Contains(got, "Unpinned everything and cleared the chat history.") {
+				t.Fatalf("a clear message is missing:\n%s", got)
+			}
+			if strings.Contains(got, "--continue") {
+				t.Errorf("promised a --continue restore with no record to restore from:\n%s", got)
+			}
+		})
 	}
 }
