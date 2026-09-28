@@ -241,7 +241,7 @@ From the shell, `strument session list`, `rename`, and `delete` do the same.
 ### Session records
 
 Strument records every session outside your project as [JSON Lines](https://jsonlines.org/): each message, tool call, and result, plus a summary row with the cost of each turn.
-`strument history list` shows a session's runs, `strument history markdown` renders them as a transcript, and `strument history path` prints the file for `jq`; `-b <n>` picks one run.
+`strument history list` shows a session's runs, `strument history markdown` renders them as a transcript, and `strument history path` prints the file for `jq`, and `strument history zip <file>` packs a run with its stored tool output for sharing; `-b <n>` picks one run.
 `--no-history` records nothing.
 The record format, stored tool output, `strument history strip`, and what to do if you rename a project directory are in [`doc/history.md`](doc/history.md).
 

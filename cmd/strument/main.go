@@ -1760,6 +1760,7 @@ type historyCmd struct {
 	Edit     historyEditCmd     `cmd:"" help:"Open a session's record in $VISUAL, $EDITOR, or your platform's default editor."`
 	Markdown historyMarkdownCmd `cmd:"" help:"Print a session's history as markdown."`
 	Strip    historyStripCmd    `cmd:"" help:"Delete stored tool output that no recent session refers to. Conversation records are kept."`
+	Zip      historyZipCmd      `cmd:"" help:"Pack one run's record and the tool output it refers to into a zip archive, for sharing."`
 }
 
 // historySession resolves the project and the session `history` acts on: the
@@ -1927,6 +1928,60 @@ func (c *historyMarkdownCmd) Run(parent *historyCmd) error {
 		return errNoRecord
 	}
 	fmt.Print(history.Markdown(history.LastTurns(turns, c.Turns)))
+	return nil
+}
+
+// historyZipCmd packs a run for someone else to read: the record alone names
+// its heavy tool results by hash, so without the payloads beside it half the
+// conversation is missing.
+//
+// One run, like path and edit, and for the same reason: a run is the unit
+// someone asks about ("what happened in that session with Luna"), and a whole
+// session can be months of them. The archive holds everything the model saw —
+// file contents and command output — which the summary line says, because it
+// is being made to be sent.
+type historyZipCmd struct {
+	Output string `arg:"" help:"The archive to write. It must not exist yet." name:"file" type:"path"`
+}
+
+func (c *historyZipCmd) Run(parent *historyCmd) error {
+	seg, err := historyRun(parent.Session, parent.Back)
+	if err != nil {
+		return err
+	}
+	root, _, err := historySession(parent.Session)
+	if err != nil {
+		return err
+	}
+	// O_EXCL: an archive made for sharing should never quietly replace a file
+	// that was already there, perhaps the one sent yesterday.
+	f, err := os.OpenFile(c.Output, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%s already exists; name a new file", c.Output)
+		}
+		return err
+	}
+	stats, err := history.ZipRun(root, seg, f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(c.Output)
+		return err
+	}
+	info, err := os.Stat(c.Output)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Wrote %s: %s and %s, %s packed into %s.\n", c.Output, filepath.Base(seg),
+		render.Plural(stats.Blobs, "stored tool result", "stored tool results"),
+		humanBytes(stats.Bytes), humanBytes(info.Size()))
+	if stats.Missing > 0 {
+		fmt.Printf("%d of the run's tool results %s no longer stored (stripped); the record keeps a one-line summary of each.\n",
+			stats.Missing, render.PluralWord(stats.Missing, "is", "are"))
+	}
+	fmt.Println("It holds everything the model read and ran in that run; look before you send it.")
 	return nil
 }
 

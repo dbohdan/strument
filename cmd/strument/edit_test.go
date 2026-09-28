@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"io"
@@ -669,5 +670,77 @@ func TestSessionListNames(t *testing.T) {
 	}
 	if out != "review\nspike\n" {
 		t.Errorf("--names printed %q, want one bare name per line", out)
+	}
+}
+
+// history zip packs the run --back names, with its payloads, and refuses to
+// write over a file that is already there: an archive made to be sent should
+// never quietly replace the one sent yesterday.
+func TestHistoryZipPacksOneRunAndNeverOverwrites(t *testing.T) {
+	writeTempUserConfig(t, "# empty\n")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root, err := historyRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := history.CurrentSession(root)
+	if _, err := history.EnsureSessionDir(root, session); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := history.PutBlob(root, []byte("the file Luna read\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC)
+	for i, prompt := range []string{"first", "second"} {
+		seg, err := history.NewLogSegment(root, session, start.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := `{"type":"session","version":1,"model":"luna"}` + "\n" +
+			`{"type":"message","role":"user","text":"` + prompt + `"}` + "\n"
+		if i == 0 {
+			body += `{"type":"message","role":"tool","tool_call_id":"c","blob":"` + payload + `","bytes":19,"summary":"read"}` + "\n"
+		}
+		body += `{"type":"turn","time":"2026-09-28T09:00:00Z","model":"luna","outcome":"Success","prompt":"` + prompt + `","answer":"ok"}` + "\n"
+		if err := os.WriteFile(seg, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out := filepath.Join(t.TempDir(), "run.zip")
+	back := 1
+	msg, err := captureStdout(t, func() error {
+		return (&historyZipCmd{Output: out}).Run(&historyCmd{Back: &back})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg, "1 stored tool result") || !strings.Contains(msg, "look before you send it") {
+		t.Errorf("summary = %q; want the payload count and the warning about what it holds", msg)
+	}
+	zr, err := zip.OpenReader(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+	}
+	zr.Close()
+	if len(names) != 2 || !strings.HasPrefix(names[0], "log/") || names[1] != "blobs/"+payload {
+		t.Errorf("archive of run 1 holds %v; want its segment and its one payload", names)
+	}
+
+	before, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = (&historyZipCmd{Output: out}).Run(&historyCmd{})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("second zip to the same file: err = %v; want a refusal", err)
+	}
+	if after, _ := os.ReadFile(out); !bytes.Equal(before, after) {
+		t.Error("the refused zip changed the existing file")
 	}
 }

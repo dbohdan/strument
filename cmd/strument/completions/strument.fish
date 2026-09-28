@@ -75,16 +75,19 @@ complete -c strument -n "__fish_seen_subcommand_from trust" -a "(__fish_complete
 complete -c strument -n "__fish_seen_subcommand_from trust" -s y -l yes -d "Do not ask; for scripts"
 
 # history.
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
     -a list -d "List this session's runs with the numbers --back takes"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
     -a path -d "Print the path to this session's record"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
     -a edit -d "Open it in \$VISUAL, \$EDITOR, or your platform's default editor"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
     -a markdown -d "Print this session's history as markdown"
-complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip" \
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
     -a strip -d "Remove stored tool payloads that nothing recent points at"
+complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list path edit markdown strip zip" \
+    -a zip -d "Pack one run and the tool output it refers to into a zip archive"
+complete -c strument -n "__fish_seen_subcommand_from history; and __fish_seen_subcommand_from zip" -F
 complete -c strument -n "__fish_seen_subcommand_from history" \
     -s s -l session -d "The conversation to act on" -x -a "(__strument_sessions)"
 complete -c strument -n "__fish_seen_subcommand_from history; and not __fish_seen_subcommand_from list strip" \

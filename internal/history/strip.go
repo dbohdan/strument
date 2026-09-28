@@ -143,9 +143,8 @@ func newestReferences(projectRoot string) (map[string]time.Time, error) {
 					"so the payloads those rows name cannot be counted; nothing was stripped", seg)
 			}
 			for _, r := range records {
-				note(r.Blob, info.ModTime())
-				for _, tc := range r.ToolCalls {
-					note(tc.Blob, info.ModTime())
+				for _, h := range recordBlobs(r) {
+					note(h, info.ModTime())
 				}
 			}
 		}

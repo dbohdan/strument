@@ -72,6 +72,14 @@ them.
 - `strument history path` prints the newest run's file, for `jq` and other
   tools. `strument history edit` opens it in your
   [editor](config.md#strument-config).
+- `strument history zip <file>` packs the newest run into a zip archive, for
+  sending to someone: its record, byte for byte, and every stored tool result
+  it refers to, under `log/` and `blobs/` as the store lays them out. A record
+  alone names its heavy tool results by hash, so without the payloads half the
+  conversation is missing. `-b <n>` picks another run. The archive holds
+  everything the model read and ran in that run, so look before you send it.
+  It refuses to write over an existing file, and a result `history strip` has
+  removed is reported rather than packed.
 - `--session <name>` on any of these reads another session's record without
   switching to it.
 

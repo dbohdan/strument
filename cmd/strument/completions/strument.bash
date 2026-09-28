@@ -10,7 +10,7 @@ _strument_commands="chat trust history config model-config project session tool 
 _strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
-_strument_history_commands="list path edit markdown strip"
+_strument_history_commands="list path edit markdown strip zip"
 _strument_history_strip_options="--older-than -y --yes"
 _strument_history_options="-s --session -b --back"
 _strument_session_commands="list rename delete"
@@ -149,7 +149,8 @@ _strument_complete() {
     history)
         # Only while no subcommand has been chosen: `history path` takes
         # nothing further, and offering its siblings there would suggest they
-        # compose. markdown is the exception — it takes a turn count.
+        # compose. markdown is the exception — it takes a turn count — and
+        # zip, which takes the archive to write.
         if [[ $cur == -* && $sub == markdown ]]; then
             _strument_words "$_strument_history_markdown_options"
         elif [[ $cur == -* && $sub == strip ]]; then
@@ -158,6 +159,8 @@ _strument_complete() {
             _strument_words "$_strument_history_options"
         elif [[ -z $sub ]]; then
             _strument_words "$_strument_history_commands"
+        elif [[ $sub == zip ]]; then
+            compopt -o default
         fi
         ;;
     session)
