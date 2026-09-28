@@ -619,3 +619,41 @@ func TestWrapWords(t *testing.T) {
 		}
 	}
 }
+
+// /model leaves a row in the record. The session header names the model a run
+// started on and nothing else did, so a run switched mid-way read as the first
+// model's work to anyone opening the log.
+func TestModelSwitchIsRecorded(t *testing.T) {
+	model := testModel()
+	cdr := coder.New(t.TempDir(), model)
+	rec := &records{}
+	cdr.Recorder = rec
+	out := &syncBuffer{}
+	r, err := New(Options{
+		Coder:      cdr,
+		Config:     testConfig(model),
+		ModelAlias: "test",
+		Stdin:      strings.NewReader("/model other\n/model nosuch\n/exit\n"),
+		Stdout:     out,
+		Stderr:     out,
+		IsTerminal: func() bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var switched []string
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	for _, x := range rec.recs {
+		if x.Type == "model" {
+			switched = append(switched, x.Model)
+		}
+	}
+	if len(switched) != 1 || switched[0] != "other" {
+		t.Errorf("model records = %v; want one naming \"other\" (the unknown alias switches nothing)", switched)
+	}
+}

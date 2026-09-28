@@ -919,6 +919,7 @@ func cmdModel(_ context.Context, r *REPL, args string) string {
 	}
 	r.useModel(m)
 	r.opts.ModelAlias = args
+	r.coder.RecordModelSwitch(args)
 	r.printf("Switched to model %s (%s).", args, m.QualifiedSlug())
 	return ""
 }

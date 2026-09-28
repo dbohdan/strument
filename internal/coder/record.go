@@ -468,6 +468,16 @@ func (c *Coder) RecordSession(modelName string) {
 	})
 }
 
+// RecordModelSwitch notes a /model switch, naming the new model the way the
+// session header names the first: by alias. Without it the header was the only
+// place a run named its model, so a run started on one model and switched to
+// another read, to anyone looking at the record, as the first model's work.
+// The turn rows carry the qualified slug either way; this is for the reader
+// who opens the log at the top.
+func (c *Coder) RecordModelSwitch(alias string) {
+	c.record(Record{Type: "model", Model: alias})
+}
+
 // recordNewMessages emits every message added to the current turn since the
 // last call.
 //

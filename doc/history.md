@@ -108,6 +108,8 @@ Each record has a `type` field:
 - A **`side_call`** record for each request Strument makes for itself.
 - An **`edit`** record for each `edit` or `write` call, saying how its target
   was found.
+- A **`model`** record when `/model` switches models, naming the new one by
+  alias as the `session` header names the first.
 
 The **`turn`** record carries:
 
