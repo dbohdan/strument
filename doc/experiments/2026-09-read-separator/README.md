@@ -22,8 +22,12 @@ first kind and not the second.
 ## Design
 
 Two arms, differing in one format string: **tab** (`%*d\t%s`, `dev` at
-5be046f) and **arrow** (`%*d→%s`, [`data/arrow-arm.diff`](data/arrow-arm.diff),
-the form Claude Code's read tool uses). Both carry the loose-match explanation
+5be046f) and **arrow** (`%*d→%s`, [`data/arrow-arm.diff`](data/arrow-arm.diff)).
+The arrow was chosen from a remembered precedent: Claude Code's read tool
+printing `     1→line`. That memory is unverified and may be out of date — Claude
+Code is closed source, and its read tool returned `1<TAB>line` in the session
+that ran this trial (2026-09-28). The preregistration states it as fact; this
+corrects it. The result does not depend on it. Both arms carry the loose-match explanation
 from 553f3a5, so either arm's model is told its offset after a loose match.
 
 GPT-6 Luna and MiMo-V2.6-Flash, `reasoning = "low"`, 5 runs per cell, 20 runs

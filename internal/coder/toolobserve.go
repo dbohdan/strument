@@ -133,8 +133,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	// tab-indented file the tab separator joined the line's own indentation, so
 	// a line at three tabs read as a number and four, and models sent edits one
 	// tab too deep: 26 of GPT-6 Luna's 48 edits and 18 of MiMo's 42 in
-	// doc/experiments/2026-09-read-separator, against 4 and 0 with the arrow,
-	// which is also what Claude Code's read tool prints.
+	// doc/experiments/2026-09-read-separator, against 4 and 0 with the arrow.
 	width := len(strconv.Itoa(ft.Start + len(ft.Lines) - 1))
 	for i, line := range ft.Lines {
 		fmt.Fprintf(&b, "%*d→%s\n", width, ft.Start+i, line)
