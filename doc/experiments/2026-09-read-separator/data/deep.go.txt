@@ -1,0 +1,43 @@
+package deep
+
+import "fmt"
+
+// Route decides what to do with an event.
+func Route(events []Event, strict bool) []string {
+	var out []string
+	for _, ev := range events {
+		switch ev.Kind {
+		case "message":
+			if ev.User != "" {
+				for _, part := range ev.Parts {
+					if part.Text != "" {
+						if strict && len(part.Text) > 400 {
+							out = append(out, "too long")
+							continue
+						}
+						out = append(out, fmt.Sprintf("%s: %s", ev.User, part.Text))
+					}
+				}
+			}
+		case "join":
+			out = append(out, ev.User+" joined")
+		default:
+			if strict {
+				out = append(out, "unknown event")
+			}
+		}
+	}
+	return out
+}
+
+// Event is one line of chat.
+type Event struct {
+	Kind  string
+	User  string
+	Parts []Part
+}
+
+// Part is a piece of a message.
+type Part struct {
+	Text string
+}

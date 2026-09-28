@@ -108,6 +108,7 @@ with current project state.
 | --- | --- |
 | **design** — [2026-09-anchored-edit](2026-09-anchored-edit/) | How should anchored editing be evaluated across its preregistration and phases? This is a multi-phase plan rather than a completed result; start with [`phase0.md`](2026-09-anchored-edit/phase0.md). |
 | **trial** — [2026-09-replace-all](2026-09-replace-all/) | Is `replace_all` reached, given that a 2026-08 trial found 1/18 and argued against adding it? Yes: 20/20 in the pilot, though five later runs on the unreduced file put real uptake at 2/5 — the pilot's cut-down fixture had removed the block-edit alternative. Ship it, default off: five models on the real file produced zero ambiguity failures and zero verbatim retries. The naming comparison is vacuous — the message is rarely reached once the parameter exists — and safety is still unmeasured, the fixture having no decoys. |
+| **trial** — [2026-09-read-separator](2026-09-read-separator/) | Does the read tool's tab between line number and line make models send edits a tab too deep? Yes: with the tab, 26 of GPT-6 Luna's 48 edits and 18 of MiMo's 42 were one tab too deep; with an arrow (`12→line`), 4 and 0. Exact matches rose from 23% to 69% (Luna, p = 0.008) and 52% to 85% (MiMo, p = 0.04), and every run completed. MiMo gained a smaller one-tab-short error with the arrow (6 edits), and deep undercounts of 3–4 tabs persisted in both arms. The arrow ships. |
 
 ## Sandbox and shell
 

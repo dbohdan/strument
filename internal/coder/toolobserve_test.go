@@ -45,8 +45,14 @@ func TestReadNumbersLinesAndPages(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"f.txt": b.String()})
 
 	whole := readTool(c, call("read", `{"path":"f.txt"}`))
-	if !strings.Contains(whole, " 1\tbody") || !strings.Contains(whole, "10\tbody") {
+	if !strings.Contains(whole, " 1→body") || !strings.Contains(whole, "10→body") {
 		t.Errorf("read result is not line-numbered:\n%s", whole)
+	}
+	// No whitespace between the number and the line: a tab separator joins the
+	// indentation of a tab-indented file, and models counted it as one more
+	// level (doc/experiments/2026-09-read-separator).
+	if strings.Contains(whole, "\tbody") {
+		t.Errorf("read result separates the number with a tab:\n%s", whole)
 	}
 	if strings.Contains(whole, "for more") {
 		t.Errorf("a complete read must not offer paging:\n%s", whole)

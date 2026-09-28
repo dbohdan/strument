@@ -375,7 +375,7 @@ func TestCodeBridgeGrepReturnsData(t *testing.T) {
 		t.Errorf("a cut result must raise:\n%s", got)
 	}
 
-	if got := run(c, `read({path: "b.go"})`); !strings.Contains(got, "1\t// Target") {
+	if got := run(c, `read({path: "b.go"})`); !strings.Contains(got, "1→// Target") {
 		t.Errorf("read must still return the tool's text, got:\n%s", got)
 	}
 }

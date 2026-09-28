@@ -348,8 +348,9 @@ only to give the old values a migration error.
 Ten tools, in three natures:
 
 - **Observation is free**, because the cost of looking is what makes a model
-  guess. `read(path, offset, limit)` returns a `cat -n`-style window with a
-  paging hint when it truncates; `grep(pattern, …)` searches contents, listing
+  guess. `read(path, offset, limit)` returns a numbered window (`12→line`,
+  nothing between the arrow and the line, so a tab-indented line keeps its own
+  count) with a paging hint when it truncates; `grep(pattern, …)` searches contents, listing
   files, matching lines, or per-file counts; `glob(pattern)` finds files by
   path; `ls(path)` lists a directory and names a symlink's target;
   `symbol(name, kind)` answers "where is this defined" from the tree-sitter

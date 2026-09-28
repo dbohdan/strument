@@ -1,0 +1,13 @@
+diff --git a/internal/coder/toolobserve.go b/internal/coder/toolobserve.go
+index d1fa12a..7696ff2 100644
+--- a/internal/coder/toolobserve.go
++++ b/internal/coder/toolobserve.go
+@@ -130,7 +130,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
+ 	// the tokens in a conversation that will discuss specific lines.
+ 	width := len(strconv.Itoa(ft.Start + len(ft.Lines) - 1))
+ 	for i, line := range ft.Lines {
+-		fmt.Fprintf(&b, "%*d\t%s\n", width, ft.Start+i, line)
++		fmt.Fprintf(&b, "%*d→%s\n", width, ft.Start+i, line)
+ 	}
+ 	if ft.Truncated {
+ 		next := ft.Start + len(ft.Lines)
