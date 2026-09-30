@@ -3,6 +3,7 @@ package readline
 import (
 	"bufio"
 	"bytes"
+	"strings"
 	"errors"
 	"fmt"
 	"io"
@@ -78,6 +79,7 @@ type terminal struct {
 	dimensions atomic.Pointer[termDimensions]
 	closeOnce  sync.Once
 	closeErr   error
+	pasted     []rune // a bracketed paste GetRune has reported; see takePaste
 	outChan    chan readResult
 	kickChan   chan struct{}
 	stopChan   chan struct{}
@@ -109,8 +111,9 @@ type readResult struct {
 	r  rune
 	ok bool // is `r` valid user input? if not, we may need to read again
 	// other data that can be conveyed in a single read operation;
-	// currently only the CPR:
-	pos *cursorPosition
+	// currently the CPR and a bracketed paste:
+	pos   *cursorPosition
+	paste []rune
 }
 
 func newTerminal(cfg *Config) (*terminal, error) {
@@ -246,10 +249,62 @@ func (t *terminal) getRuneFromStdin(deadline chan struct{}) (rune, error) {
 		result, err := t.readFromStdin(deadline)
 		if err != nil {
 			return 0, err
+		} else if result.paste != nil {
+			// Handed over on the reading goroutine, the same one that calls
+			// takePaste next, so the stash needs no lock.
+			t.pasted = result.paste
+			return MetaPaste, nil
 		} else if result.ok {
 			return result.r, nil
 		} // else: CPR or something else we didn't understand, read again
 	}
+}
+
+// takePaste returns the text of the paste GetRune last reported as MetaPaste.
+func (t *terminal) takePaste() []rune {
+	p := t.pasted
+	t.pasted = nil
+	return p
+}
+
+// pasteEnd is what a terminal sends after bracketed-pasted text.
+const pasteEnd = "\x1b[201~"
+
+// readPaste collects bracketed-pasted text up to pasteEnd. Newlines arrive
+// as CR or CRLF from most terminals and are stored as \n, which is what a
+// pasted line break means in a message. Other control characters, escape
+// sequences included, are dropped: a paste is text, and an ESC inside one
+// must not be decoded as a key.
+func readPaste(buf *bufio.Reader) ([]rune, error) {
+	var raw []rune
+	for {
+		r, _, err := buf.ReadRune()
+		if err != nil {
+			return nil, err
+		}
+		raw = append(raw, r)
+		if r == '~' && strings.HasSuffix(string(raw), pasteEnd) {
+			raw = raw[:len(raw)-len([]rune(pasteEnd))]
+			break
+		}
+	}
+	out := make([]rune, 0, len(raw))
+	for i := 0; i < len(raw); i++ {
+		switch r := raw[i]; {
+		case r == '\r':
+			out = append(out, '\n')
+			if i+1 < len(raw) && raw[i+1] == '\n' {
+				i++
+			}
+		case r == '\n' || r == '\t':
+			out = append(out, r)
+		case r < 0x20 || r == 0x7f:
+			// dropped
+		default:
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (t *terminal) readFromStdin(deadline chan struct{}) (result readResult, err error) {
@@ -397,6 +452,15 @@ func (t *terminal) consumeANSIEscape(buf *bufio.Reader, ansiBuf *bytes.Buffer) (
 	case '~':
 		if initial == '[' {
 			switch string(ansiBuf.Bytes()) {
+			case "200":
+				// Bracketed paste: everything up to ESC [201~ is one block of
+				// text, newlines included. Without it a multi-line paste
+				// submitted its first line as a message. Strument addition.
+				text, err := readPaste(buf)
+				if err != nil {
+					return readResult{}, err
+				}
+				return readResult{paste: text}, nil
 			case "3":
 				r = MetaDeleteKey // this is the key typically labeled "Delete"
 			case "3;5":

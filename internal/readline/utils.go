@@ -49,6 +49,9 @@ const (
 	MetaTranspose
 	MetaShiftTab
 	MetaDeleteKey
+	// MetaPaste is a bracketed paste: the pasted text is taken from the
+	// terminal with takePaste. Strument addition.
+	MetaPaste
 )
 
 type rawModeHandler struct {

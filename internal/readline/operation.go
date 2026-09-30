@@ -192,6 +192,9 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 			o.undo.add()
 			o.buf.Kill()
 			keepInCompleteMode = true
+		case MetaPaste:
+			o.undo.add()
+			o.buf.WriteRunes(o.t.takePaste())
 		case MetaForward:
 			o.buf.ForwardWord()
 		case CharTranspose:
@@ -247,10 +250,14 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 				o.buf.Refresh(nil)
 			}
 			o.buf.MoveToLineEnd()
-			var data []rune
-			o.buf.WriteRune('\n')
-			data = o.buf.Reset()
-			data = data[:len(data)-1] // trim \n
+			// The newline that ends the line goes to the terminal, not into
+			// the buffer: every \n in the buffer is now content, drawn as a
+			// glyph, and this one only has to move the cursor down.
+			// Strument change; upstream appended it and trimmed it off.
+			data := o.buf.Reset()
+			if o.GetConfig().isInteractive {
+				o.t.Write([]byte("\n"))
+			}
 			result = data
 			if !o.GetConfig().DisableAutoSaveHistory {
 				// ignore IO error
@@ -423,6 +430,14 @@ func (o *operation) Runes() ([]rune, error) {
 	// may be existing text on the same line that ideally we don't
 	// want to overwrite and cause prompt to jump left.
 	o.getAndSetOffset(nil)
+	// Bracketed paste, on only while the prompt reads: a paste arrives as one
+	// block rather than as keystrokes whose first newline submits. Off again
+	// before anything else reads the terminal, so a paste during a reply is
+	// what it always was. Strument addition.
+	if cfg.isInteractive {
+		o.t.Write([]byte("\x1b[?2004h"))
+		defer o.t.Write([]byte("\x1b[?2004l"))
+	}
 	o.buf.Print() // print prompt & buffer contents
 	// Prompt written safely, unlock until read completes and then
 	// lock again to unset.

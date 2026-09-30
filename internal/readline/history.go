@@ -80,7 +80,7 @@ func (o *opHistory) historyUpdatePath(cfg *Config) {
 		if len(line) == 0 {
 			continue
 		}
-		o.Push([]rune(line))
+		o.Push([]rune(decodeHistoryLine(line)))
 		o.Compact()
 	}
 	if total > cfg.HistoryLimit {
@@ -120,7 +120,7 @@ func (o *opHistory) rewriteLocked() {
 
 	buf := bufio.NewWriter(fd)
 	for elem := o.history.Front(); elem != nil; elem = elem.Next() {
-		buf.WriteString(string(elem.Value.(*hisItem).Source) + "\n")
+		buf.WriteString(encodeHistoryLine(string(elem.Value.(*hisItem).Source)) + "\n")
 	}
 	buf.Flush()
 
@@ -316,7 +316,7 @@ func (o *opHistory) Update(s []rune, commit bool) (err error) {
 		r.Source = s
 		if o.fd != nil {
 			// just report the error
-			_, err = o.fd.Write([]byte(string(r.Source) + "\n"))
+			_, err = o.fd.Write([]byte(encodeHistoryLine(string(r.Source)) + "\n"))
 		}
 	} else {
 		r.Tmp = append(r.Tmp[:0], s...)
@@ -330,4 +330,19 @@ func (o *opHistory) Push(s []rune) {
 	s = runes.Copy(s)
 	elem := o.history.PushBack(&hisItem{Source: s})
 	o.current = elem
+}
+
+// The history file holds one entry per line, and a pasted message can hold
+// line breaks. They are stored as U+2028 LINE SEPARATOR and turned back on
+// load, so an entry stays one line on disk and comes back whole. A file
+// written before this has no U+2028 and reads as it always did; no escaping
+// scheme reinterprets a typed backslash. Strument addition.
+const historyNewline = "\u2028"
+
+func encodeHistoryLine(s string) string {
+	return strings.ReplaceAll(s, "\n", historyNewline)
+}
+
+func decodeHistoryLine(s string) string {
+	return strings.ReplaceAll(s, historyNewline, "\n")
 }

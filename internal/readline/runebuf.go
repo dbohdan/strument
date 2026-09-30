@@ -563,9 +563,12 @@ func (r *runeBuffer) append(s []rune) {
 		}
 	} else {
 		for _, e := range cfg.Painter(s, slen) {
-			if e == '\t' {
+			switch e {
+			case '\t':
 				buf.WriteString(strings.Repeat(" ", runes.TabWidth))
-			} else {
+			case '\n':
+				buf.WriteRune(newlineGlyph)
+			default:
 				buf.WriteRune(e)
 			}
 		}
@@ -640,9 +643,12 @@ func (r *runeBuffer) writeBuffer(buf *bytes.Buffer) {
 		}
 	} else {
 		for _, e := range cfg.Painter(r.buf, r.idx) {
-			if e == '\t' {
+			switch e {
+			case '\t':
 				buf.WriteString(strings.Repeat(" ", runes.TabWidth))
-			} else {
+			case '\n':
+				buf.WriteRune(newlineGlyph)
+			default:
 				buf.WriteRune(e)
 			}
 		}

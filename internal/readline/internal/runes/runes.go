@@ -146,6 +146,11 @@ func Width(r rune) int {
 	if r == '\t' {
 		return TabWidth
 	}
+	if r == '\n' {
+		// A line break in the buffer is drawn as one glyph cell (see
+		// newlineGlyph in the readline package). Strument addition.
+		return 1
+	}
 	if unicode.IsOneOf(zeroWidth, r) {
 		return 0
 	}
@@ -249,12 +254,18 @@ func SplitByLine(prompt, rs []rune, offset, screenWidth, nextWidth int) [][]rune
 	si := 0
 	currentWidth := offset
 	for i, r := range prs {
-		w := Width(r)
-		if r == '\n' {
+		// A newline in the prompt starts a row. One in the buffer does not:
+		// it is drawn as a one-cell glyph, and breaking the row here made the
+		// redraw walk up rows the screen never had, erasing the input.
+		// Strument change.
+		if r == '\n' && i < len(prompt) {
 			ret = append(ret, prs[si:i+1])
 			si = i + 1
 			currentWidth = 0
-		} else if currentWidth+w > screenWidth {
+			continue
+		}
+		w := Width(r)
+		if currentWidth+w > screenWidth {
 			ret = append(ret, prs[si:i])
 			si = i
 			currentWidth = 0

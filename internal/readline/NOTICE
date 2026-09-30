@@ -67,3 +67,19 @@ Strument's changes to the vendored copy:
     (history.go), matching ~/.bash_history. It is set in both places that open
     it: the rewrite path writes a temp file and renames over the original, which
     replaces the inode, so a mode set once on the file would not survive.
+
+  * Word motion and deletion follow aider's prompt_toolkit, measured in a pty
+    (runebuf.go, terminal.go, internal/runes): Ctrl+Right and Alt+F end on the
+    end of a word (ForwardWord) where upstream went to the start of the next;
+    the underscore is part of a word; Alt+Backspace deletes the word before
+    the cursor, and Ctrl+Delete and Alt+D the word after it. Vim mode's w is
+    unchanged.
+
+  * Bracketed paste (terminal.go, operation.go): enabled only while the prompt
+    reads, a paste arrives as one block, newlines included, instead of as
+    keystrokes whose first newline submitted the line. A newline in the buffer
+    is drawn as a one-cell ↵ glyph after any Painter runs, measured as one cell
+    (runes.Width) and not treated as a row break (runes.SplitByLine; a newline
+    in the prompt still is). Enter writes the line's final newline to the
+    terminal instead of appending it to the buffer. History entries store
+    their newlines as U+2028 so an entry stays one line on disk (history.go).

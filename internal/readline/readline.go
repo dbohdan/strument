@@ -308,6 +308,12 @@ func (i *Instance) ClearScreen() {
 // on screen, for example, to implement real-time syntax highlighting.
 type Painter func(line []rune, pos int) []rune
 
+// newlineGlyph is how a line break in the buffer is drawn, after any Painter
+// has run, so a custom painter gets it too. The editor draws one logical
+// line, and a raw newline would break its cursor arithmetic; the glyph takes
+// the one cell a newline is measured as. Strument addition.
+const newlineGlyph = '↵'
+
 func defaultPainter(line []rune, _ int) []rune {
 	return line
 }
