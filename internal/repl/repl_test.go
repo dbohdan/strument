@@ -722,6 +722,26 @@ func TestShellConfirmationShowsThePurpose(t *testing.T) {
 	}
 }
 
+// The harness's verdict on a command reads after the command, not before it:
+// purpose, command, then approve_model's "Not approved" line, then the
+// question. The line used to come first and judge a command not yet shown.
+func TestShellPromptShowsTheNoteAfterTheCommand(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+	r.Confirmer().Confirm(coder.ConfirmRequest{
+		Prompt:  "Run shell command?",
+		Command: "make secret",
+		Purpose: "generate config.php",
+		Note:    "Not approved by typesafe/jev, p(safe) 0.69 < 0.90.",
+	})
+	got := out.String()
+	purpose := strings.Index(got, "‹shell› generate config.php")
+	command := strings.Index(got, "$ make secret")
+	note := strings.Index(got, "Not approved by typesafe/jev, p(safe) 0.69 < 0.90.")
+	if purpose < 0 || command < 0 || note < 0 || purpose >= command || command >= note {
+		t.Errorf("want purpose, command, note in that order (at %d, %d, %d):\n%s", purpose, command, note, got)
+	}
+}
+
 // TestShellPromptDefaultsToYes pins the answer line, which nothing did before:
 // Enter approves, and an ungrouped shell gate offers no blanket "all this
 // turn". A grouped one does — under a sandbox, where the consequences of an

@@ -1153,13 +1153,16 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	}
 	// approve_model is asked only where the prompt would really be shown, and
 	// only under the sandbox, the same property that licenses "a" above.
-	approved := c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) &&
-		c.approveByModel(ctx, command, cmd.purpose)
+	approved, note := false, ""
+	if c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
+		approved, note = c.approveByModel(ctx, command, cmd.purpose)
+	}
 	if !approved {
 		if res := c.confirmGrouped(ConfirmRequest{
 			Prompt:  "Run shell command?",
 			Command: command,
 			Purpose: cmd.purpose,
+			Note:    note,
 			Group:   group,
 			Grant:   GrantBash,
 		}); !res.Yes && !res.Always {

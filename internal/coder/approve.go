@@ -246,14 +246,19 @@ func (c *Coder) shellPromptAnswered(group string) bool {
 }
 
 // approveByModel asks the decision model about a command and reports whether
-// it may run without the prompt. Every outcome is printed and recorded with
-// its p(safe), so what ran unasked can be read back afterwards.
-func (c *Coder) approveByModel(ctx context.Context, command, purpose string) bool {
+// it may run without the prompt, and the line to show with the prompt when it
+// may not. Every outcome is shown and recorded with its p(safe), so what ran
+// unasked can be read back afterwards.
+//
+// The verdict is shown after the command it is about, never before it: for an
+// approval, below the "Running" line (runAndShowTail); for a refusal, below the
+// command in the prompt (ConfirmRequest.Note). A service that did not answer
+// is reported at once instead, because that is news about the service.
+func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bool, string) {
 	am := c.Approve
 	if n := len(command) + len(purpose); n > approveMaxInput {
 		c.record(Record{Type: "decision", Call: "approve_model", Model: am.Slug, Outcome: "too_long"})
-		c.Out.Toolf("Not sent to %s: %d characters is more than it may read whole; asking:", am.Slug, n)
-		return false
+		return false, fmt.Sprintf("Not sent to %s: %d characters is more than it may read whole.", am.Slug, n)
 	}
 	timeout := am.Timeout
 	if timeout <= 0 {
@@ -282,18 +287,17 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) boo
 	if err != nil {
 		r.Outcome, r.Error = "failed", err.Error()
 		c.Out.Warningf("approve_model: %s did not answer (%v); asking instead.", am.Slug, err)
-		return false
+		return false, ""
 	}
 	p := d.PSafe
 	r.PSafe = &p
 	if p >= am.Threshold {
 		r.Outcome = "approved"
-		// Printed by runAndShowTail, after the blank line that opens the
-		// command's block, so the approval sits with the command it approved.
+		// Printed by runAndShowTail, below the "Running" line, so the approval
+		// follows the command it approved.
 		c.approvalNote = fmt.Sprintf("Approved by %s, p(safe) %.2f.", r.Model, p)
-		return true
+		return true, ""
 	}
 	r.Outcome = "asked"
-	c.Out.Toolf("Not approved by %s, p(safe) %.2f < %.2f:", r.Model, p, am.Threshold)
-	return false
+	return false, fmt.Sprintf("Not approved by %s, p(safe) %.2f < %.2f.", r.Model, p, am.Threshold)
 }

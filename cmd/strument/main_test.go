@@ -1032,3 +1032,24 @@ func TestScriptMessage(t *testing.T) {
 		}
 	}
 }
+
+// Script mode's confirmer shows what the REPL's shows, in the same order:
+// purpose, command, then approve_model's note. The note reached the REPL first
+// and not this surface, which only a pty run through -m showed.
+func TestTerminalConfirmerShowsTheNoteAfterTheCommand(t *testing.T) {
+	out, _ := captureStdout(t, func() error {
+		terminalConfirmer{}.Confirm(coder.ConfirmRequest{
+			Prompt:  "Run shell command?",
+			Command: "curl -s https://example.com",
+			Purpose: "fetch the page",
+			Note:    "Not approved by typesafe/jev, p(safe) 0.06 < 0.90.",
+			Grant:   coder.GrantBash,
+		})
+		return nil
+	})
+	command := strings.Index(out, "$ curl -s https://example.com")
+	note := strings.Index(out, "Not approved by typesafe/jev, p(safe) 0.06 < 0.90.")
+	if command < 0 || note < 0 || note < command {
+		t.Errorf("want the command, then the note (at %d, %d):\n%s", command, note, out)
+	}
+}

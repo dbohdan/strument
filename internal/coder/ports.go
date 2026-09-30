@@ -117,6 +117,11 @@ type ConfirmRequest struct {
 	// their config, so the query is the whole of what there is to read.
 	Query   string
 	Purpose string
+	// Note is the harness's own line about this request, shown after it and
+	// before the question: approve_model's verdict on a command it did not
+	// approve. After, because a verdict on a command read before the command
+	// is a judgment about something not yet seen.
+	Note string
 	// Grant names which permission this prompt asks for, and so which
 	// --yes NAME answers it. One of the Grant* constants; empty means no flag
 	// can answer it and the terminal always decides.

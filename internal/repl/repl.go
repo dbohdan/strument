@@ -731,6 +731,11 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		r.out.Toolf("\u2039websearch\u203a")
 		r.out.Printf("%s", req.Query)
 	}
+	// The harness's verdict on what was just shown — approve_model declining
+	// a command — comes after it, where it reads as a comment on it.
+	if req.Note != "" {
+		r.out.Toolf("%s", req.Note)
+	}
 
 	// Shown after the request, not instead of it: what was proposed is worth
 	// reading even when the answer is a foregone no.

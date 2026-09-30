@@ -1108,6 +1108,12 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		}
 		fmt.Println(render.Sanitize(req.URL))
 	}
+	// approve_model's verdict, after the command it is about, as the REPL shows
+	// it. Missing here at first: the REPL got the note and this surface did
+	// not, and only a pty run through script mode showed the prompt without it.
+	if req.Note != "" {
+		fmt.Println(req.Note)
+	}
 
 	// The REPL's rlConfirmer declines rather than reading when nobody is at
 	// the keyboard; this surface follows, so the two mean the same thing. Only

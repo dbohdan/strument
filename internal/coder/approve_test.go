@@ -147,14 +147,17 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 		wantCalls  int
 		wantPrompt bool
 		outcome    string
-		line       string
+		line       string // printed, in this order
+		note       string // carried to the prompt, shown after the command
 	}{
-		{"approved", 0.95, nil, true, false, 1, false, "approved", "Approved by laya:en, p(safe) 0.95.\nRunning"},
-		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) 0.90"},
-		{"below", 0.5, nil, true, false, 1, true, "asked", "Not approved by laya:en, p(safe) 0.50 < 0.90:"},
-		{"failed", 0, errors.New("connection refused"), true, false, 1, true, "failed", "did not answer"},
-		{"no sandbox", 0.99, nil, false, false, 0, true, "", ""},
-		{"already granted", 0.99, nil, true, true, 0, false, "", ""},
+		// The verdict follows the command it is about: an approval under the
+		// Running line, a refusal under the command in the prompt.
+		{"approved", 0.95, nil, true, false, 1, false, "approved", "Running \"echo hi\"\nApproved by laya:en, p(safe) 0.95.", ""},
+		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) 0.90", ""},
+		{"below", 0.5, nil, true, false, 1, true, "asked", "", "Not approved by laya:en, p(safe) 0.50 < 0.90."},
+		{"failed", 0, errors.New("connection refused"), true, false, 1, true, "failed", "did not answer", ""},
+		{"no sandbox", 0.99, nil, false, false, 0, true, "", "", ""},
+		{"already granted", 0.99, nil, true, true, 0, false, "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testCoder(t)
@@ -186,6 +189,12 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 			joined := strings.Join(out.lines, "\n")
 			if tc.line != "" && !strings.Contains(joined, tc.line) {
 				t.Errorf("output lacks %q:\n%s", tc.line, joined)
+			}
+			if strings.Contains(joined, "Not approved") {
+				t.Errorf("the refusal was printed before the prompt showed the command:\n%s", joined)
+			}
+			if tc.wantPrompt && len(rc.got) > 0 && rc.got[0].Note != tc.note {
+				t.Errorf("prompt note = %q, want %q", rc.got[0].Note, tc.note)
 			}
 			var dec []Record
 			for _, r := range rec.recs {
@@ -244,8 +253,8 @@ func TestApproveModelSkipsLongCommands(t *testing.T) {
 	if fd.calls != 0 || len(rc.got) != 1 {
 		t.Errorf("decider calls %d, prompts %d; want 0 and 1", fd.calls, len(rc.got))
 	}
-	if !strings.Contains(strings.Join(out.lines, "\n"), "more than it may read whole") {
-		t.Errorf("no line said why the model was not asked: %v", out.lines)
+	if len(rc.got) == 1 && !strings.Contains(rc.got[0].Note, "more than it may read whole") {
+		t.Errorf("the prompt did not say why the model was not asked: note %q", rc.got[0].Note)
 	}
 }
 

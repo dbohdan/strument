@@ -44,11 +44,11 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 // the line that says why the command stopped.
 func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTimeout time.Duration, tail int) (int, string) {
 	c.Out.Printf("")
+	c.Out.Toolf("Running %s", quoteToolArg(command))
 	if c.approvalNote != "" {
 		c.Out.Toolf("%s", c.approvalNote)
 		c.approvalNote = ""
 	}
-	c.Out.Toolf("Running %s", quoteToolArg(command))
 
 	// A required sandbox that is not enforcing stops the command here rather
 	// than running it and mentioning the fact. /run does not come through this

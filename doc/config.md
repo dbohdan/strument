@@ -958,9 +958,10 @@ question about the command:
 - **Below it, or on any failure, the prompt appears as usual.** A failure is
   an error, a timeout, or an answer that is not a probability.
 
-Every outcome is printed and recorded in the session log with its p(safe):
-`Approved by typesafe/jev-1.13, p(safe) 0.97:`, or
-`Not approved by …, p(safe) 0.42 < 0.90:`.
+Every outcome is printed and recorded in the session log with its p(safe),
+and printed after the command it is about: `Approved by typesafe/jev-1.13,
+p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
+0.90.` below the command in the prompt, just before the question.
 
 **When it is consulted:**
 
