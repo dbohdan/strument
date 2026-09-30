@@ -137,6 +137,9 @@ type Options struct {
 	Exit func(code int)
 	// Now is the chord clock. Default: time.Now.
 	Now func() time.Time
+	// RunEditor opens argv — an editor command with the file to edit last —
+	// and waits for it, for /editor and Ctrl-X Ctrl-E. Default: editor.Run.
+	RunEditor func(argv []string) error
 }
 
 // SessionOps are the host's session operations, for /session.
@@ -172,6 +175,10 @@ type REPL struct {
 	coder *coder.Coder
 	rl    *readline.Instance
 	out   *termOutput
+
+	// prefill is text the next prompt opens with, for review before it is
+	// sent: what /editor or Ctrl-X Ctrl-E brought back from the editor.
+	prefill string
 
 	mu        sync.Mutex
 	lastCtrlC time.Time
@@ -503,8 +510,20 @@ func (r *REPL) Run(ctx context.Context) error {
 	r.announce()
 	for {
 		r.renderPromptHeader()
-		line, err := r.rl.ReadLine()
+		var line string
+		var err error
+		if r.prefill != "" {
+			line, err = r.rl.ReadLineWithDefault(r.prefill)
+			r.prefill = ""
+		} else {
+			line, err = r.rl.ReadLine()
+		}
 		switch {
+		case errors.Is(err, readline.ErrExternalEdit):
+			// Ctrl-X Ctrl-E: finish what was typed in the editor. The result
+			// comes back to the prompt; nothing is sent from here.
+			r.editInEditor(line, nil)
+			continue
 		case errors.Is(err, readline.ErrInterrupt):
 			// Readline already cleared the line.
 			if r.chord() {

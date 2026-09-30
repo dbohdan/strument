@@ -298,6 +298,11 @@ func readPaste(buf *bufio.Reader) ([]rune, error) {
 			}
 		case r == '\n' || r == '\t':
 			out = append(out, r)
+		case r == '\u2028':
+			// LINE SEPARATOR, from copied web text or a JSON string. Terminals
+			// disagree on drawing it, and it would come back as \n from the
+			// history file anyway (see encodeHistoryLine).
+			out = append(out, '\n')
 		case r < 0x20 || r == 0x7f:
 			// dropped
 		default:
@@ -387,6 +392,10 @@ func (t *terminal) consumeANSIEscape(buf *bufio.Reader, ansiBuf *bytes.Buffer) (
 	case 'b':
 		// Alt-b in xterm, or Option+LeftArrow in iTerm2 with "Natural text editing"
 		return readResult{r: MetaBackward, ok: true}, nil // Alt-b
+	case '\r', '\n':
+		// Alt-Enter: a newline in the message, drawn as a glyph. aider's
+		// newline key; Strument addition.
+		return readResult{r: MetaEnter, ok: true}, nil
 	case 'd':
 		// Alt-d: delete the word after the cursor (GNU readline's kill-word).
 		return readResult{r: MetaDelete, ok: true}, nil

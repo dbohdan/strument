@@ -12,6 +12,10 @@ import (
 
 var (
 	ErrInterrupt = errors.New("Interrupt")
+	// ErrExternalEdit is returned with the typed text when the user asks to
+	// finish it in their editor (Ctrl-X Ctrl-E, bash's edit-and-execute key).
+	// The caller opens the editor; nothing is submitted. Strument addition.
+	ErrExternalEdit = errors.New("edit in the external editor")
 )
 
 type operation struct {
@@ -127,6 +131,26 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 		}
 		isUpdateHistory := true
 
+		// Ctrl-X Ctrl-E hands the line to an external editor. Any other key
+		// after Ctrl-X is handled as if Ctrl-X had not been pressed.
+		if r == CharCtrlX && !o.search.IsSearchMode() {
+			next, err := o.t.GetRune(deadline)
+			if err != nil {
+				return nil, err
+			}
+			if next == CharLineEnd {
+				// To the end first, as Enter does, so the newline lands below
+				// the whole input and not below the cursor's row.
+				o.buf.MoveToLineEnd()
+				data := o.buf.Reset()
+				if o.GetConfig().isInteractive {
+					o.t.Write([]byte("\n"))
+				}
+				return data, ErrExternalEdit
+			}
+			r = next
+		}
+
 		if o.completer.IsInCompleteSelectMode() {
 			keepInCompleteMode = o.completer.HandleCompleteSelect(r)
 			if keepInCompleteMode {
@@ -192,6 +216,9 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 			o.undo.add()
 			o.buf.Kill()
 			keepInCompleteMode = true
+		case MetaEnter:
+			o.undo.add()
+			o.buf.WriteRune('\n')
 		case MetaPaste:
 			o.undo.add()
 			o.buf.WriteRunes(o.t.takePaste())

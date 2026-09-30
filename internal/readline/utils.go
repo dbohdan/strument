@@ -32,6 +32,7 @@ const (
 	CharTranspose = 20
 	CharCtrlU     = 21
 	CharCtrlW     = 23
+	CharCtrlX     = 24
 	CharCtrlY     = 25
 	CharCtrlZ     = 26
 	CharEsc       = 27
@@ -52,6 +53,9 @@ const (
 	// MetaPaste is a bracketed paste: the pasted text is taken from the
 	// terminal with takePaste. Strument addition.
 	MetaPaste
+	// MetaEnter is Alt-Enter: insert a newline rather than submit.
+	// Strument addition.
+	MetaEnter
 )
 
 type rawModeHandler struct {

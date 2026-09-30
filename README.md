@@ -164,6 +164,14 @@ In a Git repository, each turn that changes a file ends in a commit.
 `--no-git` turns the Git integration off inside a repository; outside one it is already off.
 `/undo` works either way.
 
+### Writing longer messages
+
+The prompt is a single line, and line breaks in it are shown as `↵`.
+`Alt-Enter` adds one; a multi-line paste arrives whole, line breaks included, and is not sent until you press `Enter`.
+For anything longer, `/editor` opens your editor (`$VISUAL`, then `$EDITOR`), and `Ctrl-X Ctrl-E` does the same starting from what you have typed.
+What you save comes back to the prompt for you to read and send; an empty file sends nothing.
+`/editor <command>` uses that command instead, for example `/editor code --wait`.
+
 ### Interrupting and steering
 
 While the model is responding or a tool is running, press `Ctrl-C` once to interrupt it.
@@ -214,6 +222,7 @@ Edits made before the interruption remain undoable with `/undo`.
 | `/context [<n>]` | Show the chat history as the model receives it: compaction summaries followed by recent, unsummarized messages. With `n`, show only the first `n` summaries. |
 | `/skill [<name>]` | List the available skills, or add a skill's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
 | `/symbol <name> [definition \| reference]` | Find where a name is defined or used, using the language parser rather than a text search. |
+| `/editor [<command>]` | Write your message in an editor: `$VISUAL`, then `$EDITOR`, or the command given. What you save comes back to the prompt to read and send. `Ctrl-X Ctrl-E` opens it with what you have typed. |
 | `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Paths outside the project are allowed. Files over 100 KiB are refused rather than truncated. |
 | `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands receive an [allowlist](doc/config.md#env_allow). `/web` on its own lists the origins `webfetch` can fetch from without asking, and `/web drop` and `/web reset` revoke those approvals. |
 | `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this run, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |

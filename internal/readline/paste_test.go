@@ -86,3 +86,25 @@ func TestHistoryLineEncoding(t *testing.T) {
 		t.Error("an entry with a typed backslash-n changed on disk")
 	}
 }
+
+// Alt-Enter inserts a newline (aider's key), whichever of CR or LF the
+// terminal sends after ESC.
+func TestAltEnterDecodesAsNewlineKey(t *testing.T) {
+	for _, seq := range []string{"\r", "\n"} {
+		var ansiBuf bytes.Buffer
+		res, err := (&terminal{}).consumeANSIEscape(bufio.NewReader(strings.NewReader(seq)), &ansiBuf)
+		if err != nil || res.r != MetaEnter {
+			t.Errorf("ESC %q decoded to %d (err %v), want MetaEnter", seq, res.r, err)
+		}
+	}
+}
+
+// A pasted U+2028 LINE SEPARATOR becomes \n: terminals disagree on drawing it,
+// and the history file would turn it into \n on the next load anyway.
+func TestPastedLineSeparatorBecomesNewline(t *testing.T) {
+	var ansiBuf bytes.Buffer
+	res, err := (&terminal{}).consumeANSIEscape(bufio.NewReader(strings.NewReader("[200~a b\x1b[201~")), &ansiBuf)
+	if err != nil || string(res.paste) != "a\nb" {
+		t.Errorf("paste = %q (err %v), want \"a\\nb\"", string(res.paste), err)
+	}
+}

@@ -82,4 +82,10 @@ Strument's changes to the vendored copy:
     (runes.Width) and not treated as a row break (runes.SplitByLine; a newline
     in the prompt still is). Enter writes the line's final newline to the
     terminal instead of appending it to the buffer. History entries store
-    their newlines as U+2028 so an entry stays one line on disk (history.go).
+    their newlines as U+2028 so an entry stays one line on disk (history.go),
+    and a pasted U+2028 becomes a newline.
+
+  * Alt+Enter inserts a newline (MetaEnter), as in aider. Ctrl+X Ctrl+E ends
+    the read and returns the typed text with ErrExternalEdit, for the caller to
+    open in an editor (operation.go); any other key after Ctrl+X is handled as
+    if Ctrl+X had not been pressed.

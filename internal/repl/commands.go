@@ -85,6 +85,7 @@ func init() {
 		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"drop", "[<file> ...]", "Unpin files. With no files, unpin all of them.", cmdDrop},
+		{"editor", "[<command>]", "Write your message in an editor, $VISUAL or $EDITOR unless a command is given. It comes back to the prompt to send.", cmdEditor},
 		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this run.", cmdEnv},
 		{"exit", "", "Exit Strument.", cmdExit},
 		{"help", "", "Show this help.", cmdHelp},
