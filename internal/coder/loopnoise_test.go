@@ -70,7 +70,10 @@ func feedAll(t *testing.T, kind, text string) *loopFinding {
 func TestLoopDetectorSeparatesLoopsFromQuotedMaterial(t *testing.T) {
 	sentence := strings.Repeat("I need to check the file again to be sure of the contents. ", loopMinCount+2)
 	stutter := strings.Repeat("Dynamical\n", 84)
-	bangs := strings.Repeat("!", 2*loopWindow*loopMinCount)
+	// A runaway, as the real one was: it did not stop at a screenful. Its
+	// length used to be twice the old minimum, 1,000 bytes, which a
+	// short-period run no longer meets on purpose (see loopShortSpan).
+	bangs := strings.Repeat("!", 4000)
 
 	for _, test := range []struct {
 		name string
@@ -229,5 +232,45 @@ func TestDataFieldRuleDoesNotEatProse(t *testing.T) {
 	}
 	if f := feedAll(t, loopReasoning, strings.Repeat("Again: Again\n", loopMinWordRun+2)); f == nil {
 		t.Error("a one-token prose loop was hidden by the data-field rule")
+	}
+}
+
+// A repeating unit shorter than the window is a loop only once it has run for
+// loopShortSpan. Code and rules repeat short units on purpose and end; a loop
+// does not end. The first case is the report that set this rule: a reasoning
+// stream drafting a C border, unfenced, stopped forty cells in.
+func TestShortPeriodRepetitionNeedsLength(t *testing.T) {
+	prose := "The panel needs a border on every side, and the label for the next piece sits in the top edge. " +
+		"I will draw the top edge first with the corner glyph, then fill it with horizontal bars until the " +
+		"width matches the well, leaving room for the word NEXT. The side walls come after that, one per row, " +
+		"and the bottom edge mirrors the top without a label. Colors: the border uses C_BORDER throughout, " +
+		"which the header defines as a dim blue; the label uses the bright variant so it stands out.\n"
+	border := func(n int) string {
+		return prose + "    /* Top border + NEXT label */\n    printf(C_BORDER U_TL " + strings.Repeat("U_HORZ ", n)
+	}
+	for _, test := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"a C border forty cells wide", border(40), false},
+		{"a C border a hundred and forty cells wide", border(140), false},
+		{"a markdown underline", prose + "Results\n" + strings.Repeat("=", 80) + "\n", false},
+		{"punctuation just short of a kilobyte", prose + strings.Repeat("!", 950), false},
+		{"punctuation past a kilobyte", prose + strings.Repeat("!", 1100), true},
+		{"a border that never ends", border(400), true},
+		{"a short phrase that keeps coming", prose + strings.Repeat("I'll fix that. ", 100), true},
+		// A phrase is judged as it always was, short unit or not: this is
+		// find-loops.py's self-test loop, 630 bytes, and a loop at that length.
+		{"a short sentence thirty times", prose + strings.Repeat("I'll check the file. ", 30), true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Token by token, and the border has no newline: the line still
+			// being written is what the detector sees, as it was in the report.
+			got := feedAll(t, loopReasoning, test.text) != nil
+			if got != test.want {
+				t.Errorf("loop reported = %v, want %v", got, test.want)
+			}
+		})
 	}
 }

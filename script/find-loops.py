@@ -534,16 +534,22 @@ def detect_word_run(text: str, min_run: int) -> Finding | None:
     finditer rather than findall, so the run's position is known. The offset is
     what the report turns into a line number, and a detector that finds the
     right thing at the wrong place sends the reader to the wrong screen.
+
+    Words are runs of letters and digits, the underscore excluded, and a run of
+    numbers is not a stutter: both as findWordRun in
+    internal/coder/loopdetect.go, which this used to disagree with. Here `\w+`
+    made `U_HORZ` forty times in a C border a stutter that the in-process
+    detector, splitting at the underscore, never saw.
     """
     best_len, best_word, best_off = 0, "", 0
     run_len, prev, start = 0, None, 0
-    for m in re.finditer(r"\w+", text):
+    for m in re.finditer(r"[^\W_]+", text):
         w = m.group(0).lower()
         if w == prev:
             run_len += 1
         else:
             run_len, prev, start = 1, w, m.start()
-        if run_len > best_len:
+        if run_len > best_len and any(c.isalpha() for c in w):
             best_len, best_word, best_off = run_len, w, start
     if best_len < min_run:
         return None
@@ -556,10 +562,29 @@ def detect_word_run(text: str, min_run: int) -> Finding | None:
     )
 
 
+def single_token(unit: str) -> bool:
+    """At most one run of whitespace, counted cyclically (see singleToken in
+    internal/coder/loopdetect.go)."""
+    runs, prev = 0, bool(unit) and unit[-1].isspace()
+    for ch in unit:
+        sp = ch.isspace()
+        if sp and not prev:
+            runs += 1
+        prev = sp
+    return runs <= 1
+
+
 def detect_chunk(
-    text: str, size: int, min_count: int, max_gap: int, gap_jitter: int
+    text: str, size: int, min_count: int, max_gap: int, gap_jitter: int,
+    short_span: int = 1024,
 ) -> Finding | None:
     """A window that recurs often enough at close, regular spacing.
+
+    A single short token repeated counts only once the run spans short_span
+    characters: code and rules repeat one token on purpose and end, a loop does
+    not. A repeated phrase is judged as before, however short. This is loopShortSpan in internal/coder/loopdetect.go;
+    the two must judge alike, since this is the tool the thresholds are tuned
+    with.
 
     Positions are bucketed by hash rather than by the substring itself, so the
     memory is O(n) integers rather than O(n * size) characters; the winner is
@@ -596,11 +621,22 @@ def detect_chunk(
             smallest, largest = min(gaps), max(gaps)
             if largest > max_gap or largest > gap_jitter * smallest:
                 continue
+            count = min_count
+            if smallest < size and single_token(text[positions[start]:positions[start] + smallest]):
+                end = start + min_count
+                while end < len(positions):
+                    g = positions[end] - positions[end - 1]
+                    if g > max_gap or g > gap_jitter * smallest:
+                        break
+                    end += 1
+                if positions[end - 1] - positions[start] + size < short_span:
+                    continue
+                count = end - start
             detail = (
-                f"a {size}-char window recurs {min_count}x, "
+                f"a {size}-char window recurs {count}x, "
                 f"{smallest}-{largest} chars apart"
             )
-            finding = Finding("chunk", min_count, detail, first, group[0])
+            finding = Finding("chunk", count, detail, first, group[0])
             if best is None or finding.severity > best.severity:
                 best = finding
     return best
@@ -646,7 +682,8 @@ def analyze(block: Block, args) -> list[Finding]:
         detect_run(units, args.min_run, args.min_unit_chars),
         detect_period(units, args.min_repeats, args.max_tail, args.min_unit_chars),
         detect_chunk(
-            text, args.chunk_size, args.min_chunk_count, args.max_gap, args.gap_jitter
+            text, args.chunk_size, args.min_chunk_count, args.max_gap, args.gap_jitter,
+            args.short_span,
         ),
     ):
         if f:
@@ -695,6 +732,10 @@ def main(argv: list[str]) -> int:
     )
     ap.add_argument(
         "--chunk-size", type=int, default=50, help="chunk: window width in characters"
+    )
+    ap.add_argument(
+        "--short-span", type=int, default=1024,
+        help="chunk: how far a unit shorter than the window must run to count",
     )
     ap.add_argument(
         "--min-chunk-count", type=int, default=10, help="chunk: occurrences to report"
@@ -799,6 +840,15 @@ def self_test(args) -> int:
     numbered list and a diff repeat by nature.
     """
     loop = "I'll check the file. " * 30
+    # A reasoning stream drafting a C box border, forty cells, stopped as a loop
+    # in-process before the single-token span rule (loopShortSpan).
+    border = (
+        "The panel needs a border on every side, and the label for the next piece "
+        "sits in the top edge. I will draw the top edge first with the corner glyph, "
+        "then fill it with horizontal bars until the width matches the well. The side "
+        "walls come after that, one per row, and the bottom mirrors the top.\n"
+        "    printf(C_BORDER U_TL " + "U_HORZ " * 40 + "U_TR);\n"
+    )
     stutter = (
         "The file contains the the the the the the the the the the the the the the the"
     )
@@ -892,6 +942,7 @@ def self_test(args) -> int:
     cases = [
         ("aider edit blocks in an answer", editblocks, False),
         ("sentence loop", loop, True),
+        ("C border drafted unfenced", border, False),
         ("loop cut off mid-sentence", truncated, True),
         ("multi-sentence cycle, cut off", cycle, True),
         ("word stutter", stutter, True),

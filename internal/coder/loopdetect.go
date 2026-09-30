@@ -56,6 +56,16 @@ const (
 	// output; holding a whole reply to find one would be the expensive way to
 	// answer a local question.
 	loopTailBytes = 16 << 10
+	// loopShortSpan is how far a repetition of a single short token must run
+	// before it counts. Ten windows of a 7-byte unit is 120 bytes, and a C
+	// border drawn as `U_HORZ U_HORZ …` in a printf passes that forty cells
+	// in: a reasoning stream drafting it unfenced was stopped as a loop, and an
+	// 80-character `====` underline after some prose was too. Code and rules
+	// repeat one token on purpose and end; a runaway such as a screenful of
+	// "!" does not end, so it reaches a kilobyte a few hundred tokens later.
+	// A repeated *phrase* is judged as before, however short: "I'll check the
+	// file." thirty times is a loop at 630 bytes, and no line of code is.
+	loopShortSpan = 1 << 10
 	// loopMinWordRun is the other detector, and it is five lines rather than a
 	// second algorithm: a stutter is one "sentence" with no terminator, so
 	// nothing that splits on prose can see it. "Dynamical" 84 times and a
@@ -365,12 +375,45 @@ func findLoop(text string, minCount int) *loopFinding {
 					largest = g
 				}
 			}
-			if largest <= loopMaxGap && largest <= loopGapJitter*smallest {
+			if largest > loopMaxGap || largest > loopGapJitter*smallest {
+				continue
+			}
+			if smallest >= loopWindow || !singleToken(text[p[start]:p[start]+smallest]) {
 				return &loopFinding{Sample: sampleOf(w), Count: minCount}
+			}
+			// One short token over and over: follow the run while it keeps
+			// its rhythm, and call it a loop only once it has gone on for
+			// loopShortSpan.
+			end := start + minCount
+			for end < len(p) {
+				g := p[end] - p[end-1]
+				if g > loopMaxGap || g > loopGapJitter*smallest {
+					break
+				}
+				end++
+			}
+			if p[end-1]-p[start]+loopWindow >= loopShortSpan {
+				return &loopFinding{Sample: sampleOf(w), Count: end - start}
 			}
 		}
 	}
 	return nil
+}
+
+// singleToken reports whether a repeating unit is one token: at most one run
+// of whitespace, counted cyclically, since where the unit starts is wherever
+// the window happened to fall. "U_HORZ " and "HORZ U_" are the same unit; so
+// are "!" and "=". "I'll check the file. " has four runs and is a phrase.
+func singleToken(unit string) bool {
+	runs, prev := 0, len(unit) > 0 && unicode.IsSpace(rune(unit[len(unit)-1]))
+	for _, r := range unit {
+		sp := unicode.IsSpace(r)
+		if sp && !prev {
+			runs++
+		}
+		prev = sp
+	}
+	return runs <= 1
 }
 
 // findWordRun reports a word repeated immediately, many times over.
