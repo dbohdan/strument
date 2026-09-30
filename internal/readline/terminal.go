@@ -332,6 +332,13 @@ func (t *terminal) consumeANSIEscape(buf *bufio.Reader, ansiBuf *bytes.Buffer) (
 	case 'b':
 		// Alt-b in xterm, or Option+LeftArrow in iTerm2 with "Natural text editing"
 		return readResult{r: MetaBackward, ok: true}, nil // Alt-b
+	case 'd':
+		// Alt-d: delete the word after the cursor (GNU readline's kill-word).
+		return readResult{r: MetaDelete, ok: true}, nil
+	case '\x7f', '\b':
+		// Alt-Backspace: delete the word before the cursor. Strument: it fell
+		// through to the default and did nothing.
+		return readResult{r: MetaBackspace, ok: true}, nil
 	case '[', 'O':
 		// this is a real ANSI escape sequence, read the rest of the sequence below:
 	case '\x1b':
@@ -392,6 +399,10 @@ func (t *terminal) consumeANSIEscape(buf *bufio.Reader, ansiBuf *bytes.Buffer) (
 			switch string(ansiBuf.Bytes()) {
 			case "3":
 				r = MetaDeleteKey // this is the key typically labeled "Delete"
+			case "3;5":
+				// Ctrl-Delete: delete the word after the cursor, as aider does.
+				// The payload carried the modifier and matched nothing before.
+				r = MetaDelete
 			case "1", "7":
 				r = CharLineStart // "Home" key
 			case "4", "8":

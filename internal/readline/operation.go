@@ -193,7 +193,7 @@ func (o *operation) readline(deadline chan struct{}) ([]rune, error) {
 			o.buf.Kill()
 			keepInCompleteMode = true
 		case MetaForward:
-			o.buf.MoveToNextWord()
+			o.buf.ForwardWord()
 		case CharTranspose:
 			o.undo.add()
 			o.buf.Transpose()

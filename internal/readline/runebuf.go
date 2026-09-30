@@ -278,6 +278,23 @@ func (r *runeBuffer) MoveToNextWord() {
 	})
 }
 
+// ForwardWord moves to the end of the current or next word: emacs and GNU
+// readline's forward-word, and what aider's Ctrl+Right does. Strument: the
+// fork bound Ctrl+Right and Alt+F to MoveToNextWord, which lands on the start
+// of the following word — vim's w, which vim mode keeps.
+func (r *runeBuffer) ForwardWord() {
+	r.Refresh(func() {
+		i := r.idx
+		for i < len(r.buf) && runes.IsWordBreak(r.buf[i]) {
+			i++
+		}
+		for i < len(r.buf) && !runes.IsWordBreak(r.buf[i]) {
+			i++
+		}
+		r.idx = i
+	})
+}
+
 func (r *runeBuffer) MoveToEndWord() {
 	r.Refresh(func() {
 		// already at the end, so do nothing

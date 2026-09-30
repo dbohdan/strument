@@ -223,11 +223,15 @@ func TrimSpaceLeft(in []rune) []rune {
 	return in[firstIndex:]
 }
 
+// IsWordBreak reports whether a rune separates words. Strument: the underscore
+// is part of a word, as in prompt_toolkit (aider) and in every identifier, so
+// word motion and deletion treat snake_case names as one word.
 func IsWordBreak(i rune) bool {
 	switch {
 	case i >= 'a' && i <= 'z':
 	case i >= 'A' && i <= 'Z':
 	case i >= '0' && i <= '9':
+	case i == '_':
 	default:
 		return true
 	}
