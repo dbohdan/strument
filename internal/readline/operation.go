@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"dbohdan.com/strument/internal/readline/internal/platform"
 	"dbohdan.com/strument/internal/readline/internal/runes"
@@ -496,6 +497,17 @@ func (o *operation) getAndSetOffset(deadline chan struct{}) {
 	// TODO ???
 	o.t.Write([]byte(" \b"))
 
+	// Strument addition: never wait for the reply unbounded. A terminal that
+	// drops the query, or a link that loses the answer, left the prompt
+	// undrawn and the process deaf to Ctrl+C, since keys typed meanwhile are
+	// only buffered. Past the bound the prompt draws at column one, and a
+	// reply that arrives late is read and discarded as an unknown sequence.
+	if deadline == nil {
+		done := make(chan struct{})
+		timer := time.AfterFunc(cprTimeout, func() { close(done) })
+		defer timer.Stop()
+		deadline = done
+	}
 	if offset, err := o.t.GetCursorPosition(deadline); err == nil {
 		o.buf.SetOffset(offset)
 	}

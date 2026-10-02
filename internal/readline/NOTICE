@@ -89,3 +89,9 @@ Strument's changes to the vendored copy:
     the read and returns the typed text with ErrExternalEdit, for the caller to
     open in an editor (operation.go); any other key after Ctrl+X is handled as
     if Ctrl+X had not been pressed.
+
+  * The cursor position query sent before each prompt is bounded by
+    cprTimeout (operation.go, terminal.go). Upstream waited for the reply
+    without limit, so a terminal that never answered left the prompt undrawn
+    and Ctrl+C unread. Past the bound the prompt draws at column one, and a
+    late reply is discarded like any unrecognized sequence.

@@ -19,6 +19,10 @@ import (
 const (
 	// see waitForDSR
 	dsrTimeout = 250 * time.Millisecond
+	// how long a prompt waits for its cursor position report; longer than
+	// dsrTimeout because a slow link delays the answer, and the cost of
+	// giving up is only a prompt drawn as if at column one
+	cprTimeout = 1 * time.Second
 
 	maxAnsiLen = 32
 
