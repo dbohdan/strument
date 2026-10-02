@@ -131,7 +131,7 @@ func TestCommitToolExplainsWhyItDidNot(t *testing.T) {
 		{"auto-commits off", func(c *Coder) {
 			c.Repo = &countingRepo{}
 			c.AutoCommits = false
-		}, "--no-auto-commits"},
+		}, "turned committing off"},
 		{"dry run", func(c *Coder) {
 			c.Repo = &countingRepo{}
 			c.AutoCommits = true

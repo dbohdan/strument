@@ -44,7 +44,9 @@ type Coder struct {
 	// ShellWithheld records --no-shell. The flag can turn the bash tool off and
 	// cannot turn it on, so ApplyConfig has to remember it: a /reload must not
 	// undo a decision made on the command line.
-	ShellWithheld      bool
+	ShellWithheld bool
+	// CommitsWithheld records --no-auto-commits, for the same reason.
+	CommitsWithheld    bool
 	Stream             bool
 	SystemPromptPrefix string
 	// PromptCode and PromptAsk are user replacements for the active mode's

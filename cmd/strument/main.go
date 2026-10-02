@@ -171,6 +171,7 @@ func (c *chatCmd) Run() error {
 	// calls. Adding one here instead is the bug that made three reloads look
 	// like they had worked; internal/repl's reload test guards against it.
 	cdr.ShellWithheld = c.NoShell
+	cdr.CommitsWithheld = c.NoAutoCommits
 	// Before ApplyConfig, which fills in the config half. The first version of
 	// this set it *after*, so auto_approve was written to a nil Grants and
 	// silently dropped -- found by running the binary, not by a test.
@@ -193,7 +194,6 @@ func (c *chatCmd) Run() error {
 			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
-		cdr.AutoCommits = !c.NoAutoCommits && !cfg.NoAutoCommits
 		cdr.Platform.InGit = true
 	}
 
@@ -989,7 +989,6 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ResumeNote:           resumeNote,
 		SaveResume:           saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
 		ApplyEgress:          applyEgressConfig,
-		NoAutoCommits:        c.NoAutoCommits,
 		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		RefreshCommitMessage: refreshCommitMessage,
 		// Kong's enum has already refused anything else, so the ok is never

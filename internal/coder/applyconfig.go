@@ -74,6 +74,11 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	// undo a decision made on the command line, and a config saying
 	// `shell = False` is a standing decision a flag must not silently reverse.
 	c.SuggestShellCommands = !cfg.NoShell && !c.ShellWithheld
+	// Like the shell: the flag can turn commits off and the config cannot turn
+	// them back on. A reload also discards a /commits made this session, as it
+	// discards /env changes, and returns to what the config and flag say.
+	// Without a repository the value is inert; commitTurn checks Repo first.
+	c.AutoCommits = !cfg.NoAutoCommits && !c.CommitsWithheld
 	c.AnchoredEdits = cfg.AnchoredEdits
 	c.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
 	c.ObservationViaRunCode = cfg.ObservationViaRunCode

@@ -124,7 +124,7 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	case c.Repo == nil:
 		return "There is no git repository, so nothing was committed. Your edits are applied to the files."
 	case !c.AutoCommits:
-		return "The user turned committing off for this session (--no-auto-commits), so nothing was committed. Your edits are applied to the files."
+		return "The user turned committing off for this session, so nothing was committed. Your edits are applied to the files."
 	case c.DryRun:
 		return "This is a dry run: nothing was written, so there is nothing to commit."
 	case c.turnSnap.empty():

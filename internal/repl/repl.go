@@ -96,10 +96,6 @@ type Options struct {
 	// lives is the binary's business. nil leaves the session's skills alone.
 	Rediscover func() []skill.Skill
 
-	// NoAutoCommits is --no-auto-commits. /reload re-applies `auto_commits`
-	// from the config, and the flag has to keep winning over it there too.
-	NoAutoCommits bool
-
 	Color       bool
 	HistoryFile string
 
