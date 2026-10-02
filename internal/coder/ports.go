@@ -76,13 +76,14 @@ type ConfirmResult struct {
 // re-exported here because every call site reads better as coder.GrantBash,
 // and because one definition cannot drift from the other.
 const (
-	GrantBash      = config.GrantBash
-	GrantWebfetch  = config.GrantWebfetch
-	GrantWebsearch = config.GrantWebsearch
-	GrantSteps     = config.GrantSteps
-	GrantContext   = config.GrantContext
-	GrantAddOutput = config.GrantAddOutput
-	GrantAll       = config.GrantAll
+	GrantBash        = config.GrantBash
+	GrantWebfetch    = config.GrantWebfetch
+	GrantWebsearch   = config.GrantWebsearch
+	GrantReadOutside = config.GrantReadOutside
+	GrantSteps       = config.GrantSteps
+	GrantContext     = config.GrantContext
+	GrantAddOutput   = config.GrantAddOutput
+	GrantAll         = config.GrantAll
 )
 
 // GrantNames are the individual permissions, in the order help text lists them.
@@ -115,7 +116,13 @@ type ConfirmRequest struct {
 	// search instance. Separate from Command and URL because it is neither —
 	// there is no destination to weigh here, the user already pinned that in
 	// their config, so the query is the whole of what there is to read.
-	Query   string
+	Query string
+	// Path is a read or listing outside the project, absolute, with the
+	// symlink target after an arrow when it resolves elsewhere: what is read is
+	// the target, so the target is what has to be on screen. Scope is the
+	// directory an "a" answer covers, empty when none is offered.
+	Path    string
+	Scope   string
 	Purpose string
 	// Note is the harness's own line about this request, shown after it and
 	// before the question: approve_model's verdict on a command it did not

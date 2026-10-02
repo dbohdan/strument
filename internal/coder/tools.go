@@ -153,7 +153,7 @@ func readOnlyTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path":   strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files."),
+					"path":   strProp("The file's path, relative to the project root. An absolute path inside the project or under the platform's standard temporary directory also works; relative is preferred for project files. Any other absolute path asks the user first."),
 					"offset": intProp("The first line to return, 1-based. Omit to start at the beginning."),
 					"limit":  intProp("How many lines to return. Omit for a default window."),
 				},
@@ -209,7 +209,7 @@ func readOnlyTools() []llm.ToolDef {
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"path": strProp("The directory, relative to the project root. Omit for the root itself. An absolute path inside the project or under the platform's standard temporary directory also works; relative is preferred for project directories."),
+					"path": strProp("The directory, relative to the project root. Omit for the root itself. An absolute path inside the project or under the platform's standard temporary directory also works; relative is preferred for project directories. Any other absolute path asks the user first."),
 				},
 			},
 		},

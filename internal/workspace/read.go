@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -64,20 +63,18 @@ type FileText struct {
 // that receives a silently truncated file will edit against text that is not
 // there. Truncated says so, and the tool layer turns it into a paging hint.
 func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
-	raw := rel
-	full, rel, reason := w.contain(raw)
-	if reason != "" {
-		return FileText{}, errors.New(reason)
+	full, rel, err := w.containErr(rel)
+	if err != nil {
+		return FileText{}, err
 	}
 	if rel == "" {
 		return FileText{}, errors.New("no path given")
 	}
-	// Temporary-directory paths are outside the project, so project ignore rules
-	// do not apply to them. The path was already restricted to the standard temp
-	// directories by contain. A project itself may also live under /tmp, so the
-	// original spelling must be absolute before this exception applies.
-	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
-	if !absolute || !UnderTempDir(full) {
+	// A path outside the project — temp, granted, or pinned — comes back with
+	// rel absolute, and the project's ignore rules do not apply to it. A
+	// project that itself lives under /tmp gets a relative rel for its own
+	// files, so its ignore rules still bind them.
+	if !isAbsRel(rel) {
 		// The ignore rules bind here too. They always bound ls, glob, and grep,
 		// which is what made this easy to miss: a gitignored .env was invisible to
 		// every way of finding it and one guessed filename away from being read.
@@ -243,19 +240,15 @@ func HumanBytes(n int64) string {
 // two implementations is a gate with one hole in it. ReadImage is the second
 // caller and the reason this exists.
 func (w *Workspace) openable(rel string, maxBytes int64) (string, string, os.FileInfo, error) {
-	raw := rel
-	full, rel, reason := w.contain(raw)
-	if reason != "" {
-		return "", "", nil, errors.New(reason)
+	full, rel, err := w.containErr(rel)
+	if err != nil {
+		return "", "", nil, err
 	}
 	if rel == "" {
 		return "", "", nil, errors.New("no path given")
 	}
-	// Same temp-directory exception as Read, and for the same reason: a
-	// project itself may live under /tmp, so the original spelling must be
-	// absolute before the exception applies.
-	absolute := filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)
-	if !absolute || !UnderTempDir(full) {
+	// The same exception as Read's, for the same reason.
+	if !isAbsRel(rel) {
 		if err := w.refuseIgnored(rel, full); err != nil {
 			return "", "", nil, err
 		}

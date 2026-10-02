@@ -704,6 +704,11 @@ func confirmSuffix(req coder.ConfirmRequest) string {
 	if req.GroupSession && req.Origin != "" {
 		return " (Y/n/a=all on " + req.Origin + " this run) "
 	}
+	// The outside-read gate's "a" is a directory, for the run. Same reason
+	// to say both.
+	if req.GroupSession && req.Scope != "" {
+		return " (Y/n/a=all under " + req.Scope + " this run) "
+	}
 	if req.Group != "" {
 		return " (Y/n/a=all turn) "
 	}
@@ -749,6 +754,12 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// about to leave for it, and nothing else competes for the line.
 		r.out.Toolf("\u2039websearch\u203a")
 		r.out.Printf("%s", req.Query)
+	case req.Path != "":
+		// The read tool takes no purpose, so the path alone: it is the whole
+		// of what is being decided, and the arrow to a symlink's target is
+		// part of it.
+		r.out.Toolf("\u2039read\u203a")
+		r.out.Printf("%s", req.Path)
 	}
 	// The harness's verdict on what was just shown — approve_model declining
 	// a command — comes after it, where it reads as a comment on it.

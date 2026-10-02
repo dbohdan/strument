@@ -16,6 +16,9 @@ const (
 	GrantBash      = "bash"      // run a shell command the model wrote
 	GrantWebfetch  = "webfetch"  // fetch a URL the model chose
 	GrantWebsearch = "websearch" // send the model's query to the configured backend
+	// GrantReadOutside answers "Read this file outside the project?" and its
+	// ls twin. Secret-shaped files stay refused whatever it says.
+	GrantReadOutside = "read-outside"
 	// GrantSteps answers "Keep going?" at the step budget. Not a capability:
 	// the model gains nothing it did not have, the turn simply continues. Worth
 	// knowing before typing it that the budget resets each time it is answered,
@@ -44,7 +47,7 @@ const (
 )
 
 // GrantNames are the individual permissions, in the order help text lists them.
-var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantSteps, GrantContext, GrantAddOutput}
+var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantReadOutside, GrantSteps, GrantContext, GrantAddOutput}
 
 // ParseGrants turns values into the set AutoConfirmer reads. Each value
 // may be a comma-separated list, and the flag may repeat, so

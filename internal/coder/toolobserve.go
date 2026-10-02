@@ -83,6 +83,9 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 		return "The required \"path\" argument was missing.", nil
 	}
 
+	if msg := i.outside(a.Path, false); msg != "" {
+		return msg, nil
+	}
 	// An image answers as an image, before the text path refuses it for not
 	// being UTF-8. The offset and limit arguments are windows into lines and
 	// mean nothing here, so they are ignored rather than half-honoured.
@@ -404,6 +407,9 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 		return msg
 	}
 
+	if msg := i.outside(a.Path, true); msg != "" {
+		return msg
+	}
 	entries, total, err := i.Files.List(a.Path)
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
@@ -642,4 +648,19 @@ func (i *Inspector) readImage(path string) (string, []llm.ImageSource, bool) {
 	i.Out.Toolf("Read %s", src.String())
 	return quoteToolArg(path) + " is an image; it is attached below.",
 		[]llm.ImageSource{src}, true
+}
+
+// outside asks about a path outside the project root before the call is made,
+// so that a grant lets the call go ahead and a decline answers it. "" means
+// carry on: the path is inside, granted now, or refused below for some other
+// reason the call itself will give.
+func (i *Inspector) outside(path string, isDir bool) string {
+	if i.AskOutside == nil {
+		return ""
+	}
+	oe := i.Files.OutsideOf(path)
+	if oe == nil {
+		return ""
+	}
+	return i.AskOutside(oe.Path, isDir)
 }

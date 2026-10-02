@@ -37,7 +37,7 @@ func TestSubcommandCompletion(t *testing.T) {
 		{"/consult scope ", []string{"none", "files", "chat"}},
 		{"/yes ", []string{"add", "drop", "reset"}},
 		{"/yes add b", []string{"ash"}},
-		{"/yes add bash ", []string{"bash", "webfetch", "websearch", "steps", "context", "add-output", "all"}},
+		{"/yes add bash ", []string{"bash", "webfetch", "websearch", "read-outside", "steps", "context", "add-output", "all"}},
 	} {
 		got := completionsFor(r.completer(), tc.line)
 		if !slices.Equal(got, tc.want) {

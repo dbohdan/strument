@@ -1107,6 +1107,9 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 			fmt.Println("‹webfetch› (no purpose given)")
 		}
 		fmt.Println(render.Sanitize(req.URL))
+	case req.Path != "":
+		fmt.Println("‹read›")
+		fmt.Println(render.Sanitize(req.Path))
 	}
 	// approve_model's verdict, after the command it is about, as the REPL shows
 	// it. Missing here at first: the REPL got the note and this surface did

@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,6 +52,7 @@ import (
 // caller-facing reason that is "" when the path is fine — the same shape the
 // tool layer uses, because these become sentences a model reads.
 func (w *Workspace) contain(raw string) (full, rel, reason string) {
+	raw = expandHome(raw)
 	// First, and ahead of the pinned exemption below rather than after it.
 	// .git is machine state at any depth and however the caller spells it, and
 	// the exemption must stay a record of user intent (/add, /read-only). The
@@ -103,7 +105,7 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		// out-of-root before this could be reached.
 		relBack, err := filepath.Rel(rootAbs, full)
 		if err != nil || EscapesRoot(relBack) {
-			return "", "", "that path is outside the project root"
+			return w.outside(full)
 		}
 		if UnderGitDir(relBack) {
 			return "", "", gitDirRefusal
@@ -132,12 +134,64 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		return "", "", "the project root cannot be resolved"
 	}
 	if escapes(rootAbs, full) {
-		return "", "", "that path is outside the project root"
+		abs, err := filepath.Abs(full)
+		if err != nil {
+			return "", "", "that path is outside the project root"
+		}
+		return w.outside(abs)
 	}
 	if escapes(ResolveSymlinks(rootAbs), ResolveSymlinks(full)) {
 		return "", "", "that path resolves outside the project root through a symlink"
 	}
 	return full, rel, ""
+}
+
+// outsideReason is contain's reason for a path outside the root that nothing
+// has granted yet. Callers turn it into an *OutsideError, which the tool layer
+// can ask the user about; every other reason is a refusal.
+const outsideReason = "that path is outside the project root"
+
+// OutsideError is a read or listing of a path outside the project root that
+// has not been granted. Path is absolute and cleaned. The model's tools ask the
+// user about it (coder/outside.go); `strument tool`, which asks no one, reports
+// it as the refusal it always was.
+type OutsideError struct{ Path string }
+
+func (e *OutsideError) Error() string { return outsideReason }
+
+// outside is contain's answer for an absolute path outside the root: granted,
+// refused as secret-shaped, or askable.
+//
+// The secret check comes first, before anyone is asked: a question whose
+// "yes" would be followed by a refusal is a question the user should not have
+// been shown.
+//
+// What is returned for a granted path has rel absolute, like a temp path's,
+// which is how callers know the project's ignore rules do not apply to it.
+func (w *Workspace) outside(full string) (string, string, string) {
+	full = filepath.Clean(full)
+	if err := w.refuseSecret(full, full); err != nil {
+		return "", "", err.Error()
+	}
+	if w.OutsideGranted != nil && w.OutsideGranted(full) {
+		return full, filepath.ToSlash(full), ""
+	}
+	return full, "", outsideReason
+}
+
+// containErr is contain with its reason as an error: an *OutsideError for an
+// askable path, a plain one otherwise.
+func (w *Workspace) containErr(raw string) (full, rel string, err error) {
+	full, rel, reason := w.contain(raw)
+	switch reason {
+	case "":
+		return full, rel, nil
+	case outsideReason:
+		if full != "" {
+			return "", "", &OutsideError{Path: full}
+		}
+	}
+	return "", "", errors.New(reason)
 }
 
 // UnderTempDir reports whether abs lies under the platform's standard
@@ -324,4 +378,35 @@ func (w *Workspace) refuseIgnored(rel, full string) error {
 		return fmt.Errorf("%s is ignored by the project, so it is out of scope", rel)
 	}
 	return nil
+}
+
+// OutsideOf reports a path that lies outside the project root and has not been
+// granted, or nil for anything else — inside, granted, or refused for another
+// reason, which the read or listing itself will give.
+func (w *Workspace) OutsideOf(raw string) *OutsideError {
+	_, _, err := w.containErr(raw)
+	var oe *OutsideError
+	if errors.As(err, &oe) {
+		return oe
+	}
+	return nil
+}
+
+// expandHome turns a leading "~" or "~/" into the home directory, the way a
+// shell would. Without it the model has no way to name a file in the home
+// directory: the read tool has no shell to expand the tilde, and nothing tells
+// the model where home is. Watched live, MiMo asked to read
+// ~/.config/x/config.star got "no such file" for the project-relative
+// "~/.config", then spent the turn guessing at /root. Pi expands the tilde for
+// the same reason. "~user" is left alone; it names someone else's home, which
+// is not a thing to make easy.
+func expandHome(raw string) string {
+	if raw != "~" && !strings.HasPrefix(raw, "~/") && !strings.HasPrefix(raw, `~\`) {
+		return raw
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return raw
+	}
+	return filepath.Join(home, raw[1:])
 }

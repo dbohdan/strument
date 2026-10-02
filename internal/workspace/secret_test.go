@@ -72,3 +72,30 @@ func TestSecretFilesAreNotRead(t *testing.T) {
 		t.Errorf("a pinned secret file should read: %v", err)
 	}
 }
+
+// "~/" means the home directory, as in a shell: the read tool has no shell to
+// expand it, and the model has no other way to learn where home is.
+func TestTildeIsTheHomeDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if got := expandHome("~/.config/x"); got != filepath.Join(home, ".config", "x") {
+		t.Errorf("~/.config/x = %q", got)
+	}
+	if got := expandHome("~"); got != home {
+		t.Errorf("~ = %q", got)
+	}
+	for _, s := range []string{"~user/x", "a/~/b", "main.go"} {
+		if got := expandHome(s); got != s {
+			t.Errorf("%q expanded to %q", s, got)
+		}
+	}
+	// A home under the temporary directory is readable by absolute path, so a
+	// read through "~/" succeeding is the expansion working.
+	if err := os.WriteFile(filepath.Join(home, "notes.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ft, err := New(t.TempDir()).Read("~/notes.txt", 0, 0)
+	if err != nil || len(ft.Lines) != 1 || ft.Lines[0] != "hi" {
+		t.Errorf("read ~/notes.txt: %+v, %v", ft, err)
+	}
+}

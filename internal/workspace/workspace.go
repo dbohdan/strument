@@ -13,7 +13,6 @@
 package workspace
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -125,6 +124,11 @@ type Workspace struct {
 	// pinned file is exempt, which is how the user says "this one, yes".
 	// nil marks nothing.
 	Secret *secretfile.Matcher
+	// OutsideGranted reports whether an absolute path outside the root has been
+	// granted for reading: a file, or anything under a directory, the user
+	// approved this run. nil grants nothing, and read and ls answer with an
+	// *OutsideError for the caller to ask about.
+	OutsideGranted func(abs string) bool
 }
 
 // skipAlways is the only unconditional exclusion: the repository's own
@@ -373,12 +377,14 @@ func (w *Workspace) Files() ([]string, Truncated, error) {
 // limit without saying so, and a model shown exactly 1,000 entries could only
 // guess whether that was the directory or the tool.
 func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
-	raw := dir
-	full, rel, reason := w.contain(raw)
-	if reason != "" {
-		return nil, 0, errors.New(reason)
+	full, rel, err := w.containErr(dir)
+	if err != nil {
+		return nil, 0, err
 	}
-	temp := (filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`)) && UnderTempDir(full)
+	// Outside the project — a temp directory, a granted one, a pinned file's
+	// — rel comes back absolute, and the project's ignore rules have nothing
+	// to say about it.
+	temp := isAbsRel(rel)
 	var domain []string
 	if rel != "" {
 		domain = strings.Split(rel, "/")
@@ -500,4 +506,10 @@ func matchSegments(pat, seg []string) bool {
 		pat, seg = pat[1:], seg[1:]
 	}
 	return len(seg) == 0
+}
+
+// isAbsRel reports whether a rel that contain returned is absolute, which it
+// is exactly when the path lies outside the project root.
+func isAbsRel(rel string) bool {
+	return strings.HasPrefix(rel, "/") || filepath.IsAbs(filepath.FromSlash(rel))
 }

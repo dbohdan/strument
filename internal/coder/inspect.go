@@ -43,6 +43,11 @@ type Inspector struct {
 	// anchors, and reading the whole file afterwards must agree with both, so
 	// the registry has to see every line either way.
 	AnchorRows func(rel string, start, count int) string
+	// AskOutside is asked about a read or listing outside the project root
+	// before it is refused: "" when the user granted it, so the call goes
+	// ahead, or the model's text for a decline. nil asks no one, which is
+	// `strument tool`: the path is refused as it always was.
+	AskOutside func(abs string, isDir bool) string
 }
 
 // ToolReporter is the outcome line and nothing else — the narrow half of Output
@@ -102,6 +107,7 @@ func (c *Coder) inspector() *Inspector {
 		Root: c.Root, Files: c.Files, RepoMap: c.RepoMap, Out: c.Out,
 		Observe:    func(rel string) { c.shown.note(rel, c.fullPath(rel)) },
 		AnchorRows: c.anchorRows,
+		AskOutside: c.askOutside,
 	}
 }
 

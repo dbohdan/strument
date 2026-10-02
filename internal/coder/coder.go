@@ -401,6 +401,8 @@ type Coder struct {
 	// regression would be silent, and would be exactly the session-wide
 	// silence on shell commands the ConfirmResult comment warns against.
 	sessionAutoApprove map[string]bool
+	// outside are the run's grants for reading outside the project root.
+	outside outsideGrants
 }
 
 type fence struct{ open, close string }
@@ -512,6 +514,7 @@ func New(root string, model *config.Model) *Coder {
 	// lives. A predicate rather than a snapshot, so /add and /drop need no
 	// bookkeeping and the two lists cannot go stale.
 	c.Files.Pinned = c.isPinned
+	c.Files.OutsideGranted = c.outsideGranted
 	return c
 }
 

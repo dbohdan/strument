@@ -1238,6 +1238,7 @@ permissions themselves:
 | `bash` | Run a shell command the model wrote |
 | `webfetch` | Fetch a URL the model chose |
 | `websearch` | Send the model's query to the configured backend |
+| `read-outside` | Read a file or list a directory outside the project |
 | `steps` | "Keep going?" at the step budget |
 | `context` | "Send it anyway?" over the model's input limit |
 | `add-output` | "Add … to the chat?" after `/run`, `/check`, or `/consult` |
@@ -1248,11 +1249,23 @@ It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
 at startup, naming the ones that would have worked — a permission that silently
 was not granted is one you find out about at the prompt it was meant to answer.
 
-The permissions fall into three categories: `bash`, `webfetch`, and `websearch`
-approve capabilities; `steps` and `context` answer continuation prompts; and
+The permissions fall into three categories: `bash`, `webfetch`, `websearch`, and
+`read-outside` approve capabilities; `steps` and `context` answer continuation prompts; and
 `add-output` approves adding command output to the chat. In noninteractive use,
 these names identify which prompts are answered without granting unrelated
 capabilities.
+
+**`read-outside`** answers the question `read` and `ls` ask before touching a
+path outside the project root. At the prompt, `y` allows that one file (or
+directory listing) for the rest of the run, and `a` allows everything under its
+directory. `a` is not offered when that directory is your home directory or a
+filesystem root. A symlink is shown with its target, and a grant covers
+targets, so a link inside an allowed directory that leads out of it is asked
+about again. Secret-shaped files ([`secret_files_add`](#secret_files_add-and-secret_files_exempt))
+are refused before any question, whatever this grants. `glob` and `grep`
+stay inside the project. `approve_model` does not answer this prompt: its
+rubric asks about anything outside the project root by design, and it was
+measured on shell commands only.
 
 **`--yes steps` removes the step limit rather than raising it.** The budget
 resets each time the prompt is answered, so granting it makes `max_steps` an
