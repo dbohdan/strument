@@ -226,6 +226,9 @@ type fileGlobals struct {
 	hasGitSign bool
 	gitSignVal string
 
+	hasAutoCommits bool
+	autoCommitsVal bool
+
 	hasEnvAllow bool
 	envAllowVal []string
 
@@ -555,6 +558,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasGitSign {
 		cfg.GitSign = user.gitSignVal
 	}
+	if user.hasAutoCommits {
+		cfg.NoAutoCommits = !user.autoCommitsVal
+	}
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
@@ -673,6 +679,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasGitSign {
 			cfg.GitSign = project.gitSignVal
+		}
+		if project.hasAutoCommits {
+			cfg.NoAutoCommits = !project.autoCommitsVal
 		}
 		// Whole-value like check_auto, not per-element: this is one decision
 		// about what the model's commands may see, and a project's word must be
@@ -1162,6 +1171,15 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 			out.hasApproveModel = true
 			out.approveModelVal = &cp
 		}
+	}
+
+	if ac, ok := globals["auto_commits"]; ok {
+		b, ok := ac.(starlark.Bool)
+		if !ok {
+			return nil, fmt.Errorf("%s: `auto_commits` must be a boolean, got %s", path, ac.Type())
+		}
+		out.hasAutoCommits = true
+		out.autoCommitsVal = bool(b)
 	}
 
 	if sh, ok := globals["shell"]; ok {

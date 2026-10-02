@@ -224,6 +224,7 @@ var projectKeyOrder = []string{
 	"hasShellTimeout",
 	"hasRetryTimeout",
 	"hasGitSign",
+	"hasAutoCommits",
 	"hasEnvAllow",
 	"hasAutoApprove",
 	"hasApproveModel",
@@ -419,6 +420,16 @@ var projectKeys = map[string]projectKey{
 				return "commits are not signed"
 			}
 			return "signs the commits Strument makes: " + red(g.gitSignVal)
+		},
+	},
+	"hasAutoCommits": {
+		name: "auto_commits",
+		set:  func(g *fileGlobals) bool { return g.hasAutoCommits },
+		detail: func(g *fileGlobals, _ func(string) string) string {
+			if g.autoCommitsVal {
+				return "a turn that changes a file ends in a commit"
+			}
+			return "edits are written but not committed"
 		},
 	},
 	"hasEnvAllow": {

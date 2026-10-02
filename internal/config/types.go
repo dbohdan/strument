@@ -364,6 +364,11 @@ type Config struct {
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes
 	// from the `git_sign` setting (a boolean or a key-id string).
 	GitSign string
+	// NoAutoCommits is `auto_commits = False`: edits are written to the
+	// working tree and not committed. Negated so the zero value is the
+	// default, as with NoShell. --no-auto-commits sets the same thing for
+	// one run and wins over the config either way.
+	NoAutoCommits bool
 	// EnvAllow names environment variables to pass to model-run commands
 	// (the bash tool, checks, the scraper command) on top of the built-in
 	// default allowlist. See coder/envallow.go. Empty means defaults only.

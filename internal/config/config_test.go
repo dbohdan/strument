@@ -209,6 +209,40 @@ func TestGitSignParsing(t *testing.T) {
 	}
 }
 
+// TestAutoCommits: absent means commits on, False turns them off, a trusted
+// project may decide either way, and a non-boolean fails the load by name.
+func TestAutoCommits(t *testing.T) {
+	for _, tc := range []struct {
+		expr string
+		off  bool
+	}{{"", false}, {"auto_commits = True", false}, {"auto_commits = False", true}} {
+		cfg, err := Load(harness(t, userConfig+"\n"+tc.expr+"\n", "", testEnv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.NoAutoCommits != tc.off {
+			t.Errorf("%q: NoAutoCommits = %v, want %v", tc.expr, cfg.NoAutoCommits, tc.off)
+		}
+	}
+
+	opts := harness(t, userConfig+"\nauto_commits = False\n", "auto_commits = True\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NoAutoCommits {
+		t.Error("a trusted project's auto_commits = True should win")
+	}
+
+	if _, err := Load(harness(t, userConfig+"\nauto_commits = 1\n", "", testEnv)); err == nil ||
+		!strings.Contains(err.Error(), "auto_commits") {
+		t.Errorf("a non-boolean auto_commits should fail: %v", err)
+	}
+}
+
 func TestAskEditFormatRejectedInConfig(t *testing.T) {
 	// "ask" is a runtime-only format; a config that sets it must fail.
 	src := `

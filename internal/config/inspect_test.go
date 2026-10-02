@@ -50,6 +50,7 @@ sandbox_write = ["{{writable}}"]
 shell_timeout = 30
 retry_timeout = 600
 git_sign = "ABCD1234"
+auto_commits = False
 env_allow = ["PATH", "HOME"]
 auto_approve = ["websearch"]
 approve_model = decision_model("systemone", "laya", url = "http://localhost:11435/v1/systemone")

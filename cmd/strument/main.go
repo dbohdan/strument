@@ -193,7 +193,7 @@ func (c *chatCmd) Run() error {
 			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
-		cdr.AutoCommits = !c.NoAutoCommits
+		cdr.AutoCommits = !c.NoAutoCommits && !cfg.NoAutoCommits
 		cdr.Platform.InGit = true
 	}
 
@@ -989,6 +989,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		ResumeNote:           resumeNote,
 		SaveResume:           saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
 		ApplyEgress:          applyEgressConfig,
+		NoAutoCommits:        c.NoAutoCommits,
 		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		RefreshCommitMessage: refreshCommitMessage,
 		// Kong's enum has already refused anything else, so the ok is never

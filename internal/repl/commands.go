@@ -972,6 +972,11 @@ func cmdReload(_ context.Context, r *REPL, _ string) string {
 	if r.opts.Git != nil {
 		r.opts.Git.Sign = cfg.GitSign
 	}
+	// Like /env, a reload discards this session's /commits and returns to
+	// what the config and the command line say.
+	if r.coder.Repo != nil {
+		r.coder.AutoCommits = !r.opts.NoAutoCommits && !cfg.NoAutoCommits
+	}
 	// The ports have to be rebuilt rather than copied, because a proxy lives
 	// inside a transport inside a closure. Leaving them alone is what made a
 	// reload look like it had worked when it had not.

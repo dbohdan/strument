@@ -42,6 +42,7 @@ The loader reads these module-level variables after running your file:
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
 | `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
+| `auto_commits` | boolean | Optional. Whether a turn that changes a file ends in a commit. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `auto_approve` | list of strings | Optional. Prompts approved automatically, the standing form of `--yes`. See below. |
@@ -811,6 +812,21 @@ three of twelve tasks to a provider's rate limits that outlasted the minute.
 
 Side calls (commit messages, session notes, compaction) keep their own shorter
 ladder, since each runs under a budget of its own.
+
+### `auto_commits`
+
+Whether a turn that edits files ends in a commit. `True` is the default;
+`False` writes the edits to the working tree and leaves committing to you:
+
+```python
+auto_commits = False
+```
+
+It is the standing form of `--no-auto-commits`, and the flag wins over it
+either way. `/commits on|off` changes the setting for the session, and
+`/reload` returns to what the config and the command line say, as it does for
+`/env`. With commits off, `/undo` and `/diff` still work. A trusted project
+config may set it too.
 
 ### `git_sign`
 
