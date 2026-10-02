@@ -299,3 +299,27 @@ func TestApproveRubricIsTheOneEvaluated(t *testing.T) {
 		t.Errorf("instructions differ from the eval's:\n go: %q\npy: %q", approveInstructions, b.String())
 	}
 }
+
+// TestSecretPathsGoToTheUser: a command naming a secret-shaped file is asked
+// about with the path named, even with a decision model that would approve
+// anything and an "a" already given this turn.
+func TestSecretPathsGoToTheUser(t *testing.T) {
+	c := testCoder(t)
+	c.Out = &captureOut{}
+	rc := &recordingConfirmer{answer: false}
+	c.Confirm = rc
+	c.SuggestShellCommands = true
+	c.Sandbox = SandboxState{Active: true}
+	c.turnAutoApprove["shell"] = true
+	fd := &fixedDecider{p: 1}
+	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "laya", Threshold: 0.9}
+	if _, ran := c.runShell(context.Background(), toolCommand{command: `cat ".e"nv`, purpose: "look"}); ran {
+		t.Error("a declined command ran")
+	}
+	if fd.calls != 0 || len(rc.got) != 1 {
+		t.Fatalf("decider calls %d, prompts %d; want 0 and 1", fd.calls, len(rc.got))
+	}
+	if got := rc.got[0]; !strings.Contains(got.Note, ".env") || got.Group != "" {
+		t.Errorf("prompt = %+v; want a note naming .env and no \"a\"", got)
+	}
+}

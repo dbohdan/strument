@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -1151,10 +1152,23 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
+	// A command that names a secret-shaped file goes to the user: not to
+	// approve_model, whose context is too small to be handed the patterns, and
+	// not to an earlier "a" this turn, which was about commands the sandbox
+	// bounds — and a sandbox bounds writes, not reads. --yes bash still
+	// answers it; a grant on the command line says what it says.
+	secretNote := ""
+	if c.Files != nil {
+		home, _ := os.UserHomeDir()
+		if p, pat, hit := secretInCommand(command, c.Root, home, c.Files.Secret); hit {
+			secretNote = fmt.Sprintf("Names a secret-shaped path: %s (pattern %q).", p, pat)
+			group = ""
+		}
+	}
 	// approve_model is asked only where the prompt would really be shown, and
 	// only under the sandbox, the same property that licenses "a" above.
-	approved, note := false, ""
-	if c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
+	approved, note := false, secretNote
+	if secretNote == "" && c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
 		approved, note = c.approveByModel(ctx, command, cmd.purpose)
 	}
 	if !approved {

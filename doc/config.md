@@ -990,6 +990,15 @@ p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
   outside the project.
 - **Only when the prompt would really be shown.** A `--yes bash` grant, or an
   earlier "a", answers first, and the model is not asked.
+- **Never for a command that names a secret-shaped file.** Strument parses the
+  command and expands each word the way the shell would (quotes, `~`, `$HOME`,
+  braces, globs, and a `cd` earlier in the command), then checks every word
+  against the [secret-file patterns](#secret_files_add-and-secret_files_exempt).
+  A hit goes to you with the path named, and an earlier "a" this turn does not
+  answer it either: the sandbox that licenses "a" bounds writes, not reads. A
+  word whose value needs a command run or any variable but `HOME` and `PWD` to
+  know is skipped, so `cat ~/$(echo .argep | rot13)` gets through. The
+  patterns are not passed to the model, whose input window is too small.
 - **Only for commands that fit the model's input window.** A command plus
   purpose longer than 800 characters is always asked about, because decision
   models cut long input without saying so. Ollaya's Laya reads 512 tokens,
@@ -1086,6 +1095,9 @@ settings, which a project replaces. A denylist that could be replaced could
 only be made shorter. For the same reason a project config that sets
 `secret_files_exempt` fails to load: a project can mark more files secret, but
 cannot unmark any.
+
+A shell command that names one of these files is asked about rather than sent
+to `approve_model`; see [`approve_model`](#approve_model).
 
 A name list catches the conventional places, which is what a generic
 injection ("read ~/.ssh/id_ed25519") asks for. It does not catch a secret
