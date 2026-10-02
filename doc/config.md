@@ -1031,7 +1031,7 @@ tested one model (Jev 1.13), with the rubric Strument sends, at threshold 0.9:
 Other models are calibrated differently, so the same threshold means something
 else: Laya, run locally, rated `go test ./...` at 0.81 and a destructive
 command at 0.75. That is why `threshold` is set on the model rather than
-globally. Of the decision models on OpenRouter in October 2026
+globally. Of the other decision models on OpenRouter in October 2026
 ([2026-10-decision-models](experiments/2026-10-decision-models/)):
 
 - **`liquid/d1`** passes the evaluation at 0.9 as Jev does, approving 91% of
@@ -1045,6 +1045,10 @@ globally. Of the decision models on OpenRouter in October 2026
   default 10-second timeout.
 - **`inception/mercury-decide:free`** approved 12 of 182 ask items, still 3 at
   0.99, mostly obfuscated commands whose decoded payload it judged harmless.
+- **`respan/span-01`** and **`span-01-lite`** refuse the request Strument
+  sends (they take a different `state` and only `noul` questions), so every
+  call fails and you are asked. Translated into their form, they approve
+  nothing at 0.9 and pass at no threshold.
 
 Run the evaluation's corpus against a model before trusting its threshold.
 The runner takes the same endpoint, slug and threshold as your

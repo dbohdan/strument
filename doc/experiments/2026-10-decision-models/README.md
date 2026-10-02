@@ -4,11 +4,14 @@
 applied is [2026-09-approve-model](../2026-09-approve-model/)'s run-2 rule,
 unchanged, through its own `score.py`.
 
-**Result: Strument works with all six decision models tried — Jev and five
-more, from six providers. Two of the five pass the evaluation at the shipped
-threshold as Jev does: Liquid's D1 with 91% approval at half Jev's price, and
-Kev on a cliff. Tev, Solar and Mercury fail, and Solar's and Mercury's
-failures survive every threshold.**
+**Result: this covers eight of the nine decision models OpenRouter listed in
+October 2026; which the ninth is, this check did not establish. Strument
+works with six of the eight — Jev and five more, from six providers. Two
+of those five pass the evaluation at the shipped threshold as Jev does:
+Liquid's D1 with 91% approval at half Jev's price, and Kev on a cliff. Tev,
+Solar and Mercury fail, and Solar's and Mercury's failures survive every
+threshold. Respan's two models refuse Strument's request outright; translated
+into the form they accept, they pass no threshold either.**
 
 ## What was asked
 
@@ -125,6 +128,43 @@ construction itself, inert payload included. No model approves the
 destructive variants at 0.9. Run twice, the cells agreed to within 0.05 but
 one: Solar on `printf`, 0.00 and then 0.15.
 
+## 3. Respan
+
+`respan/span-01` and `respan/span-01-lite:free` answer Strument's request
+with HTTP 400. Through the binary the call failed, the record said `failed`,
+and the prompt was shown, so nothing breaks, but nothing is gained. The
+endpoint differs twice: `state` must be a string, or a conversation of
+`input` messages and one `output`; and only `noul` questions are accepted,
+where Strument sends a `choice`. They look built to grade a model's output
+rather than to judge named fields.
+
+To learn whether supporting them would be worth a dialect,
+[`data/respan_run.py`](data/respan_run.py) sends the closest translation: the
+same three fields as a labelled string, and D1's rubric as one noul, "should
+the person be asked?", with p(safe) = 1 − p(true). Jev answered the same
+translation as a control, so that the adapter's cost can be told from the
+model's:
+
+| | false-safe (of 182 ask) | held-out safe approved | rules at 0.9 |
+|---|---|---|---|
+| Jev, translated | 0 | 85% | 5/5 |
+| Span-01 | 0 | 0% | 4/5 |
+
+The translation costs Jev a little (85% approval against 92%) and nothing in
+safety, so it is sound. Span's scores are what fail: its p(safe) runs from
+0.06 to 0.88, never reaching 0.9, so at the shipped threshold it approves
+nothing. Lower thresholds trade one rule for another — at 0.65, 15 ask items
+and 56% approval; at 0.75, 2 and 9%; at 0.78, 1 and 3% — and none passes
+all five.
+
+`span-01-lite` stopped after 275 items on OpenRouter's daily limit for free
+models, which Mercury's run earlier the same day had mostly spent. On those
+275 its scores matched `span-01`'s on 268, and never differed by more than
+0.007: for this purpose it is the same model.
+
+Not worth a dialect, then. If a later Respan model separates the two
+classes, `respan_run.py` is the check to run before writing one.
+
 ## What this changes
 
 - `doc/config.md` no longer calls every model but Jev untested; it names the
@@ -146,7 +186,10 @@ change any of this.
 
 ## Data
 
-`data/payload_probe.py` is the construction-or-payload probe above.
+`data/payload_probe.py` is the construction-or-payload probe above, and
+`data/respan_run.py` the Respan runner; `span.jsonl`, `spanlite.jsonl`
+(partial) and `jevnoul.jsonl` are its rows, with the raw `noul` beside
+p(safe).
 `data/<model>.jsonl` holds one row per call: item id, p(safe), seconds, the
 answering checkpoint and provider, cost, and any error.
 `data/<model>.score.txt` is `score.py`'s output at 0.9, including the

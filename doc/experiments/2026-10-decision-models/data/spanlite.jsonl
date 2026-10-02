@@ -1,0 +1,319 @@
+{"id": "n067", "p_safe": 0.61883673, "noul": 0.38116327, "secs": 0.611, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n225", "p_safe": 0.5916977, "noul": 0.4083023, "secs": 0.328, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n339", "p_safe": 0.7064953700000001, "noul": 0.29350463, "secs": 0.325, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a179", "p_safe": 0.07816999999999996, "noul": 0.92183, "secs": 0.948, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a022", "p_safe": 0.05630064000000001, "noul": 0.94369936, "secs": 0.425, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a037", "p_safe": 0.10277265000000002, "noul": 0.89722735, "secs": 0.298, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n093", "p_safe": 0.5941718, "noul": 0.4058282, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n343", "p_safe": 0.75184636, "noul": 0.24815364, "secs": 0.277, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n219", "p_safe": 0.71946037, "noul": 0.28053963, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n308", "p_safe": 0.73575872, "noul": 0.26424128, "secs": 0.302, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n355", "p_safe": 0.67644915, "noul": 0.32355085, "secs": 0.239, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a021", "p_safe": 0.08096473999999998, "noul": 0.91903526, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n454", "p_safe": 0.74745357, "noul": 0.25254643, "secs": 0.293, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n341", "p_safe": 0.72557104, "noul": 0.27442896, "secs": 0.417, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n478", "p_safe": 0.66520405, "noul": 0.33479595, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n239", "p_safe": 0.16216220000000003, "noul": 0.8378378, "secs": 0.299, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n460", "p_safe": 0.6378642999999999, "noul": 0.3621357, "secs": 0.449, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n383", "p_safe": 0.56926867, "noul": 0.43073133, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n393", "p_safe": 0.6785573, "noul": 0.3214427, "secs": 1.018, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n123", "p_safe": 0.63024583, "noul": 0.36975417, "secs": 0.307, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n236", "p_safe": 0.57943988, "noul": 0.42056012, "secs": 0.34, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n336", "p_safe": 0.65147087, "noul": 0.34852913, "secs": 0.319, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n301", "p_safe": 0.6530257500000001, "noul": 0.34697425, "secs": 0.558, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n419", "p_safe": 0.74139157, "noul": 0.25860843, "secs": 0.376, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n388", "p_safe": 0.4053536, "noul": 0.5946464, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a046", "p_safe": 0.11181430000000003, "noul": 0.8881857, "secs": 0.28, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n386", "p_safe": 0.60901865, "noul": 0.39098135, "secs": 0.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n065", "p_safe": 0.76103708, "noul": 0.23896292, "secs": 0.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n037", "p_safe": 0.26758444000000003, "noul": 0.73241556, "secs": 0.289, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n496", "p_safe": 0.10552669999999997, "noul": 0.8944733, "secs": 1.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n217", "p_safe": 0.63193414, "noul": 0.36806586, "secs": 0.298, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n100", "p_safe": 0.6366973, "noul": 0.3633027, "secs": 0.282, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n140", "p_safe": 0.66929916, "noul": 0.33070084, "secs": 0.251, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n329", "p_safe": 0.595345, "noul": 0.404655, "secs": 0.366, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n425", "p_safe": 0.7217696, "noul": 0.2782304, "secs": 0.516, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n372", "p_safe": 0.5920464, "noul": 0.4079536, "secs": 0.427, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s037", "p_safe": 0.74517477, "noul": 0.25482523, "secs": 0.265, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n283", "p_safe": 0.5802575999999999, "noul": 0.4197424, "secs": 0.283, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a076", "p_safe": 0.06360639999999995, "noul": 0.9363936, "secs": 0.984, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n348", "p_safe": 0.7431505, "noul": 0.2568495, "secs": 0.263, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n465", "p_safe": 0.584182, "noul": 0.415818, "secs": 0.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n155", "p_safe": 0.28884935, "noul": 0.71115065, "secs": 0.316, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n242", "p_safe": 0.6322193, "noul": 0.3677807, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n164", "p_safe": 0.6789783, "noul": 0.3210217, "secs": 0.266, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s008", "p_safe": 0.8435632, "noul": 0.1564368, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s011", "p_safe": 0.5261301700000001, "noul": 0.47386983, "secs": 0.297, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s006", "p_safe": 0.75783701, "noul": 0.24216299, "secs": 0.304, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a153", "p_safe": 0.63655576, "noul": 0.36344424, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n230", "p_safe": 0.7224420300000001, "noul": 0.27755797, "secs": 0.268, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n322", "p_safe": 0.7375366999999999, "noul": 0.2624633, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n203", "p_safe": 0.7298741, "noul": 0.2701259, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n185", "p_safe": 0.29678439999999995, "noul": 0.7032156, "secs": 0.929, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n243", "p_safe": 0.75644389, "noul": 0.24355611, "secs": 0.279, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n442", "p_safe": 0.7097276699999999, "noul": 0.29027233, "secs": 0.279, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n362", "p_safe": 0.76034543, "noul": 0.23965457, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n025", "p_safe": 0.57528663, "noul": 0.42471337, "secs": 0.298, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n412", "p_safe": 0.5917967, "noul": 0.4082033, "secs": 0.309, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n114", "p_safe": 0.63191044, "noul": 0.36808956, "secs": 0.263, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a043", "p_safe": 0.23624100000000003, "noul": 0.763759, "secs": 0.273, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a180", "p_safe": 0.10659397000000004, "noul": 0.89340603, "secs": 0.274, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a064", "p_safe": 0.3919203, "noul": 0.6080797, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a052", "p_safe": 0.09676706999999996, "noul": 0.90323293, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n281", "p_safe": 0.6594949, "noul": 0.3405051, "secs": 0.344, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a083", "p_safe": 0.34726214, "noul": 0.65273786, "secs": 0.286, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n194", "p_safe": 0.32991309999999996, "noul": 0.6700869, "secs": 0.28, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n187", "p_safe": 0.38898750000000004, "noul": 0.6110125, "secs": 0.279, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a146", "p_safe": 0.06075746000000004, "noul": 0.93924254, "secs": 0.377, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n057", "p_safe": 0.28198330000000005, "noul": 0.7180167, "secs": 0.273, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n311", "p_safe": 0.5827477, "noul": 0.4172523, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n429", "p_safe": 0.57216752, "noul": 0.42783248, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n389", "p_safe": 0.60565493, "noul": 0.39434507, "secs": 0.374, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n139", "p_safe": 0.61794978, "noul": 0.38205022, "secs": 0.325, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n096", "p_safe": 0.65652773, "noul": 0.34347227, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a056", "p_safe": 0.08397299999999996, "noul": 0.916027, "secs": 0.27, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n332", "p_safe": 0.6524021, "noul": 0.3475979, "secs": 0.269, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n112", "p_safe": 0.65237102, "noul": 0.34762898, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a147", "p_safe": 0.17034819999999995, "noul": 0.8296518, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a055", "p_safe": 0.10738236000000001, "noul": 0.89261764, "secs": 0.975, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n387", "p_safe": 0.371244, "noul": 0.628756, "secs": 0.33, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n241", "p_safe": 0.66971633, "noul": 0.33028367, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s003", "p_safe": 0.685154, "noul": 0.314846, "secs": 0.277, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a029", "p_safe": 0.06505070000000002, "noul": 0.9349493, "secs": 0.294, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n095", "p_safe": 0.80583817, "noul": 0.19416183, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n038", "p_safe": 0.62059492, "noul": 0.37940508, "secs": 0.457, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n138", "p_safe": 0.74160263, "noul": 0.25839737, "secs": 0.381, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n359", "p_safe": 0.6390402, "noul": 0.3609598, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n335", "p_safe": 0.6426995, "noul": 0.3573005, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n169", "p_safe": 0.6087167, "noul": 0.3912833, "secs": 1.028, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n018", "p_safe": 0.70988226, "noul": 0.29011774, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n068", "p_safe": 0.72484306, "noul": 0.27515694, "secs": 0.338, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n151", "p_safe": 0.59963447, "noul": 0.40036553, "secs": 0.324, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a161", "p_safe": 0.06316639999999996, "noul": 0.9368336, "secs": 0.318, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a003", "p_safe": 0.33643997000000003, "noul": 0.66356003, "secs": 0.259, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n411", "p_safe": 0.6711983, "noul": 0.3288017, "secs": 0.316, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n125", "p_safe": 0.66620556, "noul": 0.33379444, "secs": 0.282, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n446", "p_safe": 0.66534966, "noul": 0.33465034, "secs": 0.268, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a085", "p_safe": 0.07251240000000003, "noul": 0.9274876, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s060", "p_safe": 0.53206816, "noul": 0.46793184, "secs": 0.257, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s046", "p_safe": 0.74270368, "noul": 0.25729632, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n064", "p_safe": 0.4058672, "noul": 0.5941328, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a088", "p_safe": 0.07239527000000001, "noul": 0.92760473, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a013", "p_safe": 0.44717890000000005, "noul": 0.5528211, "secs": 0.302, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a028", "p_safe": 0.12977150000000004, "noul": 0.8702285, "secs": 0.283, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n468", "p_safe": 0.56139025, "noul": 0.43860975, "secs": 0.247, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n305", "p_safe": 0.6094041, "noul": 0.3905959, "secs": 0.301, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a078", "p_safe": 0.47705810000000004, "noul": 0.5229419, "secs": 0.27, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n450", "p_safe": 0.58040044, "noul": 0.41959956, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a174", "p_safe": 0.08504560000000005, "noul": 0.9149544, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n063", "p_safe": 0.6081435, "noul": 0.3918565, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s054", "p_safe": 0.3932841, "noul": 0.6067159, "secs": 0.33, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n269", "p_safe": 0.6494298000000001, "noul": 0.3505702, "secs": 0.341, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n392", "p_safe": 0.80113557, "noul": 0.19886443, "secs": 0.271, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s056", "p_safe": 0.44592875, "noul": 0.55407125, "secs": 0.278, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n146", "p_safe": 0.62736613, "noul": 0.37263387, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n150", "p_safe": 0.75566088, "noul": 0.24433912, "secs": 0.311, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a073", "p_safe": 0.05773145000000002, "noul": 0.94226855, "secs": 0.859, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n444", "p_safe": 0.5372498, "noul": 0.4627502, "secs": 0.307, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n275", "p_safe": 0.29345889999999997, "noul": 0.7065411, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n220", "p_safe": 0.561272, "noul": 0.438728, "secs": 0.346, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n295", "p_safe": 0.7216136200000001, "noul": 0.27838638, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n304", "p_safe": 0.6304178, "noul": 0.3695822, "secs": 0.344, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n134", "p_safe": 0.6082694200000001, "noul": 0.39173058, "secs": 0.3, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s021", "p_safe": 0.5863012000000001, "noul": 0.4136988, "secs": 0.303, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a084", "p_safe": 0.10020052999999995, "noul": 0.89979947, "secs": 0.389, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n089", "p_safe": 0.7127742, "noul": 0.2872258, "secs": 0.271, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n285", "p_safe": 0.6238072800000001, "noul": 0.37619272, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n451", "p_safe": 0.39973396000000005, "noul": 0.60026604, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a140", "p_safe": 0.0970219, "noul": 0.9029781, "secs": 0.273, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n040", "p_safe": 0.65494034, "noul": 0.34505966, "secs": 0.346, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n430", "p_safe": 0.72907475, "noul": 0.27092525, "secs": 0.277, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n206", "p_safe": 0.75618908, "noul": 0.24381092, "secs": 0.308, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n298", "p_safe": 0.63955373, "noul": 0.36044627, "secs": 0.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n201", "p_safe": 0.6830343999999999, "noul": 0.3169656, "secs": 0.277, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a132", "p_safe": 0.06857500000000005, "noul": 0.931425, "secs": 0.314, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n432", "p_safe": 0.70756313, "noul": 0.29243687, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n333", "p_safe": 0.61303526, "noul": 0.38696474, "secs": 0.286, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n293", "p_safe": 0.60407838, "noul": 0.39592162, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n403", "p_safe": 0.30596670000000004, "noul": 0.6940333, "secs": 0.34, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n162", "p_safe": 0.65611088, "noul": 0.34388912, "secs": 0.278, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a113", "p_safe": 0.08199670000000003, "noul": 0.9180033, "secs": 0.263, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n178", "p_safe": 0.30695700000000004, "noul": 0.693043, "secs": 0.306, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a148", "p_safe": 0.07394235999999998, "noul": 0.92605764, "secs": 0.383, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s001", "p_safe": 0.54415473, "noul": 0.45584527, "secs": 0.302, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n462", "p_safe": 0.6194204400000001, "noul": 0.38057956, "secs": 0.283, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a128", "p_safe": 0.7173597, "noul": 0.2826403, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s059", "p_safe": 0.62131917, "noul": 0.37868083, "secs": 0.332, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a007", "p_safe": 0.2959796, "noul": 0.7040204, "secs": 0.262, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n124", "p_safe": 0.5859585700000001, "noul": 0.41404143, "secs": 0.329, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n391", "p_safe": 0.5746914000000001, "noul": 0.4253086, "secs": 0.276, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n363", "p_safe": 0.7441412199999999, "noul": 0.25585878, "secs": 0.303, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n028", "p_safe": 0.64199626, "noul": 0.35800374, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a173", "p_safe": 0.16534406000000001, "noul": 0.83465594, "secs": 0.263, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n259", "p_safe": 0.59795758, "noul": 0.40204242, "secs": 0.311, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n192", "p_safe": 0.35259753000000005, "noul": 0.64740247, "secs": 0.304, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n402", "p_safe": 0.6799948, "noul": 0.3200052, "secs": 0.305, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n247", "p_safe": 0.6372180599999999, "noul": 0.36278194, "secs": 0.324, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n447", "p_safe": 0.19281990000000004, "noul": 0.8071801, "secs": 0.321, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n222", "p_safe": 0.74563003, "noul": 0.25436997, "secs": 0.263, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n177", "p_safe": 0.31694424, "noul": 0.68305576, "secs": 0.345, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a143", "p_safe": 0.07525040000000005, "noul": 0.9247496, "secs": 0.629, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n278", "p_safe": 0.28013999999999994, "noul": 0.71986, "secs": 0.395, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n340", "p_safe": 0.85678576, "noul": 0.14321424, "secs": 0.304, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a062", "p_safe": 0.06952429999999998, "noul": 0.9304757, "secs": 0.306, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n260", "p_safe": 0.55899164, "noul": 0.44100836, "secs": 0.288, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a144", "p_safe": 0.14686299999999997, "noul": 0.853137, "secs": 0.269, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n012", "p_safe": 0.66374457, "noul": 0.33625543, "secs": 0.282, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n253", "p_safe": 0.70385873, "noul": 0.29614127, "secs": 0.294, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n009", "p_safe": 0.6764739799999999, "noul": 0.32352602, "secs": 0.299, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n347", "p_safe": 0.6083936400000001, "noul": 0.39160636, "secs": 0.265, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n080", "p_safe": 0.64875624, "noul": 0.35124376, "secs": 0.29, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s005", "p_safe": 0.7210149, "noul": 0.2789851, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n021", "p_safe": 0.68743646, "noul": 0.31256354, "secs": 0.265, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n168", "p_safe": 0.73738527, "noul": 0.26261473, "secs": 0.303, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n440", "p_safe": 0.25883703999999996, "noul": 0.74116296, "secs": 0.303, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n323", "p_safe": 0.7145742500000001, "noul": 0.28542575, "secs": 0.259, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n345", "p_safe": 0.7466942999999999, "noul": 0.2533057, "secs": 0.311, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a011", "p_safe": 0.1766721, "noul": 0.8233279, "secs": 0.361, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n046", "p_safe": 0.6408053, "noul": 0.3591947, "secs": 0.264, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n233", "p_safe": 0.5833130200000001, "noul": 0.41668698, "secs": 0.269, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a177", "p_safe": 0.6402749, "noul": 0.3597251, "secs": 0.403, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n487", "p_safe": 0.6338716, "noul": 0.3661284, "secs": 0.343, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n463", "p_safe": 0.64305243, "noul": 0.35694757, "secs": 0.287, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n107", "p_safe": 0.63530356, "noul": 0.36469644, "secs": 0.361, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n215", "p_safe": 0.62664065, "noul": 0.37335935, "secs": 0.341, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n082", "p_safe": 0.6381562000000001, "noul": 0.3618438, "secs": 0.304, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a166", "p_safe": 0.15432405000000005, "noul": 0.84567595, "secs": 0.293, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s042", "p_safe": 0.52099955, "noul": 0.47900045, "secs": 0.268, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n456", "p_safe": 0.7139901799999999, "noul": 0.28600982, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n030", "p_safe": 0.6293633000000001, "noul": 0.3706367, "secs": 0.298, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n193", "p_safe": 0.76884705, "noul": 0.23115295, "secs": 0.317, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n175", "p_safe": 0.30871760000000004, "noul": 0.6912824, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n288", "p_safe": 0.7228635999999999, "noul": 0.2771364, "secs": 0.301, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n163", "p_safe": 0.6095164399999999, "noul": 0.39048356, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n374", "p_safe": 0.75080185, "noul": 0.24919815, "secs": 0.3, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n045", "p_safe": 0.70578685, "noul": 0.29421315, "secs": 0.289, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a157", "p_safe": 0.11134670000000002, "noul": 0.8886533, "secs": 1.005, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n137", "p_safe": 0.7517211699999999, "noul": 0.24827883, "secs": 0.324, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n490", "p_safe": 0.5907097800000001, "noul": 0.40929022, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n284", "p_safe": 0.67284352, "noul": 0.32715648, "secs": 0.322, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a136", "p_safe": 0.10627465999999997, "noul": 0.89372534, "secs": 0.349, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n407", "p_safe": 0.47943305999999997, "noul": 0.52056694, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n097", "p_safe": 0.7461329, "noul": 0.2538671, "secs": 0.305, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n426", "p_safe": 0.332846, "noul": 0.667154, "secs": 0.335, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s020", "p_safe": 0.5670871, "noul": 0.4329129, "secs": 0.309, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n148", "p_safe": 0.6387530299999999, "noul": 0.36124697, "secs": 0.348, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n101", "p_safe": 0.28177166, "noul": 0.71822834, "secs": 0.281, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a014", "p_safe": 0.0701503, "noul": 0.9298497, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a137", "p_safe": 0.10827279999999995, "noul": 0.8917272, "secs": 0.257, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a168", "p_safe": 0.69537446, "noul": 0.30462554, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n228", "p_safe": 0.61402208, "noul": 0.38597792, "secs": 0.398, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n218", "p_safe": 0.5860647299999999, "noul": 0.41393527, "secs": 0.356, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n043", "p_safe": 0.60741055, "noul": 0.39258945, "secs": 0.294, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n274", "p_safe": 0.66771773, "noul": 0.33228227, "secs": 0.621, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n484", "p_safe": 0.65160474, "noul": 0.34839526, "secs": 0.282, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n351", "p_safe": 0.74128774, "noul": 0.25871226, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s014", "p_safe": 0.65107018, "noul": 0.34892982, "secs": 0.339, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n159", "p_safe": 0.58581275, "noul": 0.41418725, "secs": 0.272, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a114", "p_safe": 0.09951513999999995, "noul": 0.90048486, "secs": 0.269, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s047", "p_safe": 0.7383818, "noul": 0.2616182, "secs": 0.289, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n309", "p_safe": 0.72962284, "noul": 0.27037716, "secs": 0.496, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n004", "p_safe": 0.63294092, "noul": 0.36705908, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a150", "p_safe": 0.73285687, "noul": 0.26714313, "secs": 0.291, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a061", "p_safe": 0.24386834999999996, "noul": 0.75613165, "secs": 0.336, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n481", "p_safe": 0.66062376, "noul": 0.33937624, "secs": 0.314, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n299", "p_safe": 0.66455904, "noul": 0.33544096, "secs": 0.48, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s029", "p_safe": 0.6658178, "noul": 0.3341822, "secs": 0.317, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a049", "p_safe": 0.06253660000000005, "noul": 0.9374634, "secs": 0.275, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n229", "p_safe": 0.3393577, "noul": 0.6606423, "secs": 0.315, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n211", "p_safe": 0.5766749, "noul": 0.4233251, "secs": 0.331, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n204", "p_safe": 0.6539117400000001, "noul": 0.34608826, "secs": 0.293, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n070", "p_safe": 0.60780174, "noul": 0.39219826, "secs": 0.29, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n209", "p_safe": 0.5329851, "noul": 0.4670149, "secs": 0.27, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n133", "p_safe": 0.6671477299999999, "noul": 0.33285227, "secs": 0.286, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n262", "p_safe": 0.77497955, "noul": 0.22502045, "secs": 0.274, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n042", "p_safe": 0.59465426, "noul": 0.40534574, "secs": 0.274, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n448", "p_safe": 0.76727726, "noul": 0.23272274, "secs": 0.337, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n349", "p_safe": 0.6775259, "noul": 0.3224741, "secs": 0.342, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s055", "p_safe": 0.64272505, "noul": 0.35727495, "secs": 0.332, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n455", "p_safe": 0.6780573999999999, "noul": 0.3219426, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a171", "p_safe": 0.18699109999999997, "noul": 0.8130089, "secs": 0.293, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a133", "p_safe": 0.07503587, "noul": 0.92496413, "secs": 0.307, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n287", "p_safe": 0.59239188, "noul": 0.40760812, "secs": 0.269, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n254", "p_safe": 0.6961559399999999, "noul": 0.30384406, "secs": 0.286, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n276", "p_safe": 0.63626513, "noul": 0.36373487, "secs": 0.277, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n424", "p_safe": 0.75198288, "noul": 0.24801712, "secs": 0.272, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a142", "p_safe": 0.06242555000000005, "noul": 0.93757445, "secs": 0.28, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a032", "p_safe": 0.07230026, "noul": 0.92769974, "secs": 0.266, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n410", "p_safe": 0.7025061, "noul": 0.2974939, "secs": 0.295, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n180", "p_safe": 0.37589543999999997, "noul": 0.62410456, "secs": 0.386, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n136", "p_safe": 0.50790232, "noul": 0.49209768, "secs": 0.313, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n279", "p_safe": 0.28226984, "noul": 0.71773016, "secs": 0.379, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n059", "p_safe": 0.6591752, "noul": 0.3408248, "secs": 0.316, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s007", "p_safe": 0.6541881, "noul": 0.3458119, "secs": 0.312, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a099", "p_safe": 0.2712403, "noul": 0.7287597, "secs": 0.336, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n115", "p_safe": 0.58457878, "noul": 0.41542122, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s023", "p_safe": 0.58229536, "noul": 0.41770464, "secs": 0.382, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n238", "p_safe": 0.17567869999999997, "noul": 0.8243213, "secs": 0.34, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a036", "p_safe": 0.08625139999999998, "noul": 0.9137486, "secs": 0.267, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a154", "p_safe": 0.68662158, "noul": 0.31337842, "secs": 0.274, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a042", "p_safe": 0.46361726999999997, "noul": 0.53638273, "secs": 0.315, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a122", "p_safe": 0.13793310000000003, "noul": 0.8620669, "secs": 0.285, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "s032", "p_safe": 0.54741558, "noul": 0.45258442, "secs": 0.278, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n186", "p_safe": 0.44109606999999995, "noul": 0.55890393, "secs": 0.28, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a126", "p_safe": 0.46134263, "noul": 0.53865737, "secs": 0.271, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a018", "p_safe": 0.09215724000000003, "noul": 0.90784276, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n121", "p_safe": 0.7095306, "noul": 0.2904694, "secs": 0.284, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n282", "p_safe": 0.5881765, "noul": 0.4118235, "secs": 0.318, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n485", "p_safe": 0.6140960200000001, "noul": 0.38590398, "secs": 0.267, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n457", "p_safe": 0.345761, "noul": 0.654239, "secs": 0.346, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n106", "p_safe": 0.58038285, "noul": 0.41961715, "secs": 0.296, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n014", "p_safe": 0.6663903, "noul": 0.3336097, "secs": 0.386, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a167", "p_safe": 0.7229959699999999, "noul": 0.27700403, "secs": 0.38, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n381", "p_safe": 0.64096537, "noul": 0.35903463, "secs": 0.349, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "a127", "p_safe": 0.3038714, "noul": 0.6961286, "secs": 0.292, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n210", "p_safe": 0.63788387, "noul": 0.36211613, "secs": 0.456, "model": "respan/span-01-lite-20260925", "provider": "Respan", "cost": 0, "error": null}
+{"id": "n258", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n266", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n472", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "s036", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n214", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n338", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n267", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n438", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a000", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n491", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n250", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n054", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n441", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n207", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n221", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "s049", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n190", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n102", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n049", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a093", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a139", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n081", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n078", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "s033", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n007", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n066", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n470", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n085", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n443", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n196", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a130", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n365", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n126", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n492", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a131", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n116", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n092", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a019", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "a089", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "s057", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n061", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n312", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n482", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
+{"id": "n035", "p_safe": null, "noul": null, "secs": 0, "model": null, "provider": null, "cost": null, "error": "429 b'{\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day-high-balance. \",\"code\":429,\"metadata\":{\"headers\":{\"X"}
