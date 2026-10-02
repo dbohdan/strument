@@ -137,9 +137,12 @@ so it is declined.
   23,000 reasoning tokens on a step, five minutes each at Novita's 45
   tokens a second; turn 12 took over an hour for $0.07.
 
-The paired result itself held up, and the question made it better: turn 11
-found that rotation does not out-yield alternation in every season before
-weather (the premise of the question was wrong), and turn 12 replaced
+The paired result itself held up, and the question made it better, though
+its premise was half wrong: it assumed that on a shared seed nothing random
+could separate the strategies, and greedy replants from weather-scaled
+history, so its plantings follow the weather. Turn 11 also found that
+rotation does not out-yield alternation in every season before weather, so
+200 of 200 was not trivially guaranteed either. Turn 12 replaced
 sampling with an exhaustive check of every weather sequence for the
 strategies that ignore history, and a per-seed bound for greedy, which does
 not.
