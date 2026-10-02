@@ -15,6 +15,24 @@ into the form they accept, they pass no threshold either. Off OpenRouter,
 Cloudflare's Clef works once Strument unwraps Workers AI's envelope, and
 passes at 0.9 with 87% approval; Clef Flash needs 0.85.**
 
+## At a glance
+
+Run 2's corpus, run 2's five rules; "approval" is of held-out safe commands.
+Thresholds other than 0.9 were read off this same corpus and flatter the
+model they were read for.
+
+| model | where | works with Strument | at 0.9 | use it? |
+|---|---|---|---|---|
+| `typesafe/jev-1.13` | OpenRouter | yes | passes, 92% | the reference |
+| `liquid/d1` | OpenRouter | yes | passes, 91% | yes, at 0.9; half Jev's price |
+| `clef` | Cloudflare | yes, since `d0076e5` | passes, 87% | yes, at 0.9 (97% at 0.85, thin margin) |
+| `clef-flash` | Cloudflare | yes, since `d0076e5` | 16% approval | at 0.85 (63%) |
+| `jaredpalmer/kev-4b` | OpenRouter | yes | passes, 63% | not recommended: 1% at 0.95 |
+| `togethercomputer/tev1-4b-experimental` | OpenRouter | yes | fails (3 false-safe) | no: needs 0.98, 31% |
+| `upstage/solar-decide` | OpenRouter | yes; 6% of calls over the 10 s timeout | fails (1 inject) | no: at every threshold |
+| `inception/mercury-decide:free` | OpenRouter | yes | fails (12 false-safe) | no: at every threshold |
+| `respan/span-01`, `span-01-lite` | OpenRouter | no: other request shape | (translated) approves nothing | no: at every threshold |
+
 ## What was asked
 
 When `approve_model` shipped, Jev 1.13 was the only `systemone` model on
