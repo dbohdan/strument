@@ -410,3 +410,16 @@ func expandHome(raw string) string {
 	}
 	return filepath.Join(home, raw[1:])
 }
+
+// DirSlash is doc/messages.md's "directories end in a slash" in code: the path
+// with a trailing slash if it is a directory that is really there, and as given
+// otherwise. Calling something a directory is a claim, so it is made only
+// about a path that has been looked at.
+func DirSlash(path string) string {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return path
+	}
+	sep := string(filepath.Separator)
+	return strings.TrimRight(path, sep) + sep
+}

@@ -356,6 +356,42 @@ Without a terminal, `strument trust` refuses rather than trusting silently;
 log records what was granted.
 
 
+## Reading outside the project, and secret files
+
+Writes are the sandbox's business; reads are not confined by it. A read
+returns content to the model, which sends it to the provider and keeps it in
+the transcript, so the model's file tools draw their own boundary:
+
+- **Outside the project root, `read` and `ls` ask.** "y" allows that file or
+  listing for the run, and "a" allows everything under its directory, which is
+  shown with a trailing slash. "a" is not offered for the home directory or a
+  filesystem root. Grants are kept on symlink targets, so a link inside an
+  allowed directory that leads out of it is asked about again. `glob` and
+  `grep` do not leave the project. `approve_model` does not answer these
+  prompts.
+- **Secret-shaped files are refused, inside the project or out.** `.env`,
+  `.netrc`, SSH private keys, `.aws/credentials` and the rest of the list in
+  [`secret_files_add`](config.md#secret_files_add-and-secret_files_exempt) are
+  not read, searched, or edited on the model's own say-so. Pinning one with
+  `/read-only` or `/add` is how you allow it. A project config can extend the
+  list but not shorten it.
+- **A shell command that names a secret file goes to you.** The command is
+  parsed and its words expanded as the shell would, and a hit skips
+  `approve_model` and any "a" given this turn. A word that needs a command run
+  to know its value is not resolved, so this catches the conventional spellings
+  of a path, not a determined one.
+
+The list catches the places credentials conventionally live. It does not catch
+a secret inside an ordinary file; the question at the project's edge is what
+covers those.
+
+**`--yes all` grants every prompt there is, including ones added later.** It is
+bound when Strument starts, not when you wrote it: `read-outside` joined it
+when that prompt was added. That is the meaning of the word, and narrowing it
+to a fixed list would only invite a larger "all" beside it. Name the prompts
+you mean when that matters, for example `--yes bash,steps`. Secret-shaped
+files stay refused whatever `--yes` says.
+
 ## How this was verified
 
 During development, enforcement tests were skipped on kernels without Landlock.

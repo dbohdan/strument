@@ -63,9 +63,9 @@ func (c *Coder) askOutside(abs string, isDir bool) string {
 		c.outside = outsideGrants{paths: map[string]bool{}, dirs: map[string]bool{}}
 	}
 	target := workspace.ResolveSymlinks(abs)
-	shown := abs
+	shown := workspace.DirSlash(abs)
 	if target != abs {
-		shown = abs + " → " + target
+		shown = workspace.DirSlash(abs) + " → " + workspace.DirSlash(target)
 	}
 	scope := target
 	prompt := "List this directory outside the project?"
@@ -91,7 +91,7 @@ func (c *Coder) askOutside(abs string, isDir bool) string {
 	}
 	if res.Always && req.Scope != "" {
 		c.outside.dirs[scope] = true
-		c.Out.Printf("Reading under %s without asking for the rest of this run.", scope)
+		c.Out.Printf("Reading under %s without asking for the rest of this run.", workspace.DirSlash(scope))
 		return ""
 	}
 	// A yes covers this path for the run: paging through a file is several

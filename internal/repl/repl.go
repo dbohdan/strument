@@ -21,6 +21,7 @@ import (
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/skill"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // ctrlCWindow is the double-Ctrl-C chord window.
@@ -707,7 +708,7 @@ func confirmSuffix(req coder.ConfirmRequest) string {
 	// The outside-read gate's "a" is a directory, for the run. Same reason
 	// to say both.
 	if req.GroupSession && req.Scope != "" {
-		return " (Y/n/a=all under " + req.Scope + " this run) "
+		return " (Y/n/a=all under " + workspace.DirSlash(req.Scope) + " this run) "
 	}
 	if req.Group != "" {
 		return " (Y/n/a=all turn) "

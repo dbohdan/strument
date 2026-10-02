@@ -2,17 +2,11 @@ package repl
 
 import (
 	"context"
-	"os"
-	"strings"
+
+	"dbohdan.com/strument/internal/workspace"
 )
 
-func displayPath(path string) string {
-	info, err := os.Stat(path)
-	if err != nil || !info.IsDir() {
-		return path
-	}
-	return strings.TrimRight(path, "/") + "/"
-}
+func displayPath(path string) string { return workspace.DirSlash(path) }
 
 // cmdSandbox answers "what can this session write?".
 //

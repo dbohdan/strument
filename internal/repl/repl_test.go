@@ -1404,6 +1404,17 @@ func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
 	}
 }
 
+// The outside-read "a" covers a directory, and a directory is written with a
+// trailing slash (doc/messages.md): "all under /x/y" could be a file's name.
+func TestOutsideReadSuffixEndsTheDirectoryInASlash(t *testing.T) {
+	dir := t.TempDir()
+	req := coder.ConfirmRequest{Prompt: "Read this file outside the project?", Path: dir + "/a.txt",
+		Scope: dir, Group: "read-outside:" + dir, GroupSession: true, Grant: coder.GrantReadOutside}
+	if got, want := confirmSuffix(req), " (Y/n/a=all under "+dir+"/ this run) "; got != want {
+		t.Errorf("suffix = %q, want %q", got, want)
+	}
+}
+
 // The "a" a webfetch prompt offers is scoped to one origin and to the session,
 // and the hint says both. An answer whose scope is not on screen is an answer
 // given blind — and the scope is the point: nothing bounds an unseen URL the
