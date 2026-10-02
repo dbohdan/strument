@@ -24,6 +24,11 @@
 // multiplier a unit of asparagus harvest needs for the garden with
 // one asparagus bed to match the garden with none — a ratio of
 // totals the runs already produce, with no price table anywhere.
+//
+// With -paired it runs every strategy on the same seeds — each seed
+// is one weather sequence all strategies share — and reports how
+// often rotation beats each strategy and rotation's worst margin
+// against it.
 package main
 
 import (
@@ -94,6 +99,7 @@ func main() {
 	sweep := flag.Bool("sweep", false, "sweep the persistent-family fade rate instead of printing the table")
 	perennial := flag.Bool("perennial", false, "sweep how long an asparagus planting stands (4-20 seasons) instead of printing the table")
 	breakeven := flag.Bool("breakeven", false, "print the asparagus value multiplier per stand length instead of printing the table")
+	paired := flag.Bool("paired", false, "compare strategies seed by seed on the same weather instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -118,10 +124,63 @@ func main() {
 		breakEven(*seasons, *seeds, *beds, *seed)
 		return
 	}
+	if *paired {
+		pairedCompare(*seasons, *seeds, *beds, *seed)
+		return
+	}
 
 	rows := measure(*seasons, *seeds, *beds, *seed, nil)
 	printTable(rows)
 	printSparklines(rows)
+}
+
+// pairedCompare runs every strategy on the same seeds — each seed
+// is one weather sequence all strategies share — and reports, per
+// strategy, how often rotation's total beats it and rotation's
+// worst margin over all seeds.
+func pairedCompare(seasons, seeds, beds int, first int64) {
+	type stats struct {
+		wins, ties, losses int
+		worst, worstAt     int64
+	}
+	all := make([]stats, len(strategies)-1)
+
+	for i := 0; i < seeds; i++ {
+		s := first + int64(i)
+		totals := make([]int64, len(strategies))
+		for j, st := range strategies {
+			res := sim.Run(sim.NewGarden(beds), st.s, seasons, s)
+			totals[j] = int64(res.Total)
+		}
+
+		for j := range all {
+			// strategies[0] is rotation, the reference.
+			margin := totals[0] - totals[j+1]
+			switch {
+			case margin > 0:
+				all[j].wins++
+			case margin < 0:
+				all[j].losses++
+			default:
+				all[j].ties++
+			}
+			if i == 0 || margin < all[j].worst {
+				all[j].worst, all[j].worstAt = margin, s
+			}
+		}
+	}
+
+	fmt.Println("every strategy on the same seeds: each seed is one weather")
+	fmt.Printf("sequence, so each row compares %d like-for-like runs against rotation\n\n", seeds)
+
+	const nameW, colW = 12, 6
+	fmt.Printf("%-*s %*s %*s %*s  %s\n",
+		nameW, "strategy", colW, "wins", colW, "ties", colW, "losses", "worst margin")
+	for j, st := range strategies[1:] {
+		s := all[j]
+		fmt.Printf("%-*s %*d %*d %*d  %+d (seed %d)\n",
+			nameW, st.name, colW, s.wins, colW, s.ties, colW, s.losses, s.worst, s.worstAt)
+	}
 }
 
 // perennialStand sweeps how many seasons one asparagus planting

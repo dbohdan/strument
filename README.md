@@ -39,6 +39,24 @@ alternation trails because its brassica seasons still carry pressure, and
 greedy recovers after its trial seasons; the sparklines show the same
 shapes over time.
 
+The percentiles above can mislead: rotation's `p10` (2252) sits below
+greedy's `p90` (2316), which looks as if rotation must lose in some years'
+weather. But `p10` and `p90` come from different seeds, and a seed is one
+weather sequence every strategy can share. Run them pairwise instead.
+Command: `go run ./cmd/larkspur -paired`.
+
+```
+strategy       wins   ties losses  worst margin
+monoculture     200      0      0  +1114 (seed 106)
+alternation     200      0      0  +296 (seed 119)
+greedy          200      0      0  +118 (seed 107)
+```
+
+Rotation beats every strategy in all 200 seeds on the same weather, never
+tying or losing. Its tightest margin anywhere is the +118 against greedy in
+seed 107: even greedy's luckiest weather leaves rotation ahead. The
+overlapping percentiles were an artifact of comparing different weather.
+
 One number in the model is a guess: how fast pest pressure fades while a
 family is out of the bed. The default is 0.2 points per season for the
 persistent brassica and allium diseases. The sweep reruns the whole
