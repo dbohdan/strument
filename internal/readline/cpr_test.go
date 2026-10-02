@@ -34,6 +34,11 @@ func (b *lockedBuffer) String() string {
 // prompt now draws once the wait is bounded, the keys typed meanwhile are
 // read in order, and a reply that turns up late is not taken for input.
 func TestPromptDrawsWhenCursorReportNeverComes(t *testing.T) {
+	// The console call is about the process's real console, which a pipe is
+	// not; on Windows without one it fails before the code under test runs.
+	defer func(f func() error) { enableANSI = f }(enableANSI)
+	enableANSI = func() error { return nil }
+
 	in, feed := io.Pipe()
 	out := &lockedBuffer{}
 	rl, err := NewFromConfig(&Config{

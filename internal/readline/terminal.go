@@ -120,9 +120,14 @@ type readResult struct {
 	paste []rune
 }
 
+// enableANSI is a variable so a test can drive an interactive terminal over
+// pipes on Windows, where the real call needs a console handle a CI runner
+// does not have. Strument addition.
+var enableANSI = ansi.EnableANSI
+
 func newTerminal(cfg *Config) (*terminal, error) {
 	if cfg.isInteractive {
-		if ansiErr := ansi.EnableANSI(); ansiErr != nil {
+		if ansiErr := enableANSI(); ansiErr != nil {
 			return nil, fmt.Errorf("Could not enable ANSI escapes: %w", ansiErr)
 		}
 	}

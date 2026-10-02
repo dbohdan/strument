@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/workspace"
 )
 
 // answerConfirmer answers each prompt from a script and records it.
@@ -54,6 +55,7 @@ func TestReadsOutsideTheProjectAsk(t *testing.T) {
 	base := t.TempDir()
 	home := filepath.Join(base, "home")
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	proj := filepath.Join(base, "proj")
 	cfgDir := filepath.Join(home, ".config", "tool")
 	mkfile(t, filepath.Join(proj, "main.go"), "package main\n")
@@ -90,7 +92,9 @@ func TestReadsOutsideTheProjectAsk(t *testing.T) {
 	if out := read(filepath.Join(cfgDir, "config.star")); !strings.Contains(out, "x = 1") {
 		t.Fatalf("approved read: %q", out)
 	}
-	if len(conf.got) != 1 || conf.got[0].Grant != GrantReadOutside || conf.got[0].Scope != cfgDir {
+	// Resolved, as the gate keeps it: macOS's temp directory is under /var,
+	// a link to /private/var, and Windows' may be spelled with 8.3 names.
+	if len(conf.got) != 1 || conf.got[0].Grant != GrantReadOutside || conf.got[0].Scope != workspace.ResolveSymlinks(cfgDir) {
 		t.Fatalf("prompt = %+v", conf.got)
 	}
 	if read(filepath.Join(cfgDir, "config.star")); len(conf.got) != 1 {

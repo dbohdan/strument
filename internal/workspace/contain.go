@@ -420,6 +420,5 @@ func DirSlash(path string) string {
 	if err != nil || !info.IsDir() {
 		return path
 	}
-	sep := string(filepath.Separator)
-	return strings.TrimRight(path, sep) + sep
+	return strings.TrimRight(path, "/") + "/"
 }

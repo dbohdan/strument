@@ -78,6 +78,7 @@ func TestSecretFilesAreNotRead(t *testing.T) {
 func TestTildeIsTheHomeDirectory(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	if got := expandHome("~/.config/x"); got != filepath.Join(home, ".config", "x") {
 		t.Errorf("~/.config/x = %q", got)
 	}

@@ -94,4 +94,6 @@ Strument's changes to the vendored copy:
     cprTimeout (operation.go, terminal.go). Upstream waited for the reply
     without limit, so a terminal that never answered left the prompt undrawn
     and Ctrl+C unread. Past the bound the prompt draws at column one, and a
-    late reply is discarded like any unrecognized sequence.
+    late reply is discarded like any unrecognized sequence. ansi.EnableANSI is
+    called through a package variable (enableANSI) so the test for this can run
+    over pipes on Windows.
