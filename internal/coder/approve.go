@@ -177,7 +177,30 @@ func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, us
 // error means the prompt is shown. A lenient parse is how a missing field
 // would turn into p(safe) = 0 on one server and into a panic on another; here
 // both are "asked".
+// cloudflareEnvelope is the wrapper Cloudflare Workers AI puts around every
+// response, Cloudflare's Clef models' included: the systemone answer under
+// "result", and failures in "errors". The schema itself has neither "result"
+// nor "success", so a body with both can only be the envelope.
+type cloudflareEnvelope struct {
+	Result  json.RawMessage `json:"result"`
+	Success *bool           `json:"success"`
+	Errors  []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
 func parseSystemOne(status int, raw []byte) (Decision, error) {
+	var env cloudflareEnvelope
+	if json.Unmarshal(raw, &env) == nil && env.Success != nil && (env.Result != nil || len(env.Errors) > 0) {
+		if !*env.Success || status != http.StatusOK {
+			msg := "no message"
+			if len(env.Errors) > 0 && env.Errors[0].Message != "" {
+				msg = capError(env.Errors[0].Message)
+			}
+			return Decision{}, fmt.Errorf("HTTP %d from the decision model: %s", status, msg)
+		}
+		raw = env.Result
+	}
 	var out systemOneResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		if status != http.StatusOK {

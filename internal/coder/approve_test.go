@@ -38,6 +38,19 @@ func TestParseSystemOne(t *testing.T) {
 			`{"model":"laya:en","answers":{"decision":{"type":"choice","choice":"ask","confidence":0.4,` +
 				`"probabilities":{"safe":0.3,"ask":0.7}}},"usage":{"input_tokens":43,"output_tokens":0}}`,
 			0.3, "laya:en", ""},
+		// Cloudflare Workers AI wraps the answer in its own envelope. Bodies as
+		// the API returned them on 2026-10-02.
+		{"clef via cloudflare", 200,
+			`{"result":{"model":"clef-flash","answers":{"decision":{"type":"choice","choice":"safe",` +
+				`"probabilities":{"safe":0.909,"ask":0.091},"confidence":0.669}},"usage":{"input_tokens":301,` +
+				`"output_tokens":0}},"success":true,"errors":[],"messages":[]}`,
+			0.909, "clef-flash", ""},
+		{"cloudflare auth error", 401, `{"result":null,"success":false,"errors":[{"code":10000,` +
+			`"message":"Authentication error"}],"messages":[]}`, 0, "",
+			"HTTP 401 from the decision model: Authentication error"},
+		{"cloudflare unknown model", 400, `{"success":false,"errors":[{"code":7000,` +
+			`"message":"No route for that URI"}],"messages":[],"result":null}`, 0, "",
+			"HTTP 400 from the decision model: No route for that URI"},
 		{"no answer", 200, `{"model":"m","answers":{}}`, 0, "", "no answer"},
 		{"no safe option", 200, `{"answers":{"decision":{"type":"choice","probabilities":{"ask":1}}}}`, 0, "",
 			`no probability for "safe"`},
