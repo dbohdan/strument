@@ -37,10 +37,12 @@ type Garden struct {
 // History is one bed's record of past seasons, oldest first.
 type History []Record
 
-// Record is one past season in one bed: what was planted there and
-// what the bed actually harvested after weather.
+// Record is one past season in one bed: what was planted there, the
+// yield before weather scaled it, and what the bed actually
+// harvested after weather.
 type Record struct {
 	Planting Planting
+	Raw      int // yield before weather
 	Harvest  int
 }
 
@@ -103,14 +105,17 @@ type Strategy interface {
 	Choose(g Garden, bed, season int) Planting
 }
 
-// Result is a run's harvest: one total per season, the sum over the
-// whole run, and that sum's asparagus share — tallied from the run's
-// own history of what each bed harvested under which planting, so
-// yields are computed exactly as they always were.
+// Result is a run's harvest: one total per season, the same totals
+// before weather scales them, their sums, the asparagus share, and
+// the run's full per-bed history. The share and RawPerSeason are
+// tallied from the yields the model produced — nothing here changes
+// how yields are computed.
 type Result struct {
-	PerSeason []int
-	Total     int
-	Asparagus int
+	PerSeason    []int
+	RawPerSeason []int // garden total per season, before weather
+	Total        int
+	Asparagus    int
+	History      []History // each bed's records, including Raw
 }
 
 // Run plays seasons of g under strategy s, drawing each season's
@@ -135,6 +140,7 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 		}
 
 		total := 0
+		raw := 0
 		for i, planting := range plantings {
 			g.Beds[i] = garden.SpreadCompost(g.Beds[i])
 
@@ -145,14 +151,17 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 				yield, g.Beds[i] = garden.Season(g.Beds[i], planting.Family)
 			}
 
+			raw += yield
 			harvest := yield * weather / 100
-			g.History[i] = append(g.History[i], Record{Planting: planting, Harvest: harvest})
+			g.History[i] = append(g.History[i], Record{Planting: planting, Raw: yield, Harvest: harvest})
 			total += harvest
 		}
 
 		res.PerSeason = append(res.PerSeason, total)
+		res.RawPerSeason = append(res.RawPerSeason, raw)
 		res.Total += total
 	}
+	res.History = g.History
 	for _, h := range g.History {
 		for _, r := range h {
 			if !r.Planting.Rest && r.Planting.Family == garden.Asparagus {
