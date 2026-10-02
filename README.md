@@ -57,6 +57,30 @@ tying or losing. Its tightest margin anywhere is the +118 against greedy in
 seed 107: even greedy's luckiest weather leaves rotation ahead. The
 overlapping percentiles were an artifact of comparing different weather.
 
+Could 200 of 200 have come out any other way? For two of the three, no.
+Rotation never reads a history, and neither does monoculture nor
+alternation: their plantings are fixed by bed and season, so their
+pre-weather yields are the same on every seed. The only randomness in a
+run is the weather sequence, and one seed shares it across every
+strategy. So for those pairs the comparison depends on the weather alone,
+and it can be checked exhaustively rather than sampled: give each of the
+20 seasons, independently, the factor that hurts rotation most — all
+3^20 sequences. Rotation still wins, by +922 against monoculture and
++296 against alternation. It would be 200 of 200 for any seeds drawn.
+The bound is tight: seed 119's weather really is the worst case for
+alternation, which is why its observed margin is also exactly +296.
+
+Greedy is the exception that can differ: it replants from weather-scaled
+harvest history, so its plantings — and its pre-weather yields — move
+with the seed, and a fixed-yields argument can't cover it. Instead check
+it seed by seed: against the plantings greedy actually made on each of
+the 200 seeds, even the weather sequence that hurts rotation most still
+leaves rotation ahead, by at least +116 (seed 107, the same seed as the
+observed +118). So on every seed drawn, no weather was load-bearing;
+greedy would need a different run of plantings and its luckiest weather
+together. Both checks are tests:
+`go test ./sim -run 'Invariant|Varies|WorstWeather' -v`.
+
 One number in the model is a guess: how fast pest pressure fades while a
 family is out of the bed. The default is 0.2 points per season for the
 persistent brassica and allium diseases. The sweep reruns the whole
