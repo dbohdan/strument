@@ -25,8 +25,11 @@ trials, never watched it build something from nothing.
 | 7 | write the results into the README | `730164b` | 6 | $0.0053 |
 | 8 | asparagus: how long should a perennial stand? | `5215019`, `e91209e` | 36 | $0.05 |
 | 9 | what would asparagus have to be worth to pay its way? | `3d40231` | 17 | $0.11 |
+| 10 | do the overlapping percentiles mean rotation loses some years? compare per seed | `cdf0fd7` | 19 | $0.04 |
+| 11 | could 200 of 200 have come out any other way? | — (stopped by the driver's time limit) | 8 | $0.03 |
+| 12 | finish turn 11's answer | `55c0a34`, fixed by the driver in `6af1d21` | 33 | $0.07 |
 
-About $0.26 in all, for roughly 1,750 lines of Go with tests. Prompt-cache
+About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
 
 ## What I would tell someone driving the same way
@@ -103,3 +106,41 @@ noise.
   on `dev` found cuts one-tab-too-deep edits in tab-indented code. All eight of
   MiMo's edits to this Go code matched exactly. One turn is an anecdote, not a
   result.
+
+## Turns 10–12: approve_model instead of `--yes bash`
+
+These three ran with Jev 1.13 as `approve_model` and `--yes steps` only, to
+see whether a decision model can carry an unattended build in place of the
+blanket shell grant. A command Jev declines has no one to ask in script mode,
+so it is declined.
+
+- **The build itself went through.** Every `go test`, `go vet`, `gofmt -l`
+  and `go run` was approved (0.94–1.00), and the commits went through
+  Strument's commit tool, which never reaches the shell.
+- **Anything that rewrites or removes a file did not.** Jev declined every
+  command with `gofmt -w` in it (0.70–0.86) and every `rm` (0.08–0.10), as
+  its rubric says to: the safe side is a command that "overwrites nothing".
+  MiMo reformatted through its edit tool instead, which worked. It could not
+  delete the scratch test it had created, and committed it with a note
+  asking the user to.
+- **It retried the declined `rm` twelve times.** The decline said to do
+  without; MiMo sent the same command again, alone and chained to its
+  checks, and Strument's watchers did not see it, because they count
+  read-only calls and a declined command is not one.
+- **A turn stopped from outside loses its commit.** Turn 11 ran past the
+  driver's 25-minute limit and was killed with its edit to `sim/sim.go`
+  uncommitted. Turn 12's commit took only the files turn 12 touched, so it
+  committed tests without the code they need, and the branch did not build
+  until the driver committed the rest.
+- **Hard questions cost time, not money.** Turns 11 and 12 asked for an
+  argument rather than a feature. MiMo, with `reasoning = "low"`, spent up to
+  23,000 reasoning tokens on a step, five minutes each at Novita's 45
+  tokens a second; turn 12 took over an hour for $0.07.
+
+The paired result itself held up, and the question made it better: turn 11
+found that rotation does not out-yield alternation in every season before
+weather (the premise of the question was wrong), and turn 12 replaced
+sampling with an exhaustive check of every weather sequence for the
+strategies that ignore history, and a per-seed bound for greedy, which does
+not.
+
