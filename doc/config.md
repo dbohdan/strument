@@ -959,6 +959,15 @@ approve_model = decision_model(
     api_key = env("OPENROUTER_API_KEY"),
 )
 
+# Hosted elsewhere: Cloudflare's Clef on Workers AI. The model is named in
+# the URL as well as in the slug.
+approve_model = decision_model(
+    "systemone", "clef",
+    url = "https://api.cloudflare.com/client/v4/accounts/" + env("CLOUDFLARE_ACCOUNT_ID") +
+        "/ai/run/@cf/cloudflare/clef",
+    api_key = env("CLOUDFLARE_AUTH_TOKEN"),
+)
+
 # Local: the same schema served by Ollaya on your own machine.
 approve_model = decision_model(
     "systemone", "laya",
@@ -1439,11 +1448,13 @@ A decision model for `approve_model`. It is its own type, not a `model()`:
 - The answer is probabilities.
 
 - **`dialect`** — the request schema. `"systemone"` is TypeSafe's, and other
-  servers implement it too: OpenRouter's gateway, and Ollaya locally. An
-  unknown dialect is refused at load, with the list of known ones.
+  servers implement it too: OpenRouter's gateway, Cloudflare Workers AI, and
+  Ollaya locally. Cloudflare wraps its answers in its own envelope, which
+  Strument unwraps. An unknown dialect is refused at load, with the list of
+  known ones.
 - **`slug`** — the model name the endpoint expects: `"typesafe/jev-1.13"`
-  through OpenRouter, `"jev-latest"` on TypeSafe's own API, `"laya"` on
-  Ollaya.
+  through OpenRouter, `"jev-latest"` on TypeSafe's own API, `"clef"` on
+  Cloudflare, `"laya"` on Ollaya.
 - **`url`** — the whole endpoint, not a base URL. It is required, and there is
   no default. The same schema is served at different paths
   (`/api/alpha/decisions`, `/v1/systemone`), and choosing one for you would
