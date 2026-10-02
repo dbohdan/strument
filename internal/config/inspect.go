@@ -225,6 +225,8 @@ var projectKeyOrder = []string{
 	"hasRetryTimeout",
 	"hasGitSign",
 	"hasAutoCommits",
+	"hasSecretFilesAdd",
+	"hasSecretFilesExempt",
 	"hasEnvAllow",
 	"hasAutoApprove",
 	"hasApproveModel",
@@ -430,6 +432,22 @@ var projectKeys = map[string]projectKey{
 				return "a turn that changes a file ends in a commit"
 			}
 			return "edits are written but not committed"
+		},
+	},
+	"hasSecretFilesAdd": {
+		name: "secret_files_add",
+		set:  func(g *fileGlobals) bool { return g.hasSecretFilesAdd },
+		detail: func(g *fileGlobals, _ func(string) string) string {
+			return "marks more files secret: " + strings.Join(g.secretFilesAddVal, ", ")
+		},
+	},
+	// Refused at load from a project. Listed so the summary names it rather
+	// than leaving the user to meet it as a load error after trusting.
+	"hasSecretFilesExempt": {
+		name: "secret_files_exempt",
+		set:  func(g *fileGlobals) bool { return g.hasSecretFilesExempt },
+		detail: func(_ *fileGlobals, red func(string) string) string {
+			return red("tries to unmark secret files, which only the user config may do; loading will fail")
 		},
 	},
 	"hasEnvAllow": {

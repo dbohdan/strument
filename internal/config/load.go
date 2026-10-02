@@ -16,6 +16,7 @@ import (
 
 	"dbohdan.com/strument/internal/httpx"
 	"dbohdan.com/strument/internal/origin"
+	"dbohdan.com/strument/internal/secretfile"
 )
 
 // A project config may be a root dotfile or a file inside .strument/, and the
@@ -228,6 +229,11 @@ type fileGlobals struct {
 
 	hasAutoCommits bool
 	autoCommitsVal bool
+
+	hasSecretFilesAdd    bool
+	secretFilesAddVal    []string
+	hasSecretFilesExempt bool
+	secretFilesExemptVal []string
 
 	hasEnvAllow bool
 	envAllowVal []string
@@ -564,6 +570,12 @@ func Load(opts Options) (*Config, error) {
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
+	if user.hasSecretFilesAdd {
+		cfg.SecretFilesAdd = user.secretFilesAddVal
+	}
+	if user.hasSecretFilesExempt {
+		cfg.SecretFilesExempt = user.secretFilesExemptVal
+	}
 	if user.hasAutoApprove {
 		cfg.AutoApprove = user.autoApproveVal
 	}
@@ -689,6 +701,18 @@ func Load(opts Options) (*Config, error) {
 		// could only ever widen.
 		if project.hasEnvAllow {
 			cfg.EnvAllow = project.envAllowVal
+		}
+		// The one list a project extends rather than replaces, because it is a
+		// denylist: replacing it could only ever widen what the model may read.
+		// For the same reason a project may not exempt anything. Trust is
+		// content-hashed, but a README injection that talks the model into
+		// reading ~/.aws/credentials should not be one trusted line away.
+		if project.hasSecretFilesAdd {
+			cfg.SecretFilesAdd = append(slices.Clone(cfg.SecretFilesAdd), project.secretFilesAddVal...)
+		}
+		if project.hasSecretFilesExempt {
+			return nil, errors.New("the project config sets `secret_files_exempt`, which is for the user config only: " +
+				"a project can mark more files secret with `secret_files_add`, but cannot unmark any")
 		}
 		// Whole-value like env_allow. A trusted project may set which prompts
 		// stop being asked about, because trust here is content-hashed: an
@@ -1339,6 +1363,37 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasAutoApprove = true
 		out.autoApproveVal = names
+	}
+
+	for _, key := range []struct {
+		name string
+		has  *bool
+		val  *[]string
+	}{
+		{"secret_files_add", &out.hasSecretFilesAdd, &out.secretFilesAddVal},
+		{"secret_files_exempt", &out.hasSecretFilesExempt, &out.secretFilesExemptVal},
+	} {
+		v, ok := globals[key.name]
+		if !ok {
+			continue
+		}
+		list, ok := v.(*starlark.List)
+		if !ok {
+			return nil, fmt.Errorf("%s: `%s` must be a list of gitignore-style patterns, got %s", path, key.name, v.Type())
+		}
+		pats := make([]string, 0, list.Len())
+		for i := range list.Len() {
+			s, ok := starlark.AsString(list.Index(i))
+			if !ok {
+				return nil, fmt.Errorf("%s: `%s`[%d] must be a string, got %s", path, key.name, i, list.Index(i).Type())
+			}
+			pats = append(pats, s)
+		}
+		if err := secretfile.Validate(pats); err != nil {
+			return nil, fmt.Errorf("%s: `%s`: %w", path, key.name, err)
+		}
+		*key.has = true
+		*key.val = pats
 	}
 
 	if ea, ok := globals["env_allow"]; ok {

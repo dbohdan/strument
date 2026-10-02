@@ -290,6 +290,25 @@ func (w *Workspace) ignored(rel string, isDir bool) (bool, error) {
 	return false, nil
 }
 
+// refuseSecret is the message a caller gives back for a secret-shaped path.
+// It names the pattern, so a refusal of something that is not secret points
+// at what to exempt, and it names the way the user can allow it, so the model
+// can say so rather than reach for cat.
+func (w *Workspace) refuseSecret(rel, full string) error {
+	if w.Pinned != nil && w.Pinned(full) {
+		return nil
+	}
+	abs, err := filepath.Abs(full)
+	if err != nil {
+		return err
+	}
+	if pat, ok := w.Secret.Match(abs); ok {
+		return fmt.Errorf("%s matches the secret-file pattern %q, so it is not read. "+
+			"The user can pin it with /read-only to let you read it, or with /add to let you read and edit it", rel, pat)
+	}
+	return nil
+}
+
 // refuseIgnored is the message a caller gives back for an ignored path. A
 // pinned file is exempt here as well: the user naming a file is a stronger
 // signal than the project's blanket rule, and /add already accepts one.

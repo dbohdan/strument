@@ -1,9 +1,11 @@
 package coder
 
 import (
+	"os"
 	"time"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/secretfile"
 )
 
 // ApplyConfig copies a loaded config onto the Coder. It is the *only* place a
@@ -86,6 +88,7 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	c.Check = cfg.Check
 	c.CheckAuto = cfg.CheckAuto
 	c.EnvAllow = cfg.EnvAllow
+	c.applySecretFiles(cfg)
 	// The config half of the standing approvals, replaced wholesale so an
 	// edited auto_approve takes on /reload. --yes and /yes live in their own
 	// halves and survive it; see grants.go.
@@ -114,4 +117,23 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	c.Examples = cfg.ExampleMessages
 	c.SetChatLanguage(cfg.ChatLanguage)
 	c.setPrompts()
+}
+
+// applySecretFiles rebuilds the secret-file matcher from the config. Load has
+// validated the patterns, so the error left is a "~/" pattern with no home
+// directory to expand it against; the defaults stay in force and the user is
+// told, rather than a session starting with nothing marked.
+func (c *Coder) applySecretFiles(cfg *config.Config) {
+	if c.Files == nil {
+		return
+	}
+	home, _ := os.UserHomeDir()
+	m, err := secretfile.New(home, cfg.SecretFilesAdd, cfg.SecretFilesExempt)
+	if err != nil {
+		if c.Out != nil {
+			c.Out.Warningf("secret_files_add/secret_files_exempt not applied: %v", err)
+		}
+		m = secretfile.Default()
+	}
+	c.Files.Secret = m
 }

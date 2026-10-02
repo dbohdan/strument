@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/gitignore"
+	"dbohdan.com/strument/internal/secretfile"
 )
 
 // Limits bound what a single call may traverse or return, so one tool call
@@ -118,6 +119,12 @@ type Workspace struct {
 	// time /drop ran. nil means nothing is pinned, which is what `strument
 	// tool` passes: the command line is contained with no exception at all.
 	Pinned func(abs string) bool
+	// Secret marks the files the model may not read on its own say-so — the
+	// conventional homes of credentials. Read refuses them and grep skips
+	// them; listing their names is fine, since a name reveals nothing. A
+	// pinned file is exempt, which is how the user says "this one, yes".
+	// nil marks nothing.
+	Secret *secretfile.Matcher
 }
 
 // skipAlways is the only unconditional exclusion: the repository's own
@@ -174,7 +181,9 @@ func UnderGitDir(rel string) bool {
 const gitDirRefusal = "the repository's own .git directory is not project content"
 
 // New builds a Workspace over root with the default limits.
-func New(root string) *Workspace { return &Workspace{Root: root} }
+// New starts with the built-in secret-file patterns, so a workspace no config
+// has reached is guarded rather than open.
+func New(root string) *Workspace { return &Workspace{Root: root, Secret: secretfile.Default()} }
 
 // Entry is one directory entry, as List reports it.
 type Entry struct {

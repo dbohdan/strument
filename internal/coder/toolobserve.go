@@ -311,9 +311,15 @@ func grepNothing(query string, res workspace.GrepResult) string {
 	case res.InScope == 0:
 		return "No files were searched for " + query + ": nothing is in that scope, " +
 			"so the pattern was never tested.\n\n" + globSyntaxNote
+	case res.Scanned == 0 && res.Secret == res.InScope:
+		return fmt.Sprintf("No files were searched for %s: %s in that scope, but every one of "+
+			"them matches a secret-file pattern, and those are not searched.", query, plural(res.InScope, "file is", "files are"))
 	case res.Scanned == 0:
 		return fmt.Sprintf("No files were searched for %s: %s in that scope, but every one of "+
-			"them is binary or over the size limit.", query, plural(res.InScope, "file is", "files are"))
+			"them is binary, over the size limit, or secret-shaped.", query, plural(res.InScope, "file is", "files are"))
+	case res.Secret > 0:
+		return fmt.Sprintf("No matches for %s. %s searched; %s secret-shaped and not searched.", query,
+			plural(res.Scanned, "file", "files"), plural(res.Secret, "file was", "files were"))
 	default:
 		return fmt.Sprintf("No matches for %s. %s searched.", query,
 			plural(res.Scanned, "file", "files"))

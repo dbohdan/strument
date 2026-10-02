@@ -85,6 +85,9 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 			return FileText{}, err
 		}
 	}
+	if err := w.refuseSecret(rel, full); err != nil {
+		return FileText{}, err
+	}
 
 	info, err := os.Stat(full)
 	if err != nil {
@@ -256,6 +259,9 @@ func (w *Workspace) openable(rel string, maxBytes int64) (string, string, os.Fil
 		if err := w.refuseIgnored(rel, full); err != nil {
 			return "", "", nil, err
 		}
+	}
+	if err := w.refuseSecret(rel, full); err != nil {
+		return "", "", nil, err
 	}
 
 	info, err := os.Stat(full)

@@ -80,6 +80,8 @@ type GrepResult struct {
 	// project, which is a different claim and often a false one.
 	InScope int
 	Scanned int
+	// Secret counts the files in scope left unsearched as secret-shaped.
+	Secret int
 	// Shortened counts returned lines that were clipped to MaxMatchBytes, so
 	// the caller can say so rather than let a "…" pass for the file's content.
 	Shortened int
@@ -140,11 +142,16 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 			return true
 		}
 		res.InScope++
+		full := filepath.Join(w.Root, filepath.FromSlash(rel))
+		if w.refuseSecret(rel, full) != nil {
+			res.Secret++
+			return true
+		}
 
 		if info, err := d.Info(); err == nil && info.Size() > w.Limits.fileBytes() {
 			return true
 		}
-		data, err := os.ReadFile(filepath.Join(w.Root, filepath.FromSlash(rel)))
+		data, err := os.ReadFile(full)
 		if err != nil || isBinary(data) {
 			return true
 		}

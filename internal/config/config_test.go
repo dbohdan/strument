@@ -243,6 +243,41 @@ func TestAutoCommits(t *testing.T) {
 	}
 }
 
+// TestSecretFiles: a project's secret_files_add extends the user's rather than
+// replacing it, since replacing a denylist could only widen it, and a project
+// may not exempt anything at all.
+func TestSecretFiles(t *testing.T) {
+	user := userConfig + "\nsecret_files_add = [\"*.pem\"]\nsecret_files_exempt = [\".env.test\"]\n"
+	opts := harness(t, user, "secret_files_add = [\"deploy/token\"]\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.SecretFilesAdd, ","); got != "*.pem,deploy/token" {
+		t.Errorf("SecretFilesAdd = %q, want the user's then the project's", got)
+	}
+	if got := strings.Join(cfg.SecretFilesExempt, ","); got != ".env.test" {
+		t.Errorf("SecretFilesExempt = %q", got)
+	}
+
+	opts = harness(t, userConfig, "secret_files_exempt = [\".env\"]\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(opts); err == nil || !strings.Contains(err.Error(), "secret_files_exempt") {
+		t.Errorf("a project exempting a secret file should fail the load: %v", err)
+	}
+
+	for _, bad := range []string{`secret_files_add = "*.pem"`, `secret_files_add = ["!.env"]`, `secret_files_exempt = [""]`} {
+		if _, err := Load(harness(t, userConfig+"\n"+bad+"\n", "", testEnv)); err == nil {
+			t.Errorf("%s: want a load error", bad)
+		}
+	}
+}
+
 func TestAskEditFormatRejectedInConfig(t *testing.T) {
 	// "ask" is a runtime-only format; a config that sets it must fail.
 	src := `

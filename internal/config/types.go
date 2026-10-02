@@ -374,6 +374,11 @@ type Config struct {
 	// default allowlist. See coder/envallow.go. Empty means defaults only.
 	// Matching is exact; prefixes are not expanded.
 	EnvAllow []string
+	// SecretFilesAdd and SecretFilesExempt extend and trim the built-in
+	// secret-file patterns (internal/secretfile). A project's additions are
+	// appended to the user's; only the user config may exempt.
+	SecretFilesAdd    []string
+	SecretFilesExempt []string
 
 	// AutoApprove names the confirmation prompts answered without asking, the
 	// standing form of --yes. Validated at load against GrantNames.

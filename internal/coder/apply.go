@@ -80,6 +80,13 @@ func (c *Coder) unsafePath(rel string) string {
 	if c.isPinned(rel) {
 		return ""
 	}
+	// A secret-shaped file, after the pinned exemption and before every other
+	// grant. Writing one is not the whole concern: a failed edit answers with
+	// the file's closest lines ("Did you mean to match…"), so an edit the model
+	// can send is a read it can make.
+	if reason := c.secretReason(rel); reason != "" {
+		return reason
+	}
 	// A file under the platform's standard temporary directory is sanctioned,
 	// by absolute path only. The sandbox already grants temp writes to every
 	// model-run command, so the model that prepares a scratch file for its
@@ -408,4 +415,24 @@ func (c *Coder) writeAtomically(plan writePlan) error {
 	}
 	c.recordWrites(plan, backups)
 	return nil
+}
+
+// secretReason is unsafePath's refusal for a secret-shaped target, or "".
+func (c *Coder) secretReason(rel string) string {
+	if c.Files == nil {
+		return ""
+	}
+	full := filepath.FromSlash(rel)
+	if !filepath.IsAbs(full) {
+		full = filepath.Join(c.Root, full)
+	}
+	full, err := filepath.Abs(full)
+	if err != nil {
+		return ""
+	}
+	if pat, ok := c.Files.Secret.Match(full); ok {
+		return fmt.Sprintf("it matches the secret-file pattern %q, so it is not edited; "+
+			"if the user wants you to change it, they can add it with /add", pat)
+	}
+	return ""
 }

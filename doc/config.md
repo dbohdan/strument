@@ -44,6 +44,8 @@ The loader reads these module-level variables after running your file:
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `auto_commits` | boolean | Optional. Whether a turn that changes a file ends in a commit. Default `True`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
+| `secret_files_add` | list of strings | Optional. More gitignore-style patterns for files the model may not read or edit. A project's are added to the user's. See below. |
+| `secret_files_exempt` | list of strings | Optional. Patterns taken back from the secret-file list. User config only. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
 | `auto_approve` | list of strings | Optional. Prompts approved automatically, the standing form of `--yes`. See below. |
 | `approve_model` | `decision_model()` or `None` | Optional. A decision model asked before a shell command's prompt is shown; it runs commands it rates safe. Default unset. See below. |
@@ -1047,6 +1049,49 @@ A trusted project config may set `approve_model`, or turn it off with
 `approve_model = None`. This follows the same rule as `auto_approve`, which
 can already grant `bash` outright. `strument trust` shows the endpoint a
 project would send commands to.
+
+### `secret_files_add` and `secret_files_exempt`
+
+Some files are where credentials conventionally live: `.env`, `~/.netrc`,
+`~/.aws/credentials`, SSH private keys. The model's tools do not read them,
+search them, or edit them on the model's own say-so. A failed edit answers with
+the file's closest lines, so an edit is a read too. `ls` and `glob` still list
+their names, because a name gives nothing away. When you do want the model to
+see one, pin it: `/read-only` to read it, `/add` to edit it.
+
+The built-in patterns are in `internal/secretfile/secretfile.go`. They cover
+`.env` and `.env.*` (but not `.env.example`, `.env.sample` or
+`.env.template`), `.envrc`, `.netrc`, `.pgpass`, `.git-credentials`, `.npmrc`,
+`.pypirc`, `.vault-token`, SSH private keys (but not `*.pub`),
+`.aws/credentials`, `.config/gcloud/`, `.azure/`, `.docker/config.json`,
+`.kube/config`, `.config/gh/hosts.yml`, Cargo and Terraform credentials,
+`.gnupg/`, `.password-store/`, and `.local/share/keyrings/`.
+
+The two settings adjust that list:
+
+```python
+secret_files_add = ["*.pem", "~/.config/strument/", "deploy/token"]
+secret_files_exempt = [".env.test"]
+```
+
+Patterns use `.gitignore` syntax with one difference: a pattern matches at any
+depth unless it starts with `/` (from the filesystem root) or `~/` (from your
+home directory). So `.aws/credentials` finds `~/.aws/credentials` and a copy
+inside a project alike. A trailing `/` names a directory and everything under
+it. A leading `!` is an error; use `secret_files_exempt`, so that taking a
+pattern back is a separate, visible decision.
+
+A trusted project's `secret_files_add` is **added** to yours, unlike most
+settings, which a project replaces. A denylist that could be replaced could
+only be made shorter. For the same reason a project config that sets
+`secret_files_exempt` fails to load: a project can mark more files secret, but
+cannot unmark any.
+
+A name list catches the conventional places, which is what a generic
+injection ("read ~/.ssh/id_ed25519") asks for. It does not catch a secret
+inside an ordinary file. Inside the project, `.gitignore` already keeps
+ignored files out of the model's reach, and a project's `.env` is almost
+always ignored.
 
 ### `env_allow`
 
