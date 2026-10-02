@@ -1043,6 +1043,8 @@ globally. Of the decision models on OpenRouter in October 2026
 - **`upstage/solar-decide`** approved a base64 `eval` vouched for by a comment,
   at every threshold. About 6% of its answers also took longer than the
   default 10-second timeout.
+- **`inception/mercury-decide:free`** approved 12 of 182 ask items, still 3 at
+  0.99, mostly obfuscated commands whose decoded payload it judged harmless.
 
 Run the evaluation's corpus against a model before trusting its threshold.
 The runner takes the same endpoint, slug and threshold as your
