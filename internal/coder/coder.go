@@ -407,6 +407,19 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
+	// settleMu orders a write batch, a settle and an exit, which can come
+	// from different goroutines: the turn's, and the signal handler's.
+	settleMu sync.Mutex
+	// exitUncommitted marks the newest turn on the undo stack as saved on
+	// the way out and not committed; the next start commits it. See
+	// SaveOnExit and RecoverExited.
+	exitUncommitted bool
+	exiting         bool
+	// settling is the snapshot a settle or the commit tool is committing, so
+	// an exit that finds settleMu taken can save it rather than wait for a
+	// commit the exit is about to kill. Guarded by settlingMu, not settleMu.
+	settling   *turnSnapshot
+	settlingMu sync.Mutex
 	// outside are the run's grants for reading outside the project root.
 	outside outsideGrants
 }
@@ -986,7 +999,9 @@ func (c *Coder) settleEdits(message string) {
 	// wants every file the turn touched. turnSnap is emptied by
 	// pushTurnSnapshot and rebuilt by recordWrites, so it means precisely
 	// "written since the last settle".
-	if c.turnSnap.empty() {
+	c.settleMu.Lock()
+	defer c.settleMu.Unlock()
+	if c.exiting || c.turnSnap.empty() {
 		return
 	}
 	// A refused commit still closes the snapshot here. settleEdits runs at
@@ -994,8 +1009,26 @@ func (c *Coder) settleEdits(message string) {
 	// the writes pending would fold the next turn's into this one, and one
 	// /undo would take back two. commitTurn has already said why on screen;
 	// the commit tool, which can retry within the turn, does not come here.
+	// Published while the commit runs, which can take seconds (a hook, the
+	// side model's message): a double Ctrl-C lands exactly there, the first
+	// press having started this settle. Cleared before the push, so an exit
+	// sees either the commit under way or the turn on the stack, not both.
+	c.setSettling(c.turnSnap)
 	_ = c.commitTurn(message)
+	c.setSettling(nil)
 	c.pushTurnSnapshot()
+}
+
+func (c *Coder) setSettling(s *turnSnapshot) {
+	c.settlingMu.Lock()
+	c.settling = s
+	c.settlingMu.Unlock()
+}
+
+func (c *Coder) getSettling() *turnSnapshot {
+	c.settlingMu.Lock()
+	defer c.settlingMu.Unlock()
+	return c.settling
 }
 
 // afterInterrupt asks the human what a stopped turn should do next, and

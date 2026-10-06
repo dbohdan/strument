@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -429,7 +430,7 @@ func (c *chatCmd) Run() error {
 		// failure is worth a word here, unlike the ledger above: the user would
 		// otherwise believe a turn is undoable tomorrow when it is not.
 		cdr.SaveUndo = func(stack [][]coder.TurnEdit, commits []string, last string) {
-			st := history.UndoState{Commits: commits, Last: last}
+			st := history.UndoState{Commits: commits, Last: last, Uncommitted: cdr.NewestTurnUncommitted()}
 			for _, turn := range stack {
 				var t history.UndoTurn
 				for _, e := range turn {
@@ -458,6 +459,13 @@ func (c *chatCmd) Run() error {
 	restoreNote := ""
 	if c.Continue && keepState {
 		restoreNote = restoreConversation(cdr, projectRoot, session)
+	}
+	// After the conversation, which would replace the note this adds; before
+	// the REPL's restore of the undo stack, which then reads the state this
+	// leaves. Both modes come through here, scripted runs included, though
+	// only the REPL restores the stack.
+	if keepState {
+		recoverExitedTurn(cdr, projectRoot, session)
 	}
 
 	if c.Message == "" {
@@ -500,6 +508,7 @@ func (c *chatCmd) Run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, repl.UserInterruptSignal())
 	defer stop()
+	defer watchExitSignals(cdr, nil)()
 
 	msg, format, err := scriptMessage(c.Message)
 	if err != nil {
@@ -1039,6 +1048,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		return err
 	}
 	defer r.Close()
+	defer watchExitSignals(cdr, func() { _ = r.Close() })()
 	// Route confirms through readline; a --yes name answers first. The asker
 	// has no auto variant: --yes answers permission prompts, and a question is
 	// the model asking for information it cannot proceed without.
@@ -2282,4 +2292,73 @@ func scriptMessage(text string) (msg, format string, err error) {
 	}
 	return "", "", fmt.Errorf("-m does not run /%s: script mode sends one message. "+
 		"Use the REPL for commands, or /ask or /code followed by a message", name)
+}
+
+// recoverExitedTurn finishes a turn the last run exited in the middle of: the
+// files still as that run wrote them are committed, the rest are reported, and
+// the undo record stops marking the turn. See coder.SaveOnExit.
+func recoverExitedTurn(cdr *coder.Coder, projectRoot, session string) {
+	st := history.LoadUndo(projectRoot, session)
+	if !st.Uncommitted || len(st.Turns) == 0 {
+		return
+	}
+	newest := st.Turns[len(st.Turns)-1]
+	turn := make([]coder.TurnEdit, 0, len(newest.Entries))
+	for _, e := range newest.Entries {
+		turn = append(turn, coder.TurnEdit{Path: e.Path, Before: e.Before, After: e.After, Existed: e.Existed, Mode: e.Mode})
+	}
+	kept, changed, hash, already, err := cdr.RecoverExited(turn)
+	switch {
+	case already:
+		noticef("The last run ended mid-turn, after committing its edits to %s.", strings.Join(kept, ", "))
+	case err != nil:
+		noticef("The last run ended mid-turn, and committing its edits to %s failed: %v. They are in the files; /undo reaches them.",
+			strings.Join(kept, ", "), err)
+	case hash != "":
+		noticef("The last run ended mid-turn. Its edits to %s are committed as %s.", strings.Join(kept, ", "), hash)
+	case len(kept) > 0:
+		noticef("The last run ended mid-turn. Its edits to %s are in the files, uncommitted; /undo reaches them.",
+			strings.Join(kept, ", "))
+	}
+	if len(changed) > 0 {
+		noticef("  %s", coder.ChangedSince(changed))
+	}
+	st.Uncommitted = false
+	if hash != "" {
+		st.Commits = append(st.Commits, hash)
+		st.Last = hash
+	}
+	if err := history.SaveUndo(projectRoot, session, st, 0); err != nil {
+		noticef("could not update the undo record: %v", err)
+	}
+}
+
+// watchExitSignals saves an unfinished turn when the process is told to stop:
+// SIGTERM, which `timeout` and service managers send, and SIGHUP, a closed
+// terminal. cleanup restores the terminal, if one was taken. The exit status
+// is the shell's convention, 128 plus the signal.
+func watchExitSignals(cdr *coder.Coder, cleanup func()) func() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGHUP)
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case sig := <-ch:
+			paths := cdr.SaveOnExit()
+			if cleanup != nil {
+				cleanup()
+			}
+			if len(paths) > 0 {
+				fmt.Fprintf(os.Stderr, "Saved the unfinished turn's edits to %s; the next start commits them.\n",
+					strings.Join(paths, ", "))
+			}
+			code := 1
+			if s, ok := sig.(syscall.Signal); ok {
+				code = 128 + int(s)
+			}
+			os.Exit(code)
+		case <-stop:
+		}
+	}()
+	return func() { signal.Stop(ch); close(stop) }
 }

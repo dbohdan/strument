@@ -630,6 +630,7 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 					if r.opts.Color {
 						fmt.Fprint(r.opts.Stderr, "\x1b[?25h")
 					}
+					r.saveOnExit()
 					r.opts.Exit(130)
 					return
 				}
@@ -845,6 +846,7 @@ func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 			if r.opts.Color {
 				fmt.Fprint(r.opts.Stderr, "\x1b[?25h")
 			}
+			r.saveOnExit()
 			r.opts.Exit(130)
 		}
 		fmt.Fprintln(r.opts.Stderr, "Press Ctrl-C again to exit")
@@ -899,4 +901,14 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 		return nil // interrupted or EOF; the coder reports "(no answer)"
 	}
 	return coder.ParseAskAnswer(req, line)
+}
+
+// saveOnExit keeps the unfinished turn's edits for /undo and for the next
+// start to commit, before the chord's hard exit skips the turn's own settle.
+// See coder.SaveOnExit.
+func (r *REPL) saveOnExit() {
+	if paths := r.coder.SaveOnExit(); len(paths) > 0 {
+		fmt.Fprintf(r.opts.Stderr, "\nSaved the unfinished turn's edits to %s; the next start commits them.\n",
+			strings.Join(paths, ", "))
+	}
 }

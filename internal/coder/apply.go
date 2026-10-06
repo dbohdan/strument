@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -335,6 +336,13 @@ func (c *Coder) fullPath(rel string) string {
 // key, an SSH config — would come back world-readable. Changing a file's
 // contents is what was asked for; changing who can read or run it was not.
 func (c *Coder) writeAtomically(plan writePlan) error {
+	// Held for the whole batch, so an exit waits for it: a batch is all or
+	// nothing on disk, and the snapshot must say which. See SaveOnExit.
+	c.settleMu.Lock()
+	defer c.settleMu.Unlock()
+	if c.exiting {
+		return errors.New("exiting; nothing was written")
+	}
 	backups := map[string]snapEntry{}
 	var order []string
 

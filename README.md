@@ -200,6 +200,14 @@ Answer (1-2, or your own text): Use the existing token helper instead
 Typing your own answer sends it as a correction, and `Stop` ends the turn.
 Edits made before the interruption remain undoable with `/undo`.
 
+Exiting in the middle of a turn — `Ctrl-C` twice, closing the terminal, or a
+`SIGTERM` from `timeout` or a service manager — does not lose the turn.
+Strument saves its edits for `/undo` on the way out and leaves the commit for
+the next start, which commits the files that are still exactly as the turn
+left them and reports any that have changed since, so an edit you make in
+between never lands in Strument's commit. A `SIGKILL`, a crash, or a power
+loss still ends the run with nothing saved; the edits are on disk.
+
 ### REPL commands
 
 | | |

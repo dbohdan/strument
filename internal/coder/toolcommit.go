@@ -131,8 +131,13 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 		return "Nothing has been written since your last commit, so there was nothing to commit."
 	}
 
+	c.settleMu.Lock()
+	defer c.settleMu.Unlock()
 	before := c.lastCommitHash
-	if err := c.commitTurn(args.message()); err != nil {
+	c.setSettling(c.turnSnap)
+	err := c.commitTurn(args.message())
+	c.setSettling(nil)
+	if err != nil {
 		// The writes stay pending, unlike settleEdits: the model can fix what
 		// git objected to and call this again, and the commit has to find the
 		// same edits when it does.

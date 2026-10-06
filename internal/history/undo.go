@@ -77,6 +77,9 @@ type UndoState struct {
 	Turns   []UndoTurn `json:"turns,omitempty"`
 	Commits []string   `json:"commits,omitempty"`
 	Last    string     `json:"last_commit,omitempty"`
+	// Uncommitted marks the newest turn as saved on the way out of a run it
+	// did not finish, with its commit left for the next start.
+	Uncommitted bool `json:"uncommitted,omitempty"`
 }
 
 // UndoPath is the undo file for a project root.
