@@ -1008,6 +1008,12 @@ p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
   word whose value needs a command run or any variable but `HOME` and `PWD` to
   know is skipped, so `cat ~/$(echo .argep | rot13)` gets through. The
   patterns are not passed to the model, whose input window is too small.
+- **Not for removing what the turn itself made.** A plain `rm` (with at
+  most `-f` and `--`) of files this turn created and has not committed runs
+  without asking anyone. The turn's net effect on those files is nothing, so
+  they also drop out of its commit and its `/undo`. Anything more — `-r`, a
+  file that existed before the turn, a chained command — goes through the
+  gate as usual.
 - **Once per command per turn, when no one can answer.** With no terminal, a
   command the decision model declines is declined, and the model is told that the
   answer came from a classifier, not a person. If it sends the identical

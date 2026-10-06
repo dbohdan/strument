@@ -77,6 +77,41 @@ func (s *turnSnapshot) wrote(path string) bool {
 	return ok
 }
 
+// createdKey reports the key under which this turn's snapshot holds a file it
+// created, matching the path however it is spelled: the snapshot keys on the
+// spelling of the write, "sim/x.go", and a later command may say "./sim/x.go".
+// A file that existed before the turn's first write to it is not one.
+func (s *turnSnapshot) createdKey(root, path string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	want := absUnder(root, path)
+	for _, k := range s.order {
+		if e := s.entries[k]; !e.existed && absUnder(root, k) == want {
+			return k, true
+		}
+	}
+	return "", false
+}
+
+// forget drops a path from the snapshot: what the turn did to it no longer
+// needs undoing or committing.
+func (s *turnSnapshot) forget(path string) {
+	if s == nil {
+		return
+	}
+	delete(s.entries, path)
+	s.order = slices.DeleteFunc(s.order, func(p string) bool { return p == path })
+}
+
+func absUnder(root, p string) string {
+	p = filepath.FromSlash(p)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(root, p)
+	}
+	return filepath.Clean(p)
+}
+
 // recordWrites folds a completed batch into the current turn's snapshot. It is
 // called only after the whole batch landed: a batch that rolled back changed
 // nothing and must leave no trace here.

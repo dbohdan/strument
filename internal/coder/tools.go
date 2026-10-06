@@ -3,7 +3,9 @@ package coder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -1152,6 +1154,26 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
+	// Removing only files this turn created, and has not committed, is a
+	// no-op as far as the turn is concerned: the snapshot's before-state for
+	// each of them is "did not exist". So it runs unasked, like a configured
+	// check, and the files leave the snapshot, so the commit and /undo see
+	// nothing of them. Under approve_model in an unattended run, MiMo could
+	// not delete a scratch test it had written minutes before — Jev asks
+	// about every rm, rightly in general — and committed it with a note
+	// asking the user to.
+	if keys, ok := c.removesOnlyOwnFiles(command); ok {
+		c.approvalNote = "Ran without asking: it only removes files this turn created."
+		requested := time.Duration(cmd.timeout) * time.Second
+		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
+		for _, k := range keys {
+			if _, err := os.Lstat(absUnder(c.Root, k)); errors.Is(err, fs.ErrNotExist) {
+				c.turnSnap.forget(k)
+				delete(c.turnEditedFiles, k)
+			}
+		}
+		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
+	}
 	// The same command, declined earlier this turn with no one at a terminal,
 	// is declined again without asking anything. Live, MiMo sent a declined
 	// `rm` twelve times in one turn, alone and chained to its checks: nothing
@@ -1696,4 +1718,36 @@ func declinedAgain(verdict string) string {
 	}
 	return "You sent this exact command earlier in this turn and it was declined, so it was not run again: " +
 		why + ". Sending it again cannot succeed. Do without it, or say in your answer what you would have run and why."
+}
+
+// removesOnlyOwnFiles reports whether command is a plain rm of files this turn
+// created and has not committed, and their snapshot keys. "Plain" is
+// literalWords' rule — one simple command of bare literal words, nothing
+// expanded, chained or redirected — plus rm's -f and the "--" that ends
+// options. Anything else, -r included, goes through the ordinary gate.
+func (c *Coder) removesOnlyOwnFiles(command string) ([]string, bool) {
+	words, ok := literalWords(command)
+	if !ok || len(words) < 2 || words[0] != "rm" {
+		return nil, false
+	}
+	var keys []string
+	opts := true
+	for _, w := range words[1:] {
+		if opts && w == "--" {
+			opts = false
+			continue
+		}
+		if opts && strings.HasPrefix(w, "-") {
+			if w != "-f" {
+				return nil, false
+			}
+			continue
+		}
+		k, ok := c.turnSnap.createdKey(c.Root, w)
+		if !ok {
+			return nil, false
+		}
+		keys = append(keys, k)
+	}
+	return keys, len(keys) > 0
 }
