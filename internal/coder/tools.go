@@ -1152,6 +1152,14 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Sandbox.Active {
 		group = "shell"
 	}
+	// The same command, declined earlier this turn with no one at a terminal,
+	// is declined again without asking anything. Live, MiMo sent a declined
+	// `rm` twelve times in one turn, alone and chained to its checks: nothing
+	// it could change would change the answer, and nothing said so.
+	if why, ok := c.turnDeclined[command]; ok {
+		c.Out.Toolf("Declined again: %s", quoteToolArg(command))
+		return declinedAgain(why), false
+	}
 	// A command that names a secret-shaped file goes to the user: not to
 	// approve_model, whose context is too small to be handed the patterns, and
 	// not to an earlier "a" this turn, which was about commands the sandbox
@@ -1168,6 +1176,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	// approve_model is asked only where the prompt would really be shown, and
 	// only under the sandbox, the same property that licenses "a" above.
 	approved, note := false, secretNote
+	c.approveVerdict = ""
 	if secretNote == "" && c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
 		approved, note = c.approveByModel(ctx, command, cmd.purpose)
 	}
@@ -1180,6 +1189,20 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 			Group:   group,
 			Grant:   GrantBash,
 		}); !res.Yes && !res.Always {
+			if res.Unattended {
+				verdict := c.approveVerdict
+				if c.turnDeclined == nil {
+					c.turnDeclined = map[string]string{}
+				}
+				c.turnDeclined[command] = verdict
+				if verdict != "" {
+					// The model hears that a classifier answered, not a
+					// person: a refusal it could read as someone's judgment
+					// of its work invites arguing with it.
+					return fmt.Sprintf("Strument declined to run the command: %s, and no one is at a terminal "+
+						"to overrule it. Do without it, or say what you would have done.", verdict), false
+				}
+			}
 			return declined(res, "run the command", GrantBash), false
 		}
 	}
@@ -1659,4 +1682,18 @@ func replacedVerb(n int) string {
 		return "Replaced 1 occurrence in"
 	}
 	return fmt.Sprintf("Replaced %d occurrences in", n)
+}
+
+// declinedAgain is the answer to a command already declined this turn with no
+// one to ask. It says why the answer cannot change, so the model stops
+// spending steps on it: a classifier gives the same command the same answer,
+// and no terminal will appear mid-run.
+func declinedAgain(verdict string) string {
+	why := "no one is at a terminal to approve it, and that will not change during this run"
+	if verdict != "" {
+		why = verdict + ". It is a classifier, not a person, and it gives the same command the same answer; " +
+			"no one is at a terminal to overrule it"
+	}
+	return "You sent this exact command earlier in this turn and it was declined, so it was not run again: " +
+		why + ". Sending it again cannot succeed. Do without it, or say in your answer what you would have run and why."
 }

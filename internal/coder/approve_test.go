@@ -336,3 +336,46 @@ func TestSecretPathsGoToTheUser(t *testing.T) {
 		t.Errorf("prompt = %+v; want a note naming .env and no \"a\"", got)
 	}
 }
+
+// TestDeclinedCommandIsNotAskedAgain: with no one at a terminal, a command the
+// classifier declined is declined again without a second call, and the model
+// is told it was a classifier and that retrying cannot work. A different
+// command still goes to the classifier, and a new turn starts clean.
+func TestDeclinedCommandIsNotAskedAgain(t *testing.T) {
+	c := testCoder(t)
+	c.Out = &captureOut{}
+	c.Confirm = unattendedConfirmer{}
+	c.SuggestShellCommands = true
+	c.Sandbox = SandboxState{Active: true}
+	fd := &fixedDecider{p: 0.08}
+	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "laya", Threshold: 0.9}
+	run := func(cmd string) string {
+		out, ran := c.runShell(context.Background(), toolCommand{command: cmd, purpose: "tidy"})
+		if ran {
+			t.Fatalf("%s ran", cmd)
+		}
+		return out
+	}
+
+	first := run("rm scratch_test.go")
+	if !strings.Contains(first, "classifier") || !strings.Contains(first, "0.08") {
+		t.Errorf("first decline does not say a classifier answered: %q", first)
+	}
+	again := run("rm scratch_test.go")
+	if fd.calls != 1 {
+		t.Errorf("the classifier was asked %d times; an identical retry should not ask it", fd.calls)
+	}
+	if !strings.Contains(again, "earlier in this turn") || !strings.Contains(again, "cannot succeed") ||
+		!strings.Contains(again, "same answer") {
+		t.Errorf("repeat answer = %q", again)
+	}
+	run("rm other.go")
+	if fd.calls != 2 {
+		t.Errorf("a different command was not sent to the classifier (calls %d)", fd.calls)
+	}
+	c.initBeforeMessage()
+	run("rm scratch_test.go")
+	if fd.calls != 3 {
+		t.Errorf("a new turn did not ask again (calls %d)", fd.calls)
+	}
+}

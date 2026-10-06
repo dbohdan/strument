@@ -401,6 +401,12 @@ type Coder struct {
 	// regression would be silent, and would be exactly the session-wide
 	// silence on shell commands the ConfirmResult comment warns against.
 	sessionAutoApprove map[string]bool
+	// turnDeclined holds the commands declined this turn with no one to ask,
+	// and why, so an identical retry is answered without asking again; see
+	// declinedAgain. approveVerdict is approve_model's model-facing reason for
+	// the decision just made, "" unless it rated the command and said ask.
+	turnDeclined   map[string]string
+	approveVerdict string
 	// outside are the run's grants for reading outside the project root.
 	outside outsideGrants
 }
@@ -671,6 +677,7 @@ func (c *Coder) initBeforeMessage() {
 	c.recordToolLines()
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
+	c.turnDeclined = map[string]string{}
 	c.editsExact, c.editsFuzzy = 0, 0
 	// sessionAutoApprove is not reset here. That is the whole of the session
 	// scope; /reset and "/web reset" are what end it.

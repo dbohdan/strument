@@ -1008,6 +1008,11 @@ p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
   word whose value needs a command run or any variable but `HOME` and `PWD` to
   know is skipped, so `cat ~/$(echo .argep | rot13)` gets through. The
   patterns are not passed to the model, whose input window is too small.
+- **Once per command per turn, when no one can answer.** With no terminal, a
+  command the decision model declines is declined, and the model is told that the
+  answer came from a classifier, not a person. If it sends the identical
+  command again in the same turn, Strument declines it without asking the
+  model again and says the answer cannot change.
 - **Only for commands that fit the model's input window.** A command plus
   purpose longer than 800 characters is always asked about, because decision
   models cut long input without saying so. Ollaya's Laya reads 512 tokens,

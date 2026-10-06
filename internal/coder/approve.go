@@ -278,6 +278,7 @@ func (c *Coder) shellPromptAnswered(group string) bool {
 // command in the prompt (ConfirmRequest.Note). A service that did not answer
 // is reported at once instead, because that is news about the service.
 func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bool, string) {
+	c.approveVerdict = ""
 	am := c.Approve
 	if n := len(command) + len(purpose); n > approveMaxInput {
 		c.record(Record{Type: "decision", Call: "approve_model", Model: am.Slug, Outcome: "too_long"})
@@ -322,5 +323,7 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bo
 		return true, ""
 	}
 	r.Outcome = "asked"
+	c.approveVerdict = fmt.Sprintf("approve_model, a classifier (%s), rated it p(safe) %.2f, below its threshold of %.2f",
+		r.Model, p, am.Threshold)
 	return false, fmt.Sprintf("Not approved by %s, p(safe) %.2f < %.2f.", r.Model, p, am.Threshold)
 }
