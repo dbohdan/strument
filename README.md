@@ -18,6 +18,8 @@ See [`doc/`](doc/README.md) for the developer overview.
   One `config.star` file replaces YAML, `.env` files, and a JSON model database.
   A project's own config loads only after you run `strument trust`, which shows what it would be allowed to do.
 - [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents), including `bash`, which runs commands in an embedded cross-platform Bash ([mvdan/sh](https://github.com/mvdan/sh)).
+- An optional [decision model](doc/config.md#approve_model) in front of the shell prompt.
+  A classifier such as TypeSafe's Jev or Cloudflare's Clef rates each command, and the ones it rates safe run without asking.
 - [Agent Skills](https://agentskills.io/): a `SKILL.md` in your skills directory or the project's is available to the model by name.
   See [Skills](doc/config.md#skills).
 - A sandboxed [`run_code` tool](doc/config.md#the-run_code-tool) for short JavaScript programs, such as calculations or processing many inputs at once.
