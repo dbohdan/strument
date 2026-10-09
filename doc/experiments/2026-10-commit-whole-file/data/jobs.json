@@ -1,0 +1,482 @@
+[
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-000"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-001"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-002"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-003"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-004"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-005"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-006"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-007"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-008"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-009"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-010"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-011"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-012"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-013"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-014"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-015"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-016"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-017"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-018"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-019"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-020"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-021"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-022"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-023"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-024"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-025"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-026"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-027"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-028"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-029"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-030"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-031"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-032"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-033"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-034"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-035"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-036"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-037"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-038"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-039"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-040"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-041"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-042"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-043"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-044"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-045"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-046"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-047"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-048"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-049"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-050"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-051"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-052"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-053"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-054"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-055"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-056"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-057"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-058"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-059"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-060"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-061"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-062"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-063"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-064"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-065"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-066"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-067"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-068"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-069"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-070"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-071"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-072"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-073"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-074"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-075"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-076"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-077"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-078"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-079"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-080"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-081"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-082"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-083"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-084"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-085"
+ },
+ {
+  "model": "qwen",
+  "arm": "baseline",
+  "id": "run-086"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-087"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-088"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-089"
+ },
+ {
+  "model": "mimo",
+  "arm": "baseline",
+  "id": "run-090"
+ },
+ {
+  "model": "glm",
+  "arm": "baseline",
+  "id": "run-091"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-092"
+ },
+ {
+  "model": "glm",
+  "arm": "treatment",
+  "id": "run-093"
+ },
+ {
+  "model": "mimo",
+  "arm": "treatment",
+  "id": "run-094"
+ },
+ {
+  "model": "qwen",
+  "arm": "treatment",
+  "id": "run-095"
+ }
+]

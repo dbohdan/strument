@@ -1,6 +1,8 @@
 # Telling the commit tool that an edited file is committed whole
 
-**2026-10-09. Preregistered; results below the line once run.**
+**2026-10-09.** 96 live sessions, three models, two arms, order shuffled (seed
+20261009). Preregistered in cf45d0b before the run. Data, runner and scorer in
+`data/`.
 
 ## Why
 
@@ -59,3 +61,95 @@ A pilot of one run per model per arm checks the runner, that models call the
 commit tool, and the scorer on live output; it is not pooled.
 
 ---
+
+## Result: not shipped by the preregistered rule
+
+**96 runs, all finished or timed out cleanly (no worker failures). $0.50,
+plus three timed-out runs whose cost was never printed.**
+
+| model | success: baseline | treatment | p |
+| --- | --- | --- | --- |
+| Qwen3.8-27B | 13/16 | 15/16 | 0.60 |
+| MiMo-V2.6-Flash | 16/16 | 16/16 | 1.00 |
+| GLM-5.3-Flash | 4/16 | 2/16 | 0.65 |
+
+Qwen rose by 2/16; the rule asked for 3. GLM fell by 2/16, inside the 2/16 the
+rule allowed. **The sentence does not ship.**
+
+The baseline failed far less often than the two-for-two that prompted the
+trial: 13/16 succeeded. A prompt case found by watching a model fail twice
+regressed toward its mean.
+
+### What moved anyway, on Qwen
+
+| Qwen | baseline | treatment | permutation p |
+| --- | --- | --- | --- |
+| output tokens, median | 6,600 | 1,300 | 0.012 |
+| wall clock, median | 266 s | 67 s | 0.038 |
+| runs rewriting history (`reset`, `--amend`, `rebase`, …) | 6/16 | 0/16 | 0.017 (means) |
+| steps, median | 10 | 9 | 0.031 |
+| cost, mean | $0.018 | $0.009 | |
+
+MiMo moved the same way and did not reach significance (output tokens 4,950 →
+3,800, p = 0.17); GLM did not move. These were secondary metrics, chosen
+before the run, and they are the cost of deliberation the trial was prompted
+by: Qwen, told nothing, spends minutes and thousands of tokens working out
+whether an edited file is committed from the index or from disk, and in a
+third of runs rewrites its own history to find out. The sentence ends that.
+It did not change whether the task got done, which is what the gate measured.
+A confirmatory trial with output tokens or history rewrites as the primary is
+the honest next step if the sentence is wanted; this result cannot be
+promoted to one after the fact.
+
+### GLM's success rate is a bug since fixed, not the arms
+
+24 of GLM's 26 failures, in both arms, are one pattern: `git mv notes.txt
+NOTES.md && echo more >> NOTES.md` in one command. The binaries under test
+committed a staged path as the index had it, so the rename went in without
+the line. 19ea9d1, made while this trial ran, commits staged paths as they
+are on disk; the same command, rerun live on MiMo, GLM and Qwen, now commits
+both. The other two: one run never wrote the line, one wrote `notes\n\nmore\n`
+and the scorer's exact-content check rejected the blank line.
+
+### The finding the trial was not designed for: models delete the user's line
+
+The fixture's `greet.py` carries the user's uncommitted `# user comment`. In 5
+of 96 runs that line ended in neither HEAD nor the working tree — deleted by
+the model, through its edit tool, to keep the user's work out of its own
+commit (`data/transcripts/`):
+
+| run | model | arm | how |
+| --- | --- | --- | --- |
+| 009 | Qwen | baseline | read the uncommitted-changes notice, re-edited greet.py to drop the line |
+| 021 | Qwen | treatment | the same, then timed out |
+| 031 | Qwen | baseline | dropped it before the first commit, unprompted |
+| 033 | Qwen | baseline | read the notice, re-edited greet.py to drop the line |
+| 056 | MiMo | baseline | dropped it before committing; the notice then said the changes *were* in the commit, which was false by then, and MiMo rewrote history over the contradiction |
+
+Four of the five came after the notice that 579ae4a added ("greet.py had
+uncommitted changes before you changed it; they are in this commit"), which
+models read as a problem to repair. The one repair available to them is
+deletion. Before 579ae4a, Strument committed a dirty file separately before
+editing it, so the user's line would have been in its own commit and there
+would have been nothing to repair. This is a regression introduced by
+replacing that commit, and it is the reason this write-up is longer than its
+result.
+
+### Counter-metrics
+
+| | Qwen B / T | MiMo B / T | GLM B / T |
+| --- | --- | --- | --- |
+| user's line lost | 3 / 1 | 1 / 0 | 0 / 0 |
+| user's staged `other.txt` no longer staged | 2 / 0 | 2 / 0 | 0 / 0 |
+| `other.txt` content lost from disk | 0 / 0 | 0 / 0 | 0 / 0 |
+
+None worsened in the treatment arm.
+
+### Equipment
+
+- The scorer's self-test caught a wrong expectation of mine (round-1 Qwen had
+  unstaged `other.txt`), not a fault of its own, and gained the
+  `other_lost` column that separates "unstaged" from "gone".
+- An arm-named run directory would have put the arm in the system prompt's
+  working-directory line; the stub check found it before the run.
+- Qwen at `reasoning = "low"` still ran to the 600 s timeout in 3 runs.
