@@ -126,7 +126,7 @@ with current project state.
 
 | experiment | question → result → decision |
 | --- | --- |
-| **check** — [2026-10-cache-routing](2026-10-cache-routing/) | Is the conversation cached, and does sticky routing help? Anthropic cached only the system prompt until conversation breakpoints (Haiku 5.5: 30.3k → 63.5k read of 85.4k); a message must keep one shape or automatic caches miss (MiMo); an OpenRouter session key doubled GLM's cost and was not shipped. Command Code's 99% is mostly long-session arithmetic. |
+| **check** — [2026-10-cache-routing](2026-10-cache-routing/) | Is the conversation cached, and does sticky routing help? Anthropic cached only the system prompt until conversation breakpoints (Haiku 5.5: 30.3k → 63.5k read of 85.4k); a message must keep one shape or automatic caches miss (MiMo); an OpenRouter session key doubled GLM's cost and was not shipped. Command Code's 99% is mostly long-session arithmetic. Qwen and Gemini (one breakpoint, on the turn's request) checked; long sessions reach 89–97% a turn, compaction cuts cost 29–34% on automatic caches and adds 13% on Qwen, and every resumed process re-summarizes. |
 | **trial** — [2026-09-image-dialects](2026-09-image-dialects/) | Does an image survive each of the three wire dialects, on both routes? One of three was broken, and it was the one with the dialect-specific special case: an image inside an Anthropic `tool_result` returns HTTP 400, while the same image re-homed into the following user turn is accepted. Delete the branch — 0/2 to 2/2 with no other cell moving. The capability declaration is separately shown to be load-bearing: declaring a text-only model as image-capable fails the request outright. |
 
 ## Against other harnesses

@@ -1,0 +1,6 @@
+1m    glm   turns=6 sent=2444k hit=93.1% cost=$0.0854 compactions=0 per-turn hit: 46% 89% 92% 94% 97% 96%
+1m    mimo  turns=6 sent=2095k hit=84.6% cost=$0.0512 compactions=0 per-turn hit: 72% 90% 93% 95% 59% 96%
+1m    qwen  turns=6 sent=2640k hit=94.4% cost=$0.0766 compactions=0 per-turn hit: 67% 92% 93% 95% 97% 97%
+200k  glm   turns=6 sent=932k hit=70.4% cost=$0.0551 compactions=9 per-turn hit: 67% 89% 73% 74% 44% 73%
+200k  mimo  turns=6 sent=990k hit=78.7% cost=$0.0327 compactions=9 per-turn hit: 72% 90% 75% 77% 78% 76%
+200k  qwen  turns=6 sent=1122k hit=80.1% cost=$0.0538 compactions=9 per-turn hit: 71% 90% 76% 76% 78% 76%

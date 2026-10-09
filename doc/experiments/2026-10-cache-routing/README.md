@@ -85,3 +85,66 @@ conversation at all. Five-step runs like these cannot exceed about 80% because
 the first request and each step's additions are writes. "99%+" says more about
 session length than about method, and is not a number to compare short runs
 against.
+
+## 4. Explicit-cache providers: Qwen on Alibaba, Gemini on flex (c6906bc)
+
+Same five-step turn, two runs per build. **Qwen 3.8 Flash**, served only by
+Alibaba, which caches only at explicit breakpoints and bills a write above
+plain input ($0.20 against $0.15 a million): the rolling breakpoints took hits
+from 28–34k to 56–68k per run, every token read or written, and halved the
+cost ($0.0087–0.0100 to $0.0046–0.0056).
+
+**Gemini 3.8 Flash**, restricted to the flex endpoints with
+`extra_params = {"provider": {"only": ["google-ai-studio/flex",
+"google-vertex/global/flex"]}}` — confirmed by the bill, $0.01367 against
+$0.0119 expected at flex prices and $0.0238 at standard. OpenRouter uses only
+Gemini's last breakpoint, and a request-by-request log through a recording
+proxy (`data/proxy.py`) showed the rolling breakpoints backfiring: the last one
+landed on a tool result, which creates no cache, and the system prompt's cache
+went unread — 0 tokens cached on the second and third requests, where the
+system-only build read 4,658 on every one. For Gemini the conversation's one
+breakpoint now goes on the last user message, the turn's own request. Two
+turns, per-request costs from OpenRouter:
+
+| | turn A (5 steps) | turn B (3 steps) | total |
+|---|---|---|---|
+| system breakpoint only | $0.0162 | $0.0166 | $0.0328 |
+| turn's request | $0.0180 | $0.0110 | $0.0290 |
+
+Creating the cache bills the cached prefix once more on the turn's first
+request; it is repaid after about one further step.
+
+## 5. Long sessions and compaction
+
+Six `--continue` turns, each reading four files of Strument's own source (24
+files, 332 KB, `data/files.txt`) and answering, about 30 steps a session. Each
+model ran with `context = 1000000`, where the settled-history budget
+(context/4) is never reached, and with `context = 200000`, where it is 50k
+and compaction folds the history. Costs are OpenRouter's per-request figures
+through the recording proxy, side calls included; hit rates from Strument's
+own usage lines (`data/long-sessions.txt`).
+
+| model | 1M: sent / hit / cost | 200k: sent / hit / cost | change |
+|---|---|---|---|
+| GLM-5.3-Flash | 2,444k / 93.1% / $0.0908 | 932k / 70.4% / $0.0599 | −34% |
+| MiMo-V2.6-Flash | 2,095k / 84.6% / $0.0515 | 990k / 78.7% / $0.0364 | −29% |
+| Qwen 3.8 Flash | 2,640k / 94.4% / $0.0744 | 1,122k / 80.1% / $0.0844 | +13% |
+
+- **Without compaction the hit rate climbs toward 1 − Δ/C**: 89–97% per turn
+  from the second turn on, as the context grows against a steady few thousand
+  tokens added per step. One MiMo turn fell to 59%, a single miss mid-session.
+- **Compaction lowers the hit rate and, for automatic caches, the bill.** It
+  sends less than half the tokens; the misses it causes cost less than the
+  tokens it saves. Hit rate is the wrong objective; cost per task is the one.
+- **Not for Qwen.** Its cache writes cost more than plain input and its
+  summaries are output tokens at $0.47 a million, so each fold, which
+  rewrites the whole prefix, costs more than it saves at this session length.
+- **Every resumed process summarizes again from scratch.** A `--continue`
+  process restores the full history from the session record and compacts it
+  before its first request, since the previous process's compaction is not
+  recorded — four of each 200k session's nine compactions. The new summary
+  differs from the last, so the previous turn's cache is lost too. In the
+  REPL, one process, this does not happen.
+
+The last is the one to fix: a compaction written to the session record, and a
+restore that rebuilds what the last process sent instead of folding again.
