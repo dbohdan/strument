@@ -1,0 +1,15 @@
+diff --git a/internal/coder/toolcommit.go b/internal/coder/toolcommit.go
+index 3c8faef..4058c2b 100644
+--- a/internal/coder/toolcommit.go
++++ b/internal/coder/toolcommit.go
+@@ -48,7 +48,9 @@ func commitTool() llm.ToolDef {
+ 			"commit, and whatever your bash commands staged with git since then — " +
+ 			"`git mv`, `git rm`, `git add`. Other changes a bash command made, such as a " +
+ 			"formatter's or a code generator's, are not included unless you stage them, " +
+-			"and are otherwise left for the user to commit.\n\n" +
++			"and are otherwise left for the user to commit. A file you edit is committed " +
++			"whole, as it is on disk, including any changes it had before your first edit; " +
++			"the commit names such a file in a trailer.\n\n" +
+ 			"Call it as you finish each part, not once at the end: make the edits for one " +
+ 			"part and commit them in the same step, then start the next part when that " +
+ 			"result comes back. Edits you make in one step all land in one commit, so a " +
