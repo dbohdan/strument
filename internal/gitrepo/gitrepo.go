@@ -5,6 +5,7 @@
 package gitrepo
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Repo is a discovered git repository.
@@ -454,24 +456,205 @@ func (r *Repo) indexEntries(paths []string) (map[string][]indexEntry, error) {
 	return m, nil
 }
 
-// IndexEntries lists the index as path → one string per path, mode, blob and
-// stage for each of its entries. Two listings compare equal exactly when
-// nothing was staged between them: the stat data git refreshes on a plain
-// `git status` is not in it.
-func (r *Repo) IndexEntries() (map[string]string, error) {
-	entries, err := r.indexEntries(nil)
+// MarkIndex records the index as it is now, for IndexChangedSince to compare
+// against, and returns the record's path; "" means there was no index to
+// record. DropMark deletes it.
+//
+// The record is a hard link, so taking one costs a syscall rather than a
+// listing. That works because git never writes the index in place: it writes
+// index.lock and renames it over, which leaves the old file alive under the
+// link. Listing the whole index around every model command instead cost 0.4 s
+// per command at 100,000 files and 1.3 s at 300,000, most of it parsing. A
+// filesystem without hard links gets a copy.
+func (r *Repo) MarkIndex() (string, error) {
+	idx, gitDir, err := r.indexPath()
+	if err != nil {
+		return "", err
+	}
+	r.sweepMarks(gitDir)
+	if _, err := os.Stat(idx); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	f, err := os.CreateTemp(gitDir, markPrefix+"*")
+	if err != nil {
+		return "", err
+	}
+	mark := f.Name()
+	_ = f.Close()
+	_ = os.Remove(mark)
+	if err := os.Link(idx, mark); err == nil {
+		return mark, nil
+	}
+	data, err := os.ReadFile(idx)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(mark, data, 0o600); err != nil { //nolint:gosec // mark is os.CreateTemp's name in the git directory, not input.
+		return "", err
+	}
+	return mark, nil
+}
+
+// markPrefix names index marks in the git directory.
+const markPrefix = "strument-index-mark-"
+
+// sweepMarks deletes marks a process left behind by dying before DropMark. A
+// day is far longer than any turn a mark lives for.
+func (r *Repo) sweepMarks(gitDir string) {
+	old, _ := filepath.Glob(filepath.Join(gitDir, markPrefix+"*"))
+	for _, m := range old {
+		if st, err := os.Stat(m); err == nil && time.Since(st.ModTime()) > 24*time.Hour {
+			_ = os.Remove(m)
+		}
+	}
+}
+
+// DropMark deletes a mark MarkIndex made.
+func (r *Repo) DropMark(mark string) {
+	if mark != "" {
+		_ = os.Remove(mark)
+	}
+}
+
+// IndexChangedSince lists the paths whose index entries — mode, blob, stage —
+// differ from the mark's. The same file, or the same bytes, means nothing
+// changed and costs no listing; a `git status` that only refreshed stat data
+// rewrites the file and costs two, which then compare equal.
+func (r *Repo) IndexChangedSince(mark string) ([]string, error) {
+	idx, _, err := r.indexPath()
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[string]string, len(entries))
-	for p, es := range entries {
-		var b strings.Builder
-		for _, e := range es {
-			b.WriteString(e.mode + " " + e.blob + " " + e.stage + ";")
+	_, curErr := os.Stat(idx)
+	curExists := curErr == nil
+	switch {
+	case mark == "" && !curExists:
+		return nil, nil
+	case mark != "" && curExists:
+		ms, err1 := os.Stat(mark)
+		cs, err2 := os.Stat(idx)
+		if err1 == nil && err2 == nil && os.SameFile(ms, cs) {
+			return nil, nil
 		}
-		m[p] = b.String()
+		a, err1 := os.ReadFile(mark)
+		b, err2 := os.ReadFile(idx)
+		if err1 == nil && err2 == nil && bytes.Equal(a, b) {
+			return nil, nil
+		}
 	}
-	return m, nil
+	list := func(file string) (string, error) {
+		if file == "" {
+			return "", nil
+		}
+		return r.gitEnv([]string{"GIT_INDEX_FILE=" + file}, "", "ls-files", "-s", "-z")
+	}
+	before, err := list(mark)
+	if err != nil {
+		return nil, err
+	}
+	var after string
+	if curExists {
+		if after, err = list(idx); err != nil {
+			return nil, err
+		}
+	}
+	if before == after {
+		return nil, nil
+	}
+	return diffListings(before, after), nil
+}
+
+// diffListings compares two `git ls-files -s -z` outputs and returns the
+// paths whose entries differ. Both are in index order — sorted by path bytes,
+// a conflicted path's stages together — so one merge walk does it without a
+// map: at 300,000 files, building maps for both sides cost more than the two
+// listings.
+func diffListings(before, after string) []string {
+	b, a := strings.Split(before, "\x00"), strings.Split(after, "\x00")
+	path := func(rec string) string {
+		_, p, _ := strings.Cut(rec, "\t")
+		return p
+	}
+	var changed []string
+	add := func(p string) {
+		if p != "" && (len(changed) == 0 || changed[len(changed)-1] != p) {
+			changed = append(changed, p)
+		}
+	}
+	i, j := 0, 0
+	for i < len(b) || j < len(a) {
+		var pb, pa string
+		if i < len(b) {
+			pb = path(b[i])
+		}
+		if j < len(a) {
+			pa = path(a[j])
+		}
+		switch {
+		case j >= len(a) || (i < len(b) && pb < pa):
+			add(pb)
+			i++
+		case i >= len(b) || pa < pb:
+			add(pa)
+			j++
+		default:
+			if b[i] != a[j] {
+				add(pb)
+			}
+			i++
+			j++
+		}
+	}
+	slices.Sort(changed)
+	return slices.Compact(changed)
+}
+
+// lsRecords maps `git ls-files -s -z` output to path → its entries, joined.
+func lsRecords(out string) map[string]string {
+	m := map[string]string{}
+	for rec := range strings.SplitSeq(out, "\x00") {
+		meta, path, ok := strings.Cut(rec, "\t")
+		if ok {
+			m[path] += meta + ";"
+		}
+	}
+	return m
+}
+
+// indexPath is the index file and the git directory, both absolute.
+func (r *Repo) indexPath() (idx, gitDir string, err error) {
+	out, err := r.git("rev-parse", "--absolute-git-dir", "--git-path", "index")
+	if err != nil {
+		return "", "", err
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 {
+		return "", "", fmt.Errorf("unexpected rev-parse output %q", out)
+	}
+	gitDir, idx = lines[0], lines[1]
+	if !filepath.IsAbs(idx) {
+		idx = filepath.Join(r.root, idx)
+	}
+	return idx, gitDir, nil
+}
+
+// ConflictedPaths lists which of paths have unresolved merge conflicts.
+func (r *Repo) ConflictedPaths(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	out, err := r.git(append([]string{"ls-files", "-u", "-z", "--"}, paths...)...)
+	if err != nil {
+		return nil, err
+	}
+	var conflicted []string
+	for p := range lsRecords(out) {
+		if slices.Contains(paths, p) {
+			conflicted = append(conflicted, p)
+		}
+	}
+	slices.Sort(conflicted)
+	return conflicted, nil
 }
 
 // DirtyPaths lists the tracked paths with staged or unstaged changes against

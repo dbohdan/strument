@@ -34,18 +34,28 @@ import (
 // that a change the model makes before its first edit — a `sed -i`, a
 // `git mv` — is not mistaken for one that was already there.
 
-// stagingRepo is the optional part of a Repo that can list the index and the
-// dirty paths. gitrepo implements it; without it, a turn's commit is its edits
-// alone, with no trailers.
+// stagingRepo is the optional part of a Repo that can record the index and
+// list the dirty paths. gitrepo implements it; without it, a turn's commit is
+// its edits alone, with no trailers.
 type stagingRepo interface {
 	// DirtyPaths is IsDirty for every tracked path at once.
 	DirtyPaths() (map[string]bool, error)
-	// IndexEntries lists the index as path → its entries, so that two
-	// listings differ exactly where something was staged in between.
-	IndexEntries() (map[string]string, error)
+	// MarkIndex records the index as it is now and returns the record, ""
+	// for no index; IndexChangedSince lists the paths whose entries differ
+	// from a record's; DropMark deletes one.
+	MarkIndex() (string, error)
+	IndexChangedSince(mark string) ([]string, error)
+	DropMark(mark string)
 	// StagedChanges lists which of paths the index holds differently from
-	// HEAD.
+	// HEAD, and ConflictedPaths which have unresolved merge conflicts.
 	StagedChanges(paths []string) ([]string, error)
+	ConflictedPaths(paths []string) ([]string, error)
+}
+
+// indexMark is a MarkIndex record; ok is false when none was taken.
+type indexMark struct {
+	path string
+	ok   bool
 }
 
 // staging returns the Repo's staging part when there is a commit for it to
@@ -59,57 +69,61 @@ func (c *Coder) staging() stagingRepo {
 }
 
 // takeStagingBaseline starts a turn's record: what was already uncommitted,
-// and nothing staged yet.
+// the index as the turn found it, and nothing staged yet.
 func (c *Coder) takeStagingBaseline() {
-	c.dirtyAtStart, c.turnStaged, c.indexAtStart = nil, nil, nil
+	c.dropStartMark()
+	c.dirtyAtStart, c.turnStaged = nil, nil
 	s := c.staging()
 	if s == nil {
 		return
 	}
 	// On error, no trailers: the commit is still right, only less annotated.
 	c.dirtyAtStart, _ = s.DirtyPaths()
-	c.indexAtStart, _ = s.IndexEntries()
+	c.startMark = c.markIndex()
 }
 
-// indexSnapshot lists the index before a model-caused shell command, or nil
-// when there is nothing to track.
-func (c *Coder) indexSnapshot() map[string]string {
+// dropStartMark deletes the turn's starting record of the index, once the
+// turn has settled or the next one begins.
+func (c *Coder) dropStartMark() {
+	if c.startMark.ok {
+		if s, ok := c.Repo.(stagingRepo); ok {
+			s.DropMark(c.startMark.path)
+		}
+	}
+	c.startMark = indexMark{}
+}
+
+// markIndex records the index before a model-caused shell command, or
+// returns no mark when there is nothing to track.
+func (c *Coder) markIndex() indexMark {
 	s := c.staging()
 	if s == nil {
-		return nil
+		return indexMark{}
 	}
-	idx, err := s.IndexEntries()
+	m, err := s.MarkIndex()
 	if err != nil {
-		return nil
+		return indexMark{}
 	}
-	return idx
+	return indexMark{path: m, ok: true}
 }
 
-// noteStaged records the paths whose index entries changed since before.
-func (c *Coder) noteStaged(before map[string]string) {
-	s := c.staging()
-	if before == nil || s == nil {
+// noteStaged records the paths whose index entries changed since the mark,
+// and deletes the mark.
+func (c *Coder) noteStaged(m indexMark) {
+	s, _ := c.Repo.(stagingRepo)
+	if !m.ok || s == nil {
 		return
 	}
-	after, err := s.IndexEntries()
+	defer s.DropMark(m.path)
+	changed, err := s.IndexChangedSince(m.path)
 	if err != nil {
 		return
 	}
-	mark := func(p string) {
+	for _, p := range changed {
 		if c.turnStaged == nil {
 			c.turnStaged = map[string]bool{}
 		}
 		c.turnStaged[p] = true
-	}
-	for p, e := range after {
-		if before[p] != e {
-			mark(p)
-		}
-	}
-	for p := range before {
-		if _, ok := after[p]; !ok {
-			mark(p)
-		}
 	}
 }
 
@@ -130,23 +144,29 @@ func (c *Coder) stagedForCommit(edited []string) (staged, conflicted []string) {
 	if len(c.turnStaged) == 0 || s == nil {
 		return nil, nil
 	}
-	idx, err := s.IndexEntries()
-	if err != nil {
-		return nil, nil
+	var sinceStart []string
+	if c.startMark.ok {
+		var err error
+		if sinceStart, err = s.IndexChangedSince(c.startMark.path); err != nil {
+			return nil, nil
+		}
 	}
 	var cands []string
 	for _, p := range c.dropAgentsLocal(slices.Sorted(maps.Keys(c.turnStaged))) {
 		switch {
 		case slices.Contains(edited, p):
 			// Committed from the working tree as an edit.
-		case c.indexAtStart != nil && idx[p] == c.indexAtStart[p]:
+		case c.startMark.ok && !slices.Contains(sinceStart, p):
 			delete(c.turnStaged, p)
-		case conflictedEntry(idx[p]):
-			conflicted = append(conflicted, p)
 		default:
 			cands = append(cands, p)
 		}
 	}
+	conflicted, err := s.ConflictedPaths(cands)
+	if err != nil {
+		return nil, nil
+	}
+	cands = slices.DeleteFunc(cands, func(p string) bool { return slices.Contains(conflicted, p) })
 	changed, err := s.StagedChanges(cands)
 	if err != nil {
 		return nil, conflicted
@@ -159,17 +179,6 @@ func (c *Coder) stagedForCommit(edited []string) (staged, conflicted []string) {
 		}
 	}
 	return staged, conflicted
-}
-
-// conflictedEntry reports whether an IndexEntries value holds a stage other
-// than 0. Each entry is "mode blob stage;".
-func conflictedEntry(e string) bool {
-	for f := range strings.SplitSeq(e, ";") {
-		if fs := strings.Fields(f); len(fs) == 3 && fs[2] != "0" {
-			return true
-		}
-	}
-	return false
 }
 
 // conflictedNote tells the model which staged paths were left out.

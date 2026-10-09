@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -16,10 +17,46 @@ type fakeStagingRepo struct {
 	dirty  map[string]bool
 	staged [][]string
 	extras [][]string
+
+	marks   map[string]map[string]string
+	dropped []string
 }
 
-func (r *fakeStagingRepo) IndexEntries() (map[string]string, error) {
-	return maps.Clone(r.index), nil
+func (r *fakeStagingRepo) MarkIndex() (string, error) {
+	if r.marks == nil {
+		r.marks = map[string]map[string]string{}
+	}
+	id := fmt.Sprintf("mark-%d", len(r.marks))
+	r.marks[id] = maps.Clone(r.index)
+	return id, nil
+}
+
+func (r *fakeStagingRepo) IndexChangedSince(mark string) ([]string, error) {
+	old := r.marks[mark]
+	var changed []string
+	for p, e := range r.index {
+		if old[p] != e {
+			changed = append(changed, p)
+		}
+	}
+	for p := range old {
+		if _, ok := r.index[p]; !ok {
+			changed = append(changed, p)
+		}
+	}
+	return changed, nil
+}
+
+func (r *fakeStagingRepo) DropMark(mark string) { r.dropped = append(r.dropped, mark) }
+
+func (r *fakeStagingRepo) ConflictedPaths(paths []string) ([]string, error) {
+	var out []string
+	for _, p := range paths {
+		if strings.Contains(r.index[p], " 1;") || strings.Contains(r.index[p], " 2;") {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 func (r *fakeStagingRepo) StagedChanges(paths []string) ([]string, error) {
@@ -64,7 +101,7 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 	c.AutoCommits = true
 	c.initBeforeMessage()
 
-	snap := c.indexSnapshot()
+	snap := c.markIndex()
 	// git mv a.txt b.txt; and a merge that left c.txt conflicted.
 	delete(repo.index, "a.txt")
 	repo.index["b.txt"] = "100644 aaa 0;"
@@ -99,14 +136,15 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 	}
 }
 
-// With auto-commits off nothing is listed at all: two index listings per
-// command are a cost with no commit to pay for.
+// With auto-commits off nothing is recorded at all: there is no commit for the
+// record to feed.
 func TestStagingUntrackedWhenCommitsOff(t *testing.T) {
 	c := testCoder(t)
-	c.Repo = &fakeStagingRepo{index: map[string]string{"a.txt": "x"}}
+	repo := &fakeStagingRepo{index: map[string]string{"a.txt": "x"}}
+	c.Repo = repo
 	c.AutoCommits = false
 	c.initBeforeMessage()
-	if c.indexSnapshot() != nil || c.dirtyAtStart != nil {
+	if c.markIndex().ok || c.startMark.ok || c.dirtyAtStart != nil || len(repo.marks) != 0 {
 		t.Error("tracked staging with auto-commits off")
 	}
 }
@@ -123,7 +161,7 @@ func TestCommitToolCommitsStagingAlone(t *testing.T) {
 	c.Repo = repo
 	c.AutoCommits = true
 	c.initBeforeMessage()
-	snap := c.indexSnapshot()
+	snap := c.markIndex()
 	delete(repo.index, "a.txt")
 	repo.index["b.txt"] = "100644 aaa 0;"
 	c.noteStaged(snap)
@@ -159,10 +197,10 @@ func TestUnstagingIsNotStaging(t *testing.T) {
 			c.Repo = repo
 			c.AutoCommits = true
 			c.initBeforeMessage()
-			snap := c.indexSnapshot()
+			snap := c.markIndex()
 			repo.index["user.txt"] = "100644 u0 0;" // unstaged
 			c.noteStaged(snap)
-			snap = c.indexSnapshot()
+			snap = c.markIndex()
 			repo.index["user.txt"] = tc.now
 			c.noteStaged(snap)
 
@@ -191,7 +229,7 @@ func TestStagedThenEditedIsAnnouncedOnce(t *testing.T) {
 	c.Repo = repo
 	c.AutoCommits = true
 	c.initBeforeMessage()
-	snap := c.indexSnapshot()
+	snap := c.markIndex()
 	delete(repo.index, "a.txt")
 	repo.index["b.txt"] = "100644 aaa 0;"
 	c.noteStaged(snap)

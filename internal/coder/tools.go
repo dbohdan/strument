@@ -1243,7 +1243,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	}
 	// The same seam for staging: what the command put in the index is the
 	// model's, and the turn's commit takes it (staging.go).
-	index := c.indexSnapshot()
+	index := c.markIndex()
 
 	// The model's timeout is a narrowing of the configured ceiling, so a
 	// request above it is honored as the ceiling and said so: a silent clamp

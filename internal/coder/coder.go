@@ -413,7 +413,7 @@ type Coder struct {
 	// first in trailers. See staging.go.
 	dirtyAtStart map[string]bool
 	turnStaged   map[string]bool
-	indexAtStart map[string]string
+	startMark    indexMark
 	// settleMu orders a write batch, a settle and an exit, which can come
 	// from different goroutines: the turn's, and the signal handler's.
 	settleMu sync.Mutex
@@ -1025,6 +1025,7 @@ func (c *Coder) settleEdits(message string) {
 	_, _ = c.commitTurn(message)
 	c.setSettling(nil)
 	c.pushTurnSnapshot()
+	c.dropStartMark()
 }
 
 func (c *Coder) setSettling(s *turnSnapshot) {

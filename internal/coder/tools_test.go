@@ -250,7 +250,10 @@ type countingRepo struct {
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
-func (r *countingRepo) IndexEntries() (map[string]string, error)       { return map[string]string{}, nil }
+func (r *countingRepo) MarkIndex() (string, error)                     { return "m", nil }
+func (r *countingRepo) IndexChangedSince(string) ([]string, error)     { return nil, nil }
+func (r *countingRepo) DropMark(string)                                {}
+func (r *countingRepo) ConflictedPaths([]string) ([]string, error)     { return nil, nil }
 func (r *countingRepo) StagedChanges(paths []string) ([]string, error) { return paths, nil }
 
 func (r *countingRepo) DirtyPaths() (map[string]bool, error) {

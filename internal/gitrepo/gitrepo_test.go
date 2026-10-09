@@ -8,9 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
@@ -805,10 +806,11 @@ func TestCommitTakesStagedFromIndex(t *testing.T) {
 	run(t, root, "git", "add", "other.txt")
 	run(t, root, "git", "commit", "-q", "-m", "add other")
 
-	before, err := g.IndexEntries()
+	mark, err := g.MarkIndex()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer g.DropMark(mark)
 	// The user's staged work, from before the model's command.
 	write("other.txt", "user staged\n")
 	run(t, root, "git", "add", "other.txt")
@@ -816,22 +818,10 @@ func TestCommitTakesStagedFromIndex(t *testing.T) {
 	run(t, root, "git", "mv", "main.txt", "moved.txt")
 	write("moved.txt", "hello world\nunstaged later\n")
 
-	after, err := g.IndexEntries()
+	changed, err := g.IndexChangedSince(mark)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var changed []string
-	for p, e := range after {
-		if before[p] != e {
-			changed = append(changed, p)
-		}
-	}
-	for p := range before {
-		if _, ok := after[p]; !ok {
-			changed = append(changed, p)
-		}
-	}
-	slices.Sort(changed)
 	// other.txt changed too: the listing cannot tell who staged it, which is
 	// why the coder brackets each model command rather than diffing a turn.
 	if got := strings.Join(changed, ","); got != "main.txt,moved.txt,other.txt" {
@@ -879,5 +869,140 @@ func TestCommitStagedWithoutHead(t *testing.T) {
 	}
 	if got := run(t, root, "git", "show", "HEAD:a.txt"); got != "a\n" {
 		t.Errorf("a.txt = %q", got)
+	}
+}
+
+// TestIndexMarks covers the cheap path and each way the index can change: an
+// untouched index and a stat-only refresh report nothing; staging, removal and
+// a fresh index report the paths.
+func TestIndexMarks(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedAfter := func(cmd func()) []string {
+		t.Helper()
+		m, err := g.MarkIndex()
+		if err != nil || m == "" {
+			t.Fatalf("MarkIndex = %q, %v", m, err)
+		}
+		defer g.DropMark(m)
+		cmd()
+		got, err := g.IndexChangedSince(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := changedAfter(func() {}); got != nil {
+		t.Errorf("untouched: %v", got)
+	}
+	if got := changedAfter(func() {
+		// Touching the file makes status refresh and rewrite the index
+		// without a change of entry.
+		future := time.Now().Add(time.Hour)
+		_ = os.Chtimes(filepath.Join(root, "main.txt"), future, future)
+		run(t, root, "git", "status", "--porcelain")
+	}); got != nil {
+		t.Errorf("stat refresh: %v", got)
+	}
+	if got := changedAfter(func() {
+		run(t, root, "git", "mv", "main.txt", "moved.txt")
+	}); strings.Join(got, ",") != "main.txt,moved.txt" {
+		t.Errorf("git mv: %v", got)
+	}
+
+	// A repository with no index yet: the mark is "", and a first add shows.
+	fresh := t.TempDir()
+	run(t, fresh, "git", "init", "-q")
+	g2, err := gitrepo.Discover(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := g2.MarkIndex()
+	if err != nil || m != "" {
+		t.Fatalf("no index: MarkIndex = %q, %v", m, err)
+	}
+	if err := os.WriteFile(filepath.Join(fresh, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, fresh, "git", "add", "a.txt")
+	if got, err := g2.IndexChangedSince(m); err != nil || strings.Join(got, ",") != "a.txt" {
+		t.Errorf("first add: %v, %v", got, err)
+	}
+
+	// Marks are deleted, and none is left in the git directory.
+	left, _ := filepath.Glob(filepath.Join(root, ".git", "strument-index-mark-*"))
+	if len(left) != 0 {
+		t.Errorf("marks left behind: %v", left)
+	}
+}
+
+// TestCommitCaseOnlyRename runs where it matters on the macOS and Windows CI
+// runners, whose filesystems ignore case: `git mv notes.md NOTES.md` stages a
+// deletion and an addition whose paths differ only in case, and the commit
+// must carry both.
+func TestCommitCaseOnlyRename(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte("notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", "notes.md")
+	run(t, root, "git", "commit", "-q", "-m", "add notes")
+	m, err := g.MarkIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.DropMark(m)
+	run(t, root, "git", "mv", "notes.md", "NOTES.md")
+	staged, err := g.IndexChangedSince(m)
+	if err != nil || strings.Join(staged, ",") != "NOTES.md,notes.md" {
+		t.Fatalf("staged = %v, %v", staged, err)
+	}
+	if _, _, ok, err := g.Commit(nil, staged, "", "rename notes", true, nil); !ok || err != nil {
+		t.Fatalf("Commit: ok=%v err=%v", ok, err)
+	}
+	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); !strings.Contains(got, "NOTES.md") || strings.Contains(got, "notes.md") {
+		t.Errorf("HEAD tree:\n%s", got)
+	}
+	if st := strings.TrimSpace(run(t, root, "git", "status", "--porcelain")); st != "" {
+		t.Errorf("status after commit: %q", st)
+	}
+}
+
+// TestCommitHooksSeeTheTemporaryIndex: a pre-commit hook that formats and
+// re-adds, as lint-staged and the pre-commit framework do, works on the
+// commit's index, and the real index ends up matching the commit. A hook that
+// ignores GIT_INDEX_FILE and writes .git/index directly changes the real
+// index, not the commit — which is also what `git commit -- paths` does.
+func TestCommitHooksSeeTheTemporaryIndex(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell hooks")
+	}
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := filepath.Join(root, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nprintf 'formatted\\n' > main.txt\ngit add main.txt\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "edit", true, nil); !ok || err != nil {
+		t.Fatalf("Commit: ok=%v err=%v", ok, err)
+	}
+	if got := run(t, root, "git", "show", "HEAD:main.txt"); got != "formatted\n" {
+		t.Errorf("committed %q, want the hook's formatting", got)
+	}
+	if st := strings.TrimSpace(run(t, root, "git", "status", "--porcelain")); st != "" {
+		t.Errorf("status after a formatting hook: %q, want clean", st)
 	}
 }
