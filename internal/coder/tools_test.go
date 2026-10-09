@@ -161,7 +161,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool, _ []string) (string, string, bool, error) {
+func (r *committingRepo) Commit(fnames, _ []string, _, _ string, _ bool, _ []string) (string, string, bool, error) {
 	if r.asked != nil {
 		r.asked = append(r.asked, fnames)
 	}
@@ -250,12 +250,23 @@ type countingRepo struct {
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
-func (r *countingRepo) Commit(fnames []string, context, message string, attributed bool, extra []string) (string, string, bool, error) {
+func (r *countingRepo) IndexEntries() (map[string]string, error)       { return map[string]string{}, nil }
+func (r *countingRepo) StagedChanges(paths []string) ([]string, error) { return paths, nil }
+
+func (r *countingRepo) DirtyPaths() (map[string]bool, error) {
+	m := map[string]bool{}
+	for _, p := range r.tracked {
+		m[p] = r.dirty
+	}
+	return m, nil
+}
+
+func (r *countingRepo) Commit(fnames, staged []string, context, message string, attributed bool, extra []string) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
 	r.attrs = append(r.attrs, attributed)
 	r.msgs = append(r.msgs, message)
 	r.extras = append(r.extras, extra)
-	return r.committingRepo.Commit(fnames, context, message, attributed, extra)
+	return r.committingRepo.Commit(fnames, staged, context, message, attributed, extra)
 }
 
 // TestOneCommitPerTurn is the point of moving the commit to turn end. A turn
@@ -297,7 +308,7 @@ func TestOneCommitPerTurn(t *testing.T) {
 //
 // The second edit is the regression the old dirty commit had once: the turn's
 // first edit leaves the file dirty, which must not read as uncommitted work
-// a second time.
+// a second time. The baseline is taken at turn start, so it cannot.
 func TestUncommittedBeforeEditIsOneCommit(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"uncommitted-before-edit","source":"authored"}
@@ -325,7 +336,7 @@ func TestUncommittedBeforeEditIsOneCommit(t *testing.T) {
 		t.Errorf("trailers = %q, want one naming a.txt", got)
 	}
 	screen := strings.Join(out.lines, "\n")
-	if got := strings.Count(screen, "a.txt had uncommitted changes before this turn's first edit to it; they are in this commit."); got != 1 {
+	if got := strings.Count(screen, "a.txt had uncommitted changes before this turn changed it; they are in this commit."); got != 1 {
 		t.Errorf("notice count = %d, want 1; output:\n%s", got, screen)
 	}
 }

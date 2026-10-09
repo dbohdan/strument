@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -156,7 +157,7 @@ func TestCommitContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", "", true, nil)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, nil, "USER: change it", "", true, nil)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -182,7 +183,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true, nil); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true, nil); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -240,7 +241,7 @@ func TestCommitSignFlag(t *testing.T) {
 			}
 			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true, nil); err != nil || !ok {
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true, nil); err != nil || !ok {
 				// Missing gpg (notably on Windows CI, where the shim is ignored)
 				// is environmental; don't fail the plumbing check over it.
 				if strings.Contains(errOrEmpty(err), "gpg") || strings.Contains(errOrEmpty(err), "GPG") {
@@ -271,7 +272,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, "", "", false, nil)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", false, nil)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -292,7 +293,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", "", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, nil, "", "", true, nil); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {
@@ -782,5 +783,101 @@ func TestPublishedSeesEveryRemoteAndBranchName(t *testing.T) {
 	}
 	if g.Published(local) {
 		t.Errorf("commit %s was never pushed but reads as published", local[:7])
+	}
+}
+
+// TestCommitTakesStagedFromIndex: a staged path is committed as the index has
+// it, a rename's deleted source included, while the user's own staged work in
+// another path stays staged and out of the commit.
+func TestCommitTakesStagedFromIndex(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("other.txt", "base\n")
+	run(t, root, "git", "add", "other.txt")
+	run(t, root, "git", "commit", "-q", "-m", "add other")
+
+	before, err := g.IndexEntries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The user's staged work, from before the model's command.
+	write("other.txt", "user staged\n")
+	run(t, root, "git", "add", "other.txt")
+	// The model's command: a rename, then more on disk that it did not stage.
+	run(t, root, "git", "mv", "main.txt", "moved.txt")
+	write("moved.txt", "hello world\nunstaged later\n")
+
+	after, err := g.IndexEntries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changed []string
+	for p, e := range after {
+		if before[p] != e {
+			changed = append(changed, p)
+		}
+	}
+	for p := range before {
+		if _, ok := after[p]; !ok {
+			changed = append(changed, p)
+		}
+	}
+	slices.Sort(changed)
+	// other.txt changed too: the listing cannot tell who staged it, which is
+	// why the coder brackets each model command rather than diffing a turn.
+	if got := strings.Join(changed, ","); got != "main.txt,moved.txt,other.txt" {
+		t.Fatalf("changed = %q", got)
+	}
+
+	_, _, ok, err := g.Commit(nil, []string{"main.txt", "moved.txt"}, "", "rename main", true, nil)
+	if err != nil || !ok {
+		t.Fatalf("Commit: ok=%v err=%v", ok, err)
+	}
+	if got := strings.TrimSpace(run(t, root, "git", "show", "--name-status", "--format=", "-M", "HEAD")); got != "R100\tmain.txt\tmoved.txt" {
+		t.Errorf("commit = %q, want the whole rename", got)
+	}
+	if got := run(t, root, "git", "show", "HEAD:moved.txt"); got != "hello world\n" {
+		t.Errorf("moved.txt committed as %q, want the staged content, not the disk's", got)
+	}
+	status := run(t, root, "git", "status", "--porcelain", "--untracked-files=no")
+	if !strings.Contains(status, "M  other.txt") || !strings.Contains(status, " M moved.txt") || strings.Contains(status, "main.txt") {
+		t.Errorf("status after commit:\n%s\nwant other.txt still staged, moved.txt modified on disk only", status)
+	}
+}
+
+// TestCommitStagedWithoutHead covers a repository with no commits yet, where
+// the temporary index starts empty rather than from HEAD.
+func TestCommitStagedWithoutHead(t *testing.T) {
+	gitOrSkip(t)
+	root := t.TempDir()
+	run(t, root, "git", "init", "-q", "-b", "main")
+	run(t, root, "git", "config", "user.name", "Scratch User")
+	run(t, root, "git", "config", "user.email", "scratch@example.com")
+	run(t, root, "git", "config", "commit.gpgsign", "false")
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true, nil); ok || err != nil {
+		t.Fatalf("unstaged path in an empty repo: ok=%v err=%v, want nothing to commit", ok, err)
+	}
+	run(t, root, "git", "add", "a.txt")
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true, nil); !ok || err != nil {
+		t.Fatalf("Commit: ok=%v err=%v", ok, err)
+	}
+	if got := run(t, root, "git", "show", "HEAD:a.txt"); got != "a\n" {
+		t.Errorf("a.txt = %q", got)
 	}
 }

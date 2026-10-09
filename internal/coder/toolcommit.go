@@ -44,10 +44,11 @@ func commitTool() llm.ToolDef {
 			"Use it when your work has natural boundaries — a helper extracted, then the " +
 			"feature that uses it — so each lands as its own reviewable change " +
 			"instead of one undifferentiated diff.\n\n" +
-			"Commits exactly the files your edit and write calls have changed since your " +
-			"last commit. Files that a bash command changed — a formatter, a code " +
-			"generator — are not included, and are left for you to edit or for the user " +
-			"to commit.\n\n" +
+			"Commits the files your edit and write calls have changed since your last " +
+			"commit, and whatever your bash commands staged with git since then — " +
+			"`git mv`, `git rm`, `git add`. Other changes a bash command made, such as a " +
+			"formatter's or a code generator's, are not included unless you stage them, " +
+			"and are otherwise left for the user to commit.\n\n" +
 			"Call it as you finish each part, not once at the end: make the edits for one " +
 			"part and commit them in the same step, then start the next part when that " +
 			"result comes back. Edits you make in one step all land in one commit, so a " +
@@ -127,7 +128,7 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 		return "The user turned committing off for this session, so nothing was committed. Your edits are applied to the files."
 	case c.DryRun:
 		return "This is a dry run: nothing was written, so there is nothing to commit."
-	case c.turnSnap.empty():
+	case c.turnSnap.empty() && len(c.turnStaged) == 0:
 		return "Nothing has been written since your last commit, so there was nothing to commit."
 	}
 
@@ -135,7 +136,7 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	defer c.settleMu.Unlock()
 	before := c.lastCommitHash
 	c.setSettling(c.turnSnap)
-	uncommitted, err := c.commitTurn(args.message())
+	tc, err := c.commitTurn(args.message())
 	c.setSettling(nil)
 	if err != nil {
 		// The writes stay pending, unlike settleEdits: the model can fix what
@@ -148,11 +149,21 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	if c.lastCommitHash == before {
 		// commitTurn already told the user why. Say the same thing to the
 		// model rather than letting it believe a commit it can name happened.
-		return "Nothing was committed: the files match what is already committed."
+		result := "Nothing was committed: the files match what is already committed."
+		if len(tc.conflicted) > 0 {
+			result += " " + conflictedNote(tc.conflicted)
+		}
+		return result
 	}
 	result := fmt.Sprintf("Committed %s: %s", c.lastCommitHash, args.subject)
-	if len(uncommitted) > 0 {
-		result += "\n" + uncommittedNote(uncommitted, "your")
+	if len(tc.staged) > 0 {
+		result += "\nIt includes what your shell commands staged with git: " + strings.Join(tc.staged, ", ") + "."
+	}
+	if len(tc.conflicted) > 0 {
+		result += "\n" + conflictedNote(tc.conflicted)
+	}
+	if len(tc.uncommitted) > 0 {
+		result += "\n" + uncommittedNote(tc.uncommitted, "you")
 	}
 	return result
 }

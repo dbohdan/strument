@@ -407,10 +407,13 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
-	// uncommittedBefore holds the paths that had uncommitted changes before
-	// this turn first edited them; the turn's commit names them in a trailer.
-	// See noteUncommittedBefore.
-	uncommittedBefore map[string]bool
+	// dirtyAtStart holds the tracked paths that had uncommitted changes when
+	// the turn began, and turnStaged the paths the model's shell commands
+	// staged during it. The turn's commit takes the second and names the
+	// first in trailers. See staging.go.
+	dirtyAtStart map[string]bool
+	turnStaged   map[string]bool
+	indexAtStart map[string]string
 	// settleMu orders a write batch, a settle and an exit, which can come
 	// from different goroutines: the turn's, and the signal handler's.
 	settleMu sync.Mutex
@@ -695,7 +698,7 @@ func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
 	c.turnDeclined = map[string]string{}
-	c.uncommittedBefore = nil
+	c.takeStagingBaseline()
 	c.editsExact, c.editsFuzzy = 0, 0
 	// sessionAutoApprove is not reset here. That is the whole of the session
 	// scope; /reset and "/web reset" are what end it.
@@ -1006,7 +1009,7 @@ func (c *Coder) settleEdits(message string) {
 	// "written since the last settle".
 	c.settleMu.Lock()
 	defer c.settleMu.Unlock()
-	if c.exiting || c.turnSnap.empty() {
+	if c.exiting || (c.turnSnap.empty() && len(c.turnStaged) == 0) {
 		return
 	}
 	// A refused commit still closes the snapshot here. settleEdits runs at

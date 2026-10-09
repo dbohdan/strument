@@ -241,44 +241,7 @@ func (c *Coder) allowedToEdit(rel string) (bool, string) {
 		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
 
-	c.noteUncommittedBefore(rel)
 	return true, ""
-}
-
-// noteUncommittedBefore remembers that rel had uncommitted changes before the
-// turn's first edit to it, so the turn's commit can say so.
-//
-// This replaces a commit. aider committed such a file on its own before
-// editing it ("dirty commits"), and Strument did the same until a session
-// showed what that assumes: that whatever is uncommitted is the user's. It is
-// not, once the model has a shell. MiMo ran `git mv test.ts test.mjs`, then
-// edited test.mjs, and the dirty commit took test.mjs alone under a side
-// model's message — half a rename, committed as though the user had made it,
-// and nobody told the model. It also fired with auto-commits off and in a dry
-// run, both of which promise no commits, and it cost a side-model call per
-// batch. The snapshot already gives /undo the exact prior contents, which was
-// the reason for a clean base in the first place.
-//
-// So the uncommitted changes ride along in the turn's commit, and the commit
-// names them in an Uncommitted-before-edit trailer: a reader of the history
-// can tell which parts of the diff may not be the model's, without Strument
-// guessing whose they are. Leaving such files out of the commit instead was
-// considered and rejected: a file the model keeps editing would then stay
-// uncommitted turn after turn.
-//
-// Not for a file this turn has already written: its first edit is what made
-// it dirty.
-func (c *Coder) noteUncommittedBefore(rel string) {
-	if c.Repo == nil || c.turnSnap.wrote(rel) || c.uncommittedBefore[rel] {
-		return
-	}
-	if !c.Repo.IsDirty(rel) {
-		return
-	}
-	if c.uncommittedBefore == nil {
-		c.uncommittedBefore = map[string]bool{}
-	}
-	c.uncommittedBefore[rel] = true
 }
 
 // newFileMode is what a file Strument creates gets. It matches what git

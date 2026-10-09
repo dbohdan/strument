@@ -1241,6 +1241,9 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if c.Repo != nil {
 		before = c.Repo.HeadSHA()
 	}
+	// The same seam for staging: what the command put in the index is the
+	// model's, and the turn's commit takes it (staging.go).
+	index := c.indexSnapshot()
 
 	// The model's timeout is a narrowing of the configured ceiling, so a
 	// request above it is honored as the ceiling and said so: a silent clamp
@@ -1254,12 +1257,14 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 			cmd.timeout, ceiling)
 		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
 		c.attributeShellCommits(before)
+		c.noteStaged(index)
 		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
 			quoteToolArg(command), exitCode, output, notice), true
 	}
 
 	exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
 	c.attributeShellCommits(before)
+	c.noteStaged(index)
 	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
 }
 

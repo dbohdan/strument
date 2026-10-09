@@ -273,18 +273,20 @@ type Repo interface {
 	IsDirty(rel string) bool
 	GitIgnored(rel string) bool
 	HeadSHA() string
-	// Commit commits fnames; returns hash and message, or ok=false when there
-	// was nothing to commit. attributed adds the attribution trailer; extra
-	// are further trailers, each "Key: value" — the turn's commit uses them to
-	// name files that had uncommitted changes before the turn first edited
-	// them (see commitTurn).
+	// Commit commits fnames as they are in the working tree and staged as
+	// they are in the index — what the model's shell commands staged — and
+	// nothing else; returns hash and message, or ok=false when there was
+	// nothing to commit. attributed adds the attribution trailer; extra are
+	// further trailers, each "Key: value" — the turn's commit uses them to
+	// name files that had uncommitted changes when the turn began (see
+	// commitTurn).
 	//
 	// An empty message is generated from the staged diff and context, which is
 	// the automatic path and the only one there used to be. A non-empty one is
 	// used verbatim: the commit tool lets the model write its own, and the
 	// model that made the change knows why it made it, where the generator is
 	// a side model inferring intent from a diff.
-	Commit(fnames []string, context, message string, attributed bool, extra []string) (hash, message2 string, ok bool, err error)
+	Commit(fnames, staged []string, context, message string, attributed bool, extra []string) (hash, message2 string, ok bool, err error)
 	// AttributeDirectCommits retro-attributes the commits a model-caused shell
 	// command made directly with git (bypassing the commit tool): it appends
 	// the trailer to the new commits and returns their final hashes —

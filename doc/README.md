@@ -85,11 +85,12 @@ inherited from aider.
   recorded before the first write to it, so `/undo` restores a turn whether or
   not there is a repository — which is what makes the harness usable on a live
   configuration directory or under another SCM. Git is layered on top where it
-  exists: one commit per turn and `/squash` to merge turns. A file that had
-  uncommitted changes before the turn's first edit to it is committed with the
-  turn and named in an `Uncommitted-before-edit` trailer — not committed
-  separately first, since with a shell the model can make those changes too,
-  and Strument cannot tell whose they are.
+  exists: one commit per turn and `/squash` to merge turns. The commit takes
+  what the model's shell commands staged, found by listing the index around
+  each one, so a `git mv` lands whole. A file that had uncommitted changes when
+  the turn began is committed with it and named in an `Uncommitted-before-edit`
+  trailer — not committed separately first, as aider does, since Strument
+  cannot tell whose those changes are.
   Every attributed commit — auto-commit, the commit tool, or commits a model
   makes directly with git through bash — carries the `Assisted-by` trailer, so
   the history itself says which model did the work; commits the model runs

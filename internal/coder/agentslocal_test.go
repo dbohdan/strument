@@ -36,8 +36,9 @@ type dirtyRepo struct {
 	dirty map[string]bool
 }
 
-func (r *dirtyRepo) Root() string            { return r.root }
-func (r *dirtyRepo) IsDirty(rel string) bool { return r.dirty[rel] }
+func (r *dirtyRepo) Root() string                         { return r.root }
+func (r *dirtyRepo) IsDirty(rel string) bool              { return r.dirty[rel] }
+func (r *dirtyRepo) DirtyPaths() (map[string]bool, error) { return r.dirty, nil }
 
 // An untracked AGENTS.local.md never joins a commit; staging it, ignored,
 // would make git refuse the rest of the commit too. One the user tracks on

@@ -252,31 +252,63 @@ func (r *Repo) RootCommit() string {
 	return roots[0]
 }
 
-// Commit stages fnames and commits them. attributed adds the
-// attribution trailer; extra are further trailers, each "Key: value".
-// ok=false means there was nothing to commit. GIT_AUTHOR_* and
-// GIT_COMMITTER_* are never overridden; hooks run normally.
+// Commit commits fnames, as they are in the working tree, and staged, as they
+// are in the index. attributed adds the attribution trailer; extra are
+// further trailers, each "Key: value". ok=false means there was nothing to
+// commit. GIT_AUTHOR_* and GIT_COMMITTER_* are never overridden; hooks run
+// normally.
+//
+// staged is for what a model's shell command put in the index: `git mv a b`
+// stages a deletion and an addition, and committing only the file the model
+// then edited split the rename. Those paths are taken from the index rather
+// than the working tree because that is what the command staged, and because
+// a path a rename removed is in neither: `git add -- a` on it is fatal.
+//
+// The commit is built in a temporary index — HEAD, plus exactly these paths
+// from the real index — so the user's own staged work in other paths stays
+// out of it. `git commit -- paths` cannot do this: it takes each path from
+// the working tree, so a staged entry would be committed as whatever is on
+// disk by then. Hooks still run, since this is still `git commit`; they see
+// GIT_INDEX_FILE, as they do under `git commit -- paths`, which builds a
+// temporary index of its own.
 //
 // want is the message to use. Empty means generate one from the staged diff
 // through the Message hook, which is the automatic path; a non-empty one is
 // used verbatim, for the commit tool where the model writes its own.
-func (r *Repo) Commit(fnames []string, context, want string, attributed bool, extra []string) (hash, message string, ok bool, err error) {
-	if len(fnames) == 0 {
+func (r *Repo) Commit(fnames, staged []string, context, want string, attributed bool, extra []string) (hash, message string, ok bool, err error) {
+	if len(fnames) == 0 && len(staged) == 0 {
 		return "", "", false, nil
 	}
 
-	addArgs := append([]string{"add", "--"}, fnames...)
-	if _, err := r.git(addArgs...); err != nil {
-		return "", "", false, fmt.Errorf("could not stage the files: %w", err)
+	if len(fnames) > 0 {
+		addArgs := append([]string{"add", "--"}, fnames...)
+		if _, err := r.git(addArgs...); err != nil {
+			return "", "", false, fmt.Errorf("could not stage the files: %w", err)
+		}
 	}
+	paths := slices.Sorted(slices.Values(append(slices.Clone(fnames), staged...)))
+	paths = slices.Compact(paths)
 
-	statusArgs := append([]string{"status", "--porcelain", "--untracked-files=no", "--"}, fnames...)
-	out, err := r.git(statusArgs...)
+	idx, cleanup, err := r.commitIndex(paths)
 	if err != nil {
 		return "", "", false, err
 	}
-	if strings.TrimSpace(out) == "" {
+	defer cleanup()
+	env := []string{"GIT_INDEX_FILE=" + idx}
+
+	tree, err := r.gitEnv(env, "", "write-tree")
+	if err != nil {
+		return "", "", false, err
+	}
+	headTree, herr := r.git("rev-parse", "--verify", "-q", "HEAD^{tree}")
+	if herr == nil && strings.TrimSpace(tree) == strings.TrimSpace(headTree) {
 		return "", "", false, nil
+	}
+	if herr != nil {
+		// No HEAD yet: nothing to commit if the index holds nothing.
+		if out, _ := r.gitEnv(env, "", "ls-files"); strings.TrimSpace(out) == "" {
+			return "", "", false, nil
+		}
 	}
 
 	// A message the caller supplied wins; generating one is what happens when
@@ -285,8 +317,7 @@ func (r *Repo) Commit(fnames []string, context, want string, attributed bool, ex
 	// diff afterwards.
 	message = strings.TrimSpace(want)
 	if message == "" && r.Message != nil {
-		diffArgs := append([]string{"diff", "--cached", "--"}, fnames...)
-		diffs, _ := r.git(diffArgs...)
+		diffs, _ := r.gitEnv(env, "", "diff", "--cached")
 		message = strings.TrimSpace(r.Message(diffs, context))
 		// Models love to quote one-liners (aider strips this too).
 		if len(message) >= 2 && message[0] == '"' && message[len(message)-1] == '"' {
@@ -308,17 +339,202 @@ func (r *Repo) Commit(fnames []string, context, want string, attributed bool, ex
 	for _, t := range extra {
 		commitArgs = append(commitArgs, "--trailer", t)
 	}
-	commitArgs = append(commitArgs, "--")
-	commitArgs = append(commitArgs, fnames...)
-	if _, err := r.git(commitArgs...); err != nil {
+	if _, err := r.gitEnv(env, "", commitArgs...); err != nil {
 		return "", "", false, err
 	}
+
+	// The real index already holds these paths as committed, unless a hook
+	// changed one in the temporary index — a formatter that re-adds what it
+	// formats. Matching them to HEAD keeps such a path from showing as staged
+	// in reverse. Best effort: the commit is made either way.
+	_, _ = r.git(append([]string{"reset", "-q", "HEAD", "--"}, paths...)...)
 
 	short, err := r.git("rev-parse", "--short", "HEAD")
 	if err != nil {
 		return "", "", false, err
 	}
 	return strings.TrimSpace(short), message, true, nil
+}
+
+// commitIndex writes a temporary index holding HEAD's tree with paths as the
+// real index has them: a path the real index lacks is removed. It lives in
+// the git directory, so a worktree gets its own, and cleanup deletes it.
+func (r *Repo) commitIndex(paths []string) (string, func(), error) {
+	gitDir, err := r.git("rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return "", func() {}, err
+	}
+	f, err := os.CreateTemp(strings.TrimSpace(gitDir), "strument-index-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	idx := f.Name()
+	_ = f.Close()
+	// An empty file is not a valid index; git writes a fresh one at this name.
+	_ = os.Remove(idx)
+	cleanup := func() {
+		_ = os.Remove(idx)
+		_ = os.Remove(idx + ".lock")
+	}
+	env := []string{"GIT_INDEX_FILE=" + idx}
+
+	if r.ok("rev-parse", "--verify", "-q", "HEAD") {
+		_, err = r.gitEnv(env, "", "read-tree", "HEAD")
+	} else {
+		_, err = r.gitEnv(env, "", "read-tree", "--empty")
+	}
+	if err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+
+	entries, err := r.indexEntries(paths)
+	if err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	var info strings.Builder
+	var gone []string
+	for _, p := range paths {
+		lines, ok := entries[p]
+		if !ok {
+			gone = append(gone, p)
+			continue
+		}
+		for _, l := range lines {
+			if l.stage != "0" {
+				cleanup()
+				return "", func() {}, fmt.Errorf("%s has unresolved merge conflicts", p)
+			}
+			info.WriteString(l.mode + " " + l.blob + " " + l.stage + "\t" + p + "\x00")
+		}
+	}
+	if info.Len() > 0 {
+		if _, err := r.gitEnv(env, info.String(), "update-index", "-z", "--index-info"); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	}
+	if len(gone) > 0 {
+		if _, err := r.gitEnv(env, "", append([]string{"update-index", "--force-remove", "--"}, gone...)...); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	}
+	return idx, cleanup, nil
+}
+
+// indexEntry is one line of `git ls-files -s`.
+type indexEntry struct{ mode, blob, stage string }
+
+// indexEntries reads the real index, limited to paths when any are given.
+// A conflicted path has one entry per stage.
+func (r *Repo) indexEntries(paths []string) (map[string][]indexEntry, error) {
+	args := []string{"ls-files", "-s", "-z"}
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	out, err := r.git(args...)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string][]indexEntry{}
+	for rec := range strings.SplitSeq(out, "\x00") {
+		meta, path, ok := strings.Cut(rec, "\t")
+		if !ok {
+			continue
+		}
+		f := strings.Fields(meta)
+		if len(f) != 3 {
+			continue
+		}
+		m[path] = append(m[path], indexEntry{mode: f[0], blob: f[1], stage: f[2]})
+	}
+	return m, nil
+}
+
+// IndexEntries lists the index as path → one string per path, mode, blob and
+// stage for each of its entries. Two listings compare equal exactly when
+// nothing was staged between them: the stat data git refreshes on a plain
+// `git status` is not in it.
+func (r *Repo) IndexEntries() (map[string]string, error) {
+	entries, err := r.indexEntries(nil)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string, len(entries))
+	for p, es := range entries {
+		var b strings.Builder
+		for _, e := range es {
+			b.WriteString(e.mode + " " + e.blob + " " + e.stage + ";")
+		}
+		m[p] = b.String()
+	}
+	return m, nil
+}
+
+// DirtyPaths lists the tracked paths with staged or unstaged changes against
+// HEAD, as IsDirty would report them one at a time. A rename is listed as
+// both of its paths.
+func (r *Repo) DirtyPaths() (map[string]bool, error) {
+	out, err := r.git("status", "--porcelain=v1", "-z", "--untracked-files=no", "--no-renames")
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]bool{}
+	for rec := range strings.SplitSeq(out, "\x00") {
+		if len(rec) > 3 {
+			m[rec[3:]] = true
+		}
+	}
+	return m, nil
+}
+
+// StagedChanges lists which of paths the index holds differently from HEAD —
+// what a commit of them from the index would change. Without a HEAD, that is
+// every one of them the index has.
+func (r *Repo) StagedChanges(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	var out string
+	var err error
+	if r.ok("rev-parse", "--verify", "-q", "HEAD") {
+		out, err = r.git(append([]string{"diff-index", "--cached", "--no-renames", "--name-only", "-z", "HEAD", "--"}, paths...)...)
+	} else {
+		out, err = r.git(append([]string{"ls-files", "-z", "--"}, paths...)...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var changed []string
+	for p := range strings.SplitSeq(out, "\x00") {
+		if p != "" && slices.Contains(paths, p) {
+			changed = append(changed, p)
+		}
+	}
+	return changed, nil
+}
+
+// gitEnv is git with extra environment and, when stdin is not empty, input.
+func (r *Repo) gitEnv(env []string, stdin string, args ...string) (string, error) {
+	cmd := exec.Command(gitBinary(), append([]string{"-C", r.root}, args...)...) //nolint:gosec // Argv-only git invocation, never a shell string.
+	cmd.Env = append(os.Environ(), env...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", errors.New(msg)
+	}
+	return string(out), nil
 }
 
 // HeadInfo describes HEAD for /undo: full and short hashes, the subject

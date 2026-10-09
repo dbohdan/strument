@@ -830,18 +830,23 @@ either way. `/commits on|off` changes the setting for the session, and
 `/env`. With commits off, `/undo` and `/diff` still work. A trusted project
 config may set it too.
 
-A file with uncommitted changes when the turn first edits it is committed with
-the turn's edits, and the commit names it in a trailer, one per file:
+A turn's commit holds the files the model edited and whatever the model's
+shell commands staged with git — `git mv`, `git rm`, `git add` — taken from the
+index as staged. What you stage yourself, before or during the turn, stays
+out of it, as do files a command changed without staging them. A staged path
+with unresolved merge conflicts is left out and named on screen.
+
+A file with uncommitted changes when the turn began is committed with the
+turn's changes, and the commit names it in a trailer, one per file:
 
 ```
 Uncommitted-before-edit: src/main.go
 ```
 
-The trailer does not say whose the changes were: yours, or a shell command
-the model ran earlier, such as `git mv`. Strument used to commit such a file
-on its own before editing it, as aider does; it stopped because the model's
-shell made that guess wrong. With commits off, nothing is committed either
-way.
+The trailer does not say whose the changes were: yours, or an earlier turn's
+left uncommitted. Strument used to commit such a file on its own before
+editing it, as aider does; it stopped because, with a shell, the model makes
+changes that look the same. With commits off, nothing is committed either way.
 
 ### `git_sign`
 
