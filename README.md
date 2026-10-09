@@ -13,22 +13,24 @@ See [`doc/`](doc/README.md) for the developer overview.
 
 ## Features
 
-- A single binary in pure Go, with no Python runtime and no cgo, [tree-sitter](https://github.com/odvcencio/gotreesitter) included.
+- A single binary.
+  No Python-runtime dependency.
+  Pure Go without cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
 - [Starlark](https://starlark-lang.org/) configuration.
-  One `config.star` file replaces YAML, `.env` files, and a JSON model database.
-  A project's own config loads only after you run `strument trust`, which shows what it would be allowed to do.
-- [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents), including `bash`, which runs commands in an embedded cross-platform Bash ([mvdan/sh](https://github.com/mvdan/sh)).
-- An optional [decision model](doc/config.md#approve_model) in front of the shell prompt.
-  A classifier such as TypeSafe's Jev or Cloudflare's Clef rates each command, and the ones it rates safe run without asking.
+  One `config.star` file replaces YAML config, `.env` files, and a JSON model database.
+  Projects can have their own config that is loaded only when approved with `strument trust`.
+- [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents), including `bash`, which runs commands in an embedded cross-platform Bash-compatible shell, ([mvdan/sh](https://github.com/mvdan/sh)).
+- An optional [decision model](doc/config.md#approve_model) screening shell commands for automatic approval.
+  TypeSafe's Jev or a compatible model (like Cloudflare's Clef) can rate each shell command for safety, and Strument will run sufficiently safe commands without asking you.
 - [Agent Skills](https://agentskills.io/): a `SKILL.md` in your skills directory or the project's is available to the model by name.
   See [Skills](doc/config.md#skills).
 - A sandboxed [`run_code` tool](doc/config.md#the-run_code-tool) for short JavaScript programs, such as calculations or processing many inputs at once.
-  Programs can call the read-only search tools and nothing else on the host.
-- Undo for every edit through Strument's file tools, with or without Git.
+  Programs can call read-only search tools but nothing else on the host.
+- Undo for every edit through Strument's file tools, with and without Git.
   In a repository, each turn is one commit.
-- [Project checks](#configuration): named commands such as tests and a linter, which the model can run without a permission prompt and Strument can run after every editing turn.
-- Web pages: `/web <url>` and the model's `webfetch` tool fetch a page as Markdown.
-  The tool asks before fetching from an unfamiliar origin.
+- [Project checks](#configuration): named commands such as tests and a linter, which the model can run without a permission prompt and Strument can run after every turn.
+- Web fetch: `/web <url>` and the model's `webfetch` tool fetch a page as Markdown.
+  The tool asks before the model fetches from an unfamiliar origin.
 - Optional [web search](doc/config.md#websearch) through your own [SearXNG](https://docs.searxng.org/) instance or a hosted backend ([AnySearch](https://anysearch.com/), [Exa](https://exa.ai/)).
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
@@ -99,7 +101,7 @@ Put this minimal configuration in `~/.config/strument/config.star`:
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
 
-models = {"mimo": model(openrouter, "xiaomi/mimo-v2.5", context=1050000)}
+models = {"mimo": model(openrouter, "xiaomi/mimo-v2.6-flash", context=1050000)}
 default = "mimo"
 ```
 
@@ -110,7 +112,7 @@ cd ~/src/myproject
 OPENROUTER_API_KEY=sk-or-... strument
 ```
 
-Set `context` so Strument can warn you before a request exceeds the model's context window and summarize older chat history when needed.
+Set `context` so Strument can warn you before a request exceeds the model's context window and can summarize older chat history between turns.
 Without it, a long session can exceed the provider's limit and have its requests rejected.
 
 Cost fields are optional.
@@ -126,7 +128,7 @@ Try a small request with an inexpensive model and check the reported cost before
 
 ## Using Strument
 
-Type what you want changed.
+Type what you want done.
 The model works until it finishes or reaches the step limit.
 At the limit (25 steps by default) Strument reports the number of edits and the cost so far, then asks whether to continue.
 
@@ -135,25 +137,30 @@ Shell commands ask for permission first, which you can grant for that command or
 Reading, searching, and editing do not ask.
 
 In a Git repository, each turn that changes a file ends in a commit.
-`--no-git` turns the Git integration off inside a repository; outside one it is already off.
-`/undo` works either way: Strument records each file before it first writes to it, so a turn can be undone in a directory that is not a repository, such as a live configuration directory or a checkout under another SCM.
+`--no-git` turns the Git integration off inside a repository; outside one it is automatically off.
+The `/undo` command works either way: Strument records each file before it first writes to it, so a turn's writes can be undone in a directory that is not a repository, such as a live configuration directory or a checkout under another SCM.
 
-Pages come from a built-in HTTPS client or, for pages that need JavaScript, an external browser command ([`scraper`](doc/config.md#scraper)).
-A URL fragment limits the result to that section, and a page over the size limit comes back as an outline.
+Web pages come from a built-in HTTPS client.
+For pages that need JavaScript, an external browser command ([`scraper`](doc/config.md#scraper)) can be configured.
+A URL fragment limits the result to that section.
+The model sees a page over the size limit as an outline.
 
 ### Writing longer messages
 
-The prompt is a single line, and line breaks in it are shown as `↵`.
-`Alt-Enter` adds one; a multi-line paste arrives whole, line breaks included, and is not sent until you press `Enter`.
-For anything longer, `/editor` opens your editor (`$VISUAL`, then `$EDITOR`), and `Ctrl-X Ctrl-E` does the same starting from what you have typed.
-What you save comes back to the prompt for you to read and send; an empty file sends nothing.
+The prompt is displayed on a single line with any line breaks shown as `↵`.
+<kbd>Alt+Enter</kbd> adds a line break.
+A multi-line paste is added to the prompt whole, line breaks included.
+It is not sent until you press `Enter`.
+For anything longer, `/editor` opens your editor (`$VISUAL`, then `$EDITOR`) to write a new prompt.
+The keys <kbd>Ctrl+X Ctrl+E</kbd> do the same starting from the current prompt.
+What you save in the editor become the updated prompt for you to read and send.
 `/editor <command>` uses that command instead, for example `/editor code --wait`.
 
 ### Interrupting and steering
 
-While the model is responding or a tool is running, press `Ctrl-C` once to interrupt it.
+While the model is responding or a tool is running, press <kbd>Ctrl+C</kbd> once to interrupt it.
 Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction.
-Press `Ctrl-C` twice within two seconds to exit Strument.
+Press <kbd>Ctrl+C</kbd> twice within two seconds to exit Strument.
 A script can interrupt a run with `SIGUSR1` instead; see [script mode](doc/config.md#script-mode--m).
 
 You can stop a long response and redirect the model without starting over:
@@ -173,45 +180,40 @@ Answer (1-2, or your own text): Use the existing token helper instead
 ...
 ```
 
-`Continue` lets the model resume from the partial response with its context preserved.
-Typing your own answer sends it as a correction, and `Stop` ends the turn.
+"Continue" lets the model resume from the partial response with the context preserved.
+Typing your own answer sends it as a correction, and "Stop" ends the turn.
 Edits made before the interruption remain undoable with `/undo`.
 
-Exiting in the middle of a turn — `Ctrl-C` twice, closing the terminal, or a
-`SIGTERM` from `timeout` or a service manager — does not lose the turn.
-Strument saves its edits for `/undo` on the way out and leaves the commit for
-the next start, which commits the files that are still exactly as the turn
-left them and reports any that have changed since, so an edit you make in
-between never lands in Strument's commit. A `SIGKILL`, a crash, or a power
-loss still ends the run with nothing saved; the edits are on disk.
+Exiting in the middle of a turn — <kbd>Ctrl+C</kbd> twice, closing the terminal, or a `SIGTERM` from `timeout` or a service manager — does not lose the turn.
+Strument saves its edits for `/undo` on the way out.
+It can commit the files on the next start.
+A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved and the edits on disk.
 
 ### REPL commands
 
-| | |
-| --- | --- |
-| `/add <file> ...`, `/drop`, `/ls` | Pin files you want the model to inspect or change. Strument gives the model their names; the model reads them as needed and can find other project files itself. |
-| `/ask <question>` | Ask about the project without giving the model editing tools. `/ask` on its own switches to ask mode, and `/code` switches back. |
-| `/yes [add <name> ... \| drop <name> ... \| reset]` | Show or change which prompts are approved automatically. On its own it lists each approval and where it came from: `--yes`, the config's `auto_approve`, or this run. Dropping one makes Strument ask again mid-run, which is useful when a turn starts going somewhere unexpected. |
-| `/attach <file> ...` | Attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Unlike pinned files, attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can. |
-| `/check [<name>]` | Run a project check by name, or all checks if no name is given. Checks run in the order the config lists them and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is not offered to the chat. |
-| `/consult <alias> <question>`, `/consult scope [<name>]` | Ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug. |
-| `/session`, `/session new\|switch\|fork\|rename\|delete <name>` | List this project's sessions, or create, switch to, fork, rename, or delete one. See [Sessions](#sessions). |
-| `/notes`, `/notes generate`, `/notes drop` | Show the session notes, regenerate them from the session record, or discard them. Notes stay in memory and are not saved to disk. They carry context from one session to another; to pick up *this* session's conversation, use `--continue`. See [`doc/sessions.md`](doc/sessions.md). |
-| `/read-only <file> ...` | Pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself. |
-| `/commits [on \| off]` | Show or change whether a turn that edits a file ends in a commit. With no argument, it shows the current setting. `--no-auto-commits` starts a session with commits off, and `auto_commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work. |
-| `/undo` | Revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one. |
-| `/rewind [<n>]` | Take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns folded into a compaction summary cannot be rewound. |
-| `/squash [<n>]` | Combine the last `n` turns' commits into one. |
-| `/usage [<provider> \| all]` | Show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports). |
-| `/diff`, `/tokens` | Show what changed and how full the context window is. |
-| `/context [<n>]` | Show the chat history as the model receives it: compaction summaries followed by recent, unsummarized messages. With `n`, show only the first `n` summaries. |
-| `/skill [<name>]` | List the available skills, or add a skill's instructions to the chat yourself. See [Skills](doc/config.md#skills). |
-| `/symbol <name> [definition \| reference]` | Find where a name is defined or used, using the language parser rather than a text search. |
-| `/editor [<command>]` | Write your message in an editor: `$VISUAL`, then `$EDITOR`, or the command given. What you save comes back to the prompt to read and send. `Ctrl-X Ctrl-E` opens it with what you have typed. |
-| `/submit <file>` | Send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Paths outside the project are allowed. Files over 100 KiB are refused rather than truncated. |
-| `/run <cmd>`, `/web <url>` | Run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands receive an [allowlist](doc/config.md#env_allow). `/web` on its own lists the origins `webfetch` can fetch from without asking, and `/web drop` and `/web reset` revoke those approvals. |
-| `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset` | Show or change, for this run, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`. |
-| `/model [alias]`, `/reload` | Switch models mid-session; reload the configuration without restarting ([what a reload applies](doc/config.md#what-reload-applies)). |
+- `/add <file> ...`, `/drop`, `/ls`&thinsp;&mdash;&thinsp;pin files you want the model to inspect or change. Strument gives the model their names; the model reads them as needed and can find other project files itself.
+- `/ask <question>`&thinsp;&mdash;&thinsp;ask about the project without giving the model editing tools. `/ask` on its own switches to ask mode, and `/code` switches back.
+- `/yes [add <name> ... \| drop <name> ... \| reset]`&thinsp;&mdash;&thinsp;show or change which prompts are approved automatically. On its own it lists each approval and where it came from: `--yes`, the config's `auto_approve`, or this run. Dropping one makes Strument ask again mid-run, which is useful when a turn starts going somewhere unexpected.
+- `/attach <file> ...`&thinsp;&mdash;&thinsp;attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Unlike pinned files, attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can.
+- `/check [<name>]`&thinsp;&mdash;&thinsp;run a project check by name, or all checks if no name is given. Checks run in the order the config lists them and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is not offered to the chat.
+- `/consult <alias> <question>`, `/consult scope [<name>]`&thinsp;&mdash;&thinsp;ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug.
+- `/session`, `/session new\|switch\|fork\|rename\|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, fork, rename, or delete one. See [Sessions](#sessions).
+- `/notes`, `/notes generate`, `/notes drop`&thinsp;&mdash;&thinsp;show the session notes, regenerate them from the session record, or discard them. Notes stay in memory and are not saved to disk. They carry context from one session to another; to pick up *this* session's conversation, use `--continue`. See [`doc/sessions.md`](doc/sessions.md).
+- `/read-only <file> ...`&thinsp;&mdash;&thinsp;pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself.
+- `/commits [on \| off]`&thinsp;&mdash;&thinsp;show or change whether a turn that edits a file ends in a commit. With no argument, it shows the current setting. `--no-auto-commits` starts a session with commits off, and `auto_commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
+- `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one.
+- `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns folded into a compaction summary cannot be rewound.
+- `/squash [<n>]`&thinsp;&mdash;&thinsp;combine the last `n` turns' commits into one.
+- `/usage [<provider> \| all]`&thinsp;&mdash;&thinsp;show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports).
+- `/diff`, `/tokens`&thinsp;&mdash;&thinsp;show what changed and how full the context window is.
+- `/context [<n>]`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: compaction summaries followed by recent, unsummarized messages. With `n`, show only the first `n` summaries.
+- `/skill [<name>]`&thinsp;&mdash;&thinsp;list the available skills, or add a skill's instructions to the chat yourself. See [Skills](doc/config.md#skills).
+- `/symbol <name> [definition \| reference]`&thinsp;&mdash;&thinsp;find where a name is defined or used, using the language parser rather than a text search.
+- `/editor [<command>]`&thinsp;&mdash;&thinsp;write your message in an editor: `$VISUAL`, then `$EDITOR`, or the command given. What you save comes back to the prompt to read and send. `Ctrl-X Ctrl-E` opens it with what you have typed.
+- `/submit <file>`&thinsp;&mdash;&thinsp;send a file's contents as your message, as if you had typed them: the trimmed contents are printed first, then sent. Paths outside the project are allowed. Files over 100 KiB are refused rather than truncated.
+- `/run <cmd>`, `/web <url>`&thinsp;&mdash;&thinsp;run a command or fetch a page and offer the output to the model. `/run` keeps your full environment; model-run commands receive an [allowlist](doc/config.md#env_allow). `/web` on its own lists the origins `webfetch` can fetch from without asking, and `/web drop` and `/web reset` revoke those approvals.
+- `/env`, `/env add <NAME>...`, `/env drop <NAME>...`, `/env reset`&thinsp;&mdash;&thinsp;show or change, for this run, which environment variables model-run commands receive. Tab completes variable names. Persistent changes belong in `env_allow`.
+- `/model [alias]`, `/reload`&thinsp;&mdash;&thinsp;switch models mid-session; reload the configuration without restarting ([what a reload applies](doc/config.md#what-reload-applies)).
 
 `/help` lists all commands.
 The model also has a `run_code` tool, which runs a short JavaScript program in a sandbox, in either mode.
@@ -219,31 +221,52 @@ See the [`run_code` tool](doc/config.md#the-run_code-tool).
 
 ### Script mode
 
-`strument -m '<request>'` runs a single turn and exits, and `--dry-run` shows the edits without writing them.
-Without a terminal, every prompt is declined unless `--yes <name>` approves it; read [script mode](doc/config.md#script-mode--m) before giving an unattended run `--yes bash`.
+`strument -m '<request>'` runs a single turn and exits.
+The option `--dry-run` shows the edits without writing them.
+With no terminal, every confirmation prompt is declined unless `--yes <name>` approves it;
+read [script mode](doc/config.md#script-mode--m) before giving an unattended run `--yes bash`.
 
 ### Sessions
 
-A project can hold several sessions, each with its own conversation, pinned files, and undo history.
-`-s <name>` (`--session`) picks one, creating it the first time, and a bare `strument` returns to the last one used.
-A session starts with an empty conversation; `-c` (`--continue`) restores its conversation from the session record, so your work survives a crash, a closed laptop, or a restart.
+A project can hold several _sessions_, each with its own conversation, choice of model, pinned files, and undo history.
+Each invocation of Strument is called a _run_.
+The option `-s <name>` (`--session`) picks the session, creating it if necessary.
+A bare `strument` command returns to the last session used, or `default`.
+A session starts with an empty conversation; `-c` (`--continue`) restores its conversation from the session record.
 
-Inside Strument, `/session` lists, switches, forks, renames, and deletes sessions, and `/notes` carries context from one session into another.
-From the shell, `strument session list`, `rename`, and `delete` do the same.
-[`doc/history.md`](doc/history.md) has the details, and [`doc/sessions.md`](doc/sessions.md) explains why sessions work this way.
+Inside Strument, `/session` lists, switches, forks, renames, and deletes sessions; `/notes` carries context from one session into another.
+From the shell, the subcommands `strument session list`, `rename`, and `delete` do the same.
+[`doc/history.md`](doc/history.md) and [`doc/sessions.md`](doc/sessions.md) have the details.
 
 ### Session records
 
-Strument records every session outside your project as [JSON Lines](https://jsonlines.org/): each message, tool call, and result, plus a summary row with the cost of each turn.
-`strument history list` shows a session's runs, `strument history markdown` renders them as a transcript, and `strument history path` prints the file for `jq`, and `strument history zip <file>` packs a run with its stored tool output for sharing; `-b <n>` picks one run.
-`--no-history` records nothing.
-The record format, stored tool output, `strument history strip`, and what to do if you rename a project directory are in [`doc/history.md`](doc/history.md).
+Strument records every session outside your project directory.
+It uses [JSON Lines](https://jsonlines.org/) file for this.
+The lines of this file correspond to messages, tool calls, and results, plus a summary row with the cost of each turn.
+Long tool output (over 1024 bytes) is stored in separate _blob_ files.
+
+- `strument history list` shows a session's runs
+- `strument history markdown` renders them as a transcript
+- `strument history path` prints the run file path for commands like `jq`
+- `strument history edit` opens the run file in your editor
+- `strument history zip <file>` packs a run with its stored tool output for sharing
+
+The runs are numbered.
+The `history` subcommands take the option `-b <n>` to pick one run.
+Positive numbers pick that run; zero and negative pick the current run minus the number.
+
+Use the option `--no-history` to record nothing.
+
+The record format, stored tool output, `strument history strip`, and what to do if you rename a project directory is documented in [`doc/history.md`](doc/history.md).
 
 ### Usage reports
 
-`strument usage [<provider>]` reports token usage and cost per provider, across every project: `usage all` covers every provider, and with no argument it reports the default model's provider.
+`strument usage [<provider>]` reports token usage and cost per provider, across every project.
+With no argument, it reports usage for the default model's provider; `usage all` covers every provider together.
 `/usage [<provider>]` prints the same report inside Strument, defaulting to the current model's provider.
-It shows rolling windows (the last 24 hours, 7 days, and 30 days), which will not match a provider's calendar-month invoice; see [`doc/config.md`](doc/config.md#strument-usage).
+
+The output shows rolling windows: the last 24 hours, 7 days, and 30 days.
+Those will not match a provider's calendar-month invoice; see [`doc/config.md`](doc/config.md#strument-usage).
 
 ### Shell completions
 
@@ -258,8 +281,10 @@ source <(strument shell bash)
 strument shell fish | source
 ```
 
-The `-M`/`--model` option completes model aliases from the effective config by running `strument config models`, and `-s`/`--session` completes session names.
-Subcommands, their flags, and enumerable option values (`--yes`, `--mode`, `--consult-scope`) complete too, and paths complete where a command takes one.
+With the completions loaded, the `-M`/`--model` option completes model aliases from the effective config (it runs `strument config models`), and `-s`/`--session` completes session names.
+Subcommands, their flags, and enumerable option values (`--yes`, `--mode`, `--consult-scope`) are completed, too.
+Paths are completed where a command takes one.
+
 To load completions automatically, add the command to your shell configuration.
 
 
@@ -268,9 +293,9 @@ To load completions automatically, add the command to your shell configuration.
 Strument is configured in Starlark, a small sandboxed dialect of Python.
 A config file is a short program that builds model objects and assigns values to the configuration variables.
 [`doc/config.md`](doc/config.md) is the reference for the settings and every built-in function specific to Strument.
-`strument config edit` opens your config in your editor (`--project` for the project's), and `strument config path` prints where it is.
+`strument config edit` opens your user config in your editor (`--project` for the project's config); `strument config path` prints where it is.
 
-A more complete configuration:
+Here is an example of a more complete configuration:
 
 ```python
 openrouter = provider("openrouter", api_key=env("OPENROUTER_API_KEY"))
@@ -310,29 +335,32 @@ models = {
     ),
     "mimo": model(
         openrouter,
-        "xiaomi/mimo-v2.5",
-        display_name="MiMo-V2.5",
+        "xiaomi/mimo-v2.6-flash",
+        display_name="MiMo-V2.6-Flash",
         context=1050000,
         max_output=131072,
         cache=True,
+        reasoning="low",
     ),
     "sonnet": model(
         openrouter,
-        "anthropic/claude-sonnet-5",
-        display_name="Claude Sonnet 5",
+        "anthropic/claude-sonnet-5.5",
+        display_name="Claude Sonnet 5.5",
         context=1000000,
         max_output=128000,
         input_cost=2,
         output_cost=10,
-        cache=True,  # Cache the prompt prefix (Anthropic honors this).
-        reasoning="medium",
-        side_model="mimo",  # A cheaper model for commit messages and summaries.
+        input_modalities=["text", "image"],
+        cache=True,  # OpenRouter reports prompt caching for this model.
+        reasoning="medium",  # Uncomment and set the effort: "max", "xhigh", "high", "medium", "low".
+        # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
+        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
     "qwen": model(
         local_llm,
-        "qwen/qwen3.6-27b",
-        display_name="Qwen3.6 27B",
-        reasoning="high",
+        "qwen/qwen3.8-27b",
+        display_name="Qwen3.8 27B",
+        reasoning="low",
         reasoning_tag="think",  # This model emits reasoning in inline tags.
     ),
 }
@@ -344,13 +372,13 @@ default = "mimo"
 
 `cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to stable prompt sections.
 Anthropic models reached through OpenRouter explicitly honor them.
-Other providers may ignore them or implement their own prompt-caching behavior.
-When a turn used the cache, the usage line breaks down the figure in parentheses: `12.4k sent (4.2k cache write, 3.2k cache hit)`.
+Other providers may ignore them and/or implement their own prompt-caching behavior.
+When a turn uses the cache, the usage line breaks down the figure in parentheses: `12.4k sent (4.2k cache write, 3.2k cache hit)`.
 Cache-write and cache-hit tokens are included in the sent total.
 
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
-Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog and prints a `model` block you can copy into your configuration.
-It works before you have a config.
+Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog (OpenRouter by deafult) and prints a `model` block you can copy into your configuration.
+While this command works before you have a config, an OpenRouter token is recommanded to avoid getting rate-limited or IP-banned from OpenRouter.
 Settings that are your choice (`reasoning`, `reasoning_tag`, `side_model`) appear as commented-out placeholders.
 The catalog is fetched on demand and cached.
 
@@ -367,7 +395,7 @@ check = {
 }
 check_auto = ["lint", "test"]
 
-reasoning_display = 10  # "full" (the default), a line count, or "off".
+reasoning_display = 1000  # "full" (the default), a line count, or "off".
 ```
 
 Checks run in the order in which they are listed in `check` or `check_auto`, depending on which setting is being used.
@@ -377,7 +405,7 @@ A shell command that exactly matches a configured check runs without a permissio
 A modified command, such as one with an extra flag, still requires permission.
 
 `check = project_checks()` fills the dictionary with commands detected from your project's marker files for Go, Rust, Python, Node, Deno, `make`/`task`/`just`, Java, .NET, PHP, Ruby, Elixir, Crystal, and Haskell.
-Check detection is opt-in and includes only targets the project defines.
+Check detection is opt-in and includes only targets the heuristics detect.
 These are your project's own commands: `npm test` runs whatever your `package.json` says.
 
 Hiding reasoning is not the same as disabling it.
@@ -391,7 +419,7 @@ A top-level `proxy` is applied to all providers and every outbound HTTPS connect
 
 A project-local config, `.strument.star` or `.strument/config.star`, can override any of these settings, once you have run `strument trust` in the directory.
 Trust is recorded by content hash, following the [direnv](https://direnv.net/) model, so an edited config must be trusted again.
-`strument trust` shows what the config grants and which skills it found, then asks; `--yes` skips the question for scripts, and without a terminal it refuses rather than trusting silently.
+`strument trust` lists settings with potential security implications as well as the project [skills](#skills).
 The same command trusts the project's skills.
 Project skills are not loaded until you trust them.
 See [`doc/config.md`](doc/config.md) for details.
@@ -401,9 +429,9 @@ See [`doc/config.md`](doc/config.md) for details.
 
 On Linux, Strument confines itself with [Landlock](https://landlock.io/) before the session starts.
 Every process it spawns inherits the Landlock sandbox, as does the `bash` tool.
-As a result, your checks and every child process they start can write only to your project, a temporary directory, the session's state directory, and the machine's toolchain caches.
+As a result, every child process can write only to your project, a temporary directory, the session's state directory, and toolchain-specific paths like caches.
 `/sandbox` lists the effective paths.
-`sandbox_write` in the config adds writable paths; `sandbox = ""` turns the sandbox off, which is the default on non-Linux platforms.
+`sandbox_write` in the config adds writable paths; `sandbox = ""` disabled the sandbox, which is the default on non-Linux platforms.
 
 The sandbox protects **integrity, not confidentiality**.
 While writes are confined, reads are not.
@@ -424,7 +452,7 @@ Known limits:
   Aider's text-edit formats that existed for such models (`SEARCH`/`REPLACE`, fenced, whole-file) have been removed.
 - Strument is developed on Linux.
   It is tested on macOS and Windows in CI.
-- No MCP, subagents, aider's architect mode, voice, or GUI.
+- No MCP (for now), subagents, aider's architect mode, voice, or GUI.
 - No syntax highlighting.
 
 
