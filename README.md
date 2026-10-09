@@ -211,5 +211,40 @@ longer stand grows more asparagus to spread its cost over. Whether asparagus
 is worth twice cabbage at market is a question for the committee's accounts,
 and for a price list this model does not have.
 
+### Potassium: how much compost would rotation need?
+
+Potassium is the one nutrient that runs out. The six families draw 9 over a
+six-season cycle, the committee's compost puts back 1 a season, and so a bed
+loses 3 per cycle and empties late in a twenty-season run. `go run
+./cmd/larkspur -potassium` reruns rotation with the yearly potassium dressing
+set to each value from today's 1 up to 6, on the same 200 seeds.
+
+My expectation, from those numbers: a bed starting at 10 loses 3 per cycle,
+so it empties in the third cycle, and a dressing of 1.5 a season would hold
+it. The first whole value that does is 2.
+
+```
+rotation, 200 seeds, 12 beds, 20 seasons: potassium per bed in the
+yearly dressing against the committee's compost of 1.
+
+dressing         mean       cost   short bed-yr  short seeds
+1                2399          0           16.0          200
+2                2402         -2            0.0            0
+3                2402         -2            0.0            0
+4                2402         -2            0.0            0
+5                2402         -2            0.0            0
+6                2402         -2            0.0            0
+
+smallest dressing with no short bed-seasons on any seed: 2
+```
+
+The expectation held. Today's compost leaves 16 bed-seasons short on average
+across the 12 beds, and every seed has at least one. A dressing of 2 removes
+them all, and it costs nothing: the mean total rises by 2, since the
+shortfall was only ever a little yield lost in the last seasons. Anything
+above 2 adds nothing more. So the committee's potassium gap is small and
+worth closing with one extra unit a year, and it moves the harvest by about
+a tenth of a percent.
+
 Built in sessions driven through [Strument](https://dbohdan.com/strument);
 see DRIVING.md for notes on those sessions.
