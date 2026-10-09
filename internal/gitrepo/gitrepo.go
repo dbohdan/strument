@@ -262,15 +262,19 @@ func (r *Repo) RootCommit() string {
 //
 // staged is for what a model's shell command put in the index: `git mv a b`
 // stages a deletion and an addition, and committing only the file the model
-// then edited split the rename. Those paths are taken from the index rather
-// than the working tree because that is what the command staged, and because
-// a path a rename removed is in neither: `git add -- a` on it is fatal.
+// then edited split the rename. A staged path the index still has is
+// committed as it is on disk, like an edited file, and as a deletion if it is
+// gone from disk; one the index no longer has is committed as a deletion
+// whatever is on disk, so `git rm --cached` untracks rather than being
+// undone. Disk rather than the index's copy because models stage a rename
+// and then change the file through the shell — `git mv`, then `printf >>` —
+// without staging again: committing the staged copy left that change out in
+// three live runs across two models, while the commit said the file was in.
 //
 // The commit is built in a temporary index — HEAD, plus exactly these paths
-// from the real index — so the user's own staged work in other paths stays
-// out of it. `git commit -- paths` cannot do this: it takes each path from
-// the working tree, so a staged entry would be committed as whatever is on
-// disk by then. Hooks still run, since this is still `git commit`; they see
+// — so the user's own staged work in other paths stays out of it, which
+// `git commit -- paths` cannot do: it also takes a removed path to be an
+// error. Hooks still run, since this is still `git commit`; they see
 // GIT_INDEX_FILE, as they do under `git commit -- paths`, which builds a
 // temporary index of its own.
 //
@@ -297,6 +301,9 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 	}
 	defer cleanup()
 	env := []string{"GIT_INDEX_FILE=" + idx}
+	if err := r.stagedFromDisk(env, staged); err != nil {
+		return "", "", false, err
+	}
 
 	tree, err := r.gitEnv(env, "", "write-tree")
 	if err != nil {
@@ -356,6 +363,43 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 		return "", "", false, err
 	}
 	return strings.TrimSpace(short), message, true, nil
+}
+
+// stagedFromDisk updates, in the commit's index, each staged path the real
+// index still has to what is on disk: the file's contents, or its deletion.
+// A submodule keeps its staged commit; disk has a directory there, and
+// adding it would stage whatever the submodule's HEAD is now.
+func (r *Repo) stagedFromDisk(env, staged []string) error {
+	if len(staged) == 0 {
+		return nil
+	}
+	entries, err := r.indexEntries(staged)
+	if err != nil {
+		return err
+	}
+	var add, gone []string
+	for _, p := range staged {
+		es, ok := entries[p]
+		if !ok || es[0].mode == "160000" {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(r.root, p)); err == nil {
+			add = append(add, p)
+		} else {
+			gone = append(gone, p)
+		}
+	}
+	if len(add) > 0 {
+		if _, err := r.gitEnv(env, "", append([]string{"add", "--"}, add...)...); err != nil {
+			return fmt.Errorf("could not stage the files: %w", err)
+		}
+	}
+	if len(gone) > 0 {
+		if _, err := r.gitEnv(env, "", append([]string{"update-index", "--force-remove", "--"}, gone...)...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // commitIndex writes a temporary index holding HEAD's tree with paths as the

@@ -11,10 +11,11 @@ import (
 //
 // Two things, both decided by provenance rather than by a guess.
 //
-// What the model's shell commands staged goes into the commit. A session
-// showed why: MiMo ran `git mv test.ts test.mjs`, then edited test.mjs, and
-// the commit took test.mjs alone, leaving the staged deletion of test.ts
-// behind — half a rename. Rename detection cannot repair that reliably: git
+// What the model's shell commands staged goes into the commit, each path as
+// it is on disk (gitrepo's Commit says why disk and not the staged copy). A
+// session showed why it goes in at all: MiMo ran `git mv test.ts test.mjs`,
+// then edited test.mjs, and the commit took test.mjs alone, leaving the
+// staged deletion of test.ts behind — half a rename. Rename detection cannot repair that reliably: git
 // stores no renames, and pairing a deletion with an addition by similarity
 // misses a rename whose target was rewritten and pairs a deletion the user
 // staged with an unrelated new file of the model's. So instead the index is

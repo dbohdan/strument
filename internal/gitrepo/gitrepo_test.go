@@ -787,10 +787,10 @@ func TestPublishedSeesEveryRemoteAndBranchName(t *testing.T) {
 	}
 }
 
-// TestCommitTakesStagedFromIndex: a staged path is committed as the index has
-// it, a rename's deleted source included, while the user's own staged work in
+// TestCommitTakesStagedFromDisk: a staged path is committed as it is on disk,
+// a rename's deleted source included, while the user's own staged work in
 // another path stays staged and out of the commit.
-func TestCommitTakesStagedFromIndex(t *testing.T) {
+func TestCommitTakesStagedFromDisk(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
@@ -814,7 +814,8 @@ func TestCommitTakesStagedFromIndex(t *testing.T) {
 	// The user's staged work, from before the model's command.
 	write("other.txt", "user staged\n")
 	run(t, root, "git", "add", "other.txt")
-	// The model's command: a rename, then more on disk that it did not stage.
+	// The model's command: a rename, then more on disk that it did not stage,
+	// as models do with `printf >>` after `git mv`.
 	run(t, root, "git", "mv", "main.txt", "moved.txt")
 	write("moved.txt", "hello world\nunstaged later\n")
 
@@ -832,15 +833,16 @@ func TestCommitTakesStagedFromIndex(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
-	if got := strings.TrimSpace(run(t, root, "git", "show", "--name-status", "--format=", "-M", "HEAD")); got != "R100\tmain.txt\tmoved.txt" {
+	// Both halves, whether or not git's similarity check calls it a rename:
+	// the file is small, and the added line takes it below 50%.
+	if got := strings.TrimSpace(run(t, root, "git", "show", "--name-status", "--no-renames", "--format=", "HEAD")); got != "D\tmain.txt\nA\tmoved.txt" {
 		t.Errorf("commit = %q, want the whole rename", got)
 	}
-	if got := run(t, root, "git", "show", "HEAD:moved.txt"); got != "hello world\n" {
-		t.Errorf("moved.txt committed as %q, want the staged content, not the disk's", got)
+	if got := run(t, root, "git", "show", "HEAD:moved.txt"); got != "hello world\nunstaged later\n" {
+		t.Errorf("moved.txt committed as %q, want what is on disk", got)
 	}
-	status := run(t, root, "git", "status", "--porcelain", "--untracked-files=no")
-	if !strings.Contains(status, "M  other.txt") || !strings.Contains(status, " M moved.txt") || strings.Contains(status, "main.txt") {
-		t.Errorf("status after commit:\n%s\nwant other.txt still staged, moved.txt modified on disk only", status)
+	if status := strings.TrimSpace(run(t, root, "git", "status", "--porcelain", "--untracked-files=no")); status != "M  other.txt" {
+		t.Errorf("status after commit: %q, want only other.txt, still staged", status)
 	}
 }
 
@@ -1004,5 +1006,30 @@ func TestCommitHooksSeeTheTemporaryIndex(t *testing.T) {
 	}
 	if st := strings.TrimSpace(run(t, root, "git", "status", "--porcelain")); st != "" {
 		t.Errorf("status after a formatting hook: %q, want clean", st)
+	}
+}
+
+// TestCommitStagedUntrack: `git rm --cached` removes a path from the index and
+// leaves the file on disk. Committing it from disk would put back exactly what
+// the command took out, so a path the index no longer has commits as a
+// deletion, and the file stays on disk, untracked.
+func TestCommitStagedUntrack(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "rm", "-q", "--cached", "main.txt")
+	if _, _, ok, err := g.Commit(nil, []string{"main.txt"}, "", "untrack main", true, nil); !ok || err != nil {
+		t.Fatalf("Commit: ok=%v err=%v", ok, err)
+	}
+	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); got != "" {
+		t.Errorf("HEAD still tracks %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "main.txt")); err != nil {
+		t.Errorf("main.txt gone from disk: %v", err)
+	}
+	if st := strings.TrimSpace(run(t, root, "git", "status", "--porcelain")); st != "?? main.txt" {
+		t.Errorf("status = %q, want main.txt untracked", st)
 	}
 }

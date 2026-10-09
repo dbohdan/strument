@@ -830,11 +830,14 @@ either way. `/commits on|off` changes the setting for the session, and
 `/env`. With commits off, `/undo` and `/diff` still work. A trusted project
 config may set it too.
 
-A turn's commit holds the files the model edited and whatever the model's
-shell commands staged with git — `git mv`, `git rm`, `git add` — taken from the
-index as staged. What you stage yourself, before or during the turn, stays
-out of it, as do files a command changed without staging them. A staged path
-with unresolved merge conflicts is left out and named on screen.
+A turn's commit holds the files the model edited and the files the model's
+shell commands staged with git — `git mv`, `git rm`, `git add` — each as it is
+on disk, so a change the model made after staging is included too. A file a
+command took out of the index, as `git rm --cached` does, is committed as
+untracked and stays on disk. What you stage yourself, before or during the
+turn, stays out of the commit, as do files a command changed without staging
+them. A staged path with unresolved merge conflicts is left out and named on
+screen.
 
 A file with uncommitted changes when the turn began is committed with the
 turn's changes, and the commit names it in a trailer, one per file:

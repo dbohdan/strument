@@ -45,10 +45,11 @@ func commitTool() llm.ToolDef {
 			"feature that uses it — so each lands as its own reviewable change " +
 			"instead of one undifferentiated diff.\n\n" +
 			"Commits the files your edit and write calls have changed since your last " +
-			"commit, and whatever your bash commands staged with git since then — " +
-			"`git mv`, `git rm`, `git add`. Other changes a bash command made, such as a " +
-			"formatter's or a code generator's, are not included unless you stage them, " +
-			"and are otherwise left for the user to commit.\n\n" +
+			"commit, and the files your bash commands staged with git since then — " +
+			"`git mv`, `git rm`, `git add` — each as it is on disk. Other files a bash " +
+			"command changed, such as a formatter's or a code generator's output, are not " +
+			"included unless you stage them, and are otherwise left for the user to " +
+			"commit.\n\n" +
 			"Call it as you finish each part, not once at the end: make the edits for one " +
 			"part and commit them in the same step, then start the next part when that " +
 			"result comes back. Edits you make in one step all land in one commit, so a " +
