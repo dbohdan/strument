@@ -13,49 +13,21 @@ See [`doc/`](doc/README.md) for the developer overview.
 
 ## Features
 
-- A single binary.
-  No Python-runtime dependency.
-  Pure Go without cgo, even for [tree-sitter](https://github.com/odvcencio/gotreesitter).
+- A single binary in pure Go, with no Python runtime and no cgo, [tree-sitter](https://github.com/odvcencio/gotreesitter) included.
 - [Starlark](https://starlark-lang.org/) configuration.
   One `config.star` file replaces YAML, `.env` files, and a JSON model database.
-  Project-local config is supported as either `.strument.star` or `.strument/config.star`.
-  They are loaded only after you authorize them by running `strument trust` in the project directory.
-  That command prints what the config would be allowed to do — which hosts, which commands, which variables — and asks before recording anything.
-  Trust is recorded by content hash, following the [direnv](https://direnv.net/) model.
-- [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents).
-  `bash` runs a command using the embedded [mvdan/sh](https://github.com/mvdan/sh) shell, a cross-platform reimplementation of Bash.
-- [Agent Skills](https://agentskills.io/).
-  Drop a `SKILL.md` under `~/.local/share/strument/skills/foo/` or the project's `.strument/skills/foo/`, and the model can ask for it by name.
-  Project skills also require `strument trust`.
-  A skill's `allowed-tools` field does not grant tool permissions.
-- A sandboxed `run_code` tool.
-  The model can run short JavaScript programs for calculations, formatting, or processing several inputs at once, in an embedded interpreter with no access to the host.
-  Programs have no direct filesystem or network access.
-  They can inspect project data through the five exposed read-only search tools.
-  Tools that modify files or run shell commands are not exposed.
-  See the [`run_code` tool](doc/config.md#the-run_code-tool).
-- Every file Strument edits through its file tools is undoable, with or without Git.
-  Strument records each file before the first time it writes to it.
-  `/undo` can restore those file changes for a whole turn even in a directory that is not a repository,
-  like a live configuration directory or a checkout under another SCM.
-  In a Git repository, a turn is one commit.
-  The command `/squash [n]` merges commits.
-  Files that the model's commands created, rather than its edits (a compiled binary, a scratch script), are not committed.
-  Strument lists those that git neither tracks nor ignores at the end of the turn, and tells the model about them once, when it thinks it is done, so it can remove any by-product it did not mean to leave.
-- Project checks.
-  The `check` config setting is a dictionary of named verification commands, like tests, a linter, and a build.
-  The model can run them by name without a permission prompt.
-  `project_checks()` detects standard checks for your project type.
-  `check_auto` lists which of the `check` commands Strument runs at the end of any turn that changed a file.
-- Web pages.
-  `/web <url>` fetches a page, converts it to Markdown, and offers it to the model.
-  Fetching uses either a built-in HTTPS client or an external browser command (necessary for pages that rely on JavaScript).
-  The model has a `webfetch` tool, which asks your permission before fetching from an unfamiliar origin; the built-in client does not follow a redirect to one either.
-  A URL fragment limits the result to that section.
-  If a page exceeds the size limit, the tool returns an outline instead.
-- Web search, if you enable it.
-  Configure [`websearch`](doc/config.md#websearch) and the model gets a `websearch` tool.
-  Use your own [SearXNG](https://docs.searxng.org/) instance, with your choice of engines and no API key, or a hosted backend that needs no setup: [AnySearch](https://anysearch.com/), which works with or without a key, or [Exa](https://exa.ai/), which searches its own index and returns page text instead of snippets (key required).
+  A project's own config loads only after you run `strument trust`, which shows what it would be allowed to do.
+- [Tool calls](https://datacream.substack.com/p/tool-calling-explained-how-ai-agents), including `bash`, which runs commands in an embedded cross-platform Bash ([mvdan/sh](https://github.com/mvdan/sh)).
+- [Agent Skills](https://agentskills.io/): a `SKILL.md` in your skills directory or the project's is available to the model by name.
+  See [Skills](doc/config.md#skills).
+- A sandboxed [`run_code` tool](doc/config.md#the-run_code-tool) for short JavaScript programs, such as calculations or processing many inputs at once.
+  Programs can call the read-only search tools and nothing else on the host.
+- Undo for every edit through Strument's file tools, with or without Git.
+  In a repository, each turn is one commit.
+- [Project checks](#configuration): named commands such as tests and a linter, which the model can run without a permission prompt and Strument can run after every editing turn.
+- Web pages: `/web <url>` and the model's `webfetch` tool fetch a page as Markdown.
+  The tool asks before fetching from an unfamiliar origin.
+- Optional [web search](doc/config.md#websearch) through your own [SearXNG](https://docs.searxng.org/) instance or a hosted backend ([AnySearch](https://anysearch.com/), [Exa](https://exa.ai/)).
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
 The terminal interface has stayed deliberately close to aider's, including the green/blue palette (with `--dark-mode` and `--light-mode`).
@@ -162,7 +134,10 @@ Reading, searching, and editing do not ask.
 
 In a Git repository, each turn that changes a file ends in a commit.
 `--no-git` turns the Git integration off inside a repository; outside one it is already off.
-`/undo` works either way.
+`/undo` works either way: Strument records each file before it first writes to it, so a turn can be undone in a directory that is not a repository, such as a live configuration directory or a checkout under another SCM.
+
+Pages come from a built-in HTTPS client or, for pages that need JavaScript, an external browser command ([`scraper`](doc/config.md#scraper)).
+A URL fragment limits the result to that section, and a page over the size limit comes back as an outline.
 
 ### Writing longer messages
 
@@ -412,7 +387,8 @@ A top-level `proxy` is applied to all providers and every outbound HTTPS connect
 `proxy="direct"` disables the top-level `proxy` for that provider.
 `search()` calls work the same way.
 
-A project-local config can override any of these settings, once you have run `strument trust` in the directory.
+A project-local config, `.strument.star` or `.strument/config.star`, can override any of these settings, once you have run `strument trust` in the directory.
+Trust is recorded by content hash, following the [direnv](https://direnv.net/) model, so an edited config must be trusted again.
 `strument trust` shows what the config grants and which skills it found, then asks; `--yes` skips the question for scripts, and without a terminal it refuses rather than trusting silently.
 The same command trusts the project's skills.
 Project skills are not loaded until you trust them.
