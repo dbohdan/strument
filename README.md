@@ -370,7 +370,7 @@ models["ds"] = models["deepseek-flash"]  # One model, two aliases.
 default = "mimo"
 ```
 
-`cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to stable prompt sections.
+`cache` (off by default) attaches cache-control breakpoints with a one-hour TTL to the stable prompt sections and to the end of the conversation, so each step of a turn reuses the previous one's prefix.
 Anthropic models reached through OpenRouter explicitly honor them.
 Other providers may ignore them and/or implement their own prompt-caching behavior.
 When a turn uses the cache, the usage line breaks down the figure in parentheses: `12.4k sent (4.2k cache write, 3.2k cache hit)`.

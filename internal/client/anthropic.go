@@ -211,6 +211,10 @@ func splitSystem(in []llm.Message) ([]antBlock, []antMessage) {
 				Type:      "tool_result",
 				ToolUseID: m.ToolCallID,
 				Content:   m.Text(),
+				// The result's content travels as a string, so a breakpoint on
+				// one of its blocks goes on the tool_result itself, or the
+				// conversation's rolling breakpoint is dropped here.
+				CacheControl: cacheControlOf(m.Content),
 			})
 		case llm.RoleAssistant:
 			blocks := contentBlocks(m.Content)
@@ -233,6 +237,16 @@ func splitSystem(in []llm.Message) ([]antBlock, []antMessage) {
 		}
 	}
 	return system, out
+}
+
+// cacheControlOf returns the breakpoint on any block of c, or nil.
+func cacheControlOf(c llm.Content) *llm.CacheControl {
+	for _, b := range c.Blocks {
+		if b.CacheControl != nil {
+			return b.CacheControl
+		}
+	}
+	return nil
 }
 
 // contentBlocks renders llm.Content as Anthropic text blocks, carrying any

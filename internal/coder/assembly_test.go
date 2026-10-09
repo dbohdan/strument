@@ -187,14 +187,47 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 	if got := countBreakpoints(chunks.system); got != 1 {
 		t.Errorf("system breakpoints = %d, want 1 (the examples fallback)", got)
 	}
-	if got := countBreakpoints(chunks.done) + countBreakpoints(chunks.cur); got != 0 {
-		t.Errorf("done/cur breakpoints = %d (never cacheable)", got)
+	// Two roll with the conversation: on the request's last message, and on
+	// the message before the last assistant turn, where the previous
+	// request's last breakpoint was.
+	if got := countBreakpoints(chunks.done) + countBreakpoints(chunks.cur); got != 2 {
+		t.Errorf("done/cur breakpoints = %d, want 2", got)
+	}
+	if countBreakpoints(chunks.cur[:1]) != 1 || countBreakpoints(chunks.done[:1]) != 1 || countBreakpoints(chunks.done[1:2]) != 0 {
+		t.Errorf("breakpoints on the wrong messages: done %+v, cur %+v", chunks.done, chunks.cur)
 	}
 	// Decoration must not mutate history.
 	for _, m := range c.doneMessages {
 		if m.Content.Blocks != nil {
 			t.Error("doneMessages mutated by cache decoration")
 		}
+	}
+}
+
+// TestConversationBreakpointKeepsBlocks: a tool result with an image keeps its
+// image when it carries the rolling breakpoint, and the history's own block
+// slice is not touched — done aliases it.
+func TestConversationBreakpointKeepsBlocks(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = true
+	img := llm.ImageBlock(llm.ImageSource{MediaType: "image/png", Data: "AAAA", Label: "x.png"})
+	result := llm.Message{Role: llm.RoleTool, ToolCallID: "call_1", Content: llm.BlocksContent(llm.TextBlock("read x.png"), img)}
+	c.doneMessages = []llm.Message{llm.TextMessage("user", "look"), {Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "read"}}}, result}
+	c.curMessages = nil
+
+	chunks := c.formatMessages()
+
+	last := chunks.done[2].Content.Blocks
+	if len(last) != 2 || last[1].Type != llm.BlockImage || last[1].CacheControl == nil {
+		t.Errorf("marked tool result = %+v, want the image kept and marked", last)
+	}
+	if c.doneMessages[2].Content.Blocks[1].CacheControl != nil {
+		t.Error("the history's block slice was marked in place")
+	}
+	// The assistant turn is only tool calls: nothing on it to mark, and the
+	// message before it carries the second breakpoint.
+	if chunks.done[0].Content.Blocks == nil || chunks.done[0].Content.Blocks[0].CacheControl == nil {
+		t.Errorf("message before the assistant turn not marked: %+v", chunks.done[0])
 	}
 }
 
@@ -540,4 +573,35 @@ func formatAllSystem(chunks *chatChunks) string {
 		b.WriteString(m.Text())
 	}
 	return b.String()
+}
+
+// TestConversationShapeIsStable: with caching on, an unmarked user or tool
+// message goes out as blocks too, so a message has one shape whether or not
+// it carries a breakpoint this step. A live run showed why: plain text one
+// step and a marked block the next cost MiMo-V2.6-Flash, whose provider caches
+// prefixes on its own, about a tenth of its cache hits. Assistant turns keep
+// their shape; they are never marked.
+func TestConversationShapeIsStable(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = true
+	c.doneMessages = []llm.Message{
+		llm.TextMessage("user", "one"), llm.TextMessage("assistant", "reply one"),
+		llm.TextMessage("user", "two"), llm.TextMessage("assistant", "reply two"),
+	}
+	c.curMessages = []llm.Message{llm.TextMessage("user", "three")}
+	chunks := c.formatMessages()
+
+	unmarked := chunks.done[0] // neither the tail nor the message before the last answer
+	if unmarked.Content.Text != nil || len(unmarked.Content.Blocks) != 1 || unmarked.Content.Blocks[0].CacheControl != nil {
+		t.Errorf("unmarked user message = %+v, want one unmarked block", unmarked.Content)
+	}
+	if chunks.done[1].Content.Text == nil {
+		t.Errorf("assistant turn reshaped: %+v", chunks.done[1].Content)
+	}
+
+	// Off, nothing is reshaped.
+	c.Model.Cache = false
+	if got := c.formatMessages().done[0].Content; got.Text == nil {
+		t.Errorf("with caching off, a user message was reshaped: %+v", got)
+	}
 }

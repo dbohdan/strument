@@ -1697,10 +1697,15 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   wraps its reasoning in; its contents are stripped from the answer body.
 - **`temperature`** — a float, or `None` to omit the field.
 - **`cache`** — add prompt-cache breakpoints with a one-hour TTL (default
-  `False`). Strument marks the last message in the examples-or-system,
-  read-only-files, and chat-files sections; it does not mark the completed or
-  current conversation. This adds provider-facing metadata only: whether a
-  cache is used depends on the provider and model.
+  `False`). Strument marks the end of the system prompt (or the examples) and
+  of the read-only files, and two places that move with the conversation: the
+  request's last message and the message before the last answer, so each
+  step of a turn reads the previous step's prefix from the cache. That is
+  four, Anthropic's limit. This adds provider-facing metadata only: whether a
+  cache is used depends on the provider and model. Anthropic caches only up
+  to a breakpoint, so it needs this; providers that cache prefixes on their
+  own (OpenAI, DeepSeek, Xiaomi) are not hurt by it, because with the setting
+  on, user and tool messages keep one shape whether marked or not.
 - **`context`** — the input window in tokens. `0`/unset means unknown, and two
   things that depend on knowing it stop working: the warning before a request
   overruns the window, and the summarization that keeps the settled chat history

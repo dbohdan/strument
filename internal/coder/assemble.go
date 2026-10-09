@@ -61,28 +61,63 @@ func addCacheControl(messages []llm.Message) {
 	if len(messages) == 0 {
 		return
 	}
-	last := messages[len(messages)-1]
-	block := llm.ContentBlock{
-		Type: "text",
-		Text: last.Content.String(),
-		// The 1-hour TTL matches Strument's cadence: bursts of turns separated
-		// by think-time gaps that the default ~5-minute cache would let expire.
-		CacheControl: &llm.CacheControl{Type: "ephemeral", TTL: "1h"},
-	}
-	messages[len(messages)-1] = llm.Message{
-		Role:    last.Role,
-		Content: llm.Content{Blocks: []llm.ContentBlock{block}},
-	}
+	messages[len(messages)-1] = withBreakpoint(messages[len(messages)-1])
 }
 
-// addCacheControlHeaders places at most 2 breakpoints: examples-else-system
-// and read-only files. Never on done/cur.
+// breakpoint is the cache marker every slot uses. The 1-hour TTL matches
+// Strument's cadence: bursts of turns separated by think-time gaps that the
+// default ~5-minute cache would let expire.
+func breakpoint() *llm.CacheControl {
+	return &llm.CacheControl{Type: "ephemeral", TTL: "1h"}
+}
+
+// withBreakpoint returns m with a cache breakpoint on its last content block.
+// Plain text becomes one text block; a block list keeps its blocks — a tool
+// result's image stays an image — and is copied before the marker goes on,
+// because the blocks may be shared with the conversation history. A message
+// with nothing to mark, such as an assistant turn that is only tool calls,
+// comes back unchanged.
+func withBreakpoint(m llm.Message) llm.Message {
+	if m.Content.Text != nil {
+		if *m.Content.Text == "" {
+			return m
+		}
+		block := llm.TextBlock(*m.Content.Text)
+		block.CacheControl = breakpoint()
+		m.Content = llm.BlocksContent(block)
+		return m
+	}
+	blocks := slices.Clone(m.Content.Blocks)
+	for i, b := range slices.Backward(blocks) {
+		if b.Type == llm.BlockText && b.Text == "" {
+			continue // Anthropic rejects an empty text block, marked or not
+		}
+		blocks[i].CacheControl = breakpoint()
+		m.Content = llm.Content{Blocks: blocks}
+		return m
+	}
+	return m
+}
+
+// addCacheControlHeaders places up to four breakpoints, Anthropic's limit:
+// examples-else-system, read-only files, and two that roll with the
+// conversation.
 //
 // There used to be a third, on the chat-files block. That block changed every
 // time the model edited a file, so it invalidated its own breakpoint on most
 // editing turns. Pinned files are named in the system prompt now and their
 // contents arrive as tool results, so the prefix moves only when the pin list
 // does — on /add and /drop, not on every edit.
+//
+// The conversation had none, by a rule inherited from aider ("never on
+// done/cur"), where a turn was one request. In a tool loop every step resends
+// the whole conversation, and a provider that caches only up to an explicit
+// breakpoint — Anthropic — then bills all of it at full price on every step.
+// Providers that cache prefixes on their own hid that. Claude Haiku 5.5 did
+// not: a 20-step Larkspur turn restored with 480 messages sent 4.1 million
+// tokens and read 135k of them from the cache, the ~7.5k-token system prompt
+// once per step. With these two breakpoints, every token of a five-step turn
+// was either a cache read or a cache write.
 func (ch *chatChunks) addCacheControlHeaders() {
 	if len(ch.examples) > 0 {
 		addCacheControl(ch.examples)
@@ -90,6 +125,45 @@ func (ch *chatChunks) addCacheControlHeaders() {
 		addCacheControl(ch.system)
 	}
 	addCacheControl(ch.readonlyFiles)
+	ch.addConversationBreakpoints()
+}
+
+// addConversationBreakpoints marks the last message of the request, which
+// writes the conversation so far to the cache, and the message before the
+// last assistant turn, which is where the previous request put its last
+// breakpoint. The second makes the read exact: Anthropic looks for an earlier
+// cache entry only about twenty blocks back from a breakpoint, and one step
+// of parallel tool calls can add more than that. Across turns it does the same
+// job, since the previous turn's last request ended just before its answer.
+func (ch *chatChunks) addConversationBreakpoints() {
+	n := len(ch.done) + len(ch.cur)
+	if n == 0 {
+		return
+	}
+	// done aliases the conversation history; cur is already a copy.
+	ch.done = slices.Clone(ch.done)
+	at := func(i int) *llm.Message {
+		if i < len(ch.done) {
+			return &ch.done[i]
+		}
+		return &ch.cur[i-len(ch.done)]
+	}
+	// Every user and tool message goes out as blocks, marked or not, so a
+	// message keeps one shape from the step it is marked to the step it is
+	// not. Plain text one step and a marked block the next changed the bytes
+	// of the prefix under a provider that caches it on its own.
+	for i := range n {
+		if m := at(i); m.Role != llm.RoleAssistant && m.Content.Text != nil && *m.Content.Text != "" {
+			m.Content = llm.BlocksContent(llm.TextBlock(*m.Content.Text))
+		}
+	}
+	*at(n - 1) = withBreakpoint(*at(n - 1))
+	for i := n - 1; i >= 1; i-- {
+		if at(i).Role == llm.RoleAssistant {
+			*at(i - 1) = withBreakpoint(*at(i - 1))
+			return
+		}
+	}
 }
 
 // allFences is the escalation list; shared with editblock.
