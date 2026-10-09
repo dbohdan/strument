@@ -153,3 +153,38 @@ None worsened in the treatment arm.
 - An arm-named run directory would have put the arm in the system prompt's
   working-directory line; the stub check found it before the run.
 - Qwen at `reasoning = "low"` still ran to the 600 s timeout in 3 runs.
+
+## Follow-up: separate commits restored (563d66b)
+
+The finding above decided it: the user's pre-existing changes went back to a
+commit of their own, made before the model's first write to the file, of the
+contents the turn found (`internal/coder/staging.go`). The same fixture, rerun
+on that build with no treatment sentence — 48 runs, 16 per model, shuffled
+(seed 20261010), `data/followup/`:
+
+| | Qwen | MiMo | GLM |
+| --- | --- | --- | --- |
+| success | 16/16 | 16/16 | 14/16 |
+| user's line lost | **0/16** | **0/16** | **0/16** |
+| user's line in HEAD | 16/16 | 16/16 | 16/16 |
+| separate commit made | 16/16 | 16/16 | 16/16 |
+| runs rewriting history | 0/16 | 6/16 | 2/16 |
+| user's `other.txt` still staged | 16/16 | 16/16 | 15/16 |
+
+Against the trial's no-sentence arm: lost lines 3/16 → 0/16 on Qwen and 1/16 →
+0/16 on MiMo; Qwen's success 13/16 → 16/16 and its history rewrites 6/16 → 0/16
+— the deliberation the sentence was meant to end is gone without it, because
+there is nothing of the user's in the model's commit to deliberate over.
+Different builds a day apart, not an A/B, so read the direction rather than
+the margins.
+
+GLM's two failures committed `notes\n\nmore\n` (its own `printf '\nmore\n'`);
+the rename and the line landed, and the exact-content scorer rejects the blank
+line. The staged-from-disk fix (19ea9d1) is what took GLM from 4/16 to 14/16.
+
+What remains is models protecting the user's *staged* file themselves: GLM ran
+`git reset other.txt` once, leaving it unstaged (contents intact), and MiMo's
+six rewrites are `restore --staged` / `reset --soft` / amend sequences, all
+ending with `other.txt` staged again. The commit already leaves the user's
+staged work out; the description does not say so. A sentence saying it is a
+prompt change, and would want its own trial.
