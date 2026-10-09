@@ -30,6 +30,7 @@ trials, never watched it build something from nothing.
 | 12 | finish turn 11's answer | `55c0a34`, fixed by the driver in `6af1d21` | 33 | $0.07 |
 | 13 | does the committee's *order* matter? rank all 120 cyclic orders | `dc67c7a` | 15 | $0.03 |
 | 14 | how much potassium would the compost need? (Claude Haiku 5.5) | `cab249c`, message by the driver | 20 | $2.01 |
+| 15 | finish turn 14: the potassium result in the README (Claude Haiku 5.5) | `600f6fa` | 7 | $0.29 |
 
 About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
@@ -225,3 +226,22 @@ carry, and what does the shortfall cost now?
   words were that the shell was declined and the code was unverified, which
   was true. The driver verified it, gave the commit a message, and left the
   README for the next turn.
+
+## Turn 15: Haiku finishes, on the cache fix
+
+Turn 15 ran on `dev` at `7209c2e`, the build that caches the conversation, with
+the same 478-message session and the same model. The message told Haiku what
+had happened outside the conversation: the key ran out, the driver checked its
+code and gave the commit a message, and the README still lacked the result.
+
+- **Every token was read from the cache or written to it.** 1,335.6k hits and
+  215.8k written, of 1,551.4k sent: $0.29 for seven steps, about four cents a
+  step against turn 14's ten. Most of what is left is Haiku's long-context
+  rate, which the cache cannot change.
+- **It reran the program rather than copying the driver's numbers**, as asked,
+  and its table matches the program's output to the character. It quoted its
+  own expectation from turn 14 — 1.5 a season, so 2 — and said it held.
+- **One sentence follows a column instead of the table.** "The mean total rises
+  by 2" comes from the `cost` column, computed on unrounded means; the rounded
+  means beside it go from 2399 to 2402. Not wrong, and too small to change the
+  reading, but a reader comparing the two will stop on it.
