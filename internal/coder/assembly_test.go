@@ -605,3 +605,43 @@ func TestConversationShapeIsStable(t *testing.T) {
 		t.Errorf("with caching off, a user message was reshaped: %+v", got)
 	}
 }
+
+// TestGeminiBreakpointOnLastUserMessage: a cache that uses only the request's
+// last breakpoint (Gemini, per OpenRouter) gets one conversation breakpoint,
+// on the last user message — the turn's own request, which stays put while
+// the turn's tool results accumulate after it.
+func TestGeminiBreakpointOnLastUserMessage(t *testing.T) {
+	c := testCoder(t)
+	c.Model.Cache = true
+	c.Model.Slug = "google/gemini-3.8-flash"
+	c.doneMessages = []llm.Message{llm.TextMessage("user", "earlier"), llm.TextMessage("assistant", "done")}
+	c.curMessages = []llm.Message{
+		llm.TextMessage("user", "this turn"),
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "read"}}},
+		{Role: llm.RoleTool, ToolCallID: "call_1", Content: llm.TextContent("file contents")},
+	}
+	chunks := c.formatMessages()
+
+	marked := func(m llm.Message) bool {
+		for _, b := range m.Content.Blocks {
+			if b.CacheControl != nil {
+				return true
+			}
+		}
+		return false
+	}
+	var got []string
+	for _, m := range append(slices.Clone(chunks.done), chunks.cur...) {
+		if marked(m) {
+			got = append(got, m.Role+":"+m.Content.String())
+		}
+	}
+	if strings.Join(got, "|") != "user:this turn" {
+		t.Errorf("conversation breakpoints = %q, want only the turn's own request", got)
+	}
+	for _, slug := range []string{"anthropic/claude-haiku-5.5", "xiaomi/mimo-v2.6-flash"} {
+		if lastBreakpointOnly(slug) {
+			t.Errorf("%s treated as last-breakpoint-only", slug)
+		}
+	}
+}

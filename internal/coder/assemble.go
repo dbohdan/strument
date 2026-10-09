@@ -118,14 +118,14 @@ func withBreakpoint(m llm.Message) llm.Message {
 // tokens and read 135k of them from the cache, the ~7.5k-token system prompt
 // once per step. With these two breakpoints, every token of a five-step turn
 // was either a cache read or a cache write.
-func (ch *chatChunks) addCacheControlHeaders() {
+func (ch *chatChunks) addCacheControlHeaders(lastOnly bool) {
 	if len(ch.examples) > 0 {
 		addCacheControl(ch.examples)
 	} else {
 		addCacheControl(ch.system)
 	}
 	addCacheControl(ch.readonlyFiles)
-	ch.addConversationBreakpoints()
+	ch.addConversationBreakpoints(lastOnly)
 }
 
 // addConversationBreakpoints marks the last message of the request, which
@@ -135,7 +135,13 @@ func (ch *chatChunks) addCacheControlHeaders() {
 // cache entry only about twenty blocks back from a breakpoint, and one step
 // of parallel tool calls can add more than that. Across turns it does the same
 // job, since the previous turn's last request ended just before its answer.
-func (ch *chatChunks) addConversationBreakpoints() {
+//
+// lastOnly is for a cache that uses only the request's last breakpoint
+// (lastBreakpointOnly). There the one breakpoint goes on the last user
+// message: within a turn that is the turn's own request, which does not move,
+// so everything before it is cached once and read by every step, and the
+// provider's implicit cache covers the steps themselves.
+func (ch *chatChunks) addConversationBreakpoints(lastOnly bool) {
 	n := len(ch.done) + len(ch.cur)
 	if n == 0 {
 		return
@@ -156,6 +162,15 @@ func (ch *chatChunks) addConversationBreakpoints() {
 		if m := at(i); m.Role != llm.RoleAssistant && m.Content.Text != nil && *m.Content.Text != "" {
 			m.Content = llm.BlocksContent(llm.TextBlock(*m.Content.Text))
 		}
+	}
+	if lastOnly {
+		for i := n - 1; i >= 0; i-- {
+			if at(i).Role == llm.RoleUser {
+				*at(i) = withBreakpoint(*at(i))
+				return
+			}
+		}
+		return
 	}
 	*at(n - 1) = withBreakpoint(*at(n - 1))
 	for i := n - 1; i >= 1; i-- {
@@ -613,9 +628,20 @@ const AgentsFileName = "AGENTS.md"
 func (c *Coder) formatMessages() *chatChunks {
 	chunks := c.formatChatChunks()
 	if c.cacheHeadersEnabled() {
-		chunks.addCacheControlHeaders()
+		chunks.addCacheControlHeaders(lastBreakpointOnly(c.Model.Slug))
 	}
 	return chunks
+}
+
+// lastBreakpointOnly reports whether the model's cache uses only the last
+// breakpoint in a request, which OpenRouter documents for Gemini. There the
+// rolling breakpoints backfire: the last one lands on a tool result, which
+// creates no cache, and the system prompt's cache is not read either. A
+// Gemini Flash run logged per request read 0 tokens from the cache on its
+// second and third requests, where the system-only breakpoint had read 4,658
+// on every one.
+func lastBreakpointOnly(slug string) bool {
+	return strings.Contains(strings.ToLower(slug), "gemini")
 }
 
 // cacheHeadersEnabled reports whether the active model opts into prompt
