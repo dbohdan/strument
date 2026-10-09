@@ -81,6 +81,45 @@ greedy would need a different run of plantings and its luckiest weather
 together. Both checks are tests:
 `go test ./sim -run 'Invariant|Varies|WorstWeather' -v`.
 
+### Does the order matter?
+
+The rule fixes the rotation; it also fixes the order: brassicas,
+legumes, roots, alliums, nightshades, cucurbits. Common advice puts a
+heavy feeder right after legumes to use their nitrogen — the
+committee's order puts brassicas right before them. Of the 120
+distinct cyclic orders (brassicas fixed first, the other five
+permuted), where does the committee's rank? `go run ./cmd/larkspur
+-order` ranks all of them on shared seeds, so a difference between two
+orders is not weather. The expectation, from the model's own rules:
+order should matter very little, and the committee should land
+mid-pack.
+
+```
+committee: brassicas-legumes-roots-alliums-nightshades-cucurbits
+rank 62 of 120, mean 2399
+
+rank mean wins  order
+   1  2402   200  brassicas-legumes-cucurbits-roots-alliums-nightshades
+   2  2402   200  brassicas-nightshades-cucurbits-roots-alliums-legumes
+...
+ 119  2397     0  brassicas-roots-legumes-nightshades-alliums-cucurbits
+ 120  2397     0  brassicas-legumes-nightshades-roots-alliums-cucurbits
+```
+
+(The program prints the five best and five worst.) The expectation
+held: dead middle, and the whole spread across all 120 orders is five
+units in 2400 — the committee is three below the best and two above
+the worst. The model's rules explain why: every cyclic order has the
+same six-season cycle, so pest pressure is order-independent, and
+nitrogen never runs short in any order (its per-cycle net is zero and
+beds stay near 7-12), so the nitrogen story behind the advice has no
+bite here. What little separates the orders is potassium running out
+near the end of the run: all five best orders end their cycle with a
+light potassium-feeder (legumes, roots, nightshades), four of the five
+worst end it with a heavy one (alliums or cucurbits) — and the
+committee's order ends with cucurbits. The wins column is 200 or 0:
+on shared seeds these differences hold in every seed drawn.
+
 One number in the model is a guess: how fast pest pressure fades while a
 family is out of the bed. The default is 0.2 points per season for the
 persistent brassica and allium diseases. The sweep reruns the whole

@@ -29,6 +29,10 @@
 // is one weather sequence all strategies share — and reports how
 // often rotation beats each strategy and rotation's worst margin
 // against it.
+//
+// With -order it ranks all 120 distinct cyclic orders of the six
+// families (brassicas first) on shared seeds and reports where the
+// committee's order lands.
 package main
 
 import (
@@ -100,6 +104,7 @@ func main() {
 	perennial := flag.Bool("perennial", false, "sweep how long an asparagus planting stands (4-20 seasons) instead of printing the table")
 	breakeven := flag.Bool("breakeven", false, "print the asparagus value multiplier per stand length instead of printing the table")
 	paired := flag.Bool("paired", false, "compare strategies seed by seed on the same weather instead of printing the table")
+	order := flag.Bool("order", false, "rank all 120 cyclic family orders on shared seeds instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -126,6 +131,10 @@ func main() {
 	}
 	if *paired {
 		pairedCompare(*seasons, *seeds, *beds, *seed)
+		return
+	}
+	if *order {
+		orderRank(*seasons, *seeds, *beds, *seed)
 		return
 	}
 
@@ -180,6 +189,109 @@ func pairedCompare(seasons, seeds, beds int, first int64) {
 		s := all[j]
 		fmt.Printf("%-*s %*d %*d %*d  %+d (seed %d)\n",
 			nameW, st.name, colW, s.wins, colW, s.ties, colW, s.losses, s.worst, s.worstAt)
+	}
+}
+
+// cycle plants one fixed cyclic order of families: bed and season
+// together shift each bed's place in the cycle, the same way
+// Rotation walks FamilyOrder.
+type cycle struct{ order []garden.Family }
+
+func (c cycle) Choose(g sim.Garden, bed, season int) sim.Planting {
+	return sim.Use(c.order[(bed+season)%len(c.order)])
+}
+
+func orderString(order []garden.Family) string {
+	names := make([]string, len(order))
+	for i, f := range order {
+		names[i] = f.String()
+	}
+	return strings.Join(names, "-")
+}
+
+// cyclicOrders returns every distinct cyclic order of the six
+// families: 5! = 120, with rotationally equal orders folded together
+// by fixing brassicas first.
+func cyclicOrders() [][]garden.Family {
+	var rest []garden.Family
+	for _, f := range garden.FamilyOrder {
+		if f != garden.Brassicas {
+			rest = append(rest, f)
+		}
+	}
+	var out [][]garden.Family
+	var permute func(prefix []garden.Family, left []garden.Family)
+	permute = func(prefix, left []garden.Family) {
+		if len(left) == 0 {
+			out = append(out, append([]garden.Family{garden.Brassicas}, prefix...))
+			return
+		}
+		for i := range left {
+			rest2 := append(append([]garden.Family(nil), left[:i]...), left[i+1:]...)
+			permute(append(append([]garden.Family(nil), prefix...), left[i]), rest2)
+		}
+	}
+	permute(nil, rest)
+	return out
+}
+
+// orderRank runs every cyclic family order — brassicas first, the
+// other five permuted, 120 in all — on the same seeds, ranks them
+// by mean total, and reports where the committee's order lands and
+// what the best and worst orders look like. Wins counts the seeds
+// on which an order beat the committee, so a difference between two
+// orders is not weather.
+func orderRank(seasons, seeds, beds int, first int64) {
+	committee := cycle{order: garden.FamilyOrder[:]}
+	committeeTotals := make([]int, seeds)
+	for i := 0; i < seeds; i++ {
+		committeeTotals[i] = sim.Run(sim.NewGarden(beds), committee, seasons, first+int64(i)).Total
+	}
+
+	type scored struct {
+		order string
+		mean  float64
+		wins  int
+	}
+	orders := cyclicOrders()
+	scores := make([]scored, len(orders))
+	for o, order := range orders {
+		var sum int
+		wins := 0
+		for i := 0; i < seeds; i++ {
+			total := sim.Run(sim.NewGarden(beds), cycle{order: order}, seasons, first+int64(i)).Total
+			sum += total
+			if total > committeeTotals[i] {
+				wins++
+			}
+		}
+		scores[o] = scored{order: orderString(order), mean: float64(sum) / float64(seeds), wins: wins}
+	}
+	sort.Slice(scores, func(i, j int) bool { return scores[i].mean > scores[j].mean })
+
+	name := orderString(garden.FamilyOrder[:])
+	rank := 0
+	for i, s := range scores {
+		if s.order == name {
+			rank = i
+			break
+		}
+	}
+	fmt.Printf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds\n", seeds)
+	fmt.Printf("committee: %s\n", name)
+	fmt.Printf("rank %d of %d, mean %.0f\n\n", rank+1, len(scores), scores[rank].mean)
+
+	show := func(r int) {
+		s := scores[r]
+		fmt.Printf("%4d %5.0f %5d  %s\n", r+1, s.mean, s.wins, s.order)
+	}
+	fmt.Println("rank mean wins  order")
+	for r := 0; r < 5; r++ {
+		show(r)
+	}
+	fmt.Println("...")
+	for r := len(scores) - 5; r < len(scores); r++ {
+		show(r)
 	}
 }
 
