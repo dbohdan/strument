@@ -397,7 +397,13 @@ func Season(b Bed, family Family) (int, Bed) {
 // Compost added to each nutrient, up to SoilCap. When to spread is
 // the caller's decision — the committee does it every spring.
 func SpreadCompost(b Bed) Bed {
-	b.Soil = add(b.Soil, Compost)
+	return SpreadCompostWith(b, Compost)
+}
+
+// SpreadCompostWith is SpreadCompost with the spring's dressing given
+// explicitly, for asking what a different compost would have done.
+func SpreadCompostWith(b Bed, dressing Nutrients) Bed {
+	b.Soil = add(b.Soil, dressing)
 	return b
 }
 

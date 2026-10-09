@@ -32,6 +32,9 @@ const DefaultBeds = 12
 type Garden struct {
 	Beds    []garden.Bed
 	History []History
+	// Dressing, if set, replaces the committee's spring compost
+	// (garden.Compost) on every bed. Nil means the default.
+	Dressing *garden.Nutrients
 }
 
 // History is one bed's record of past seasons, oldest first.
@@ -44,6 +47,10 @@ type Record struct {
 	Planting Planting
 	Raw      int // yield before weather
 	Harvest  int
+	// Potassium is the bed's potassium after the season's draw and
+	// give, before the next spring's dressing: what a short bed has
+	// left to offer the next crop.
+	Potassium int
 }
 
 // Planting is what a strategy picks for a bed in one season: a crop
@@ -84,6 +91,14 @@ func (g Garden) WithFades(f garden.Fades) Garden {
 	for i := range out.Beds {
 		out.Beds[i].Fades = f
 	}
+	return out
+}
+
+// WithDressing returns a copy of the garden whose spring spread is
+// d instead of the committee's compost, on every bed.
+func (g Garden) WithDressing(d garden.Nutrients) Garden {
+	out := clone(g)
+	out.Dressing = &d
 	return out
 }
 
@@ -142,7 +157,11 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 		total := 0
 		raw := 0
 		for i, planting := range plantings {
-			g.Beds[i] = garden.SpreadCompost(g.Beds[i])
+			if g.Dressing != nil {
+				g.Beds[i] = garden.SpreadCompostWith(g.Beds[i], *g.Dressing)
+			} else {
+				g.Beds[i] = garden.SpreadCompost(g.Beds[i])
+			}
 
 			var yield int
 			if planting.Rest {
@@ -153,7 +172,12 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 
 			raw += yield
 			harvest := yield * weather / 100
-			g.History[i] = append(g.History[i], Record{Planting: planting, Raw: yield, Harvest: harvest})
+			g.History[i] = append(g.History[i], Record{
+				Planting:  planting,
+				Raw:       yield,
+				Harvest:   harvest,
+				Potassium: g.Beds[i].Soil.Potassium,
+			})
 			total += harvest
 		}
 
@@ -190,8 +214,9 @@ func drawWeather(rng *rand.Rand) int {
 // every bed.
 func clone(g Garden) Garden {
 	out := Garden{
-		Beds:    append([]garden.Bed(nil), g.Beds...),
-		History: make([]History, len(g.History)),
+		Beds:     append([]garden.Bed(nil), g.Beds...),
+		History:  make([]History, len(g.History)),
+		Dressing: g.Dressing,
 	}
 	for i, h := range g.History {
 		out.History[i] = append(History(nil), h...)

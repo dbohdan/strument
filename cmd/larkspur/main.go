@@ -105,6 +105,7 @@ func main() {
 	breakeven := flag.Bool("breakeven", false, "print the asparagus value multiplier per stand length instead of printing the table")
 	paired := flag.Bool("paired", false, "compare strategies seed by seed on the same weather instead of printing the table")
 	order := flag.Bool("order", false, "rank all 120 cyclic family orders on shared seeds instead of printing the table")
+	potassium := flag.Bool("potassium", false, "sweep the yearly potassium dressing and report what rotation's beds need instead of printing the table")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -135,6 +136,10 @@ func main() {
 	}
 	if *order {
 		orderRank(*seasons, *seeds, *beds, *seed)
+		return
+	}
+	if *potassium {
+		potassiumNeed(*seasons, *seeds, *beds, *seed)
 		return
 	}
 
@@ -192,6 +197,34 @@ func pairedCompare(seasons, seeds, beds int, first int64) {
 	}
 }
 
+// potassiumCost runs rotation on the shared seeds with the given
+// potassium dressing and reports the mean total, the mean number of
+// bed-seasons in which a bed had no potassium left after its crop,
+// and the number of seeds on which any bed ran short at all.
+func potassiumCost(k, seasons, seeds, beds int, first int64) (mean float64, shortMean float64, shortSeeds int) {
+	dressing := garden.Compost
+	dressing.Potassium = k
+	var total, short int
+	for i := 0; i < seeds; i++ {
+		g := sim.NewGarden(beds).WithDressing(dressing)
+		res := sim.Run(g, sim.Rotation{}, seasons, first+int64(i))
+		total += res.Total
+		seedShort := 0
+		for bed := 0; bed < beds; bed++ {
+			for _, r := range res.History[bed] {
+				if r.Potassium == 0 {
+					seedShort++
+				}
+			}
+		}
+		short += seedShort
+		if seedShort > 0 {
+			shortSeeds++
+		}
+	}
+	return float64(total) / float64(seeds), float64(short) / float64(seeds), shortSeeds
+}
+
 // cycle plants one fixed cyclic order of families: bed and season
 // together shift each bed's place in the cycle, the same way
 // Rotation walks FamilyOrder.
@@ -233,6 +266,36 @@ func cyclicOrders() [][]garden.Family {
 	}
 	permute(nil, rest)
 	return out
+}
+
+// potassiumNeed asks how much potassium the committee's yearly
+// compost would have to carry for rotation's beds never to run short,
+// and what the shortfall costs at today's dressing. It sweeps the
+// potassium dressing from today's value (1) upward and reports, per
+// dressing, the mean total, the cost against today's compost, the
+// mean count of short bed-seasons, and how many seeds saw any short.
+func potassiumNeed(seasons, seeds, beds int, first int64) {
+	base, _, _ := potassiumCost(garden.Compost.Potassium, seasons, seeds, beds, first)
+
+	fmt.Printf("rotation, %d seeds, %d beds, %d seasons: potassium per bed in the\n", seeds, beds, seasons)
+	fmt.Printf("yearly dressing against the committee's compost of %d.\n\n", garden.Compost.Potassium)
+	fmt.Printf("%-10s %10s %10s %14s %12s\n", "dressing", "mean", "cost", "short bed-yr", "short seeds")
+
+	need := -1
+	for k := garden.Compost.Potassium; k <= 6; k++ {
+		mean, short, shortSeeds := potassiumCost(k, seasons, seeds, beds, first)
+		fmt.Printf("%-10d %10.0f %10.0f %14.1f %12d\n",
+			k, mean, base-mean, short, shortSeeds)
+		if need < 0 && shortSeeds == 0 {
+			need = k
+		}
+	}
+	fmt.Println()
+	if need < 0 {
+		fmt.Println("no dressing up to 6 keeps every bed above zero on every seed")
+	} else {
+		fmt.Printf("smallest dressing with no short bed-seasons on any seed: %d\n", need)
+	}
 }
 
 // orderRank runs every cyclic family order — brassicas first, the
