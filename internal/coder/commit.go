@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -33,7 +34,12 @@ import (
 // is returned as well as printed, because the commit tool has to tell the model
 // why. Returning nothing left it to infer "nothing to commit" from the hash
 // not moving, which is the one reading the hook's refusal rules out.
-func (c *Coder) commitTurn(message string) error {
+//
+// before lists the committed paths that had uncommitted changes before the
+// turn first edited them (noteUncommittedBefore). The commit names each in an
+// Uncommitted-before-edit trailer and says so on screen; the commit tool
+// tells the model too.
+func (c *Coder) commitTurn(message string) (before []string, err error) {
 	// What is new since the last commit, not what the turn has touched.
 	//
 	// These were the same set while a turn made one commit. They stopped being
@@ -47,16 +53,24 @@ func (c *Coder) commitTurn(message string) error {
 	// commit they never saw.
 	edited := c.committablePaths(c.turnSnap.paths())
 	if len(edited) == 0 || c.Repo == nil || !c.AutoCommits || c.DryRun {
-		return nil
+		return nil, nil
 	}
 	slices.Sort(edited)
 
-	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), message, true)
+	var trailers []string
+	for _, p := range edited {
+		if c.uncommittedBefore[p] {
+			before = append(before, p)
+			trailers = append(trailers, uncommittedTrailer+": "+p)
+		}
+	}
+
+	hash, message, ok, err := c.Repo.Commit(edited, c.commitContext(), message, true, trailers)
 	if err != nil {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.
 		c.Out.Errorf("Could not commit: %v", err)
-		return err
+		return nil, err
 	}
 	if !ok {
 		// The turn's writes since the last settle net out against what is
@@ -70,7 +84,7 @@ func (c *Coder) commitTurn(message string) error {
 		} else {
 			c.Out.Toolf("The turn left the files as they were; nothing to commit.")
 		}
-		return nil
+		return nil, nil
 	}
 
 	c.lastCommitHash = hash
@@ -79,7 +93,32 @@ func (c *Coder) commitTurn(message string) error {
 	}
 	c.sessionCommits[hash] = true
 	c.Out.Toolf("Commit %s %s", hash, message)
-	return nil
+	for _, p := range before {
+		delete(c.uncommittedBefore, p)
+	}
+	if len(before) > 0 {
+		c.Out.Toolf("%s", uncommittedNote(before, "this turn's"))
+	}
+	return before, nil
+}
+
+// uncommittedTrailer names, in a turn's commit, a file that had uncommitted
+// changes before the turn first edited it. Neutral on whose they were on
+// purpose: the user's, or a shell command the model ran — Strument cannot tell.
+// No harness on the panel or elsewhere had a trailer for this as of October
+// 2026; aider's answer was a separate commit, which noteUncommittedBefore
+// explains the retirement of.
+const uncommittedTrailer = "Uncommitted-before-edit"
+
+// uncommittedNote says that paths had uncommitted changes before whose first
+// edit, and that the commit includes them.
+func uncommittedNote(paths []string, whose string) string {
+	if len(paths) == 1 {
+		return fmt.Sprintf("%s had uncommitted changes before %s first edit to it; they are in this commit.",
+			paths[0], whose)
+	}
+	return fmt.Sprintf("%s had uncommitted changes before %s first edits to them; they are in this commit.",
+		strings.Join(paths, ", "), whose)
 }
 
 // attributeShellCommits retro-attributes the commits a model-caused shell

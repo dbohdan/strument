@@ -3,7 +3,6 @@ package coder
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -209,10 +208,10 @@ func (c *Coder) normalizeToolPath(p string) string {
 //
 // What guards an edit is everything here that is not a question: path
 // containment (unsafePath, checked before this), the gitignore refusal below,
-// a dirty-commit before the edit so /undo has a clean base, git auto-commit,
+// the turn's snapshot so /undo has the exact prior contents, git auto-commit,
 // and the diff scrolling past as it happens. Review lives in the diff and in
 // being able to undo, not in a y/n the user has learned to dismiss.
-func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool, string) {
+func (c *Coder) allowedToEdit(rel string) (bool, string) {
 	full := c.absRootPath(rel)
 
 	// Read-only first, so it wins over a file that is in both lists. This is
@@ -242,50 +241,44 @@ func (c *Coder) allowedToEdit(rel string, needDirtyCommit map[string]bool) (bool
 		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
 	}
 
-	// Runs on every editable path, not only for a file that is already pinned,
-	// so a first edit to a file carrying the user's uncommitted work still gets
-	// a clean base for /undo.
-	c.checkForDirtyCommit(rel, needDirtyCommit)
+	c.noteUncommittedBefore(rel)
 	return true, ""
 }
 
-// checkForDirtyCommit separates the user's uncommitted work from the turn's, by
-// committing theirs before the first edit lands on a file.
+// noteUncommittedBefore remembers that rel had uncommitted changes before the
+// turn's first edit to it, so the turn's commit can say so.
 //
-// It must not fire on a file this turn has already written. Once the commit
-// moved to turn end, the turn's own first edit leaves the file dirty, so a
-// second edit to it looked exactly like the user's uncommitted work — and
-// committing there swept the turn's changes into an unattributed commit with no
-// trailer, which /undo and /squash then rightly refused to touch. The turn's
-// snapshot is the record of what it has written, so it is also the test.
-func (c *Coder) checkForDirtyCommit(rel string, needDirtyCommit map[string]bool) {
-	if c.Repo == nil || !c.Repo.IsDirty(rel) {
+// This replaces a commit. aider committed such a file on its own before
+// editing it ("dirty commits"), and Strument did the same until a session
+// showed what that assumes: that whatever is uncommitted is the user's. It is
+// not, once the model has a shell. MiMo ran `git mv test.ts test.mjs`, then
+// edited test.mjs, and the dirty commit took test.mjs alone under a side
+// model's message — half a rename, committed as though the user had made it,
+// and nobody told the model. It also fired with auto-commits off and in a dry
+// run, both of which promise no commits, and it cost a side-model call per
+// batch. The snapshot already gives /undo the exact prior contents, which was
+// the reason for a clean base in the first place.
+//
+// So the uncommitted changes ride along in the turn's commit, and the commit
+// names them in an Uncommitted-before-edit trailer: a reader of the history
+// can tell which parts of the diff may not be the model's, without Strument
+// guessing whose they are. Leaving such files out of the commit instead was
+// considered and rejected: a file the model keeps editing would then stay
+// uncommitted turn after turn.
+//
+// Not for a file this turn has already written: its first edit is what made
+// it dirty.
+func (c *Coder) noteUncommittedBefore(rel string) {
+	if c.Repo == nil || c.turnSnap.wrote(rel) || c.uncommittedBefore[rel] {
 		return
 	}
-	if c.turnSnap.wrote(rel) {
-		return // dirty because of this turn; there is nothing of the user's here
-	}
-	if needDirtyCommit[rel] {
-		return // already queued by an earlier edit in this batch
-	}
-	c.Out.Toolf("Committing existing changes to %s before applying edits.", rel)
-	needDirtyCommit[rel] = true
-}
-
-// dirtyCommit commits dirty files before edits so /undo has a clean base.
-// These are user changes: no trailer. Files sort for
-// deterministic commits.
-func (c *Coder) dirtyCommit(need map[string]bool) {
-	if c.Repo == nil || len(need) == 0 {
+	if !c.Repo.IsDirty(rel) {
 		return
 	}
-	files := c.dropAgentsLocal(slices.Sorted(maps.Keys(need)))
-	if len(files) == 0 {
-		return
+	if c.uncommittedBefore == nil {
+		c.uncommittedBefore = map[string]bool{}
 	}
-	if _, _, _, err := c.Repo.Commit(files, "", "", false); err != nil {
-		c.Out.Errorf("Could not commit existing changes: %v", err)
-	}
+	c.uncommittedBefore[rel] = true
 }
 
 // newFileMode is what a file Strument creates gets. It matches what git

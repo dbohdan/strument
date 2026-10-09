@@ -134,7 +134,7 @@ func TestTurnCommitSkipsTempFiles(t *testing.T) {
 	c.turnSnap.record("in.go", snapEntry{}, "package in\n")
 	c.turnSnap.record(filepath.Join(t.TempDir(), "scratch.txt"), snapEntry{}, "scratch\n")
 
-	if err := c.commitTurn("test: one repo file, one temp file"); err != nil {
+	if _, err := c.commitTurn("test: one repo file, one temp file"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,7 +174,7 @@ func TestTurnCommitSkipsSymlinkEscapes(t *testing.T) {
 		t.Fatalf("the symlink target was not written: %q, %v", got, err)
 	}
 
-	if err := c.commitTurn("test: skip symlink escape"); err != nil {
+	if _, err := c.commitTurn("test: skip symlink escape"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +195,7 @@ func TestTurnCommitAnnouncesSkippedTempFiles(t *testing.T) {
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record(temp, snapEntry{}, "scratch\n")
 
-	if err := c.commitTurn("test: only a temp file"); err != nil {
+	if _, err := c.commitTurn("test: only a temp file"); err != nil {
 		t.Fatal(err)
 	}
 

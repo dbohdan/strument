@@ -203,7 +203,7 @@ func cmdSquash(_ context.Context, r *REPL, args string) string {
 	for _, c := range slices.Backward(commits) {
 		fmt.Fprintf(&context, "- %s\n", c.Subject)
 	}
-	hash, message, ok, err := g.Commit(files, context.String(), "", true)
+	hash, message, ok, err := g.Commit(files, context.String(), "", true, nil)
 	if err != nil || !ok {
 		r.out.Errorf("The commits were undone and their changes staged, but the combined commit failed: %v", err)
 		r.printf("Your changes are staged; commit them yourself with `git commit`.")

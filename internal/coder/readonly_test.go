@@ -29,7 +29,7 @@ func TestReadOnlyFilesAreRefused(t *testing.T) {
 	c, p := readOnlyCoder(t)
 	c.AddReadOnlyFile(p)
 
-	ok, why := c.allowedToEdit("ref.md", map[string]bool{})
+	ok, why := c.allowedToEdit("ref.md")
 	if ok {
 		t.Fatal("a read-only file was accepted for editing")
 	}
@@ -49,7 +49,7 @@ func TestReadOnlyWinsOverAdd(t *testing.T) {
 	c.AddFile(p)
 	c.AddReadOnlyFile(p)
 
-	if ok, _ := c.allowedToEdit("ref.md", map[string]bool{}); !ok {
+	if ok, _ := c.allowedToEdit("ref.md"); !ok {
 		return
 	}
 	t.Error("an added-then-read-only file stayed editable")
@@ -59,7 +59,7 @@ func TestReadOnlyWinsOverAdd(t *testing.T) {
 // marked, not a new obstacle on the common path.
 func TestOrdinaryFilesStillEditable(t *testing.T) {
 	c, _ := readOnlyCoder(t)
-	if ok, why := c.allowedToEdit("ref.md", map[string]bool{}); !ok {
+	if ok, why := c.allowedToEdit("ref.md"); !ok {
 		t.Errorf("an unmarked file was refused: %q", why)
 	}
 	// An edit also must not add the file to the chat. Chat membership is what
@@ -90,7 +90,7 @@ func TestOutsideReferenceIsPinnedButNotEditable(t *testing.T) {
 	if !strings.Contains(sb.String(), "GET /widgets returns 200.") {
 		t.Errorf("an outside reference did not reach the prompt:\n%s", sb.String())
 	}
-	if ok, _ := c.allowedToEdit(outside, map[string]bool{}); ok {
+	if ok, _ := c.allowedToEdit(outside); ok {
 		t.Error("an outside reference was editable")
 	}
 }
@@ -117,7 +117,7 @@ func TestOutsideReferenceIsRefusedForBeingReadOnly(t *testing.T) {
 		t.Fatalf("containment refused the pinned reference first, so the model never "+
 			"learns it is read-only: %q", reason)
 	}
-	ok, why := c.allowedToEdit(rel, map[string]bool{})
+	ok, why := c.allowedToEdit(rel)
 	if ok {
 		t.Fatal("an outside reference was editable")
 	}

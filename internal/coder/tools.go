@@ -1339,7 +1339,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	fen := editblock.Fence{Open: c.fence.open, Close: c.fence.close}
 	reader := diskReader{root: c.Root}
 	pending := map[string]string{}
-	needDirtyCommit := map[string]bool{}
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
 	callVerb := map[string]string{}  // call id -> the same, for that one call
 	applied := map[string]bool{}     // call ids whose edit made it into the batch
@@ -1376,7 +1375,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			recordEdit(e, "skipped", reason)
 			continue
 		}
-		if ok, why := c.allowedToEdit(e.path, needDirtyCommit); !ok {
+		if ok, why := c.allowedToEdit(e.path); !ok {
 			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why))
 			recordEdit(e, "skipped", why)
 			continue
@@ -1567,8 +1566,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		}
 		results.setText(e.callID, text)
 	}
-
-	c.dirtyCommit(needDirtyCommit)
 
 	if len(edited) == 0 {
 		return nil

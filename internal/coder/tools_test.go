@@ -161,7 +161,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool) (string, string, bool, error) {
+func (r *committingRepo) Commit(fnames []string, _, _ string, _ bool, _ []string) (string, string, bool, error) {
 	if r.asked != nil {
 		r.asked = append(r.asked, fnames)
 	}
@@ -241,19 +241,21 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 type countingRepo struct {
 	committingRepo
 
-	dirty bool // report every file as dirty, as a tree with the user's own work is
-	calls [][]string
-	attrs []bool
-	msgs  []string // what the caller asked for, "" when it wanted one generated
+	dirty  bool // report every file as dirty, as a tree with the user's own work is
+	calls  [][]string
+	attrs  []bool
+	msgs   []string // what the caller asked for, "" when it wanted one generated
+	extras [][]string
 }
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
 
-func (r *countingRepo) Commit(fnames []string, context, message string, attributed bool) (string, string, bool, error) {
+func (r *countingRepo) Commit(fnames []string, context, message string, attributed bool, extra []string) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
 	r.attrs = append(r.attrs, attributed)
 	r.msgs = append(r.msgs, message)
-	return r.committingRepo.Commit(fnames, context, message, attributed)
+	r.extras = append(r.extras, extra)
+	return r.committingRepo.Commit(fnames, context, message, attributed, extra)
 }
 
 // TestOneCommitPerTurn is the point of moving the commit to turn end. A turn
@@ -289,15 +291,16 @@ func TestOneCommitPerTurn(t *testing.T) {
 	}
 }
 
-// TestDirtyCommitIgnoresTheTurnsOwnEdits is a regression found live. Once the
-// commit moved to turn end, a turn's first edit leaves the file dirty, so its
-// second edit to the same file looked like the user's uncommitted work. The
-// pre-edit dirty commit then swept the turn's changes into an unattributed
-// commit — one /undo and /squash both refuse, because Strument has no record of
-// having made it.
-func TestDirtyCommitIgnoresTheTurnsOwnEdits(t *testing.T) {
+// TestUncommittedBeforeEditIsOneCommit: a file with uncommitted changes gets no
+// commit of its own before the edit; the turn commits once, names the file in
+// a trailer, and says so on screen.
+//
+// The second edit is the regression the old dirty commit had once: the turn's
+// first edit leaves the file dirty, which must not read as uncommitted work
+// a second time.
+func TestUncommittedBeforeEditIsOneCommit(t *testing.T) {
 	sc := inlineScenario(t, `
-{"kind":"meta","v":1,"scenario":"dirty-commit-once","source":"authored"}
+{"kind":"meta","v":1,"scenario":"uncommitted-before-edit","source":"authored"}
 {"kind":"fs","path":"a.txt","content":"one\ntwo\n"}
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change both lines, one at a time"}
@@ -315,16 +318,41 @@ func TestDirtyCommitIgnoresTheTurnsOwnEdits(t *testing.T) {
 	})
 	env.run(t)
 
-	// Exactly two: the user's pre-existing work before the first edit, then the
-	// turn's own at the end. A third would be the turn committing itself away.
-	if len(repo.calls) != 2 {
-		t.Fatalf("Commit called %d times, want 2 (dirty, then the turn): %v", len(repo.calls), repo.calls)
+	if len(repo.calls) != 1 || !repo.attrs[0] {
+		t.Fatalf("Commit calls = %v, attributed = %v; want one attributed commit", repo.calls, repo.attrs)
 	}
-	if repo.attrs[0] || !repo.attrs[1] {
-		t.Errorf("attribution = %v, want the dirty commit unattributed and the turn's attributed", repo.attrs)
+	if got := strings.Join(repo.extras[0], "|"); got != "Uncommitted-before-edit: a.txt" {
+		t.Errorf("trailers = %q, want one naming a.txt", got)
 	}
-	if got := strings.Count(strings.Join(out.lines, "\n"), "Committing existing changes to a.txt before applying edits."); got != 1 {
-		t.Errorf("dirty-commit notice count = %d, want 1; output:\n%s", got, strings.Join(out.lines, "\n"))
+	screen := strings.Join(out.lines, "\n")
+	if got := strings.Count(screen, "a.txt had uncommitted changes before this turn's first edit to it; they are in this commit."); got != 1 {
+		t.Errorf("notice count = %d, want 1; output:\n%s", got, screen)
+	}
+}
+
+// TestNoCommitWhenAutoCommitsOff: with auto-commits off, a file with
+// uncommitted changes is edited and nothing is committed at all. The old dirty
+// commit fired here regardless.
+func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
+	for _, dry := range []bool{false, true} {
+		sc := inlineScenario(t, `
+{"kind":"meta","v":1,"scenario":"no-commit-when-off","source":"authored"}
+{"kind":"fs","path":"a.txt","content":"one\n"}
+{"kind":"chat","editable":["a.txt"]}
+{"kind":"user","text":"change it"}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"one\\n\",\"new_string\":\"ONE\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+`+closingTurn)
+		repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
+		env := setupScenario(t, sc, func(c *Coder) {
+			c.editFormat = "tool"
+			c.AutoCommits = dry // off for the first case; on for the dry run, which must still not commit
+			c.DryRun = dry
+			c.Repo = repo
+		})
+		env.run(t)
+		if len(repo.calls) != 0 {
+			t.Errorf("dry=%v: Commit called %v, want never", dry, repo.calls)
+		}
 	}
 }
 

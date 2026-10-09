@@ -71,10 +71,10 @@ func TestAgentsLocalIsEditableThoughIgnored(t *testing.T) {
 	c := testCoder(t)
 	c.Out = &captureOut{}
 	c.Repo = &ignoringRepo{dirtyRepo{root: c.Root}}
-	if ok, why := c.allowedToEdit(AgentsLocalFileName, map[string]bool{}); !ok {
+	if ok, why := c.allowedToEdit(AgentsLocalFileName); !ok {
 		t.Errorf("AGENTS.local.md was refused: %s", why)
 	}
-	if ok, _ := c.allowedToEdit("build/out.txt", map[string]bool{}); ok {
+	if ok, _ := c.allowedToEdit("build/out.txt"); ok {
 		t.Error("an ordinary ignored file must still be refused")
 	}
 }

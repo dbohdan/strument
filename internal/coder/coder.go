@@ -407,6 +407,10 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
+	// uncommittedBefore holds the paths that had uncommitted changes before
+	// this turn first edited them; the turn's commit names them in a trailer.
+	// See noteUncommittedBefore.
+	uncommittedBefore map[string]bool
 	// settleMu orders a write batch, a settle and an exit, which can come
 	// from different goroutines: the turn's, and the signal handler's.
 	settleMu sync.Mutex
@@ -691,6 +695,7 @@ func (c *Coder) initBeforeMessage() {
 	c.turnEditedFiles = map[string]bool{}
 	c.turnAutoApprove = map[string]bool{}
 	c.turnDeclined = map[string]string{}
+	c.uncommittedBefore = nil
 	c.editsExact, c.editsFuzzy = 0, 0
 	// sessionAutoApprove is not reset here. That is the whole of the session
 	// scope; /reset and "/web reset" are what end it.
@@ -1014,7 +1019,7 @@ func (c *Coder) settleEdits(message string) {
 	// press having started this settle. Cleared before the push, so an exit
 	// sees either the commit under way or the turn on the stack, not both.
 	c.setSettling(c.turnSnap)
-	_ = c.commitTurn(message)
+	_, _ = c.commitTurn(message)
 	c.setSettling(nil)
 	c.pushTurnSnapshot()
 }

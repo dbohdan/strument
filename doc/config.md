@@ -830,6 +830,19 @@ either way. `/commits on|off` changes the setting for the session, and
 `/env`. With commits off, `/undo` and `/diff` still work. A trusted project
 config may set it too.
 
+A file with uncommitted changes when the turn first edits it is committed with
+the turn's edits, and the commit names it in a trailer, one per file:
+
+```
+Uncommitted-before-edit: src/main.go
+```
+
+The trailer does not say whose the changes were: yours, or a shell command
+the model ran earlier, such as `git mv`. Strument used to commit such a file
+on its own before editing it, as aider does; it stopped because the model's
+shell made that guess wrong. With commits off, nothing is committed either
+way.
+
 ### `git_sign`
 
 Sign the commits Strument makes with Git's own signing, passed through as

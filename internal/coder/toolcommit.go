@@ -135,7 +135,7 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	defer c.settleMu.Unlock()
 	before := c.lastCommitHash
 	c.setSettling(c.turnSnap)
-	err := c.commitTurn(args.message())
+	uncommitted, err := c.commitTurn(args.message())
 	c.setSettling(nil)
 	if err != nil {
 		// The writes stay pending, unlike settleEdits: the model can fix what
@@ -150,5 +150,9 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 		// model rather than letting it believe a commit it can name happened.
 		return "Nothing was committed: the files match what is already committed."
 	}
-	return fmt.Sprintf("Committed %s: %s", c.lastCommitHash, args.subject)
+	result := fmt.Sprintf("Committed %s: %s", c.lastCommitHash, args.subject)
+	if len(uncommitted) > 0 {
+		result += "\n" + uncommittedNote(uncommitted, "your")
+	}
+	return result
 }

@@ -156,7 +156,7 @@ func TestCommitContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", "", true)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, "USER: change it", "", true, nil)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -182,7 +182,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true, nil); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -240,7 +240,7 @@ func TestCommitSignFlag(t *testing.T) {
 			}
 			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true); err != nil || !ok {
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, "", "", true, nil); err != nil || !ok {
 				// Missing gpg (notably on Windows CI, where the shim is ignored)
 				// is environmental; don't fail the plumbing check over it.
 				if strings.Contains(errOrEmpty(err), "gpg") || strings.Contains(errOrEmpty(err), "GPG") {
@@ -271,7 +271,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, "", "", false)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, "", "", false, nil)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -279,7 +279,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 		t.Errorf("fallback message: %q", message)
 	}
 	if body := run(t, root, "git", "log", "-1", "--format=%B"); strings.Contains(body, "Assisted-by") {
-		t.Errorf("dirty commit must not carry the trailer: %q", body)
+		t.Errorf("an unattributed commit must not carry the trailer: %q", body)
 	}
 }
 
@@ -292,7 +292,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", "", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, "", "", true, nil); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {
@@ -391,7 +391,10 @@ func TestCoderAutoCommitIntegration(t *testing.T) {
 	}
 }
 
-func TestDirtyCommitBeforeEdits(t *testing.T) {
+// TestUncommittedBeforeEditTrailer: a file with uncommitted changes before the
+// model's edit is committed once, with the turn, and the commit names it in a
+// trailer rather than splitting the changes into a commit of their own.
+func TestUncommittedBeforeEditTrailer(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
@@ -399,8 +402,8 @@ func TestDirtyCommitBeforeEdits(t *testing.T) {
 	}
 	g.CommitTrailer = gitrepo.Trailer("test-model")
 	g.Message = func(_, _ string) string { return "feat: greet strument" }
+	base := g.HeadSHA()
 
-	// User-dirty file before the model edits it.
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello world\nuser addition\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -408,23 +411,20 @@ func TestDirtyCommitBeforeEdits(t *testing.T) {
 	c := newIntegrationCoder(t, root, g)
 	c.Run(t.Context(), "change the greeting")
 
-	// Two commits on top of base: the unattributed dirty commit, then the
-	// attributed edit commit.
-	log := run(t, root, "git", "log", "--format=%s|%(trailers:key=Assisted-by,valueonly)")
-	lines := strings.Split(strings.TrimSpace(log), "\n")
-	joined := strings.Join(lines, "\n")
-	if len(lines) < 3 {
-		t.Fatalf("expected 3+ commits, got:\n%s", joined)
+	if n := strings.TrimSpace(run(t, root, "git", "rev-list", "--count", base+"..HEAD")); n != "1" {
+		t.Fatalf("commits on top of base = %s, want 1", n)
 	}
-	if !strings.Contains(lines[0], "test-model via Strument") {
-		t.Errorf("edit commit not attributed:\n%s", joined)
+	body := run(t, root, "git", "log", "-1", "--format=%B")
+	for _, want := range []string{"Assisted-by: test-model via Strument", "Uncommitted-before-edit: main.txt"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("commit lacks %q:\n%s", want, body)
+		}
 	}
-	if strings.Contains(lines[1], "Strument") {
-		t.Errorf("dirty commit must be unattributed:\n%s", joined)
-	}
-	// The user's addition survived in the dirty commit and the final file.
 	if got, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(got) != "hello strument\nuser addition\n" {
 		t.Errorf("file = %q", got)
+	}
+	if g.IsDirty("main.txt") {
+		t.Error("main.txt dirty after the turn's commit")
 	}
 }
 

@@ -253,14 +253,14 @@ func (r *Repo) RootCommit() string {
 }
 
 // Commit stages fnames and commits them. attributed adds the
-// trailer (auto-commits of model edits); dirty commits stay unattributed.
+// attribution trailer; extra are further trailers, each "Key: value".
 // ok=false means there was nothing to commit. GIT_AUTHOR_* and
 // GIT_COMMITTER_* are never overridden; hooks run normally.
 //
 // want is the message to use. Empty means generate one from the staged diff
 // through the Message hook, which is the automatic path; a non-empty one is
 // used verbatim, for the commit tool where the model writes its own.
-func (r *Repo) Commit(fnames []string, context, want string, attributed bool) (hash, message string, ok bool, err error) {
+func (r *Repo) Commit(fnames []string, context, want string, attributed bool, extra []string) (hash, message string, ok bool, err error) {
 	if len(fnames) == 0 {
 		return "", "", false, nil
 	}
@@ -304,6 +304,9 @@ func (r *Repo) Commit(fnames []string, context, want string, attributed bool) (h
 	commitArgs = append(commitArgs, "-m", message)
 	if attributed && r.CommitTrailer != "" {
 		commitArgs = append(commitArgs, "--trailer", r.CommitTrailer)
+	}
+	for _, t := range extra {
+		commitArgs = append(commitArgs, "--trailer", t)
 	}
 	commitArgs = append(commitArgs, "--")
 	commitArgs = append(commitArgs, fnames...)
