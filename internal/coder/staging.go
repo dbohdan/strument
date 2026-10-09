@@ -1,43 +1,50 @@
 package coder
 
 import (
+	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 )
 
-// What a turn's commit takes beyond the turn's own edits, and how it knows.
-//
-// Two things, both decided by provenance rather than by a guess.
+// What a turn's commit takes beyond the turn's own edits, what it leaves to a
+// commit of its own, and how it knows.
 //
 // What the model's shell commands staged goes into the commit, each path as
 // it is on disk (gitrepo's Commit says why disk and not the staged copy). A
 // session showed why it goes in at all: MiMo ran `git mv test.ts test.mjs`,
 // then edited test.mjs, and the commit took test.mjs alone, leaving the
-// staged deletion of test.ts behind — half a rename. Rename detection cannot repair that reliably: git
-// stores no renames, and pairing a deletion with an addition by similarity
-// misses a rename whose target was rewritten and pairs a deletion the user
-// staged with an unrelated new file of the model's. So instead the index is
-// listed before and after every model-caused shell command, and whatever
-// changed in between is the model's, whatever command did it. /run never
-// comes through here, so what the user stages stays theirs.
+// staged deletion of test.ts behind — half a rename. Rename detection cannot
+// repair that reliably: git stores no renames, and pairing a deletion with an
+// addition by similarity misses a rename whose target was rewritten and
+// pairs a deletion the user staged with an unrelated new file of the model's.
+// So instead the index is recorded before and after every model-caused shell
+// command, and whatever changed in between is the model's, whatever command
+// did it. /run never comes through here, so what the user stages stays
+// theirs.
 //
-// Paths that had uncommitted changes when the turn began are committed with
-// it and named in an Uncommitted-before-edit trailer. This replaced a commit:
-// aider committed such a file on its own before editing it ("dirty commits"),
-// and Strument did too until the session above, where the dirty commit was
-// what took test.mjs alone, under a side model's message, as though the user
-// had made it. It also fired with auto-commits off and in a dry run, both of
-// which promise no commits. Leaving such files out of the commit instead was
-// considered and rejected: a file the model keeps editing would stay
-// uncommitted turn after turn. The baseline is taken once, at turn start, so
-// that a change the model makes before its first edit — a `sed -i`, a
-// `git mv` — is not mistaken for one that was already there.
+// Uncommitted changes a file had when the turn began are committed on their
+// own, before the model's first change to the file, as aider does. Strument
+// briefly put them in the model's commit instead, named in a trailer, and a
+// trial (doc/experiments/2026-10-commit-whole-file) showed what that costs:
+// in 5 of 96 runs a model deleted the user's uncommitted line to keep it out
+// of its commit, four of them right after being told the line was in. With
+// the user's changes already committed there is nothing to keep out.
+//
+// What made the old version of this commit wrong is what this one is built
+// around. It fired at the first edit and took the file from disk, so a
+// model's `git mv` or `sed -i` before the edit was committed as the user's
+// work — half a rename, under a side model's message. Now the baseline is
+// taken at turn start, contents included, and the commit is of those
+// contents, so nothing the model did can be in it; its message is fixed; and
+// it needs auto-commits on and no dry run, like any other commit.
 
-// stagingRepo is the optional part of a Repo that can record the index and
-// list the dirty paths. gitrepo implements it; without it, a turn's commit is
-// its edits alone, with no trailers.
+// stagingRepo is the optional part of a Repo that can record the index, list
+// the dirty paths, and commit saved contents. gitrepo implements it; without
+// it, a turn's commit is its edits alone.
 type stagingRepo interface {
 	// DirtyPaths is IsDirty for every tracked path at once.
 	DirtyPaths() (map[string]bool, error)
@@ -51,6 +58,9 @@ type stagingRepo interface {
 	// HEAD, and ConflictedPaths which have unresolved merge conflicts.
 	StagedChanges(paths []string) ([]string, error)
 	ConflictedPaths(paths []string) ([]string, error)
+	// CommitContents commits these contents, nil for a deletion, and nothing
+	// else, unattributed.
+	CommitContents(files map[string][]byte, message string) (hash string, ok bool, err error)
 }
 
 // indexMark is a MarkIndex record; ok is false when none was taken.
@@ -69,18 +79,102 @@ func (c *Coder) staging() stagingRepo {
 	return s
 }
 
-// takeStagingBaseline starts a turn's record: what was already uncommitted,
-// the index as the turn found it, and nothing staged yet.
+// takeStagingBaseline starts a turn's record: what was already uncommitted
+// and its contents, the index as the turn found it, and nothing staged yet.
 func (c *Coder) takeStagingBaseline() {
 	c.dropStartMark()
-	c.dirtyAtStart, c.turnStaged = nil, nil
+	c.uncommittedAtStart, c.turnStaged = nil, nil
 	s := c.staging()
 	if s == nil {
 		return
 	}
-	// On error, no trailers: the commit is still right, only less annotated.
-	c.dirtyAtStart, _ = s.DirtyPaths()
 	c.startMark = c.markIndex()
+	dirty, err := s.DirtyPaths()
+	if err != nil {
+		return
+	}
+	c.uncommittedAtStart = c.readUncommitted(slices.Sorted(maps.Keys(dirty)))
+}
+
+// Limits on what the baseline reads at turn start. A file past them is not
+// committed separately: its uncommitted changes go into the model's commit
+// with the model's, as they would with no baseline at all. A tree with
+// hundreds of dirty files is mid-checkout or mid-rewrite, not someone's
+// work in progress, and reading it every turn would cost more than the
+// separation is worth.
+const (
+	maxUncommittedFiles = 200
+	maxUncommittedFile  = 4 << 20
+	maxUncommittedTotal = 16 << 20
+)
+
+// readUncommitted reads the turn-start contents of the dirty paths, within
+// the limits. A path gone from disk is the user's deletion, recorded as nil.
+// A symlink is skipped: its contents are a target, not bytes to commit.
+func (c *Coder) readUncommitted(paths []string) map[string][]byte {
+	if len(paths) == 0 || len(paths) > maxUncommittedFiles {
+		return nil
+	}
+	root := c.Repo.Root()
+	if root == "" {
+		return nil
+	}
+	saved := map[string][]byte{}
+	total := 0
+	for _, p := range paths {
+		full := filepath.Join(root, filepath.FromSlash(p))
+		st, err := os.Lstat(full)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			saved[p] = nil
+			continue
+		case err != nil, !st.Mode().IsRegular(), st.Size() > maxUncommittedFile:
+			continue
+		}
+		if total += int(st.Size()); total > maxUncommittedTotal {
+			break
+		}
+		data, err := os.ReadFile(full)
+		if err != nil {
+			continue
+		}
+		if data == nil {
+			data = []byte{}
+		}
+		saved[p] = data
+	}
+	return saved
+}
+
+// commitUncommittedFirst commits, on its own, what any of paths had
+// uncommitted when the turn began, before the model's changes to them are
+// written or committed. Each path is committed this way once a turn. A
+// failure — a hook refusing the commit, most often — is said and not
+// retried: the changes then go in with the model's, which is where they
+// would have been anyway.
+func (c *Coder) commitUncommittedFirst(paths []string) {
+	s := c.staging()
+	if s == nil || len(c.uncommittedAtStart) == 0 {
+		return
+	}
+	files := map[string][]byte{}
+	for _, p := range paths {
+		if data, ok := c.uncommittedAtStart[p]; ok {
+			files[p] = data
+			delete(c.uncommittedAtStart, p)
+		}
+	}
+	if len(files) == 0 {
+		return
+	}
+	names := strings.Join(slices.Sorted(maps.Keys(files)), ", ")
+	hash, ok, err := s.CommitContents(files, "Commit existing changes to "+names+" before Strument's edits")
+	switch {
+	case err != nil:
+		c.Out.Errorf("Could not commit the existing changes to %s first, so they will be in the model's commit: %v", names, err)
+	case ok:
+		c.Out.Toolf("Committed existing changes to %s first: %s", names, hash)
+	}
 }
 
 // dropStartMark deletes the turn's starting record of the index, once the

@@ -158,7 +158,7 @@ func TestCommitContract(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, nil, "USER: change it", "", true, nil)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, nil, "USER: change it", "", true)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -184,7 +184,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true, nil); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -242,7 +242,7 @@ func TestCommitSignFlag(t *testing.T) {
 			}
 			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true, nil); err != nil || !ok {
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true); err != nil || !ok {
 				// Missing gpg (notably on Windows CI, where the shim is ignored)
 				// is environmental; don't fail the plumbing check over it.
 				if strings.Contains(errOrEmpty(err), "gpg") || strings.Contains(errOrEmpty(err), "GPG") {
@@ -273,7 +273,7 @@ func TestUnattributedCommitHasNoTrailer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", false, nil)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", false)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -294,7 +294,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, nil, "", "", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, nil, "", "", true); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {
@@ -393,10 +393,10 @@ func TestCoderAutoCommitIntegration(t *testing.T) {
 	}
 }
 
-// TestUncommittedBeforeEditTrailer: a file with uncommitted changes before the
-// model's edit is committed once, with the turn, and the commit names it in a
-// trailer rather than splitting the changes into a commit of their own.
-func TestUncommittedBeforeEditTrailer(t *testing.T) {
+// TestUncommittedChangesCommittedFirst: a file with uncommitted changes before
+// the model's edit gets a commit of its own, unattributed and holding exactly
+// those changes, and the model's commit on top holds only the model's.
+func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
@@ -413,20 +413,79 @@ func TestUncommittedBeforeEditTrailer(t *testing.T) {
 	c := newIntegrationCoder(t, root, g)
 	c.Run(t.Context(), "change the greeting")
 
-	if n := strings.TrimSpace(run(t, root, "git", "rev-list", "--count", base+"..HEAD")); n != "1" {
-		t.Fatalf("commits on top of base = %s, want 1", n)
+	subjects := strings.TrimSpace(run(t, root, "git", "log", "--format=%s", base+"..HEAD"))
+	if subjects != "feat: greet strument\nCommit existing changes to main.txt before Strument's edits" {
+		t.Fatalf("commits on top of base:\n%s", subjects)
 	}
-	body := run(t, root, "git", "log", "-1", "--format=%B")
-	for _, want := range []string{"Assisted-by: test-model via Strument", "Uncommitted-before-edit: main.txt"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("commit lacks %q:\n%s", want, body)
-		}
+	if body := run(t, root, "git", "log", "-1", "--format=%B", "HEAD~1"); strings.Contains(body, "Assisted-by") {
+		t.Errorf("the user's changes were attributed to the model:\n%s", body)
 	}
-	if got, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(got) != "hello strument\nuser addition\n" {
-		t.Errorf("file = %q", got)
+	if body := run(t, root, "git", "log", "-1", "--format=%B", "HEAD"); !strings.Contains(body, "Assisted-by: test-model via Strument") {
+		t.Errorf("model's commit not attributed:\n%s", body)
+	}
+	if got := run(t, root, "git", "show", "HEAD~1:main.txt"); got != "hello world\nuser addition\n" {
+		t.Errorf("first commit holds %q, want the user's version", got)
+	}
+	if got := run(t, root, "git", "diff", "HEAD~1", "HEAD"); !strings.Contains(got, "-hello world") || strings.Contains(got, "+user addition") || strings.Contains(got, "-user addition") {
+		t.Errorf("model's commit diff:\n%s\nwant only the greeting change", got)
 	}
 	if g.IsDirty("main.txt") {
 		t.Error("main.txt dirty after the turn's commit")
+	}
+}
+
+// TestCommitContents commits saved contents, not the disk's: a changed file,
+// an executable whose mode must survive, and a deletion — and leaves other
+// staged work alone.
+func TestCommitContents(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes")
+	}
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, body string, mode os.FileMode) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("run.sh", "#!/bin/sh\n", 0o755)
+	write("gone.txt", "bye\n", 0o644)
+	write("other.txt", "base\n", 0o644)
+	run(t, root, "git", "add", ".")
+	run(t, root, "git", "commit", "-q", "-m", "more files")
+	write("other.txt", "user staged\n", 0o644)
+	run(t, root, "git", "add", "other.txt")
+	write("main.txt", "on disk now\n", 0o644)
+
+	hash, ok, err := g.CommitContents(map[string][]byte{
+		"main.txt": []byte("saved\n"),
+		"run.sh":   []byte("#!/bin/sh\necho hi\n"),
+		"gone.txt": nil,
+	}, "save")
+	if err != nil || !ok || hash == "" {
+		t.Fatalf("CommitContents = %q, %v, %v", hash, ok, err)
+	}
+	if got := run(t, root, "git", "show", "HEAD:main.txt"); got != "saved\n" {
+		t.Errorf("main.txt = %q, want the saved contents", got)
+	}
+	if got := run(t, root, "git", "ls-tree", "HEAD", "run.sh"); !strings.HasPrefix(got, "100755") {
+		t.Errorf("run.sh entry = %q, want mode 100755 kept", got)
+	}
+	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); strings.Contains(got, "gone.txt") || strings.Contains(got, "other.txt") == false {
+		t.Errorf("tree:\n%s\nwant gone.txt removed and other.txt kept", got)
+	}
+	if got := run(t, root, "git", "show", "HEAD:other.txt"); got != "base\n" {
+		t.Errorf("other.txt = %q, want the user's staged change left out", got)
+	}
+	if st := run(t, root, "git", "status", "--porcelain"); !strings.Contains(st, "M  other.txt") || !strings.Contains(st, " M main.txt") {
+		t.Errorf("status:\n%s\nwant other.txt still staged, main.txt modified on disk", st)
+	}
+	if _, ok, err := g.CommitContents(map[string][]byte{"main.txt": []byte("saved\n")}, "again"); ok || err != nil {
+		t.Errorf("committing HEAD's contents again: ok=%v err=%v, want nothing to commit", ok, err)
 	}
 }
 
@@ -829,7 +888,7 @@ func TestCommitTakesStagedFromDisk(t *testing.T) {
 		t.Fatalf("changed = %q", got)
 	}
 
-	_, _, ok, err := g.Commit(nil, []string{"main.txt", "moved.txt"}, "", "rename main", true, nil)
+	_, _, ok, err := g.Commit(nil, []string{"main.txt", "moved.txt"}, "", "rename main", true)
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -862,11 +921,11 @@ func TestCommitStagedWithoutHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true, nil); ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true); ok || err != nil {
 		t.Fatalf("unstaged path in an empty repo: ok=%v err=%v, want nothing to commit", ok, err)
 	}
 	run(t, root, "git", "add", "a.txt")
-	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := run(t, root, "git", "show", "HEAD:a.txt"); got != "a\n" {
@@ -966,7 +1025,7 @@ func TestCommitCaseOnlyRename(t *testing.T) {
 	if err != nil || strings.Join(staged, ",") != "NOTES.md,notes.md" {
 		t.Fatalf("staged = %v, %v", staged, err)
 	}
-	if _, _, ok, err := g.Commit(nil, staged, "", "rename notes", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, staged, "", "rename notes", true); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); !strings.Contains(got, "NOTES.md") || strings.Contains(got, "notes.md") {
@@ -998,7 +1057,7 @@ func TestCommitHooksSeeTheTemporaryIndex(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("edited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "edit", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "edit", true); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := run(t, root, "git", "show", "HEAD:main.txt"); got != "formatted\n" {
@@ -1020,7 +1079,7 @@ func TestCommitStagedUntrack(t *testing.T) {
 		t.Fatal(err)
 	}
 	run(t, root, "git", "rm", "-q", "--cached", "main.txt")
-	if _, _, ok, err := g.Commit(nil, []string{"main.txt"}, "", "untrack main", true, nil); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"main.txt"}, "", "untrack main", true); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); got != "" {

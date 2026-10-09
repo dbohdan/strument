@@ -161,7 +161,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit(fnames, _ []string, _, _ string, _ bool, _ []string) (string, string, bool, error) {
+func (r *committingRepo) Commit(fnames, _ []string, _, _ string, _ bool) (string, string, bool, error) {
 	if r.asked != nil {
 		r.asked = append(r.asked, fnames)
 	}
@@ -241,11 +241,25 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 type countingRepo struct {
 	committingRepo
 
-	dirty  bool // report every file as dirty, as a tree with the user's own work is
-	calls  [][]string
-	attrs  []bool
-	msgs   []string // what the caller asked for, "" when it wanted one generated
-	extras [][]string
+	dirty bool // report every file as dirty, as a tree with the user's own work is
+	calls [][]string
+	attrs []bool
+	msgs  []string // what the caller asked for, "" when it wanted one generated
+
+	// pre records each CommitContents call, with what was on disk for its
+	// first path at that moment, so a test can tell it came before the write.
+	pre       []map[string][]byte
+	preOnDisk []string
+}
+
+func (r *countingRepo) CommitContents(files map[string][]byte, _ string) (string, bool, error) {
+	r.pre = append(r.pre, files)
+	for p := range files {
+		data, _ := os.ReadFile(filepath.Join(r.root, p))
+		r.preOnDisk = append(r.preOnDisk, string(data))
+		break
+	}
+	return "pre1234", true, nil
 }
 
 func (r *countingRepo) IsDirty(string) bool { return r.dirty }
@@ -264,12 +278,11 @@ func (r *countingRepo) DirtyPaths() (map[string]bool, error) {
 	return m, nil
 }
 
-func (r *countingRepo) Commit(fnames, staged []string, context, message string, attributed bool, extra []string) (string, string, bool, error) {
+func (r *countingRepo) Commit(fnames, staged []string, context, message string, attributed bool) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
 	r.attrs = append(r.attrs, attributed)
 	r.msgs = append(r.msgs, message)
-	r.extras = append(r.extras, extra)
-	return r.committingRepo.Commit(fnames, staged, context, message, attributed, extra)
+	return r.committingRepo.Commit(fnames, staged, context, message, attributed)
 }
 
 // TestOneCommitPerTurn is the point of moving the commit to turn end. A turn
@@ -305,14 +318,14 @@ func TestOneCommitPerTurn(t *testing.T) {
 	}
 }
 
-// TestUncommittedBeforeEditIsOneCommit: a file with uncommitted changes gets no
-// commit of its own before the edit; the turn commits once, names the file in
-// a trailer, and says so on screen.
+// TestUncommittedChangesCommittedFirst: a file with uncommitted changes when
+// the turn began gets a commit of its own, of its turn-start contents, before
+// the edit is written; then the turn commits once, attributed.
 //
 // The second edit is the regression the old dirty commit had once: the turn's
 // first edit leaves the file dirty, which must not read as uncommitted work
 // a second time. The baseline is taken at turn start, so it cannot.
-func TestUncommittedBeforeEditIsOneCommit(t *testing.T) {
+func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"uncommitted-before-edit","source":"authored"}
 {"kind":"fs","path":"a.txt","content":"one\ntwo\n"}
@@ -329,17 +342,21 @@ func TestUncommittedBeforeEditIsOneCommit(t *testing.T) {
 		c.AutoCommits = true
 		c.Repo = repo
 		c.Out = out
+		repo.root = c.Root
 	})
 	env.run(t)
 
+	if len(repo.pre) != 1 || string(repo.pre[0]["a.txt"]) != "one\ntwo\n" {
+		t.Fatalf("CommitContents calls = %q, want one, of a.txt as the turn found it", repo.pre)
+	}
+	if repo.preOnDisk[0] != "one\ntwo\n" {
+		t.Errorf("disk at the separate commit = %q, want it before the edit", repo.preOnDisk[0])
+	}
 	if len(repo.calls) != 1 || !repo.attrs[0] {
 		t.Fatalf("Commit calls = %v, attributed = %v; want one attributed commit", repo.calls, repo.attrs)
 	}
-	if got := strings.Join(repo.extras[0], "|"); got != "Uncommitted-before-edit: a.txt" {
-		t.Errorf("trailers = %q, want one naming a.txt", got)
-	}
 	screen := strings.Join(out.lines, "\n")
-	if got := strings.Count(screen, "a.txt had uncommitted changes before this turn changed it; they are in this commit."); got != 1 {
+	if got := strings.Count(screen, "Committed existing changes to a.txt first: pre1234"); got != 1 {
 		t.Errorf("notice count = %d, want 1; output:\n%s", got, screen)
 	}
 }
@@ -362,10 +379,11 @@ func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
 			c.AutoCommits = dry // off for the first case; on for the dry run, which must still not commit
 			c.DryRun = dry
 			c.Repo = repo
+			repo.root = c.Root
 		})
 		env.run(t)
-		if len(repo.calls) != 0 {
-			t.Errorf("dry=%v: Commit called %v, want never", dry, repo.calls)
+		if len(repo.calls) != 0 || len(repo.pre) != 0 {
+			t.Errorf("dry=%v: Commit called %v, CommitContents %v; want neither", dry, repo.calls, repo.pre)
 		}
 	}
 }

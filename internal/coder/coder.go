@@ -407,13 +407,14 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
-	// dirtyAtStart holds the tracked paths that had uncommitted changes when
-	// the turn began, and turnStaged the paths the model's shell commands
-	// staged during it. The turn's commit takes the second and names the
-	// first in trailers. See staging.go.
-	dirtyAtStart map[string]bool
-	turnStaged   map[string]bool
-	startMark    indexMark
+	// uncommittedAtStart holds, for the tracked paths that had uncommitted
+	// changes when the turn began, their contents then (nil: deleted), and
+	// turnStaged the paths the model's shell commands staged during it. The
+	// first are committed on their own before the model's changes to them;
+	// the second go into the turn's commit. See staging.go.
+	uncommittedAtStart map[string][]byte
+	turnStaged         map[string]bool
+	startMark          indexMark
 	// settleMu orders a write batch, a settle and an exit, which can come
 	// from different goroutines: the turn's, and the signal handler's.
 	settleMu sync.Mutex

@@ -112,7 +112,7 @@ func (c *Coder) RecoverExited(turn []TurnEdit) (kept, changed []string, hash str
 	if len(kept) > 0 && c.Repo != nil && c.AutoCommits && !c.DryRun {
 		paths := c.committablePaths(kept)
 		if len(paths) > 0 {
-			h, _, ok, cerr := c.Repo.Commit(paths, nil, c.commitContext(), "Commit the edits of a turn interrupted by exiting", true, nil)
+			h, _, ok, cerr := c.Repo.Commit(paths, nil, c.commitContext(), "Commit the edits of a turn interrupted by exiting", true)
 			switch {
 			case cerr != nil:
 				err = cerr

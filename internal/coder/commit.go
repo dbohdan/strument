@@ -2,7 +2,6 @@ package coder
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -36,9 +35,7 @@ import (
 // not moving, which is the one reading the hook's refusal rules out.
 //
 // The result says what else went in: paths the model's shell commands staged
-// (staging.go), and paths that had uncommitted changes when the turn began,
-// which the commit names in Uncommitted-before-edit trailers. Both are said
-// on screen here; the commit tool tells the model too.
+// (staging.go), said on screen here and told to the model by the commit tool.
 func (c *Coder) commitTurn(message string) (turnCommit, error) {
 	// What is new since the last commit, not what the turn has touched.
 	//
@@ -66,15 +63,12 @@ func (c *Coder) commitTurn(message string) (turnCommit, error) {
 	}
 	slices.Sort(edited)
 
-	var trailers, before []string
-	for _, p := range slices.Sorted(slices.Values(append(slices.Clone(edited), staged...))) {
-		if c.dirtyAtStart[p] && !slices.Contains(before, p) {
-			before = append(before, p)
-			trailers = append(trailers, uncommittedTrailer+": "+p)
-		}
-	}
+	// Uncommitted changes from before the turn first, in a commit of their
+	// own, for files only a shell command changed; the edit tools did theirs
+	// before writing.
+	c.commitUncommittedFirst(append(slices.Clone(edited), staged...))
 
-	hash, message, ok, err := c.Repo.Commit(edited, staged, c.commitContext(), message, true, trailers)
+	hash, message, ok, err := c.Repo.Commit(edited, staged, c.commitContext(), message, true)
 	if err != nil {
 		// A commit failure after the writes leaves the edits in the tree, where
 		// /undo still reaches them through the turn's snapshot.
@@ -111,42 +105,13 @@ func (c *Coder) commitTurn(message string) (turnCommit, error) {
 	if len(staged) > 0 {
 		c.Out.Toolf("Included what the model's commands staged with git: %s.", strings.Join(staged, ", "))
 	}
-	// Committed now, so a later commit in the same turn has nothing of theirs
-	// to name.
-	for _, p := range before {
-		delete(c.dirtyAtStart, p)
-	}
-	tc.uncommitted = before
-	if len(before) > 0 {
-		c.Out.Toolf("%s", uncommittedNote(before, "this turn"))
-	}
 	return tc, nil
 }
 
 // turnCommit is what commitTurn put in a commit beyond the turn's own edits.
 type turnCommit struct {
-	staged      []string // staged by the model's shell commands
-	uncommitted []string // had uncommitted changes when the turn began
-	conflicted  []string // staged, but left out for unresolved conflicts
-}
-
-// uncommittedTrailer names, in a turn's commit, a file that had uncommitted
-// changes when the turn began. Neutral on whose they were on purpose: the
-// user's, or an earlier turn's left uncommitted — Strument cannot tell. No
-// harness on the panel or elsewhere had a trailer for this as of October
-// 2026; aider's answer was a separate commit, which staging.go explains the
-// retirement of.
-const uncommittedTrailer = "Uncommitted-before-edit"
-
-// uncommittedNote says that paths had uncommitted changes before who changed
-// them, and that the commit includes them.
-func uncommittedNote(paths []string, who string) string {
-	if len(paths) == 1 {
-		return fmt.Sprintf("%s had uncommitted changes before %s changed it; they are in this commit.",
-			paths[0], who)
-	}
-	return fmt.Sprintf("%s had uncommitted changes before %s changed them; they are in this commit.",
-		strings.Join(paths, ", "), who)
+	staged     []string // staged by the model's shell commands
+	conflicted []string // staged, but left out for unresolved conflicts
 }
 
 // attributeShellCommits retro-attributes the commits a model-caused shell

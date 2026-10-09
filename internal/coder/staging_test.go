@@ -3,6 +3,8 @@ package coder
 import (
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -16,7 +18,8 @@ type fakeStagingRepo struct {
 	head   map[string]string // HEAD's entries, for StagedChanges
 	dirty  map[string]bool
 	staged [][]string
-	extras [][]string
+	pre    []map[string][]byte
+	order  []string
 
 	marks   map[string]map[string]string
 	dropped []string
@@ -69,17 +72,25 @@ func (r *fakeStagingRepo) StagedChanges(paths []string) ([]string, error) {
 	return out, nil
 }
 
+func (r *fakeStagingRepo) CommitContents(files map[string][]byte, _ string) (string, bool, error) {
+	r.pre = append(r.pre, files)
+	r.order = append(r.order, "pre")
+	return "pre1234", true, nil
+}
+
 func (r *fakeStagingRepo) DirtyPaths() (map[string]bool, error) { return r.dirty, nil }
 
-func (r *fakeStagingRepo) Commit(fnames, staged []string, context, message string, attributed bool, extra []string) (string, string, bool, error) {
+func (r *fakeStagingRepo) Commit(fnames, staged []string, context, message string, attributed bool) (string, string, bool, error) {
 	r.staged = append(r.staged, staged)
-	r.extras = append(r.extras, extra)
-	return r.committingRepo.Commit(fnames, staged, context, message, attributed, extra)
+	r.order = append(r.order, "commit")
+	return r.committingRepo.Commit(fnames, staged, context, message, attributed)
 }
 
 // A model command's staging reaches the turn's commit: both halves of a
 // rename, but not a path that was already staged before the command, and not
-// a conflicted one, which is named instead.
+// a conflicted one, which is named instead. a.txt had uncommitted changes
+// when the turn began, so they are committed first, as the turn found them;
+// user.txt had some too, but nothing of the model's touches it.
 func TestStagedByCommandIsCommitted(t *testing.T) {
 	c := testCoder(t)
 	out := &captureOut{}
@@ -97,12 +108,22 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 		},
 		dirty: map[string]bool{"a.txt": true, "user.txt": true},
 	}
+	repo.root = c.Root
+	for name, body := range map[string]string{"a.txt": "user's a\n", "user.txt": "user's\n"} {
+		if err := os.WriteFile(filepath.Join(c.Root, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	c.Repo = repo
 	c.AutoCommits = true
 	c.initBeforeMessage()
 
 	snap := c.markIndex()
-	// git mv a.txt b.txt; and a merge that left c.txt conflicted.
+	// git mv a.txt b.txt, and a change to b.txt; a merge left c.txt
+	// conflicted.
+	if err := os.Rename(filepath.Join(c.Root, "a.txt"), filepath.Join(c.Root, "b.txt")); err != nil {
+		t.Fatal(err)
+	}
 	delete(repo.index, "a.txt")
 	repo.index["b.txt"] = "100644 aaa 0;"
 	repo.index["c.txt"] = "100644 c1 1;100644 c2 2;100644 c3 3;"
@@ -118,9 +139,11 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 	if got := strings.Join(tc.conflicted, ","); got != "c.txt" {
 		t.Errorf("conflicted = %q", got)
 	}
-	// a.txt was dirty at turn start; user.txt was too but is not committed.
-	if got := strings.Join(repo.extras[0], "|"); got != "Uncommitted-before-edit: a.txt" {
-		t.Errorf("trailers = %q", got)
+	if len(repo.pre) != 1 || len(repo.pre[0]) != 1 || string(repo.pre[0]["a.txt"]) != "user's a\n" {
+		t.Errorf("CommitContents = %q, want a.txt alone, as the turn found it", repo.pre)
+	}
+	if got := strings.Join(repo.order, ","); got != "pre,commit" {
+		t.Errorf("order = %s, want the user's changes first", got)
 	}
 	screen := strings.Join(out.lines, "\n")
 	for _, want := range []string{
@@ -144,7 +167,7 @@ func TestStagingUntrackedWhenCommitsOff(t *testing.T) {
 	c.Repo = repo
 	c.AutoCommits = false
 	c.initBeforeMessage()
-	if c.markIndex().ok || c.startMark.ok || c.dirtyAtStart != nil || len(repo.marks) != 0 {
+	if c.markIndex().ok || c.startMark.ok || c.uncommittedAtStart != nil || len(repo.marks) != 0 {
 		t.Error("tracked staging with auto-commits off")
 	}
 }

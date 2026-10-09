@@ -163,8 +163,5 @@ func (c *Coder) runCommitTool(args commitArgs) string {
 	if len(tc.conflicted) > 0 {
 		result += "\n" + conflictedNote(tc.conflicted)
 	}
-	if len(tc.uncommitted) > 0 {
-		result += "\n" + uncommittedNote(tc.uncommitted, "you")
-	}
 	return result
 }

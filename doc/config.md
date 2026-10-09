@@ -839,17 +839,14 @@ turn, stays out of the commit, as do files a command changed without staging
 them. A staged path with unresolved merge conflicts is left out and named on
 screen.
 
-A file with uncommitted changes when the turn began is committed with the
-turn's changes, and the commit names it in a trailer, one per file:
-
-```
-Uncommitted-before-edit: src/main.go
-```
-
-The trailer does not say whose the changes were: yours, or an earlier turn's
-left uncommitted. Strument used to commit such a file on its own before
-editing it, as aider does; it stopped because, with a shell, the model makes
-changes that look the same. With commits off, nothing is committed either way.
+A file with uncommitted changes when the turn began gets a commit of its own
+before the model's changes to it, as aider does: "Commit existing changes to
+src/main.go before Strument's edits", unattributed. It holds the file as the
+turn found it, read at turn start, so a change the model makes first — a
+`git mv`, a `sed -i` — is never committed as yours. If a hook refuses that
+commit, your changes go into the model's commit instead and Strument says so.
+Files past a size limit (200 dirty files, 4 MB each, 16 MB in all) are not
+separated. With commits off, nothing is committed either way.
 
 ### `git_sign`
 

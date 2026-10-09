@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,10 +255,9 @@ func (r *Repo) RootCommit() string {
 	return roots[0]
 }
 
-// Commit commits fnames, as they are in the working tree, and staged, as they
-// are in the index. attributed adds the attribution trailer; extra are
-// further trailers, each "Key: value". ok=false means there was nothing to
-// commit. GIT_AUTHOR_* and GIT_COMMITTER_* are never overridden; hooks run
+// Commit commits fnames and staged as they are in the working tree.
+// attributed adds the attribution trailer. ok=false means there was nothing
+// to commit. GIT_AUTHOR_* and GIT_COMMITTER_* are never overridden; hooks run
 // normally.
 //
 // staged is for what a model's shell command put in the index: `git mv a b`
@@ -281,7 +281,7 @@ func (r *Repo) RootCommit() string {
 // want is the message to use. Empty means generate one from the staged diff
 // through the Message hook, which is the automatic path; a non-empty one is
 // used verbatim, for the commit tool where the model writes its own.
-func (r *Repo) Commit(fnames, staged []string, context, want string, attributed bool, extra []string) (hash, message string, ok bool, err error) {
+func (r *Repo) Commit(fnames, staged []string, context, want string, attributed bool) (hash, message string, ok bool, err error) {
 	if len(fnames) == 0 && len(staged) == 0 {
 		return "", "", false, nil
 	}
@@ -345,9 +345,6 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 	if attributed && r.CommitTrailer != "" {
 		commitArgs = append(commitArgs, "--trailer", r.CommitTrailer)
 	}
-	for _, t := range extra {
-		commitArgs = append(commitArgs, "--trailer", t)
-	}
 	if _, err := r.gitEnv(env, "", commitArgs...); err != nil {
 		return "", "", false, err
 	}
@@ -363,6 +360,98 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 		return "", "", false, err
 	}
 	return strings.TrimSpace(short), message, true, nil
+}
+
+// CommitContents commits files with the given contents rather than what is
+// on disk: a nil value commits the path's deletion, an empty non-nil one an
+// empty file. Nothing else goes in — the commit is built in a temporary index
+// from HEAD — and nothing is attributed: these are contents Strument saved
+// before the model touched them. ok=false means they match HEAD already. A
+// path keeps the mode the index or HEAD gives it, 100644 for a new one.
+//
+// Afterwards the real index holds the committed version of each path, so a
+// change the user had staged there does not show as staged in reverse.
+func (r *Repo) CommitContents(files map[string][]byte, message string) (hash string, ok bool, err error) {
+	if len(files) == 0 {
+		return "", false, nil
+	}
+	paths := slices.Sorted(maps.Keys(files))
+	idx, cleanup, err := r.commitIndex(nil)
+	if err != nil {
+		return "", false, err
+	}
+	defer cleanup()
+	env := []string{"GIT_INDEX_FILE=" + idx}
+
+	modes := map[string]string{}
+	if out, err := r.git(append([]string{"ls-tree", "-z", "HEAD", "--"}, paths...)...); err == nil {
+		for rec := range strings.SplitSeq(out, "\x00") {
+			meta, p, ok := strings.Cut(rec, "\t")
+			if f := strings.Fields(meta); ok && len(f) == 3 {
+				modes[p] = f[0]
+			}
+		}
+	}
+	if entries, err := r.indexEntries(paths); err == nil {
+		for p, es := range entries {
+			if es[0].stage == "0" {
+				modes[p] = es[0].mode
+			}
+		}
+	}
+
+	var info strings.Builder
+	var gone []string
+	for _, p := range paths {
+		data := files[p]
+		if data == nil {
+			gone = append(gone, p)
+			continue
+		}
+		// --path applies the path's clean filters (autocrlf, LFS), as git add
+		// would to the same bytes on disk.
+		sha, err := r.gitEnv(nil, string(data), "hash-object", "-w", "--stdin", "--path="+p)
+		if err != nil {
+			return "", false, err
+		}
+		mode := modes[p]
+		if mode == "" || mode == "160000" || mode == "120000" {
+			mode = "100644"
+		}
+		info.WriteString(mode + " " + strings.TrimSpace(sha) + " 0\t" + p + "\x00")
+	}
+	if info.Len() > 0 {
+		if _, err := r.gitEnv(env, info.String(), "update-index", "-z", "--index-info"); err != nil {
+			return "", false, err
+		}
+	}
+	if len(gone) > 0 {
+		if _, err := r.gitEnv(env, "", append([]string{"update-index", "--force-remove", "--"}, gone...)...); err != nil {
+			return "", false, err
+		}
+	}
+
+	tree, err := r.gitEnv(env, "", "write-tree")
+	if err != nil {
+		return "", false, err
+	}
+	if headTree, err := r.git("rev-parse", "--verify", "-q", "HEAD^{tree}"); err == nil && strings.TrimSpace(headTree) == strings.TrimSpace(tree) {
+		return "", false, nil
+	}
+	commitArgs := []string{"commit"}
+	if r.Sign != "" {
+		commitArgs = append(commitArgs, r.Sign)
+	}
+	commitArgs = append(commitArgs, "-m", message)
+	if _, err := r.gitEnv(env, "", commitArgs...); err != nil {
+		return "", false, err
+	}
+	_, _ = r.git(append([]string{"reset", "-q", "HEAD", "--"}, paths...)...)
+	short, err := r.git("rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(short), true, nil
 }
 
 // stagedFromDisk updates, in the commit's index, each staged path the real
@@ -434,6 +523,9 @@ func (r *Repo) commitIndex(paths []string) (string, func(), error) {
 		return "", func() {}, err
 	}
 
+	if len(paths) == 0 {
+		return idx, cleanup, nil
+	}
 	entries, err := r.indexEntries(paths)
 	if err != nil {
 		cleanup()

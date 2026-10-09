@@ -1575,6 +1575,9 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	if len(edited) == 0 {
 		return nil
 	}
+	// Before the writes, so the user's changes to these files are committed
+	// as they were and the model's diff is its own (staging.go).
+	c.commitUncommittedFirst(writeOrder)
 	if !c.DryRun {
 		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
 			c.Out.Errorf("Could not write the edits, so none were applied: %v", err)
