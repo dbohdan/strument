@@ -28,6 +28,7 @@ trials, never watched it build something from nothing.
 | 10 | do the overlapping percentiles mean rotation loses some years? compare per seed | `cdf0fd7` | 19 | $0.04 |
 | 11 | could 200 of 200 have come out any other way? | — (stopped by the driver's time limit) | 8 | $0.03 |
 | 12 | finish turn 11's answer | `55c0a34`, fixed by the driver in `6af1d21` | 33 | $0.07 |
+| 13 | does the committee's *order* matter? rank all 120 cyclic orders | `dc67c7a` | 15 | $0.03 |
 
 About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
@@ -147,3 +148,37 @@ sampling with an exhaustive check of every weather sequence for the
 strategies that ignore history, and a per-seed bound for greedy, which does
 not.
 
+
+## Turn 13: a week later, on a build with the turn-12 fixes
+
+Run on `dev` at `8c20175`, a week after turn 12, still with Jev as
+`approve_model` and `--yes steps`. The question: the committee's order puts
+brassicas right before legumes, the reverse of the usual advice to follow
+legumes with a heavy feeder; of the 120 cyclic orders, where does theirs rank?
+MiMo was asked to say what it expected, from the model's rules, before
+running anything.
+
+- **It predicted the answer from the rules, and the run agreed.** Its
+  expectation, written first: the order barely matters, because every order
+  gives each bed the same six-season cycle, nitrogen never runs short, and the
+  only nutrient that runs out is potassium, late in the run. All 120 orders fall
+  within five units of 2,400; the committee's is 62nd. The best orders end their
+  cycle on a light potassium feeder and the worst on a heavy one. Nothing
+  separates them by the legume-then-heavy-feeder pattern the advice predicts.
+  The new `cycle` strategy, run with the committee's order, totals 2399, the
+  same as the existing `rotation`: a check on the new code that MiMo did not
+  need to be asked for.
+- **The decline loop is gone.** Jev declined `rm` (0.09) and then `git rm`
+  (0.12). MiMo tried those two, then went on without them. In turn 11 it sent
+  the same `rm` twelve times.
+- **It acted on a tree that no longer existed, and the cause was the driver.**
+  Both declined commands deleted `sim/scratch_test.go`, the file turn 12 could
+  not remove. I had removed it myself in `6af1d21`, between turns, outside the
+  conversation. Restored with 409 messages, MiMo knew the tree as of turn 12.
+  It did not look before acting, and its report says the file is "still on
+  disk". The lesson is the driver's: a change made to the tree between
+  `--continue` turns should be mentioned in the next message, or the model's
+  picture of the tree is the transcript's.
+- **The cache was not cold after a week.** Turn 9's two-day gap cost $0.11.
+  Turn 13 sent 2.3 million tokens, 93% of them cache hits, for $0.03. Whatever
+  expired the cache before did not this time; one turn does not say why.
