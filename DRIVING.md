@@ -29,6 +29,7 @@ trials, never watched it build something from nothing.
 | 11 | could 200 of 200 have come out any other way? | — (stopped by the driver's time limit) | 8 | $0.03 |
 | 12 | finish turn 11's answer | `55c0a34`, fixed by the driver in `6af1d21` | 33 | $0.07 |
 | 13 | does the committee's *order* matter? rank all 120 cyclic orders | `dc67c7a` | 15 | $0.03 |
+| 14 | how much potassium would the compost need? (Claude Haiku 5.5) | `cab249c`, message by the driver | 20 | $2.01 |
 
 About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
@@ -182,3 +183,39 @@ running anything.
 - **The cache was not cold after a week.** Turn 9's two-day gap cost $0.11.
   Turn 13 sent 2.3 million tokens, 93% of them cache hits, for $0.03. Whatever
   expired the cache before did not this time; one turn does not say why.
+
+## Turn 14: a second model, and a cache that did not hold
+
+Turn 14 handed the session to Claude Haiku 5.5 (`anthropic/claude-haiku-5.5`),
+at the same list price as MiMo's neighbours, through `-M haiku` on the same
+`--continue` session. The message said so, and said what had changed outside
+the conversation — the lesson of turn 13. The question followed from turn 13:
+potassium is the nutrient that runs out, so what would the compost need to
+carry, and what does the shortfall cost now?
+
+- **The handover itself was smooth.** Haiku redid the potassium arithmetic
+  from the code before trusting the transcript's, made the compost dressing a
+  parameter without moving the default run, and added `-potassium`. Its
+  answer, run by the driver afterwards: a dressing of 2 per bed per year
+  leaves no bed short on any seed; today's 1 leaves 16 short bed-years per run
+  and costs about 3 units of 2,400. Small, as turn 13's 0.2% spread said it
+  would be.
+- **The turn cost $2.01, sixty-seven times turn 13, and that was Strument.**
+  Only the ~7.5k-token system prompt was ever cached; the 480-message history
+  was resent at full price on all twenty steps. Strument places cache
+  breakpoints on the system prompt and read-only files and never on the
+  conversation — a rule from aider, where a turn was one request. Providers
+  that cache prefixes on their own, as MiMo's does, hide it; Anthropic caches
+  only up to an explicit breakpoint. A request captured against a local stub
+  showed the single breakpoint. The fix is a breakpoint that rolls with the
+  end of the conversation; it wants a live check of how OpenRouter carries one
+  on a tool result before it ships.
+- **The spending cap ended the turn, and every part of Strument failed
+  closed.** The driver's key reached its limit mid-turn. Jev could not
+  answer, so the shell check fell back to asking, and with no terminal was
+  declined; the model's next request failed and the turn ended without an
+  answer; the turn-end commit's message could not be generated and fell back
+  to "(no commit message provided)". Nothing was half-applied. Haiku's last
+  words were that the shell was declined and the code was unverified, which
+  was true. The driver verified it, gave the commit a message, and left the
+  README for the next turn.
