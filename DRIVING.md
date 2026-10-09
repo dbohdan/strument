@@ -200,16 +200,22 @@ carry, and what does the shortfall cost now?
   leaves no bed short on any seed; today's 1 leaves 16 short bed-years per run
   and costs about 3 units of 2,400. Small, as turn 13's 0.2% spread said it
   would be.
-- **The turn cost $2.01, sixty-seven times turn 13, and that was Strument.**
-  Only the ~7.5k-token system prompt was ever cached; the 480-message history
-  was resent at full price on all twenty steps. Strument places cache
-  breakpoints on the system prompt and read-only files and never on the
-  conversation — a rule from aider, where a turn was one request. Providers
-  that cache prefixes on their own, as MiMo's does, hide it; Anthropic caches
-  only up to an explicit breakpoint. A request captured against a local stub
-  showed the single breakpoint. The fix is a breakpoint that rolls with the
-  end of the conversation; it wants a live check of how OpenRouter carries one
-  on a tool result before it ships.
+- **The turn cost $2.01, sixty-seven times turn 13, for two reasons.** One is
+  Haiku's: past 100k tokens a request is billed at a higher rate, which
+  OpenRouter's listed price does not show, and every request in a 480-message
+  session is past it. The other was Strument's: only the ~7.5k-token system
+  prompt was ever cached, so the history went at full price on all twenty
+  steps — 135k of 4.1 million tokens read from the cache. Strument placed
+  cache breakpoints on the system prompt and read-only files and never on the
+  conversation, a rule from aider, where a turn was one request. Providers
+  that cache prefixes on their own, as MiMo's does, hid it; Anthropic caches
+  only up to an explicit breakpoint. Fixed on `dev` in `7209c2e`: two
+  breakpoints now roll with the conversation. Checked live on a five-step
+  turn: Haiku went from 30.3k to 63.5k cached of 85.4k, with every token now
+  read or written; MiMo held its rate once its messages kept one shape whether
+  marked or not (the first version cost it a tenth of its hits); GPT-6 Luna
+  went from 73% to 77%. Haiku on a long session is still the expensive tier;
+  the fix makes it the expensive tier at cache prices.
 - **The spending cap ended the turn, and every part of Strument failed
   closed.** The driver's key reached its limit mid-turn. Jev could not
   answer, so the shell check fell back to asking, and with no terminal was
