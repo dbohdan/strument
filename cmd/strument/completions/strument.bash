@@ -7,7 +7,7 @@
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
 _strument_commands="chat trust history config model-config project session tool shell usage"
-_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --version"
+_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --config --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="list path edit markdown strip zip"
@@ -28,10 +28,13 @@ _strument_tool_options="--root --json"
 
 # Every option that takes a value, so the scanner does not read one as a
 # subcommand: `strument -M trust` names a model, not the trust command.
-_strument_value_options="-m --message -M --model --yes --consult-scope -s --session --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
+_strument_value_options="--config -m --message -M --model --yes --consult-scope -s --session --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
 
+# The aliases of the config this command line will load: the --config file
+# when one was given (config_path, set by the scan in _strument_complete),
+# the user config otherwise.
 _strument_find_models() {
-    command -v strument >/dev/null 2>&1 && strument config models 2>/dev/null
+    command -v strument >/dev/null 2>&1 && strument ${config_path:+--config "$config_path"} config models 2>/dev/null
 }
 
 # The sessions of the project the shell is in, which is the project the
@@ -45,13 +48,14 @@ _strument_words() {
 }
 
 _strument_complete() {
-    local cur prev command sub word i expecting args
+    local cur prev command sub word i expecting args config_path
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     command=""
     sub=""
     expecting=0
     args=0
+    config_path=""
 
     # First pass: which command and subcommand are we inside? Options that take
     # a value consume the next word, so it is never mistaken for a command.
@@ -59,8 +63,10 @@ _strument_complete() {
         word="${COMP_WORDS[i]}"
         if ((expecting)); then
             expecting=0
+            [[ ${COMP_WORDS[i-1]} == --config ]] && config_path=$word
             continue
         fi
+        [[ $word == --config=* ]] && config_path=${word#--config=}
         case " $_strument_value_options " in
         *" $word "*)
             expecting=1
@@ -112,6 +118,10 @@ _strument_complete() {
     --session) _strument_words "$(_strument_find_sessions)" ; return ;;
     --root | --path)
         compopt -o dirnames
+        return
+        ;;
+    --config)
+        compopt -o default
         return
         ;;
     esac

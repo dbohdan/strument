@@ -100,7 +100,7 @@ func (c *chatCmd) Run() error {
 		}
 	}
 
-	cfg, err := config.Load(config.Options{ProjectRoot: root, Warn: warnNoticef})
+	cfg, err := config.Load(loadOptions(config.Options{ProjectRoot: root, Warn: warnNoticef}))
 	if err != nil {
 		return err
 	}
@@ -1004,7 +1004,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		// false here; the parse is where the name-to-scope mapping lives.
 		ConsultScope: consultScope(c.ConsultScope),
 		ReloadConfig: func() (*config.Config, error) {
-			return config.Load(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef})
+			return config.Load(loadOptions(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef}))
 		},
 		Rediscover: func() []skill.Skill { return discoverSkills(cdr.Root) },
 		Notes:      func() string { return cdr.SessionNotes },
@@ -1558,6 +1558,9 @@ type configCmd struct {
 // `path` and for `edit`, so the path printed is always the path opened.
 func (c *configCmd) scopedFile() (string, error) {
 	if !c.Project {
+		if userConfigPath != "" {
+			return userConfigPath, nil
+		}
 		return config.DefaultUserConfigPath()
 	}
 	root, err := historyRoot()
@@ -1712,7 +1715,7 @@ func loadProjectConfig() (*config.Config, error) {
 		return nil, err
 	}
 	var missing []string
-	cfg, err := config.Load(config.Options{
+	cfg, err := config.Load(loadOptions(config.Options{
 		ProjectRoot: root,
 		Warn:        warnNoticef,
 		OnMissingEnv: func(name string) {
@@ -1720,7 +1723,7 @@ func loadProjectConfig() (*config.Config, error) {
 				missing = append(missing, name)
 			}
 		},
-	})
+	}))
 	if len(missing) > 0 {
 		noticef("these variables are not set and were read as empty: %s", strings.Join(missing, ", "))
 	}
@@ -2053,7 +2056,7 @@ func (c *modelConfigCmd) Run() error {
 	// Best-effort load the config once: it supplies the OpenRouter API key and
 	// the global proxy. It may not exist yet on a first run.
 	var cfg *config.Config
-	if loaded, err := config.Load(config.Options{}); err == nil {
+	if loaded, err := config.Load(loadOptions(config.Options{})); err == nil {
 		cfg = loaded
 	}
 
@@ -2111,6 +2114,24 @@ type cli struct {
 	Shell       shellCmd         `cmd:""                         help:"Generate shell completions."`
 	Usage       usageCmd         `cmd:""                         help:"Show token usage and cost per provider for the last 24 hours, 7 days, and 30 days."`
 	Version     kong.VersionFlag `help:"Print version and exit."`
+
+	// --config applies to every command, so it sits on the root.
+	ConfigFile string `help:"Use this config file instead of the user config. The state directory stays where it is." name:"config" placeholder:"<path>" type:"path"`
+}
+
+// userConfigPath is --config: the user config file every config load in this
+// process reads in place of the default, or "" for the default. Set once in
+// main, before any command runs, so that chat, /reload and the subcommands
+// cannot disagree about which file they read. Only the config moves: state —
+// sessions, history, the trust store — stays under the state directory, so a
+// tester's config can be swapped without forking the record it writes to.
+var userConfigPath string
+
+// loadOptions is config.Options with --config applied. Every config.Load in
+// this command goes through it.
+func loadOptions(o config.Options) config.Options {
+	o.UserConfigPath = userConfigPath
+	return o
 }
 
 // missingPaths reports which of want the sandbox did not grant.
@@ -2209,6 +2230,7 @@ func main() {
 		kong.Vars{"version": version},
 		kong.UsageOnError(),
 	)
+	userConfigPath = c.ConfigFile
 	if err := ctx.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "strument:", err)
 		os.Exit(1)

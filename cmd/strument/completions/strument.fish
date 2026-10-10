@@ -27,12 +27,26 @@ function __strument_sessions
     strument session list --names 2>/dev/null
 end
 
+# The aliases of the config this command line will load: the --config file
+# when one was given, the user config otherwise.
 function __strument_models
-    strument config models 2>/dev/null
+    set -l args
+    set -l tokens (commandline -opc)
+    for i in (seq (count $tokens))
+        if test "$tokens[$i]" = --config; and test $i -lt (count $tokens)
+            set args --config $tokens[(math $i + 1)]
+        else if string match -q -- '--config=*' $tokens[$i]
+            set args --config (string replace -- '--config=' '' $tokens[$i])
+        end
+    end
+    strument $args config models 2>/dev/null
 end
 
 # No file completion by default. The places that take a path ask for it.
 complete -c strument -f
+
+# --config belongs to every command, so it carries no condition.
+complete -c strument -l config -d "Use this config file instead of the user config" -r -F
 
 # Top-level commands, only while none has been chosen.
 complete -c strument -n __fish_use_subcommand -a chat -d "Chat with a model about the given files (the default)"

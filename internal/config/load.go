@@ -430,7 +430,8 @@ func Load(opts Options) (*Config, error) {
 	env := envResolver{lookup: lookup, onMissing: opts.OnMissingEnv}
 
 	userPath := opts.UserConfigPath
-	if userPath == "" {
+	named := userPath != ""
+	if !named {
 		var err error
 		if userPath, err = DefaultUserConfigPath(); err != nil {
 			return nil, err
@@ -441,6 +442,11 @@ func Load(opts Options) (*Config, error) {
 	userSrc, err := os.ReadFile(userPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			// A path someone named is a path they expected to exist: a typo,
+			// not a first run, so not the first-run screen.
+			if named {
+				return nil, fmt.Errorf("config file %s does not exist", userPath)
+			}
 			return nil, missingConfigError(userPath)
 		}
 		return nil, err

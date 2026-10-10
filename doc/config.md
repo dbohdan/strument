@@ -2,7 +2,9 @@
 
 Strument reads its configuration from a [Starlark] file, `config.star` (by
 default `$XDG_CONFIG_HOME/strument/config.star`, i.e.
-`~/.config/strument/config.star`). Starlark is a small, sandboxed dialect
+`~/.config/strument/config.star`; `--config PATH` names another file for one
+run, before or after the subcommand, for every command and for `/reload`).
+Starlark is a small, sandboxed dialect
 of Python, so its syntax will be familiar if you know Python. Strument exposes a
 small set of configuration functions and values; a config file uses them to
 build provider and model objects and assigns them to a few top-level names. For
@@ -1348,7 +1350,7 @@ use `--yes add-output` to answer them automatically.
 
 ### What `/reload` applies
 
-`/reload` re-reads `config.star` into the running session. It applies the
+`/reload` re-reads `config.star` (or the `--config` file) into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
 `shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
@@ -1867,7 +1869,8 @@ with scripts and pipelines. `models` is sorted alphabetically, not in config
 declaration order, so a script can rely on the order across edits.
 
 `strument config path` prints where a config file is, whether or not it exists
-yet, and `strument config edit` opens it. They take `--user` (the default) or
+yet, and `strument config edit` opens it; with `--config`, the user config is
+the file it names. They take `--user` (the default) or
 `--project`. Without an existing project config, `--project` picks
 `.strument/config.star` in a project that already has a `.strument/` directory,
 and `.strument.star` otherwise. Editing a project config untrusts it, so
