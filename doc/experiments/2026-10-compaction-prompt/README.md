@@ -861,3 +861,67 @@ second model (the survey's lesson that providers disagree applies here
 too), the cache-friendly fold's cost effect, and Stage B at a sample large
 enough for small differences. Stage B at n=6 can detect a large effect, such
 as the threshold trial's 0 against 3 of 3, and nothing subtle.
+
+## Stage A, preregistered 2026-10-11 before the batch
+
+**What the pilot changed.** A three-fold pilot (B0 and P17, one chain each;
+not pooled) found the summarizer often *continuing* the transcript instead
+of summarizing it:
+
+- B0's second fold was MiMo's last answer, copied. Every P17 fold was either
+  that copy or a tool call written as text (`<tool_call><function=read>…`).
+- The cause is the input's layout. Strument sends the rendered transcript as
+  the user message, ending on `# ASSISTANT <answer>` with nothing after it,
+  so the most likely next text is more transcript.
+- The threshold trial's proxy logs agree. Many summaries there were 18–50
+  tokens long, for histories of 16k–128k tokens: 8 of 12 at 128k, 19 of 43
+  at 32k, 18 of 48 at 16k (under 250 tokens). Many of that trial's folds
+  replaced the history with a continuation, not a summary — a bug in
+  Strument as it ships, apart from what the prompt says.
+
+So Stage A has a second factor, the **layout**:
+
+- *raw* is Strument's current input;
+- *framed* puts the transcript between `<conversation>` markers, with one
+  line before saying it is material to summarize, not a conversation to
+  continue, and one after saying to write the summary now. OpenCode, Kimi
+  and DeepSeek each frame theirs in some form.
+
+A second three-fold pilot (B0 raw, B0 framed, P17 framed) had no
+continuations under framing; it is not pooled either.
+
+**Arms.** Six, eight chains each, chain order shuffled (seed 20261011), two
+turns a fold (eight folds):
+
+- B0:raw, the shipped baseline;
+- B0, P1, P9, P16 and P17, all framed.
+
+The summary label is the shipped one (3b9b790). The P17 arm adds the line
+Haiku suggested about "Stated by the user" lines, as it would ship.
+
+**Input.** The 16 turns of the threshold trial's files, rendered as
+`renderForSummary` does, with MiMo's own answers from a no-compaction
+session. Answers that acknowledged a note are trimmed, so each fact exists
+only in the user's message. There are 12 new facts at turns 0–15, the August
+trial's reason (turn 3), and a correction (code freeze Monday → Wednesday,
+turns 4 and 12). The bench is `data/bench.py`.
+
+**Metrics,** scored on the final summary of each chain, all counts:
+
+- facts present, exact tokens, out of 12 (**primary**);
+- the reason ("load balancer" and "60");
+- the correction: new value only / both / old only / neither;
+- summary length in characters;
+- continuation rate over all folds;
+- code-like tokens found in no input (read, not scored automatically).
+
+**Decision rule.**
+
+- **Layout:** framed ships if B0:framed has fewer continuations than B0:raw
+  and no fewer facts.
+- **Prompt:** among the framed arms, the one with the most facts wins. A
+  winner whose final summary is more than three times B0:framed's length,
+  or that keeps the reason in fewer chains than B0:framed, is passed over
+  for the next. Within one fact, the shorter prompt wins.
+- **Afterwards:** the best two then run at sixteen folds (one turn each),
+  and the winner goes to Stage B against B0:raw.
