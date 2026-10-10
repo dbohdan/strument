@@ -96,8 +96,14 @@ def run(job):
                 raw.write(chunk); raw.flush(); buf += chunk
                 for _ in range(chunk.count(b"\x1b[6n")):
                     child.send("\x1b[1;1R")
-            if until is not None and until.search(ANSI.sub(b"", buf)):
+            clean = ANSI.sub(b"", buf)
+            if until is not None and until.search(clean):
                 return "ok"
+            # A refused request ends the turn without a usage line; waiting
+            # for one cost the main batch's first run an hour of timeouts
+            # after the key's credit ran out.
+            if re.search(rb"request: HTTP \d{3}", clean):
+                return "http-error"
         return "timeout"
     turns = []
     status = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 30)
