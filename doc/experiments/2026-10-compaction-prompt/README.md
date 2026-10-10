@@ -1050,6 +1050,22 @@ exceeds baseline's by at least 2 facts a session, and its mean cost is no
 more than 25% higher. Otherwise it is not shipped until the gap is
 understood.
 
+### Amendment from the pilot, before the batch
+
+The treatment pilot reached turn 11 with ten folds. All ten were real
+summaries (695 to 3,415 tokens), none was a continuation, and none was
+refused. Then the session ended on an unrelated fault: the Xiaomi endpoint
+streamed a tool call with no `id`, the call ran, and the next request
+carried its result with an empty `tool_call_id`. The same endpoint refused
+that with HTTP 400 ("tool messages must include a non-empty string
+tool_call_id"). Strument now gives such a call an id of its own (732c5d6).
+The fix is in **both** binaries, so neither arm can lose a session to it:
+
+- baseline is 80be257 + the fix;
+- treatment is 732c5d6.
+
+The pilot is not pooled.
+
 ## Designed, not yet run: does a first-person summary lower re-verification?
 
 The question behind the agentless rule (`doc/README.md`, "The summary's
