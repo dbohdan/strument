@@ -512,7 +512,8 @@ just removing one sentence.
 ## What two smaller models said
 
 Each reviewer was given this document up to the first pick, run as a
-subagent, and edited nothing. Their reports are paraphrased here; the quoted
+subagent, and edited nothing. Their reports are paraphrased here; the five OpenRouter reviews below are
+kept whole in `data/reviews/`, with the brief and `data/ask.py`; the quoted
 phrases are theirs.
 
 **Haiku 5.5, as a stand-in summarizer.** It was asked to read the first
@@ -611,8 +612,132 @@ P13's opening stays. Changed from the first pick:
 > Do not attribute actions to anyone — no "I", no "you", no "the assistant".
 > Say what happened.
 
-**Rating: ★★★★★.** The risk to watch is growth: the ledger only gets longer.
+**Rating: ★★★★★ (superseded by P17, below).** The risk to watch is growth: the ledger only gets longer.
 Measuring that is a metric below, not a guess.
+
+## Five more reviewers, through OpenRouter
+
+The same brief went to five models: the current prompt, P16, the threshold
+trial's failure, and five questions (unclear instructions, behaviour over
+10–20 folds, sources of false content, what a model simply won't do, and up
+to three edits). Reasoning was pinned low. Total cost $0.009; Ling was free.
+
+| model | provider | tokens out |
+|---|---|---|
+| MiMo-V2.6-Flash | Novita | 2,408 |
+| GLM-5.3-Flash | BaseTen | 1,014 |
+| GPT-6 Luna | OpenAI | 1,260 |
+| Qwen3.8 27B | DekaLLM | 2,029 |
+| Ling 3.1 Flash | Novita | 4,109 |
+
+**Where all five agree.**
+
+- **"Word for word" will not happen.** Qwen: "Models don't copy verbatim;
+  they paraphrase while believing they copied. The instruction creates a
+  false sense of fidelity." All five predict near-verbatim drift. A token
+  garbled at one fold becomes canonical at the next.
+- **The ledger only grows.** Nothing bounds it, and the account of the work
+  shrinks as it grows. Ling: "the summary inverts its priorities: ever more
+  user trivia, ever less work detail".
+- **Verbatim carry launders errors.** An earlier summarizer's misquote,
+  inference or misattribution is copied forward as "Stated by the user", and
+  "the only record left" discourages anyone from challenging it. MiMo: "an
+  inference becomes 'Stated by the user,' then a fact, then the only record
+  left."
+
+**Where four agree.**
+
+- **"Cannot be recovered from the files" is still a judgment.** The
+  summarizer never saw most files, and tool output reaches it cut short.
+  GLM's fix is the cleanest: "Do not judge whether it could be recovered
+  elsewhere; if the user said it, list it."
+- **Supersession fails silently.** The summarizer has to notice that a new
+  message contradicts an old line. When it misses, both values survive,
+  which GLM and MiMo suggest is how the trial got its confident wrong
+  answers. When it over-matches, a true value is deleted without trace.
+  Ling and GLM both propose keeping the old value visible, marked as
+  replaced, instead of deleting it.
+
+**Single-model points worth keeping.**
+
+- MiMo: "keep reasons in the user's own words" contradicts the ban on "I": a
+  user's reason reads "because I needed it portable".
+- Ling: the attribution rule bans "the assistant" while the heading itself
+  attributes; allow "the user said" and "the command returned", so user
+  statements don't blur into tool output.
+- Qwen: "requests" fills the ledger with "read this file", which the
+  account of the work already covers. Ling would keep only requests still
+  pending.
+- GLM: "Do not add anything the user did not say", and keep tool and file
+  content out of the user's section.
+- Luna, the outlier: treat the earlier summary "as fallible evidence, not a
+  verbatim transcript". This is the opposite of the other four's direction,
+  and the most cautious.
+
+**Not adopted.** Qwen's rule to drop a fact "once it is clearly stale" is
+the same relevance judgment that lost the trial's notes. MiMo's objection
+that the headed section is a template again is a fair risk, but one list of
+quotations has no slots to merge reasons into. Stage A measures it with the
+August reason probe rather than taking it on faith.
+
+**What it changes beyond the prompt.** Every reviewer, three of them small
+models, says a model cannot reliably carry text verbatim across folds. That
+is the case for the Codex/Kimi mechanism: code keeps the user's messages,
+and no prompt has to. The prompt still matters for everything those
+messages don't hold, and for a session whose user messages overflow the
+cap.
+
+## P17, after the five reviews
+
+> These messages are about to be removed from the conversation and replaced
+> by what you write here; whatever isn't in it, the conversation no longer
+> has. Summarize them so the work can continue without them.
+>
+> Begin with a section headed "Stated by the user:", one line per item:
+> every fact, name, code, number, preference, reason and still-open request
+> the user gave, including passing remarks and notes for later that seem
+> unrelated to the work (for example, "the demo moved to Thursday"). Don't
+> judge whether an item matters or could be found elsewhere; if the user
+> said it, list it. Keep names, codes and numbers exactly as written. List
+> only what the user said, not what a file, a command or the assistant
+> showed, and add nothing the user did not say.
+>
+> A message that begins "Summary of the earlier part of this conversation"
+> is an earlier summary, not something the user said. Its "Stated by the
+> user" lines are the only record of what came before: carry each of them
+> into yours, keeping their names, codes and numbers exactly. When a later
+> message changes one, write the new value and keep the old one after it as
+> "(was: …)".
+>
+> Then say what was done, in prose. Keep test outcomes, error lines and
+> values a command returned that the work depends on. File contents, search
+> results and other command output can be read or run again: name the file
+> or command rather than repeating it. Leave fenced code blocks out, naming
+> the files they came from. Start a new paragraph whenever the topic
+> changes, and don't end with a wrap-up like "Finally, ..."; the
+> conversation continues after the summary.
+>
+> Write "the user" for the user, and name the command or file for what it
+> returned. Otherwise attribute nothing: no "I", no "you", no "the
+> assistant", except inside a quotation of the user.
+
+Changed from P16:
+
+- one line per item, which makes lines easy to count, compare and dedupe
+  (GLM, Ling);
+- no recoverability judgment for the user's section (GLM, MiMo, Luna,
+  Ling);
+- only still-open requests (Qwen, Ling);
+- user content separated from tool content, and nothing added (GLM);
+- "carry" with exact tokens instead of "word for word", which no reviewer
+  believed (all five);
+- "(was: …)" instead of deletion (Ling, GLM), so a missed or false
+  supersession leaves both values visible rather than one silently wrong;
+- attribution words allowed where they separate speakers, and quotations
+  exempt (MiMo, Ling).
+
+**Rating: ★★★★★, replacing P16 as the pick.** Growth remains the open risk:
+the "(was: …)" notes and open requests add to it. Stage A measures it.
 
 ## What $6 can test
 
@@ -634,7 +759,8 @@ clipped tool results, and assistant answers taken from the transcripts. It
 then chains folds the way Strument does: summary *n* plus the next span of
 messages becomes summary *n+1*.
 
-- **Arms:** B0, P1, P3 (first pick), P9, P16. Five arms × 8 chains × 8 folds
+- **Arms:** B0, P1, P9, P16, P17. P3 is dropped: all seven reviewers
+  found its recoverability judgment the weak point. Five arms × 8 chains × 8 folds
   = 320 calls, about $0.25, with arm order shuffled.
 - **Metrics** (counts):
   - planted facts present, exact token, after each fold;
