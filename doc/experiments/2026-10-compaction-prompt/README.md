@@ -1005,6 +1005,51 @@ The guard is needed because `validCompaction` accepts any summary smaller
 than the history, so it accepted all 27 of B0:raw's continuations. Stage B
 then checks the shipped change end to end against B0:raw.
 
+## Stage B, preregistered 2026-10-11 before the batch
+
+**The change.** Three parts, shipped together:
+
+- `prompts.Summarize` becomes P9, byte-identical to the Stage A arm;
+- the summarizer's input is framed (`prompts.SummaryInputBefore` /
+  `SummaryInputAfter`);
+- a guard refuses a continuation-shaped answer (tool-call markup, or one
+  that begins with the folded span's last answer) and leaves the history
+  as it was.
+
+`SummaryLabel` also gains Haiku's line, "Lines under "Said by the user:"
+record what the user said". Stage A's P9 arm ran without it, so Stage B is
+its first test.
+
+**Binaries.** Built from the same commit, with the threshold trial's
+one-line budget hook:
+
+- *baseline* is `dev` at 80be257 without the change;
+- *treatment* is the same commit with it.
+
+**Runner and script.** The threshold trial's runner and its 19-turn script,
+unchanged: six facts given in turns 1–3 and 9–11, asked back in turns
+17–19. One REPL process per session, MiMo-V2.6-Flash with reasoning low,
+Xiaomi first in the provider order.
+
+**Arms.** A 32k history budget, where the threshold trial recalled 0 of 6 in
+every session (14 folds a session). Six sessions an arm, order shuffled
+(seed 20261013), four at a time. One treatment pilot session checks the
+runtime path and is not pooled.
+
+**Metrics** (the threshold trial's scorer):
+
+- facts recalled by exact token, of 6 (**primary**);
+- session cost from OpenRouter, the counter-metric;
+- tool calls in the question turns;
+- "Could not summarize" warnings, i.e. guard refusals and failures, read
+  from the transcripts;
+- fold count.
+
+**Decision rule.** The change is confirmed if treatment's mean recall
+exceeds baseline's by at least 2 facts a session, and its mean cost is no
+more than 25% higher. Otherwise it is not shipped until the gap is
+understood.
+
 ## Designed, not yet run: does a first-person summary lower re-verification?
 
 The question behind the agentless rule (`doc/README.md`, "The summary's
