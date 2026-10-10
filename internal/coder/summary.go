@@ -2,6 +2,7 @@ package coder
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -237,7 +238,7 @@ func (s *ChatSummary) summarizeHead(keep []llm.Message) ([]llm.Message, error) {
 		// before anything reached disk. Folding the messages is what there is.
 		return s.summarizeAll(keep)
 	}
-	return s.summarizeText(sampleTranscript(record))
+	return s.summarizeText(sampleTranscript(record), "")
 }
 
 // summarizeAll collapses msgs into a single marked harness turn via the side
@@ -261,7 +262,18 @@ func (s *ChatSummary) summarizeHead(keep []llm.Message) ([]llm.Message, error) {
 // prefixed user message, OpenCode an assistant message flagged as a summary.
 // None uses system.
 func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
-	return s.summarizeText(renderForSummary(msgs))
+	return s.summarizeText(renderForSummary(msgs), lastAnswer(msgs))
+}
+
+// lastAnswer is the text of the last assistant message that has any, which a
+// summarizer continuing the conversation tends to copy.
+func lastAnswer(msgs []llm.Message) string {
+	for _, m := range slices.Backward(msgs) {
+		if m.Role == llm.RoleAssistant && strings.TrimSpace(m.Text()) != "" {
+			return m.Text()
+		}
+	}
+	return ""
 }
 
 // summarizeText is summarizeAll once its input is already laid out.
@@ -269,7 +281,7 @@ func (s *ChatSummary) summarizeAll(msgs []llm.Message) ([]llm.Message, error) {
 // Split out for the trial in doc/experiments/2026-09-compaction-source, whose
 // treatment changes only where that layout comes from: the folded message list
 // above, or the session record below.
-func (s *ChatSummary) summarizeText(content string) ([]llm.Message, error) {
+func (s *ChatSummary) summarizeText(content, last string) ([]llm.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), summaryTimeout)
 	defer cancel()
 
@@ -277,7 +289,7 @@ func (s *ChatSummary) summarizeText(content string) ([]llm.Message, error) {
 		Model: s.side.Slug,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, prompts.Summarize),
-			llm.TextMessage(llm.RoleUser, content),
+			llm.TextMessage(llm.RoleUser, frameForSummary(content)),
 		},
 		ReasoningEffort: s.side.Reasoning,
 		Temperature:     s.side.Temperature,
@@ -287,7 +299,41 @@ func (s *ChatSummary) summarizeText(content string) ([]llm.Message, error) {
 		return nil, err
 	}
 
+	if why := continuation(answer, last); why != "" {
+		return nil, fmt.Errorf("the side model %s instead of summarizing", why)
+	}
 	return []llm.Message{llm.HarnessNote(prompts.SummaryLabel + strings.TrimSpace(answer))}, nil
+}
+
+// frameForSummary puts the rendered conversation between markers, with the
+// instruction before and after it; prompts.SummaryInputBefore says why.
+func frameForSummary(content string) string {
+	return prompts.SummaryInputBefore + "\n\n<conversation>\n" + content + "</conversation>\n\n" +
+		prompts.SummaryInputAfter
+}
+
+// continuation reports why an answer is the conversation carried on rather
+// than a summary of it, or "" when it is not.
+//
+// validCompaction accepts any summary smaller than the history, and a
+// continuation always is: in doc/experiments/2026-10-compaction-prompt it let
+// through all 27 of the unframed summarizer's continuations, each replacing
+// thousands of tokens with a copied answer or a tool call. Framing the input
+// stopped nearly all of them, not all (2 in 128 folds under one prompt), so the
+// two shapes seen are refused here and the history is left as it was. Both
+// tests are deliberately narrow: a real summary may well mention a tool or
+// restate a conclusion, but it does not begin with the last answer verbatim or
+// contain tool-call markup.
+func continuation(answer, last string) string {
+	if strings.Contains(answer, "<tool_call") || strings.Contains(answer, "<function=") {
+		return "wrote a tool call"
+	}
+	a, l := strings.Join(strings.Fields(answer), " "), strings.Join(strings.Fields(last), " ")
+	const prefix = 80
+	if len(l) >= prefix && strings.HasPrefix(a, l[:prefix]) {
+		return "repeated the last answer"
+	}
+	return ""
 }
 
 // renderForSummary lays the messages out for the side model.

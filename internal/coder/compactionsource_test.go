@@ -153,7 +153,9 @@ func TestTheRecordSourceIsBounded(t *testing.T) {
 	if _, err := s.summarizeHead(foldedHistory); err != nil {
 		t.Fatal(err)
 	}
-	if got := len(stub.inputs[0]); got > maxNotesInput {
+	// The frame around the input is a fixed few hundred bytes; the bound is on
+	// what is sampled from the record, which is what grows with the session.
+	if got := len(stub.inputs[0]) - len(frameForSummary("")); got > maxNotesInput {
 		t.Errorf("the record arm sent %d bytes, over the %d bound", got, maxNotesInput)
 	}
 	// And the head survives the sampling, which is the half the trial's first

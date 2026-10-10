@@ -470,39 +470,39 @@ const CommitSystem = "Write the Git commit message for the changes below. " +
 // with \"I asked you...\"." — the prompt *commanded* the fabrication that
 // readOnlyFilesPrefix's comment describes as what it replaced: a user turn the
 // user never wrote, followed by a fabricated assistant reply agreeing to it.
-// Fixing the injection alone would not have fixed it.
+// The body is agentless rather than first person; doc/README.md ("The
+// summary's voice") has why, and why the reason that survives is trust.
 //
-// It is agentless now, and that is a decision rather than a style. First person
-// is a lie whenever a different model wrote the text, and the summarizer is the
-// side model, so it usually is. Third person about the assistant ("another model
-// did this") is alienating the other way and invites the reader to discount it.
-// A changelog asserts no authorship and is true regardless of who wrote it or
-// who reads it.
-//
-// The *content* instructions are still aider's, and that is a measured
-// decision. A first attempt replaced them with a structured list — what the
-// user asked for, decisions and their reasons, files changed, what was
-// unfinished — which read better and performed worse: over 24 live sessions,
-// recall of a reason the user had stated dropped from 10/12 to 5/12 (p=0.089),
-// while compactions per session rose. The failures were not vague, they were
-// losses: "the reasoning ... was not established in the context I have access
-// to", and in one case a confabulated reason ("to balance between frequent
-// updates and system load") that nobody had given.
-//
-// So only two things changed here: the impersonation clause became the
-// agentless instruction, and one line asks to keep a stated reason — which is
-// the thing the trial showed is worth protecting and the thing the code cannot
-// give back. See doc/experiments/ for the run.
-const Summarize = "Briefly summarize this partial conversation about programming. " +
-	"Give more detail to the most recent messages and less to the older ones. " +
-	"Start a new paragraph whenever the topic changes.\n\n" +
-	"This is only part of a longer conversation, so don't end with a wrap-up phrase " +
-	"like \"Finally, ...\"; the conversation continues after your summary.\n\n" +
-	"Include the function, library, and package names under discussion, along with the " +
-	"filenames the assistant references inside fenced code blocks. Leave the fenced code " +
-	"blocks themselves out of the summary.\n\n" +
-	"Keep any reason the user gave for a decision, in their own terms. A choice can be " +
-	"read back from the code; the reason for it cannot.\n\n" +
+// It opens with a list of what the user said, and that is measured
+// (doc/experiments/2026-10-compaction-prompt). The prose prompt before it —
+// "briefly", "less detail to the older" messages — dropped what users stated in
+// passing: over eight chained folds it kept 8.25 of 12 planted facts once its
+// input was framed, losing whole sets at once, and a summary of a summary
+// dropped them again. This prompt kept 12 of 12 and the user's stated reason
+// in every chain, at eight folds and at sixteen. Copying statements into a
+// list asks for no judgment about what matters, which is the judgment that
+// failed; and a list of quotations has no slots for a reason to be merged
+// into, which is how a structured template lost reasons in
+// doc/experiments/2026-08-compaction. Seventeen candidates, seven model
+// reviewers and a welfare review are in that directory. The rest is the old
+// prompt, kept: its reason line is still the one thing the code cannot give
+// back.
+const Summarize = "Write two parts. First, under \"Said by the user:\", list every request, fact, " +
+	"name, value, preference and reason the user gave, as close to their words as " +
+	"possible, including those listed in an earlier summary. Drop an entry only " +
+	"when the user withdrew or replaced it, and say what replaced it. Add a short " +
+	"line for each value a command returned that the work depends on.\n\n" +
+	"Then summarize what was done, as prose. Briefly summarize this partial " +
+	"conversation about programming. Give more detail to the most recent messages " +
+	"and less to the older ones. Start a new paragraph whenever the topic " +
+	"changes.\n\n" +
+	"This is only part of a longer conversation, so don't end with a wrap-up " +
+	"phrase like \"Finally, ...\"; the conversation continues after your summary.\n\n" +
+	"Include the function, library, and package names under discussion, along " +
+	"with the filenames the assistant references inside fenced code blocks. Leave " +
+	"the fenced code blocks themselves out of the summary.\n\n" +
+	"Keep any reason the user gave for a decision, in their own terms. A choice " +
+	"can be read back from the code; the reason for it cannot.\n\n" +
 	"Do not attribute actions to anyone — no \"I\", no \"you\", no \"the assistant\". " +
 	"Say what happened."
 
@@ -627,6 +627,30 @@ const SessionNotes = "Write notes on a programming session, to be read at the st
 // owner, which both reviewers found mildly alienating. The record framing
 // says what the text is before saying what it is not, and still keeps it from
 // reading as the user's words.
+//
+// The last sentence names the list Summarize asks for. A summary of a summary
+// rereads this label, so the summarizer is told what those lines are; and the
+// model reading it is told they are the user's, but a record of them, not a
+// transcript: seven reviewers agreed no model copies text exactly across folds.
 const SummaryLabel = "Summary of the earlier part of this conversation, written by Strument to " +
 	"keep it inside the context window. It replaces those messages; it is a record of the " +
-	"earlier work, not something anyone said to you.\n\n"
+	"earlier work, not something anyone said to you. Lines under \"Said by the user:\" " +
+	"record what the user said.\n\n"
+
+// SummaryInputBefore and SummaryInputAfter frame the conversation the
+// summarizer is given, which sits between <conversation> markers.
+//
+// Without them the input was the rendered transcript alone, ending on the
+// assistant's last answer, and the likeliest next text was more transcript: in
+// doc/experiments/2026-10-compaction-prompt the summarizer continued the
+// conversation instead of summarizing it in 27 of 64 folds — a copy of the last
+// answer, or a tool call written out as text — and kept 0.25 of 12 planted
+// facts. Framed, it continued in none of 64 and kept 8.25 under the same
+// prompt. The instruction comes after the transcript as well as before it
+// because that is where the model's attention is when it starts writing.
+// OpenCode, Kimi and DeepSeek all place theirs there in some form.
+const SummaryInputBefore = "Below, between the markers, is the part of the conversation to " +
+	"summarize. It is material to summarize, not a conversation to continue: do not answer " +
+	"it, call tools, or carry on the work."
+
+const SummaryInputAfter = "Write the summary now, as the system prompt describes."
