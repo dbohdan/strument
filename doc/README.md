@@ -865,6 +865,33 @@ message, OpenCode as an assistant message flagged `summary: true`. None uses
 `system`. Session notes stay in the prefix, because they genuinely are
 scaffolding read every turn rather than history.
 
+**The summary's voice, and why it is not first person.** aider's summary was
+written "as the user, in the first person" — a user turn the user never wrote,
+answered by a fabricated "Ok.". Removing that was about *who said what*, and it
+stands. Whether the summary's body may say "I" is a separate question, and the
+reason first given for "no" was the weaker one: that the model would notice the
+"lie" of a first-person account written by a different model in a different
+voice. Models read mixed-voice text all the time, and what tells a model what it
+is reading is the label, not the pronouns. An agent that had itself been
+resumed from a partly first-person compaction summary (Claude Code's, in the
+session that wrote this) reported no friction in reading one.
+
+The argument that survives is about trust. First person reads as memory, and a
+summary is the least reliable text in the request:
+
+- `2026-08-compaction` caught a summary inventing a reason nobody gave;
+- `2026-10-compaction-threshold` drew confident wrong answers ("ripples", "The
+  Canopy") that the model said it got from the summary;
+- `2026-10-compaction-prompt` found folds that copied an answer, or wrote a
+  tool call as text, in place of a summary.
+
+"I ran the tests and they passed", read as one's own memory, is less likely to
+be checked than a record that says tests were run and passed. So the body
+stays agentless, and the label says what the text is: "a record of the earlier
+work". That is the welfare review's wording, which names the work rather than
+erasing the worker. Whether first person really lowers re-verification is
+untested; `2026-10-compaction-prompt` designs the trial that would measure it.
+
 **Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
 in order against a shared overlay, so two edits to one file build on each
 other, then writes the batch atomically — all of it or none of it, each file

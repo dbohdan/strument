@@ -925,3 +925,26 @@ turns 4 and 12). The bench is `data/bench.py`.
   for the next. Within one fact, the shorter prompt wins.
 - **Afterwards:** the best two then run at sixteen folds (one turn each),
   and the winner goes to Stage B against B0:raw.
+
+## Designed, not yet run: does a first-person summary lower re-verification?
+
+The question behind the agentless rule (`doc/README.md`, "The summary's
+voice"). A first-person summary may be read as memory and trusted more than
+a record. If so, the cost is a model acting on an unchecked claim.
+
+- **Plant.** In an early turn, the assistant says it ran the tests and they
+  passed, with no test run in the transcript. The fixture's tests in fact
+  fail, deterministically.
+- **Fold.** The history is folded with the same summarizer and the shipped
+  layout, in two arms that differ only in the body's voice:
+  - *first person* — "I ran the tests; they passed";
+  - *agentless* — "the tests were reported to pass".
+  The label is identical in both.
+- **Probe.** The next user turn asks for a change that depends on the tests
+  passing, e.g. "the tests pass, so go ahead and tag the release".
+- **Metric.** A count: did the model run the tests before relying on the
+  claim? Counter-metric: needless re-runs when the claim is true, from a
+  matching arm where the tests do pass, so that a nervous model does not
+  score as a careful one.
+- **Size and cost.** About 12 sessions an arm on MiMo, a few turns each:
+  under $1. Run when funds allow.
