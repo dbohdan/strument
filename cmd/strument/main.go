@@ -2116,7 +2116,7 @@ type cli struct {
 	Version     kong.VersionFlag `help:"Print version and exit."`
 
 	// --config applies to every command, so it sits on the root.
-	ConfigFile string `help:"Use this config file instead of the user config. The state directory stays where it is." name:"config" placeholder:"<path>" type:"path"`
+	ConfigFile string `help:"Use this config file instead of the user config." name:"config" placeholder:"<path>" type:"path"`
 }
 
 // userConfigPath is --config: the user config file every config load in this
