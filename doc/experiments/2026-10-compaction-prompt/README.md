@@ -1,6 +1,6 @@
 # Compaction prompt: brainstorm and trial design
 
-**2026-10-11. Stage A run; results below. Stage B not yet run.** Background in
+**2026-10-11. Stages A and B run; results below. The change shipped in eaa9cbd.** Background in
 [`2026-10-compaction-threshold`](../2026-10-compaction-threshold/) and
 [`2026-10-compaction-survey`](../2026-10-compaction-survey/).
 
@@ -1065,6 +1065,43 @@ The fix is in **both** binaries, so neither arm can lose a session to it:
 - treatment is 732c5d6.
 
 The pilot is not pooled.
+
+## Stage B results
+
+Twelve sessions at a 32k budget, 15 folds each. Eleven ran all 19 turns.
+Per-session scores, jobs and runs are in `data/stageB-*`.
+
+| arm | facts recalled /6, per session | mean | cost per session | summary calls under 250 tokens |
+|---|---|---|---|---|
+| baseline (80be257 + id fix) | 0, 0, 0, 0, 0, 0 | **0.00** | $0.187 | 46 of 91 |
+| treatment (732c5d6) | 6, 6, 6, 6, 6, (0) | **5.00** | $0.203 | 0 of 87 |
+
+**By the rule: confirmed.**
+
+- Recall rose by 5.0 facts a session against the +2 required. Every
+  completed treatment session answered all six questions exactly; every
+  baseline session answered "I don't know" to all six.
+- Cost rose 9% with the failed session counted, 13% without it, against a
+  25% ceiling.
+- The rise is almost all summary calls: the side cost went from $0.010 to
+  $0.025 a session, because a summary now carries the user's list. The
+  main conversation cost the same.
+
+**Continuations.** Half the baseline's summary calls wrote under 250 tokens
+to replace 16–30k. Stage A had shown what those are: continuations, not
+summaries. Treatment had none. The guard refused nothing in any session; no
+"Could not summarize" appeared. So framing alone prevented them here, and
+the guard stays as a backstop.
+
+**The failed session (s11), and why it counts as zero rather than being
+dropped.** In turn 12, MiMo wrote a tool call as text, and the Xiaomi
+endpoint also streamed a structured call with an **empty name**. Strument
+kept it, and the next request was refused: "tool_calls[0].function.name
+must be a non-empty string". This is the same fault family as the empty id
+fixed after the pilot. It sits outside compaction, and the baseline binary
+has the same exposure; it simply did not hit it. It is counted as zero
+recall because the preregistration had no rule for dropping a session.
+Excluding it would make the treatment mean 6.0.
 
 ## Designed, not yet run: does a first-person summary lower re-verification?
 

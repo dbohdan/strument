@@ -1,0 +1,74 @@
+[
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s00",
+  "port": 19100
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s01",
+  "port": 19101
+ },
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s02",
+  "port": 19102
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s03",
+  "port": 19103
+ },
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s04",
+  "port": 19104
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s05",
+  "port": 19105
+ },
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s06",
+  "port": 19106
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s07",
+  "port": 19107
+ },
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s08",
+  "port": 19108
+ },
+ {
+  "binary": "baseline",
+  "budget": 32000,
+  "id": "s09",
+  "port": 19109
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s10",
+  "port": 19110
+ },
+ {
+  "binary": "treatment",
+  "budget": 32000,
+  "id": "s11",
+  "port": 19111
+ }
+]
