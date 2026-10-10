@@ -165,9 +165,9 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 	}{
 		// The verdict follows the command it is about: an approval under the
 		// Running line, a refusal under the command in the prompt.
-		{"approved", 0.95, nil, true, false, 1, false, "approved", "Running \"echo hi\"\nApproved by laya:en, p(safe) 0.95.", ""},
-		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) 0.90", ""},
-		{"below", 0.5, nil, true, false, 1, true, "asked", "", "Not approved by laya:en, p(safe) 0.50 < 0.90."},
+		{"approved", 0.95, nil, true, false, 1, false, "approved", "Running \"echo hi\"\nApproved by laya:en, p(safe) = 0.95.", ""},
+		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) = 0.90", ""},
+		{"below", 0.5, nil, true, false, 1, true, "asked", "", "Not approved by laya:en, p(safe) = 0.50 < 0.90."},
 		{"failed", 0, errors.New("connection refused"), true, false, 1, true, "failed", "did not answer", ""},
 		{"no sandbox", 0.99, nil, false, false, 0, true, "", "", ""},
 		{"already granted", 0.99, nil, true, true, 0, false, "", "", ""},

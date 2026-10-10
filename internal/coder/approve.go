@@ -319,11 +319,11 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bo
 		r.Outcome = "approved"
 		// Printed by runAndShowTail, below the "Running" line, so the approval
 		// follows the command it approved.
-		c.approvalNote = fmt.Sprintf("Approved by %s, p(safe) %.2f.", r.Model, p)
+		c.approvalNote = fmt.Sprintf("Approved by %s, p(safe) = %.2f.", r.Model, p)
 		return true, ""
 	}
 	r.Outcome = "asked"
-	c.approveVerdict = fmt.Sprintf("approve_model, a classifier (%s), rated it p(safe) %.2f, below its threshold of %.2f",
+	c.approveVerdict = fmt.Sprintf("approve_model, a classifier (%s), rated it p(safe) = %.2f, below its threshold of %.2f",
 		r.Model, p, am.Threshold)
-	return false, fmt.Sprintf("Not approved by %s, p(safe) %.2f < %.2f.", r.Model, p, am.Threshold)
+	return false, fmt.Sprintf("Not approved by %s, p(safe) = %.2f < %.2f.", r.Model, p, am.Threshold)
 }
