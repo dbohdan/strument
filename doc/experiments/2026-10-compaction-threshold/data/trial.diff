@@ -1,0 +1,25 @@
+diff --git a/internal/coder/send.go b/internal/coder/send.go
+index e1c08d6..01401ec 100644
+--- a/internal/coder/send.go
++++ b/internal/coder/send.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"math"
++	"os"
+ 	"strconv"
+ 	"strings"
+ 	"time"
+@@ -784,6 +785,12 @@ const historyShare = 8
+ const minChatHistoryTokens = 2048
+ 
+ func maxChatHistoryTokens(context int) int {
++	// Trial build only (doc/experiments/2026-10-compaction-threshold).
++	if v := os.Getenv("STRUMENT_TRIAL_HISTORY_BUDGET"); v != "" {
++		if n, err := strconv.Atoi(v); err == nil && n > 0 {
++			return n
++		}
++	}
+ 	return max(context/historyShare, minChatHistoryTokens)
+ }
+ 
