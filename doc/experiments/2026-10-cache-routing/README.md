@@ -119,8 +119,9 @@ request; it is repaid after about one further step.
 Six `--continue` turns, each reading four files of Strument's own source (24
 files, 332 KB, `data/files.txt`) and answering, about 30 steps a session. Each
 model ran with `context = 1000000`, where the settled-history budget
-(context/4) is never reached, and with `context = 200000`, where it is 50k
-and compaction folds the history. Costs are OpenRouter's per-request figures
+(context/8, 125k) is not reached, and with `context = 200000`, where it is
+25k: each fold keeps a tail under half of that, so the history folded at the
+end of every turn from the second on. Costs are OpenRouter's per-request figures
 through the recording proxy, side calls included; hit rates from Strument's
 own usage lines (`data/long-sessions.txt`).
 
@@ -142,9 +143,12 @@ own usage lines (`data/long-sessions.txt`).
 - **Every resumed process summarizes again from scratch.** A `--continue`
   process restores the full history from the session record and compacts it
   before its first request, since the previous process's compaction is not
-  recorded — four of each 200k session's nine compactions. The new summary
-  differs from the last, so the previous turn's cache is lost too. In the
-  REPL, one process, this does not happen.
+  recorded — four of each 200k session's nine compactions. Priced from the
+  proxy log, those four cost $0.0035 (GLM), $0.0010 (MiMo) and $0.0102 (Qwen,
+  whose summaries ran to 4k output tokens each): $0.0147 in all. The cache
+  loses nothing extra by it, since the turn-end fold had already replaced the
+  summary the last request was sent with. In the REPL, one process, this
+  does not happen.
 
 The last is the one to fix: a compaction written to the session record, and a
 restore that rebuilds what the last process sent instead of folding again.
