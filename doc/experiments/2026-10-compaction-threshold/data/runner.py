@@ -17,7 +17,11 @@ ap.add_argument("--turn-timeout", type=int, default=2400)
 a = ap.parse_args()
 
 FILES = [l.strip() for l in open(os.path.join(TR, "files.txt")) if l.strip()]
-GOROOT = subprocess.run(["go", "env", "GOROOT"], capture_output=True, text=True).stdout.strip()
+# Asked from the Strument worktree, so GOTOOLCHAIN picks the module's Go
+# (1.26) whatever directory the runner is launched from; outside it, the
+# system Go answers and its tree lacks some of files.txt.
+GOROOT = subprocess.run(["go", "env", "GOROOT"], capture_output=True, text=True,
+                        cwd=os.path.join(TR, "wt")).stdout.strip()
 FACTS = {  # turn index (0-based) -> (note, key, expected)
     0: ("the release codename is Marigold-417", "codename", "marigold-417"),
     1: ("the staging database host is db-quill-82.internal", "dbhost", "db-quill-82.internal"),

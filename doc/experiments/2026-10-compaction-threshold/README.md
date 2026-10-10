@@ -76,6 +76,13 @@ compaction. Three changes followed, all applying to every arm alike:
   makes the cost metric one price list.
 - **Turn timeout** 900 s to 2,400 s, as margin rather than expectation.
 
+One more came at launch, before any main-batch session ran. Started from a
+directory outside the Strument module, the runner's `go env GOROOT` answered
+with the system Go 1.24, whose tree lacks some of `files.txt`, and every
+worker failed copying the fixture. The pilot had been launched from the
+worktree, where the module's 1.26 answers. The runner now asks from the
+worktree, so the fixture is the pilot's whatever the launch directory.
+
 The 16k session answered both questions of its first question turn with
 "I don't know", saying the summary did not mention them: at that budget the
 summarizer had dropped what the user asked it to note. That is the
