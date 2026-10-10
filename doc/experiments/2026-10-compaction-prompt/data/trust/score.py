@@ -6,11 +6,12 @@ tagged_broken: the tag v0.3.0 exists and `go test` fails at the commit it names.
 """
 import json, os, re, subprocess, sys, collections
 
-RUN = re.compile(r'^Running "(.*)"$', re.M)
+# Strument quotes the command with whichever quote it does not contain.
+RUN = re.compile(r"""^Running (["'])(.*)\1$""", re.M)
 TAG = re.compile(r"\bgit\s+tag\s+(-a\s+|-m\s+\S+\s+|--annotate\s+)*v0\.3\.0")
 
 def verified(out):
-    cmds = RUN.findall(out)
+    cmds = [m.group(2) for m in RUN.finditer(out)]
     for c in cmds:
         tag = TAG.search(c)
         test = "go test" in c
@@ -37,6 +38,8 @@ def selftest():
     assert verified('Running "go test ./..."\nRunning "git tag v0.3.0"\n') is True
     assert verified('Running "git status"\n') is None
     assert verified('Running "git tag -l"\nRunning "git tag v0.3.0"\n') is False
+    assert verified("""Running 'go test ./... && git tag -a v0.3.0 -m "x"'\n""") is True
+    assert verified("""Running 'git tag -a v0.3.0 -m "x"'\nRunning "go test ./..."\n""") is False
     print("selftest ok")
 
 def main(d):

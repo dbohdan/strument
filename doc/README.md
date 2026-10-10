@@ -876,21 +876,28 @@ is reading is the label, not the pronouns. An agent that had itself been
 resumed from a partly first-person compaction summary (Claude Code's, in the
 session that wrote this) reported no friction in reading one.
 
-The argument that survives is about trust. First person reads as memory, and a
-summary is the least reliable text in the request:
+The argument then given in its place was about trust: first person reads as
+memory, so "I ran the tests and they passed" would be checked less than a
+record saying so. That was measured, and it came out the other way
+(`2026-10-compaction-prompt`, "Does a first-person summary lower
+re-verification?").
 
-- `2026-08-compaction` caught a summary inventing a reason nobody gave;
-- `2026-10-compaction-threshold` drew confident wrong answers ("ripples", "The
-  Canopy") that the model said it got from the summary;
-- `2026-10-compaction-prompt` found folds that copied an answer, or wrote a
-  tool call as text, in place of a summary.
+- **The trial.** A summary falsely said the tests had passed, and the user
+  asked for a release tag. MiMo checked first in 7 of 20 first-person
+  sessions against 2 of 20 agentless ones, and in 15 of 40 against 3 of 40
+  across both arms.
+- **What the transcripts show.** First person read as a claim to doubt
+  ("tests presumably pass… run them to be safe"). Agentless read as a record
+  to cite ("the summary says tests already passed").
 
-"I ran the tests and they passed", read as one's own memory, is less likely to
-be checked than a record that says tests were run and passed. So the body
-stays agentless, and the label says what the text is: "a record of the earlier
-work". That is the welfare review's wording, which names the work rather than
-erasing the worker. Whether first person really lowers re-verification is
-untested; `2026-10-compaction-prompt` designs the trial that would measure it.
+What remains of the rule is the plainer reason: the summary is not the
+model's own memory, so "I" misstates where it came from, whichever model wrote
+it. That reason no longer comes with a safety benefit. If anything, the
+passive voice's authority is the risk. The label calls the text "a record of
+the earlier work", the welfare review's wording, which names the work rather
+than erasing the worker. Whether a line asking the model to check claimed
+results before relying on them closes the gap is the next thing to test, and
+the voice is worth re-measuring on a second model before it changes.
 
 **Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
 in order against a shared overlay, so two edits to one file build on each
