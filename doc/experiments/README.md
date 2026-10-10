@@ -10,7 +10,8 @@ listing is chronological and this index is where the subject grouping lives.
 **Statuses:** **trial** is a comparative live run; **characterization** is an
 exploratory live pass; **bug report** records a live finding without a
 comparative experiment; **review** is models reading an artifact rather than
-running against one; **design** is not yet run; **data only** has results but
+running against one; **survey** is reading other harnesses' source;
+**design** is not yet run; **data only** has results but
 no write-up.
 
 Two directories have no `README.md` and are listed as such rather than tidied
@@ -134,6 +135,7 @@ with current project state.
 
 | experiment | question → result → decision |
 | --- | --- |
+| **survey** — [2026-10-compaction-survey](2026-10-compaction-survey/) | When do the panel's harnesses compact, and what do they tell the summarizer? All six compact in the last fifth of the window (80% to the limit) against Strument's context/8; five fold and retry on overflow, three prune tool output first, Codex and Kimi keep the user's messages verbatim, and Strument's is the only prompt that asks for less on older messages and has no rule for an earlier summary. |
 | **characterization** — [2026-09-frontier-harness](2026-09-frontier-harness/) | How does Strument compare on FrontierHarness's twelve tasks every published harness passes, run with Kimi K3 through OpenRouter in a chroot, without Docker? 11/12 for $2.31, eighth of thirteen by cost (published: 12/12, $1.17–7.91). The miss was K3 leaving a compiled binary where the test wants one file, in both runs. Turns match the other harnesses; each turn costs more. One trial per task, not admissible. Nine trials died when a provider's 429s outlasted aider's one-minute retry ladder: `retry_timeout` became configurable. Only codex overrides K3's `max` default effort (to `high`), and opencode's published cost omits its reasoning tokens. A partial effort trial (12 valid of 27 before the key ran dry): `low` cost 40% of `max` and ran three times faster with the same per-task outcomes; `high` barely differed from `max`. |
 
 ## Designed, not yet run
@@ -141,6 +143,7 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **design** — [2026-09-consult](2026-09-consult/) | Does `/consult`'s source label survive to the next turn, and how much session context should the advisor see? The plan separates attribution from scope and is not yet run. |
+| **design** — [2026-10-compaction-prompt](2026-10-compaction-prompt/) | Which compaction prompt keeps what the user said through repeated folds? Fifteen candidates critiqued, revised and rated, with Sonnet and Haiku as reviewers; the pick is a "Stated by the user" ledger carried word for word, then the recoverability rule. A $6 plan: a summarizer-only bench of chained folds (~$0.60), then 12 end-to-end sessions (~$2.20). |
 | **pilot** — [2026-09-task-checklist](2026-09-task-checklist/) | Would a small checklist tool, offered with no nudges, help models finish multi-part requests? Two pilots found nothing to help: 10 runs, 11- and 17-item requests, four models (Luna, MiMo, GLM-5.3-Flash, Ling 3.0 Flash), every item landed every time. Unprompted uptake was thin: two models never called it, Luna kept a three-phase progress bar, and Ling's one detailed attempt was refused by a prototype bug. Its plausible value, surviving compaction, depends on re-injection that Strument does not do. Not built. |
 
 ## The documents themselves
