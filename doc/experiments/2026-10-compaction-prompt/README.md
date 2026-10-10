@@ -1,6 +1,6 @@
 # Compaction prompt: brainstorm and trial design
 
-**2026-10-10. Design; not yet run.** Background in
+**2026-10-11. Stage A run; results below. Stage B not yet run.** Background in
 [`2026-10-compaction-threshold`](../2026-10-compaction-threshold/) and
 [`2026-10-compaction-survey`](../2026-10-compaction-survey/).
 
@@ -925,6 +925,85 @@ turns 4 and 12). The bench is `data/bench.py`.
   for the next. Within one fact, the shorter prompt wins.
 - **Afterwards:** the best two then run at sixteen folds (one turn each),
   and the winner goes to Stage B against B0:raw.
+
+## Stage A results
+
+All 384 calls of the eight-fold run and all 384 of the sixteen-fold run
+succeeded. Cost: $0.65 and $0.49. Final summaries, per-fold scores and the
+shuffled plans are in `data/`.
+
+**Eight folds** (two turns a fold), final summary of each chain:
+
+| arm | facts /12 | reason | continued (all folds) | final length (chars) |
+|---|---|---|---|---|
+| B0:raw (shipped) | 0.25 | 0/8 | **27/64** | 833 |
+| B0:framed | 8.25 | 3/8 | 0/64 | 4,748 |
+| P1:framed | 9.50 | 6/8 | 0/64 | 7,300 |
+| P9:framed | **12.00** | **8/8** | 0/64 | 12,820 |
+| P16:framed | 12.00 | 8/8 | 0/64 | 16,025 |
+| P17:framed | 12.00 | 8/8 | 0/64 | 19,484 |
+
+**By the rule:**
+
+- **The layout: framed ships.** Continuations fell from 27/64 to 0/64,
+  and facts rose from 0.25 to 8.25.
+- **The prompt: P9 wins.** P9, P16 and P17 tie on facts and the reason.
+  P16 and P17 are passed over because they exceed three times B0:framed's
+  length (14,244). P9 is under it.
+
+**What else the run shows:**
+
+- **Shipped Strument kept almost nothing.** B0:raw kept 2 facts in 96
+  chances, both from the last two turns. More than four folds in ten were
+  continuations, not summaries. This is the threshold trial's result
+  again, and now its cause.
+- **Framing alone loses whole sets.** B0:framed kept every late fact but
+  lost the early ones in half its chains. It is all or nothing: one fold
+  drops the whole carried set of notes (per chain, 3 to 12 facts).
+- **The ledger arms lose nothing.** P9, P16 and P17 kept all 12 facts in
+  every chain.
+- **The correction is handled by every framed arm.** Each states that the
+  freeze moved from Monday to Wednesday. P17 did not use its "(was: …)"
+  form; it kept both of the user's lines, which serves the same end.
+- **No invented values.** The code-like tokens found in no input were all
+  slash-joined shorthand for real identifiers ("Syscall/Syscall6/RawSyscall",
+  "openbsd/arm64").
+- **Too many requests in the ledger.** P17 listed every file-read request
+  word for word despite "still-open request", which is why it is the
+  longest.
+
+**Sixteen folds** (one turn a fold). Run on the rule's best two, P9 and P1,
+plus B0:framed. B0:framed was added beyond the preregistration, because
+"framing alone, or framing and P9" is the shipping question:
+
+| arm | facts /12 | reason | continued | final length | per-chain range |
+|---|---|---|---|---|---|
+| B0:framed | 11.00 | 7/8 | 0/128 | 5,727 | 4–12 |
+| P1:framed | 11.38 | 7/8 | 2/128 | 9,575 | 9–12 |
+| P9:framed | **12.00** | **8/8** | 0/128 | 13,153 | 12–12 |
+
+- **Smaller folds are gentler.** B0:framed did better at sixteen small folds
+  than at eight larger ones. Loss tracks how much each fold has to absorb,
+  not how many folds there are, which is why late compaction (few, large
+  folds) needs the ledger more, not less.
+- **P9 never lost a fact** across 24 chains and 192 folds at either size.
+- **P9 grows about 0.8k characters a fold:** 13k after sixteen folds, about
+  3.5k tokens. Under late compaction a session rarely folds that often; a
+  long one on a small window would, and that is where a cap belongs (in code,
+  on the ledger, not in the prompt).
+- **Framing does not prevent every continuation.** P1 continued twice in
+  128 framed folds. A guard in code is still worth having.
+
+**Decision.** Ship three things together:
+
+1. the framed layout;
+2. P9 as `prompts.Summarize`;
+3. a guard that rejects a continuation-shaped summary and leaves the history
+   as it was.
+
+The guard is needed because `validCompaction` accepts any summary smaller
+than the history, so it accepted all 27 of B0:raw's continuations. Stage B
+then checks the shipped change end to end against B0:raw.
 
 ## Designed, not yet run: does a first-person summary lower re-verification?
 
