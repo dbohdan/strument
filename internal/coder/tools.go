@@ -587,6 +587,23 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	tc.Arguments += d.Args
 }
 
+// fillToolCallIDs gives an ID to every call that arrived without one, unique
+// to its message's position and its place in the message.
+//
+// A live session (doc/experiments/2026-10-compaction-prompt, Stage B pilot)
+// ended on one: the Xiaomi endpoint streamed a tool call with no id, the call
+// ran, and the next request carried its result with an empty tool_call_id —
+// which the same endpoint then refused ("tool messages must include a
+// non-empty string tool_call_id"), with HTTP 400, ending the turn. The id only
+// has to pair a call with its result, so Strument can supply one.
+func fillToolCallIDs(calls []llm.ToolCall, msgIndex int) {
+	for i := range calls {
+		if calls[i].ID == "" {
+			calls[i].ID = fmt.Sprintf("strument_call_%d_%d", msgIndex, i)
+		}
+	}
+}
+
 // plannedEdit is one edit-tool call resolved to an editblock edit plus the
 // call id it answers. create marks a create_file call, whose content is the file's
 // whole text (written fresh, or overwriting an existing file).

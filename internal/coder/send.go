@@ -419,6 +419,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	if answer != "" || len(c.partialToolCalls) > 0 {
 		msg := llm.TextMessage("assistant", answer)
 		if len(c.partialToolCalls) > 0 {
+			fillToolCallIDs(c.partialToolCalls, len(c.doneMessages)+len(c.curMessages))
 			msg.ToolCalls = c.partialToolCalls
 		}
 		c.curMessages = append(c.curMessages, msg)
