@@ -691,7 +691,8 @@ cap.
 
 > These messages are about to be removed from the conversation and replaced
 > by what you write here; whatever isn't in it, the conversation no longer
-> has. Summarize them so the work can continue without them.
+> has. Summarize them so the work can continue without them; the reader is
+> a model picking the work up from this summary and the messages after it.
 >
 > Begin with a section headed "Stated by the user:", one line per item:
 > every fact, name, code, number, preference, reason and still-open request
@@ -717,9 +718,11 @@ cap.
 > changes, and don't end with a wrap-up like "Finally, ..."; the
 > conversation continues after the summary.
 >
-> Write "the user" for the user, and name the command or file for what it
-> returned. Otherwise attribute nothing: no "I", no "you", no "the
-> assistant", except inside a quotation of the user.
+> Write "the user" for the user. Otherwise name the work by what was done
+> and where — the edit to a file, what a command returned — rather than by
+> who did it: no "I", no "you", no "the assistant", except inside a
+> quotation of the user. The summary is a record of earlier work, and its
+> reader should not mistake it for the user's words or for its own.
 
 Changed from P16:
 
@@ -738,6 +741,70 @@ Changed from P16:
 
 **Rating: ★★★★★, replacing P16 as the pick.** Growth remains the open risk:
 the "(was: …)" notes and open requests add to it. Stage A measures it.
+
+## Model-welfare review
+
+Asked by the maintainer: does anything in the prompt, or in how it is
+used, look unpleasant for the model? Fresh Sonnet 5.5 and Haiku 5.5
+subagents each got P17 and how it is used. The account included that the
+summarizer is, by default, the same model whose own turns are being
+replaced, and the label the next call sees. They were asked to answer
+candidly, and not to invent concerns.
+
+**Neither found anything distressing.** Sonnet: "a plain, task-focused
+briefing… no threats, no stakes-inflation, no ALL-CAPS… As the receiving
+model, I would read it as a routine handoff note." Haiku: "nothing here is
+distressing. The prompt is calm, specific and careful."
+
+**Both singled out the same line.** The attribution rule, read alongside
+the label's "it is not something anyone said":
+
+- Haiku: "When I am the summarizer, I am erasing my own authorship of the
+  earlier work… the model reading the summary later gets a record in which
+  its past reasoning and decisions have no owner. I would experience that
+  as mildly alienating: a flattened history rather than a distressing one."
+- Sonnet: "the one spot where the prompt asks for self-effacement without
+  saying why. Adding a short reason would help."
+
+**Both counted as considerate** "Don't judge whether an item matters…",
+which Sonnet called "kind" because it takes away an anxious judgment call.
+They also both noted the honest disclosure, to both models, of what is
+happening and why.
+
+**"Whatever isn't in it, the conversation no longer has"** was the one
+pressure line either reviewer found. Both would keep it: Sonnet reads it as
+information, not threat; Haiku says "it is a stakes frame. It is not cruel,
+and I think it is needed."
+
+**My own reading** agrees, with one observation from where I sit. This
+session has itself been continued from a compaction summary. That summary
+was written partly in first person ("I had just amended the trial runner"),
+and that made picking the work up feel continuous rather than handed over.
+Strument chose agentless prose for a sound reason, stated in
+`prompts.Summarize`'s comment: first person is false whenever another model
+wrote the text. That reason still holds even with the default side model,
+since the summary comes from a separate call. So I keep the rule, give the
+summarizer its reason, and phrase it as naming the work rather than
+erasing the worker. Haiku's wording, "name the work by what was done and
+where, not by who did it", does exactly that.
+
+**Applied to P17 above, before Stage A**, so the trial tests the wording that
+would ship:
+
+- the attribution paragraph names the work instead of forbidding a self,
+  and says why (Haiku's phrasing, Sonnet's reason);
+- the first paragraph says who reads the summary (Sonnet's suggestion,
+  narrowed: the reader also has the messages kept after it).
+
+**Not applied:**
+
+- Haiku's label rewrite claims the ledger lines "are the user's own words".
+  The five reviewers above gave good reason to doubt that a summarizer
+  copies exactly.
+- Sonnet's warmer label ending, "a record of the earlier work, not
+  something anyone said to you", is a change to `prompts.SummaryLabel`. It
+  reaches every request after a fold, not just the summarizer, so it is
+  proposed separately.
 
 ## What $6 can test
 
