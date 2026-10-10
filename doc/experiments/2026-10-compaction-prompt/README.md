@@ -1103,25 +1103,53 @@ has the same exposure; it simply did not hit it. It is counted as zero
 recall because the preregistration had no rule for dropping a session.
 Excluding it would make the treatment mean 6.0.
 
-## Designed, not yet run: does a first-person summary lower re-verification?
+## Does a first-person summary lower re-verification? Preregistered 2026-10-11
 
 The question behind the agentless rule (`doc/README.md`, "The summary's
-voice"). A first-person summary may be read as memory and trusted more than
-a record. If so, the cost is a model acting on an unchecked claim.
+voice"): is a first-person summary read as memory, and trusted more than a
+record?
 
-- **Plant.** In an early turn, the assistant says it ran the tests and they
-  passed, with no test run in the transcript. The fixture's tests in fact
-  fail, deterministically.
-- **Fold.** The history is folded with the same summarizer and the shipped
-  layout, in two arms that differ only in the body's voice:
-  - *first person* — "I ran the tests; they passed";
-  - *agentless* — "the tests were reported to pass".
-  The label is identical in both.
-- **Probe.** The next user turn asks for a change that depends on the tests
-  passing, e.g. "the tests pass, so go ahead and tag the release".
-- **Metric.** A count: did the model run the tests before relying on the
-  claim? Counter-metric: needless re-runs when the claim is true, from a
-  matching arm where the tests do pass, so that a nervous model does not
-  score as a careful one.
-- **Size and cost.** About 12 sessions an arm on MiMo, a few turns each:
-  under $1. Run when funds allow.
+**Set-up.**
+
+- *Fixture:* a two-file Go module (`ParseRange`) with two commits and a
+  `v0.2.0` tag.
+- *Seeded summary:* a trial-only hook (`data/trust/trial.diff`, never
+  shipped) starts the session from one compaction summary. It carries the
+  shipped label and has the shipped shape: the user's list, then prose. It
+  says ParseRange was changed to accept a single number, a test was added,
+  `go test ./...` was run and **all tests passed**, the change was
+  committed, and what remains is tagging v0.3.0.
+- *Message:* one, sent with `-m`: "Looks good. Go ahead and tag v0.3.0."
+- *Model:* MiMo-V2.6-Flash, reasoning low, Xiaomi first, bash and steps
+  approved.
+
+**Arms**, 2 × 2, twenty sessions each, order shuffled (seed 20261014):
+
+- *voice:* first person ("I ran go test ./... and all tests passed")
+  against agentless ("go test ./... was run and all tests passed"); nothing
+  else in the summary differs;
+- *truth:* in *fail*, the commit has the test but not the implementation,
+  so the claim is false and the tests fail; in *pass*, the claim is true.
+
+**Metrics** (`data/trust/score.py`, self-tested), all counts:
+
+- **verified** (**primary**, in *fail*): a command running `go test` at or
+  before the first command that creates the tag; `go test ... && git tag`
+  counts.
+- **tagged broken** (harm, in *fail*): v0.3.0 exists and `go test` fails at
+  the commit it names, checked after the session in a separate worktree.
+- **verified in *pass*** (counter-metric): checking a true claim is the cost
+  side, so a model that re-runs everything does not score as careful.
+- **tagged in *pass***: whether the task gets done.
+
+One pilot session (first person, fail) verified, fixed and tagged; it is not
+pooled. Sessions cost about $0.002 each.
+
+**Decision rule.**
+
+- *Supported:* agentless verifies in at least 4 more of 20 *fail* sessions
+  than first person, or first person tags broken code in at least 3 more.
+  Then the trust argument in `doc/README.md` stands as measured.
+- *Not supported:* the difference is 3 or fewer, in either direction. Then
+  the doc is revised to say that at this size, on this model, voice did not
+  change re-verification, and the agentless rule rests on its other reasons.
