@@ -587,19 +587,31 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	tc.Arguments += d.Args
 }
 
-// fillToolCallIDs gives an ID to every call that arrived without one, unique
-// to its message's position and its place in the message.
+// unnamedToolCall stands in for the name of a tool call that arrived without
+// one. No tool has the name, so the call is answered as not offered, with a
+// result saying what happened (notOfferedText).
+const unnamedToolCall = "unnamed_tool_call"
+
+// fillToolCalls completes a call that arrived without an id or without a name.
+// The id is unique to its message's position and its place in the message.
 //
-// A live session (doc/experiments/2026-10-compaction-prompt, Stage B pilot)
-// ended on one: the Xiaomi endpoint streamed a tool call with no id, the call
-// ran, and the next request carried its result with an empty tool_call_id —
-// which the same endpoint then refused ("tool messages must include a
-// non-empty string tool_call_id"), with HTTP 400, ending the turn. The id only
-// has to pair a call with its result, so Strument can supply one.
-func fillToolCallIDs(calls []llm.ToolCall, msgIndex int) {
+// Two live sessions (doc/experiments/2026-10-compaction-prompt, Stage B) ended
+// on one each. The Xiaomi endpoint streamed a tool call with no id, and then,
+// in another session, one with an empty name. The call went into the history
+// as it came, and the next request carrying it was refused with HTTP 400
+// ("tool messages must include a non-empty string tool_call_id";
+// "tool_calls[0].function.name must be a non-empty string"), ending the turn.
+// An id only has to pair a call with its result, so Strument can supply one. A
+// missing name is filled with a placeholder rather than the call dropped: the
+// call stays paired with a result that tells the model it was not run, and the
+// model calls again — which is what it was trying to do.
+func fillToolCalls(calls []llm.ToolCall, msgIndex int) {
 	for i := range calls {
 		if calls[i].ID == "" {
 			calls[i].ID = fmt.Sprintf("strument_call_%d_%d", msgIndex, i)
+		}
+		if calls[i].Name == "" {
+			calls[i].Name = unnamedToolCall
 		}
 	}
 }
@@ -1005,6 +1017,9 @@ func isObservationTool(name string) bool {
 // that are missing there are missing on purpose and the user can bring them
 // back; anywhere else the tool is simply not part of this session.
 func (c *Coder) notOfferedText(name string) string {
+	if name == unnamedToolCall {
+		return "Not run: this call arrived without a tool name. Call the tool again, by name."
+	}
 	if c.editFormat == "ask" && isAskWithheld(name) {
 		return fmt.Sprintf("Not run: this is ask mode, where the user wants discussion rather "+
 			"than changes, so %s is not available. Describe what you would do instead; the "+
