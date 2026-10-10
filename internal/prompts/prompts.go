@@ -620,6 +620,13 @@ const SessionNotes = "Write notes on a programming session, to be read at the st
 // harness's artifact, so it goes in the harness's voice — which is what the
 // marker is for. The role it does *not* take is assistant: the model did not
 // say this.
+//
+// "A record of the earlier work" is from a model-welfare review
+// (doc/experiments/2026-10-compaction-prompt): read beside the summary's
+// agentless prose, "not something anyone said" alone left the work with no
+// owner, which both reviewers found mildly alienating. The record framing
+// says what the text is before saying what it is not, and still keeps it from
+// reading as the user's words.
 const SummaryLabel = "Summary of the earlier part of this conversation, written by Strument to " +
-	"keep it inside the context window. It replaces those messages; it is not something " +
-	"anyone said.\n\n"
+	"keep it inside the context window. It replaces those messages; it is a record of the " +
+	"earlier work, not something anyone said to you.\n\n"
