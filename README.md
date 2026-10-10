@@ -294,7 +294,7 @@ Strument is configured in Starlark, a small sandboxed dialect of Python.
 A config file is a short program that builds model objects and assigns values to the configuration variables.
 [`doc/config.md`](doc/config.md) is the reference for the settings and every built-in function specific to Strument.
 `strument config edit` opens your user config in your editor (`--project` for the project's config); `strument config path` prints where it is.
-`--config PATH` uses another user config for one run, `/reload` included; sessions and other state stay where they are, so a tester's config can be swapped in without forking the history.
+`--config <path>` reads a different config file for that run, `/reload` included; sessions and history are shared with runs that use the default config.
 
 Here is an example of a more complete configuration:
 

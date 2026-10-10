@@ -2,7 +2,7 @@
 
 Strument reads its configuration from a [Starlark] file, `config.star` (by
 default `$XDG_CONFIG_HOME/strument/config.star`, i.e.
-`~/.config/strument/config.star`; `--config PATH` names another file for one
+`~/.config/strument/config.star`; `--config <path>` names another file for one
 run, before or after the subcommand, for every command and for `/reload`).
 Starlark is a small, sandboxed dialect
 of Python, so its syntax will be familiar if you know Python. Strument exposes a
