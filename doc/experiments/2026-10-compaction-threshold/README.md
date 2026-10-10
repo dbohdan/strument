@@ -58,4 +58,27 @@ A pilot of one session at 16k and one without compaction checks that folds
 happen where intended and that the scorer reads live transcripts; it is not
 pooled.
 
+### Amendments from the pilot, before the main batch
+
+The pilot (16k and no compaction, one session each) ran 2026-10-10 and is not
+pooled. Folds happened where intended: once a turn at 16k, never without
+compaction. Three changes followed, all applying to every arm alike:
+
+- **The end-of-turn pattern.** A turn with no tool call prints its usage
+  line without "N steps"; the runner waited for the word and timed out on
+  the first question turn, which had in fact answered.
+- **Provider order.** Past about 320k tokens OpenRouter began sending
+  requests to Novita instead of Xiaomi, each switch reading almost nothing
+  from the cache (4k of 329k on the first) and taking minutes: the
+  no-compaction session's turn 8 took 589 s and turn 9 passed the 900 s
+  limit. Xiaomi serves the full 1M window, so the config now puts it first
+  (`provider.order = ["xiaomi"]`, fallbacks allowed). One provider also
+  makes the cost metric one price list.
+- **Turn timeout** 900 s to 2,400 s, as margin rather than expectation.
+
+The 16k session answered both questions of its first question turn with
+"I don't know", saying the summary did not mention them: at that budget the
+summarizer had dropped what the user asked it to note. That is the
+counter-metric working, not a fault in the rig.
+
 ---

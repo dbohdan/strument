@@ -13,7 +13,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("outdir"); ap.add_argument("reps", type=int)
 ap.add_argument("--arms", default=f"16000,32000,64000,128000,256000,{NONE}")
 ap.add_argument("--seed", type=int, default=20261010); ap.add_argument("--jobs", type=int, default=4)
-ap.add_argument("--turn-timeout", type=int, default=900)
+ap.add_argument("--turn-timeout", type=int, default=2400)
 a = ap.parse_args()
 
 FILES = [l.strip() for l in open(os.path.join(TR, "files.txt")) if l.strip()]
@@ -66,7 +66,8 @@ def run(job):
     open(cfg, "w").write(
         f'orr = provider("openrouter", base_url = "http://127.0.0.1:{port}/api/v1", api_key = env("OPENROUTER_API_KEY"))\n'
         'default = "mimo"\n'
-        'models = {"mimo": model(orr, "xiaomi/mimo-v2.6-flash", context = 1050000, reasoning = "low", cache = True)}\n')
+        'models = {"mimo": model(orr, "xiaomi/mimo-v2.6-flash", context = 1050000, reasoning = "low", cache = True,\n'
+        '    extra_params = {"provider": {"order": ["xiaomi"], "allow_fallbacks": True}})}\n')
     proxy = subprocess.Popen([sys.executable, "-I", os.path.join(S, "orproxy", "proxy.py"), str(port),
                               os.path.join(base, "proxy.jsonl")], stdout=subprocess.DEVNULL,
                              stderr=open(os.path.join(base, "proxy.err"), "w"))
@@ -95,13 +96,13 @@ def run(job):
                 return "ok"
         return "timeout"
     turns = []
-    status = pump(re.compile(rb"(^|\n) ?> ?$"), 30)
+    status = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 30)
     for i, msg in enumerate(turn_messages()):
         buf = b""; t0 = time.time()
         child.send(msg.replace("\n", " ") + "\r")
-        st = pump(re.compile(rb"Tokens: [^\n]*steps?[^\n]*\n"), a.turn_timeout)
+        st = pump(re.compile(rb"Tokens: [^\n]*\n"), a.turn_timeout)
         if st == "ok":
-            st = pump(re.compile(rb"(^|\n) ?> ?$"), 120)
+            st = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 120)
         turns.append({"turn": i, "status": st, "secs": round(time.time() - t0, 1)})
         if st != "ok":
             break
