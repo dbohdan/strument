@@ -31,6 +31,10 @@ trials, never watched it build something from nothing.
 | 13 | does the committee's *order* matter? rank all 120 cyclic orders | `dc67c7a` | 15 | $0.03 |
 | 14 | how much potassium would the compost need? (Claude Haiku 5.5) | `cab249c`, message by the driver | 20 | $2.01 |
 | 15 | finish turn 14: the potassium result in the README (Claude Haiku 5.5) | `600f6fa` | 7 | $0.29 |
+| 16 | with the potassium gap closed, do the 120 orders still differ? (Ling 3.1 Flash) | `3817261` | 18 | $0.00 |
+| 17 | does closing the gap change rotation's lead? (Ling 3.1 Flash) | `cc3728b` | 22 | $0.00 |
+| 18 | a consistency pass on the README (Ling 3.1 Flash) | `b29247a` | 8 | $0.00 |
+| 19 | from a compacted history: what is open, and pin the default output (Ling 3.1 Flash) | `aaa1e2a` | 27 | $0.00 |
 
 About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
@@ -245,3 +249,62 @@ code and gave the commit a message, and the README still lacked the result.
   by 2" comes from the `cost` column, computed on unrounded means; the rounded
   means beside it go from 2399 to 2402. Not wrong, and too small to change the
   reading, but a reader comparing the two will stop on it.
+
+## Turns 16-19: a third model, and the first compacted history
+
+Four turns with Ling 3.1 Flash (`inclusionai/ling-3.1-flash`), free on
+OpenRouter, chosen for its window. At 262k tokens it is the one model on the
+panel whose window the session — now about 600 messages — outgrows, so it is
+the one that makes Strument compact a real conversation rather than a trial's.
+Strument had just been changed to clear old tool results before summarizing,
+to summarize into a list of what the user said followed by prose, to frame
+the summarizer's input so it cannot be mistaken for a conversation to
+continue, and to fold and retry on an over-long request
+(`doc/experiments/2026-10-compaction-prompt` on `dev`). Each turn
+was a fresh `--continue` process, as every turn here has been.
+
+- **The answers were good, and Ling checked before it trusted.** Turn 16 found
+  that at a dressing of 2 all 120 orders tie at 2402: potassium running out
+  was the whole of the five-unit spread turn 13 found. Turn 17 found rotation
+  still wins every paired seed at a dressing of 2, and that monoculture gains
+  most (45% to 50% of rotation), because brassicas draw the most potassium.
+  It flagged its own word for that, "flatters", as unfair to a model with
+  hand-set constants, and in turn 18 replaced it: the default table answers
+  its own question exactly, and the answer depends on the compost. Every
+  turn it said its expectation before running anything, reran commands
+  rather than quoting earlier output, and checked by hand that the default
+  output had not changed — which turn 19 then made a test.
+- **Turn 16 was told something false, by the driver.** Its message said the
+  history had been compacted. It had not: Strument estimated tokens as
+  characters over four, and on this session's Go and JSON the provider counts
+  about one token in three characters (171,443 against an estimate of
+  124,464), so the history looked under budget and went whole. Ling answered
+  a premise that was not true with the right habit — "let me verify the code
+  I'll rely on rather than trusting the summary" — and turn 17 opened with
+  the correction. Strument now learns the provider's count from each response
+  (`ba952f0`).
+- **A process per turn never kept a fold.** Compactions are not saved, by
+  decision, so a fold made at the end of a turn left with the process, and
+  the next restore measured the history again with the uncorrected estimate.
+  Request records now carry Strument's estimate beside the provider's count,
+  and a restore starts from their ratio (`9952036`). Turn 17's end-of-turn
+  fold cleared 50 old tool results and then lost its summary call to the
+  free tier's rate limit, so the history was kept whole; Strument said so.
+  Turn 18's completed.
+- **Turn 19 started from a compacted history.** On restore Strument cleared 52
+  old tool results (about 41k tokens) and summarized the rest: 593 messages
+  to 252, about 107k estimated tokens to 56k. Asked before reading anything
+  what the driver had asked of the project and what was open, Ling named the
+  module, its three packages, every flag in the order it was added, and
+  "nothing is open", and said where it was unsure: how `main.go` threads the
+  flags, which it then read. All of that was right.
+- **The summary kept every one of the driver's messages, and dated its
+  ending wrong.** A reproduction of turn 19's restore (the same history, the
+  same summarizer) quotes each request under its turn, from "Start the Go
+  module" through turn 6's objection that the fade rate built the cycle
+  length into the constant that then proved it. It closes with what was open
+  at the end of the summarized part — turn 12's unfinished analysis — written
+  as "the current, uncommitted work … nothing has been run". The turns kept
+  verbatim after it said otherwise, and Ling followed them, but the present
+  tense was wrong. That is a sentence for the prompt to fix, tested before it
+  ships.
