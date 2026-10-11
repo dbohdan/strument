@@ -296,10 +296,11 @@ potassium feeder (draw 2 a season against rotation's average
 rotation. Closing the potassium gap narrows rotation's lead over
 monoculture by about a tenth of the garden. Alternation is
 unchanged and greedy barely moves: their potassium drains
-slowly enough that the extra unit changes almost nothing. So the
-committee's compost flatters rotation in the default table: with
-the gap closed, lazier strategies look a little better, though
-nowhere near the rule.
+slowly enough that the extra unit changes almost nothing. So how
+much the rule beats the alternatives depends on the compost: the
+default table's answer is at the committee's present dressing,
+and a richer one makes the alternatives look a little better,
+though still nowhere near the rule.
 
 Built in sessions driven through [Strument](https://dbohdan.com/strument);
 see DRIVING.md for notes on those sessions.
