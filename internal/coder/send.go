@@ -310,13 +310,17 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		appendedUser = true
 	}
 
-	chunks := c.formatMessages()
-	messages := chunks.allMessages()
+	messages := c.formatMessages().allMessages()
 	// Before the token check, not after: the projection changes what is
 	// actually sent, and a count taken on the unprojected messages would be
 	// counting something no provider will ever see.
 	messages = projectForModel(messages, c.Model)
 
+	// Over the limit by Strument's own count: fold the settled history first,
+	// and ask only if that was not enough.
+	if !c.fitsContext(messages) && c.foldForOverflow() {
+		messages = projectForModel(c.formatMessages().allMessages(), c.Model)
+	}
 	if !c.checkTokens(messages) {
 		if appendedUser {
 			c.curMessages = c.curMessages[:len(c.curMessages)-1]
@@ -351,6 +355,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// classification forward rather than re-encoding it into flags. Every path
 	// out of the loop below assigns it before breaking.
 	var term streamResult
+	foldedForOverflow := false
 
 	for {
 		c.partialResponseContent = ""
@@ -398,6 +403,16 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			} else {
 				messages = append(messages, llm.TextMessage("assistant", c.multiResponseContent))
 			}
+			continue
+		}
+
+		// The provider refused the request as too long: fold the settled
+		// history and send once more. Not after a continuation, whose stitched
+		// partial a rebuild would drop, and not twice — a request still too long
+		// after a fold is too long because of this turn, which cannot be folded.
+		if res == resContextExhausted && !foldedForOverflow && continuations == 0 && c.foldForOverflow() {
+			foldedForOverflow = true
+			messages = projectForModel(c.formatMessages().allMessages(), c.Model)
 			continue
 		}
 
@@ -697,17 +712,11 @@ func (c *Coder) CheckRestoredContext() {
 // checkTokens warns when the estimate reaches the input window and asks to
 // proceed.
 func (c *Coder) checkTokens(messages []llm.Message) bool {
+	if c.fitsContext(messages) {
+		return true
+	}
 	maxInput := c.Model.Context
-	if maxInput <= 0 {
-		return true
-	}
-	// The schemas count: they go out with this request like everything else,
-	// and leaving them out made the guard cheerful about a prompt 1.3k tokens
-	// closer to the limit than it reported.
-	inputTokens := c.countMessages(messages) + c.countTools() + c.countImages(messages)
-	if inputTokens < maxInput {
-		return true
-	}
+	inputTokens := c.requestTokens(messages)
 	c.Out.Errorf("This request is about %d tokens; the context limit for %s is %d.",
 		inputTokens, c.Model.QualifiedSlug(), maxInput)
 	// The advice is what helps here, not aider's: pinned files go by name, so
@@ -718,6 +727,19 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 		"or /tokens to see what takes the space.")
 	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Send it anyway?", Grant: GrantContext})
 	return res.Yes
+}
+
+// requestTokens estimates a request's size. The schemas count: they go out
+// with the request like everything else, and leaving them out made the guard
+// cheerful about a prompt 1.3k tokens closer to the limit than it reported.
+func (c *Coder) requestTokens(messages []llm.Message) int {
+	return c.countMessages(messages) + c.countTools() + c.countImages(messages)
+}
+
+// fitsContext reports whether a request fits the main model's window; an
+// unknown window always fits, as there is no limit to enforce.
+func (c *Coder) fitsContext(messages []llm.Message) bool {
+	return c.Model.Context <= 0 || c.requestTokens(messages) < c.Model.Context
 }
 
 // moveBackCurMessages rotates cur into done on edited turns.
@@ -812,6 +834,7 @@ func hasSummaryContent(msgs []llm.Message) bool {
 	return false
 }
 
+// maybeSummarize compacts the settled history when it outgrows the chat-history
 // budget. It runs only when a summarizer is wired and the model's window is
 // known (Context > 0) — mirroring checkTokens, which treats an unknown window
 // as "no limit to enforce". Synchronous: the side-model call happens here,
@@ -829,19 +852,50 @@ func (c *Coder) maybeSummarize() {
 		return
 	}
 	c.Out.Printf("Summarizing chat history to fit the context window...")
+	if !c.compactHistory(budget) {
+		c.summaryBackoff = true
+	}
+}
+
+// foldForOverflow compacts the settled history so that a request over the
+// context limit can be sent again, and reports whether it did. The history is
+// folded to half its size, or to the usual budget if that is smaller, whether
+// or not it had reached the budget: the request is over the limit either way,
+// and the history is the part of it that can give.
+//
+// Five of the six harnesses surveyed in doc/experiments/2026-10-compaction-survey
+// fold and retry when a provider refuses a request as too long; Strument
+// classified the refusal and ended the turn. With compaction moved late in the
+// window, this is the backstop it relies on.
+func (c *Coder) foldForOverflow() bool {
+	if c.Summarizer == nil || len(c.doneMessages) == 0 {
+		return false
+	}
+	target := c.Summarizer.total(c.doneMessages) / 2
+	if c.Model.Context > 0 {
+		target = min(target, maxChatHistoryTokens(c.Model.Context))
+	}
+	if target <= 0 {
+		return false
+	}
+	c.Out.Printf("The request is over the context limit; summarizing the chat history to make room...")
+	return c.compactHistory(target)
+}
+
+// compactHistory folds the settled history to fit budget and reports whether
+// it did. On failure the history is left intact and the user told why.
+func (c *Coder) compactHistory(budget int) bool {
 	beforeTokens := c.Summarizer.total(c.doneMessages)
 	beforeMessages := len(c.doneMessages)
 	out, err := c.Summarizer.summarize(c.doneMessages, budget)
 	if err != nil {
-		c.summaryBackoff = true
 		c.Out.Warningf("Could not summarize chat history: %v", err)
-		return
+		return false
 	}
 	afterTokens := c.Summarizer.total(out)
 	if !validCompaction(out, beforeTokens, beforeMessages, afterTokens) {
-		c.summaryBackoff = true
 		c.Out.Warningf("Could not summarize the chat history: the summary was not smaller than the history.")
-		return
+		return false
 	}
 	c.doneMessages = out
 	// The summary absorbed the turns, so there are none left to rewind.
@@ -850,6 +904,7 @@ func (c *Coder) maybeSummarize() {
 		beforeTokens, plural(beforeMessages, "message", "messages"),
 		afterTokens, plural(len(out), "message", "messages"),
 		plural(countSummaryMessages(out), "summary", "summaries"))
+	return true
 }
 
 // finalizeUsage resolves cost — (1) in-band cost, (2) config
