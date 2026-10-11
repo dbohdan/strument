@@ -200,6 +200,9 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 			finishReason = ev.FinishReason
 		case llm.EventUsage:
 			usage.add(ev.Usage)
+			if call == "turn" && ev.Usage != nil && ev.Usage.PromptTokens > 0 {
+				c.calibrateTokens(c.requestTokens(req.Messages), ev.Usage.PromptTokens)
+			}
 			if ev.Usage != nil {
 				got.Add(*ev.Usage)
 				sawUsage = true
@@ -716,7 +719,7 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 		return true
 	}
 	maxInput := c.Model.Context
-	inputTokens := c.requestTokens(messages)
+	inputTokens := c.scaledTokens(c.requestTokens(messages))
 	c.Out.Errorf("This request is about %d tokens; the context limit for %s is %d.",
 		inputTokens, c.Model.QualifiedSlug(), maxInput)
 	// The advice is what helps here, not aider's: pinned files go by name, so
@@ -739,7 +742,52 @@ func (c *Coder) requestTokens(messages []llm.Message) int {
 // fitsContext reports whether a request fits the main model's window; an
 // unknown window always fits, as there is no limit to enforce.
 func (c *Coder) fitsContext(messages []llm.Message) bool {
-	return c.Model.Context <= 0 || c.requestTokens(messages) < c.Model.Context
+	return c.Model.Context <= 0 || c.scaledTokens(c.requestTokens(messages)) < c.Model.Context
+}
+
+// calibrateTokens folds one request's provider-counted prompt size into
+// tokenScale, the ratio of what the provider counts to what Strument estimates.
+//
+// The estimate is characters over four (RuneCounter), right for English prose
+// and wrong for what a coding session mostly holds. On the Larkspur session —
+// Go source, JSON, test output — the provider counted 171,443 tokens for a
+// request Strument put at 124,464 plus schemas: three characters a token, not
+// four. The history budget was measured in the estimate, so a history the
+// provider saw as well over budget never folded. The provider reports the true
+// size of every request it answers, so rather than guess a better constant for
+// every tokenizer and every mix of code and prose, Strument learns the ratio
+// from the session itself. Smoothed, because one request with a large image or
+// an odd tool result should not swing the budget; clamped, because a provider
+// that reports nonsense should not be able to.
+func (c *Coder) calibrateTokens(estimated, counted int) {
+	if estimated <= 0 || counted <= 0 {
+		return
+	}
+	r := min(max(float64(counted)/float64(estimated), 0.5), 3)
+	if c.tokenScale == 0 {
+		c.tokenScale = r
+		return
+	}
+	c.tokenScale = (c.tokenScale + r) / 2
+}
+
+// scaledTokens converts an estimate into the provider's units, as far as this
+// session has learned them.
+func (c *Coder) scaledTokens(estimated int) int {
+	if c.tokenScale == 0 {
+		return estimated
+	}
+	return int(float64(estimated) * c.tokenScale)
+}
+
+// historyBudget is maxChatHistoryTokens in Strument's own estimate's units, so
+// that it can be compared with counts taken by the estimator.
+func (c *Coder) historyBudget() int {
+	b := maxChatHistoryTokens(c.Model.Context)
+	if c.tokenScale == 0 {
+		return b
+	}
+	return int(float64(b) / c.tokenScale)
 }
 
 // moveBackCurMessages rotates cur into done on edited turns.
@@ -854,7 +902,7 @@ func (c *Coder) maybeSummarize() {
 	if c.Summarizer == nil || c.Model.Context <= 0 {
 		return
 	}
-	budget := maxChatHistoryTokens(c.Model.Context)
+	budget := c.historyBudget()
 	if !c.Summarizer.tooBig(c.doneMessages, budget) {
 		return
 	}
@@ -887,7 +935,7 @@ func (c *Coder) foldForOverflow() bool {
 	}
 	target := c.Summarizer.total(c.doneMessages) / 2
 	if c.Model.Context > 0 {
-		target = min(target, maxChatHistoryTokens(c.Model.Context))
+		target = min(target, c.historyBudget())
 	}
 	if target <= 0 {
 		return false

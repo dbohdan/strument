@@ -130,6 +130,8 @@ func (c *Coder) AppendContext(text string) {
 // any).
 func (c *Coder) SetModel(m *config.Model) {
 	c.Model = m
+	// Another model counts with another tokenizer.
+	c.tokenScale = 0
 	c.SetEditFormat(m.EditFormat)
 }
 

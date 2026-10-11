@@ -302,6 +302,9 @@ type Coder struct {
 	editedSinceCheck bool
 	lastSendOutcome  SendOutcome // observability for tests/REPL status
 	summaryBackoff   bool        // skip one compaction attempt after a failure
+	// tokenScale is the provider's count of a request over Strument's estimate
+	// of it, smoothed; 0 until the first main-model response. See calibrateTokens.
+	tokenScale float64
 
 	// cancelSend stops the send in flight, and only that send. See
 	// sendSteerable and InterruptSend. Guarded because the caller is a signal
