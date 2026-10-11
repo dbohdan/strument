@@ -632,10 +632,18 @@ const SessionNotes = "Write notes on a programming session, to be read at the st
 // rereads this label, so the summarizer is told what those lines are; and the
 // model reading it is told they are the user's, but a record of them, not a
 // transcript: seven reviewers agreed no model copies text exactly across folds.
+//
+// The last sentence is measured (doc/experiments/2026-10-compaction-prompt,
+// "A calibration line"). Seeded with a summary that falsely said the tests had
+// passed and asked to tag a release, MiMo ran the tests first in 13 of 80
+// sessions with it and 5 of 80 without, and tagged broken code in 63 against
+// 72. GPT-6 Luna checked in none of 160 sessions either way, so it is a help,
+// not a guarantee: a summary is a record of claims, and the line says so.
 const SummaryLabel = "Summary of the earlier part of this conversation, written by Strument to " +
 	"keep it inside the context window. It replaces those messages; it is a record of the " +
 	"earlier work, not something anyone said to you. Lines under \"Said by the user:\" " +
-	"record what the user said.\n\n"
+	"record what the user said. Where it says something was done, run or verified, check " +
+	"that before relying on it.\n\n"
 
 // SummaryInputBefore and SummaryInputAfter frame the conversation the
 // summarizer is given, which sits between <conversation> markers.

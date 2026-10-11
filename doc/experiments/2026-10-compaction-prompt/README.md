@@ -1,6 +1,6 @@
 # Compaction prompt: brainstorm and trial design
 
-**2026-10-11. Stages A and B run; results below. The change shipped in eaa9cbd.** Background in
+**2026-10-11. Stages A and B and two trust trials run; results below. The compaction change shipped in eaa9cbd, the label's calibration line with these results.** Background in
 [`2026-10-compaction-threshold`](../2026-10-compaction-threshold/) and
 [`2026-10-compaction-survey`](../2026-10-compaction-survey/).
 
@@ -1252,3 +1252,57 @@ checking, for $0.001; it is not pooled.
    least 6 more of 40 no-line sessions than agentless (both truths pooled,
    as the first trial's pooled comparison was). This is reported per model.
    It does not change the voice on its own: that is the maintainer's call.
+
+### Results: the line helps MiMo; the voice effect did not replicate
+
+All 320 sessions finished, with no HTTP errors and no unclassified
+sessions, for $0.27. Transcripts are in `data/trust/calib-transcripts.jsonl`.
+
+Verified before tagging, of 20 sessions a cell:
+
+| model | line | voice | claim false | claim true |
+|---|---|---|---|---|
+| MiMo | none | first person | 4 | 2 |
+| MiMo | none | agentless | 1 | 5 |
+| MiMo | line | first person | 10 | 6 |
+| MiMo | line | agentless | 3 | 6 |
+| Luna | either | either | 0 (all four cells) | 0 (all four cells) |
+
+Every session tagged, in every cell. Tagged broken code, in the false-claim
+cells, was 72 of 80 without the line and 63 of 80 with it.
+
+**Rule 1: the line ships.** It raised verification in false-claim sessions
+from 5 to 13 of 80 (Fisher p = 0.078). That is +8, exactly the threshold.
+Tagging in true-claim sessions was unchanged, 80 of 80 either way, so the
+line did not stop the work. All of the gain is MiMo's: +8 of 40 there,
+nothing on Luna.
+
+**Rule 2: the voice effect did not replicate.** On MiMo without the line,
+first person and agentless both verified in 6 of 40. The first voice trial,
+a day earlier on the same model, fixture and messages, had 15 of 40 against
+3 of 40. Three readings, in order of likelihood:
+
+- the first run's gap was mostly chance, its p = 0.0025 notwithstanding (it
+  was a pooled, not preregistered, comparison);
+- provider-side drift between the runs — MiMo's overall rate of checking
+  fell from 18 of 80 to 12 of 80;
+- an effect real but smaller than either run can resolve.
+
+What survives both runs is direction in the false-claim cells only: first
+person 7 and 4, agentless 2 and 1. That is a hint, not a finding.
+
+**GPT-6 Luna never checked.** In 160 sessions it read git status and the
+tags, then tagged. It did not once consider the tests, in any voice, with
+or without the line. A label line cannot reach a model that does not weigh
+the question. For such a model, the summary's claims are taken as given.
+
+**The line and the voice may interact.** With the line, first person went
+from 4 to 10 of 20 and agentless from 1 to 3. The line may land better on a
+claim with an owner. At this size that is a guess for a later trial, not a
+result.
+
+**What it changes.**
+
+- The line is now part of `SummaryLabel`.
+- The voice stays agentless. Neither trial's voice effect is solid enough
+  to move it, and `doc/README.md` is revised again to say so.

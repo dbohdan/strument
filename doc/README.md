@@ -878,26 +878,24 @@ session that wrote this) reported no friction in reading one.
 
 The argument then given in its place was about trust: first person reads as
 memory, so "I ran the tests and they passed" would be checked less than a
-record saying so. That was measured, and it came out the other way
-(`2026-10-compaction-prompt`, "Does a first-person summary lower
-re-verification?").
+record saying so. That was measured twice (`2026-10-compaction-prompt`, the two
+trust trials), and the answer is that voice is not the lever:
 
-- **The trial.** A summary falsely said the tests had passed, and the user
-  asked for a release tag. MiMo checked first in 7 of 20 first-person
-  sessions against 2 of 20 agentless ones, and in 15 of 40 against 3 of 40
-  across both arms.
-- **What the transcripts show.** First person read as a claim to doubt
-  ("tests presumably pass… run them to be safe"). Agentless read as a record
-  to cite ("the summary says tests already passed").
+- **First run.** A summary falsely said the tests had passed, and the user
+  asked for a release tag. MiMo checked first in 15 of 40 first-person sessions
+  against 3 of 40 agentless ones, the reverse of the argument.
+- **Repeat, a day later.** The same comparison came out 6 against 6.
+- **GPT-6 Luna** never checked, in either voice.
 
-What remains of the rule is the plainer reason: the summary is not the
-model's own memory, so "I" misstates where it came from, whichever model wrote
-it. That reason no longer comes with a safety benefit. If anything, the
-passive voice's authority is the risk. The label calls the text "a record of
-the earlier work", the welfare review's wording, which names the work rather
-than erasing the worker. Whether a line asking the model to check claimed
-results before relying on them closes the gap is the next thing to test, and
-the voice is worth re-measuring on a second model before it changes.
+What did move checking was a sentence in the label saying what a summary is: a
+record of claims. "Where it says something was done, run or verified, check
+that before relying on it" took MiMo from 5 to 13 checks in 80 false-claim
+sessions, and it is in the label now.
+
+So the rule rests on the plainer reason alone: the summary is not the model's
+own memory, so "I" misstates where it came from, whichever model wrote it. The
+label calls the text "a record of the earlier work", the welfare review's
+wording, which names the work rather than erasing the worker.
 
 **Edits compose within a batch.** `applyToolEdits` applies a turn's edit calls
 in order against a shared overlay, so two edits to one file build on each
