@@ -121,6 +121,11 @@ def run(job):
             clean = ANSI.sub(b"", buf)
             # Strument's loop detector stops a repeating model and asks what
             # now; a scripted session answers "stop", so the turn ends there.
+            # A shell prompt: the runner approves steps only, and the task is to
+            # read files, so a shell command is declined and the model goes on.
+            shells = clean.count(b"Run shell command?")
+            if shells > declined_seen[0]:
+                child.send("n\r"); declined_seen[0] = shells; declined[0] += 1
             asked = clean.count(b"The model was repeating itself")
             if asked > answered[0]:
                 child.send("1\r"); answered[0] = asked; loops[0] += 1
@@ -135,9 +140,11 @@ def run(job):
     turns = []
     loops = [0]
     answered = [0]
+    declined = [0]
+    declined_seen = [0]
     status = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 30)
     for i, msg in enumerate(turn_messages()[:a.max_turns]):
-        buf = b""; answered[0] = 0; t0 = time.time()
+        buf = b""; answered[0] = 0; declined_seen[0] = 0; t0 = time.time()
         child.send(msg.replace("\n", " ") + "\r")
         st = pump(re.compile(rb"Tokens: [^\n]*\n"), a.turn_timeout)
         if st == "ok":
@@ -150,7 +157,7 @@ def run(job):
     except Exception:
         pass
     raw.close(); proxy.terminate(); proxy.wait()
-    rec = dict(job, loops=loops[0], turns=turns, done=len(turns) == len(turn_messages()) and all(t["status"] == "ok" for t in turns))
+    rec = dict(job, loops=loops[0], declined=declined[0], turns=turns, done=len(turns) == len(turn_messages()) and all(t["status"] == "ok" for t in turns))
     with open(os.path.join(a.outdir, "runs.jsonl"), "a") as f:
         f.write(json.dumps(rec) + "\n")
     return rec

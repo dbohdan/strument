@@ -113,6 +113,16 @@ In the second pilot both summary arms kept all 6 user facts and all 4 derived
 facts. `roll` answered "don't know" to all four derived questions rather than
 guessing.
 
+**One more, two hours into the main batch.** Session s04 (`record`) stalled
+on turn 3: instead of reading the files, Ling chose to count their lines with
+`wc -l` first, and Strument asked to approve the shell command. The runner
+approves steps only and did not answer, so the turn would have waited out its
+limit. The runner now declines shell prompts ("n"): the task is to read the
+files, and a declined command leaves the model to do so. Declines are counted
+per arm. The runner was restarted. The five sessions already complete (s00–s03,
+s05) had no shell prompts and are kept; s04 and s06, which were in progress, ran
+again from turn 0.
+
 ## Decision rule
 
 - **`roll` replaces `summary` as the default** if:
