@@ -16,7 +16,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("outdir"); ap.add_argument("reps", type=int)
 ap.add_argument("--arms", default=f"16000,32000,64000,128000,256000,{NONE}")
 ap.add_argument("--seed", type=int, default=20261010); ap.add_argument("--jobs", type=int, default=4)
-ap.add_argument("--turn-timeout", type=int, default=2400); ap.add_argument("--bindir", required=True); ap.add_argument("--max-turns", type=int, default=99)
+ap.add_argument("--turn-timeout", type=int, default=3600); ap.add_argument("--bindir", required=True); ap.add_argument("--max-turns", type=int, default=99)
 a = ap.parse_args()
 
 FILES = [l.strip() for l in open(os.path.join(TR, "files.txt")) if l.strip()]
@@ -119,6 +119,11 @@ def run(job):
                 for _ in range(chunk.count(b"\x1b[6n")):
                     child.send("\x1b[1;1R")
             clean = ANSI.sub(b"", buf)
+            # Strument's loop detector stops a repeating model and asks what
+            # now; a scripted session answers "stop", so the turn ends there.
+            asked = clean.count(b"The model was repeating itself")
+            if asked > answered[0]:
+                child.send("1\r"); answered[0] = asked; loops[0] += 1
             if until is not None and until.search(clean):
                 return "ok"
             # A refused request ends the turn without a usage line; waiting
@@ -128,9 +133,11 @@ def run(job):
                 return "http-error"
         return "timeout"
     turns = []
+    loops = [0]
+    answered = [0]
     status = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 30)
     for i, msg in enumerate(turn_messages()[:a.max_turns]):
-        buf = b""; t0 = time.time()
+        buf = b""; answered[0] = 0; t0 = time.time()
         child.send(msg.replace("\n", " ") + "\r")
         st = pump(re.compile(rb"Tokens: [^\n]*\n"), a.turn_timeout)
         if st == "ok":
@@ -143,7 +150,7 @@ def run(job):
     except Exception:
         pass
     raw.close(); proxy.terminate(); proxy.wait()
-    rec = dict(job, turns=turns, done=len(turns) == len(turn_messages()) and all(t["status"] == "ok" for t in turns))
+    rec = dict(job, loops=loops[0], turns=turns, done=len(turns) == len(turn_messages()) and all(t["status"] == "ok" for t in turns))
     with open(os.path.join(a.outdir, "runs.jsonl"), "a") as f:
         f.write(json.dumps(rec) + "\n")
     return rec

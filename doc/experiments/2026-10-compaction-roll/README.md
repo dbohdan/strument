@@ -28,9 +28,8 @@ against 0/12) was measured on the old summarizer, which stage A of
 ## Design
 
 One model, Ling 3.1 Flash (`inclusionai/ling-3.1-flash`), free on OpenRouter,
-reasoning low; its own summarizer, as by default. A 32k settled-history budget
-through the trial hook (`data/trial.diff`), so every arm compacts most turns.
-The binary is `dev` at d2970b1 plus that hook.
+reasoning low; its own summarizer, as by default. A settled-history budget set through the trial hook (`data/trial.diff`); see the
+amendments for its value and the binary.
 
 **Arms** (hidden `--compaction` and `--compaction-source` flags):
 
@@ -71,6 +70,48 @@ two at a time.
 fails keeps the history whole, which flatters a summary arm. So a summary or
 record session with any failed fold is not scored. It is rerun, in its place
 in the order, until it has none, and the reruns are reported.
+
+## Amendments from two pilots, before the main batch
+
+Both pilots ran one session an arm; neither is pooled.
+
+**The first pilot measured nothing.** At a 32k budget no arm ever summarized
+or rolled: clearing old tool results, which every arm does first, brought this
+script's history under budget every time, because without the file contents
+the conversation's own text is small. That is a finding about pruning — on
+sessions dominated by tool output, it makes summaries rare — but it left the
+arms identical. **The budget is 4,000 tokens**, small enough that the text
+itself overflows once tool results are cleared, from about turn 6.
+
+**The second pilot (4k) compacted in every arm** and found three things:
+
+- **The roll note's cap was a quarter of the budget**, 1,000 tokens here, so
+  `roll` lost every early user message to it. A real budget is half the
+  window and the cap tens of thousands of tokens (Kimi's is 20k), so a cap
+  that shrinks with an artificial budget tests nothing a session meets. The
+  cap is now a quarter of the budget but never under 16k tokens (a25dee2);
+  the binary is a25dee2 plus the hook.
+- **Ling's free tier rate-limited summary calls:** 6 failed folds in one
+  `summary` session, 3 in `record`. A rule that reruns such sessions until
+  they have none might never finish. **Replaced:** every session is scored,
+  and failed folds are reported per arm. A failed fold keeps more of the
+  history, so failures can only help the summary arms. A `roll` win is
+  therefore robust to them; a summary win is to be checked on a paid model.
+- **Ling looped once,** mid-turn in `roll-bare`, narrating "Step 1: read."
+  instead of calling the tool. Strument's loop detector stopped it and asked
+  what to do, and the runner, not answering, waited out its limit. The runner
+  now answers "stop", so the turn ends there, and counts loops per arm. The
+  turn limit is 3,600 s.
+
+The scorer had two bugs the self-test missed, both fixed and covered:
+
+- it applied a text pattern to bytes;
+- it located turns by their echoed prompt, which wraps mid-path at the
+  terminal's width; it now uses the usage line that ends every turn.
+
+In the second pilot both summary arms kept all 6 user facts and all 4 derived
+facts. `roll` answered "don't know" to all four derived questions rather than
+guessing.
 
 ## Decision rule
 

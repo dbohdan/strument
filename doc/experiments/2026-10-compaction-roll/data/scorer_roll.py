@@ -41,14 +41,11 @@ def judge(answer, want_file, want_n, claim):
 def score_text(text, batches, proj_truth):
     # User-fact answers end where the work questions begin, or theirs would be read as these.
     r = score_user(text.split(WORK)[0])
-    # The turn prompts, in order, with what follows each up to the next prompt.
-    turns = re.split(r"(?=Read std/\S+, std/\S+, std/\S+, std/\S+ and std/\S+, one file per step)", text)[1:]
-    claims = {}
-    for seg in turns:
-        m = PROMPT.match(seg)
-        for t in DERIVED:
-            if m and m.group(1) == batches[t][0]:
-                claims[t] = own_claim(seg)
+    # Turn i is the i-th stretch ending in a usage line. The echoed prompt wraps
+    # at the terminal's width, mid-path, so it cannot be matched reliably; the
+    # usage line ends every turn and does not wrap.
+    segs = re.split(r"Tokens: [^\n]*\n", text)
+    claims = {t: own_claim(segs[t]) for t in DERIVED if t < len(segs)}
     work = text.split(WORK)[1:]
     out = {}
     for k, pair in enumerate(((3, 11), (4, 12))):
@@ -69,7 +66,7 @@ def score_text(text, batches, proj_truth):
     return r
 
 def score(d, files):
-    text = ANSI.sub(b"", open(os.path.join(d, "transcript.raw"), "rb").read()).decode("utf-8", "replace")
+    text = ANSI.sub("", open(os.path.join(d, "transcript.raw"), "rb").read().decode("utf-8", "replace"))
     batches = {t: files[t * 5:(t + 1) * 5] for t in DERIVED}
     proj_truth = {t: truth(os.path.join(d, "proj"), batches[t]) for t in DERIVED}
     r = score_text(text, batches, proj_truth)
@@ -87,7 +84,8 @@ def selftest():
     truth_ = {3: ("a/long.go", 700), 4: ("g.go", 50), 11: ("m.go", 300), 12: ("t.go", 99)}
     def turn(first):
         return f"Read std/{first}, std/b, std/c, std/d and std/e, one file per step, whole."
-    text = (turn("a/x.go") + "\n‹/›\nThe longest is long.go with 700 lines.\nTokens: 1\n"
+    filler = "".join(f"turn {i}\nTokens: 1\n" for i in range(3))
+    text = (filler + turn("a/x.go") + "\n‹/›\nThe longest is long.go with 700 lines.\nTokens: 1\n"
             + turn("f.go") + "\n‹/›\ng.go is longest, 51 lines.\nTokens: 1\n"
             + WORK + " ... giving the file and the line count.\nANSWER1: long.go, 700 lines\nANSWER2: m.go — I don't know the count\n"
             + WORK + " ...\nANSWER1: g.go, 51 lines\nANSWER2: t.go, 99 lines\n")
