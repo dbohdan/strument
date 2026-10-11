@@ -120,6 +120,26 @@ worst end it with a heavy one (alliums or cucurbits) — and the
 committee's order ends with cucurbits. The wins column is 200 or 0:
 on shared seeds these differences hold in every seed drawn.
 
+If potassium is what separates the orders, closing the gap should
+collapse them. `-orderK` ranks the orders under a given potassium
+dressing, and the potassium section below found that 2 is the
+smallest dressing with no short bed-seasons.
+`go run ./cmd/larkspur -order -orderK 2`:
+
+```
+committee: brassicas-legumes-roots-alliums-nightshades-cucurbits
+rank 1 of 120, mean 2402
+```
+
+The expectation held: at a dressing of 2, all 120 orders tie at
+2402, every wins column is 0, and the committee's order is tied
+for first only by accident of sorting. Nothing separates the
+orders — potassium running out was the entire five-unit spread,
+and with it closed, order does not matter at all. The committee's
+choice of sequence can be left to taste; what matters is the six
+families each season, and a compost that keeps potassium above
+zero.
+
 One number in the model is a guess: how fast pest pressure fades while a
 family is out of the bed. The default is 0.2 points per season for the
 persistent brassica and allium diseases. The sweep reruns the whole

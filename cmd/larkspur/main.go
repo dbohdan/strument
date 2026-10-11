@@ -106,6 +106,7 @@ func main() {
 	paired := flag.Bool("paired", false, "compare strategies seed by seed on the same weather instead of printing the table")
 	order := flag.Bool("order", false, "rank all 120 cyclic family orders on shared seeds instead of printing the table")
 	potassium := flag.Bool("potassium", false, "sweep the yearly potassium dressing and report what rotation's beds need instead of printing the table")
+	orderK := flag.Int("orderK", 1, "rank the cyclic orders with this potassium dressing (used with -order)")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -135,7 +136,18 @@ func main() {
 		return
 	}
 	if *order {
-		orderRank(*seasons, *seeds, *beds, *seed)
+		if *orderK == garden.Compost.Potassium {
+			orderRank(*seasons, *seeds, *beds, *seed)
+		} else {
+			dressing := garden.Compost
+			dressing.Potassium = *orderK
+			newGarden := func() sim.Garden {
+				return sim.NewGarden(*beds).WithDressing(dressing)
+			}
+			header := fmt.Sprintf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds, potassium dressing %d (compost's is %d)",
+				*seeds, *orderK, garden.Compost.Potassium)
+			orderRankWith(newGarden, header, *seasons, *seeds, *seed)
+		}
 		return
 	}
 	if *potassium {
@@ -305,10 +317,20 @@ func potassiumNeed(seasons, seeds, beds int, first int64) {
 // on which an order beat the committee, so a difference between two
 // orders is not weather.
 func orderRank(seasons, seeds, beds int, first int64) {
+	newGarden := func() sim.Garden { return sim.NewGarden(beds) }
+	header := fmt.Sprintf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds", seeds)
+	orderRankWith(newGarden, header, seasons, seeds, first)
+}
+
+// orderRankWith ranks the cyclic orders on gardens built by
+// newGarden, so a run can compare them under a given dressing
+// without changing the default -order output. The header says
+// what newGarden varies, which -orderWithK prints.
+func orderRankWith(newGarden func() sim.Garden, header string, seasons, seeds int, first int64) {
 	committee := cycle{order: garden.FamilyOrder[:]}
 	committeeTotals := make([]int, seeds)
 	for i := 0; i < seeds; i++ {
-		committeeTotals[i] = sim.Run(sim.NewGarden(beds), committee, seasons, first+int64(i)).Total
+		committeeTotals[i] = sim.Run(newGarden(), committee, seasons, first+int64(i)).Total
 	}
 
 	type scored struct {
@@ -322,7 +344,7 @@ func orderRank(seasons, seeds, beds int, first int64) {
 		var sum int
 		wins := 0
 		for i := 0; i < seeds; i++ {
-			total := sim.Run(sim.NewGarden(beds), cycle{order: order}, seasons, first+int64(i)).Total
+			total := sim.Run(newGarden(), cycle{order: order}, seasons, first+int64(i)).Total
 			sum += total
 			if total > committeeTotals[i] {
 				wins++
@@ -340,7 +362,6 @@ func orderRank(seasons, seeds, beds int, first int64) {
 			break
 		}
 	}
-	fmt.Printf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds\n", seeds)
 	fmt.Printf("committee: %s\n", name)
 	fmt.Printf("rank %d of %d, mean %.0f\n\n", rank+1, len(scores), scores[rank].mean)
 
@@ -348,6 +369,7 @@ func orderRank(seasons, seeds, beds int, first int64) {
 		s := scores[r]
 		fmt.Printf("%4d %5.0f %5d  %s\n", r+1, s.mean, s.wins, s.order)
 	}
+	fmt.Println(header)
 	fmt.Println("rank mean wins  order")
 	for r := 0; r < 5; r++ {
 		show(r)
