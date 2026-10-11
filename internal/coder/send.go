@@ -927,7 +927,9 @@ func (c *Coder) maybeSummarize() {
 	if c.pruneHistory(budget) {
 		return
 	}
-	c.Out.Printf("Summarizing chat history to fit the context window...")
+	if c.CompactionMode == "" || c.CompactionMode == CompactionSummary {
+		c.Out.Printf("Summarizing chat history to fit the context window...")
+	}
 	if !c.compactHistory(budget) {
 		c.summaryBackoff = true
 	}
@@ -964,6 +966,9 @@ func (c *Coder) foldForOverflow() bool {
 // compactHistory folds the settled history to fit budget and reports whether
 // it did. On failure the history is left intact and the user told why.
 func (c *Coder) compactHistory(budget int) bool {
+	if c.CompactionMode == CompactionRoll || c.CompactionMode == CompactionRollBare {
+		return c.rollHistory(budget, c.CompactionMode == CompactionRoll)
+	}
 	beforeTokens := c.Summarizer.total(c.doneMessages)
 	beforeMessages := len(c.doneMessages)
 	out, err := c.Summarizer.summarize(c.doneMessages, budget)

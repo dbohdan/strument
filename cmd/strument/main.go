@@ -67,6 +67,9 @@ type chatCmd struct {
 	Yes              []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
 	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
 	Files            []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
+
+	// Hidden as well: the arms of doc/experiments/2026-10-compaction-roll.
+	Compaction string `default:"summary" enum:"summary,roll,roll-bare" help:"How an over-budget history is compacted." hidden:""`
 }
 
 func (c *chatCmd) Run() error {
@@ -185,6 +188,9 @@ func (c *chatCmd) Run() error {
 	}
 	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens,
 		cdr.Out, cdr.Clock, cdr.RecordSideCall)
+	// A trial flag (doc/experiments/2026-10-compaction-roll), hidden until a
+	// trial says which mode should be the default.
+	cdr.CompactionMode = c.Compaction
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)

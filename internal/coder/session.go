@@ -105,6 +105,7 @@ func (c *Coder) ClearHistory() {
 	c.doneMessages = nil
 	c.curMessages = nil
 	c.turns, c.compactedTurns = nil, false
+	c.rolledSaid = nil
 }
 
 // AppendContext adds material to the current history without sending

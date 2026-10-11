@@ -305,6 +305,12 @@ type Coder struct {
 	// tokenScale is the provider's count of a request over Strument's estimate
 	// of it, smoothed; 0 until the first main-model response. See calibrateTokens.
 	tokenScale float64
+	// CompactionMode is how an over-budget history is compacted: summarized
+	// (the default) or rolled. See roll.go.
+	CompactionMode string
+	// rolledSaid is what the user said in turns a roll has dropped, oldest
+	// first, carried into each later roll's note.
+	rolledSaid []string
 
 	// cancelSend stops the send in flight, and only that send. See
 	// sendSteerable and InterruptSend. Guarded because the caller is a signal

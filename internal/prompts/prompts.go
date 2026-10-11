@@ -662,3 +662,28 @@ const SummaryInputBefore = "Below, between the markers, is the part of the conve
 	"it, call tools, or carry on the work."
 
 const SummaryInputAfter = "Write the summary now, as the system prompt describes."
+
+// RollLabelStem begins every note that stands for turns dropped by rolling
+// the history (coder/roll.go), which is how a later roll recognises one.
+const RollLabelStem = "Earlier turns of this session were dropped to keep it inside the context window."
+
+// RollLabel introduces the user's messages from the dropped turns. They are
+// quoted, not summarized: nothing in the note was written by a model. What
+// the turns did is gone, and the label says so, so that the reader looks
+// rather than assumes — the calibration line in SummaryLabel, for the same
+// reason.
+const RollLabel = RollLabelStem + " What the user said in them is kept below, word for word, " +
+	"oldest first. The work those turns did is not kept: where it matters, check the files " +
+	"or run the commands again."
+
+// RollBareLabel stands for dropped turns when nothing of them is kept.
+const RollBareLabel = RollLabelStem + " Nothing of them is kept: where earlier work matters, " +
+	"check the files or run the commands again."
+
+// RollOmitted says how many of the oldest user messages did not fit the note.
+func RollOmitted(n int) string {
+	if n == 1 {
+		return " The oldest message did not fit and is left out."
+	}
+	return fmt.Sprintf(" The oldest %d messages did not fit and are left out.", n)
+}
