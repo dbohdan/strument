@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 	"math"
+	"strings"
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
@@ -75,5 +76,34 @@ func TestCalibratedBudgetFolds(t *testing.T) {
 	}
 	if side.calls == 0 && !hasSummaryContent(c.doneMessages) {
 		t.Error("a history over budget by the provider's count did not fold at turn end")
+	}
+}
+
+// A process per turn folds only on restore, so the restore has to measure in
+// the provider's units: the ratio comes from the last turn request this model
+// made, recorded with both counts.
+func TestRestoreSeedsTheTokenScale(t *testing.T) {
+	c := testCoder(t)
+	side := &summaryStub{}
+	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
+	var recs []Record
+	for range 6 {
+		recs = append(recs, msg(llm.RoleUser, strings.Repeat("x", 1600)), msg(llm.RoleAssistant, strings.Repeat("y", 1600)))
+		recs = append(recs, Record{Type: "turn"})
+	}
+	recs = append(recs,
+		Record{Type: "request", Call: "turn", Model: "elsewhere/other", Sent: 300, Estimated: 100},
+		Record{Type: "request", Call: "turn", Model: c.Model.QualifiedSlug(), Sent: 140, Estimated: 100})
+	msgs, stats := MessagesFromRecords(recs)
+	est := c.Summarizer.total(msgs)
+	c.Model.Context = 2*est + 2000 // fits by the estimate, not by the provider's count
+
+	c.SeedTokenScale(stats)
+	if math.Abs(c.tokenScale-1.4) > 1e-9 {
+		t.Fatalf("scale %v, want this model's 1.4 (not the other model's 3)", c.tokenScale)
+	}
+	c.RestoreHistory(msgs, stats.Turns)
+	if side.calls == 0 {
+		t.Error("the restored history, over budget in the provider's units, did not fold")
 	}
 }

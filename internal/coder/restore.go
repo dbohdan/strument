@@ -53,6 +53,9 @@ type RestoreStats struct {
 	// Turns are the surviving turns' ranges in the returned messages, oldest
 	// first, so a restored session can be rewound like a live one.
 	Turns []TurnSpan
+	// TokenScales is, per model, the provider's count of its last turn request
+	// over Strument's estimate of it, from records that carry both.
+	TokenScales map[string]float64
 	// Rewound counts the turns /rewind records took out.
 	Rewound int
 }
@@ -103,6 +106,12 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 			}
 			turnStart = len(out)
 			continue
+		}
+		if r.Type == "request" && r.Call == "turn" && r.Sent > 0 && r.Estimated > 0 {
+			if stats.TokenScales == nil {
+				stats.TokenScales = map[string]float64{}
+			}
+			stats.TokenScales[r.Model] = float64(r.Sent) / float64(r.Estimated)
 		}
 		if r.Type != "message" {
 			continue

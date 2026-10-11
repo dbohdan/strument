@@ -153,11 +153,12 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 	// edits, asking the user — is outside it, so summing these across a turn
 	// gives model time rather than wall time.
 	started := c.Clock.Now()
+	estimated := c.requestTokens(req.Messages)
 	defer func() {
 		elapsed := c.Clock.Now().Sub(started)
 		usage.modelTime += elapsed
 		c.messageModelTime += elapsed
-		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed)
+		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed, estimated)
 	}()
 
 	for ev, err := range c.Client.Send(ctx, req) {
@@ -201,7 +202,7 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 		case llm.EventUsage:
 			usage.add(ev.Usage)
 			if call == "turn" && ev.Usage != nil && ev.Usage.PromptTokens > 0 {
-				c.calibrateTokens(c.requestTokens(req.Messages), ev.Usage.PromptTokens)
+				c.calibrateTokens(estimated, ev.Usage.PromptTokens)
 			}
 			if ev.Usage != nil {
 				got.Add(*ev.Usage)
@@ -769,6 +770,19 @@ func (c *Coder) calibrateTokens(estimated, counted int) {
 		return
 	}
 	c.tokenScale = (c.tokenScale + r) / 2
+}
+
+// SeedTokenScale starts a restored session from the token ratio its last turn
+// request measured on this model, so that the restore-time fold measures the
+// history in the provider's units. Without it a restore measured with the bare
+// estimate, which undercounts code, and a process per turn (--continue -m) never
+// folded at all: each turn's fold came at its end, and was discarded with the
+// process. Another model's ratio is no guide to this one's tokenizer.
+func (c *Coder) SeedTokenScale(stats RestoreStats) {
+	if r, ok := stats.TokenScales[c.Model.QualifiedSlug()]; ok {
+		c.tokenScale = 0
+		c.calibrateTokens(1000, int(r*1000))
+	}
 }
 
 // scaledTokens converts an estimate into the provider's units, as far as this

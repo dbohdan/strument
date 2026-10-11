@@ -98,10 +98,14 @@ type Record struct {
 	// it is a poor one: the markdown the transcript used to hold carried the
 	// turn's time in its header, and rebuilding that header is what reading
 	// these rows back is for.
-	Time      string  `json:"time,omitempty"`
-	Outcome   string  `json:"outcome,omitempty"`
-	Steps     int     `json:"steps,omitempty"`
-	Sent      int     `json:"sent,omitempty"`
+	Time    string `json:"time,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
+	Steps   int    `json:"steps,omitempty"`
+	Sent    int    `json:"sent,omitempty"`
+	// Estimated is Strument's own estimate of a request whose provider count
+	// is Sent. The pair is what a restore learns the token ratio from
+	// (calibrateTokens), before the restored history is measured.
+	Estimated int     `json:"estimated,omitempty"`
 	Received  int     `json:"received,omitempty"`
 	Cost      float64 `json:"cost,omitempty"`
 	CostKnown bool    `json:"cost_known,omitempty"`
@@ -395,7 +399,7 @@ var streamOutcomes = map[streamResult]string{
 // a request that failed before usage arrived records no counts rather than
 // zeroes that look measured.
 func (c *Coder) recordRequest(call string, res streamResult, err error, finishReason string,
-	usage llm.Usage, sawUsage bool, elapsed time.Duration,
+	usage llm.Usage, sawUsage bool, elapsed time.Duration, estimated int,
 ) {
 	if c.Recorder == nil {
 		return
@@ -416,6 +420,7 @@ func (c *Coder) recordRequest(call string, res streamResult, err error, finishRe
 	}
 	if sawUsage {
 		r.Sent = usage.PromptTokens
+		r.Estimated = estimated
 		r.Received = usage.CompletionTokens
 		r.CacheRead = usage.CacheReadTokens
 		r.CacheWrite = usage.CacheWriteTokens

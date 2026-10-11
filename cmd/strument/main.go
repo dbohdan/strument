@@ -902,6 +902,7 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 	if len(msgs) == 0 {
 		return ""
 	}
+	cdr.SeedTokenScale(stats)
 	cdr.RestoreHistory(msgs, stats.Turns)
 	if cdr.RestoredFromAnotherModel(stats) {
 		cdr.NoteRestoredFromAnotherModel()

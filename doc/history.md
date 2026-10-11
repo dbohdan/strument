@@ -142,7 +142,9 @@ When the provider reported usage, the record adds `sent` and `received`, their
 `cache_read`, `cache_write` and `reasoning` parts, the `cost`, and the
 `provider` that actually served the request, where a router reports one
 (OpenRouter does). A request that failed before usage arrived has no counts
-rather than zeroes.
+rather than zeroes. Beside `sent` goes `estimated`, Strument's own estimate of
+the same request: a restored session learns from the pair how far its estimate
+undercounts the provider's tokenizer, and measures the history budget with that.
 
 A **`side_call`** record covers each request Strument makes for itself: a
 commit message, session notes, or a compaction summary. These requests are
