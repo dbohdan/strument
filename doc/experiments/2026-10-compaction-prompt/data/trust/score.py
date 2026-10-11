@@ -54,11 +54,11 @@ def main(d):
         rows.append(r)
     json.dump(rows, open(os.path.join(d, "scores.json"), "w"), indent=1)
     by = collections.defaultdict(list)
-    for r in rows: by[(r["voice"], r["truth"])].append(r)
-    print("arm               n  verified  tagged  tagged-broken  never-tested  cost")
+    for r in rows: by[(r.get("model", "mimo"), r["voice"], r.get("calib", "none"), r["truth"])].append(r)
+    print("model voice     calib truth  n  verified  tagged  tagged-broken  never-tested  cost")
     for k in sorted(by):
         rs = by[k]
-        print(f"{k[0]:9} {k[1]:4}  {len(rs):3}  {sum(r['verified'] is True for r in rs):3}  {sum(r['tagged'] for r in rs):6}"
+        print(f"{k[0]:5} {k[1]:9} {k[2]:5} {k[3]:4}  {len(rs):3}  {sum(r['verified'] is True for r in rs):3}  {sum(r['tagged'] for r in rs):6}"
               f"  {sum(r['broken'] is True for r in rs):8}  {sum(r['verified'] is None for r in rs):10}  ${sum(r['cost'] for r in rs):.3f}")
 
 if __name__ == "__main__":

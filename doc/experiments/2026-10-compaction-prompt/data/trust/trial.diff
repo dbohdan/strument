@@ -1,8 +1,8 @@
 diff --git a/internal/coder/coder.go b/internal/coder/coder.go
-index cfe8f09..4f584d4 100644
+index cfe8f09..7742ac4 100644
 --- a/internal/coder/coder.go
 +++ b/internal/coder/coder.go
-@@ -822,6 +822,13 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
+@@ -822,6 +822,17 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
  		return
  	}
  	message := userMessage
@@ -10,7 +10,11 @@ index cfe8f09..4f584d4 100644
 +	// a seeded compaction summary, as if earlier turns had been folded.
 +	if f := os.Getenv("STRUMENT_TRIAL_SEED_SUMMARY"); f != "" && len(c.doneMessages) == 0 {
 +		if b, err := os.ReadFile(f); err == nil {
-+			c.doneMessages = append(c.doneMessages, llm.HarnessNote(prompts.SummaryLabel+strings.TrimSpace(string(b))))
++			label := prompts.SummaryLabel
++			if extra := os.Getenv("STRUMENT_TRIAL_LABEL_EXTRA"); extra != "" {
++				label = strings.TrimSuffix(label, "\n\n") + " " + extra + "\n\n"
++			}
++			c.doneMessages = append(c.doneMessages, llm.HarnessNote(label+strings.TrimSpace(string(b))))
 +		}
 +	}
  
