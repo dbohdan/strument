@@ -176,3 +176,19 @@ nothing, one fold kept most.
    is the main model, which it already is by default, since `side_model`
    resolves to the model itself. It changes how the request is laid out,
    not what it asks.
+
+## What came of it
+
+As of 2026-10-11, in commit order:
+
+- **The prompt and its input** — the "Said by the user" list, a framed
+  input and a continuation guard — eaa9cbd. See
+  `2026-10-compaction-prompt`, which found the summarizer had been
+  continuing the transcript instead of summarizing it.
+- **Overflow:** fold and retry, before sending and on a provider's
+  refusal — 403d5bb.
+- **Compacting late:** history may fill half the window — bf166d8.
+- **Pruning:** old tool results are cleared before any summary — 3193774.
+- **Not done:** the cache-friendly fold, and keeping the user's messages
+  verbatim in code. The "Said by the user" list kept every planted fact in
+  every chain, so the second is less pressing than it looked.
