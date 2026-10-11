@@ -1033,6 +1033,25 @@ func TestScriptMessage(t *testing.T) {
 	}
 }
 
+// --unattended in script mode declines before reading stdin, even where stdin
+// is a terminal, and marks the decline so the model is not told the user chose.
+func TestTerminalConfirmerUnattendedDeclines(t *testing.T) {
+	var res coder.ConfirmResult
+	out, _ := captureStdout(t, func() error {
+		res = terminalConfirmer{unattended: true}.Confirm(coder.ConfirmRequest{
+			Prompt: "Fetch it?",
+			Grant:  coder.GrantWebfetch,
+		})
+		return nil
+	})
+	if res.Yes || !res.Unattended {
+		t.Errorf("got %+v, want an unattended decline", res)
+	}
+	if !strings.Contains(out, "runs unattended") || !strings.Contains(out, "--yes webfetch") {
+		t.Errorf("the decline does not say why or name the flag:\n%s", out)
+	}
+}
+
 // Script mode's confirmer shows what the REPL's shows, in the same order:
 // purpose, command, then approve_model's note. The note reached the REPL first
 // and not this surface, which only a pty run through -m showed.

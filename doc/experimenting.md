@@ -369,7 +369,10 @@ depend on the trial. That leaves one hypothesis to test and one change to revert
 - **`--yes NAME` in trials**, naming every prompt the run can raise, otherwise
   an unanswered prompt may stall an unattended session. Include
   `steps` for anything long enough to reach the budget; `--yes all` is the
-  blunt version when the run is disposable.
+  blunt version when the run is disposable. A runner that drives a pty also
+  needs `--unattended`: the pty is a terminal, so a prompt `--yes` does not
+  name waits for an answer. The compaction-roll trial's runner typed one in
+  by pattern-matching the screen, and stalled on each prompt it did not know.
 - **Fix the random seed and shuffle the job list**, so a rerun is comparable and
   the arm is not confounded with the hour it ran.
 

@@ -224,6 +224,7 @@ See the [`run_code` tool](doc/config.md#the-run_code-tool).
 `strument -m '<request>'` runs a single turn and exits.
 The option `--dry-run` shows the edits without writing them.
 With no terminal, every confirmation prompt is declined unless `--yes <name>` approves it;
+`--unattended` does the same for a script driving a terminal.
 read [script mode](doc/config.md#script-mode--m) before giving an unattended run `--yes bash`.
 
 ### Sessions

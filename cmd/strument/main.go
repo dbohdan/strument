@@ -65,6 +65,7 @@ type chatCmd struct {
 	DryRun           bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
 	NoShell          bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
 	Yes              []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	Unattended       bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
 	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
 	Files            []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 
@@ -191,7 +192,7 @@ func (c *chatCmd) Run() error {
 	// A trial flag (doc/experiments/2026-10-compaction-roll), hidden until a
 	// trial says which mode should be the default.
 	cdr.CompactionMode = c.Compaction
-	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{}}
+	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{unattended: c.Unattended}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
 	if repo != nil {
@@ -1046,6 +1047,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		IsTerminal: drivingATerminal,
 		// Only stdin: `strument | tee log` still has a human to ask.
 		StdinIsTerminal: func() bool { return isTerminal(os.Stdin) },
+		Unattended:      c.Unattended,
 		HistoryFile:     inputHistory,
 		Version:         version,
 		Theme:           c.paletteTheme(),
@@ -1101,9 +1103,11 @@ func drivingATerminal() bool {
 // buffered past the line it used, which loses input that was never answered.
 var stdinReader = bufio.NewReader(os.Stdin)
 
-type terminalConfirmer struct{}
+// terminalConfirmer asks at the terminal. unattended answers every prompt
+// with its safe answer instead, as when there is no terminal (--unattended).
+type terminalConfirmer struct{ unattended bool }
 
-func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
+func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	switch {
 	case req.Command != "":
 		if req.Purpose != "" {
@@ -1138,15 +1142,19 @@ func (terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	// The REPL's rlConfirmer declines rather than reading when nobody is at
 	// the keyboard; this surface follows, so the two mean the same thing. Only
 	// stdin is consulted: redirecting output does not take the human away.
-	if !isTerminal(os.Stdin) {
+	if t.unattended || !isTerminal(os.Stdin) {
 		// The same advice the REPL gives, and for the same reason: name the
 		// flag that would have answered *this* prompt rather than the nearest
 		// of two.
+		why := "this prompt requires an interactive terminal"
+		if t.unattended {
+			why = "this session runs unattended"
+		}
 		if req.Grant == "" {
-			fmt.Println("Declined: this prompt requires an interactive terminal and cannot be approved with `--yes`.")
+			fmt.Printf("Declined: %s, and this prompt cannot be approved with `--yes`.\n", why)
 			return coder.ConfirmResult{Unattended: true}
 		}
-		fmt.Printf("Declined: this prompt requires an interactive terminal. Pass `--yes %s` to approve it automatically.\n", req.Grant)
+		fmt.Printf("Declined: %s. Pass `--yes %s` to approve it automatically.\n", why, req.Grant)
 		return coder.ConfirmResult{Unattended: true}
 	}
 

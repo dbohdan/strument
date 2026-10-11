@@ -126,6 +126,11 @@ type Options struct {
 	// tee log` — leaves a human perfectly able to answer a prompt, and folding
 	// the two questions together would refuse to ask them.
 	StdinIsTerminal func() bool
+	// Unattended answers every question the harness would ask mid-turn with
+	// its safe answer, terminal or not: declined, stopped, unanswered. For a
+	// session driven by a script through a pty, where there is a terminal and
+	// no one at it. Prompts --yes names are still approved.
+	Unattended bool
 	// MakeRaw/ExitRaw override raw-mode handling; readline's default
 	// operates on the process's stdin, which tests replace with a pty.
 	MakeRaw func() error
@@ -358,7 +363,19 @@ func (r *REPL) interactive() bool {
 // --yes NAME is how a scripted session says yes; such prompts are answered before
 // the fallback is ever reached.
 func (r *REPL) canAsk() bool {
+	if r.opts.Unattended {
+		return false
+	}
 	return r.opts.StdinIsTerminal == nil || r.opts.StdinIsTerminal()
+}
+
+// noAskReason says why a question was not asked: the session was started
+// unattended, or there is no terminal to ask at.
+func (r *REPL) noAskReason() string {
+	if r.opts.Unattended {
+		return "this session runs unattended"
+	}
+	return "this prompt requires an interactive terminal"
 }
 
 // announce prints the opening banner once at session start, mirroring
@@ -776,10 +793,10 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// message could only pick between two, so it named the right flag by
 		// luck; now the prompt carries its own name and the advice is precise.
 		if req.Grant == "" {
-			r.out.Warningf("Declined: this prompt requires an interactive terminal and cannot be approved with `--yes`.")
+			r.out.Warningf("Declined: %s, and this prompt cannot be approved with `--yes`.", r.noAskReason())
 			return coder.ConfirmResult{Unattended: true}
 		}
-		r.out.Warningf("Declined: this prompt requires an interactive terminal. Pass `--yes %s` to approve it automatically.", req.Grant)
+		r.out.Warningf("Declined: %s. Pass `--yes %s` to approve it automatically.", r.noAskReason(), req.Grant)
 		return coder.ConfirmResult{Unattended: true}
 	}
 
@@ -885,7 +902,13 @@ func (rl rlAsker) Ask(req coder.AskRequest) []string {
 	// user turn as the answer. There is no flag that answers a question, so
 	// the honest outcome is the one a nil Asker already produces.
 	if !r.canAsk() {
-		r.out.Warningf("Declined: answering a question requires an interactive terminal. The model is told it went unanswered.")
+		if r.opts.Unattended {
+			// No claim about the model here: the loop and interrupt questions
+			// share this path, and an unanswered one of those just stops.
+			r.out.Warningf("Unanswered: this session runs unattended.")
+		} else {
+			r.out.Warningf("Declined: answering a question requires an interactive terminal. The model is told it went unanswered.")
+		}
 		return nil
 	}
 

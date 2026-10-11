@@ -1404,6 +1404,34 @@ func TestAskReturnsUnansweredWithoutATerminal(t *testing.T) {
 	}
 }
 
+// TestUnattendedDeclinesAtATerminal pins --unattended: a script driving a pty
+// gives the REPL a terminal and no one at it, so the answer the script would
+// type (here "y") must stay unread and the prompt be declined as unattended.
+func TestUnattendedDeclinesAtATerminal(t *testing.T) {
+	r, _, out := newTestREPL(t, answerStub("ok"), strings.NewReader("y\n"))
+	r.opts.StdinIsTerminal = func() bool { return true }
+	r.opts.Unattended = true
+
+	res := r.Confirmer().Confirm(coder.ConfirmRequest{Prompt: "Fetch it?", Grant: coder.GrantWebfetch})
+	if res.Yes || res.Always {
+		t.Fatal("an unattended session approved a prompt --yes did not cover")
+	}
+	if !res.Unattended {
+		t.Error("the decline is not marked unattended, so the model would credit the user with it")
+	}
+	got := out.String()
+	if !strings.Contains(got, "runs unattended") || !strings.Contains(got, "--yes webfetch") {
+		t.Errorf("the decline does not say why or name the flag:\n%s", got)
+	}
+
+	if ans := r.Asker().Ask(coder.AskRequest{Question: "Which?", Options: []coder.AskOption{{Label: "a"}}}); ans != nil {
+		t.Errorf("an unattended session answered a question: %q", ans)
+	}
+	if line, err := r.rl.ReadLine(); err != nil || line != "y" {
+		t.Errorf("a prompt read the script's input: %q %v", line, err)
+	}
+}
+
 // The outside-read "a" covers a directory, and a directory is written with a
 // trailing slash (doc/messages.md): "all under /x/y" could be a file's name.
 func TestOutsideReadSuffixEndsTheDirectoryInASlash(t *testing.T) {

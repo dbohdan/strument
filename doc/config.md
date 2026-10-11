@@ -1289,6 +1289,12 @@ declined. A nonempty answer, even a truncated one, exits with status 0.
 Without a terminal on standard input, every prompt is declined unless `--yes`
 approves it, and Strument names the `--yes` value that would have. An interrupt
 stops the turn without the follow-up question an interactive session asks.
+`--unattended` does the same where there is a terminal and no one at it, as
+when a script drives Strument through a pty: every prompt `--yes` does not
+approve is declined, a question to the user goes unanswered, and nothing is
+read from the terminal until the turn ends. It works in the REPL as well as
+with `-m`. There is deliberately no environment variable for it: a setting
+that silently declines every prompt is one to see on the command line.
 `SIGUSR1` interrupts the current send as a single Ctrl-C does, without counting
 toward the double-Ctrl-C exit, and does nothing between turns. That is how a
 script or a remote assistant stops a run whose keyboard it cannot reach:

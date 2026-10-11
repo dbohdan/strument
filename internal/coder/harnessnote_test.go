@@ -37,7 +37,7 @@ func TestDeclinedCommandsSayWhoDeclined(t *testing.T) {
 		want, not string
 	}{
 		{"a person said no", noConfirmer{}, "The user chose not to run the command.", "no one"},
-		{"no one could be asked", unattendedConfirmer{}, "no one is at a terminal", "The user chose"},
+		{"no one could be asked", unattendedConfirmer{}, "no one is available to approve it", "The user chose"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testCoder(t)

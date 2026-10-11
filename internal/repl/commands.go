@@ -1510,8 +1510,7 @@ func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
 		"Stored tool output is shared between sessions and is kept.", name, lost)
 
 	if !r.canAsk() {
-		r.out.Warningf("Declined: deleting a session requires an interactive terminal. " +
-			"Use `strument session delete` from a shell instead.")
+		r.out.Warningf("Declined: %s. Use `strument session delete` from a shell instead.", r.noAskReason())
 		return false
 	}
 	cfg := r.rl.GetConfig()

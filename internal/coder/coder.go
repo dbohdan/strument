@@ -774,11 +774,12 @@ func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
 
 // declined is the model's text for a prompt that was answered no. what is the
 // action as the sentence needs it ("run the command"). When no one could be
-// asked, it says that, and which --yes would have approved it, rather than
-// crediting a user who never saw the question.
+// asked (no terminal, or a session started --unattended), it says that, and
+// which --yes would have approved it, rather than crediting a user who never
+// saw the question.
 func declined(res ConfirmResult, what, grant string) string {
 	if res.Unattended {
-		return fmt.Sprintf("Strument declined to %s: no one is at a terminal to approve it, and the "+
+		return fmt.Sprintf("Strument declined to %s: no one is available to approve it, and the "+
 			"session was not started with `--yes %s`. Do without it, or say what you would have done.", what, grant)
 	}
 	return "The user chose not to " + what + "."

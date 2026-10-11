@@ -7,7 +7,7 @@
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
 _strument_commands="chat trust history config model-config project session tool shell usage"
-_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --consult-scope --config --version"
+_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --unattended --consult-scope --config --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="list path edit markdown strip zip"
