@@ -266,5 +266,40 @@ above 2 adds nothing more. So the committee's potassium gap is small and
 worth closing with one extra unit a year, and it moves the harvest by about
 a tenth of a percent.
 
+But the gap was not costing every strategy alike. `go run
+./cmd/larkspur -dressK 2` (and `-paired -dressK 2`) reruns the
+default table and the paired comparison with a dressing of 2.
+The expectation: rotation keeps its lead, since the big gaps come
+from pest pressure, which a dressing does not touch, and every
+strategy gains a little. What held, and what did not:
+
+```
+strategy         mean      p10      p90  % of rotation
+rotation         2402     2256     2544           100%
+monoculture      1203     1116     1284            50%
+alternation      2075     1920     2220            86%
+greedy           2159     1980     2316            90%
+```
+
+Paired on the same seeds (`go run ./cmd/larkspur -paired
+-dressK 2`), rotation still wins all 200 against each of
+the three, never tying or losing; the tightest margin is
++120 against greedy (seed 107, the same seed as at the
+default dressing), then +300 against alternation and
++1056 against monoculture.
+
+Rotation still beats all three in all 200 paired seeds, so the
+lead holds. But monoculture gained the most — 1084 to 1203, and
+45% to 50% of rotation — because brassicas are the heaviest
+potassium feeder (draw 2 a season against rotation's average
+1.5), so the richer compost relieved it far more than it relieved
+rotation. Closing the potassium gap narrows rotation's lead over
+monoculture by about a tenth of the garden. Alternation is
+unchanged and greedy barely moves: their potassium drains
+slowly enough that the extra unit changes almost nothing. So the
+committee's compost flatters rotation in the default table: with
+the gap closed, lazier strategies look a little better, though
+nowhere near the rule.
+
 Built in sessions driven through [Strument](https://dbohdan.com/strument);
 see DRIVING.md for notes on those sessions.

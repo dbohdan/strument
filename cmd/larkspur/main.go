@@ -107,6 +107,7 @@ func main() {
 	order := flag.Bool("order", false, "rank all 120 cyclic family orders on shared seeds instead of printing the table")
 	potassium := flag.Bool("potassium", false, "sweep the yearly potassium dressing and report what rotation's beds need instead of printing the table")
 	orderK := flag.Int("orderK", 1, "rank the cyclic orders with this potassium dressing (used with -order)")
+	dressK := flag.Int("dressK", 1, "run the default table and -paired with this potassium dressing (compost's is 1)")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -117,6 +118,25 @@ func main() {
 	}
 	if *beds < 1 {
 		fatalf("-beds must be at least 1")
+	}
+	if *dressK < 0 {
+		fatalf("-dressK must be at least 0")
+	}
+
+	// A dressing of nil means the committee's compost; a
+	// non-nil one replaces it, which is how -dressK runs the
+	// table and -paired under a different potassium level.
+	var dressing *garden.Nutrients
+	if *dressK != garden.Compost.Potassium {
+		d := garden.Compost
+		d.Potassium = *dressK
+		dressing = &d
+	}
+	newGarden := func() sim.Garden {
+		if dressing == nil {
+			return sim.NewGarden(*beds)
+		}
+		return sim.NewGarden(*beds).WithDressing(*dressing)
 	}
 
 	if *sweep {
@@ -132,18 +152,13 @@ func main() {
 		return
 	}
 	if *paired {
-		pairedCompare(*seasons, *seeds, *beds, *seed)
+		pairedCompareWith(newGarden, *seasons, *seeds, *seed)
 		return
 	}
 	if *order {
-		if *orderK == garden.Compost.Potassium {
+		if *orderK == garden.Compost.Potassium && dressing == nil {
 			orderRank(*seasons, *seeds, *beds, *seed)
 		} else {
-			dressing := garden.Compost
-			dressing.Potassium = *orderK
-			newGarden := func() sim.Garden {
-				return sim.NewGarden(*beds).WithDressing(dressing)
-			}
 			header := fmt.Sprintf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds, potassium dressing %d (compost's is %d)",
 				*seeds, *orderK, garden.Compost.Potassium)
 			orderRankWith(newGarden, header, *seasons, *seeds, *seed)
@@ -155,7 +170,7 @@ func main() {
 		return
 	}
 
-	rows := measure(*seasons, *seeds, *beds, *seed, nil)
+	rows := measureWith(newGarden, *seasons, *seeds, *seed, nil)
 	printTable(rows)
 	printSparklines(rows)
 }
@@ -165,6 +180,12 @@ func main() {
 // strategy, how often rotation's total beats it and rotation's
 // worst margin over all seeds.
 func pairedCompare(seasons, seeds, beds int, first int64) {
+	pairedCompareWith(func() sim.Garden { return sim.NewGarden(beds) }, seasons, seeds, first)
+}
+
+// pairedCompareWith is pairedCompare on gardens built by
+// newGarden, so -paired can run under a dressing.
+func pairedCompareWith(newGarden func() sim.Garden, seasons, seeds int, first int64) {
 	type stats struct {
 		wins, ties, losses int
 		worst, worstAt     int64
@@ -175,7 +196,7 @@ func pairedCompare(seasons, seeds, beds int, first int64) {
 		s := first + int64(i)
 		totals := make([]int64, len(strategies))
 		for j, st := range strategies {
-			res := sim.Run(sim.NewGarden(beds), st.s, seasons, s)
+			res := sim.Run(newGarden(), st.s, seasons, s)
 			totals[j] = int64(res.Total)
 		}
 
@@ -485,9 +506,15 @@ func means(newGarden func() sim.Garden, strategy sim.Strategy, seasons, seeds in
 // rates (nil for the package defaults) and works out each row's
 // percentage of rotation.
 func measure(seasons, seeds, beds int, first int64, fades garden.Fades) []row {
+	return measureWith(func() sim.Garden { return sim.NewGarden(beds) }, seasons, seeds, first, fades)
+}
+
+// measureWith is measure on gardens built by newGarden, so the
+// table can run under a dressing.
+func measureWith(newGarden func() sim.Garden, seasons, seeds int, first int64, fades garden.Fades) []row {
 	rows := make([]row, len(strategies))
 	for i, st := range strategies {
-		rows[i] = run(st.name, st.s, seasons, seeds, beds, first, fades)
+		rows[i] = runWith(newGarden, st.name, st.s, seasons, seeds, first, fades)
 	}
 	// rows[0] is the committee rotation, the reference for the
 	// percentage column.
@@ -540,10 +567,15 @@ func sweepFade(seasons, seeds, beds int, first int64) {
 // run plays one strategy over every seed and summarizes the totals.
 // Fades of nil mean the package defaults.
 func run(name string, strategy sim.Strategy, seasons, seeds, beds int, first int64, fades garden.Fades) row {
+	return runWith(func() sim.Garden { return sim.NewGarden(beds) }, name, strategy, seasons, seeds, first, fades)
+}
+
+// runWith is run on gardens built by newGarden.
+func runWith(newGarden func() sim.Garden, name string, strategy sim.Strategy, seasons, seeds int, first int64, fades garden.Fades) row {
 	totals := make([]int, seeds)
 	perSeason := make([]int, seasons)
 	for i := 0; i < seeds; i++ {
-		g := sim.NewGarden(beds)
+		g := newGarden()
 		if fades != nil {
 			g = g.WithFades(fades)
 		}
