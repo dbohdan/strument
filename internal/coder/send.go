@@ -862,6 +862,9 @@ func (c *Coder) maybeSummarize() {
 		c.summaryBackoff = false
 		return
 	}
+	if c.pruneHistory(budget) {
+		return
+	}
 	c.Out.Printf("Summarizing chat history to fit the context window...")
 	if !c.compactHistory(budget) {
 		c.summaryBackoff = true
@@ -888,6 +891,9 @@ func (c *Coder) foldForOverflow() bool {
 	}
 	if target <= 0 {
 		return false
+	}
+	if c.pruneHistory(target) {
+		return true
 	}
 	c.Out.Printf("The request is over the context limit; summarizing the chat history to make room...")
 	return c.compactHistory(target)
