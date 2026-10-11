@@ -791,21 +791,32 @@ func (c *Coder) endTurnHistory() {
 	c.moveBackCurMessages()
 }
 
-// maxChatHistoryTokens is the settled-history budget: context/8,
-// derived from the main model's window, with a 2048 floor for small windows.
-// It is increased from aider's context/16.
-// historyShare is the fraction of the main model's window chat history may
-// occupy: one eighth. The divisor is named because it is a share of a
-// *contended* window — history sits there beside pinned files, the repo map,
-// the tool schemas and the exchange in progress — which is what distinguishes
-// it from sideInputBound, where the call owns the window and takes nearly all
-// of it. Two numbers, one idea, applied at two scopes.
-const historyShare = 8
+// historyShare is the fraction of the main model's window the settled chat
+// history may fill before it is folded: one half. The divisor is named because
+// it is a share of a *contended* window — history sits there beside pinned
+// files, the repo map, the tool schemas and the exchange in progress — which is
+// what distinguishes it from sideInputBound, where the call owns the window and
+// takes nearly all of it. Two numbers, one idea, applied at two scopes.
+//
+// It was one eighth (aider's was one sixteenth), and two trials moved it.
+// doc/experiments/2026-10-compaction-threshold found that on MiMo folding early
+// cost more than not folding: each fold rewrites the cached prefix, and a 98%
+// cache hit on a long history is cheaper than the misses a fold causes. Folding
+// at context/8 cost 16% more than never folding. The same trial's recall loss
+// turned out to be the summarizer's (doc/experiments/2026-10-compaction-prompt),
+// and with that fixed what an early fold still costs is the cache. Every
+// harness in doc/experiments/2026-10-compaction-survey folds in the last fifth
+// of the window, measuring the whole request rather than history alone. Half
+// for history is about as late as the rest of the request leaves room for, and
+// foldForOverflow catches a turn that overruns the window anyway.
+const historyShare = 2
 
 // minChatHistoryTokens keeps a tiny window from reducing the history budget to
 // nothing, which would compact after every turn and never fit.
 const minChatHistoryTokens = 2048
 
+// maxChatHistoryTokens is the settled-history budget: context/historyShare,
+// with a floor for small windows.
 func maxChatHistoryTokens(context int) int {
 	return max(context/historyShare, minChatHistoryTokens)
 }

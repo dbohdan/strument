@@ -66,11 +66,11 @@ func msgTok(role string, tokens int) llm.Message {
 func TestMaxChatHistoryTokens(t *testing.T) {
 	for _, c := range []struct{ ctx, want int }{
 		{0, 2048},           // unknown => floor
-		{8000, 2048},        // 500 -> clamped up
-		{16384, 2048},       // exactly the floor
-		{100000, 12500},     // within range
-		{200000, 25000},     // within range
-		{1_000_000, 125000}, // within range
+		{3000, 2048},        // 1500 -> clamped up
+		{4096, 2048},        // exactly the floor
+		{100000, 50000},     // within range
+		{200000, 100000},    // within range
+		{1_000_000, 500000}, // within range
 	} {
 		if got := maxChatHistoryTokens(c.ctx); got != c.want {
 			t.Errorf("maxChatHistoryTokens(%d) = %d, want %d", c.ctx, got, c.want)
@@ -179,7 +179,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 
 	t.Run("no summarizer is a no-op", func(t *testing.T) {
 		c := testCoder(t)
-		c.Model.Context = 16384
+		c.Model.Context = 4096
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
 		if len(c.doneMessages) != 10 {
@@ -189,7 +189,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 
 	t.Run("under budget is a no-op", func(t *testing.T) {
 		c := testCoder(t)
-		c.Model.Context = 1_000_000 // threshold 125_000; ~2500 tokens fits
+		c.Model.Context = 1_000_000 // threshold 500_000; ~2500 tokens fits
 		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 		c.doneMessages = bigHistory()
 		c.maybeSummarize()
@@ -200,7 +200,7 @@ func TestMaybeSummarizeGating(t *testing.T) {
 
 	t.Run("over budget compacts", func(t *testing.T) {
 		c := testCoder(t)
-		c.Model.Context = 16384 // threshold 2048; ~2500 tokens overflows
+		c.Model.Context = 4096 // threshold 2048; ~2500 tokens overflows
 		stub := &summaryStub{}
 		c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 		c.doneMessages = bigHistory()
@@ -218,7 +218,7 @@ func TestMaybeSummarizeReportsCompaction(t *testing.T) {
 	c := testCoder(t)
 	out := &summaryOutput{}
 	c.Out = out
-	c.Model.Context = 16384
+	c.Model.Context = 4096
 	c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	c.doneMessages = []llm.Message{
 		msgTok("user", 300), msgTok("assistant", 300),
@@ -251,7 +251,7 @@ func TestMaybeSummarizeBacksOffAfterFailure(t *testing.T) {
 	c := testCoder(t)
 	out := &summaryOutput{}
 	c.Out = out
-	c.Model.Context = 16384
+	c.Model.Context = 4096
 	stub := &summaryEmptyStub{}
 	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	c.doneMessages = []llm.Message{
@@ -306,7 +306,7 @@ func TestMaybeSummarizeRejectsABiggerSummary(t *testing.T) {
 	c := testCoder(t)
 	out := &summaryOutput{}
 	c.Out = out
-	c.Model.Context = 16384
+	c.Model.Context = 4096
 	stub := &summaryBloatStub{}
 	c.Summarizer = NewChatSummary(stub, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	before := []llm.Message{
