@@ -126,18 +126,7 @@ func main() {
 	// A dressing of nil means the committee's compost; a
 	// non-nil one replaces it, which is how -dressK runs the
 	// table and -paired under a different potassium level.
-	var dressing *garden.Nutrients
-	if *dressK != garden.Compost.Potassium {
-		d := garden.Compost
-		d.Potassium = *dressK
-		dressing = &d
-	}
-	newGarden := func() sim.Garden {
-		if dressing == nil {
-			return sim.NewGarden(*beds)
-		}
-		return sim.NewGarden(*beds).WithDressing(*dressing)
-	}
+	newGarden := gardenAt(*dressK, *beds)
 
 	if *sweep {
 		sweepFade(*seasons, *seeds, *beds, *seed)
@@ -156,7 +145,7 @@ func main() {
 		return
 	}
 	if *order {
-		if *orderK == garden.Compost.Potassium && dressing == nil {
+		if *orderK == garden.Compost.Potassium {
 			orderRank(*seasons, *seeds, *beds, *seed)
 		} else {
 			header := fmt.Sprintf("every cyclic order (brassicas first) ranked by mean total over %d shared seeds, potassium dressing %d (compost's is %d)",
@@ -173,6 +162,20 @@ func main() {
 	rows := measureWith(newGarden, *seasons, *seeds, *seed, nil)
 	printTable(rows)
 	printSparklines(rows)
+}
+
+// gardenAt returns a garden constructor for the given
+// -dressK value and bed count: the committee's compost
+// when dressK matches it, a dressing otherwise. main uses
+// it so the default table, -paired and -order share one
+// construction, and tests can call it the same way.
+func gardenAt(dressK, beds int) func() sim.Garden {
+	if dressK == garden.Compost.Potassium {
+		return func() sim.Garden { return sim.NewGarden(beds) }
+	}
+	dressing := garden.Compost
+	dressing.Potassium = dressK
+	return func() sim.Garden { return sim.NewGarden(beds).WithDressing(dressing) }
 }
 
 // pairedCompare runs every strategy on the same seeds — each seed
