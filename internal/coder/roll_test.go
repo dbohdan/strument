@@ -124,12 +124,12 @@ func TestRollBareKeepsNothing(t *testing.T) {
 	}
 }
 
-// Over a quarter of the budget, the oldest messages give way, and the note
-// says how many.
+// Over the cap — a quarter of the budget, never under minRollNoteCap — the
+// oldest messages give way, and the note says how many.
 func TestRollNoteCap(t *testing.T) {
 	said := make([]string, 40)
 	for i := range said {
-		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 200))
+		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 4000))
 	}
 	note := rollNote(said, 2000, true).Text()
 	if !strings.Contains(note, "message 39") {
@@ -157,5 +157,18 @@ func TestRollQuotesOnlyTheUser(t *testing.T) {
 	c.ClearHistory()
 	if len(c.rolledSaid) != 0 {
 		t.Error("/clear kept the rolled messages")
+	}
+}
+
+// A small budget does not shrink the cap below minRollNoteCap: a few dozen
+// ordinary messages fit whole.
+func TestRollNoteCapFloor(t *testing.T) {
+	said := make([]string, 30)
+	for i := range said {
+		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 300))
+	}
+	note := rollNote(said, 4000, true).Text()
+	if !strings.Contains(note, "message 00") || strings.Contains(note, "did not fit") {
+		t.Error("a small budget cut ordinary messages from the note")
 	}
 }

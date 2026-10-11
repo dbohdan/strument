@@ -95,14 +95,22 @@ func userTexts(msgs []llm.Message) []string {
 	return out
 }
 
+// minRollNoteCap is the smallest the roll note's quotes may be capped to. A
+// quarter of a small budget is a few messages; Kimi caps the user's carried
+// messages at 20k tokens. The trial's pilot (doc/experiments/2026-10-compaction-roll)
+// lost every early message to a quarter of a 4k budget, which no real window
+// would impose.
+const minRollNoteCap = 16384
+
 // rollNote is the harness note that stands for the dropped turns. With
 // keepSaid it quotes the user's messages from them, newest kept when they
-// exceed a quarter of the budget, and says how many were left out.
+// exceed a quarter of the budget (or minRollNoteCap, whichever is more), and
+// says how many were left out.
 func rollNote(said []string, budget int, keepSaid bool) llm.Message {
 	if !keepSaid {
 		return llm.HarnessNote(prompts.RollBareLabel)
 	}
-	limit := budget / 4
+	limit := max(budget/4, minRollNoteCap)
 	var kept []string
 	total := 0
 	for _, s := range slices.Backward(said) {
