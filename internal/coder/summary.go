@@ -52,6 +52,10 @@ type ChatSummary struct {
 	out    Output
 	clock  Clock
 	report SideCallReporter
+	// note follows each summary this summarizer writes; see
+	// prompts.SummaryRecallNote. Set by the coder before each fold, so a
+	// summarizer rebuilt by a model switch cannot lose it.
+	note string
 }
 
 // NewChatSummary builds a summarizer backed by the side model. out and clock
@@ -262,7 +266,7 @@ func (s *ChatSummary) summarizeText(content, last string) ([]llm.Message, error)
 	if why := continuation(answer, last); why != "" {
 		return nil, fmt.Errorf("the side model %s instead of summarizing", why)
 	}
-	return []llm.Message{llm.HarnessNote(prompts.SummaryLabel + strings.TrimSpace(answer))}, nil
+	return []llm.Message{llm.HarnessNote(prompts.SummaryLabel + strings.TrimSpace(answer) + s.note)}, nil
 }
 
 // frameForSummary puts the rendered conversation between markers, with the

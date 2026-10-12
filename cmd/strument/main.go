@@ -69,7 +69,8 @@ type chatCmd struct {
 	// --help is a supported feature, and this is a question.
 	Compaction string `default:"summary" enum:"summary,roll,roll-bare" help:"How an over-budget history is compacted." hidden:""`
 	// Hidden too: the recall tool, an arm of doc/experiments/2026-10-recall.
-	Recall bool `help:"Offer the model a tool that searches the session record." hidden:""`
+	Recall     bool `help:"Offer the model a tool that searches the session record."    hidden:""`
+	RecallNote bool `help:"End each summary with a pointer to recall (needs --recall)." hidden:"" name:"recall-note"`
 }
 
 func (c *chatCmd) Run() error {
@@ -192,6 +193,7 @@ func (c *chatCmd) Run() error {
 	// trial says which mode should be the default.
 	cdr.CompactionMode = c.Compaction
 	cdr.OfferRecall = c.Recall
+	cdr.RecallNote = c.RecallNote
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{unattended: c.Unattended}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)

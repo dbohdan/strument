@@ -11,6 +11,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // SendOutcome is the terminal state of one sendMessage.
@@ -971,6 +972,10 @@ func (c *Coder) compactHistory(budget int) bool {
 	}
 	beforeTokens := c.Summarizer.total(c.doneMessages)
 	beforeMessages := len(c.doneMessages)
+	c.Summarizer.note = ""
+	if c.RecallNote && c.offersRecall() {
+		c.Summarizer.note = prompts.SummaryRecallNote
+	}
 	out, err := c.Summarizer.summarize(c.doneMessages, budget)
 	if err != nil {
 		c.Out.Warningf("Could not summarize chat history: %v", err)

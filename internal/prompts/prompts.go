@@ -645,6 +645,16 @@ const SummaryLabel = "Summary of the earlier part of this conversation, written 
 	"record what the user said. Where it says something was done, run or verified, check " +
 	"that before relying on it.\n\n"
 
+// SummaryRecallNote ends a summary in a session that offers the recall tool,
+// in the trial arm that tests it (doc/experiments/2026-10-recall). Its pilot
+// found that a model reading a summary never searched the record, even where the
+// summary lacked the answer, and once invented one instead; this says where the
+// rest is. It follows the summary rather than joining SummaryLabel, because the
+// label is how a summary is recognized and must not vary.
+const SummaryRecallNote = "\n\nThe turns this summary replaces are kept whole in the session record, " +
+	"and the recall tool searches them. Where the summary is silent or vague on something, " +
+	"search the record before answering."
+
 // SummaryInputBefore and SummaryInputAfter frame the conversation the
 // summarizer is given, which sits between <conversation> markers.
 //

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/prompts"
 )
 
 // recallRecords is a three-turn session: the model reads a file in turn 1 and
@@ -211,5 +212,39 @@ func TestRecallIsNotInProgramsWhenNotOffered(t *testing.T) {
 	}
 	if strings.Contains(codeTool(c.codeCallableTools(), true, c.dataFuncs()).Description, "recall") {
 		t.Error("the run_code description lists recall when it is not offered")
+	}
+}
+
+// The fifth arm of doc/experiments/2026-10-recall: with RecallNote and recall
+// offered, a summary ends with the pointer to the record; otherwise not. The
+// label itself is untouched, because it is how a summary is recognized.
+func TestRecallNoteEndsTheSummary(t *testing.T) {
+	fold := func(note, offered bool) string {
+		c := testCoder(t)
+		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
+		c.RecallNote, c.OfferRecall = note, offered
+		c.SessionRecords = recallRecords
+		for range 6 {
+			c.doneMessages = append(c.doneMessages, msgTok("user", 400), msgTok("assistant", 400))
+		}
+		if !c.compactHistory(1000) {
+			t.Fatal("did not compact")
+		}
+		for _, m := range c.doneMessages {
+			if isSummaryMessage(m) {
+				return m.Text()
+			}
+		}
+		t.Fatal("no summary message")
+		return ""
+	}
+	if got := fold(true, true); !strings.HasSuffix(got, prompts.SummaryRecallNote) || !strings.Contains(got, prompts.SummaryLabel) {
+		t.Errorf("the note does not end the summary, or the label changed:\n%s", got)
+	}
+	if got := fold(true, false); strings.Contains(got, "recall tool") {
+		t.Errorf("the note points at a tool that is not offered:\n%s", got)
+	}
+	if got := fold(false, true); strings.Contains(got, "recall tool") {
+		t.Errorf("the note appeared without RecallNote:\n%s", got)
 	}
 }

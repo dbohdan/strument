@@ -217,6 +217,9 @@ type Coder struct {
 	// OfferRecall offers the recall tool. Hidden behind a trial flag until
 	// doc/experiments/2026-10-recall says whether it earns its place.
 	OfferRecall bool
+	// RecallNote ends each summary with a pointer to the record when recall
+	// is offered (prompts.SummaryRecallNote). A trial arm, like OfferRecall.
+	RecallNote bool
 
 	// PutBlob, when set, stores a tool payload too large to keep inline and
 	// returns the name to find it under. nil keeps every payload inline; see
