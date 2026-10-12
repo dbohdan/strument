@@ -58,7 +58,8 @@ func recallTool() llm.ToolDef {
 			"type": "object",
 			"properties": map[string]any{
 				"pattern": strProp("A regular expression (Go syntax), as for grep. Use a|b for " +
-					"alternatives. A pattern that is not a valid expression is searched for as plain text."),
+					"alternatives. A pattern that is not a valid expression is searched for as plain text. " +
+					"Required unless id is given."),
 				"from": map[string]any{
 					"type": "string",
 					"enum": []any{"conversation", "tools", "all"},
@@ -70,10 +71,9 @@ func recallTool() llm.ToolDef {
 				"context_lines": intProp("Lines to return either side of each match, like grep's -C."),
 				"newest": intProp(fmt.Sprintf("How many matching messages to show, newest first. "+
 					"Default %d, at most %d.", recallDefaultNewest, recallMaxNewest)),
-				"id": strProp("Optional. A hit's id, such as \"t4.3\", to see that message whole, " +
-					"with the lines matching pattern marked."),
+				"id": strProp("Optional. A hit's id, such as \"t4.3\", to see that message whole; " +
+					"lines matching pattern, if one is given, are marked."),
 			},
-			"required": []any{"pattern"},
 		},
 	}
 }
@@ -94,8 +94,11 @@ func parseRecallArgs(tc llm.ToolCall) (recallArgs, string) {
 	if err := json.Unmarshal([]byte(tc.Arguments), &a); err != nil {
 		return a, fmt.Sprintf("The arguments were not valid JSON: %v", err)
 	}
-	if a.Pattern == "" {
-		return a, "The required \"pattern\" argument was missing."
+	// An id alone is a complete request: a model that has a hit's id and
+	// wants the message should not have to invent a pattern to get it. A live
+	// MiMo session did exactly that, with "\\d+", after being refused.
+	if a.Pattern == "" && a.ID == "" {
+		return a, "Give a \"pattern\" to search for, or the \"id\" of a message to see whole."
 	}
 	switch a.From {
 	case "":
@@ -178,11 +181,10 @@ func recallEntries(records []Record) ([]recallEntry, int) {
 			out = append(out, recallEntry{turn: turn, index: index, role: r.Role, tool: name, text: r.Text})
 		}
 	}
-	turns := turn
-	if index == 0 && turn > 1 {
-		turns--
-	}
-	return out, turns
+	// recall only runs inside a turn, so the turn in progress counts even
+	// before its first message reaches the record. Without that, two searches in
+	// one turn could disagree about how many turns there are.
+	return out, turn
 }
 
 // inConversation is the set of message texts the model can currently see. A
@@ -226,6 +228,9 @@ func (c *Coder) runRecall(a recallArgs) string {
 		return "This session keeps no record to search (it was started with --no-history)."
 	}
 	entries, turns := recallEntries(c.SessionRecords())
+	if a.Pattern == "" {
+		return recallOpen(entries, a.ID, nil)
+	}
 	re, note := compileRecall(a.Pattern, a.IgnoreCase)
 	if a.ID != "" {
 		return note + recallOpen(entries, a.ID, re)
@@ -332,7 +337,8 @@ func clipLine(line string, re *regexp.Regexp) string {
 	return out
 }
 
-// recallOpen shows one entry whole, lines matching re marked with ">".
+// recallOpen shows one entry whole, lines matching re marked with ">"; a nil
+// re marks nothing.
 func recallOpen(entries []recallEntry, id string, re *regexp.Regexp) string {
 	for _, e := range entries {
 		if e.id() != id {
@@ -348,7 +354,7 @@ func recallOpen(entries []recallEntry, id string, re *regexp.Regexp) string {
 				break
 			}
 			mark := " "
-			if re.MatchString(l) {
+			if re != nil && re.MatchString(l) {
 				mark = ">"
 			}
 			fmt.Fprintf(&b, "%s %d: %s\n", mark, i+1, l)
@@ -371,6 +377,9 @@ func runRecallData(c *Coder, call *bridgedCall) (any, error) {
 	a, msg := parseRecallArgs(llm.ToolCall{Arguments: string(raw)})
 	if msg != "" {
 		return nil, errors.New(msg)
+	}
+	if a.Pattern == "" {
+		return nil, errors.New("recall in a program needs a \"pattern\"")
 	}
 	entries, _ := recallEntries(c.SessionRecords())
 	re, _ := compileRecall(a.Pattern, a.IgnoreCase)

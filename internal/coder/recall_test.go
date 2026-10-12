@@ -56,6 +56,16 @@ func TestRecallEntriesNumberMessagesByTurn(t *testing.T) {
 	}
 }
 
+// Before the turn in progress has a message in the record, it still counts:
+// two searches in one turn must agree on the number of turns.
+func TestRecallCountsTheTurnInProgress(t *testing.T) {
+	recs := recallRecords()
+	recs = append(recs[:len(recs)-1], Record{Type: "message", Role: llm.RoleAssistant, Text: "x"}, Record{Type: "turn"})
+	if _, turns := recallEntries(recs); turns != 4 {
+		t.Errorf("turns = %d, want 4: three finished and one in progress", turns)
+	}
+}
+
 func recallCoder(visible ...string) *Coder {
 	c := &Coder{SessionRecords: recallRecords}
 	for _, v := range visible {
@@ -120,6 +130,14 @@ func TestRecallOpensAnEntryWhole(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
+	// An id alone opens the message, unmarked: a live session was refused for
+	// leaving out the pattern and had to invent one.
+	if out := recallCoder().runRecall(recallArgs{ID: "t1.3"}); !strings.Contains(out, "  2: 2\t// 878 lines follow") {
+		t.Errorf("an id alone did not open the message:\n%s", out)
+	}
+	if _, msg := parseRecallArgs(llm.ToolCall{Arguments: `{"id":"t1.3"}`}); msg != "" {
+		t.Errorf("an id alone was refused: %s", msg)
+	}
 	if out := recallCoder().runRecall(recallArgs{Pattern: "x", ID: "t9.9"}); !strings.Contains(out, "No message has the id") {
 		t.Errorf("an unknown id was not reported:\n%s", out)
 	}
@@ -134,7 +152,7 @@ func TestRecallArgsDefaultsAndBounds(t *testing.T) {
 		t.Error("an unknown scope was accepted")
 	}
 	if _, msg := parseRecallArgs(llm.ToolCall{Arguments: `{}`}); msg == "" {
-		t.Error("a missing pattern was accepted")
+		t.Error("a call with neither pattern nor id was accepted")
 	}
 }
 
