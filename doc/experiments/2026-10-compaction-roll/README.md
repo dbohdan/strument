@@ -1,6 +1,6 @@
 # Rolling the history instead of summarizing it
 
-**2026-10-11. Preregistered; results below the line once run.**
+**2026-10-11 to 12. Preregistered; run on Ling 3.1 Flash. `summary` stays the default; `compaction_source` is removed; `roll` fails its bar and stays hidden only until the paid validation.**
 
 ## Why
 
@@ -141,3 +141,84 @@ again from turn 0.
 
 Ling only. The verdict on the default needs the validation the maintainer has
 planned, at a smaller scale, on MiMo, GLM-5.3-Flash and GPT-6 Luna, once funded.
+
+---
+
+## Results
+
+23 of 24 sessions completed all 21 turns. Session s19 (`summary`) hit the
+Ling throttle at turn 10, and again at turn 7 when rerun, and is not scored,
+so `summary` has five sessions. Neither decision depends on it: a sixth
+session scoring zero would leave `summary` ahead of `record` by more than one
+fact and of `roll` by more than two derived facts. No session looped or met a
+shell prompt.
+
+| arm | n | user facts | derived, true | derived, "don't know" | derived, wrong | compactions | failed folds |
+|---|---|---|---|---|---|---|---|
+| `summary` | 5 | 30/30 | **20/20** | 0 | 0 | 31 folds | 17 |
+| `record` | 6 | 36/36 | 18/24 | 5 | 1 | 36 folds | 21 |
+| `roll` | 6 | **36/36** | **0/24** | 24 | 0 | 33 rolls | — |
+| `roll-bare` | 6 | 2/36 | 0/24 | 24 | 0 | 25 rolls | — |
+
+Per session, every `summary` session recalled all four derived facts, and
+`record`'s recalled 3, 2, 4, 3, 4 and 2. Over questions, `summary` against
+`roll` on derived facts is p < 10⁻¹² (Fisher, one-sided), and against `record`
+p = 0.02. Questions within a session are not independent, so read the
+per-session counts as the evidence and the p-values as a summary of them.
+
+**What each arm does with the oldest work.**
+
+- **`roll` keeps exactly what it promises and nothing else.** Every user fact
+  survived, carried in the note, and every derived fact was gone. Asked, Ling
+  said "I don't know" all 24 times and never guessed. That is the honest
+  failure, but the model's own results are most of what a coding session
+  produces, and `roll` loses all of them.
+- **`summary` kept everything.** Every user fact and every derived fact,
+  across three to twelve folds a session, each building on the last.
+- **`record` loses the middle.** Its source is the session record sampled to
+  fit the summarizer's input, keeping both ends. The facts from turns 3 and 4
+  fall in the cut, and the model said so: "that turn … is among the omitted
+  middle turns". The facts from turns 11 and 12 survived. The one confident
+  wrong answer in the trial (s01: the right group of files, a wrong file and
+  count) is also `record`'s.
+- **`roll-bare` is the floor it was meant to be:** 2 of 36 user facts. Both
+  are the canary cohort, which Ling repeated in its own later answers ("canary
+  cohort cohort-teal-29 remain on file"), so no roll removed every copy.
+
+**Were the summary arms flattered by failed folds?** Every session was
+compacted when the questions came: each question turn was a single request
+of 9–11k tokens, where the uncompacted history at that point runs to tens of
+thousands. The answers therefore came from the summary,
+not from history a failed fold left behind. Failed folds did mean fewer
+rounds of re-summarizing, which can only have helped. The amendment's
+reading stands: a `summary` win on Ling is to be confirmed on a paid model.
+
+**A scorer defect, found reading transcripts.** The "own result" extractor
+takes the last "N lines" in a turn's answer. When Ling listed the other
+files' counts after naming the longest ("878 lines (the others are 457, …
+and 218 lines)") it took 218. When a failed fold's retry messages followed
+the answer, it found none. So `own` undercounts in every arm. The decision
+rule is worded on `own`, but `roll` scores 0 on both `own` and `truth`, so the
+verdict is the same either way. `truth`, checked against the files, is the
+column reported above.
+
+## Decision
+
+- **`summary` stays the default.** `roll` matched it on user facts (6 of 6
+  against 6 of 6), but not on derived facts (0 against 4, outside the bar of
+  1).
+- **`roll` misses the "within 2" bar too,** which under the rule removes it.
+  It stays behind the hidden `--compaction` flag only because the paid
+  validation (MiMo, GLM-5.3-Flash, GPT-6 Luna) needs the arms. Unless that
+  validation reverses the result, the flag and both roll modes go.
+- **`compaction_source` is removed.** `record` scored 9 of 10 against
+  `summary`'s 10, short of the bar of beating it by 1. Its September
+  advantage came from the old summarizer re-summarizing its own output;
+  the reworked prompt keeps what the user said, so folding no longer loses it.
+
+What this does not show: the 4k budget compacts far more often than a real
+session's half-window, and the derived facts are short (a file name and a
+number). A longer result, such as a design decision and its reason, could
+suffer more under re-summarizing, which this trial does not test. The trial
+also used only one model, on its free tier.
+
