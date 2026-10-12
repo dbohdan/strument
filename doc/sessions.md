@@ -246,8 +246,13 @@ change. Reading the record instead recalled a turn-1 reason in 10/12 MiMo
 sessions against 0/12 for folding, and the predicted harm to a
 mid-conversation fact did not appear — but the confabulation counter-metric
 turned out to be measuring the wrong thing, so the check its ship rule depends
-on did not run. Not shipped; `--compaction-source` stays hidden and defaults
-to folding. A re-run with a disambiguated probe would settle it.
+on did not run. [2026-10-compaction-roll](experiments/2026-10-compaction-roll/)
+re-ran it against the reworked summarizer, which keeps what the user said and
+is framed against continuing the transcript. Folding kept all 10 planted facts
+per session on Ling 3.1 Flash and reading the record kept 9: the record is
+sampled to fit the summarizer's input, its middle is what goes, and the model
+then said, correctly, that those turns were omitted. The flag was removed;
+compaction folds the messages.
 
 ## Notes are regenerated, never folded
 

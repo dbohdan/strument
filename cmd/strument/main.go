@@ -48,28 +48,25 @@ var version = devVersion
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message string `help:"Send one message, apply the edits, and exit (script mode)."                     placeholder:"<text>" short:"m"`
-	Session string `help:"Session to work in; created if it does not exist (default: the last one used)." placeholder:"<name>" short:"s"`
-	// Hidden: an arm of doc/experiments/2026-09-compaction-source, removed or
-	// promoted when that trial reports. A flag in --help is a supported
-	// feature, and this is a question.
-	CompactionSource string   `default:"fold"                                                                                                                                                    enum:"fold,record"                                        help:"Where a compaction summary is built from."        hidden:""`
-	Continue         bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
-	Model            string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
-	NoGit            bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
-	NoColor          bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode         bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
-	LightMode        bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
-	NoAutoCommits    bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
-	NoHistory        bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
-	DryRun           bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
-	NoShell          bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
-	Yes              []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	Unattended       bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
-	ConsultScope     string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
-	Files            []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
+	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                      short:"m"`
+	Session       string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"                                      short:"s"`
+	Continue      bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
+	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
+	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
+	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
+	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
+	NoHistory     bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
+	DryRun        bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
+	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
+	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	Unattended    bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
+	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
+	Files         []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 
-	// Hidden as well: the arms of doc/experiments/2026-10-compaction-roll.
+	// Hidden: the arms of doc/experiments/2026-10-compaction-roll. A flag in
+	// --help is a supported feature, and this is a question.
 	Compaction string `default:"summary" enum:"summary,roll,roll-bare" help:"How an over-budget history is compacted." hidden:""`
 }
 
@@ -410,14 +407,6 @@ func (c *chatCmd) Run() error {
 					noticef("could not record usage for provider %q: %v", u.Provider, err)
 				}
 			}
-		}
-
-		// The compaction summary's input, which the trial in
-		// doc/experiments/2026-09-compaction-source is about. Gated on
-		// keepState with everything else: there is no record to read in a
-		// session that leaves no trace.
-		if c.CompactionSource == "record" && cdr.Summarizer != nil {
-			cdr.Summarizer.Record = func() string { return sessionMarkdown(projectRoot, cdr.Session) }
 		}
 
 		// Heavy tool payloads go beside the record rather than into it, so
