@@ -651,9 +651,13 @@ const SummaryLabel = "Summary of the earlier part of this conversation, written 
 // summary lacked the answer, and once invented one instead; this says where the
 // rest is. It follows the summary rather than joining SummaryLabel, because the
 // label is how a summary is recognized and must not vary.
-const SummaryRecallNote = "\n\nThe turns this summary replaces are kept whole in the session record, " +
-	"and the recall tool searches them. Where the summary is silent or vague on something, " +
-	"search the record before answering."
+//
+// Worded as RollRecallTail is, so the three pointers to recall (this, the roll
+// note and the cleared-result placeholder) say the same thing the same way.
+const SummaryRecallNote = "\n\nThe turns this summary replaces are kept in the session record, " +
+	"including your own replies and the output of every tool call, and the recall tool searches it. " +
+	"When a question concerns something this summary does not cover, search the record before " +
+	"deciding you don't know; file contents and command output need from=\"all\"."
 
 // SummaryInputBefore and SummaryInputAfter frame the conversation the
 // summarizer is given, which sits between <conversation> markers.
@@ -685,6 +689,27 @@ const RollLabelStem = "Earlier turns of this session were dropped to keep it ins
 const RollLabel = RollLabelStem + " What the user said in them is kept below, word for word, " +
 	"oldest first. The work those turns did is not kept: where it matters, check the files " +
 	"or run the commands again."
+
+// RollRecallLabel and RollRecallTail replace RollLabel when the recall tool
+// is offered. RollLabel's "The work those turns did is not kept" is false
+// then — the record keeps it — and its "check the files or run the commands
+// again" points at the one recovery a question may rule out. In
+// doc/experiments/2026-10-recall a model reasoned "I would need to re-read the
+// files" and stopped at "I don't know" with the answer one search away.
+//
+// The pointer is in two places: a clause in the label, read first, and the
+// instruction after the quotes, which can run to thousands of tokens, nearest
+// the turn that needs it. Six models reviewed the wording
+// (doc/experiments/2026-10-recall-pointers); all six put it after the quotes.
+const RollRecallLabel = RollLabelStem + " What the user said in them is quoted below, word for word, " +
+	"oldest first; the rest of those turns is in the session record."
+
+// RollRecallTail ends a roll note when recall is offered; see RollRecallLabel.
+const RollRecallTail = "The rest of those turns, including your own replies and the output of every " +
+	"tool call, is kept in the session record, and the recall tool searches it. When a question " +
+	"concerns something said, read or worked out in those turns, search the record before deciding " +
+	"you don't know; file contents and command output need from=\"all\". Re-read a file only when " +
+	"its current contents are what you need."
 
 // RollBareLabel stands for dropped turns when nothing of them is kept.
 const RollBareLabel = RollLabelStem + " Nothing of them is kept: where earlier work matters, " +

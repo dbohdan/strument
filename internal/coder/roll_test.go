@@ -131,7 +131,7 @@ func TestRollNoteCap(t *testing.T) {
 	for i := range said {
 		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 4000))
 	}
-	note := rollNote(said, 2000, true).Text()
+	note := rollNote(said, 2000, true, false).Text()
 	if !strings.Contains(note, "message 39") {
 		t.Error("the newest message was left out")
 	}
@@ -167,7 +167,7 @@ func TestRollNoteCapFloor(t *testing.T) {
 	for i := range said {
 		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 300))
 	}
-	note := rollNote(said, 4000, true).Text()
+	note := rollNote(said, 4000, true, false).Text()
 	if !strings.Contains(note, "message 00") || strings.Contains(note, "did not fit") {
 		t.Error("a small budget cut ordinary messages from the note")
 	}

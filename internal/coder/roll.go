@@ -50,7 +50,7 @@ func (c *Coder) rollHistory(budget int, keepSaid bool) bool {
 			continue
 		}
 		said := append(slices.Clone(c.rolledSaid), userTexts(msgs[:k])...)
-		note := rollNote(said, budget, keepSaid)
+		note := rollNote(said, budget, keepSaid, c.offersRecall())
 		if count(note)+c.Summarizer.total(msgs[k:]) <= budget/2 {
 			cut = k
 			break
@@ -66,7 +66,7 @@ func (c *Coder) rollHistory(budget int, keepSaid bool) bool {
 
 	before, beforeN := c.Summarizer.total(msgs), len(msgs)
 	c.rolledSaid = append(c.rolledSaid, userTexts(msgs[:cut])...)
-	note := rollNote(c.rolledSaid, budget, keepSaid)
+	note := rollNote(c.rolledSaid, budget, keepSaid, c.offersRecall())
 	out := append([]llm.Message{note}, msgs[cut:]...)
 	after := c.Summarizer.total(out)
 	if after >= before {
@@ -106,7 +106,7 @@ const minRollNoteCap = 16384
 // keepSaid it quotes the user's messages from them, newest kept when they
 // exceed a quarter of the budget (or minRollNoteCap, whichever is more), and
 // says how many were left out.
-func rollNote(said []string, budget int, keepSaid bool) llm.Message {
+func rollNote(said []string, budget int, keepSaid, recall bool) llm.Message {
 	if !keepSaid {
 		return llm.HarnessNote(prompts.RollBareLabel)
 	}
@@ -123,13 +123,21 @@ func rollNote(said []string, budget int, keepSaid bool) llm.Message {
 	}
 	slices.Reverse(kept)
 	var b strings.Builder
-	b.WriteString(prompts.RollLabel)
+	if recall {
+		b.WriteString(prompts.RollRecallLabel)
+	} else {
+		b.WriteString(prompts.RollLabel)
+	}
 	if omitted := len(said) - len(kept); omitted > 0 {
 		b.WriteString(prompts.RollOmitted(omitted))
 	}
 	for _, s := range kept {
 		b.WriteString("\n\n> ")
 		b.WriteString(strings.ReplaceAll(s, "\n", "\n> "))
+	}
+	if recall {
+		b.WriteString("\n\n")
+		b.WriteString(prompts.RollRecallTail)
 	}
 	return llm.HarnessNote(b.String())
 }

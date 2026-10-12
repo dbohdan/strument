@@ -248,3 +248,49 @@ func TestRecallNoteEndsTheSummary(t *testing.T) {
 		t.Errorf("the note appeared without RecallNote:\n%s", got)
 	}
 }
+
+// With recall offered, the roll note no longer says the dropped work is gone:
+// it says where it is, once before the quotes and in full after them. Without
+// recall it is byte for byte what it was.
+func TestRollNoteWithRecallPointsAtTheRecord(t *testing.T) {
+	said := []string{"Note for later: the codename is Marigold-417.", "Read big.go."}
+	with := rollNote(said, 4000, true, true).Text()
+	if !strings.Contains(with, prompts.RollLabelStem) {
+		t.Errorf("the stem is gone:\n%s", with)
+	}
+	if strings.Contains(with, "is not kept") {
+		t.Errorf("the note says the work is gone while recall can find it:\n%s", with)
+	}
+	quote, tail := strings.LastIndex(with, "> Read big.go."), strings.Index(with, prompts.RollRecallTail)
+	if quote < 0 || tail < quote {
+		t.Errorf("the instruction does not follow the quotes:\n%s", with)
+	}
+	without := rollNote(said, 4000, true, false).Text()
+	if !strings.Contains(without, prompts.RollLabel) || strings.Contains(without, "recall") {
+		t.Errorf("the note without recall changed:\n%s", without)
+	}
+}
+
+// The placeholder names recall only when it is offered, and a result cleared
+// under either placeholder is recognized as cleared, not cleared again.
+func TestClearedPlaceholderFollowsRecall(t *testing.T) {
+	c := &Coder{}
+	if c.clearedPlaceholder() != clearedToolResult {
+		t.Error("the placeholder names recall without it")
+	}
+	c.OfferRecall, c.SessionRecords = true, recallRecords
+	if p := c.clearedPlaceholder(); p != clearedToolResultRecall || !strings.Contains(p, `from="all"`) {
+		t.Errorf("placeholder with recall = %q", p)
+	}
+	count := func(m llm.Message) int { return len(m.Text()) / 4 }
+	big := strings.Repeat("x", 8000)
+	msgs := []llm.Message{
+		{Role: llm.RoleTool, Content: llm.TextContent(clearedToolResultRecall)},
+		{Role: llm.RoleTool, Content: llm.TextContent(big)},
+		{Role: llm.RoleUser, Content: llm.TextContent(strings.Repeat("y", 400))},
+	}
+	n, _ := pruneToolResults(msgs, 1000, count, clearedToolResult)
+	if n != 1 || msgs[0].Text() != clearedToolResultRecall {
+		t.Errorf("cleared %d; a result already cleared under the other placeholder was rewritten: %q", n, msgs[0].Text())
+	}
+}

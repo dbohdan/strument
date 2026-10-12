@@ -19,9 +19,27 @@ import (
 // model said stays word for word — which no summary manages
 // (doc/experiments/2026-10-compaction-prompt).
 
+// clearedPrefix begins every cleared result, whichever placeholder replaced
+// it; it is how a result already cleared is recognized.
+const clearedPrefix = "[This result was cleared from the history to save space."
+
 // clearedToolResult replaces a cleared result's text.
-const clearedToolResult = "[This result was cleared from the history to save space. " +
-	"The call is above; make it again if the output is needed.]"
+const clearedToolResult = clearedPrefix + " The call is above; make it again if the output is needed.]"
+
+// clearedToolResultRecall replaces it when the recall tool is offered: the
+// output is in the record, and the placeholder is where its loss is noticed,
+// so it names the search first and re-running for the current output second.
+// See prompts.RollRecallLabel for why.
+const clearedToolResultRecall = clearedPrefix + " To see what it returned, search the record with " +
+	"recall, using from=\"all\"; to get the current output, make the call above again.]"
+
+// clearedPlaceholder is the placeholder this session uses.
+func (c *Coder) clearedPlaceholder() string {
+	if c.offersRecall() {
+		return clearedToolResultRecall
+	}
+	return clearedToolResult
+}
 
 // pruneToolResults clears the text of tool results outside the most recent
 // half of the budget, oldest first, and reports how many results it cleared
@@ -31,7 +49,7 @@ const clearedToolResult = "[This result was cleared from the history to save spa
 //
 // The protected tail is the same half-budget the fold keeps, so what the
 // current work is reading stays intact.
-func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) int) (int, int) {
+func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) int, placeholder string) (int, int) {
 	protect := budget / 2
 	tail := 0
 	start := len(msgs)
@@ -43,13 +61,13 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 		start = i
 	}
 
-	cleared := llm.TextContent(clearedToolResult)
+	cleared := llm.TextContent(placeholder)
 	clearedTokens := count(llm.Message{Role: llm.RoleTool, Content: cleared})
 	var idx []int
 	freed := 0
 	for i := range start {
 		m := msgs[i]
-		if m.Role != llm.RoleTool || strings.HasPrefix(m.Text(), clearedToolResult) {
+		if m.Role != llm.RoleTool || strings.HasPrefix(m.Text(), clearedPrefix) {
 			continue
 		}
 		if gain := count(m) - clearedTokens; gain > 0 {
@@ -71,7 +89,7 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 func (c *Coder) pruneHistory(budget int) bool {
 	// A copy, so that a slice sharing the old backing array keeps its results.
 	msgs := slices.Clone(c.doneMessages)
-	n, freed := pruneToolResults(msgs, budget, c.Summarizer.count)
+	n, freed := pruneToolResults(msgs, budget, c.Summarizer.count, c.clearedPlaceholder())
 	if n == 0 {
 		return false
 	}
