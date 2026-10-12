@@ -36,8 +36,28 @@ def records_of(d):
         recs += [json.loads(l) for l in open(p) if l.strip()]
     return recs
 
+def prose_unknowns(d, r):
+    """Post-hoc fix (doc/experiments/2026-10-recall, Results): an answer of "I
+    don't know" in prose, without ANSWER lines, was scored unanswered. Where a
+    work-question turn has no ANSWER lines and its final text says it does not
+    know, both of its questions count as "don't know". True and wrong counts
+    cannot change: neither depends on an unparsed answer."""
+    text = scorer_roll.ANSI.sub("", open(os.path.join(d, "transcript.raw"), "rb").read().decode("utf-8", "replace"))
+    work = text.split(scorer_roll.WORK)[1:]
+    for k, pair in enumerate(((3, 11), (4, 12))):
+        if k >= len(work) or scorer_roll.ANS.search(work[k]):
+            continue
+        final = work[k].rsplit("\u2039/\u203a", 1)[-1].split("Tokens:")[0]
+        if scorer_roll.UNKNOWN.search(final):
+            for t in pair:
+                v = r["derived"].get(str(t))
+                if v and not v["answered"]:
+                    v["unknown"] = True
+    r["derived_unknown"] = sum(bool(v and v["unknown"]) for v in r["derived"].values())
+
 def score(d, files):
     r = scorer_roll.score(d, files)
+    prose_unknowns(d, r)
     calls = recall_calls(records_of(d))
     r["recall_calls"] = len(calls)
     r["recall_in_questions"] = sum(1 for t, _ in calls if t in QUESTION_TURNS)
