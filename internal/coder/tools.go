@@ -86,6 +86,13 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// about mutates nothing and answers what the model cannot find out by
 		// looking, which a discussion turn needs as much as any other.
 		defs = append(defs, aboutTool())
+		if c.OfferRecall && c.SessionRecords != nil {
+			// recall reads the session record, which mutates nothing; offered
+			// from the first turn rather than from the first compaction, because
+			// a tool list that changes mid-session confuses models and breaks
+			// the cached prefix.
+			defs = append(defs, recallTool())
+		}
 		if c.RepoMap != nil {
 			// symbol reads the same tree-sitter layer the repo map is built from,
 			// so it is offered exactly when that layer is available.
@@ -862,6 +869,15 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			// Not routed through ConfirmGrouped: a question is not a permission
 			// prompt, and --yes must not answer it.
 			results.setText(tc.ID, c.runAskUser(tc, &needsReflection))
+		case toolRecall:
+			a, msg := parseRecallArgs(tc)
+			if msg != "" {
+				results.setText(tc.ID, msg)
+				needsReflection = true
+				continue
+			}
+			c.Out.Toolf("Recall %q", a.Pattern)
+			results.setText(tc.ID, c.runRecall(a))
 		case toolAbout:
 			c.Out.Toolf("About Strument")
 			results.setText(tc.ID, c.About(time.Now()))
