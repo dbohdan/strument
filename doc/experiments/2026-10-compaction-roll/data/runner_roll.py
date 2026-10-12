@@ -134,7 +134,9 @@ def run(job):
             # A refused request ends the turn without a usage line; waiting
             # for one cost the main batch's first run an hour of timeouts
             # after the key's credit ran out.
-            if re.search(rb"request: HTTP \d{3}", clean):
+            # A free endpoint's 429s print as "rate_limit: HTTP 429" once
+            # retries run out; the turn is over then, not merely slow.
+            if re.search(rb"(request|rate_limit): HTTP \d{3}[^\n]*\n(?:(?!Retrying)[^\n]*\n)*[^\n]*> ?$", clean):
                 return "http-error"
         return "timeout"
     turns = []

@@ -123,6 +123,8 @@ per arm. The runner was restarted. The five sessions already complete (s00–s03
 s05) had no shell prompts and are kept; s04 and s06, which were in progress, ran
 again from turn 0.
 
+**And a throttle, seven hours in.** From about 17:20 UTC on 2026-10-11, Novita's free Ling pool answered every request with HTTP 429 ("temporarily rate-limited upstream"). This was the shared pool, not this key: one app alone was using it at about 780M tokens an hour, against this trial's 10M. Two sessions failed mid-run, s12 (`roll`, turn 18) and s14 (`roll`, turn 3), and two more never got past turn 0. The runner did not recognize the error and waited out a full hour per turn; it now ends the turn when Strument gives up retrying. A container restart then ended the batch. It was relaunched at 04:25 UTC on 2026-10-12, once Ling answered again. The 13 complete sessions are kept. The other 11 run from the start, and s12 and s14 count as replacements, since a provider refusal says nothing about compaction. The throttled transcripts and the runs recorded before the relaunch are kept in the scratch archive, and the scorer reads the latest record for each session.
+
 ## Decision rule
 
 - **`roll` replaces `summary` as the default** if:
