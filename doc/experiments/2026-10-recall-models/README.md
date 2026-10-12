@@ -1,4 +1,4 @@
-# Searching the record, with pointers, on four models
+# Searching the record, with pointers, on three models
 
 **2026-10-12. Preregistered; results below the line once run, one model at a time.**
 
@@ -55,20 +55,30 @@ question wording above. Sessions run `--unattended` with `--yes steps`.
 
 | model | where | context | concurrency | seed |
 |---|---|---|---|---|
-| Qwen3.8 27B, the community fine-tune `Qwen3.8-27B-Uncensored-HauhauCS-Aggressive`, quantized Q4_K_P | the maintainer's llama.cpp server, one slot | 131,072 | 1 | 20261021 |
 | Ling 3.0 Flash VL | OpenRouter, pinned to Novita | 262,144 | 4 | 20261022 |
 | MiMo-V2.6-Flash | OpenRouter, pinned to Xiaomi | 262,144 | 4 | 20261023 |
 | Ling 3.1 Flash | OpenRouter, free pool | 262,144 | 2 | 20261024 |
 
-Reasoning is "low" in every config. Qwen's server ignores the effort level
-(about 200 characters of thinking either way, in a probe), so it reasons at
-its default. Its record keeps the thinking, so its length can be reported.
+Reasoning is "low" in every config.
 
 **Size.** Six sessions per arm per model, 30 per model, shuffled with the
-model's seed. One exception, fixed now, before any Qwen result: if Qwen's
-smoke session (one `roll+recall` session, excluded from analysis) took more
-than 30 minutes, Qwen runs three per arm. A session that fails on a provider
-or server error is rerun in its place and reported.
+model's seed. A session that fails on a provider error is rerun in its place
+and reported.
+
+**Amendment, before any result: Qwen dropped.** Qwen3.8 27B, the community
+fine-tune `Qwen3.8-27B-Uncensored-HauhauCS-Aggressive` at Q4_K_P on the
+maintainer's llama.cpp server, was planned as the first stratum. Its smoke
+session (`roll+recall`, never scored) ran three turns in 8.5 minutes. The
+server was busy 457 of those 510 seconds, processing about 56k prompt tokens
+a turn at 510 tokens a second. That is about 45–50 minutes a session and a
+day for 30, too long to supervise, with a risk of overheating the hardware.
+It was stopped.
+
+Two observations from the probe, for anyone who runs it later:
+- native tool calls worked;
+- the server ignored `reasoning_effort` (about 200 characters of thinking
+  at default and at "low"), while `chat_template_kwargs.enable_thinking:
+  false` turned thinking off.
 
 **Metrics** (`data/scorer_recall.py`, `data/aggregate_recall.py`). These are
 `2026-10-recall`'s, including its fix for "I don't know" in prose:
@@ -90,8 +100,7 @@ or server error is rerun in its place and reported.
 2. **The note works** if `summary+recall+note`'s mean is at least 1 above
    `summary+recall`'s.
 3. **Wrong answers veto:** an arm with `recall` fails rules 1–2 if its wrong
-   answers exceed its comparison arm's by more than 1 in 6 sessions (by more
-   than 0 at three per arm).
+   answers exceed its comparison arm's by more than 1.
 
 **Across models:**
 
