@@ -2,6 +2,7 @@ package coder
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -216,6 +217,10 @@ func compileRecall(pattern string, ignoreCase bool) (*regexp.Regexp, string) {
 	return regexp.MustCompile(prefix + regexp.QuoteMeta(pattern)), note
 }
 
+// offersRecall reports whether this session offers recall, as a tool and
+// inside run_code alike.
+func (c *Coder) offersRecall() bool { return c.OfferRecall && c.SessionRecords != nil }
+
 func (c *Coder) runRecall(a recallArgs) string {
 	if c.SessionRecords == nil {
 		return "This session keeps no record to search (it was started with --no-history)."
@@ -352,4 +357,51 @@ func recallOpen(entries []recallEntry, id string, re *regexp.Regexp) string {
 		return b.String()
 	}
 	return fmt.Sprintf("No message has the id %q. Ids look like \"t4.3\" and come from a search's results.", id)
+}
+
+// runRecallData is recall inside a program: the matching lines as data, so a
+// program can filter, count or join them. Matches still in the conversation are
+// included and marked: a program is post-processing, and leaving them out would
+// make its counts disagree with what the model can see.
+func runRecallData(c *Coder, call *bridgedCall) (any, error) {
+	raw, err := json.Marshal(call.Args)
+	if err != nil {
+		return nil, err
+	}
+	a, msg := parseRecallArgs(llm.ToolCall{Arguments: string(raw)})
+	if msg != "" {
+		return nil, errors.New(msg)
+	}
+	entries, _ := recallEntries(c.SessionRecords())
+	re, _ := compileRecall(a.Pattern, a.IgnoreCase)
+	visible := c.inConversation()
+	var out []map[string]any
+	messages := 0
+	for _, e := range slices.Backward(entries) {
+		if !e.inScope(a.From) || !re.MatchString(e.text) {
+			continue
+		}
+		if messages++; messages > a.Newest {
+			break
+		}
+		lines := strings.Split(e.text, "\n")
+		last := -1
+		for i, l := range lines {
+			if !re.MatchString(l) {
+				continue
+			}
+			for j := max(i-a.ContextLines, last+1); j <= min(i+a.ContextLines, len(lines)-1); j++ {
+				out = append(out, map[string]any{
+					"id": e.id(), "turn": e.turn, "speaker": e.speaker(),
+					"in_conversation": visible[e.text], "line": j + 1,
+					"text": clipLine(lines[j], re), "match": j == i,
+				})
+				last = j
+			}
+		}
+	}
+	if out == nil {
+		out = []map[string]any{}
+	}
+	return out, nil
 }

@@ -86,7 +86,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// about mutates nothing and answers what the model cannot find out by
 		// looking, which a discussion turn needs as much as any other.
 		defs = append(defs, aboutTool())
-		if c.OfferRecall && c.SessionRecords != nil {
+		if c.offersRecall() {
 			// recall reads the session record, which mutates nothing; offered
 			// from the first turn rather than from the first compaction, because
 			// a tool list that changes mid-session confuses models and breaks
@@ -129,7 +129,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// ObservationViaRunCode forces it past that flag: the redirect arm has no
 	// other way to look at anything.
 	if c.OfferCode || c.ObservationViaRunCode {
-		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell()))
+		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
 	}
 	if c.editFormat == "ask" {
 		return defs

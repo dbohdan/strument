@@ -142,7 +142,7 @@ func TestCodeToolOfferedInAskMode(t *testing.T) {
 // what is missing. JavaScript is the whole language, so what it names is the
 // host, and each name here corresponds to a probe in TestCodeHasNoHost.
 func TestCodeDescriptionNamesTheHost(t *testing.T) {
-	desc := codeTool(InspectorTools(), true).Description
+	desc := codeTool(InspectorTools(), true, codeDataFuncs).Description
 	for _, want := range []string{"goja", "not Node or a browser", "require", "fs", "process", "fetch", "bash tool", "console.log()"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must mention %q:\n%s", want, desc)
@@ -546,7 +546,7 @@ func TestCodeDiscardedResultsSayWhichShape(t *testing.T) {
 // told the names are overridden.
 func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 	c, _ := observeEnv(t, map[string]string{"a.go": "package a\n"})
-	desc := codeTool(InspectorTools(), true).Description
+	desc := codeTool(InspectorTools(), true, codeDataFuncs).Description
 
 	if !strings.Contains(desc, "return data rather than the tools' prose") {
 		t.Errorf("the description must state the override:\n%s", desc)
@@ -593,10 +593,10 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 		t.Errorf("with no repo map the callable list must not offer symbol, got %v", got)
 	}
 
-	if desc := codeTool(withMap.codeCallableTools(), true).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), true, codeDataFuncs).Description; !strings.Contains(desc, "ls, symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
-	if desc := codeTool(without.codeCallableTools(), true).Description; strings.Contains(desc, "symbol") {
+	if desc := codeTool(without.codeCallableTools(), true, codeDataFuncs).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
 	}
 

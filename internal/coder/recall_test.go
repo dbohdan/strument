@@ -160,3 +160,38 @@ func TestRecallIsOfferedOnlyWithARecord(t *testing.T) {
 		t.Error("offered without the flag")
 	}
 }
+
+// Inside run_code, recall returns lines as data, so a program can post-process
+// a search; matches still in the conversation are included and marked.
+func TestRecallInsideAProgramReturnsData(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.OfferRecall, c.SessionRecords = true, recallRecords
+	c.doneMessages = []llm.Message{llm.TextMessage(llm.RoleAssistant, "It was 878.")}
+	got := run(c, `const hits = recall({pattern: "878", from: "all"});
+hits.map(h => [h.id, h.speaker, h.in_conversation, h.line].join(" ")).join("; ")`)
+	for _, want := range []string{"t2.4 assistant true 1", "t1.4 assistant false 1", "t1.3 tool read false 2"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %s", want, got)
+		}
+	}
+	// Positional, like grep's pattern-first call.
+	if got := run(c, `recall("Marigold").length`); !strings.Contains(got, "1") {
+		t.Errorf("positional call: %s", got)
+	}
+	if !strings.Contains(codeTool(c.codeCallableTools(), true, c.dataFuncs()).Description, "recall({pattern") {
+		t.Error("the run_code description does not list recall when it is offered")
+	}
+}
+
+// A session without recall has no recall in programs either: a program can
+// reach exactly the tools the model can.
+func TestRecallIsNotInProgramsWhenNotOffered(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.SessionRecords = recallRecords
+	if got := run(c, `recall("878")`); !strings.Contains(got, "ReferenceError") {
+		t.Errorf("recall was callable without being offered:\n%s", got)
+	}
+	if strings.Contains(codeTool(c.codeCallableTools(), true, c.dataFuncs()).Description, "recall") {
+		t.Error("the run_code description lists recall when it is not offered")
+	}
+}

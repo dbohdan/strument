@@ -19,6 +19,7 @@ package coder
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/workspace"
@@ -110,11 +111,33 @@ func codeFuncByName(name string) *codeFuncDef {
 	return codeFuncScan(codeFuncs, name)
 }
 
+// recallDataFunc is recall's data shape. Not in codeDataFuncs, because recall
+// is offered only in some sessions and the list is every session's: dataFuncs
+// adds it when the tool itself is offered, so a program can reach exactly the
+// tools the model can.
+var recallDataFunc = codeFuncDef{
+	name: "recall",
+	summary: "recall({pattern, from, ignore_case, context_lines, newest}) searches the session record " +
+		"as the recall tool does and returns an array of {id, turn, speaker, in_conversation, line, text} " +
+		"for the matching lines, newest message first; from and newest mean what they mean for the tool, " +
+		"except that matches still in this conversation are included, marked in_conversation: true.",
+	params: []string{"pattern", "from", "ignore_case", "context_lines", "newest"},
+	fn:     runRecallData,
+}
+
+// dataFuncs is the data-shape registry for this session.
+func (c *Coder) dataFuncs() []codeFuncDef {
+	if c.offersRecall() {
+		return append(slices.Clone(codeDataFuncs), recallDataFunc)
+	}
+	return codeDataFuncs
+}
+
 // codeDataFuncByName returns the data-shape entry for name, or nil. Separate
 // from codeFuncByName so a future name that exists in both shapes is a
 // decision, not an accident of scan order.
-func codeDataFuncByName(name string) *codeFuncDef {
-	return codeFuncScan(codeDataFuncs, name)
+func (c *Coder) codeDataFuncByName(name string) *codeFuncDef {
+	return codeFuncScan(c.dataFuncs(), name)
 }
 
 func codeFuncScan(defs []codeFuncDef, name string) *codeFuncDef {
@@ -144,15 +167,27 @@ func codeFuncDoc() string {
 	return b.String()
 }
 
+// joinAnd joins names as prose: "a", "a and b", "a, b and c".
+func joinAnd(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 // codeDataFuncDoc renders the data shapes into the description, with the
 // overriding stated in the header: these names are the tools', so the program
 // gets the list, not the tool's prose. Built from the registry like
 // codeFuncDoc, for the same reason.
-func codeDataFuncDoc() string {
+func codeDataFuncDoc(data []codeFuncDef) string {
+	names := make([]string, len(data))
+	for i, d := range data {
+		names[i] = d.name
+	}
 	var b strings.Builder
-	b.WriteString("\n\nInside a program, glob, grep and ls return data rather than the tools' " +
-		"prose, and the other tools return the same text they return to you:\n")
-	for _, d := range codeDataFuncs {
+	fmt.Fprintf(&b, "\n\nInside a program, %s return data rather than the tools' "+
+		"prose, and the other tools return the same text they return to you:\n", joinAnd(names))
+	for _, d := range data {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}
 	return b.String()

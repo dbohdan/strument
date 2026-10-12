@@ -92,7 +92,7 @@ func codeCommandsClause(shell bool) string {
 // and shell = False both withhold it, and the description used to point at
 // "the bash tool" anyway — the kind of mismatch
 // doc/experiments/2026-09-tool-disclosure's arm C showed one model will act on.
-func codeTool(callable []string, shell bool) llm.ToolDef {
+func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Run a short JavaScript program. " +
 		"The program can call the read-only tools directly — " +
@@ -122,7 +122,7 @@ func codeTool(callable []string, shell bool) llm.ToolDef {
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
-	b.WriteString(codeDataFuncDoc())
+	b.WriteString(codeDataFuncDoc(data))
 	b.WriteString(codeFuncDoc())
 
 	return llm.ToolDef{
@@ -262,7 +262,7 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	for _, n := range names {
 		register(n, codeToolParams[n])
 	}
-	for _, d := range codeDataFuncs {
+	for _, d := range c.dataFuncs() {
 		register(d.name, d.params)
 	}
 	for _, d := range codeFuncs {
@@ -585,7 +585,8 @@ var codeToolParams = map[string][]string{
 // truth without parsing anything.
 func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 	funcs := codeFuncs
-	isAllowed := make(map[string]bool, len(allowed)+len(funcs)+len(codeDataFuncs))
+	data := c.dataFuncs()
+	isAllowed := make(map[string]bool, len(allowed)+len(funcs)+len(data))
 	for _, n := range allowed {
 		isAllowed[n] = true
 	}
@@ -595,7 +596,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 	for _, d := range funcs {
 		isAllowed[d.name] = true
 	}
-	for _, d := range codeDataFuncs {
+	for _, d := range data {
 		isAllowed[d.name] = true
 	}
 
@@ -635,7 +636,7 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 		// The data shapes go before Inspector.Run: they are the same tool
 		// names, answered as data inside a program. The prose shapes stay
 		// behind them untouched, for the model's direct calls.
-		if d := codeDataFuncByName(call.Name); d != nil {
+		if d := c.codeDataFuncByName(call.Name); d != nil {
 			v, err := d.fn(c, call)
 			log.last = v
 			return v, err
