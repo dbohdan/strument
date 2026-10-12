@@ -46,7 +46,11 @@ def score_text(text, batches, proj_truth):
     # usage line ends every turn and does not wrap.
     segs = re.split(r"Tokens: [^\n]*\n", text)
     claims = {t: own_claim(segs[t]) for t in DERIVED if t < len(segs)}
-    work = text.split(WORK)[1:]
+    # A segment is a question turn only if it ends one: a redrawn prompt line
+    # (seen while a 429 was being retried) repeats the question's opening with
+    # nothing after it, and would shift every later answer onto the wrong
+    # question. A real turn always prints its usage line.
+    work = [seg for seg in text.split(WORK)[1:] if "Tokens:" in seg]
     out = {}
     for k, pair in enumerate(((3, 11), (4, 12))):
         seg = work[k] if k < len(work) else ""
@@ -87,8 +91,10 @@ def selftest():
     filler = "".join(f"turn {i}\nTokens: 1\n" for i in range(3))
     text = (filler + turn("a/x.go") + "\n‹/›\nThe longest is long.go with 700 lines.\nTokens: 1\n"
             + turn("f.go") + "\n‹/›\ng.go is longest, 51 lines.\nTokens: 1\n"
-            + WORK + " ... giving the file and the line count.\nANSWER1: long.go, 700 lines\nANSWER2: m.go — I don't know the count\n"
-            + WORK + " ...\nANSWER1: g.go, 51 lines\nANSWER2: t.go, 99 lines\n")
+            + WORK + " ... giving the file and the line count.\nANSWER1: long.go, 700 lines\nANSWER2: m.go — I don't know the count\nTokens: 1\n"
+            # A redrawn prompt line: the question's opening again, no turn after it.
+            + WORK + " ... giving the file\n"
+            + WORK + " ...\nANSWER1: g.go, 51 lines\nANSWER2: t.go, 99 lines\nTokens: 1\n")
     r = score_text(text, batches, truth_)
     d = r["derived"]
     assert d["3"]["truth"] and d["3"]["own"], d["3"]
@@ -97,7 +103,7 @@ def selftest():
     assert d["12"]["truth"] and not d["12"]["own"], d["12"]        # no claim recorded for 12
     assert r["claims_correct"] == 1 and r["derived_truth"] == 2, r
     u = score_text("Two questions about things I told you ... Put the answers on their own lines as ANSWER1: and ANSWER2:.\n"
-                   "ANSWER1: Marigold-417\nANSWER2: lantern_ridge_v3\n" + WORK + "\nANSWER1: x.go, 9\nANSWER2: y.go, 8\n",
+                   "ANSWER1: Marigold-417\nANSWER2: lantern_ridge_v3\nTokens: 1\n" + WORK + "\nANSWER1: x.go, 9\nANSWER2: y.go, 8\nTokens: 1\n",
                    batches, truth_)
     assert u["codename"] == "correct" and u["flag"] == "correct", u
     print("selftest ok")

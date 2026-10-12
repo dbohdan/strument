@@ -120,6 +120,11 @@ def run(job):
                               os.path.join(base, "proxy.jsonl")], stdout=subprocess.DEVNULL, env=penv,
                              stderr=open(os.path.join(base, "proxy.err"), "w"))
     time.sleep(1)
+    # A proxy that could not bind its port exits; whatever holds the port would
+    # then answer this session. A stale proxy from another run once did, and
+    # forwarded a request, key and all, to a different upstream. Fail instead.
+    if proxy.poll() is not None:
+        raise RuntimeError(f"{jid}: the proxy on port {port} exited (port in use?); see proxy.err")
     env = dict(os.environ, XDG_STATE_HOME=os.path.join(base, "state"), TERM="xterm",
                STRUMENT_TRIAL_HISTORY_BUDGET=str(budget))
     raw = open(os.path.join(base, "transcript.raw"), "wb")

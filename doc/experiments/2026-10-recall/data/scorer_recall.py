@@ -43,7 +43,7 @@ def prose_unknowns(d, r):
     know, both of its questions count as "don't know". True and wrong counts
     cannot change: neither depends on an unparsed answer."""
     text = scorer_roll.ANSI.sub("", open(os.path.join(d, "transcript.raw"), "rb").read().decode("utf-8", "replace"))
-    work = text.split(scorer_roll.WORK)[1:]
+    work = [seg for seg in text.split(scorer_roll.WORK)[1:] if "Tokens:" in seg]
     for k, pair in enumerate(((3, 11), (4, 12))):
         if k >= len(work) or scorer_roll.ANS.search(work[k]):
             continue

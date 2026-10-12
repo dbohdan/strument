@@ -132,7 +132,7 @@ All 30 sessions completed all 21 turns, at $1.05 (pilot $0.12; $1.17 in all).
 |---|---|---|---|---|---|---|---|
 | `summary` | 6 | 33/36 | 13/24 | 9 | 2 | — | — |
 | `summary+recall` | 6 | 36/36 | 8/24 | 16 | 0 | 0 of 6 | 0 |
-| `summary+recall+note` | 6 | 35/36 | 14/24 | 6 | 2 | 3 of 6 | 14 |
+| `summary+recall+note` | 6 | 35/36 | 15/24 | 3 | 3 | 3 of 6 | 14 |
 | `roll` | 6 | 36/36 | 2/24 | 21 | 0 | — | — |
 | `roll+recall` | 6 | 36/36 | 4/24 | 14 | 4 | 1 of 6 | 3 |
 
@@ -140,17 +140,20 @@ All 30 sessions completed all 21 turns, at $1.05 (pilot $0.12; $1.17 in all).
 
 1. **`roll+recall` against `roll`:** means of 0.67 and 0.33 true derived
    facts per session, a gain of +0.33 against a bar of 2. **Fails.**
-2. **`summary+recall+note` against `summary+recall`:** 2.33 against 1.33,
-   a gain of +1.00, which meets the bar of 1. Its 2 wrong answers exceed
-   `summary+recall`'s 0 by 2, more than the 1 allowed, so the veto applies.
+2. **`summary+recall+note` against `summary+recall`:** 2.50 against 1.33,
+   a gain of +1.17, which meets the bar of 1. Its 3 wrong answers exceed
+   `summary+recall`'s 0 by 3, more than the 1 allowed, so the veto applies.
    **Fails.**
 3. **`recall` stays hidden,** and so does the note.
 
-The vetoing wrong answers are worth reading. Both are s03's: "exec.go at 555
+The vetoing wrong answers are worth reading. Two are s03's: "exec.go at 555
 lines" and "os3_solaris.go at 647". The read tool had shown 554 and 646, and
 s03 stated 555 and 647 in the turn itself. So the model miscounted at the
 time and its memory then carried that miscount faithfully. s03 never called
 `recall`. Against the files they are wrong, as preregistered, and they count.
+The third is s14's hedge, which still committed to an answer: "I don't have a
+record of a batch beginning with …zsysnum_linux_mips.go; the batch I recall …
+identified map.go … 816 lines". That is the wrong file for the question.
 
 ### What decided it: whether the model searched
 
@@ -160,7 +163,7 @@ from sessions that did not, so read it as a lead, not as a measured effect.
 | sessions with `recall` offered | n | derived, true | "don't know" | wrong |
 |---|---|---|---|---|
 | called it in the question turns | 4 | **15/16** | 0 | **0** |
-| did not | 14 | 11/56 | 36 | 6 |
+| did not | 14 | 12/56 | 33 | 7 |
 
 The pilot's `roll+recall` session, which searched, scored 4/4. When Ling 3.0
 searched, it searched well:
@@ -169,7 +172,7 @@ searched, it searched well:
 - **With `from="all"`** once the conversation scope came up empty.
 - **With patterns it built from what it learned:** `turn 5.*longest|t5\.[0-9]+.*longest`.
 
-All six wrong answers came from sessions that did not search. s16 and s21
+All seven wrong answers came from sessions that did not search. s16 and s21
 (`roll+recall`) gave the right file with invented counts (414 and 386, against
 878) and a wrong file for the other question.
 
@@ -198,9 +201,21 @@ visible because the two previous ones summarized well.
 The scorer read only ANSWER1/ANSWER2 lines. Sessions that answered "I don't
 know" in prose (s02, s14, s27, s29) were scored as unanswered, rather than as
 "don't know". Reading transcripts after the run found this, and
-`scorer_recall.prose_unknowns` now classifies them. It changes only the
-"don't know" column. True and wrong do not depend on parsed answers, and the
-decision uses only those.
+`scorer_recall.prose_unknowns` now classifies them.
+
+**Correction, 2026-10-12, after `2026-10-recall-models` ran.** The note above
+claimed true and wrong could not change, and for s14 that was wrong. A second
+scorer bug had hidden its answers. All three scorers split a transcript on a
+question's opening words. While a 429 was being retried, the terminal redrew
+the prompt line, so the opening appeared one extra time with nothing after it.
+That shifted every later answer onto the wrong question. The scorers now keep
+only segments that end a turn (a `Tokens:` line), and their self-tests cover
+the redraw. Re-scoring every batch with both versions changed one completed
+session here, s14 (`summary+recall+note`): from 0 true, 4 "don't know", 0
+wrong to 1 true, 1 "don't know", 1 wrong. It changed none in
+`2026-10-compaction-roll` or this trial's pilot. The tables above are
+corrected. The verdict is unchanged: rule 2's gain becomes +1.17, and the
+veto holds on 3 wrong answers against 0.
 
 ## What next
 

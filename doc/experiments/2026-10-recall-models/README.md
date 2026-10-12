@@ -1,6 +1,6 @@
 # Searching the record, with pointers, on three models
 
-**2026-10-12. Preregistered; results below the line once run, one model at a time.**
+**2026-10-12. Preregistered; results below the line, one model at a time. Ling 3.0 done: both rules hold. MiMo and Ling 3.1 to come.**
 
 ## Why
 
@@ -116,3 +116,79 @@ Two observations from the probe, for anyone who runs it later:
 **Reported in full:** `summary+recall` against `summary` (the placeholder
 pointer alone, on summary sessions), and the share of sessions that searched,
 per arm and model.
+
+---
+
+## Results
+
+### Ling 3.0 Flash VL (Novita)
+
+All 30 sessions completed, at about $1.12. Three (s21 and s29, `roll`; s23,
+`summary+recall`) failed on Novita 429s and were rerun in place. Their failed
+transcripts are kept in the scratch archive.
+
+| arm | n | user facts | derived, true | "don't know" | wrong | sessions searching in the questions | `recall` calls |
+|---|---|---|---|---|---|---|---|
+| `summary` | 6 | 36/36 | 15/24 | 8 | 1 | — | — |
+| `summary+recall` | 6 | 35/36 | 8/24 | 11 | 4 | 0 of 6 | 0 |
+| `summary+recall+note` | 6 | 35/36 | **22/24** | 2 | 0 | 5 of 6 | 56 |
+| `roll` | 6 | 36/36 | 0/24 | 24 | 0 | — | — |
+| `roll+recall` | 6 | 36/36 | **23/24** | 0 | 1 | **6 of 6** | 39 |
+
+**Rules:**
+
+1. **`roll+recall` against `roll`:** 3.83 against 0.00, a gain of +3.83
+   against a bar of 2. Its wrong answers exceed `roll`'s by 1, which the veto
+   allows. **Holds.**
+2. **`summary+recall+note` against `summary+recall`:** 3.67 against 1.33, a
+   gain of +2.33 against a bar of 1. It has no wrong answers, against 4.
+   **Holds.**
+
+**Against `2026-10-recall`** (same model, before the pointers and the new
+question wording; a before-and-after across two runs, not randomized):
+
+| arm | sessions searching | derived, true |
+|---|---|---|
+| `roll+recall` | 1 of 6 → **6 of 6** | 4/24 → **23/24** |
+| `summary+recall+note` | 3 of 6 → 5 of 6 | 15/24 → 22/24 |
+| `summary+recall` | 0 of 6 → 0 of 6 | 8/24 → 8/24 |
+
+**What the pointers did:**
+
+- **The roll note's pointer took searching from 1 session in 6 to 6 in 6,**
+  and `roll` from no derived facts to nearly all of them.
+- **Every one of the 95 `recall` calls used `from="all"`,** as the note now
+  says to.
+- **The placeholder alone did nothing for summaries.** `summary+recall` has
+  the placeholder pointer and no note, and no session searched. Its 8 true
+  and 4 wrong is worse than plain `summary`'s 15 and 1. With six sessions an
+  arm that may be noise, but none of the four wrong answers came from a
+  search. They are summary errors: two sessions gave
+  "runtime/malloc_stubs.go, 638 lines", the runner-up of that turn, for
+  os3_solaris.go at 646.
+- **Across the three `recall` arms, the 11 sessions that searched** answered
+  43 true, 0 "don't know" and 1 wrong. The 7 that did not answered 10 true,
+  13 "don't know" and 4 wrong.
+
+**The one wrong answer after a search** (s12, `roll+recall`): in turn 3 it
+had said "So the longest is ztypes_darwin_amd64.go at 878 lines". Asked
+later, after twelve searches, it answered with the file the question names,
+zsysnum_linux_mips.go, at 450 lines. The record held the right answer, and
+the model misread its search results.
+
+**Instrument note: a scorer bug, found here and fixed in all three
+scorers.** While a 429 was being retried, the terminal redrew the prompt line,
+and a question's opening words appeared one extra time with nothing after
+them. The scorers split a transcript on those words, so every later answer
+shifted onto the wrong question. In s24 here, two correct answers had been
+scored as one "don't know" and one wrong. The scorers now keep only segments
+that end a turn, and their self-tests cover the redraw. Re-scoring every
+earlier batch with both versions changed one completed session elsewhere, in
+`2026-10-recall` (corrected there, verdict unchanged), and none in
+`2026-10-compaction-roll`.
+
+**Runner note.** A stale proxy from the cancelled Qwen smoke session held a
+port, and the first Ling session talked to it: one request went to the wrong
+upstream, and the session failed in a second. The batch was wiped and rerun.
+The runner now refuses to start a session whose proxy could not bind.
+

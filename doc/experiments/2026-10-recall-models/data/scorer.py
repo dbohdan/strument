@@ -19,7 +19,9 @@ def norm(s):
     return re.sub(r"[`*\"'“”]", "", s).strip().strip(".").lower()
 
 def score_text(text):
-    segs = text.split(ECHO)[1:]
+    # Only segments that end a turn: a redrawn prompt line repeats the
+    # question's opening with nothing after it (see scorer_roll.score_text).
+    segs = [seg for seg in text.split(ECHO)[1:] if "Tokens:" in seg]
     out = {}
     for k in range(3):
         seg = segs[k] if k < len(segs) else ""
@@ -67,9 +69,11 @@ def score(d):
 
 def selftest():
     q = ECHO + " ... Put the answers on their own lines as ANSWER1: and ANSWER2:.\n"
-    t = ("noise\n" + q + "Read std/x.go (10 lines)\nANSWER1: **Marigold-417**\nANSWER2: lantern_ridge_v2\n"
-         + q + "ANSWER1: I don't know\n"
-         + q + "**ANSWER1:** Ilse Varga.\nANSWER2: `cohort-teal-29`\nChat history compacted: 1 -> 2\n")
+    t = ("noise\n" + q + "Read std/x.go (10 lines)\nANSWER1: **Marigold-417**\nANSWER2: lantern_ridge_v2\nTokens: 1\n"
+         # A redrawn prompt line: the question's opening again, no turn after it.
+         + q
+         + q + "ANSWER1: I don't know\nTokens: 1\n"
+         + q + "**ANSWER1:** Ilse Varga.\nANSWER2: `cohort-teal-29`\nChat history compacted: 1 -> 2\nTokens: 1\n")
     r = score_text(t)
     want = {"codename": "correct", "flag": "wrong", "dbhost": "unknown", "budget": "no_answer",
             "oncall": "correct", "cohort": "correct", "q0_tool_calls": 1, "folds": 1,
