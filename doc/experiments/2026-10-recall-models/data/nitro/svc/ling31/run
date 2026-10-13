@@ -1,0 +1,9 @@
+#!/bin/bash
+# The Ling 3.1 stratum of doc/experiments/2026-10-recall-models, supervised by
+# nitro. exec, so nitro's signal reaches the watcher itself: a shell waiting on
+# it would die and leave the watcher running. The watcher takes the service
+# down once all 30 sessions are done; finish stops what it started.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+export NITRO_SOCK=$S/nitro/nitro.sock
+cd $S/recall
+exec 2>&1 ./ling31_watch.sh

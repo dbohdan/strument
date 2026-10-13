@@ -1,0 +1,9 @@
+#!/bin/bash
+# nitro signals only the run process. The runner, its proxies and the Strument
+# sessions each carry the stratum's output directory in their arguments, so a
+# match on it stops exactly this stratum's processes and nothing else's.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+pkill -f "$S/recall/models-ling31/"
+sleep 2
+pkill -9 -f "$S/recall/models-ling31/"
+exit 0

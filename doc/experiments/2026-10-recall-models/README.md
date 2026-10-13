@@ -1,6 +1,6 @@
 # Searching the record, with pointers, on three models
 
-**2026-10-12. Preregistered; results below the line, one model at a time. Ling 3.0 done: both rules hold. MiMo and Ling 3.1 to come.**
+**2026-10-12 to 13. Preregistered; results below the line, one model at a time. Ling 3.0: both rules hold. MiMo: rule 1 holds, rule 2 at ceiling. Ling 3.1 in progress (the free pool is throttled).**
 
 ## Why
 
@@ -191,4 +191,63 @@ earlier batch with both versions changed one completed session elsewhere, in
 port, and the first Ling session talked to it: one request went to the wrong
 upstream, and the session failed in a second. The batch was wiped and rerun.
 The runner now refuses to start a session whose proxy could not bind.
+
+### MiMo-V2.6-Flash (Xiaomi)
+
+All 30 sessions completed on the first pass, with no provider failures, at
+$3.32. Sessions took 20–30 minutes each, four at a time. Run under nitro
+(below), alongside Ling 3.1.
+
+| arm | n | user facts | derived, true | "don't know" | wrong | sessions searching in the questions | `recall` calls |
+|---|---|---|---|---|---|---|---|
+| `summary` | 6 | 36/36 | 23/24 | 0 | 1 | — | — |
+| `summary+recall` | 6 | 36/36 | 24/24 | 0 | 0 | 1 of 6 | 2 |
+| `summary+recall+note` | 6 | 36/36 | 24/24 | 0 | 0 | 3 of 6 | 29 |
+| `roll` | 6 | 36/36 | 0/24 | 24 | 0 | — | — |
+| `roll+recall` | 6 | 36/36 | **24/24** | 0 | 0 | **6 of 6** | 34 |
+
+**Rules:**
+
+1. **`roll+recall` against `roll`:** 4.00 against 0.00, with no wrong answers
+   in either. **Holds.**
+2. **`summary+recall+note` against `summary+recall`:** 4.00 against 4.00, a
+   gain of 0 against a bar of 1. **Fails, at the ceiling.** MiMo's summaries
+   keep every derived fact on their own (plain `summary`: 23/24), so a pointer
+   to the record has nothing left to rescue. That fits the prediction in
+   `2026-10-recall` that strong summarizers would leave the summary arms
+   little room.
+
+**Details:**
+
+- **The only wrong answer is in plain `summary` (s05), outside every
+  comparison.** Its summary held no count for one turn. The model reasoned
+  "That risks being wrong… I'll commit" and gave the previous turn's answer
+  again.
+- **Searching never hurt.** The 10 sessions that searched answered 40 of 40.
+  The 8 that had `recall` and did not search answered 32 of 32, all from
+  their summaries.
+- **59 of 65 searches used `from="all"`.** One `summary+recall` session
+  searched with only the placeholder pointing at the record, which no Ling
+  3.0 session did.
+
+## Across models, so far
+
+| model | rule 1 (`roll+recall`) | rule 2 (the note) | veto |
+|---|---|---|---|
+| Ling 3.0 | holds (+3.83) | holds (+2.33) | none |
+| MiMo | holds (+4.00) | fails at the ceiling (+0.00) | none |
+| Ling 3.1 | — | — | — |
+
+Rule 1 holds on two models, which is the preregistered bar for offering
+`recall` by default. The rule also requires that no model's `recall` arm fail
+the veto. Ling 3.1 has not finished, so the decision waits for it. Rule 2 has
+held on one model.
+
+**Infrastructure note.** From here on, strata run under
+[nitro](https://github.com/leahneukirchen/nitro), built from source and run
+unprivileged. Each stratum is a service, with a `finish` script that stops its
+processes by matching its output directory. Each also has its own port base,
+so that two strata can run at once. An idle container is reclaimed, and that
+killed the first two unsupervised attempts at Ling 3.1. A background task kept
+running for up to two hours at a time now holds the container.
 

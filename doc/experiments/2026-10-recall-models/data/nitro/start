@@ -1,0 +1,13 @@
+#!/bin/bash
+# Start nitro (unprivileged mode: it is not pid 1, so a shutdown stops only its
+# own services). Safe to run when it is already up: it then does nothing.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+export NITRO_SOCK=$S/nitro/nitro.sock
+if $S/src/nitro/nitroctl list >/dev/null 2>&1; then
+  echo "nitro already running"
+else
+  rm -f "$NITRO_SOCK"
+  setsid nohup $S/src/nitro/nitro $S/nitro/svc >> $S/nitro/nitro.log 2>&1 < /dev/null &
+  sleep 3
+fi
+$S/src/nitro/nitroctl list

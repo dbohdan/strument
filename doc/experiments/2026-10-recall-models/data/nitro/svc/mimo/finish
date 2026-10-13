@@ -1,0 +1,8 @@
+#!/bin/bash
+# As ling31/finish: stop this stratum's runner, proxies and sessions, which all
+# carry its output directory in their arguments, and nothing else.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+pkill -f "$S/recall/models-mimo/"
+sleep 2
+pkill -9 -f "$S/recall/models-mimo/"
+exit 0

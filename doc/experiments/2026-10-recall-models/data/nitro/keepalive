@@ -1,0 +1,11 @@
+#!/bin/bash
+# Holds the container while any nitro service is up: an idle container is
+# reclaimed unless a harness background task is running, and nitro dies with it.
+# Run as that task, for up to two hours at a time; exits when nothing is up.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+export NITRO_SOCK=$S/nitro/nitro.sock
+while $S/src/nitro/nitroctl list 2>/dev/null | grep -qE "^(UP|STARTING|SETUP|RESTART|DELAY) "; do
+  sleep 60
+done
+$S/src/nitro/nitroctl list 2>&1
+tail -3 $S/recall/models-ling31.log

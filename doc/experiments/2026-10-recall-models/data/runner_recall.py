@@ -27,6 +27,8 @@ ap.add_argument("--provider", default="")
 # holding its URL (passed to the proxy by name, never by value), its context,
 # and extra request fields as JSON.
 ap.add_argument("--adapter", default="openrouter")
+# Session i listens on port-base + i; two strata running at once need distinct bases.
+ap.add_argument("--port-base", type=int, default=19100)
 ap.add_argument("--key-env", default="OPENROUTER_API_KEY")
 ap.add_argument("--upstream-env", default="")
 ap.add_argument("--context", type=int, default=262144)
@@ -191,7 +193,7 @@ os.makedirs(a.outdir, exist_ok=True)
 jobs = [{"mode": arm.split(":")[0], "budget": int(arm.split(":")[1])} for arm in a.arms.split(",") for _ in range(a.reps)]
 random.Random(a.seed).shuffle(jobs)
 for i, j in enumerate(jobs):
-    j["id"] = f"s{i:02d}"; j["port"] = 19100 + i
+    j["id"] = f"s{i:02d}"; j["port"] = a.port_base + i
 json.dump(jobs, open(os.path.join(a.outdir, "jobs.json"), "w"), indent=1)
 done = set()
 if os.path.exists(os.path.join(a.outdir, "runs.jsonl")):

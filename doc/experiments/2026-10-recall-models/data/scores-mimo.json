@@ -1,0 +1,1224 @@
+[
+ {
+  "id": "s00",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10099
+ },
+ {
+  "id": "s01",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11572
+ },
+ {
+  "id": "s02",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10158
+ },
+ {
+  "id": "s03",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 4,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.09913
+ },
+ {
+  "id": "s04",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10686
+ },
+ {
+  "id": "s05",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 3,
+  "dunk": 0,
+  "dwrong": 1,
+  "rolls": 0,
+  "folds": 8,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11145
+ },
+ {
+  "id": "s06",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 6,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 3,
+  "rq": 3,
+  "rbefore": 0,
+  "rall": 3,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "id": "longest",
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 1,
+     "from": "all",
+     "newest": 30,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "ztypes_darwin_amd64.go"
+    }
+   ]
+  ],
+  "cost": 0.10161
+ },
+ {
+  "id": "s07",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 9,
+  "rq": 9,
+  "rbefore": 0,
+  "rall": 5,
+  "rargs": [
+   [
+    17,
+    {
+     "context_lines": 0,
+     "newest": 10,
+     "pattern": "db-quill-82|BX-5528"
+    }
+   ],
+   [
+    17,
+    {
+     "context_lines": 0,
+     "newest": 10,
+     "pattern": "budget code"
+    }
+   ],
+   [
+    18,
+    {
+     "context_lines": 0,
+     "newest": 10,
+     "pattern": "on-call|canary cohort"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "newest": 15,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 1,
+     "from": "all",
+     "newest": 15,
+     "pattern": "ztypes_darwin_amd64\\.go.*longest|longest.*ztypes_darwin"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 1,
+     "from": "all",
+     "newest": 15,
+     "pattern": "exec\\.go.*554|554 lines|exec.go is"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 15,
+     "pattern": "ztypes_darwin_amd64\\.go \\(\\d+ lines\\)|ztypes_darwin_amd64.go.*878|878"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 8,
+     "pattern": "map\\.go|816"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 8,
+     "pattern": "os3_solaris|646"
+    }
+   ]
+  ],
+  "cost": 0.11997
+ },
+ {
+  "id": "s08",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 4,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10118
+ },
+ {
+  "id": "s09",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 6,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 7,
+  "rq": 7,
+  "rbefore": 0,
+  "rall": 7,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 20,
+     "pattern": "zsysnum_linux_mips\\.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_ppc|zsysnum_linux_sparc64|longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 1,
+     "from": "all",
+     "id": "t4.12"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "ztypes_linux_arm"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "os3_solaris|extern\\.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 10,
+     "pattern": "longest of the five|longest file|is the longest"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "id": "t5.12"
+    }
+   ]
+  ],
+  "cost": 0.11449
+ },
+ {
+  "id": "s10",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 6,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 10,
+  "rq": 10,
+  "rbefore": 0,
+  "rall": 10,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 20,
+     "pattern": "is the longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 30,
+     "pattern": "lines.*(longest|tied|shortest)|longest.*(lines|file)"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 30,
+     "pattern": "they have in common"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest of the five|five files is the longest|is the longest, at|longest: "
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 6,
+     "from": "all",
+     "newest": 20,
+     "pattern": "ztypes_linux_arm"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 30,
+     "pattern": "lines.*[Tt]heir (own|job|purpose)|[Tt]heir own (set|table|rules)"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 30,
+     "pattern": "read whole \u2014|read whole -"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 30,
+     "pattern": "read whole"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 40,
+     "pattern": "map\\.go \\(|mips64|Longest of the five"
+    }
+   ]
+  ],
+  "cost": 0.10336
+ },
+ {
+  "id": "s11",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10207
+ },
+ {
+  "id": "s12",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 8,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 13,
+  "rq": 13,
+  "rbefore": 0,
+  "rall": 13,
+  "rargs": [
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "was the longest|longest (of|at|was)"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "lookup_windows"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 30,
+     "pattern": "lines\\)$"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 30,
+     "pattern": "udpsock|file_windows|filepath/path\\.go|regexp/exec"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 30,
+     "pattern": "zsysnum_linux_mips\\.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 10,
+     "pattern": "878"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "ztypes_linux_arm"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "extern\\.go"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "id": "t5",
+     "pattern": "Longest"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 30,
+     "pattern": "mranges\\.go|mfinal\\.go|malloc_stubs\\.go"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "id": "t13.12"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "map\\.go.*816|816 lines"
+    }
+   ]
+  ],
+  "cost": 0.11842
+ },
+ {
+  "id": "s13",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11104
+ },
+ {
+  "id": "s14",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 9,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11645
+ },
+ {
+  "id": "s15",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 9,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 2,
+  "rq": 2,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 3,
+     "newest": 20,
+     "pattern": "zsysnum_linux_mips"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ]
+  ],
+  "cost": 0.11923
+ },
+ {
+  "id": "s16",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 7,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 1,
+  "rq": 1,
+  "rbefore": 0,
+  "rall": 1,
+  "rargs": [
+   [
+    19,
+    {
+     "pattern": "longest",
+     "from": "all",
+     "newest": 20
+    }
+   ]
+  ],
+  "cost": 0.10612
+ },
+ {
+  "id": "s17",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12552
+ },
+ {
+  "id": "s18",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.1084
+ },
+ {
+  "id": "s19",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 7,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12496
+ },
+ {
+  "id": "s20",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 8,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11197
+ },
+ {
+  "id": "s21",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 8,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 4,
+  "rq": 4,
+  "rbefore": 0,
+  "rall": 4,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "is the longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 6,
+     "pattern": "lines long|line file|the five is|five files is the longest|Longest|longest of"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 6,
+     "pattern": "ztypes_darwin_amd64\\.go.*lines|zsysnum_linux_mipsle|zsysnum_linux_sparc64\\.go.*\\(\\d+\\)"
+    }
+   ]
+  ],
+  "cost": 0.10442
+ },
+ {
+  "id": "s22",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10107
+ },
+ {
+  "id": "s23",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 9,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11879
+ },
+ {
+  "id": "s24",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 8,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.1111
+ },
+ {
+  "id": "s25",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 10,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12502
+ },
+ {
+  "id": "s26",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 6,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.10994
+ },
+ {
+  "id": "s27",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 10,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 7,
+  "rq": 7,
+  "rbefore": 0,
+  "rall": 7,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 50,
+     "pattern": "The longest of the five"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 4,
+     "from": "all",
+     "newest": 20,
+     "pattern": "zsysnum_linux_mips\\.go \\("
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 6,
+     "from": "all",
+     "id": "t4.4",
+     "pattern": "zsysnum_linux_mips|ztypes_darwin_amd64"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 8,
+     "from": "all",
+     "newest": 5,
+     "pattern": "ztypes_darwin_amd64\\.go \\(\\d+"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 6,
+     "from": "all",
+     "newest": 5,
+     "pattern": "878 lines|878\\)"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 5,
+     "from": "all",
+     "newest": 10,
+     "pattern": "ztypes_linux_arm\\.go \\(\\d+|Longest of the five|longest of the five"
+    }
+   ]
+  ],
+  "cost": 0.10837
+ },
+ {
+  "id": "s28",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 7,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 9,
+  "rq": 9,
+  "rbefore": 0,
+  "rall": 9,
+  "rargs": [
+   [
+    19,
+    {
+     "pattern": "longest",
+     "from": "all"
+    }
+   ],
+   [
+    19,
+    {
+     "pattern": "zsysnum_linux_mips\\.go",
+     "from": "all"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "pattern": "Line counts|longest",
+     "id": "t4.1"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "pattern": "lookup_windows\\.go"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "lines\\)\\."
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "sparc64|ztypes_darwin_amd64\\.go read|All five files read whole"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "ztypes_darwin|openbsd_arm64\\.go read|zsysnum_openbsd"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "os3_solaris|malloc_stubs\\.go \\d|mranges\\.go \\d"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "ztypes_linux_arm\\.go|cases/map\\.go|text/cases"
+    }
+   ]
+  ],
+  "cost": 0.10515
+ },
+ {
+  "id": "s29",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 8,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11108
+ }
+]
