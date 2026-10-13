@@ -1,6 +1,6 @@
 # Searching the record, with pointers, on three models
 
-**2026-10-12 to 13. Preregistered; results below the line, one model at a time. Ling 3.0: both rules hold. MiMo: rule 1 holds, rule 2 at ceiling. Ling 3.1 in progress (the free pool is throttled).**
+**2026-10-12 to 13. Preregistered; results below the line, one model at a time. Ling 3.0: both rules hold, also on clean sessions only. MiMo: rule 1 holds, rule 2 at ceiling. Ling 3.1: first run set aside for an instrument defect; rerunning on Novita.**
 
 ## Why
 
@@ -230,17 +230,74 @@ $3.32. Sessions took 20–30 minutes each, four at a time. Run under nitro
   searched with only the placeholder pointing at the record, which no Ling
   3.0 session did.
 
+### Instrument defect: turns cut short by a provider error
+
+Ling 3.1's s05 scored nothing, and its transcript showed why. When a request
+partway through a turn runs out of retries, Strument prints the error and
+ends the turn with its usual usage line. The runner waited for that line, so
+it counted a cut-short turn as complete. A failed summary is the quieter
+version. Strument warns "Could not summarize chat history", keeps the history
+whole, and carries on, so the turn completes with more raw history than the
+arm's budget allows, until a later summary succeeds.
+
+Both count as provider failures under the preregistered rule. The runner now
+fails a turn that holds a provider error line not followed by "Retrying",
+which covers both cases. Here is what it flags across the finished strata:
+
+| model | sessions flagged | a turn cut short | summary failures only |
+|---|---|---|---|
+| Ling 3.0 | 7 of 30 | s26, s27, s28 | s15, s19, s24, s25 |
+| MiMo | 0 of 30 | — | — |
+| Ling 3.1 | 25 of 30 | 19 | 6 |
+
+**Ling 3.0.** The preregistered remedy, a rerun in place, is no longer
+available. Novita has stopped serving Ling 3.0 on OpenRouter, and the only
+endpoint left is DeepInfra's fp16 at 131,072 context. Rerunning there would
+put two providers in one stratum. Instead, the seven flagged sessions are
+excluded and the rules recomputed on the 23 clean ones:
+
+| arm | n | derived, true (mean) | wrong |
+|---|---|---|---|
+| `summary` | 4 | 2.50 | 1 |
+| `summary+recall` | 4 | 1.50 | 2 |
+| `summary+recall+note` | 4 | 3.50 | 0 |
+| `roll` | 5 | 0.00 | 0 |
+| `roll+recall` | 6 | 3.83 | 1 |
+
+On clean sessions, rule 1 is +3.83 and rule 2 is +2.00. Neither recall arm
+has more than one wrong answer above its comparison arm, so there's no veto.
+The Ling 3.0 verdict stands. The table further up stays as it ran, with the
+defect in it.
+
+**Amendment, before Ling 3.1's rerun: Ling 3.1 runs again, in full, on
+Novita.** The first run is set aside. It flagged 25 of its 30 sessions,
+including all 18 summary-arm sessions. The free pool it ran on is gone:
+OpenRouter now lists a single Ling 3.1 endpoint, Novita, at $0.075/$0.225
+per million tokens. Novita had already served the first run's successful
+requests, and charged $1.00 for them. The stratum is rerun from scratch with
+the same seed, pinned to Novita, at concurrency 4 like the other paid strata,
+under the corrected runner. The first run's raw numbers are reported here
+only to show where it stood, and they play no part in the decision:
+
+| arm | derived, true | wrong |
+|---|---|---|
+| `summary` | 19/24 | 1 |
+| `summary+recall` | 21/24 | 1 |
+| `summary+recall+note` | 22/24 | 0 |
+| `roll` | 0/24 | 0 |
+| `roll+recall` | 19/24 | 0 |
+
 ## Across models, so far
 
 | model | rule 1 (`roll+recall`) | rule 2 (the note) | veto |
 |---|---|---|---|
-| Ling 3.0 | holds (+3.83) | holds (+2.33) | none |
+| Ling 3.0 | holds (+3.83; clean +3.83) | holds (+2.33; clean +2.00) | none |
 | MiMo | holds (+4.00) | fails at the ceiling (+0.00) | none |
 | Ling 3.1 | — | — | — |
 
 Rule 1 holds on two models, which is the preregistered bar for offering
 `recall` by default. The rule also requires that no model's `recall` arm fail
-the veto. Ling 3.1 has not finished, so the decision waits for it. Rule 2 has
+the veto. Ling 3.1 is being rerun, so the decision waits for it. Rule 2 has
 held on one model.
 
 **Infrastructure note.** From here on, strata run under

@@ -160,7 +160,7 @@ def run(job):
             # after the key's credit ran out.
             # A free endpoint's 429s print as "rate_limit: HTTP 429" once
             # retries run out; the turn is over then, not merely slow.
-            if re.search(rb"(request|rate_limit): HTTP \d{3}[^\n]*\n(?:(?!Retrying)[^\n]*\n)*[^\n]*> ?$", clean):
+            if re.search(rb"(?:(?:request|rate_limit): HTTP \d{3}|network: [^\n]*)[^\n]*\n(?:(?!Retrying)[^\n]*\n)*[^\n]*> ?$", clean):
                 return "http-error"
         return "timeout"
     turns = []
@@ -173,6 +173,12 @@ def run(job):
         buf = b""; answered[0] = 0; declined_seen[0] = 0; t0 = time.time()
         child.send(msg.replace("\n", " ") + "\r")
         st = pump(re.compile(rb"Tokens: [^\n]*\n"), a.turn_timeout)
+        # A request that exhausts its retries partway through a turn still
+        # ends the turn with a usage line, so "Tokens:" alone reads as done.
+        # An error line not followed by "Retrying" is that case: the turn was
+        # cut short, and the session is a provider failure like any other.
+        if st == "ok" and re.search(rb"(?:(?:request|rate_limit): HTTP \d{3}|network: )[^\n]*\n(?!Retrying)", ANSI.sub(b"", buf)):
+            st = "http-error-midturn"
         if st == "ok":
             st = pump(re.compile(rb"(^|\n)[ \x08]*> ?$"), 120)
         declined[0] += declined_seen[0]; loops[0] += answered[0]

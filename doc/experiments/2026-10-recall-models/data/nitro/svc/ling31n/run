@@ -1,0 +1,7 @@
+#!/bin/bash
+# The Ling 3.1 rerun stratum of doc/experiments/2026-10-recall-models; exec, so nitro's
+# signal reaches the stratum script itself.
+S=/tmp/claude-0/-home-user-strument/81348424-3872-590a-840d-1e776b0797d9/scratchpad
+export NITRO_SOCK=$S/nitro/nitro.sock
+cd $S/recall
+exec 2>&1 ./ling31n_stratum.sh
