@@ -1,0 +1,104 @@
+diff --git a/internal/coder/context.go b/internal/coder/context.go
+index ff48563..c1a2b7e 100644
+--- a/internal/coder/context.go
++++ b/internal/coder/context.go
+@@ -70,12 +70,16 @@ func (c *Coder) ViewContext(n int) string {
+ // marker HarnessNote prepends, then the label.
+ var summaryPrefix = llm.HarnessMarker + " " + prompts.SummaryLabel
+ 
++// summaryPrefixRecord is the trial label's prefix
++// (doc/experiments/2026-10-summary-label).
++var summaryPrefixRecord = llm.HarnessMarker + " " + prompts.SummaryLabelRecord
++
+ // isSummaryMessage reports whether a message is a compaction summary: a marked
+ // harness turn carrying the SummaryLabel. An earlier summary is itself one of
+ // these, so this must check by content, not by role alone — otherwise every
+ // earlier summary would be silently dropped on a later fold.
+ func isSummaryMessage(m llm.Message) bool {
+-	return m.Role == llm.RoleUser && strings.HasPrefix(m.Text(), summaryPrefix)
++	return m.Role == llm.RoleUser && (strings.HasPrefix(m.Text(), summaryPrefix) || strings.HasPrefix(m.Text(), summaryPrefixRecord))
+ }
+ 
+ // renderTail lays out the message slice as the model reads it — the turns the
+diff --git a/internal/coder/send.go b/internal/coder/send.go
+index 7a13392..ff8b059 100644
+--- a/internal/coder/send.go
++++ b/internal/coder/send.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"math"
++	"os"
+ 	"strconv"
+ 	"strings"
+ 	"time"
+@@ -880,6 +881,12 @@ const minChatHistoryTokens = 2048
+ // maxChatHistoryTokens is the settled-history budget: context/historyShare,
+ // with a floor for small windows.
+ func maxChatHistoryTokens(context int) int {
++	// Trial build only (doc/experiments/2026-10-compaction-roll).
++	if v := os.Getenv("STRUMENT_TRIAL_HISTORY_BUDGET"); v != "" {
++		if n, err := strconv.Atoi(v); err == nil && n > 0 {
++			return n
++		}
++	}
+ 	return max(context/historyShare, minChatHistoryTokens)
+ }
+ 
+@@ -911,7 +918,7 @@ func validCompaction(msgs []llm.Message, beforeTokens, beforeMessages, afterToke
+ 
+ func hasSummaryContent(msgs []llm.Message) bool {
+ 	for _, m := range msgs {
+-		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(m.Text(), summaryPrefix)) != "" {
++		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(m.Text(), summaryPrefix), summaryPrefixRecord)) != "" {
+ 			return true
+ 		}
+ 	}
+diff --git a/internal/coder/summary.go b/internal/coder/summary.go
+index 770b7ed..1112b70 100644
+--- a/internal/coder/summary.go
++++ b/internal/coder/summary.go
+@@ -3,6 +3,7 @@ package coder
+ import (
+ 	"context"
+ 	"fmt"
++	"os"
+ 	"slices"
+ 	"strings"
+ 
+@@ -262,7 +263,12 @@ func (s *ChatSummary) summarizeText(content, last string) ([]llm.Message, error)
+ 	if why := continuation(answer, last); why != "" {
+ 		return nil, fmt.Errorf("the side model %s instead of summarizing", why)
+ 	}
+-	return []llm.Message{llm.HarnessNote(prompts.SummaryLabel + strings.TrimSpace(answer))}, nil
++	label := prompts.SummaryLabel
++	// Trial build only (doc/experiments/2026-10-summary-label).
++	if os.Getenv("STRUMENT_TRIAL_SUMMARY_LABEL") == "record" {
++		label = prompts.SummaryLabelRecord
++	}
++	return []llm.Message{llm.HarnessNote(label + strings.TrimSpace(answer))}, nil
+ }
+ 
+ // frameForSummary puts the rendered conversation between markers, with the
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index 3c07701..8f01662 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -645,6 +645,17 @@ const SummaryLabel = "Summary of the earlier part of this conversation, written
+ 	"record what the user said. Where it says something was done, run or verified, check " +
+ 	"that before relying on it.\n\n"
+ 
++// SummaryLabelRecord is SummaryLabel for a session that offers recall, in the
++// trial build of doc/experiments/2026-10-summary-label: "It replaces those
++// messages" becomes where they are. Read literally, the old sentence told
++// weaker models the turns were gone, and they never searched.
++const SummaryLabelRecord = "Summary of the earlier part of this conversation, written by Strument to " +
++	"keep it inside the context window. It stands in for those messages here; the messages themselves, " +
++	"including your own replies and the output of every tool call, are kept in the session record, and " +
++	"the recall tool searches it. It is a record of the earlier work, not something anyone said to you. " +
++	"Lines under \"Said by the user:\" record what the user said. Where it says something was done, run " +
++	"or verified, check that before relying on it.\n\n"
++
+ // SummaryInputBefore and SummaryInputAfter frame the conversation the
+ // summarizer is given, which sits between <conversation> markers.
+ //
