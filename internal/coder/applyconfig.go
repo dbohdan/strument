@@ -81,6 +81,15 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	// discards /env changes, and returns to what the config and flag say.
 	// Without a repository the value is inert; commitTurn checks Repo first.
 	c.AutoCommits = !cfg.NoAutoCommits && !c.CommitsWithheld
+	// Roll unless the config or the flag says otherwise, the flag winning for
+	// the run it was given to (doc/experiments/2026-10-recall-models).
+	c.CompactionMode = CompactionRoll
+	if cfg.Compaction != "" {
+		c.CompactionMode = cfg.Compaction
+	}
+	if c.CompactionFlag != "" {
+		c.CompactionMode = c.CompactionFlag
+	}
 	c.AnchoredEdits = cfg.AnchoredEdits
 	c.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
 	c.ObservationViaRunCode = cfg.ObservationViaRunCode

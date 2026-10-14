@@ -311,9 +311,13 @@ type Coder struct {
 	// tokenScale is the provider's count of a request over Strument's estimate
 	// of it, smoothed; 0 until the first main-model response. See calibrateTokens.
 	tokenScale float64
-	// CompactionMode is how an over-budget history is compacted: summarized
-	// (the default) or rolled. See roll.go.
+	// CompactionMode is how an over-budget history is compacted: rolled or
+	// summarized. ApplyConfig sets it from the `compaction` setting, roll by
+	// default; the zero value summarizes. See roll.go.
 	CompactionMode string
+	// CompactionFlag is --compaction, remembered so that a /reload does not
+	// undo a choice made on the command line. Empty when not given.
+	CompactionFlag string
 	// rolledSaid is what the user said in turns a roll has dropped, oldest
 	// first, carried into each later roll's note.
 	rolledSaid []string

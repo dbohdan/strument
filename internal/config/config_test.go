@@ -209,6 +209,38 @@ func TestGitSignParsing(t *testing.T) {
 	}
 }
 
+// TestCompaction: absent leaves the mode to the coder's default, a trusted
+// project's value wins over the user's, and anything but "roll" or "summary"
+// fails the load by name.
+func TestCompaction(t *testing.T) {
+	for _, tc := range []struct{ expr, want string }{
+		{"", ""}, {`compaction = "roll"`, CompactionRoll}, {`compaction = "summary"`, CompactionSummary},
+	} {
+		cfg, err := Load(harness(t, userConfig+"\n"+tc.expr+"\n", "", testEnv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Compaction != tc.want {
+			t.Errorf("%q: Compaction = %q, want %q", tc.expr, cfg.Compaction, tc.want)
+		}
+	}
+
+	opts := harness(t, userConfig+"\ncompaction = \"summary\"\n", "compaction = \"roll\"\n", testEnv)
+	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(opts); err != nil || cfg.Compaction != CompactionRoll {
+		t.Errorf("a trusted project's compaction should win: %q, %v", cfg.Compaction, err)
+	}
+
+	for _, bad := range []string{`compaction = "roll-bare"`, `compaction = True`} {
+		if _, err := Load(harness(t, userConfig+"\n"+bad+"\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "compaction") {
+			t.Errorf("%s should fail: %v", bad, err)
+		}
+	}
+}
+
 // TestAutoCommits: absent means commits on, False turns them off, a trusted
 // project may decide either way, and a non-boolean fails the load by name.
 func TestAutoCommits(t *testing.T) {

@@ -113,7 +113,8 @@ cd ~/src/myproject
 OPENROUTER_API_KEY=sk-or-... strument
 ```
 
-Set `context` so Strument can warn you before a request exceeds the model's context window and can summarize older chat history between turns.
+Set `context` so Strument can warn you before a request exceeds the model's context window and can make older chat history fit between turns.
+By default it drops the oldest turns, keeping what you said in them, and the model can search the rest with `recall`; [`compaction = "summary"`](doc/config.md#compaction) summarizes them instead.
 Without it, a long session can exceed the provider's limit and have its requests rejected.
 
 Cost fields are optional.
@@ -203,11 +204,11 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 - `/read-only <file> ...`&thinsp;&mdash;&thinsp;pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself.
 - `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether a turn that edits a file ends in a commit. With no argument, it shows the current setting. `--no-auto-commits` starts a session with commits off, and `auto_commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
 - `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one.
-- `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns folded into a compaction summary cannot be rewound.
+- `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns that compaction has rolled away or summarized cannot be rewound.
 - `/squash [<n>]`&thinsp;&mdash;&thinsp;combine the last `n` turns' commits into one.
 - `/usage [<provider> | all]`&thinsp;&mdash;&thinsp;show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports).
 - `/diff`, `/tokens`&thinsp;&mdash;&thinsp;show what changed and how full the context window is.
-- `/context [<n>]`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: compaction summaries followed by recent, unsummarized messages. With `n`, show only the first `n` summaries.
+- `/context [<n>]`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: the roll note or compaction summaries, followed by recent messages. With `n`, show only the first `n` summaries.
 - `/skill [<name>]`&thinsp;&mdash;&thinsp;list the available skills, or add a skill's instructions to the chat yourself. See [Skills](doc/config.md#skills).
 - `/symbol <name> [definition | reference]`&thinsp;&mdash;&thinsp;find where a name is defined or used, using the language parser rather than a text search.
 - `/editor [<command>]`&thinsp;&mdash;&thinsp;write your message in an editor: `$VISUAL`, then `$EDITOR`, or the command given. What you save comes back to the prompt to read and send. <kbd>Ctrl+X Ctrl+E</kbd> opens it with what you have typed.

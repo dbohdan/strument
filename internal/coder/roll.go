@@ -21,10 +21,12 @@ import (
 // summaries (doc/experiments/2026-10-compaction-survey); the Cyborgists' rolling
 // contexts keep only the window.
 
-// Compaction modes, set by the hidden --compaction flag.
+// Compaction modes, set by the `compaction` setting and the --compaction flag.
+// CompactionRollBare is a trial arm (doc/experiments/2026-10-compaction-roll)
+// that neither can select.
 const (
-	CompactionSummary  = "summary"   // the default: clear old tool output, then summarize
-	CompactionRoll     = "roll"      // drop old turns, carry the user's messages
+	CompactionSummary  = "summary"   // clear old tool output, then summarize
+	CompactionRoll     = "roll"      // the default: drop old turns, carry the user's messages
 	CompactionRollBare = "roll-bare" // drop old turns, carry nothing
 )
 

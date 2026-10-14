@@ -45,6 +45,7 @@ The loader reads these module-level variables after running your file:
 | `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
 | `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `auto_commits` | boolean | Optional. Whether a turn that changes a file ends in a commit. Default `True`. See below. |
+| `compaction` | string | Optional. How a long chat history is made to fit the context window: `"roll"` or `"summary"`. Default `"roll"`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `secret_files_add` | list of strings | Optional. More gitignore-style patterns for files the model may not read or edit. A project's are added to the user's. See below. |
 | `secret_files_exempt` | list of strings | Optional. Patterns taken back from the secret-file list. User config only. See below. |
@@ -850,6 +851,40 @@ commit, your changes go into the model's commit instead and Strument says so.
 Files past a size limit (200 dirty files, 4 MB each, 16 MB in all) are not
 separated. With commits off, nothing is committed either way.
 
+### `compaction`
+
+How a chat history that has outgrown its budget is made to fit the context
+window:
+
+```python
+compaction = "roll"      # the default
+compaction = "summary"
+```
+
+- **`"roll"`** drops the oldest turns and puts a note in their place that
+  quotes, word for word, what you said in them. The model's own work in those
+  turns, its replies and every tool result, stays in the session record,
+  where the [`recall` tool](#the-recall-tool) searches it. Rolling costs no
+  extra request.
+- **`"summary"`** has the side model write a summary of the oldest turns
+  first, and folds them into it. The summary keeps a rough account of the
+  work itself, at the cost of a request per fold, and a summary can lose or
+  garble what it compresses.
+
+Roll is the default because, with `recall`, it kept more in
+[`2026-10-recall-models`](experiments/2026-10-recall-models/README.md). Asked
+about results worked out in turns that compaction had removed, rolled sessions
+answered 71 of 72 questions on three models, against 56 for summarized ones.
+Every rolled session searched the record for the answers. On the model with
+the weakest summaries, summarized sessions answered from the summary without
+searching, and gave 4 wrong answers against the rolled sessions' 1.
+
+`--compaction roll|summary` overrides the setting for one run, and the flag
+survives `/reload`. A trusted project config may set it too. A session started
+with `--no-history` keeps no record, so a roll there drops work that nothing
+can search again; Strument says so at startup and suggests `--compaction
+summary`.
+
 ### `git_sign`
 
 Sign the commits Strument makes with Git's own signing, passed through as
@@ -1358,7 +1393,7 @@ use `--yes add-output` to answer them automatically.
 
 `/reload` re-reads `config.star` (or the `--config` file) into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
-`shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
+`shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `compaction`, `env_allow`, `check` and `check_auto`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 

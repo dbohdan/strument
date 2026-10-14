@@ -7,7 +7,7 @@
 # `--yes-shell` flag, a `-r` short for `tool --root` — survived here for months.
 
 _strument_commands="chat trust history config model-config project session tool shell usage"
-_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --unattended --consult-scope --config --version"
+_strument_chat_options="-m --message -s --session -c --continue -M --model --no-git --no-color --dark-mode --light-mode --no-auto-commits --no-history --dry-run --no-shell --yes --unattended --compaction --consult-scope --config --version"
 _strument_yes_names="bash webfetch websearch steps context add-output all"
 _strument_trust_options="-y --yes"
 _strument_history_commands="list path edit markdown strip zip"
@@ -28,7 +28,7 @@ _strument_tool_options="--root --json"
 
 # Every option that takes a value, so the scanner does not read one as a
 # subcommand: `strument -M trust` names a model, not the trust command.
-_strument_value_options="--config -m --message -M --model --yes --consult-scope -s --session --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
+_strument_value_options="--config -m --message -M --model --yes --compaction --consult-scope -s --session --source --provider-name --proxy --root --offset --limit --glob --path --mode --context-lines --kind"
 
 # The aliases of the config this command line will load: the --config file
 # when one was given (config_path, set by the scan in _strument_complete),
@@ -103,6 +103,7 @@ _strument_complete() {
         return
         ;;
     --consult-scope) _strument_words "none files chat" ; return ;;
+    --compaction) _strument_words "roll summary" ; return ;;
     --mode) _strument_words "files content count" ; return ;;
     --kind) _strument_words "definition reference" ; return ;;
     # -s is --source to model-config and --session everywhere else.

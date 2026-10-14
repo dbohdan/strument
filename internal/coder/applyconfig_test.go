@@ -54,3 +54,24 @@ func TestApplyConfigKeepsTheShellFlag(t *testing.T) {
 		t.Error("without the flag the bash tool should be on")
 	}
 }
+
+// Roll is the default, the config can choose summary, and --compaction wins
+// over the config on every reload, not only the first.
+func TestApplyConfigCompaction(t *testing.T) {
+	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	ApplyConfig(c, &config.Config{})
+	if c.CompactionMode != CompactionRoll {
+		t.Errorf("default = %q, want roll", c.CompactionMode)
+	}
+	ApplyConfig(c, &config.Config{Compaction: config.CompactionSummary})
+	if c.CompactionMode != CompactionSummary {
+		t.Errorf("config summary = %q", c.CompactionMode)
+	}
+	c.CompactionFlag = CompactionRoll
+	for range 2 {
+		ApplyConfig(c, &config.Config{Compaction: config.CompactionSummary})
+		if c.CompactionMode != CompactionRoll {
+			t.Errorf("the flag lost to the config: %q", c.CompactionMode)
+		}
+	}
+}

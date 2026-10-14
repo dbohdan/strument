@@ -369,6 +369,10 @@ type Config struct {
 	// default, as with NoShell. --no-auto-commits sets the same thing for
 	// one run and wins over the config either way.
 	NoAutoCommits bool
+	// Compaction is how a history over its budget is made to fit:
+	// CompactionRoll (the default, also when empty) or CompactionSummary.
+	// --compaction overrides it for one run.
+	Compaction string
 	// EnvAllow names environment variables to pass to model-run commands
 	// (the bash tool, checks, the scraper command) on top of the built-in
 	// default allowlist. See coder/envallow.go. Empty means defaults only.
@@ -597,3 +601,12 @@ type DecisionModel struct {
 	// prompt is shown instead.
 	Timeout float64
 }
+
+// The `compaction` setting's values.
+const (
+	// CompactionRoll drops the oldest turns and keeps what the user said in
+	// them, word for word; the recall tool searches the rest.
+	CompactionRoll = "roll"
+	// CompactionSummary has a side model summarize the oldest turns.
+	CompactionSummary = "summary"
+)

@@ -82,6 +82,7 @@ complete -c strument -n $chat_cmd -l no-shell -d "Disable the model's bash tool"
 complete -c strument -n $chat_cmd -l yes -d "Approve prompts of this type automatically" -x \
     -a "bash webfetch websearch steps context add-output all"
 complete -c strument -n $chat_cmd -l unattended -d "Decline every prompt --yes does not approve"
+complete -c strument -n $chat_cmd -l compaction -d "Fit a long history by roll or summary, for this run" -x -a "roll summary"
 complete -c strument -n $chat_cmd -l consult-scope -d "Session context to include in /consult requests" -x -a "none files chat"
 complete -c strument -n $chat_cmd -l version -d "Print version and exit"
 

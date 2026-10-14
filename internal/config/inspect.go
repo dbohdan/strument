@@ -225,6 +225,7 @@ var projectKeyOrder = []string{
 	"hasRetryTimeout",
 	"hasGitSign",
 	"hasAutoCommits",
+	"hasCompaction",
 	"hasSecretFilesAdd",
 	"hasSecretFilesExempt",
 	"hasEnvAllow",
@@ -422,6 +423,16 @@ var projectKeys = map[string]projectKey{
 				return "commits are not signed"
 			}
 			return "signs the commits Strument makes: " + red(g.gitSignVal)
+		},
+	},
+	"hasCompaction": {
+		name: "compaction",
+		set:  func(g *fileGlobals) bool { return g.hasCompaction },
+		detail: func(g *fileGlobals, _ func(string) string) string {
+			if g.compactionVal == CompactionSummary {
+				return "a long history is summarized"
+			}
+			return "a long history drops its oldest turns, keeping what the user said"
 		},
 	},
 	"hasAutoCommits": {

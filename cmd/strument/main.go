@@ -65,9 +65,17 @@ type chatCmd struct {
 	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
 	Files         []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 
-	// Hidden: the arms of doc/experiments/2026-10-compaction-roll. A flag in
-	// --help is a supported feature, and this is a question.
-	Compaction string `default:"summary" enum:"summary,roll,roll-bare" help:"How an over-budget history is compacted." hidden:""`
+	Compaction string `help:"How a long chat history is made to fit the context window, for this run: roll (drop the oldest turns, keep what you said) or summary. Overrides the compaction setting." placeholder:"<roll|summary>"`
+}
+
+// Validate checks --compaction by hand: kong's enum needs a default, and an
+// empty value here means "as the config says".
+func (c *chatCmd) Validate() error {
+	switch c.Compaction {
+	case "", config.CompactionRoll, config.CompactionSummary:
+		return nil
+	}
+	return fmt.Errorf("--compaction must be %q or %q, not %q", config.CompactionRoll, config.CompactionSummary, c.Compaction)
 }
 
 func (c *chatCmd) Run() error {
@@ -174,6 +182,7 @@ func (c *chatCmd) Run() error {
 	// like they had worked; internal/repl's reload test guards against it.
 	cdr.ShellWithheld = c.NoShell
 	cdr.CommitsWithheld = c.NoAutoCommits
+	cdr.CompactionFlag = c.Compaction
 	// Before ApplyConfig, which fills in the config half. The first version of
 	// this set it *after*, so auto_approve was written to a nil Grants and
 	// silently dropped -- found by running the binary, not by a test.
@@ -186,9 +195,6 @@ func (c *chatCmd) Run() error {
 	}
 	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens,
 		cdr.Out, cdr.Clock, cdr.RecordSideCall)
-	// A trial flag (doc/experiments/2026-10-compaction-roll), hidden until a
-	// trial says which mode should be the default.
-	cdr.CompactionMode = c.Compaction
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{unattended: c.Unattended}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
@@ -448,6 +454,13 @@ func (c *chatCmd) Run() error {
 				noticef("could not save the undo record; /undo will not be able to restore this turn's changes: %v", err)
 			}
 		}
+	}
+	// A roll drops the oldest turns and leaves recall to find their work, and
+	// recall searches the session record. Without one, rolled-away work is
+	// gone; a summary would at least keep an account of it. Said once here
+	// rather than switching modes behind the user's back.
+	if cdr.SessionRecords == nil && cdr.CompactionMode == coder.CompactionRoll {
+		noticef("this session keeps no record (--no-history), so turns dropped to fit the context window cannot be searched again; --compaction summary keeps a summary of them instead")
 	}
 
 	// --continue restores the conversation itself.

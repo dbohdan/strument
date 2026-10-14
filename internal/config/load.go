@@ -230,6 +230,9 @@ type fileGlobals struct {
 	hasAutoCommits bool
 	autoCommitsVal bool
 
+	hasCompaction bool
+	compactionVal string
+
 	hasSecretFilesAdd    bool
 	secretFilesAddVal    []string
 	hasSecretFilesExempt bool
@@ -573,6 +576,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasAutoCommits {
 		cfg.NoAutoCommits = !user.autoCommitsVal
 	}
+	if user.hasCompaction {
+		cfg.Compaction = user.compactionVal
+	}
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
@@ -700,6 +706,9 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasAutoCommits {
 			cfg.NoAutoCommits = !project.autoCommitsVal
+		}
+		if project.hasCompaction {
+			cfg.Compaction = project.compactionVal
 		}
 		// Whole-value like check_auto, not per-element: this is one decision
 		// about what the model's commands may see, and a project's word must be
@@ -1210,6 +1219,15 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasAutoCommits = true
 		out.autoCommitsVal = bool(b)
+	}
+
+	if cv, ok := globals["compaction"]; ok {
+		s, ok := starlark.AsString(cv)
+		if !ok || (s != CompactionRoll && s != CompactionSummary) {
+			return nil, fmt.Errorf("%s: `compaction` must be %q or %q, got %s", path, CompactionRoll, CompactionSummary, cv.String())
+		}
+		out.hasCompaction = true
+		out.compactionVal = s
 	}
 
 	if sh, ok := globals["shell"]; ok {
