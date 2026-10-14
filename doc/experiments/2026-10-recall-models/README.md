@@ -353,6 +353,55 @@ arms that answered from a summary without searching: one in plain `summary`
 on each model, and four in Ling 3.0's `summary+recall`. The eighth came from
 a Ling 3.0 `roll+recall` session that did search.
 
+## Reading the transcripts: `summary+recall` against `roll+recall`
+
+The full question turns of ten sessions were read: Ling 3.0's s00, s02, s06,
+s12, s13 and s23, MiMo's s15, s16 and s17, and Ling 3.1's s02 through
+`recall`'s raw results. Scripted passes covered the question turns of all 54
+sessions that had `recall`. The arms differ less in how they search than in
+what the compacted history tells the model about where the earlier work is.
+
+- **The roll note says the history is partial; the summary says it replaces
+  it.** Every `roll+recall` session searched, usually as its first action. The
+  roll note quotes the user word for word, including "I will ask about it
+  later", so the model can see which turns hold the answers (MiMo s16: one
+  call, 224 output tokens). The summary label says it "replaces those
+  messages", and Ling 3.0 took that literally: s23 reasoned that the messages
+  "are not available to me anymore" and answered "don't know". No Ling 3.0
+  `summary+recall` session mentioned the tool. Every Ling 3.0 note session
+  that searched quoted the note first.
+- **The roll keeps the question's keys; the summary files facts under its
+  own.** A question names a file and refers to a turn, and the roll keeps the
+  user's turns verbatim. Ling 3.0's summaries filed answers by batch number,
+  and the numbers drifted as summaries were re-summarized. s00's summary has
+  two different files as "the longest of the third batch", and no entry for
+  turn 4, so the model spent about 2k tokens reconciling it with the record.
+  Ling 3.0's note arm averaged about 2.6k output tokens per question turn,
+  against 1.4k for `roll+recall`. MiMo s15's summary had the counts without
+  the batches they belonged to.
+- **The arms settle "do not read the files again or run commands" in opposite
+  directions.** Roll sessions quote the roll note's "search the record before
+  deciding you don't know" as an instruction that outranks the clause.
+  Summary sessions without that sentence use the clause as a reason not to
+  search (MiMo s25: "So no tools"; s19: "safest to answer from summary"). This
+  question wording invites the hesitation, so the trial may understate how
+  often summary sessions search when a real user asks.
+- **The one wrong answer from a search came from the tool's output.** Ling
+  3.0 s12 (`roll+recall`) searched "longest" and saw the newest 10 of 18
+  matches, with turn 4's answer below the cutoff, and did not raise `newest`.
+  A search for the file named in the question then hit the read tool's
+  header, "zsysnum_linux_mips.go (450 lines)", since turn 4's reply never
+  named that file, and the model answered with that count.
+- **Ids were typed as patterns.** Ling 3.1 s02 searched for `t4\.12` and
+  `t4\.3`, three calls that could only return "No matches". 10 of 196 calls
+  used `id`.
+
+**Changes made from this.** A pattern that is a hit id now opens that
+message. When the cutoff hides replies, the header names them by id; replayed
+on s12's record, it lists `t4.12`, the answer s12 missed. And each compaction
+is now recorded with the text that replaced the turns, which this reading
+could not check for Ling 3.0's summaries.
+
 **Infrastructure note.** From here on, strata run under
 [nitro](https://github.com/leahneukirchen/nitro), built from source and run
 unprivileged. Each stratum is a service, with a `finish` script that stops its
