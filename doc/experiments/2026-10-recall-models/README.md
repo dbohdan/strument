@@ -1,6 +1,6 @@
 # Searching the record, with pointers, on three models
 
-**2026-10-12 to 13. Preregistered; results below the line, one model at a time. Ling 3.0: both rules hold, also on clean sessions only. MiMo: rule 1 holds, rule 2 at ceiling. Ling 3.1: first run set aside for an instrument defect; rerunning on Novita.**
+**2026-10-12 to 14. Preregistered; results below the line. `recall` holds on all three models and ships by default; the summary note holds on Ling 3.0 only and does not ship. Ling 3.1 was rerun on Novita after an instrument defect.**
 
 ## Why
 
@@ -287,18 +287,71 @@ only to show where it stood, and they play no part in the decision:
 | `roll` | 0/24 | 0 |
 | `roll+recall` | 19/24 | 0 |
 
-## Across models, so far
+### Ling 3.1 Flash (Novita), rerun
+
+All 30 sessions completed on the first pass under the corrected runner. None
+were flagged, and every request went to Novita. The run cost $3.39 and took 2
+hours 19 minutes, four sessions at a time. Novita refused 88 requests, and a
+retry recovered each one.
+
+| arm | n | user facts | derived, true | "don't know" | wrong | sessions searching in the questions | `recall` calls |
+|---|---|---|---|---|---|---|---|
+| `summary` | 6 | 35/36 | 23/24 | 0 | 1 | — | — |
+| `summary+recall` | 6 | 36/36 | 24/24 | 0 | 0 | 0 of 6 | 0 |
+| `summary+recall+note` | 6 | 36/36 | 24/24 | 0 | 0 | 0 of 6 | 1 |
+| `roll` | 6 | 36/36 | 0/24 | 24 | 0 | — | — |
+| `roll+recall` | 6 | 35/36 | **24/24** | 0 | 0 | **6 of 6** | 35 |
+
+**Rules:**
+
+1. **`roll+recall` against `roll`:** 4.00 against 0.00, with no wrong answers
+   in either. **Holds.**
+2. **`summary+recall+note` against `summary+recall`:** 4.00 against 4.00.
+   **Fails, at the ceiling,** as on MiMo. Ling 3.1's summaries keep the
+   derived facts on their own, so neither summary arm with `recall` searched
+   in the question turns. The one call is s21's, made before the questions.
+
+**Details:**
+
+- **The only wrong answer is in plain `summary` (s07), outside every
+  comparison,** as on MiMo. Turn 12 named os3_solaris.go, at 646 lines, as
+  the longest file. The summary lost that answer, and in the question turn
+  the model confidently gave malloc_stubs.go, at 638 lines.
+- **Ling 3.1 writes long summaries.** Fourteen of the 18 summary-arm sessions
+  had a fold refused because "the summary was not smaller than the history",
+  24 refusals in all. These are not provider errors: the history stays whole
+  until a later fold succeeds, in every summary arm alike. They favour the
+  summary arms, if anything.
+- **32 of 36 searches used `from="all"`.**
+
+## Across models
 
 | model | rule 1 (`roll+recall`) | rule 2 (the note) | veto |
 |---|---|---|---|
 | Ling 3.0 | holds (+3.83; clean +3.83) | holds (+2.33; clean +2.00) | none |
 | MiMo | holds (+4.00) | fails at the ceiling (+0.00) | none |
-| Ling 3.1 | — | — | — |
+| Ling 3.1 | holds (+4.00) | fails at the ceiling (+0.00) | none |
 
-Rule 1 holds on two models, which is the preregistered bar for offering
-`recall` by default. The rule also requires that no model's `recall` arm fail
-the veto. Ling 3.1 is being rerun, so the decision waits for it. Rule 2 has
-held on one model.
+**Decision, as preregistered:**
+
+- **`recall` is offered by default.** Rule 1 holds on all three models, and
+  no `recall` arm fails the veto. The roll and placeholder pointers ship
+  with it.
+- **The summary note does not ship.** Rule 2 holds on Ling 3.0 only. On the
+  two stronger summarizers, both summary arms with `recall` were already at
+  the ceiling, so the note had nothing to rescue. The result is a ceiling,
+  not evidence that the note hurts: on Ling 3.0, whose summaries lose facts,
+  it was the only thing that got the model to search.
+- **`roll` against `summary`,** reported and not decided here. Without
+  `recall`, `roll` answered no derived facts on any model (0/72), while
+  `summary` answered 61/72. With `recall`, `roll` answered 71/72, and
+  `summary` plus its pointer answered 56/72. Most of that gap is Ling 3.0's
+  8/24.
+
+There were 8 wrong answers across the three strata. Seven came from summary
+arms that answered from a summary without searching: one in plain `summary`
+on each model, and four in Ling 3.0's `summary+recall`. The eighth came from
+a Ling 3.0 `roll+recall` session that did search.
 
 **Infrastructure note.** From here on, strata run under
 [nitro](https://github.com/leahneukirchen/nitro), built from source and run

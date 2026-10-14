@@ -1,0 +1,973 @@
+[
+ {
+  "id": "s00",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 10,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 6,
+  "rq": 6,
+  "rbefore": 0,
+  "rall": 6,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 10,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_mips\\.go|lookup_windows\\.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "id": "t4.12",
+     "newest": 5
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 5,
+     "pattern": "ztypes_linux_arm\\.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 5,
+     "pattern": "runtime/extern\\.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "id": "t13.12",
+     "newest": 3
+    }
+   ]
+  ],
+  "cost": 0.09368
+ },
+ {
+  "id": "s01",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12436
+ },
+ {
+  "id": "s02",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 10,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 12,
+  "rq": 12,
+  "rbefore": 0,
+  "rall": 11,
+  "rargs": [
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "zsysnum_linux_mips.go"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "lookup_windows.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 10,
+     "pattern": "t4\\.1[0-9]"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "All five files read"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 5,
+     "pattern": "t4\\.12"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 5,
+     "pattern": "t4\\.3"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 10,
+     "pattern": "ztypes_darwin_amd64.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_sparc64.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 10,
+     "pattern": "ztypes_linux_arm.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 10,
+     "pattern": "text/cases/map.go"
+    }
+   ],
+   [
+    20,
+    {
+     "context_lines": 0,
+     "from": "all",
+     "newest": 3,
+     "pattern": "t13\\.12"
+    }
+   ],
+   [
+    20,
+    {
+     "id": "t13.12"
+    }
+   ]
+  ],
+  "cost": 0.09515
+ },
+ {
+  "id": "s03",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 15,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.14145
+ },
+ {
+  "id": "s04",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 16,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 3,
+  "rq": 3,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "conversation",
+     "newest": 10,
+     "pattern": "zsysnum_linux_mips.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "conversation",
+     "newest": 10,
+     "pattern": "lookup_windows.go"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 2,
+     "from": "conversation",
+     "newest": 5,
+     "pattern": "Longest"
+    }
+   ]
+  ],
+  "cost": 0.1466
+ },
+ {
+  "id": "s05",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 9,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 3,
+  "rq": 3,
+  "rbefore": 0,
+  "rall": 3,
+  "rargs": [
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "pattern": "ztypes_darwin_amd64|zsysnum_linux_sparc64"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "pattern": "ztypes_linux_arm|ztypes_linux_mips64|cases/map.go"
+    }
+   ]
+  ],
+  "cost": 0.09102
+ },
+ {
+  "id": "s06",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 11,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12702
+ },
+ {
+  "id": "s07",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 3,
+  "dunk": 0,
+  "dwrong": 1,
+  "rolls": 0,
+  "folds": 10,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11219
+ },
+ {
+  "id": "s08",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 2,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 7,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.08996
+ },
+ {
+  "id": "s09",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 13,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12882
+ },
+ {
+  "id": "s10",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 10,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.1173
+ },
+ {
+  "id": "s11",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 1,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11894
+ },
+ {
+  "id": "s12",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 5,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 10,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 8,
+  "rq": 8,
+  "rbefore": 0,
+  "rall": 8,
+  "rargs": [
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_mips"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "lookup_windows"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 5,
+     "pattern": "longest"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_mips.go and four|Of the five"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 5,
+     "pattern": "turn 4 of 20 \u00b7 assistant"
+    }
+   ],
+   [
+    19,
+    {
+     "from": "all",
+     "newest": 5,
+     "pattern": "ztypes_darwin_amd64"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "ztypes_linux_arm"
+    }
+   ],
+   [
+    20,
+    {
+     "from": "all",
+     "newest": 10,
+     "pattern": "cases/map.go"
+    }
+   ]
+  ],
+  "cost": 0.09345
+ },
+ {
+  "id": "s13",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 13,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.13173
+ },
+ {
+  "id": "s14",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.08642
+ },
+ {
+  "id": "s15",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 11,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12245
+ },
+ {
+  "id": "s16",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.09651
+ },
+ {
+  "id": "s17",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12181
+ },
+ {
+  "id": "s18",
+  "arm": "roll+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 1,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 11,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 3,
+  "rq": 3,
+  "rbefore": 0,
+  "rall": 3,
+  "rargs": [
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "zsysnum_linux_mips"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 3,
+     "from": "all",
+     "newest": 10,
+     "pattern": "lookup_windows"
+    }
+   ],
+   [
+    19,
+    {
+     "context_lines": 5,
+     "from": "all",
+     "newest": 20,
+     "pattern": "longest of the five"
+    }
+   ]
+  ],
+  "cost": 0.0959
+ },
+ {
+  "id": "s19",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12528
+ },
+ {
+  "id": "s20",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11882
+ },
+ {
+  "id": "s21",
+  "arm": "summary+recall+note",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 14,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 1,
+  "rq": 0,
+  "rbefore": 1,
+  "rall": 1,
+  "rargs": [
+   [
+    4,
+    {
+     "from": "all",
+     "newest": 5,
+     "pattern": "ztypes_linux_arm\\.go \\(\\d+ lines\\)"
+    }
+   ]
+  ],
+  "cost": 0.13186
+ },
+ {
+  "id": "s22",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.13096
+ },
+ {
+  "id": "s23",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 5,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 12,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.1203
+ },
+ {
+  "id": "s24",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 5,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.08908
+ },
+ {
+  "id": "s25",
+  "arm": "summary+recall",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 13,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11861
+ },
+ {
+  "id": "s26",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 9,
+  "fail": 2,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.11879
+ },
+ {
+  "id": "s27",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 7,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.09139
+ },
+ {
+  "id": "s28",
+  "arm": "summary",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 4,
+  "dunk": 0,
+  "dwrong": 0,
+  "rolls": 0,
+  "folds": 13,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.12236
+ },
+ {
+  "id": "s29",
+  "arm": "roll",
+  "done": true,
+  "turns": 21,
+  "loops": 0,
+  "declined": 0,
+  "user": 6,
+  "dtruth": 0,
+  "dunk": 4,
+  "dwrong": 0,
+  "rolls": 6,
+  "folds": 0,
+  "fail": 0,
+  "qtools": 0,
+  "rcalls": 0,
+  "rq": 0,
+  "rbefore": 0,
+  "rall": 0,
+  "rargs": [],
+  "cost": 0.09227
+ }
+]
