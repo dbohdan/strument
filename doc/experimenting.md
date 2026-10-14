@@ -57,6 +57,12 @@ Before spending on a run, ask these questions in order:
   ([a check that cannot fail](#check-that-cannot-fail)).
 - **Did the runner finish, or did it only stop reporting?** Wait on the specific
   process and record worker failures ([a runner that dies quietly](#runner-dies-quietly)).
+- **Does a turn the provider cut short count as a failure?** Fail any turn
+  with an error line not followed by `Retrying` ([a cut-short turn ends like
+  any other](#cut-short-turn)).
+- **Will the run survive the container going idle?** Run it under a
+  supervisor and hold the container with a background task ([supervise long
+  runs](#supervise-long-runs)).
 - **Has the resume path been exercised deliberately?** Run it with a stub before
   the batch needs it ([the resume path runs last](#resume-path)).
 - **Does each planted change alter the answer, not only the source?** Run
@@ -80,7 +86,8 @@ Before spending on a run, ask these questions in order:
 | Answer can be recovered without the mechanism | [a probe only the mechanism answers](#probe-isolates-mechanism) |
 | Arms contain an unintended difference or are identical | [baseline is HEAD minus the change](#baseline-from-head), [the measurement the confound cannot reach](#confound-cannot-reach), [a clean null has many causes](#clean-null) |
 | Treatment was not reached, or the fixture never contained the phenomenon | [a clean null has many causes](#clean-null), [a fixture that cannot contain it](#fixture-cannot-contain-it) |
-| Runner stopped reporting, timed out, or cannot resume | [a runner that dies quietly](#runner-dies-quietly), [the resume path runs last](#resume-path) |
+| Runner stopped reporting, timed out, or cannot resume | [a runner that dies quietly](#runner-dies-quietly), [the resume path runs last](#resume-path), [supervise long runs](#supervise-long-runs) |
+| A capable model scores zero in sessions the runner called complete | [a cut-short turn ends like any other](#cut-short-turn) |
 | A bug report names the wrong subsystem | [a report infers the subsystem](#report-infers-subsystem) |
 | A check passed and the bug was real anyway | [your validator can carry the same bug](#validator-shares-the-bug), [a check that cannot fail](#check-that-cannot-fail) |
 | A diff shows two artifacts that look the same | [two documents can render identically](#identical-renderings) |
@@ -358,6 +365,8 @@ depend on the trial. That leaves one hypothesis to test and one change to revert
   successfully. Capture the pid; a `pgrep -f` pattern will match the next run of
   the same script. If a log watcher is unavoidable, match every terminal state
   as a secondary signal; it must not replace waiting on the specific process.
+  In a cloud agent session, detaching is not enough: see [supervise long
+  runs](#supervise-long-runs).
 - **Type-check the runner before launching it** ([type-check the runner](#type-check-runner)). The error paths are the
   ones a one-off script never exercises until they decide whether the run
   survives.
@@ -1223,6 +1232,89 @@ is a judgment about a different, shorter input. So:
 This is the same shape as [a check that cannot fail](#check-that-cannot-fail),
 moved from the scorer to the thing being scored. The eval was real, and it
 tested a narrower claim than the one a deployment relies on.
+
+<a id="cut-short-turn"></a>
+
+## 29. A turn the provider cut short ends like any other turn
+
+When a request partway through a turn runs out of retries, Strument prints the
+error and ends the turn with its usual `Tokens:` line. So does a turn whose
+summary request failed: Strument warns "Could not summarize chat history",
+keeps the history whole, and goes on with more history than the arm's budget
+allows. A runner that waits for `Tokens:` counts both as complete turns.
+
+`2026-10-recall-models` ran Ling 3.1 on OpenRouter's free pool, which answered
+thousands of requests with 429s. The runner reported 30 of 30 sessions
+complete. The tell was s05, a `roll+recall` session that scored nothing on a
+model that rescues facts. Its transcript had a turn ending three lines after
+`rate_limit: HTTP 429`, with no reply in between. Checked across the strata,
+25 of Ling 3.1's 30 sessions were affected, 7 of Ling 3.0's, and none of
+MiMo's. The stratum that looked finished was mostly instrument fault.
+
+- **Do:** fail a turn that contains a provider error line not followed by
+  `Retrying`, in addition to the error that ends a turn outright. The error
+  can follow a spinner on the same line (`Waiting for …rate_limit: HTTP 429`),
+  so don't anchor the pattern to the start of a line. A summary that was
+  refused for being too long ("the summary was not smaller than the history")
+  is the model's behavior, not the provider's, and it is not a failure.
+- **Check:** after a batch, grep every transcript for unretried errors before
+  scoring. On a clean stratum the count is zero. Anything else is a list of
+  sessions to rerun.
+- **Tell:** a capable model scoring zero, or far below its own other
+  sessions, in an arm it handles elsewhere.
+
+**The remedy can disappear while you are reading the result.** The
+preregistered remedy was a rerun in place. By the time the defect was found,
+the provider serving Ling 3.0 had stopped serving it, and Ling 3.1's free pool
+had become a single paid endpoint. A rerun on a different provider puts two
+providers in one stratum, so Ling 3.0 was reported on its clean sessions and
+Ling 3.1 was rerun whole, with the amendment committed first. Detect the fault
+while the batch runs, when a rerun is still the same experiment.
+
+<a id="supervise-long-runs"></a>
+
+## 30. A long run in a cloud container needs a supervisor, and the container needs holding
+
+The `setsid nohup` advice in [practical mechanics](#practical-mechanics)
+assumes a machine that stays up. In a cloud agent session it doesn't, and
+`2026-10-recall-models` lost two unsupervised runs before this setup held for
+three strata.
+
+- **An idle container is reclaimed, and everything detached goes with it.**
+  The container counts as busy only while a harness-tracked background task is
+  running. Run a keep-alive as that task: a script that sleeps while any
+  service is up and exits when none is. Background tasks are limited to two
+  hours, so schedule a check-in to start the next one before the current one
+  expires.
+- **Use a supervisor, not a watcher script.**
+  [nitro](https://github.com/leahneukirchen/nitro) builds from source and runs
+  unprivileged: its `kill(-1)` shutdown applies only when it is PID 1. Make
+  each stratum a service:
+  - A `run` script that `exec`s the stratum script, so nitro's signal reaches
+    it rather than a shell waiting on it.
+  - A `finish` script that stops the runner, proxies and sessions with
+    `pkill -f "<output-dir>/"`, since `nitroctl down` signals only the main
+    process.
+  - A `down` file, so the service starts only when asked.
+  - A stratum that finishes runs `nitroctl down` on itself. Otherwise it
+    exits and is restarted.
+- **A `pgrep -f` or `pkill -f` pattern typed on the command line matches your
+  own shell.** The agent's shell is `bash -c "<the whole command>"`, and the
+  pattern is in that string. This killed the session's own shell, exit 144,
+  twice. Keep patterns inside script files and run them by path, so the
+  caller's command line holds a path, not the pattern.
+- **A long-lived process keeps the environment it started with.** After a
+  harness restart, the egress proxy came back on a new port. The supervisor
+  still held the old `HTTPS_PROXY`, so its sessions failed with `network: …
+  EOF` and two of them waited out an hour each. After a restart, compare the
+  supervisor's environment (`/proc/<pid>/environ`) with a fresh shell's, and
+  restart the supervisor from the fresh shell if they differ. Have the runner
+  fail fast on `network:` errors as it does on HTTP errors.
+- **Give each stratum its own port base, and refuse a session whose proxy
+  could not bind.** A proxy left over from a cancelled run held a port, and the
+  next stratum's first session talked to it. One request, key included, went
+  to the cancelled run's upstream, a different server. A proxy that fails to
+  bind now fails the session.
 
 ---
 
