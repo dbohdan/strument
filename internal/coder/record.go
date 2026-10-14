@@ -203,6 +203,20 @@ type Record struct {
 	// failed call) is not.
 	PSafe *float64 `json:"p_safe,omitempty"`
 
+	// compaction
+	//
+	// One record per fold of the history, with Text set to what replaced the
+	// folded turns: the summary, or the roll note. Before this, a summary was
+	// visible only to the model that read it, so a wrong answer drawn from a
+	// summary could not be traced to it
+	// (doc/experiments/2026-10-recall-models). Mode is "summary" or "roll";
+	// Outcome is "ok", or "not_smaller" for a summary that was refused, whose
+	// text is kept too because the refusal is what needs explaining.
+	// TokensBefore and TokensAfter are the history's estimated size.
+	Mode         string `json:"mode,omitempty"`
+	TokensBefore int    `json:"tokens_before,omitempty"`
+	TokensAfter  int    `json:"tokens_after,omitempty"`
+
 	// rewind
 	//
 	// Rewound is how many turns a /rewind took out of the conversation. The
@@ -381,6 +395,12 @@ func (c *Coder) RecordSideCall(s SideCall) {
 		r.Cost, r.CostKnown = *s.Usage.Cost, true
 	}
 	c.record(r)
+}
+
+// recordCompaction logs one fold of the history and the text that replaced
+// the folded turns.
+func (c *Coder) recordCompaction(mode, outcome, text string, before, after int) {
+	c.record(Record{Type: "compaction", Mode: mode, Outcome: outcome, Text: text, TokensBefore: before, TokensAfter: after})
 }
 
 // streamOutcomes are the request record's words for a streamResult.

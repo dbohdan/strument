@@ -172,3 +172,32 @@ func TestRollNoteCapFloor(t *testing.T) {
 		t.Error("a small budget cut ordinary messages from the note")
 	}
 }
+
+// Each fold leaves a compaction record holding the text that replaced the
+// folded turns, so a wrong answer drawn from a summary can be traced to it.
+func TestCompactionIsRecordedWithItsText(t *testing.T) {
+	for _, mode := range []string{CompactionSummary, CompactionRoll} {
+		c, _ := rollCoder(t, mode)
+		rec := &capture{}
+		c.Recorder = rec
+		for n := 1; n <= 8; n++ {
+			c.doneMessages = append(c.doneMessages, rollTurn(n)...)
+		}
+		if !c.compactHistory(1200) {
+			t.Fatalf("%s: nothing was folded", mode)
+		}
+		var got []Record
+		for _, r := range rec.recs {
+			if r.Type == "compaction" {
+				got = append(got, r)
+			}
+		}
+		if len(got) != 1 {
+			t.Fatalf("%s: %d compaction records, want 1", mode, len(got))
+		}
+		r := got[0]
+		if r.Mode != mode || r.Outcome != "ok" || r.Text != c.doneMessages[0].Text() || r.TokensAfter >= r.TokensBefore {
+			t.Errorf("%s: record = %+v; want the text of the first message, %q", mode, r, c.doneMessages[0].Text())
+		}
+	}
+}

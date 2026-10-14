@@ -106,6 +106,8 @@ Each record has a `type` field:
 - A **`turn`** record at the end of each turn.
 - A **`request`** record for each request to the model.
 - A **`side_call`** record for each request Strument makes for itself.
+- A **`compaction`** record each time the chat history is folded to fit the
+  context window.
 - An **`edit`** record for each `edit` or `write` call, saying how its target
   was found.
 - A **`model`** record when `/model` switches models, naming the new one by
@@ -158,6 +160,15 @@ commit reading `(no commit message provided)`. The record carries:
 - the `error` text when there is one;
 - the same usage fields as a `request` record.
 
+A **`compaction`** record covers one fold of the chat history. Its `text` is
+what replaced the folded turns, exactly as the model then reads it: the
+summary, or the roll note. `mode` is `summary` or `roll`, and `tokens_before`
+and `tokens_after` are the history's estimated size. A summary that came back
+no smaller than the history is refused and recorded with `outcome`
+`not_smaller`, its text included; a successful fold is `ok`. Without this
+record a summary was visible only to the model that read it, so an answer it
+got wrong could not be traced back to the summary.
+
 An **`edit`** record covers one `edit` or `write` call: its `tool_call_id`,
 the `path`, and an `outcome` — `exact`, `loose`, `replaced_all`, `anchored`,
 `created`, `overwrote`, `not_found`, `ambiguous`, `stale`, `not_resolved` or
@@ -172,6 +183,7 @@ call was which.
 ```sh
 jq -c 'select(.type=="side_call" and .outcome!="ok")' "$(strument history path)"
 jq -c 'select(.type=="edit" and .outcome=="loose") | {path, summary}' "$(strument history path)"
+jq -r 'select(.type=="compaction") | .text' "$(strument history path)"
 jq -s 'map(select(.type=="request")) | group_by(.provider) | map({provider: .[0].provider, requests: length, reasoning: (map(.reasoning // 0) | add)})' "$(strument history path)"
 jq -r 'select(.type=="message" and .role=="assistant") | .text' "$(strument history path)"
 ```

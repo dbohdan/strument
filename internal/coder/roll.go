@@ -72,6 +72,7 @@ func (c *Coder) rollHistory(budget int, keepSaid bool) bool {
 	if after >= before {
 		return false
 	}
+	c.recordCompaction("roll", "ok", note.Text(), before, after)
 	c.doneMessages = out
 	c.turns, c.compactedTurns = nil, true
 	c.Out.Printf("Dropped the oldest %d of %d messages from the chat history (%d -> %d tokens)%s.",

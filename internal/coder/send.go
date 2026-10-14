@@ -884,6 +884,17 @@ func maxChatHistoryTokens(context int) int {
 }
 
 // countSummaryMessages reports how many retained history messages are compaction summaries.
+// summaryTexts is the text of the summary messages among msgs, joined.
+func summaryTexts(msgs []llm.Message) string {
+	var texts []string
+	for _, m := range msgs {
+		if isSummaryMessage(m) {
+			texts = append(texts, m.Text())
+		}
+	}
+	return strings.Join(texts, "\n\n")
+}
+
 func countSummaryMessages(msgs []llm.Message) int {
 	n := 0
 	for _, m := range msgs {
@@ -978,9 +989,11 @@ func (c *Coder) compactHistory(budget int) bool {
 	}
 	afterTokens := c.Summarizer.total(out)
 	if !validCompaction(out, beforeTokens, beforeMessages, afterTokens) {
+		c.recordCompaction("summary", "not_smaller", summaryTexts(out), beforeTokens, afterTokens)
 		c.Out.Warningf("Could not summarize the chat history: the summary was not smaller than the history.")
 		return false
 	}
+	c.recordCompaction("summary", "ok", summaryTexts(out), beforeTokens, afterTokens)
 	c.doneMessages = out
 	// The summary absorbed the turns, so there are none left to rewind.
 	c.turns, c.compactedTurns = nil, true
