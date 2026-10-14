@@ -253,6 +253,19 @@ func (c *Coder) runRecall(a recallArgs) string {
 	return note + recallSearch(entries, turns, re, a, c.inConversation())
 }
 
+// recallAnnouncement is the line a recall call prints. A call by id alone
+// printed `Recall ""`, which said nothing about which message was opened.
+func recallAnnouncement(a recallArgs) string {
+	switch {
+	case a.ID == "":
+		return fmt.Sprintf("Recall %q", a.Pattern)
+	case a.Pattern == "":
+		return "Recall message " + a.ID
+	default:
+		return fmt.Sprintf("Recall %q in message %s", a.Pattern, a.ID)
+	}
+}
+
 // recallIDPattern matches a hit's id written as a pattern: "t4.12", or
 // "t4\\.12" with the dot escaped.
 var recallIDPattern = regexp.MustCompile(`^t(\d+)\\?\.(\d+)$`)

@@ -876,7 +876,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				needsReflection = true
 				continue
 			}
-			c.Out.Toolf("Recall %q", a.Pattern)
+			c.Out.Toolf("%s", recallAnnouncement(a))
 			results.setText(tc.ID, c.runRecall(a))
 		case toolAbout:
 			c.Out.Toolf("About Strument")

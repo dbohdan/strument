@@ -296,3 +296,20 @@ func TestRecallNamesRepliesTheCutoffHid(t *testing.T) {
 		t.Errorf("named hidden replies when nothing was hidden:\n%s", got)
 	}
 }
+
+// A call by id says which message it opened, rather than printing an empty
+// pattern.
+func TestRecallAnnouncementNamesTheID(t *testing.T) {
+	for _, tc := range []struct {
+		a    recallArgs
+		want string
+	}{
+		{recallArgs{Pattern: "longest"}, `Recall "longest"`},
+		{recallArgs{ID: "t5.12"}, "Recall message t5.12"},
+		{recallArgs{Pattern: "816", ID: "t5.12"}, `Recall "816" in message t5.12`},
+	} {
+		if got := recallAnnouncement(tc.a); got != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.a, got, tc.want)
+		}
+	}
+}
