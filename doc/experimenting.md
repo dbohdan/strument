@@ -1298,6 +1298,11 @@ three strata.
   - A `down` file, so the service starts only when asked.
   - A stratum that finishes runs `nitroctl down` on itself. Otherwise it
     exits and is restarted.
+  - Keep `NITRO_SOCK` short, through a symlink if the scratch path is deep.
+    `nitroctl` binds a notification socket next to it, named after the
+    service, and a Unix socket path is limited to 108 bytes. A long one makes
+    `nitroctl down` fail, so a finished stratum was restarted every two
+    seconds for 20 minutes (`2026-10-summary-label`).
 - **A `pgrep -f` or `pkill -f` pattern typed on the command line matches your
   own shell.** The agent's shell is `bash -c "<the whole command>"`, and the
   pattern is in that string. This killed the session's own shell, exit 144,
