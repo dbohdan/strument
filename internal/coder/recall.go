@@ -40,6 +40,8 @@ const (
 	// recallLineRunes cuts a matching line that is mostly something else: a
 	// minified file or a long JSON line would otherwise be the whole result.
 	recallLineRunes = 300
+	// recallHiddenIDs bounds how many hidden replies a search names.
+	recallHiddenIDs = 10
 	// recallEntryLines and recallEntryRunes bound an entry opened with id.
 	recallEntryLines = 400
 	recallEntryRunes = 40000
@@ -233,12 +235,27 @@ func (c *Coder) runRecall(a recallArgs) string {
 	if a.Pattern == "" {
 		return recallOpen(entries, a.ID, nil)
 	}
+	if a.ID == "" {
+		// A hit's id passed as the pattern, escaped or not, can only match
+		// itself, and ids are not text in the record, so the search would come
+		// back empty. Ling 3.1 did this three times in one turn
+		// (doc/experiments/2026-10-recall-models); open the message instead.
+		if m := recallIDPattern.FindStringSubmatch(a.Pattern); m != nil {
+			id := "t" + m[1] + "." + m[2]
+			return fmt.Sprintf("%q is a message id, not text in the record, so it was opened as id=%q.\n", a.Pattern, id) +
+				recallOpen(entries, id, nil)
+		}
+	}
 	re, note := compileRecall(a.Pattern, a.IgnoreCase)
 	if a.ID != "" {
 		return note + recallOpen(entries, a.ID, re)
 	}
 	return note + recallSearch(entries, turns, re, a, c.inConversation())
 }
+
+// recallIDPattern matches a hit's id written as a pattern: "t4.12", or
+// "t4\\.12" with the dot escaped.
+var recallIDPattern = regexp.MustCompile(`^t(\d+)\\?\.(\d+)$`)
 
 // recallSearch lists the matching messages in scope and out of the
 // conversation, newest first, and says what else matched and where.
@@ -270,6 +287,25 @@ func recallSearch(entries []recallEntry, turns int, re *regexp.Regexp, a recallA
 		}
 	}
 	b.WriteString(".")
+	// Replies the cutoff hid are named. A search for a word the answer used
+	// matches tool output as well, and the answer can fall below the cutoff:
+	// in doc/experiments/2026-10-recall-models a session that did not raise
+	// newest took a line count from a tool result instead of the reply it
+	// was asked about. An id says which turn a hidden reply belongs to.
+	var hiddenReplies []string
+	for _, e := range hits[shown:] {
+		if e.role == llm.RoleAssistant {
+			hiddenReplies = append(hiddenReplies, e.id())
+		}
+	}
+	if len(hiddenReplies) > 0 {
+		more := ""
+		if len(hiddenReplies) > recallHiddenIDs {
+			more = fmt.Sprintf(" and %d more", len(hiddenReplies)-recallHiddenIDs)
+			hiddenReplies = hiddenReplies[:recallHiddenIDs]
+		}
+		fmt.Fprintf(&b, " Not shown, your own replies: %s%s; pass one as id to see it.", strings.Join(hiddenReplies, ", "), more)
+	}
 	if inView > 0 {
 		fmt.Fprintf(&b, " %d more in messages still in this conversation (not shown).", inView)
 	}

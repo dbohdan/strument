@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -254,5 +255,44 @@ func TestClearedPlaceholderFollowsRecall(t *testing.T) {
 	n, _ := pruneToolResults(msgs, 1000, count, clearedToolResult)
 	if n != 1 || msgs[0].Text() != clearedToolResultRecall {
 		t.Errorf("cleared %d; a result already cleared under the other placeholder was rewritten: %q", n, msgs[0].Text())
+	}
+}
+
+// An id passed as the pattern, with or without the dot escaped, opens the
+// message: as a pattern it could only ever come back empty. A pattern that
+// merely starts like an id is still a search.
+func TestRecallOpensAnIDPassedAsPattern(t *testing.T) {
+	c := &Coder{SessionRecords: recallRecords}
+	for _, p := range []string{`t1.4`, `t1\.4`} {
+		got := c.runRecall(recallArgs{Pattern: p, From: "all", Newest: 10})
+		if !strings.Contains(got, `opened as id="t1.4"`) || !strings.Contains(got, "878 lines") {
+			t.Errorf("pattern %q:\n%s", p, got)
+		}
+	}
+	if got := c.runRecall(recallArgs{Pattern: `t1\.[0-9]`, From: "all", Newest: 10}); strings.Contains(got, "opened as id") {
+		t.Errorf("a range was taken for an id:\n%s", got)
+	}
+}
+
+// When the cutoff hides replies, the header names them by id, so a model
+// that does not raise newest can still reach the answer it gave. Tool output
+// hidden by the cutoff is not named; only replies are.
+func TestRecallNamesRepliesTheCutoffHid(t *testing.T) {
+	entries := []recallEntry{
+		{turn: 1, index: 4, role: llm.RoleAssistant, text: "big.go is the longest, at 878 lines."},
+		{turn: 2, index: 3, role: llm.RoleTool, tool: toolRead, text: "the longest wait"},
+		{turn: 3, index: 3, role: llm.RoleTool, tool: toolRead, text: "the longest name"},
+		{turn: 4, index: 3, role: llm.RoleTool, tool: toolRead, text: "the longest line"},
+	}
+	re := regexp.MustCompile("longest")
+	got := recallSearch(entries, 5, re, recallArgs{From: "all", Newest: 2}, nil)
+	if !strings.Contains(got, "Not shown, your own replies: t1.4;") {
+		t.Errorf("the hidden reply is not named:\n%s", got)
+	}
+	if strings.Contains(got, "t2.3;") || strings.Contains(got, "t2.3,") {
+		t.Errorf("hidden tool output was named as a reply:\n%s", got)
+	}
+	if got := recallSearch(entries, 5, re, recallArgs{From: "all", Newest: 10}, nil); strings.Contains(got, "Not shown") {
+		t.Errorf("named hidden replies when nothing was hidden:\n%s", got)
 	}
 }
