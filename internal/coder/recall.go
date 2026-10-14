@@ -220,8 +220,10 @@ func compileRecall(pattern string, ignoreCase bool) (*regexp.Regexp, string) {
 }
 
 // offersRecall reports whether this session offers recall, as a tool and
-// inside run_code alike.
-func (c *Coder) offersRecall() bool { return c.OfferRecall && c.SessionRecords != nil }
+// inside run_code alike: whenever there is a record to search.
+// doc/experiments/2026-10-recall-models made it the default; before that it
+// was a trial flag.
+func (c *Coder) offersRecall() bool { return c.SessionRecords != nil }
 
 func (c *Coder) runRecall(a recallArgs) string {
 	if c.SessionRecords == nil {

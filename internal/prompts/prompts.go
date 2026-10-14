@@ -645,20 +645,6 @@ const SummaryLabel = "Summary of the earlier part of this conversation, written 
 	"record what the user said. Where it says something was done, run or verified, check " +
 	"that before relying on it.\n\n"
 
-// SummaryRecallNote ends a summary in a session that offers the recall tool,
-// in the trial arm that tests it (doc/experiments/2026-10-recall). Its pilot
-// found that a model reading a summary never searched the record, even where the
-// summary lacked the answer, and once invented one instead; this says where the
-// rest is. It follows the summary rather than joining SummaryLabel, because the
-// label is how a summary is recognized and must not vary.
-//
-// Worded as RollRecallTail is, so the three pointers to recall (this, the roll
-// note and the cleared-result placeholder) say the same thing the same way.
-const SummaryRecallNote = "\n\nThe turns this summary replaces are kept in the session record, " +
-	"including your own replies and the output of every tool call, and the recall tool searches it. " +
-	"When a question concerns something this summary does not cover, search the record before " +
-	"deciding you don't know; file contents and command output need from=\"all\"."
-
 // SummaryInputBefore and SummaryInputAfter frame the conversation the
 // summarizer is given, which sits between <conversation> markers.
 //

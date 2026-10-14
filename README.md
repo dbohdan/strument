@@ -26,6 +26,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   See [Skills](doc/config.md#skills).
 - A sandboxed [`run_code` tool](doc/config.md#the-run_code-tool) for short JavaScript programs, such as calculations or processing many inputs at once.
   Programs can call read-only search tools but nothing else on the host.
+- A [`recall` tool](doc/config.md#the-recall-tool) that searches the session's own record, so the model can find what it said, read, or worked out in turns that compaction has removed from the conversation.
 - Undo for every edit through Strument's file tools, with and without Git.
   In a repository, each turn is one commit.
 - [Project checks](#configuration): named commands such as tests and a linter, which the model can run without a permission prompt and Strument can run after every turn that edits a file.

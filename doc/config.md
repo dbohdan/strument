@@ -2090,6 +2090,49 @@ restarting.
 
 [agent-skills]: https://code.claude.com/docs/en/skills
 
+## The `recall` tool
+
+`recall` searches the session record: every message of this session as it was
+said, including turns that compaction has since summarized, rolled, or
+cleared out of the conversation the model sees. Compaction keeps a session
+inside the context window by forgetting; `recall` lets the model go back for
+what it forgot without reading files or running commands again.
+
+Its shape is grep's:
+
+- `pattern`: a Go regular expression, searched as plain text when it does not
+  parse;
+- `from`: `"conversation"` (the default) for what the user and the model said,
+  `"tools"` for tool output such as files read and commands run, or `"all"`;
+- `ignore_case` and `context_lines`, as in grep;
+- `newest`: how many matching messages to show, newest first (default 10, at
+  most 50);
+- `id`: a hit's id, such as `t4.3`, to see that message whole.
+
+Matches in messages still in the conversation are counted rather than shown,
+since the model can already see them. When the scope left matches out, the
+result says so (for example, "3 more in tool output"). Earlier `recall`
+results are not searched, so a search does not find itself.
+
+The tool is offered from the first turn of any session that keeps a record,
+which means any session without `--no-history`. It is offered from the start
+rather than from the first compaction because a tool list that changes
+mid-session confuses models and breaks the cached prompt prefix. It never
+asks permission, since it reads nothing but the session's own record.
+
+When `recall` is offered, two compaction texts point at it. The roll note says
+the rest of the dropped turns is in the record, not that it is gone. A cleared
+tool result's placeholder suggests `recall` with `from="all"` as well as
+making the call again.
+
+Why it is on by default:
+[`doc/experiments/2026-10-recall-models`](experiments/2026-10-recall-models/README.md)
+asked the models about facts they had worked out in turns that were later
+compacted. On three models, with `recall` a rolled session answered 71 of 72
+such questions, and without it none. Summaries keep more on their own (61 of
+72), but a summary that has lost a fact tends to produce a confident wrong
+answer rather than "I don't know".
+
 ## The `run_code` tool
 
 `run_code(code)` runs a short JavaScript program and returns its last
@@ -2161,8 +2204,13 @@ there would read as "not found" when the pattern was never tested. Content
 mode has no context lines in a program unless `context_lines` asks for them.
 `read` and `symbol` still cross as prose.
 
-Only the five read-only observation tools are callable from a `run_code`
-program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a
+`recall`, when the session offers it, is callable too, and only in a data
+shape: `recall({pattern, from, ...})` or `recall("pattern")` returns matching
+lines as `{id, turn, speaker, in_conversation, line, text, match}` objects,
+including the lines still in the conversation (marked by `in_conversation`).
+
+Only the five read-only observation tools and `recall` are callable from a
+`run_code` program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a
 program cannot initiate commands or modifications through the bridge.
 
 Trials so far have not earned the tool a default slot:

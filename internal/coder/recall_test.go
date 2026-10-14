@@ -166,17 +166,13 @@ func TestRecallIsOfferedOnlyWithARecord(t *testing.T) {
 		}
 		return false
 	}
-	c := &Coder{OfferRecall: true}
+	c := &Coder{}
 	if offered(c) {
 		t.Error("offered with no record to search")
 	}
 	c.SessionRecords = recallRecords
 	if !offered(c) {
-		t.Error("not offered with a record and the flag")
-	}
-	c.OfferRecall = false
-	if offered(c) {
-		t.Error("offered without the flag")
+		t.Error("not offered with a record")
 	}
 }
 
@@ -184,7 +180,7 @@ func TestRecallIsOfferedOnlyWithARecord(t *testing.T) {
 // a search; matches still in the conversation are included and marked.
 func TestRecallInsideAProgramReturnsData(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.OfferRecall, c.SessionRecords = true, recallRecords
+	c.SessionRecords = recallRecords
 	c.doneMessages = []llm.Message{llm.TextMessage(llm.RoleAssistant, "It was 878.")}
 	got := run(c, `const hits = recall({pattern: "878", from: "all"});
 hits.map(h => [h.id, h.speaker, h.in_conversation, h.line].join(" ")).join("; ")`)
@@ -202,50 +198,16 @@ hits.map(h => [h.id, h.speaker, h.in_conversation, h.line].join(" ")).join("; ")
 	}
 }
 
-// A session without recall has no recall in programs either: a program can
-// reach exactly the tools the model can.
+// A session without a record has no recall in programs either: a program
+// can reach exactly the tools the model can.
 func TestRecallIsNotInProgramsWhenNotOffered(t *testing.T) {
 	c, _ := observeEnv(t, nil)
-	c.SessionRecords = recallRecords
+	c.SessionRecords = nil
 	if got := run(c, `recall("878")`); !strings.Contains(got, "ReferenceError") {
 		t.Errorf("recall was callable without being offered:\n%s", got)
 	}
 	if strings.Contains(codeTool(c.codeCallableTools(), true, c.dataFuncs()).Description, "recall") {
 		t.Error("the run_code description lists recall when it is not offered")
-	}
-}
-
-// The fifth arm of doc/experiments/2026-10-recall: with RecallNote and recall
-// offered, a summary ends with the pointer to the record; otherwise not. The
-// label itself is untouched, because it is how a summary is recognized.
-func TestRecallNoteEndsTheSummary(t *testing.T) {
-	fold := func(note, offered bool) string {
-		c := testCoder(t)
-		c.Summarizer = NewChatSummary(&summaryStub{}, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
-		c.RecallNote, c.OfferRecall = note, offered
-		c.SessionRecords = recallRecords
-		for range 6 {
-			c.doneMessages = append(c.doneMessages, msgTok("user", 400), msgTok("assistant", 400))
-		}
-		if !c.compactHistory(1000) {
-			t.Fatal("did not compact")
-		}
-		for _, m := range c.doneMessages {
-			if isSummaryMessage(m) {
-				return m.Text()
-			}
-		}
-		t.Fatal("no summary message")
-		return ""
-	}
-	if got := fold(true, true); !strings.HasSuffix(got, prompts.SummaryRecallNote) || !strings.Contains(got, prompts.SummaryLabel) {
-		t.Errorf("the note does not end the summary, or the label changed:\n%s", got)
-	}
-	if got := fold(true, false); strings.Contains(got, "recall tool") {
-		t.Errorf("the note points at a tool that is not offered:\n%s", got)
-	}
-	if got := fold(false, true); strings.Contains(got, "recall tool") {
-		t.Errorf("the note appeared without RecallNote:\n%s", got)
 	}
 }
 
@@ -278,7 +240,7 @@ func TestClearedPlaceholderFollowsRecall(t *testing.T) {
 	if c.clearedPlaceholder() != clearedToolResult {
 		t.Error("the placeholder names recall without it")
 	}
-	c.OfferRecall, c.SessionRecords = true, recallRecords
+	c.SessionRecords = recallRecords
 	if p := c.clearedPlaceholder(); p != clearedToolResultRecall || !strings.Contains(p, `from="all"`) {
 		t.Errorf("placeholder with recall = %q", p)
 	}

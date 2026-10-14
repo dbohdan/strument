@@ -212,14 +212,9 @@ type Coder struct {
 
 	// SessionRecords, when set, returns the session's record as written so far,
 	// payloads resolved: what the recall tool searches. A callback for the
-	// reason RecordUsage is one. nil in a session that leaves no trace.
+	// reason RecordUsage is one. nil in a session that leaves no trace, which
+	// is then offered no recall tool.
 	SessionRecords func() []Record
-	// OfferRecall offers the recall tool. Hidden behind a trial flag until
-	// doc/experiments/2026-10-recall says whether it earns its place.
-	OfferRecall bool
-	// RecallNote ends each summary with a pointer to the record when recall
-	// is offered (prompts.SummaryRecallNote). A trial arm, like OfferRecall.
-	RecallNote bool
 
 	// PutBlob, when set, stores a tool payload too large to keep inline and
 	// returns the name to find it under. nil keeps every payload inline; see
