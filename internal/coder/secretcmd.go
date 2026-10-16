@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
+
+var errProcSubst = errors.New("process substitution is not expanded")
 
 // secretInCommand finds a secret-shaped path a shell command names, so the
 // shell gate can ask the user rather than approve_model.
@@ -32,11 +35,18 @@ import (
 //
 // What it finds sends the command to the user; it never refuses one. A false
 // positive — `echo .env` — costs a question, which is the right direction to
-// be wrong in.
+// be wrong in. For the same reason a check that panics counts as a hit, with
+// an empty path: the expander is a library walking whatever the model wrote,
+// and it has crashed Strument once (a nil ProcSubst hook, below).
 func secretInCommand(command, dir, home string, m *secretfile.Matcher) (path, pattern string, ok bool) {
 	if m == nil {
 		return "", "", false
 	}
+	defer func() {
+		if recover() != nil {
+			path, pattern, ok = "", "", true
+		}
+	}()
 	file, err := syntax.NewParser().Parse(strings.NewReader(command), "")
 	if err != nil {
 		return "", "", false
@@ -47,6 +57,14 @@ func secretInCommand(command, dir, home string, m *secretfile.Matcher) (path, pa
 			Env:      expand.ListEnviron("HOME="+home, "PWD="+cwd),
 			NoUnset:  true,
 			ReadDir2: os.ReadDir,
+			// A process substitution expands by running a command, which this
+			// check never does, so the word is skipped like one with a command
+			// substitution; the commands inside are still walked. The library
+			// calls this hook without a nil check, and a model's
+			// `diff <(git show …) …` crashed Strument on it.
+			ProcSubst: func(*syntax.ProcSubst) (string, error) {
+				return "", errProcSubst
+			},
 		}
 	}
 	check := func(w *syntax.Word) bool {

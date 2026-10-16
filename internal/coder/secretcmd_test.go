@@ -42,6 +42,8 @@ func TestSecretInCommand(t *testing.T) {
 		"cat < ~/.netrc",
 		"X=~/.netrc; cat $X", // the assignment is the word that names it
 		"go test ./... && cat deploy/.env.production",
+		// Inside a process substitution the command is still a command.
+		"diff <(cat ~/.netrc) /dev/null",
 	} {
 		if _, _, ok := secretInCommand(cmd, proj, home, m); !ok {
 			t.Errorf("%s: not caught", cmd)
@@ -56,6 +58,13 @@ func TestSecretInCommand(t *testing.T) {
 		"grep -r credentials internal/",
 		"cat <<EOF\n.netrc\nEOF",
 		"cat ~/.ne*rc_missing*",
+		// Process substitution expands by running a command, which this check
+		// never does. The expander calls a nil ProcSubst hook when it meets
+		// one, and a model's `diff <(git show HEAD) …` crashed Strument; a
+		// `cd` to one went through expand.Literal, which calls the same hook.
+		"diff <(git show HEAD:README.md) README.md",
+		"tee >(wc -l) < README.md",
+		"cd <(true) && ls",
 	} {
 		if p, pat, ok := secretInCommand(cmd, proj, home, m); ok {
 			t.Errorf("%s: caught %q by %q, want no hit", cmd, p, pat)

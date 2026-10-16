@@ -1240,6 +1240,9 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 		home, _ := os.UserHomeDir()
 		if p, pat, hit := secretInCommand(command, c.Root, home, c.Files.Secret); hit {
 			secretNote = fmt.Sprintf("Names a secret-shaped path: %s (pattern %q).", p, pat)
+			if p == "" {
+				secretNote = "Could not be checked for secret-shaped paths."
+			}
 			group = ""
 		}
 	}
