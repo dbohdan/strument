@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// defaultEnvAllowNames and defaultEnvAllowPrefixes define the environment the
+// defaultEnvAllowNames defines the environment the
 // harness passes to commands it runs on the model's behalf — the bash tool,
 // named checks, and the scraper command. Everything else in the session's
 // environment is withheld, so a model-run `env` (or a build tool that echoes
