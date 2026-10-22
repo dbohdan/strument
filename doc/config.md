@@ -1233,6 +1233,11 @@ config carries names only, never values.
 Credential variables may be included explicitly. Add them only when the command
 needs them.
 
+The allowlist keeps credentials out of tool results, not out of reach: a
+command can still read the environment Strument started with from
+`/proc/<pid>/environ`. See [the environment
+allowlist](security.md#the-environment-allowlist).
+
 For ad-hoc, session-scoped changes the REPL has `/env`: `/env` shows the
 effective allowlist by origin (defaults, config, session changes), `/env add`
 and `/env drop` change it until the session ends (Tab completes variable names:

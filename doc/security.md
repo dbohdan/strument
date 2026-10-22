@@ -321,6 +321,18 @@ a command receives. It is also, by accident, the main thing keeping a
 model-caused command from ordinary X11 discovery — see [what Landlock does not
 confine](#what-landlock-does-not-confine-the-display-server).
 
+**The allowlist keeps secrets out of tool results, not out of reach.** It
+decides what a command's environment holds, so a careless `env` or a test that
+prints its environment leaks nothing. A command that goes looking can still
+read `/proc/<pid>/environ` of any process running as you, Strument's included:
+the same user may read it, and the sandbox allows reading everywhere. That file
+holds the environment a process *started* with. So a variable exported in the
+shell that launched Strument, such as `OPENROUTER_API_KEY`, is readable there,
+while a value [`env_set`](config.md#env_set) applied after startup is not,
+except in the `/proc` of `git` and `/run` processes while they run. A live
+session confirmed both halves. Keeping a credential from a deliberate model
+means keeping it out of the user's processes altogether.
+
 `/run` is exempt from the allowlist because the user typed the command. It is
 not exempt from the sandbox because the allowlist is a policy Strument chooses
 to apply, while Landlock is a property of the process.
