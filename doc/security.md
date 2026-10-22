@@ -92,7 +92,7 @@ The policy has two main rules:
 [`doc/config.md`](config.md#language-support) documents where the cache paths
 come from, one ecosystem at a time.
 
-The process-wide policy has three consequences:
+The process-wide policy has four consequences:
 
 - **`/run` is confined too.** Landlock is monotonic — there is no call that
   removes a ruleset — so a command you typed yourself runs under the same
@@ -107,6 +107,29 @@ The process-wide policy has three consequences:
 - **The sandbox imposes no CPU, memory, or process limits.** `shell_timeout`
   limits how long model-run commands may run; it does not limit their resource
   consumption while they run.
+- **Nothing can be mounted.** A process under Landlock cannot change the
+  mount table, even as root and even onto a writable directory, and
+  `/dev/fuse` is not writable either. The common casualty is an AppImage,
+  which mounts itself with FUSE and fails with "Cannot mount AppImage". The
+  AppImage runtime can extract itself to `/tmp` and run from there instead
+  when `APPIMAGE_EXTRACT_AND_RUN` is set. Export it in your shell before
+  starting Strument, or set it with
+  [`env_set`](config.md#env_set). For model-run commands, also list it in
+  [`env_allow`](config.md#env_allow), since `env_set` does not widen the
+  allowlist:
+
+  ```starlark
+  env_set = {"APPIMAGE_EXTRACT_AND_RUN": "1"}
+  env_allow = ["APPIMAGE_EXTRACT_AND_RUN"]
+  ```
+
+  Extraction happens on every run. For an AppImage you use often, extract it
+  once with `--appimage-extract` and run `squashfs-root/AppRun`.
+
+[`script/strument-sandbox.sh`](../script/strument-sandbox.sh) applies the same
+policy to any other command, such as another coding agent, through
+[landrun](https://github.com/Zouuup/landrun). It sets
+`APPIMAGE_EXTRACT_AND_RUN=1` for the command it runs.
 
 
 ## Exceptions and remaining risks
