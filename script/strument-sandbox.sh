@@ -1,31 +1,27 @@
 #!/usr/bin/env bash
-# Run a command under the filesystem policy Strument applies to itself, using
-# Bubblewrap instead of Landlock, so that another agent (or any command) can be
-# confined the way Strument confines the commands its model runs.
+# Run a command under the filesystem policy Strument applies to itself, so
+# that another agent (or any command) is confined the way Strument confines
+# the commands its model runs. It uses landrun, a command-line front end to
+# Landlock built on go-landlock, the same mechanism and library as Strument.
 #
 # The policy is internal/sandbox: read and execute everywhere, write only to
 # the project, temp directories, this machine's toolchain caches, a few
 # harmless devices, and whatever --write adds. With --filter-env, the command
 # also gets only the environment allowlist of internal/coder/envallow.go.
 #
-# Written for Bash 5.2 and bubblewrap 0.9 on Ubuntu 24.04. See --help.
-#
-# Where it differs from Strument's Landlock sandbox:
-#
-#   - It is a mount namespace, not a Landlock ruleset: writes outside the set
-#     fail with EROFS ("Read-only file system") instead of EACCES.
-#   - /dev is a fresh minimal one (see "Devices" below), so devices outside
-#     that set are absent rather than read-only, and files created in /dev
-#     stay in a private tmpfs.
-#   - Without root, bwrap runs in a user namespace: files owned by other users
-#     show as nobody, and setuid programs such as sudo do not work.
-#   - The writable set is computed once, when the script starts, as Strument
-#     computes it once at startup.
+# Written for Bash 5.2 on Ubuntu 24.04. Install landrun with
+#   go install github.com/zouuup/landrun/cmd/landrun@latest
 #
 # The writable set matched sandbox.DefaultWritable path for path on a test
 # home with every awkward case writable.go handles: cargo and go bin/ beside
 # their caches, pnpm on PATH, pyenv and mise shims, a symlinked subdirectory,
 # relocated caches, and a git worktree.
+#
+# AppImages: a Landlock-confined process cannot mount anything, so an
+# AppImage cannot mount itself with FUSE, here or under Strument. The script
+# sets APPIMAGE_EXTRACT_AND_RUN=1, which makes the AppImage runtime extract
+# itself to /tmp and run from there instead (--no-appimage-extract to leave
+# it unset).
 set -euo pipefail
 
 prog=${0##*/}
@@ -34,9 +30,10 @@ usage() {
 	cat <<EOF
 Usage: $prog [options] [--] command [args...]
 
-Run command with writes confined to Strument's sandbox policy: the project,
-TMPDIR and /tmp, existing toolchain caches, a few devices, and --write paths.
-Reading and executing stay unrestricted. The network is not restricted.
+Run command under Landlock with writes confined to Strument's sandbox policy:
+the project, TMPDIR and /tmp, existing toolchain caches, a few devices, and
+--write paths. Reading and executing stay unrestricted, and so does the
+network. Needs landrun on PATH.
 
 Options:
   -p, --project DIR     Project root (default: the git toplevel of the current
@@ -49,8 +46,11 @@ Options:
                         an agent needs its own API key.
   -a, --env-allow NAME  Also pass NAME under --filter-env, like env_allow.
                         Repeatable.
+      --no-appimage-extract
+                        Do not set APPIMAGE_EXTRACT_AND_RUN=1. AppImages then
+                        try FUSE, which Landlock does not allow.
   -l, --list            Print the writable set and exit, like /sandbox.
-  -n, --dry-run         Print the bwrap command instead of running it.
+  -n, --dry-run         Print the landrun command instead of running it.
   -h, --help            Show this help.
 
 An agent also needs to write its own state. For example:
@@ -70,6 +70,7 @@ filter_env=0
 env_allow=()
 list=0
 dry_run=0
+appimage_extract=1
 
 while (($#)); do
 	case $1 in
@@ -92,6 +93,10 @@ while (($#)); do
 		(($# >= 2)) || die "$1 needs a variable name"
 		env_allow+=("$2")
 		shift 2
+		;;
+	--no-appimage-extract)
+		appimage_extract=0
+		shift
 		;;
 	-l | --list)
 		list=1
@@ -260,18 +265,13 @@ add \
 	"$(pick R_LIBS_USER)" \
 	"$(pick MISE_CACHE_DIR)"
 
-# Devices: Strument grants writing to /dev/null, zero, full, tty, ptmx, pts
-# and shm, and reading everything. bwrap's --dev builds a fresh /dev with
-# exactly that writable set (plus random and urandom) and a private devpts, so
-# pseudo-terminals work. The host's /dev/shm and /dev/log are bound on top,
-# so shared memory and syslog behave as they do outside. Other devices are
-# absent rather than read-only. The ones worth having (GPUs, /dev/kvm,
-# /dev/fuse) must be opened read-write, which Strument denies too.
-devices=(/dev/shm /dev/log)
+# The devices a build writes to, as in internal/sandbox/policy.go. Not all of
+# /dev: /dev/sda is exactly the wrong thing to hand over.
+devices=(/dev/null /dev/zero /dev/full /dev/tty /dev/ptmx /dev/pts /dev/shm)
 
 # Resolve and dedupe. A path that does not exist is skipped, as Strument skips
-# it. Binding the resolved path matches Landlock, which anchors a rule to the
-# inode a path resolves to.
+# it. Landlock anchors a rule to the inode a path resolves to, so resolving
+# here changes nothing but the listing, which then shows the real path.
 declare -A seen=()
 grants=()
 missing=()
@@ -290,13 +290,12 @@ done
 if ((list)); then
 	printf 'Writable (%d):\n' "${#grants[@]}"
 	printf '  %s\n' "${grants[@]}"
-	printf 'Devices: a fresh /dev (null, zero, full, random, urandom, tty, ptmx, pts)'
+	printf 'Devices:\n'
 	for d in "${devices[@]}"; do
 		if [[ -e $d ]]; then
-			printf ', %s' "$d"
+			printf '  %s\n' "$d"
 		fi
 	done
-	printf '\n'
 	if ((${#missing[@]})); then
 		printf 'Not granted, because they do not exist:\n'
 		printf '  %s\n' "${missing[@]}"
@@ -304,27 +303,28 @@ if ((list)); then
 	exit 0
 fi
 
-command -v bwrap >/dev/null || die "bwrap not found; install it with: sudo apt install bubblewrap"
+command -v landrun >/dev/null ||
+	die "landrun not found; install it with: go install github.com/zouuup/landrun/cmd/landrun@latest"
 
-# / read-only, then a fresh /dev, then each grant. bwrap mounts every bind
-# but --dev-bind nodev, and so does --remount-ro: binding the host's /dev and
-# making it read-only stopped programs from reading /dev/urandom, and git from
-# writing any object.
-args=(--ro-bind / / --dev /dev)
-for d in "${devices[@]}"; do
-	if [[ -e $d ]]; then
-		args+=(--bind "$d" "$d")
+# Read and execute everywhere, and connect to Unix sockets anywhere, as
+# Strument's RODirs("/").WithResolveUnix() does. landrun restricts the network
+# and scopes signals and abstract Unix sockets unless told not to; Strument
+# does neither. --best-effort uses what the running kernel supports: without
+# it landrun refuses any kernel older than Landlock ABI 10, and Ubuntu
+# 24.04's 6.8 kernel has ABI 4. Strument asks for the same with BestEffort.
+args=(--best-effort --unrestricted-network --unrestricted-scoped --rox / --unix /)
+for g in "${grants[@]}" "${devices[@]}"; do
+	if [[ -e $g ]]; then
+		args+=(--rw "$g")
 	fi
 done
-for g in "${grants[@]}"; do
-	args+=(--bind "$g" "$g")
-done
-args+=(--die-with-parent --chdir "$PWD")
 
+# landrun passes no environment unless named. Without --filter-env the command
+# gets all of it, as Strument itself does.
 if ((filter_env)); then
 	# The default allowlist of internal/coder/envallow.go, Linux names only.
-	allow=(
-		PATH HOME SHELL USER LOGNAME TERM TERMINFO COLUMNS LINES TMPDIR PWD
+	names=(
+		PATH HOME SHELL USER LOGNAME TERM TERMINFO COLUMNS LINES TMPDIR
 		LANG LANGUAGE TZ
 		LC_ALL LC_CTYPE LC_MESSAGES LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY
 		LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION
@@ -341,41 +341,31 @@ if ((filter_env)); then
 		JAVA_HOME GRADLE_USER_HOME
 		"${env_allow[@]}"
 	)
-	args+=(--clearenv)
-	for name in "${allow[@]}"; do
-		if [[ $name != PWD && -v $name ]]; then
-			args+=(--setenv "$name" "${!name}")
-		fi
-	done
-	args+=(--setenv PWD "$PWD")
+else
+	mapfile -t names < <(compgen -e)
+fi
+for name in "${names[@]}"; do
+	if [[ $name != PWD && -v $name ]]; then
+		args+=(--env "$name")
+	fi
+done
+args+=(--env "PWD=$PWD")
+if ((appimage_extract)) && [[ ! -v APPIMAGE_EXTRACT_AND_RUN ]]; then
+	args+=(--env APPIMAGE_EXTRACT_AND_RUN=1)
 fi
 
 if ((dry_run)); then
-	printf '%q ' bwrap "${args[@]}" -- "$@"
+	printf '%q ' landrun "${args[@]}" -- "$@"
 	printf '\n'
 	exit 0
 fi
 
-# Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, and
-# bwrap needs one when it does not run as root. Say how to allow it rather than
-# leave the user with "setting up uid map: Permission denied".
-if ((EUID != 0)) && [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null) == 1 ]] &&
-	! bwrap --ro-bind / / -- true 2>/dev/null; then
-	cat >&2 <<'EOF'
-strument-sandbox.sh: bwrap cannot create a user namespace. Ubuntu 24.04
-restricts them with AppArmor; allow bwrap with a profile, then reload:
-
-  sudo tee /etc/apparmor.d/bwrap <<'END'
-  abi <abi/4.0>,
-  include <tunables/global>
-  profile bwrap /usr/bin/bwrap flags=(unconfined) {
-    userns,
-    include if exists <local/bwrap>
-  }
-  END
-  sudo apparmor_parser -r /etc/apparmor.d/bwrap
-EOF
-	exit 1
+# --best-effort also means "nothing at all" on a kernel without Landlock, so
+# check that something is enforced before trusting it, as Strument's Probe
+# does. With no write grant, even /dev/null must be unwritable.
+if landrun --best-effort --unrestricted-network --unrestricted-scoped --rox / -- \
+	/bin/sh -c 'exec 3>/dev/null' 2>/dev/null; then
+	die "Landlock is not enforced on this kernel; refusing to run unconfined"
 fi
 
-exec bwrap "${args[@]}" -- "$@"
+exec landrun "${args[@]}" -- "$@"
