@@ -139,15 +139,15 @@ func (s *sigREPL) hasSubscriber() bool {
 	return s.subscribed > 0
 }
 
-// sig1 delivers one signal to the in-turn handler. Delivered only when some
+// sig1 delivers one interrupt to the in-turn handler. Delivered only when some
 // turn currently subscribes — the semantics of a real signal: nothing is
 // listening between turns, so a signal fired there reaches nothing rather
 // than waiting in the buffer to ambush the next turn (see the Notify comment).
-func (s *sigREPL) sig1(v os.Signal) {
+func (s *sigREPL) sig1() {
 	if !s.hasSubscriber() {
 		return
 	}
-	s.sig <- v
+	s.sig <- interruptSignal
 }
 
 // awaitBetweenTurns blocks until no in-turn subscription is live — until the
@@ -930,10 +930,18 @@ type blockingClient struct {
 	started   chan struct{}
 	cancelled chan struct{}
 	release   chan struct{}
+	// partial is streamed before blocking, so an interrupt stops a reply
+	// already under way and gets the steer question. Without it the
+	// interrupt lands before anything came back, which ends the turn
+	// quietly instead (coder.OutcomeStopped).
+	partial string
 }
 
 func (b *blockingClient) Send(ctx context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
 	return func(yield func(llm.StreamEvent, error) bool) {
+		if b.partial != "" && !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: b.partial}, nil) {
+			return
+		}
 		close(b.started)
 		<-ctx.Done()
 		close(b.cancelled)
@@ -1042,6 +1050,7 @@ func TestUserSignalInterruptsTheSend(t *testing.T) {
 		started:   make(chan struct{}),
 		cancelled: make(chan struct{}),
 		release:   make(chan struct{}),
+		partial:   "Starting on",
 	}
 
 	pr, pw := io.Pipe()
@@ -1058,11 +1067,11 @@ func TestUserSignalInterruptsTheSend(t *testing.T) {
 	go func() { done <- s.Run(context.Background()) }()
 
 	<-cl.started
-	s.sig1(interruptSignal)
+	s.sig1()
 	<-cl.cancelled
 	// A repeat while the steer question is up means "interrupt again", not
 	// "exit": the chord is a keyboard idiom and SIGUSR1 is not a keystroke.
-	s.sig1(interruptSignal)
+	s.sig1()
 
 	select {
 	case code := <-exited:
@@ -1079,6 +1088,46 @@ func TestUserSignalInterruptsTheSend(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Completed work and conversation context are retained") {
 		t.Errorf("no interrupt hint after a user-space interrupt:\n%s", out.String())
+	}
+}
+
+// An interrupt before anything came back ends the turn quietly: no steer
+// question, and not the hint about retained work, since there is none.
+func TestUserSignalBeforeAnyReplyStopsQuietly(t *testing.T) {
+	cl := &blockingClient{
+		started:   make(chan struct{}),
+		cancelled: make(chan struct{}),
+		release:   make(chan struct{}),
+	}
+
+	pr, pw := io.Pipe()
+	s, out := newSigREPL(t, cl, pr)
+	defer s.Close()
+
+	go func() {
+		_, _ = io.WriteString(pw, "hello\n")
+	}()
+	done := make(chan error, 1)
+	go func() { done <- s.Run(context.Background()) }()
+
+	<-cl.started
+	s.sig1()
+	<-cl.cancelled
+	close(cl.release)
+	_ = pw.Close()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("REPL did not stop after the turn")
+	}
+	got := out.String()
+	if !strings.Contains(got, "Stopped before the model replied") {
+		t.Errorf("no line saying the turn was stopped:\n%s", got)
+	}
+	for _, unwanted := range []string{"What now?", "Completed work and conversation context are retained"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("printed %q for a turn that never began:\n%s", unwanted, got)
+		}
 	}
 }
 
@@ -1107,7 +1156,7 @@ func TestUserSignalBetweenTurnsDoesNothing(t *testing.T) {
 	close(cl.release) // the first send finishes normally...
 	s.awaitBetweenTurns(t)
 
-	s.sig1(interruptSignal) // ...and now it is the human's turn: nothing is subscribed
+	s.sig1() // ...and now it is the human's turn: nothing is subscribed
 	_, _ = io.WriteString(pw, "second\n")
 
 	<-cl.secondStarted

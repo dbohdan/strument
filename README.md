@@ -185,6 +185,7 @@ Answer (1-2, or your own text): Use the existing token helper instead
 "Continue" lets the model resume from the partial response with the context preserved.
 Typing your own answer sends it as a correction, and "Stop" ends the turn.
 Edits made before the interruption remain undoable with `/undo`.
+If you press <kbd>Ctrl+C</kbd> before the model has replied at all, for example while Strument retries a poor connection, there is nothing to ask about: the turn ends as if you had not sent it, and your message is not added to the conversation.
 
 Exiting in the middle of a turn — <kbd>Ctrl+C</kbd> twice, closing the terminal, or a `SIGTERM` from `timeout` or a service manager — does not lose the turn.
 Strument saves its edits for `/undo` on the way out.

@@ -655,6 +655,16 @@ happened, and a second press inside the chord window quit Strument. The command
 also says in its own output that the user stopped it, since a result that just
 stops is the kind of unexplained failure a model answers by editing code.
 
+One interrupt is not a steer. Ctrl-C during the turn's *first* send, before
+anything at all has come back (no text, no reasoning, no tool call), returns
+`OutcomeStopped`: the user's message is dropped and its attachments given back,
+no note goes into the conversation, and no turn row or usage estimate is
+written, since the turn did not happen. On a poor connection this is the
+Ctrl-C that means "stop retrying", including one that lands in the wait
+between attempts, where `retry` used to report "gave up: context canceled". A
+later send that has produced nothing yet still asks: by then the turn has done
+things, and stopping is a decision about them.
+
 The edits made before an interrupt are committed and snapshotted *there*
 (`settleEdits`), because the interruption is a review boundary: `git show` gives
 what the model did before you stopped it separately from what it did after your

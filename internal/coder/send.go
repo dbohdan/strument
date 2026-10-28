@@ -38,6 +38,11 @@ const (
 	// thing to say after a Ctrl-C — is the one instruction that would resume
 	// the loop.
 	OutcomeLooping
+	// OutcomeStopped: the user pressed Ctrl-C during the turn's first send,
+	// before anything came back. That is a connection being waited on or
+	// retried, not a reply being steered, so the turn ends as if it had not
+	// begun: no "what now?" and nothing added to the conversation.
+	OutcomeStopped
 	OutcomeContextExhausted
 	OutcomeOutputExhausted
 	OutcomeFailed
@@ -57,6 +62,8 @@ func (o SendOutcome) String() string {
 		return "SelfInterrupted"
 	case OutcomeLooping:
 		return "Looping"
+	case OutcomeStopped:
+		return "Stopped"
 	case OutcomeContextExhausted:
 		return "ContextExhausted"
 	case OutcomeOutputExhausted:
@@ -101,6 +108,11 @@ type sendUsage struct {
 	// refused the request rather than answering it. Last-wins, because a retry
 	// that succeeds brings real usage with it.
 	rejected bool
+	// stopped is a send the user stopped before anything came back
+	// (OutcomeStopped). Like a rejected one it reports no estimate: the turn
+	// it belonged to did not happen, and a usage line under it would read as
+	// a charge for a reply nobody saw.
+	stopped bool
 }
 
 func (u *sendUsage) add(usage *llm.Usage) {
@@ -271,6 +283,12 @@ func (rb *retryBackoff) retry(ctx context.Context, out Output, clock Clock, stre
 	out.Warningf("%s%s", rb.prefix(), se.Error())
 	out.Printf("Retrying%s in %.1f seconds...", rb.suffix(), rb.delay.Seconds())
 	if !clock.Sleep(ctx, rb.delay) {
+		// Ctrl-C during the turn's own wait is the user stopping the retries,
+		// and the caller says so; "gave up: context canceled" would read as a
+		// failure.
+		if rb.what == "" && errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		// The wait outlived the call's own deadline. Said rather than returned
 		// quietly: this is the path that made a failed side call look like a
 		// model that had decided there was nothing to say.
@@ -381,6 +399,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 				continue
 			}
 			term = resFailed
+			if ctx.Err() != nil {
+				// Stopped during the wait between attempts.
+				term = resInterrupted
+			}
 			break
 		}
 
@@ -424,6 +446,14 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		break
 	}
 	interrupted := term == resInterrupted
+	// Interrupted in the turn's first send with nothing back at all: no text,
+	// no reasoning, no tool call. On a poor connection this is Ctrl-C during
+	// the retries, and the user wants them to stop, not a "what now?" about a
+	// reply that never began, nor a note about one in the conversation.
+	stoppedBeforeReply := interrupted && c.turnSends == 1 &&
+		c.multiResponseContent == "" && c.partialResponseContent == "" &&
+		len(c.partialToolCalls) == 0 && strings.TrimSpace(c.partialReasoningContent) == ""
+	usage.stopped = stoppedBeforeReply
 
 	// --- Finally (always runs) ---
 	c.Out.FlushStream()
@@ -453,6 +483,17 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		if appendedUser {
 			c.curMessages = c.curMessages[:len(c.curMessages)-1]
 		}
+	}
+
+	if stoppedBeforeReply {
+		dropUserTurn()
+		if appendedUser {
+			// As when the request is refused for size: the turn never
+			// happened, so the attachments go back with it.
+			c.pendingAttachments = consumedAttachments
+		}
+		c.Out.Printf("Stopped before the model replied. Nothing was added to the conversation.")
+		return OutcomeStopped, ""
 	}
 
 	switch term {
@@ -1039,7 +1080,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	//
 	// A stream that produced text before it broke is a different case: those
 	// tokens were generated and will be billed, so it still estimates below.
-	if u.rejected && sent == 0 && received == 0 && !u.costKnown && c.streamedText() == "" {
+	if (u.rejected || u.stopped) && sent == 0 && received == 0 && !u.costKnown && c.streamedText() == "" {
 		return
 	}
 

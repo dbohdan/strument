@@ -297,6 +297,9 @@ type Coder struct {
 	// report the steps since the second began.
 	turnSteps  int
 	autoChecks int // automatic check rounds this turn (maxAutoCheck)
+	// turnSends counts the turn's sends, so sendMessage can tell the turn's
+	// first send, before anything in the turn has happened, from the rest.
+	turnSends int
 	// toolLoops counts this turn's read-class tool calls for exact repetition.
 	// Per turn: a new task may legitimately re-read what the last one read.
 	toolLoops *toolLoopWatcher
@@ -725,6 +728,7 @@ func (c *Coder) initBeforeMessage() {
 	c.numReflections = 0
 	c.numSteps = 0
 	c.turnSteps = 0
+	c.turnSends = 0
 	c.autoChecks = 0
 	// The tool-loop watcher follows LoopDetection, the same switch the text
 	// detector answers to — a user who turned detection off asked for neither
@@ -931,6 +935,11 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 			c.accumulateInterrupt(next)
 			message = next
 
+		case OutcomeStopped:
+			// Stopped before anything happened: the turn is over, and there
+			// is nothing to ask about.
+			return
+
 		case OutcomeLooping:
 			next, keepGoing := c.afterLoop()
 			if !keepGoing {
@@ -978,6 +987,7 @@ func (c *Coder) sendSteerable(ctx context.Context, message string) (SendOutcome,
 	c.sendMu.Lock()
 	c.cancelSend = cancel
 	c.sendMu.Unlock()
+	c.turnSends++
 
 	defer func() {
 		c.sendMu.Lock()
