@@ -100,7 +100,8 @@ type Options struct {
 	Color       bool
 	HistoryFile string
 
-	// Version fills the opening banner's "Strument v…" line.
+	// Version fills the opening banner's "Strument …" line: a calendar
+	// version, 2026.10.31-abc1def, so no "v" in front.
 	Version string
 	// Theme is the color palette; the zero value defaults to DefaultTheme.
 	Theme render.Theme
@@ -385,7 +386,7 @@ func (r *REPL) announce() {
 	if !r.interactive() {
 		return
 	}
-	r.printf("Strument v%s", r.opts.Version)
+	r.printf("Strument %s", r.opts.Version)
 	r.printf("Model: %s", r.coder.Model.QualifiedSlug())
 	// The conversation this run writes to, read through the same seam
 	// /session lists, so the banner and the command cannot name different

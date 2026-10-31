@@ -29,8 +29,8 @@ type BuildTarget struct {
 }
 
 func main() {
-	// Bare, as the binary reports it: the file name adds its own "v", and a
-	// stamped "v1.2.3" would print as "Strument vv1.2.3".
+	// Bare, as the binary reports it: a calendar version, 2026.10.31-abc1def,
+	// with no "v" in front in the file name or the banner.
 	version := strings.TrimPrefix(os.Getenv("VERSION"), "v")
 	if version == "" {
 		fmt.Fprintln(os.Stderr, "'VERSION' environment variable must be set")
@@ -79,7 +79,7 @@ func build(dir string, target BuildTarget, version string) error {
 		ext = ".exe"
 	}
 
-	filename := fmt.Sprintf("%s-v%s-%s-%s%s", projectName, version, target.os, target.arch, ext)
+	filename := fmt.Sprintf("%s-%s-%s-%s%s", projectName, version, target.os, target.arch, ext)
 	outputPath := filepath.Join(dir, filename)
 
 	// Release binaries carry only the grammars strument uses (guide phase
@@ -89,8 +89,8 @@ func build(dir string, target BuildTarget, version string) error {
 		return fmt.Errorf("failed to read grammar tags: %w", err)
 	}
 
-	// -X stamps the version the binary reports. Without it every release
-	// said 0.0.0-dev: VERSION named the file and nothing else.
+	// -X stamps the version the binary reports. A release build has its
+	// commit anyway, but a stamp is what a VERSION given by hand needs.
 	cmd := exec.Command("go", "build", "-trimpath",
 		"-ldflags", "-s -w -X main.version="+version,
 		"-tags", strings.TrimSpace(string(tags)),

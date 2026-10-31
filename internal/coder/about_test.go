@@ -53,7 +53,7 @@ func TestAboutReportsTheLiveClockAndTheBuild(t *testing.T) {
 
 	// A build without a VCS stamp says so rather than printing nothing, and a
 	// Coder with no session (strument tool about) leaves the mode out.
-	c = &Coder{Build: BuildInfo{Version: "0.0.0-dev"}}
+	c = &Coder{Build: BuildInfo{Version: "dev"}}
 	got = c.About(now)
 	if !strings.Contains(got, "Commit: unknown") {
 		t.Errorf("an unstamped build did not say its commit is unknown:\n%s", got)

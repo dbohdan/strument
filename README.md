@@ -469,6 +469,15 @@ task build:strument:subset  # Release variant: only the grammars Strument uses.
 task release                # Cross-compile the subset build for every platform.
 ```
 
+Strument uses calendar versions: `2026.10.31-abc1def` is the date of the commit
+a binary was built from, in UTC, and its short hash, with `+dirty` when the
+checkout had uncommitted changes.
+It comes from what Go records in the binary, so a checkout's `go build`, a
+`go install …@latest` and `task release` of one commit all report the same
+version, without tags or a release step.
+A build that records no commit, such as one from a source tarball, reports
+`dev`.
+
 The subset build compiles in just the 35 grammars the parse layer supports,
 via gotreesitter's `grammar_subset` build tags.
 The tag list lives in [`script/grammar-tags.txt`](script/grammar-tags.txt).

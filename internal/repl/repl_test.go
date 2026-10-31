@@ -320,7 +320,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			Coder:      cdr,
 			Config:     testConfig(model),
 			ModelAlias: "test",
-			Version:    "9.9.9",
+			Version:    "2026.10.31-abc1def",
 			Sessions:   &SessionOps{Current: func() string { return "review" }},
 			Color:      color,
 			Stdin:      strings.NewReader(""),
@@ -341,7 +341,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 		got := out.String()
 
 		for _, want := range []string{
-			"Strument v9.9.9",
+			"Strument 2026.10.31-abc1def",
 			"Model: openrouter/test-model",
 			"Session: review", // the conversation this run writes to
 			"Git repo: none",

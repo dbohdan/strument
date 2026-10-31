@@ -27,7 +27,7 @@ const toolAbout = "about"
 // in, from the linker-set version and runtime/debug.ReadBuildInfo; the coder
 // only reports it, so it never learns how a build is stamped.
 type BuildInfo struct {
-	Version    string    // "0.0.0-dev" for an unstamped build
+	Version    string    // "2026.10.31-abc1def", or "dev" with no VCS stamp
 	Commit     string    // "" when the build carried no VCS stamp
 	CommitTime time.Time // zero when unknown
 	Modified   bool      // the tree had uncommitted changes at build time

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
@@ -930,20 +931,33 @@ func TestDevNullIsNotATerminal(t *testing.T) {
 	}
 }
 
-// The version is bare wherever it comes from, because the banner adds its own
-// "v": a checkout's `go build` records a module pseudo-version that starts with
-// one, and the banner printed "Strument vv0.0.0-20260924235244-10c205370749+dirty".
-func TestPickVersionIsBare(t *testing.T) {
-	for _, tc := range []struct{ stamped, module, want string }{
-		{devVersion, "v0.0.0-20260924235244-10c205370749+dirty", "0.0.0-20260924235244-10c205370749+dirty"},
-		{devVersion, "v1.2.3", "1.2.3"},
-		{devVersion, "(devel)", devVersion},
-		{devVersion, "", devVersion},
-		{"1.2.3", "v9.9.9", "1.2.3"},
-		{"v1.2.3", "", "1.2.3"},
+// Calendar versions from every source a binary can have. The banner printed
+// "Strument vv0.0.0-…" once, when a module version kept Go's "v"; whatever the
+// source, the result is bare.
+func TestPickVersion(t *testing.T) {
+	commit := time.Date(2026, 10, 31, 23, 30, 0, 0, time.FixedZone("UTC-5", -5*3600))
+	const hash = "10c205370749aa0123456789abcdef0123456789"
+	for _, tc := range []struct {
+		name    string
+		stamped string
+		src     versionSource
+		want    string
+	}{
+		{"checkout", devVersion, versionSource{
+			module: "v0.0.0-20261101043000-10c205370749", revision: hash, time: commit,
+		}, "2026.11.01-10c2053"},
+		{"checkout, modified", devVersion, versionSource{revision: hash, time: commit, modified: true}, "2026.11.01-10c2053+dirty"},
+		{"go install", devVersion, versionSource{module: "v0.0.0-20260924235244-10c205370749"}, "2026.09.24-10c2053"},
+		{"pseudo-version after a tag", devVersion, versionSource{module: "v1.2.4-0.20260105010203-10c205370749"}, "2026.01.05-10c2053"},
+		{"pre-release pseudo-version", devVersion, versionSource{module: "v1.2.3-rc.1.0.20260105010203-10c205370749+dirty"}, "2026.01.05-10c2053+dirty"},
+		{"tag", devVersion, versionSource{module: "v1.2.3"}, "1.2.3"},
+		{"no VCS", devVersion, versionSource{module: "(devel)"}, devVersion},
+		{"nothing", devVersion, versionSource{}, devVersion},
+		{"stamped wins", "2026.10.31", versionSource{module: "v9.9.9", revision: hash, time: commit}, "2026.10.31"},
+		{"stamped, bare", "v1.2.3", versionSource{}, "1.2.3"},
 	} {
-		if got := pickVersion(tc.stamped, tc.module); got != tc.want {
-			t.Errorf("pickVersion(%q, %q) = %q, want %q", tc.stamped, tc.module, got, tc.want)
+		if got := pickVersion(tc.stamped, tc.src); got != tc.want {
+			t.Errorf("%s: pickVersion = %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }
