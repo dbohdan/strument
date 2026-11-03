@@ -1067,8 +1067,12 @@ p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
   most `-f` and `--`) of files this turn created and has not committed runs
   without asking anyone. The turn's net effect on those files is nothing, so
   they also drop out of its commit and its `/undo`. Anything more — `-r`, a
-  file that existed before the turn, a chained command — goes through the
-  gate as usual.
+  file that existed before the turn — goes through the gate as usual. Chained
+  to other work (`bun run probe.ts; rm -f probe.ts`), such a removal is left
+  out of what the decision model is shown, so it judges only the rest; a
+  prompt, if one follows, still shows the whole command. A chain with `cd`,
+  `eval`, `source` or anything else that could make the `rm` name a different
+  file is judged whole.
 - **Once per command per turn, when no one can answer.** With no terminal, a
   command the decision model declines is declined, and the model is told that the
   answer came from a classifier, not a person. If it sends the identical

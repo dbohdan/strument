@@ -214,6 +214,48 @@ func TestCodeHostHintRidesTheRightError(t *testing.T) {
 	}
 }
 
+// An import of the project's own module is a probe of the project, which only
+// bash can run; the hint says so where bash is offered, and an import of
+// Node's fs, which reading the source does answer, gets no such pointer.
+func TestCodeProjectImportPointsAtBash(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	c.SuggestShellCommands = true
+	const pointer = "To run the project's own code, use the bash tool."
+	for _, code := range []string{
+		"import {state} from './src/state/state'\nstate({})",
+		"const s = require(\"../lib/s\")",
+	} {
+		if got := run(c, code); !strings.Contains(got, pointer) {
+			t.Errorf("a project import must be pointed at bash:\n%s", got)
+		}
+	}
+	if got := run(c, `import fs from "fs"`); strings.Contains(got, pointer) {
+		t.Errorf("an import of Node's fs is not a project probe:\n%s", got)
+	}
+	c.SuggestShellCommands = false
+	if got := run(c, "import {state} from './src/state/state'"); strings.Contains(got, "bash") {
+		t.Errorf("a session without bash must not be pointed at it:\n%s", got)
+	}
+}
+
+// The description sends running the project's code to bash, and says that
+// read, the one bridged tool that keeps its prose, returns a string.
+func TestCodeDescriptionSaysWhatRunsTheProject(t *testing.T) {
+	desc := codeTool([]string{"read", "grep", "glob", "ls"}, true, codeDataFuncs).Description
+	for _, want := range []string{
+		"running the project's own code",
+		"read returns the same text it returns to you, as a string",
+	} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("the description must say %q:\n%s", want, desc)
+		}
+	}
+	if desc := codeTool(InspectorTools(), false, codeDataFuncs).Description; !strings.Contains(desc,
+		"nothing in this session runs shell commands or the project's own code") {
+		t.Errorf("without bash, the description must say nothing runs the project:\n%s", desc)
+	}
+}
+
 // TestCodeErrorNamesTheLine: the error carries the line it points at — what a
 // traceback would have shown — and not the Go closure goja names for a bridged
 // function.
@@ -408,6 +450,13 @@ func TestCodeBridgeCapFires(t *testing.T) {
 	got := run(c, "while (true) {\n  ls()\n}")
 	if !strings.Contains(got, "more than") || !strings.Contains(got, "line 2") {
 		t.Errorf("the bridged-call cap must fire with line attribution, got:\n%s", got)
+	}
+	if !strings.Contains(got, `mode: "count"`) || strings.Contains(got, "bash") {
+		t.Errorf("the cap must say how to get a figure across many files, without bash here:\n%s", got)
+	}
+	c.SuggestShellCommands = true
+	if got := run(c, "while (true) {\n  ls()\n}"); !strings.Contains(got, "wc -l") {
+		t.Errorf("with bash offered, the cap must point at it:\n%s", got)
 	}
 }
 

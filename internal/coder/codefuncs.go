@@ -179,14 +179,35 @@ func joinAnd(names []string) string {
 // overriding stated in the header: these names are the tools', so the program
 // gets the list, not the tool's prose. Built from the registry like
 // codeFuncDoc, for the same reason.
-func codeDataFuncDoc(data []codeFuncDef) string {
+//
+// The tools that keep their prose are named rather than left as "the other
+// tools": DeepSeek wrote read({path}).text, took undefined, and spent a step
+// rereading the file. Beside three functions that return objects, and a
+// read_text whose name says it is the text one, "the other tools" did not
+// say that read returns a string.
+func codeDataFuncDoc(callable []string, data []codeFuncDef) string {
 	names := make([]string, len(data))
+	isData := map[string]bool{}
 	for i, d := range data {
 		names[i] = d.name
+		isData[d.name] = true
+	}
+	var prose []string
+	for _, n := range callable {
+		if !isData[n] {
+			prose = append(prose, n)
+		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n\nInside a program, %s return data rather than the tools' "+
-		"prose, and the other tools return the same text they return to you:\n", joinAnd(names))
+	fmt.Fprintf(&b, "\n\nInside a program, %s return data rather than the tools' prose", joinAnd(names))
+	switch len(prose) {
+	case 0:
+		b.WriteString(":\n")
+	case 1:
+		fmt.Fprintf(&b, ", and %s returns the same text it returns to you, as a string:\n", prose[0])
+	default:
+		fmt.Fprintf(&b, ", and %s return the same text they return to you, as strings:\n", joinAnd(prose))
+	}
 	for _, d := range data {
 		fmt.Fprintf(&b, "- %s\n", d.summary)
 	}

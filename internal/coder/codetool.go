@@ -80,11 +80,21 @@ const maxBridgedCalls = 50
 // bridge.
 // codeCommandsClause says where commands run: in bash when it is offered, and
 // otherwise that this session runs none.
+//
+// It names the project's own code because "runs a short JavaScript program"
+// reads, in a JavaScript project, as "runs your JavaScript". A live comparison
+// on a TypeScript repository (bitstillery/mithril, 2026-11) had MiMo write its
+// probe of the project's state proxy as a string inside run_code and print
+// it, and DeepSeek label a program's output "git status": both took the tool
+// for general execution, though the description already said import and
+// commands were elsewhere. What was missing was the need mapped to the tool,
+// the mapping doc/experiments/2026-08-symbol-uptake found moves behavior.
 func codeCommandsClause(shell bool) string {
 	if shell {
-		return "the bash tool, not this one, runs commands."
+		return "the bash tool, not this one, runs commands, and it is the one for " +
+			"running the project's own code: its tests, a probe script, git."
 	}
-	return "nothing in this session runs shell commands."
+	return "nothing in this session runs shell commands or the project's own code."
 }
 
 // shell says whether this session offers bash, from offersShell: the sentence
@@ -122,7 +132,7 @@ func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
-	b.WriteString(codeDataFuncDoc(data))
+	b.WriteString(codeDataFuncDoc(callable, data))
 	b.WriteString(codeFuncDoc())
 
 	return llm.ToolDef{
@@ -300,7 +310,7 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 		// to leave "Ran 82 lines of code." on screen and the error in the
 		// model's result alone, so the person watching saw the model try
 		// again with no idea what had gone wrong the first time.
-		text := jsErrorText(err, cc.code)
+		text := jsErrorText(err, cc.code, c.offersShell())
 		c.Out.Warningf("%s", firstLine(text))
 		return text
 	}
@@ -757,6 +767,10 @@ var jsPosition = regexp.MustCompile(`program\.js:(\d+):`)
 // jsImport is an import statement, which a script cannot hold.
 var jsImport = regexp.MustCompile(`(?m)^\s*import\s`)
 
+// jsProjectImport is an import or require of a relative path: the project's
+// own module, rather than Node's fs or path.
+var jsProjectImport = regexp.MustCompile(`(?m)(^\s*import\s[^\n]*from\s*|\brequire\(\s*)['"]\.{1,2}/`)
+
 // jsHostName matches the ReferenceError of a Node or browser global — the
 // wrong reach JavaScript invites, as os and open were Python's.
 var jsHostName = regexp.MustCompile(`\b(require|process|fs|path|fetch|module|exports|__dirname|__filename|Deno|Bun|window|document|setTimeout|setInterval|Buffer)\b is not defined`)
@@ -799,7 +813,7 @@ func compileProgram(code string) (*goja.Program, error) {
 	return goja.Compile("program.js", "(function () {"+code+"\n})()", true)
 }
 
-func jsErrorText(err error, code string) string {
+func jsErrorText(err error, code string, shell bool) string {
 	var interrupted *goja.InterruptedError
 	if errors.As(err, &interrupted) {
 		if v, ok := interrupted.Value().(error); ok && errors.Is(v, errHeapLimit) {
@@ -838,12 +852,31 @@ func jsErrorText(err error, code string) string {
 		full += "\n\nArguments go in an options object: grep({pattern: \"TODO\", glob: \"**/*.go\"}), " +
 			"not grep(pattern=\"TODO\")."
 	}
+	// The cap is hit by a program that maps a read over the whole tree to
+	// compute one figure per file — DeepSeek counting lines in every .ts and
+	// .md file of a repository — and the bare limit says to do less without
+	// saying how the figure is to be had.
+	if strings.Contains(msg, fmt.Sprintf("more than %d tool calls", maxBridgedCalls)) {
+		full += "\n\nA program combines a few lookups; it is not a loop over the tree. " +
+			"For a figure across many files, grep({pattern, mode: \"count\"}) answers in one call"
+		if shell {
+			full += ", and the bash tool runs wc -l or du"
+		}
+		full += "."
+	}
 	if strings.Contains(msg, "print is not defined") {
 		full += "\n\nconsole.log() is how a program prints here."
 	}
 	if jsHostName.MatchString(msg) || (jsImport.MatchString(code) && strings.Contains(msg, "SyntaxError")) {
 		full += "\n\nThis is not Node or a browser: require, import, fs, path, process, fetch and " +
 			"timers do not exist. Use the glob, ls, read, read_text, and grep functions instead."
+		// An import of the project's own module is a probe of how the
+		// project behaves, which no function here can answer: the redirect
+		// above sends it to reading the source instead, the reading-only
+		// investigation that the same live comparison found least accurate.
+		if shell && jsProjectImport.MatchString(code) {
+			full += " To run the project's own code, use the bash tool."
+		}
 	}
 	return full
 }

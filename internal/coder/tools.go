@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"time"
+
+	"mvdan.cc/sh/v3/syntax"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
@@ -1214,12 +1217,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 		c.approvalNote = "Ran without asking: it only removes files this turn created."
 		requested := time.Duration(cmd.timeout) * time.Second
 		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
-		for _, k := range keys {
-			if _, err := os.Lstat(absUnder(c.Root, k)); errors.Is(err, fs.ErrNotExist) {
-				c.turnSnap.forget(k)
-				delete(c.turnEditedFiles, k)
-			}
-		}
+		c.forgetRemoved(keys)
 		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
 	}
 	// The same command, declined earlier this turn with no one at a terminal,
@@ -1248,10 +1246,30 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	}
 	// approve_model is asked only where the prompt would really be shown, and
 	// only under the sandbox, the same property that licenses "a" above.
+	//
+	// A command that chains a removal of the turn's own files to other work
+	// is judged without the removal, which is a no-op as above: the rubric
+	// asks about every rm, so `bun run probe.ts; rm -f probe.ts` was asked
+	// about for its cleanup. In a live comparison on a TypeScript repository
+	// every prompt DeepSeek drew was one of these: three commands, each
+	// removing a probe it had written that turn, each chained to a run, a
+	// git status or a sed (p(safe) 0.52, 0.68, 0.32). The rest is put to the
+	// model as it stands; a prompt, if one follows, shows the whole command.
 	approved, note := false, secretNote
 	c.approveVerdict = ""
+	rest, ownKeys, split := c.splitOwnRemovals(command)
+	if split {
+		defer c.forgetRemoved(ownKeys)
+	}
 	if secretNote == "" && c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
-		approved, note = c.approveByModel(ctx, command, cmd.purpose)
+		judged := command
+		if split {
+			judged = rest
+		}
+		approved, note = c.approveByModel(ctx, judged, cmd.purpose)
+		if approved && split {
+			c.approvalNote += " Its removal of files this turn created was not put to it."
+		}
 	}
 	if !approved {
 		if res := c.confirmGrouped(ConfirmRequest{
@@ -1775,6 +1793,94 @@ func declinedAgain(verdict string) string {
 	return "You sent this exact command earlier in this turn and it was declined, so it was not run again: " +
 		why + ". Sending it again cannot succeed. Do without it, or say in your answer what you would have run and why."
 }
+
+// forgetRemoved drops from the snapshot the turn's own files that a command
+// removed, so the commit and /undo see nothing of them.
+func (c *Coder) forgetRemoved(keys []string) {
+	for _, k := range keys {
+		if _, err := os.Lstat(absUnder(c.Root, k)); errors.Is(err, fs.ErrNotExist) {
+			c.turnSnap.forget(k)
+			delete(c.turnEditedFiles, k)
+		}
+	}
+}
+
+// splitOwnRemovals splits a chained command into the plain removals of this
+// turn's own files (removesOnlyOwnFiles' rule, per statement) and the rest,
+// printed one statement per line. ok needs at least one of each.
+//
+// The chain is the top-level statements and their && and || links; a
+// pipeline is one statement, since its parts run in subshells. Order is not
+// kept, so anything that could make a later rm name a different file than
+// the one checked fails the split: a statement that changes the directory or
+// runs code it is handed (cd, pushd, popd, source, ., eval, exec, builtin,
+// command), and any statement that is not a simple command or a pipeline —
+// a block, an if, a function. What remains is the rest's own business, and
+// the decision model judges it as it would on its own; a mv onto the probe's
+// name is a move, which its rubric asks about.
+func (c *Coder) splitOwnRemovals(command string) (rest string, keys []string, ok bool) {
+	file, err := syntax.NewParser().Parse(strings.NewReader(command), "")
+	if err != nil {
+		return "", nil, false
+	}
+	var leaves []*syntax.Stmt
+	var flatten func(*syntax.Stmt) bool
+	flatten = func(s *syntax.Stmt) bool {
+		if s.Background || s.Coprocess || s.Disown {
+			return false
+		}
+		if b, isBin := s.Cmd.(*syntax.BinaryCmd); isBin && (b.Op == syntax.AndStmt || b.Op == syntax.OrStmt) {
+			if len(s.Redirs) > 0 || s.Negated {
+				return false
+			}
+			return flatten(b.X) && flatten(b.Y)
+		}
+		leaves = append(leaves, s)
+		return true
+	}
+	for _, s := range file.Stmts {
+		if !flatten(s) {
+			return "", nil, false
+		}
+	}
+	printer := syntax.NewPrinter()
+	var others []string
+	for _, s := range leaves {
+		var b strings.Builder
+		if printer.Print(&b, s) != nil {
+			return "", nil, false
+		}
+		text := b.String()
+		if k, own := c.removesOnlyOwnFiles(text); own {
+			keys = append(keys, k...)
+			continue
+		}
+		switch cmd := s.Cmd.(type) {
+		case *syntax.CallExpr:
+			if len(cmd.Args) > 0 {
+				name := cmd.Args[0].Lit()
+				if name == "" || slices.Contains(chainBreakers, name) {
+					return "", nil, false
+				}
+			}
+		case *syntax.BinaryCmd:
+			if cmd.Op != syntax.Pipe && cmd.Op != syntax.PipeAll {
+				return "", nil, false
+			}
+		default:
+			return "", nil, false
+		}
+		others = append(others, text)
+	}
+	if len(keys) == 0 || len(others) == 0 {
+		return "", nil, false
+	}
+	return strings.Join(others, "\n"), keys, true
+}
+
+// chainBreakers are the commands that can change what a later statement's
+// relative path names, or run code that could.
+var chainBreakers = []string{"cd", "pushd", "popd", "source", ".", "eval", "exec", "builtin", "command"}
 
 // removesOnlyOwnFiles reports whether command is a plain rm of files this turn
 // created and has not committed, and their snapshot keys. "Plain" is

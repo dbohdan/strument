@@ -151,9 +151,14 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // out — and leaving it out unconditionally hid a tool a program really can call
 // wherever grammars exist. Coder.codeCallableTools fills it from the same list
 // the schema and the bridge use.
+//
+// The "inside the harness" clause is the bullet's half of codeCommandsClause's
+// fix (see its comment): in a JavaScript project the bullet's first words were
+// read as an offer to run the project's code, and the bullet is read first.
 const CodeToolsBullet = "- run_code runs a short JavaScript program, which can itself call %s" +
 	" — the results come back to the program, not to you, until it returns. " +
-	"It changes nothing and needs no permission. Reach for it when one answer " +
+	"It changes nothing and needs no permission, and it runs inside the harness, " +
+	"not the project: it cannot import or run the project's own code. Reach for it when one answer " +
 	"needs several lookups combined — three greps you already know you need are " +
 	"one program, and each tool call you make separately costs the user a full " +
 	"round trip — and for any arithmetic or counting beyond a single step, " +
