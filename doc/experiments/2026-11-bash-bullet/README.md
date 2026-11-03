@@ -1,9 +1,10 @@
 # Does calling bash the tool for running the project make models run it?
 
-**Status: design.** The pilot changed the run task and the sample size; see [`preregistration.md`](preregistration.md), which supersedes this file where they differ. Written and committed on 2026-11-03, before the pilot and
-before any model call. Nothing here has been run yet. A pilot section and a
-results section will follow below; changes made after the pilot go in a
-`preregistration.md` beside this file, committed before the main run.
+**Status: trial, run 2026-11-03.** B fired but did not help, so it does not
+ship. The results are at the end of this file. The pilot changed the run
+task and the sample size; [`preregistration.md`](preregistration.md) has
+those changes and the rule as it was applied, and supersedes the design below
+where they differ.
 
 ## Why
 
@@ -180,3 +181,112 @@ counted.
 - **read task:** a small rise in executed under B, mostly `node --test` runs
   done as reassurance. Cost within the 1.25× bound.
 - **run_code project reach:** at most one program across the 80 sessions.
+
+## Results
+
+160 sessions, all completed: none failed, timed out or left the `RESULT:`
+line out. They ran from `564be22` and `564be22` plus
+[`data/trial.diff`](data/trial.diff), in the seeded order, for $0.31 in all.
+Scores are in [`data/scores.txt`](data/scores.txt) (from `score.py`), and the
+session logs in [`data/runs/`](data/runs/).
+
+### Run task
+
+| arm | model | n | executed | correct (all four) | median cost |
+| --- | --- | --- | --- | --- | --- |
+| A | MiMo | 20 | 19 | 9 | $0.0018 |
+| A | DeepSeek | 20 | 9 | 2 | $0.0040 |
+| B | MiMo | 20 | 20 | 8 | $0.0021 |
+| B | DeepSeek | 20 | 18 | 4 | $0.0044 |
+| **A** | both | 40 | **28** | **11** | |
+| **B** | both | 40 | **38** | **12** | |
+
+Per question, out of the 40 parsed answers in each arm:
+
+| arm | Q1 (parseInt) | Q2 (sort) | Q3 (key order) | Q4 (combined) |
+| --- | --- | --- | --- | --- |
+| A | 11 | 40 | 37 | 40 |
+| B | 12 | 40 | 36 | 40 |
+
+### Read task
+
+Every session in both arms was correct (40 and 40), and none executed
+anything (0 and 0). B's median cost against A's was 1.15× for MiMo and 0.89×
+for DeepSeek.
+
+### The rule
+
+1. **It fires: yes.** executed went from 28/40 to 38/40, Fisher p = 0.0064.
+   Nearly all of the change is DeepSeek, from 9/20 to 18/20; MiMo already ran
+   code in 19 of 20 sessions.
+2. **It helps: no.** correct went from 11/40 to 12/40, p = 1.0, and MiMo's
+   count fell from 9 to 8.
+3. **It does not cost where it cannot help: yes.** The read task saw no
+   execution in either arm, the cost ratios were 1.15 and 0.89 against a
+   1.25 bound, and correctness was 40/40 in both arms.
+
+**B does not ship.** It moves behavior without moving accuracy on this
+fixture.
+
+### Why it didn't help
+
+The preregistration named three possible causes: A at ceiling, reading being
+enough, or the probes missing the planted behavior. A was not at ceiling (11/40).
+Reading was not enough either: **no session got question 1 right without
+running code (0 of 14).** Questions 2–4 were answered almost perfectly by
+reading. The whole effect lives in question 1, the `map(parseInt)` trap, and
+there the failures among sessions that ran code split two ways
+(`data/probes.py`):
+
+| arm | probed a line with 2+ counts, Q1 right | probed one, Q1 wrong | single-count probes only (Q1 wrong) |
+| --- | --- | --- | --- |
+| A | 11 | 10 | 7 |
+| B | 12 | 16 | 10 |
+
+- **Probes that could not show it (17).** Every line probed had one count,
+  where the index-as-radix bug does nothing.
+- **Probes that showed it, misread (26).** The output carried the dropped
+  count, and the answer said every count is added. This is the larger group,
+  and the third cause as the preregistration put it was too narrow: these
+  probes did not miss the planted behavior, the models missed it in their own
+  output. Three transcripts read in full, all three alike:
+  - `B-run-deepseek-06` printed a total of 31 for `b7,30,4` plus `b7,1`
+    (35 expected).
+  - `A-run-deepseek-03` printed `tally(["x1,3,4","x1,5"])` (8, against 12).
+  - `B-run-mimo-15` printed 4 for `x,1,2` plus `x,3`, and its reasoning
+    explained the 4 away as "1+2 + 3 = 4".
+
+  Each probe was written to check something else: sort order, key order,
+  that a repeated code combines. The numbers that contradicted question 1
+  went by unexamined.
+
+So B's extra executions landed where they could not help: more running, the
+same share of it checked against an expectation. Of the sessions whose probe
+could show the trap, 11/21 caught it in A and 12/28 in B.
+
+### What this suggests
+
+- **The next arm is about reading output, not about running.** Something like
+  "Before you run a probe, say what you expect it to print; afterwards, check
+  every value against that." That targets the 26 directly. The review's
+  edge-case sentence ("list the inputs where its precondition fails and test
+  those") targets the 17. The 26 are the larger group.
+- **The current bullet does not suppress execution where it matters most.**
+  MiMo ran code in 19 of 20 sessions under A. DeepSeek is where the wording
+  bites. The comparison's DeepSeek ran four probe scripts under the same
+  bullet, so the wording is one influence among several.
+- **The `run_code` clause shipped in `564be22` had nothing to catch.** No
+  program in 160 sessions imported the project. Both arms carried the clause,
+  and there was no arm without it, so this is a floor, not a measured effect.
+
+### Limitations
+
+- **One fixture, one trap doing all the work.** A different planted behavior,
+  one that is visible in a single-count probe, would test reading the output
+  without the confound of probe choice.
+- **"Showed it" is a pattern match on the probe's input** (a line literal
+  with two or more counts, or a direct `parseCounts` or `parseInt` call), not
+  a check of what was printed. Three transcripts were read to confirm it, not
+  all 26.
+- **`--yes bash` removed approval friction in both arms.** Real use asks,
+  through a person or `approve_model`, which this trial does not measure.
