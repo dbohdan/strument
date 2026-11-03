@@ -1,0 +1,42 @@
+{"id": "A-read-deepseek-00", "arm": "A", "task": "read", "model": "deepseek", "order": 0, "per_question": "", "grade": "correct", "executed": false, "exec_commands": 0, "bash": 0, "programs": 2, "project_reach": 0, "cost": 0.000788, "steps": 3}
+{"id": "A-run-mimo-00", "arm": "A", "task": "run", "model": "mimo", "order": 1, "per_question": "1111", "grade": "correct", "executed": true, "exec_commands": 1, "bash": 2, "programs": 0, "project_reach": 0, "cost": 0.002659, "steps": 5}
+{"id": "A-read-mimo-00", "arm": "A", "task": "read", "model": "mimo", "order": 2, "per_question": "", "grade": "correct", "executed": false, "exec_commands": 0, "bash": 0, "programs": 0, "project_reach": 0, "cost": 0.000813, "steps": 1}
+{"id": "B-run-mimo-00", "arm": "B", "task": "run", "model": "mimo", "order": 3, "per_question": "0111", "grade": "wrong", "executed": true, "exec_commands": 1, "bash": 1, "programs": 0, "project_reach": 0, "cost": 0.001384, "steps": 5}
+{"id": "B-run-deepseek-00", "arm": "B", "task": "run", "model": "deepseek", "order": 4, "per_question": "1111", "grade": "correct", "executed": true, "exec_commands": 2, "bash": 2, "programs": 0, "project_reach": 0, "cost": 0.004994, "steps": 5}
+{"id": "B-read-mimo-00", "arm": "B", "task": "read", "model": "mimo", "order": 5, "per_question": "", "grade": "correct", "executed": false, "exec_commands": 0, "bash": 0, "programs": 0, "project_reach": 0, "cost": 0.000727, "steps": 1}
+{"id": "B-read-deepseek-00", "arm": "B", "task": "read", "model": "deepseek", "order": 6, "per_question": "", "grade": "correct", "executed": false, "exec_commands": 0, "bash": 0, "programs": 2, "project_reach": 0, "cost": 0.000643, "steps": 3}
+{"id": "A-run-deepseek-00", "arm": "A", "task": "run", "model": "deepseek", "order": 7, "per_question": "0111", "grade": "wrong", "executed": false, "exec_commands": 0, "bash": 0, "programs": 3, "project_reach": 0, "cost": 0.002581, "steps": 3}
+
+## run task
+
+| arm | model | n | executed | correct | wrong | unparseable | no answer | failed | median cost | median steps | run_code project reach |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | mimo | 1 | 1 | 1 | 0 | 0 | 0 | 0 | $0.0027 | 5 | 0 |
+| A | deepseek | 1 | 0 | 0 | 1 | 0 | 0 | 0 | $0.0026 | 3 | 0 |
+| A | all | 2 | 1 | 1 | 1 | 0 | 0 | 0 | $0.0026 | 4.0 | 0 |
+| B | mimo | 1 | 1 | 0 | 1 | 0 | 0 | 0 | $0.0014 | 5 | 0 |
+| B | deepseek | 1 | 1 | 1 | 0 | 0 | 0 | 0 | $0.0050 | 5 | 0 |
+| B | all | 2 | 2 | 1 | 1 | 0 | 0 | 0 | $0.0032 | 5.0 | 0 |
+
+per question, arm A (of 2 parsed): Q1 1, Q2 2, Q3 2, Q4 2
+
+per question, arm B (of 2 parsed): Q1 1, Q2 2, Q3 2, Q4 2
+
+executed: A 1/2, B 2/2, Fisher p = 1.0000
+
+correct: A 1/2, B 1/2, Fisher p = 1.0000
+
+## read task
+
+| arm | model | n | executed | correct | wrong | unparseable | no answer | failed | median cost | median steps | run_code project reach |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | mimo | 1 | 0 | 1 | 0 | 0 | 0 | 0 | $0.0008 | 1 | 0 |
+| A | deepseek | 1 | 0 | 1 | 0 | 0 | 0 | 0 | $0.0008 | 3 | 0 |
+| A | all | 2 | 0 | 2 | 0 | 0 | 0 | 0 | $0.0008 | 2.0 | 0 |
+| B | mimo | 1 | 0 | 1 | 0 | 0 | 0 | 0 | $0.0007 | 1 | 0 |
+| B | deepseek | 1 | 0 | 1 | 0 | 0 | 0 | 0 | $0.0006 | 3 | 0 |
+| B | all | 2 | 0 | 2 | 0 | 0 | 0 | 0 | $0.0007 | 2.0 | 0 |
+
+executed: A 0/2, B 0/2, Fisher p = 1.0000
+
+correct: A 2/2, B 2/2, Fisher p = 1.0000

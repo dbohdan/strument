@@ -1,6 +1,6 @@
 # Does calling bash the tool for running the project make models run it?
 
-**Status: design.** Written and committed on 2026-11-03, before the pilot and
+**Status: design.** The pilot changed the run task and the sample size; see [`preregistration.md`](preregistration.md), which supersedes this file where they differ. Written and committed on 2026-11-03, before the pilot and
 before any model call. Nothing here has been run yet. A pilot section and a
 results section will follow below; changes made after the pilot go in a
 `preregistration.md` beside this file, committed before the main run.

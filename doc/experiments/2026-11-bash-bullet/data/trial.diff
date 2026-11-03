@@ -1,0 +1,16 @@
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index 197ee64..bd1a24f 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -227,8 +227,9 @@ const toolMainSystem = "You are an expert software developer working with a user
+ 	"- edit and write change files directly: the change lands the moment you call them, with no " +
+ 	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
+ 	"make the change.\n" +
+-	"- bash runs a shell command, and the user is asked before it runs. Reach for it only for work " +
+-	"the other tools don't cover; reading and searching have their own tools.\n" +
++	"- bash runs a shell command, and the user is asked before it runs. Use it to run things: " +
++	"the project's tests, its code, a short script that checks how something actually behaves. " +
++	"Reading and searching have their own tools.\n" +
+ 	"- commit closes the edits you have made so far as one commit, with a message you write. " +
+ 	"When a request has several parts, work through them one at a time: make the edits for the " +
+ 	"first part, call commit, and begin the second part after that result comes back. Do not " +
