@@ -158,3 +158,12 @@ with current project state.
 | experiment | question → result → decision |
 | --- | --- |
 | **review** — [2026-09-handbook-review](2026-09-handbook-review/) | Is [`experimenting.md`](../experimenting.md) usable as a pre-run reference, not only as an essay? Two independent reviewers scored it around 8/10 as an essay and 4–5/10 as a reference, agreeing that the operational checks were buried at the end. Add a front checklist and a symptom index; keep the incident narratives and the evidence attached to each rule. |
+
+## Curiosities
+
+Trials about the models themselves rather than about Strument, run with the
+same handbook.
+
+| experiment | question → result → decision |
+| --- | --- |
+| **trial** — [2026-11-naming-attractors](2026-11-naming-attractors/) | Asked to invent a name with no other guidance, how concentrated are a model's choices, and does a paragraph of setting or a request to deliberate change that? Opus 5, Opus 5.5 and GPT-6 Sol, 30 prompts. Preregistered; not yet run. |
