@@ -125,8 +125,8 @@ def report(rundir):
     w = out.append
 
     w("## Compliance and reasoning\n")
-    w("| model | arm | n | errors | non-compliant | inline thought | reasoning > 0 | median reasoning tokens |")
-    w("|---|---|---|---|---|---|---|---|")
+    w("| model | arm | n | errors | truncated | non-compliant | inline thought | reasoning > 0 | median reasoning tokens |")
+    w("|---|---|---|---|---|---|---|---|---|")
     for m in models:
         for arm in ("off", "deliberate"):
             rs = [r for r in rows if r["model"] == m and r["arm"] == arm]
@@ -134,6 +134,7 @@ def report(rundir):
                 continue
             rt = [r["reasoning_tokens"] or 0 for r in rs]
             w(f"| {SHORT[m]} | {arm} | {len(rs)} | {sum(1 for r in rs if r['error'])} | "
+              f"{sum(1 for r in rs if r['finish_reason'] == 'length')} | "
               f"{sum(1 for r in rs if not r['error'] and not r['compliant'])} | "
               f"{sum(1 for r in rs if leaked(r['content']))} | "
               f"{sum(1 for x in rt if x > 0)} | {median(rt):g} |")

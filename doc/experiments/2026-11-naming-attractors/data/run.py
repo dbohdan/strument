@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Submit, poll and collect the naming trial's batches on OpenRouter.
 
-    run.py submit LABEL [--pilot]   one batch per model; ids saved to OUT/LABEL/batches.json
+    run.py submit LABEL [--pilot] [--arm off|deliberate|both] [--model SLUG]
+                                    one batch per model and arm; ids saved to
+                                    OUT/LABEL/batches.json
     run.py collect LABEL            poll every minute until all are final, then write
-                                    OUT/LABEL/<model>.jsonl, one row per request
+                                    OUT/LABEL/<model>-<arm>.jsonl, one row per request
 
 OUT is --out (default: ./runs). The key is read from OPENROUTER_API_KEY and
-never written. A label that already has batches.json is not resubmitted, so
-`submit` is safe to rerun; `collect` skips models whose results are saved.
+never written. A model and arm already in batches.json is not resubmitted, so
+`submit` is safe to rerun; `collect` skips batches whose results are saved.
 
-Each model runs as one batch holding both arms, so arms share a provider and a
-submit time; the three batches are submitted back to back. Within a batch the
-requests are shuffled (seed 20261109) so no arm or prompt is systematically
-first.
+Each arm of each model is one batch. OpenRouter reserves a batch's cost as if
+every request used its whole max_tokens, and refuses a batch whose estimate
+exceeds the balance (402), so the arms go in separately: the three off batches
+together, then the deliberate ones as the balance allows. Within a batch the
+requests are shuffled (seed 20261109) so no prompt is systematically first.
 """
 
 import argparse
@@ -38,10 +41,15 @@ MODELS = {
     "openai/gpt-6-sol": {"effort": "none"},
 }
 REPS = 20
+# Caps, from the pilot's largest real use (off 41 tokens, an inline thought;
+# deliberate 644, Opus 5). A reply that reaches its cap ends with
+# finish_reason "length" and is counted as truncated, not silently dropped.
+MAX_TOKENS = {"off": 80, "deliberate": 1500}
+ARMS = ("off", "deliberate")
 FINAL = {"completed", "failed", "expired", "cancelled"}
 
 
-def requests_for(model, pilot):
+def requests_for(model, pilot, arm=None):
     reps = 2 if pilot else REPS
     items = P.PROMPTS
     delib = P.DELIBERATION_IDS
@@ -57,13 +65,15 @@ def requests_for(model, pilot):
             for r in range(reps):
                 out.append({"custom_id": f"off_{pid}_{cond}_{r:02d}",
                             "body": {"messages": [{"role": "user", "content": text}],
-                                     "reasoning": MODELS[model], "max_tokens": 80}})
+                                     "reasoning": MODELS[model], "max_tokens": MAX_TOKENS["off"]}})
     things = {p[0]: p[2] for p in P.PROMPTS}
     for pid in delib:
         for r in range(reps):
             out.append({"custom_id": f"deliberate_{pid}_bare_{r:02d}",
                         "body": {"messages": [{"role": "user", "content": P.deliberate(things[pid])}],
-                                 "reasoning": {"effort": "high"}, "max_tokens": 8000}})
+                                 "reasoning": {"effort": "high"}, "max_tokens": MAX_TOKENS["deliberate"]}})
+    if arm:
+        out = [o for o in out if o["custom_id"].startswith(arm + "_")]
     random.Random(20261109).shuffle(out)
     return out
 
@@ -94,24 +104,28 @@ def slug(model):
 def submit(a):
     d = os.path.join(a.out, a.label)
     path = os.path.join(d, "batches.json")
-    if os.path.exists(path):
-        print(f"{path} exists; not resubmitting")
-        return
     os.makedirs(d, exist_ok=True)
-    ids = {}
-    for model in MODELS:
-        reqs = requests_for(model, a.pilot)
-        # endpoint and model before requests: OpenRouter reads the body as a stream.
-        payload = {"endpoint": "/v1/chat/completions", "model": model, "requests": reqs}
-        status, out = call("POST", API, payload)
-        if status != 202:
-            print(f"{model}: HTTP {status}: {json.dumps(out)[:400]}")
-            sys.exit(1)
-        ids[model] = {"id": out["id"], "n": len(reqs), "provider": out.get("provider"),
-                      "submitted": time.time()}
-        print(f"{model}: {out['id']} ({len(reqs)} requests) on {out.get('provider')}")
-        with open(path, "w") as f:  # after each, so a failure midway keeps what was submitted
-            json.dump(ids, f, indent=1)
+    ids = json.load(open(path)) if os.path.exists(path) else {}
+    arms = ARMS if a.arm == "both" else (a.arm,)
+    models = [m for m in MODELS if not a.model or m == a.model]
+    for arm in arms:
+        for model in models:
+            key = f"{model}|{arm}"
+            if key in ids:
+                print(f"{key}: already submitted as {ids[key]['id']}")
+                continue
+            reqs = requests_for(model, a.pilot, arm)
+            # endpoint and model before requests: OpenRouter reads the body as a stream.
+            payload = {"endpoint": "/v1/chat/completions", "model": model, "requests": reqs}
+            status, out = call("POST", API, payload)
+            if status != 202:
+                print(f"{key}: HTTP {status}: {json.dumps(out)[:400]}")
+                sys.exit(1)
+            ids[key] = {"id": out["id"], "model": model, "arm": arm, "n": len(reqs),
+                        "provider": out.get("provider"), "submitted": time.time()}
+            print(f"{key}: {out['id']} ({len(reqs)} requests) on {out.get('provider')}")
+            with open(path, "w") as f:  # after each, so a failure midway keeps what was submitted
+                json.dump(ids, f, indent=1)
 
 
 def row(model, res):
@@ -140,11 +154,13 @@ def row(model, res):
 def collect(a):
     d = os.path.join(a.out, a.label)
     ids = json.load(open(os.path.join(d, "batches.json")))
-    pending = {m: v for m, v in ids.items() if not os.path.exists(os.path.join(d, slug(m) + ".jsonl"))}
+    out_name = lambda key: f"{slug(ids[key].get('model', key))}-{ids[key].get('arm', 'all')}.jsonl"  # noqa: E731
+    pending = {k: v for k, v in ids.items() if not os.path.exists(os.path.join(d, out_name(k)))}
     summary_path = os.path.join(d, "summary.json")
     summary = json.load(open(summary_path)) if os.path.exists(summary_path) else {}
     while pending:
-        for model, v in list(pending.items()):
+        for key, v in list(pending.items()):
+            model = v.get("model", key)
             status, b = call("GET", f"{API}/{v['id']}")
             # A batch can 404 for a short while after its 202: seen in the
             # pilot, a second after submit. Ten minutes is generous.
@@ -156,20 +172,20 @@ def collect(a):
                 sys.exit(f"{model}: HTTP {status}: {json.dumps(b)[:300]}")
             st = b.get("status")
             ready = st in FINAL and (st != "completed" or b.get("results") is not None)
-            print(f"{time.strftime('%H:%M:%S')} {slug(model)}: {st} {b.get('request_counts')}", flush=True)
+            print(f"{time.strftime('%H:%M:%S')} {key}: {st} {b.get('request_counts')}", flush=True)
             if not ready:
                 continue
             rows = [row(model, res) for res in (b.get("results") or [])]
-            with open(os.path.join(d, slug(model) + ".jsonl"), "w") as f:
+            with open(os.path.join(d, out_name(key)), "w") as f:
                 for r in sorted(rows, key=lambda r: (r["arm"], r["prompt"], r["condition"], r["rep"])):
                     f.write(json.dumps(r, ensure_ascii=False) + "\n")
-            summary[model] = {"id": v["id"], "status": st, "provider": b.get("provider"),
+            summary[key] = {"id": v["id"], "status": st, "provider": b.get("provider"),
                               "request_counts": b.get("request_counts"), "usage": b.get("usage"),
                               "error": b.get("error"), "rows": len(rows), "expected": v["n"]}
             with open(summary_path, "w") as f:
                 json.dump(summary, f, indent=1)
             print(f"  saved {len(rows)}/{v['n']} rows; cost {(b.get('usage') or {}).get('cost')}", flush=True)
-            del pending[model]
+            del pending[key]
         if pending:
             time.sleep(60)
 
@@ -179,6 +195,8 @@ def main():
     ap.add_argument("cmd", choices=["submit", "collect"])
     ap.add_argument("label")
     ap.add_argument("--pilot", action="store_true")
+    ap.add_argument("--arm", choices=["off", "deliberate", "both"], default="both")
+    ap.add_argument("--model", default="", help="submit for this model only")
     ap.add_argument("--out", default="runs")
     a = ap.parse_args()
     submit(a) if a.cmd == "submit" else collect(a)

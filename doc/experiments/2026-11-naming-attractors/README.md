@@ -115,6 +115,22 @@ deliberate prompts, for each model: 84 requests, $0.04.
 The pilot's names are not counted. The predictions below were written after
 reading them.
 
+## Run notes
+
+**One change after the commit above, before any main-run result.** The first
+main submission was refused with "This batch is estimated to cost $25.42,
+which exceeds your available balance of $7.02". OpenRouter prices a batch as
+if every request used its full `max_tokens`, and the deliberate arm's cap was
+8,000. Nothing ran, and two things changed:
+
+- **Caps:** `max_tokens` is now 80 for off and 1,500 for deliberate. The
+  pilot's largest real uses were 41 (an inline thought) and 644 (Opus 5).
+  A reply that reaches its cap is counted in a "truncated" column.
+- **Batches:** each arm of each model is its own batch. The three off batches
+  went in together. The deliberate batches follow as the balance allows, so
+  across models they may start minutes apart, and the off-versus-deliberate
+  comparison within a model spans the same gap.
+
 ## Predictions
 
 1. **Concentrated by default.** The median bare top-1 share is at least 0.25
