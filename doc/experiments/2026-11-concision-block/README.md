@@ -170,8 +170,14 @@ eight Sonnet sessions. In all $0.55. No pilot session is counted.
   - every pilot session finished, with no failures and no unparseable
     answers;
   - every read-task answer was correct;
-  - the dropped-caveat count fired on 6 sessions, and on reading, each
-    names the planted behavior and answers against it.
+  - the dropped-caveat count fired on 6 sessions, and all 6 were read. Five
+    are real: the reasoning names the planted behavior, and the answer goes
+    against it. One MiMo session wrote "0.10+0.20 = 0.30000000000000004 >
+    0.30 → false" and then answered "yes". The sixth was a false positive:
+    "parseInt without radix, but uses default" matched a bare "radix". The
+    pattern now needs index and radix together, and that sentence is a
+    negative case in the self-test. One of the five real ones is in arm A,
+    so the baseline drops caveats too.
 
 **Changes, made before the main run:**
 

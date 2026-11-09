@@ -43,7 +43,9 @@ EXEC = re.compile(r"\b(node|npm|npx)\b")
 # it away counts. (question index, pattern, wrong answer)
 CAVEATS = {
     "tally": [
-        (0, r"radix|parseInt\b[^.\n]{0,80}\bindex|index[^.\n]{0,40}\bparseInt", "yes"),
+        # Index and radix together: the pilot's "parseInt without radix, but uses
+        # default" named neither the index nor the trap, and matched a bare "radix".
+        (0, r"index[^.\n]{0,60}radix|radix[^.\n]{0,60}index|map passes[^.\n]{0,60}index", "yes"),
         (1, r"lexicograph|as strings|string (sort|order|comparison)|sorts? .{0,20}strings", "yes"),
         (2, r"integer[- ]like|integer keys|array[- ]index|numeric[- ]like|numeric keys|integer-valued", "yes"),
     ],
@@ -230,6 +232,8 @@ def self_test():
         ("tally", "Object.keys puts integer-like keys first.", ["no", "no", "no", "yes"], (1, 0)),
         ("tally", "map(parseInt) passes the index as the radix", ["yes", "no", "no", "yes"], (1, 1)),
         ("tally", "nothing relevant here", ["yes", "no", "yes", "yes"], (0, 0)),
+        ("tally", "parseInt without radix, but uses default. parseInt(\"5abc\") returns 5.", ["yes", "no", "no", "yes"], (0, 0)),
+        ("tally", "parseInt is passed directly to map, so the index becomes the radix", ["yes", "no", "no", "yes"], (1, 1)),
         ("pricetag", "The regex has the global flag, so lastIndex persists.", ["yes", "no", "no", "yes"], (1, 1)),
         ("pricetag", "parseFloat stops at the comma, giving 1", ["yes", "no", "no", "no"], (1, 0)),
         ("pricetag", "0.1 + 0.2 is 0.30000000000000004 in floating point", ["yes", "yes", "no", "no"], (1, 1)),
