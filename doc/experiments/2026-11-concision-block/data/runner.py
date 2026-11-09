@@ -52,6 +52,8 @@ ap.add_argument("--timeout", type=int, default=1200)
 ap.add_argument("--port-base", type=int, default=20000)
 ap.add_argument("--arms", default="A,C,C-length,C-direct,P")
 ap.add_argument("--models", default="mimo,deepseek,haiku")
+ap.add_argument("--pin", default="",
+                help="model=provider,... : route each through that provider only, no fallbacks")
 ap.add_argument("--stub", action="store_true", help="run `true` instead of strument, to exercise resume")
 a = ap.parse_args()
 
@@ -62,6 +64,7 @@ ALL_MODELS = {
     "sonnet": "anthropic/claude-sonnet-5.5",
 }
 MODELS = {m: ALL_MODELS[m] for m in a.models.split(",")}
+PIN = dict(kv.split("=", 1) for kv in a.pin.split(",") if kv)
 TASKS = ("run", "read")
 ARMS = a.arms.split(",")
 
@@ -110,7 +113,10 @@ def run(job, slot):
             f'default = "{job["model"]}"\n'
             "retry_timeout = 600\n"
             f'models = {{"{job["model"]}": model(orr, "{MODELS[job["model"]]}", context = 131072, '
-            'reasoning = "low", cache = True)}\n')
+            'reasoning = "low", cache = True'
+            + (f', extra_params = {{"provider": {{"only": ["{PIN[job["model"]]}"], "allow_fallbacks": False}}}}'
+               if job["model"] in PIN else "")
+            + ')}\n')
     start = time.time()
     rec = None
     if a.stub:

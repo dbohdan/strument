@@ -189,6 +189,34 @@ eight Sonnet sessions. In all $0.55. No pilot session is counted.
   confounded with when it ran.
 - **Rule 4 is now judged on correct and caveat dropped,** not on executed.
 
+## Follow-up: pinned providers
+
+Added on 2026-11-10 after the main run's scores, and before the run it
+describes. The main run's results are below. Reading them showed that
+OpenRouter's choice of provider mattered more than the prompt arm. MiMo
+sessions served mostly by DeepInfra:
+- ran code in 5 of 38, against 38 of 62 on other providers (p = 3 × 10⁻⁶);
+- answered correctly in 0 of 38, against 9 of 62 (p = 0.01).
+
+DeepInfra and Xiaomi both list the model as `fp8`. The mix was also uneven
+across arms: 13 of MiMo's 20 C sessions went mostly to DeepInfra, against 8 of
+its 20 A sessions.
+
+**Design:**
+- **Pinning:** MiMo goes through Xiaomi only, its maker's own endpoint.
+  DeepSeek, which has no first-party endpoint, goes through Wafer only, the
+  provider in the comparison that started this. Both have fallbacks off
+  (`provider.only`, `allow_fallbacks: false`).
+- **Scope:** all five arms on the `tally` run task, 20 reps each per model:
+  200 sessions, seed 20261111.
+
+**Rule:** rule 1 again, on these sessions alone. C is below A on executed and
+on correct, each at p < 0.05, the two models pooled (n = 40 per arm).
+C-length, C-direct and P are reported against A as before.
+
+**Prediction:** with Xiaomi serving MiMo, A's baseline returns to the private
+run's level (about 12 of 40 correct), and rule 1 holds.
+
 ## Rule
 
 All p-values are Fisher two-sided. The Flash models are pooled over models and
