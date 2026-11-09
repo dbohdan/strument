@@ -1,0 +1,50 @@
+{
+ "anthropic/claude-opus-5|off": {
+  "id": "batch-1794259138-qsPwLCMmo10BBdCXbYax",
+  "model": "anthropic/claude-opus-5",
+  "arm": "off",
+  "n": 1200,
+  "provider": "Anthropic",
+  "submitted": 1794259139.1890454
+ },
+ "anthropic/claude-opus-5.5|off": {
+  "id": "batch-1794259139-6HnnItfoaYeY0BbnAQB6",
+  "model": "anthropic/claude-opus-5.5",
+  "arm": "off",
+  "n": 1200,
+  "provider": "Anthropic",
+  "submitted": 1794259140.7987318
+ },
+ "openai/gpt-6-sol|off": {
+  "id": "batch-1794259141-wqFVuG61mxTwCUyPqrWq",
+  "model": "openai/gpt-6-sol",
+  "arm": "off",
+  "n": 1200,
+  "provider": "OpenAI",
+  "submitted": 1794259141.649499
+ },
+ "anthropic/claude-opus-5|deliberate": {
+  "id": "batch-1794259645-6ngfVvRIxI2XwpZpr2Rl",
+  "model": "anthropic/claude-opus-5",
+  "arm": "deliberate",
+  "n": 240,
+  "provider": "Anthropic",
+  "submitted": 1794259645.9649744
+ },
+ "anthropic/claude-opus-5.5|deliberate": {
+  "id": "batch-1794260011-TMjYSYdiwUZKsPR5nU1I",
+  "model": "anthropic/claude-opus-5.5",
+  "arm": "deliberate",
+  "n": 240,
+  "provider": "Anthropic",
+  "submitted": 1794260012.430721
+ },
+ "openai/gpt-6-sol|deliberate": {
+  "id": "batch-1794260500-SnZkx4UyRooiUGncAl3G",
+  "model": "openai/gpt-6-sol",
+  "arm": "deliberate",
+  "n": 240,
+  "provider": "OpenAI",
+  "submitted": 1794260501.9997358
+ }
+}

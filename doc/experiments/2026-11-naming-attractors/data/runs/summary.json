@@ -1,0 +1,122 @@
+{
+ "anthropic/claude-opus-5|off": {
+  "id": "batch-1794259138-qsPwLCMmo10BBdCXbYax",
+  "status": "completed",
+  "provider": "Anthropic",
+  "request_counts": {
+   "total": 1200,
+   "completed": 1200,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 67560,
+   "completion_tokens": 11690,
+   "total_tokens": 79250,
+   "cost": 0.310925,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 1200,
+  "expected": 1200
+ },
+ "openai/gpt-6-sol|off": {
+  "id": "batch-1794259141-wqFVuG61mxTwCUyPqrWq",
+  "status": "completed",
+  "provider": "OpenAI",
+  "request_counts": {
+   "total": 1200,
+   "completed": 1200,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 48620,
+   "completion_tokens": 9167,
+   "total_tokens": 57787,
+   "cost": 0.094455,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 1200,
+  "expected": 1200
+ },
+ "anthropic/claude-opus-5.5|off": {
+  "id": "batch-1794259139-6HnnItfoaYeY0BbnAQB6",
+  "status": "completed",
+  "provider": "Anthropic",
+  "request_counts": {
+   "total": 1200,
+   "completed": 1200,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 69960,
+   "completion_tokens": 19103,
+   "total_tokens": 89063,
+   "cost": 0.33095,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 1200,
+  "expected": 1200
+ },
+ "anthropic/claude-opus-5|deliberate": {
+  "id": "batch-1794259645-6ngfVvRIxI2XwpZpr2Rl",
+  "status": "completed",
+  "provider": "Anthropic",
+  "request_counts": {
+   "total": 240,
+   "completed": 240,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 9960,
+   "completion_tokens": 77906,
+   "total_tokens": 87866,
+   "cost": 0.998725,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 240,
+  "expected": 240
+ },
+ "anthropic/claude-opus-5.5|deliberate": {
+  "id": "batch-1794260011-TMjYSYdiwUZKsPR5nU1I",
+  "status": "completed",
+  "provider": "Anthropic",
+  "request_counts": {
+   "total": 240,
+   "completed": 240,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 10440,
+   "completion_tokens": 25281,
+   "total_tokens": 35721,
+   "cost": 0.27369,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 240,
+  "expected": 240
+ },
+ "openai/gpt-6-sol|deliberate": {
+  "id": "batch-1794260500-SnZkx4UyRooiUGncAl3G",
+  "status": "completed",
+  "provider": "OpenAI",
+  "request_counts": {
+   "total": 240,
+   "completed": 240,
+   "failed": 0
+  },
+  "usage": {
+   "prompt_tokens": 7680,
+   "completion_tokens": 28266,
+   "total_tokens": 35946,
+   "cost": 0.14901,
+   "is_byok": false
+  },
+  "error": null,
+  "rows": 240,
+  "expected": 240
+ }
+}

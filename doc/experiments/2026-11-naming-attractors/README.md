@@ -1,7 +1,7 @@
 # Naming attractors: what do models call things when you don't tell them?
 
-**Status: trial, preregistered.** Written and committed on 2026-11-09, after a
-pilot and before the main run. Results will follow below.
+**Status: trial, run 2026-11-09.** The design and predictions were committed
+after a pilot and before the main run. The results are at the end.
 
 Ask a model to invent a name for a fantasy heroine and some names keep coming
 back. "Elara Voss" became famous enough as one of these to turn into a tell.
@@ -165,3 +165,165 @@ if every request used its full `max_tokens`, and the deliberate arm's cap was
 - **One provider per model,** at whatever date the batch ran. Model behavior
   under the batch API is assumed to match the sync API. The pre-pilot probes
   used sync, and the pilot used batch; they agreed in kind.
+
+## Results
+
+All 4,320 requests completed, with no batch failures, for $2.16. The full
+report is [`data/report.md`](data/report.md), produced by `analyze.py
+data/runs`. The raw replies are in [`data/runs/`](data/runs/).
+
+**Disclosure.** The model that designed this trial and wrote this report is
+Opus 5.5, one of the three being measured. Its own naming habits were
+measured below, and they come out more concentrated than it predicted.
+
+### What ran
+
+| model | arm | n | truncated | non-compliant | reasoned | median reasoning tokens |
+| --- | --- | --- | --- | --- | --- | --- |
+| Opus 5 | off | 1,200 | 1 | 23 | 0 | 0 |
+| Opus 5.5 | off | 1,200 | 66 | 58 | 149 | 0 |
+| GPT-6 Sol | off | 1,200 | 0 | 0 | 0 | 0 |
+| Opus 5 | deliberate | 240 | 0 | 0 | 240 | 280 |
+| Opus 5.5 | deliberate | 240 | 0 | 0 | 240 | 87 |
+| GPT-6 Sol | deliberate | 240 | 0 | 0 | 240 | 96 |
+
+Two things the pilot did not show:
+
+- **Opus 5.5 at `minimal` still reasons when it wants to.** In the off arm,
+  149 calls reasoned. Almost all were context prompts, concentrated on a few:
+  - all 20 generation-ship samples;
+  - 18 airship, 18 detective and 17 AI-character samples.
+
+  Sixty-six of those spent the whole 80-token cap thinking and returned an
+  empty reply. The pilot's six context prompts happened not to include them.
+  So Opus 5.5's context condition is partly a reasoning condition. The
+  sensitivity check below drops those prompts.
+- **An output filter, reproducibly.** Opus 5's open-source-library prompt
+  *with context* ended in `finish_reason: content_filter`, with empty content,
+  20 times out of 20. The same prompt bare passed. That cell is empty, so Opus
+  5 has 29 context prompts. The paragraph describes a config-file parser, so
+  presumably the filter caught something in the output, not the request.
+  What it caught is not visible.
+
+### Concentration
+
+Median over prompts. Top-1 share is the most common name's share of 20 samples.
+
+| model | bare top-1 | bare distinct | context top-1 | deliberate top-1 |
+| --- | --- | --- | --- | --- |
+| Opus 5 | 0.15 | 15.5 | 0.30 | 0.20 |
+| Opus 5.5 | 0.40 | 8 | 0.32 | 0.20 |
+| GPT-6 Sol | 0.38 | 7 | 0.55 | 0.20 |
+
+Paired sign tests on per-prompt top-1 share:
+
+| comparison | more concentrated | p |
+| --- | --- | --- |
+| bare: Opus 5 vs Opus 5.5 | Opus 5.5 on 25 of 30 | 0.0003 |
+| bare: Opus 5 vs Sol | Sol on 23 of 29 | 0.0023 |
+| bare: Opus 5.5 vs Sol | 15 vs 13 | 0.85 |
+| bare vs context, Opus 5 | context on 14 of 23 | 0.40 |
+| bare vs context, Opus 5.5 | bare on 19 of 29 | 0.14 |
+| bare vs context, Sol | context on 19 of 29 | 0.14 |
+| off vs deliberate, Opus 5 | 4 vs 4 | 1.0 |
+| off vs deliberate, Opus 5.5 | off on 9 of 10 | 0.021 |
+| off vs deliberate, Sol | off on 7 of 11 | 0.55 |
+
+**Sensitivity check:** leaving out the 15 context prompts where Opus 5.5
+reasoned or was truncated, no model's bare-versus-context difference becomes
+significant. The medians go from 0.16 to 0.32 for Opus 5, stay at 0.35 for
+Opus 5.5, and go from 0.30 to 0.50 for Sol.
+
+### Deliberation finds other names, not more of them
+
+| model | deliberate names also among its off names | prompts whose modal name changed |
+| --- | --- | --- |
+| Opus 5 | 8% | 10 of 12 |
+| Opus 5.5 | 14% | 12 of 12 |
+| GPT-6 Sol | 13% | 12 of 12 |
+
+Asked to think it over, every model moved almost entirely off its reflex
+names, but not toward variety. The median deliberate top-1 share is 0.20 for
+all three models: four of every 20 samples still land on one name. For Opus
+5.5 that is a real loosening (0.40 to 0.20). For Opus 5, already the loosest,
+it is no change.
+
+### What the attractors look like
+
+Exact names barely overlap between models: the mean Jaccard overlap of name
+sets per prompt is 0.03 to 0.05, and a prompt's modal name is shared on 1 to 3
+of 30 prompts. The *templates* are shared. Off arm, bare and context:
+
+| template | Opus 5 | Opus 5.5 | GPT-6 Sol |
+| --- | --- | --- | --- |
+| Velvet … (rock bands) | 20 | 20 | 10 |
+| Gilded … (taverns, ships) | 26 | 35 | 7 |
+| Vael… | 25 | 24 | 38 |
+| Vesper… | 22 | 22 | 43 |
+| Project … (codenames) | 40 | 32 | 40 |
+| …thorn… | 34 | 39 | 21 |
+| …meridian… | 4 | 47 | 0 |
+| Quill… | 1 | 36 | 11 |
+| … Voss | 3 | 14 | 42 |
+
+Some single prompts are close to deterministic:
+- "Lumora" was every model's startup;
+- Opus 5.5 named the fictional country "Valdoria" 19 times in 20;
+- Sol named the detective "Mara Voss" 19 times in 20;
+- Opus 5.5 named the starship captain "Elara Voss" 11 times in 20.
+
+Elara is not gone. She has moved to Opus 5.5, which used "Elara" for 11 of 181
+character first names, against 4 of 198 for Opus 5 and 6 of 200 for Sol.
+
+### Predictions, scored
+
+1. **Concentrated by default (median bare top-1 ≥ 0.25 for every model):
+   partly.**
+   - Opus 5.5 (0.40) and Sol (0.38): yes.
+   - Opus 5 (0.15): no. It is the most varied of the three by a wide margin.
+2. **Context loosens it: no.** No difference was significant. Opus 5 and Sol
+   leaned the other way, becoming *more* concentrated with a setting. The
+   limitation noted in advance is the likely reason: a paragraph that fixes
+   gender, era and tone narrows the target more than it unsettles the habit.
+3. **Lineage shows (Opus 5 ≈ Opus 5.5; Sol > Opus 5.5): no, on both counts.**
+   Opus 5.5 is far more concentrated than Opus 5 (p = 0.0003), and Sol and
+   Opus 5.5 are indistinguishable (p = 0.85).
+4. **Deliberation finds new favorites more than variety: mostly yes, with
+   the strength backwards.**
+   - Overlap stayed under 30% for every model.
+   - The deliberate top-1 share stayed at 0.15 or more.
+   - Top-1 share fell significantly for Opus 5.5, not for Opus 5. That is the
+     reverse of the prediction, which assumed the longer reasoner would
+     loosen more. The model with the most concentrated reflex had the most to
+     lose.
+5. **The letter v (≥ 40% of bare names, every model): partly.**
+   - Opus 5: 47%. Sol: 52%. Opus 5.5: 37%.
+   - "Elara" as at least 5% of Sol's character first names: no (3%). Sol's
+     signature is the surname: "Voss" 42 times, and "Mara" 45 times as a
+     first name.
+
+### Reading it
+
+- **A newer model is not a more varied one.** Opus 5.5's bare naming is far
+  more concentrated than Opus 5's, and as concentrated as Sol's, though its
+  prose has fewer of the well-known tells. One plausible reading connects the
+  two: the same training that removes tells makes outputs more predictable
+  generally. This trial cannot separate that from other differences between
+  the two models.
+- **Asking a model to think is a better lever than the reasoning setting, but
+  only a partial one.** Effort alone did not produce reasoning in the pilot.
+  The instruction did, and it moved every model onto different names, while
+  leaving a fifth of the samples on one name.
+- **Context did not help.** For anyone using these models to name things, the
+  practical upshot is that a richer brief does not by itself buy variety. If
+  variety is the goal, asking for several candidates, or rejecting the first,
+  is worth testing. Neither was tested here.
+
+### Limitations, found in the run
+
+- Opus 5.5's off arm reasoned in 149 calls. The `minimal` setting is a
+  request, not a guarantee, and the context comparison for Opus 5.5 should be
+  read with the sensitivity check beside it.
+- One Opus 5 context cell was emptied by a content filter.
+- **The template counts are ad hoc.** They are patterns I picked after seeing
+  the names, so they describe, they do not test.

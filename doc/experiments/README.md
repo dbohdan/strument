@@ -166,4 +166,4 @@ same handbook.
 
 | experiment | question → result → decision |
 | --- | --- |
-| **trial** — [2026-11-naming-attractors](2026-11-naming-attractors/) | Asked to invent a name with no other guidance, how concentrated are a model's choices, and does a paragraph of setting or a request to deliberate change that? Opus 5, Opus 5.5 and GPT-6 Sol, 30 prompts. Preregistered; not yet run. |
+| **trial** — [2026-11-naming-attractors](2026-11-naming-attractors/) | Asked to invent a name with no other guidance, how concentrated are a model's choices? Opus 5 was the most varied (median top-1 share 0.15), and Opus 5.5 (0.40) and GPT-6 Sol (0.38) were far more concentrated: Opus 5.5 named a starship captain "Elara Voss" 11 times in 20, and Sol named a detective "Mara Voss" 19 times. A setting paragraph did not loosen it. Asking the model to think moved every model onto other names (8–14% overlap) and still left a fifth of samples on one. Reasoning effort alone did not produce reasoning on this task. |
