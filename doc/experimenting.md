@@ -38,6 +38,8 @@ experiment will not point at it.
 
 Before spending on a run, ask these questions in order:
 
+- **Is the provider pinned for every model?** Routing between endpoints can
+  move a result more than the arm does ([pin the provider](#pin-the-provider)).
 - **Is reasoning pinned low on every model?** Set `reasoning = "low"` in the
   shared config unless reasoning is what you are measuring, and check one
   transcript per model ([pin reasoning low](#pin-reasoning-low)). Defaults
@@ -248,6 +250,27 @@ What it costs when you forget:
 **Do:** put the reasoning setting in the shared config, not per model, so
 forgetting one is impossible; then read one transcript per model and confirm
 there is an answer under the thinking.
+
+<a id="pin-the-provider"></a>
+
+### Pin the provider, too
+
+A model slug on OpenRouter is not one model. It is a set of endpoints that
+OpenRouter routes between, request by request, and they can behave very
+differently while listing the same quantization. In
+[`2026-11-concision-block`](experiments/2026-11-concision-block/), MiMo
+sessions served mostly by DeepInfra ran the project's code in 5 of 38 and
+answered correctly in 0 of 38. On Xiaomi's own endpoint the figures were 12
+of 16 and 5 of 16, and both list `fp8`. The routing also landed unevenly on
+the arms: 13 of 20 for one arm, 8 of 20 for the baseline. That is enough to
+fake or hide a prompt effect, and it moved a baseline from 12 of 40 correct
+to 5 of 40 between two runs a day apart.
+
+**Do:** route each model through one provider with `extra_params =
+{"provider": {"only": ["<slug>"], "allow_fallbacks": False}}`. Prefer the
+model's maker's own endpoint where there is one. Record the provider of every
+request (Strument's request rows have it), and check after the run that the
+pin held.
 
 <a id="probe-isolates-mechanism"></a>
 

@@ -1,8 +1,13 @@
 # A copied concision block, and the work it removes
 
-**Status: trial, preregistered.** This design was committed before the pilot.
-What the pilot changes, if anything, goes in a pilot section committed before
-the main run. Results will follow below.
+**Status: trial, run 2026-11-10.** The design was committed before the pilot,
+the pilot's changes before the main run, and a provider-pinned follow-up
+before it ran. The results are at the end. In short:
+- The block's cost did not reach the preregistered threshold in either run.
+- It pointed the same way in every run where the models were served by
+  their usual providers.
+- The largest effect measured was not the prompt but which provider
+  OpenRouter routed MiMo to.
 
 ## Where this came from
 
@@ -256,3 +261,170 @@ fixtures: n = 80 per arm per task.
 - **The Claude models lose less correctness than the Flash models,** but
   still lose some: they drop more caveats under C than under A.
 - **Caveat dropped is highest under C-direct.**
+
+## Results
+
+The main run had 1,280 sessions and the pinned follow-up 200. Every session
+finished; there were 7 "no answer" turns in all, all MiMo ending a turn with reasoning and no reply, and no failures. Main-run
+cost was about $6, the follow-up's about $0.40. Data:
+- the scorer's output, in [`data/scores-main.txt`](data/scores-main.txt) and
+  [`data/scores-pinned.txt`](data/scores-pinned.txt);
+- every session's log, compressed, in `data/runs-main.tar.xz` and
+  `data/runs-pinned.tar.xz`.
+
+### Rule 1: does the block cost work and accuracy?
+
+Run task. Main run: both fixtures, Flash models pooled. Follow-up: `tally`
+only.
+
+| run | executed A → C | p | correct A → C | p |
+| --- | --- | --- | --- | --- |
+| private pilot (11-09), `tally` | 34 → 15 of 40 | < 0.0001 | 12 → 3 of 40 | 0.020 |
+| main run, both fixtures | 50 → 36 of 80 | 0.039 | 45 → 48 of 80 | 0.75 |
+| main run, `tally` only | 26 → 17 of 40 | 0.072 | 5 → 9 of 40 | 0.38 |
+| pinned follow-up, `tally` | 35 → 27 of 40 | 0.059 | 15 → 8 of 40 | 0.14 |
+
+**Rule 1 is not met in either preregistered run.** The main run fails on
+correctness. The follow-up has both measures in the predicted direction, and
+neither reaches p < 0.05. Read together:
+- **In both runs where MiMo was served mostly by good providers** (the private
+  pilot and the pinned follow-up), the block cut both executions and correct
+  answers, and by similar amounts in the follow-up: 8 of 40 fewer
+  executions, 7 of 40 fewer correct.
+- **The main run is the exception,** and its baseline was degraded by routing
+  (below).
+- **The private pilot's effect was probably an overestimate,** as a first
+  significant result tends to be. A fair summary is that the block costs some
+  work and some accuracy on a task where running code finds the answer. The
+  size is smaller than the pilot suggested, and not established at the
+  threshold set in advance.
+
+### The provider effect
+
+On `tally` in the main run, MiMo's results depended on where OpenRouter sent
+its requests:
+
+| MiMo, by majority provider | sessions | ran code | correct |
+| --- | --- | --- | --- |
+| DeepInfra | 38 | 5 (13%) | 0 |
+| Cohere | 32 | 20 (63%) | 3 |
+| Xiaomi (first party) | 16 | 12 (75%) | 5 |
+| Makora | 14 | 6 (43%) | 1 |
+
+- **Every endpoint here lists the model as `fp8`,** so this is not
+  quantization. What differs about the DeepInfra endpoint is not visible
+  from here.
+- **The routing was uneven across arms:** 13 of MiMo's 20 C sessions against 8
+  of its 20 A sessions. That confounds the main run's work effect for MiMo.
+- **The private pilot had almost no DeepInfra traffic,** and pinned to Xiaomi,
+  A's baseline came back: 15 of 40 correct, against 5 in the main run.
+- **DeepSeek's spread across providers was smaller and noisier.**
+
+This is the most consequential finding of the trial for this project. Every
+earlier MiMo result through OpenRouter was measured on routing nobody
+controlled, and a prompt arm can be swamped, or faked, by which arm happened
+to land on which endpoint. The handbook now says to pin the provider.
+
+### Which part of the block?
+
+Pinned follow-up, `tally`, Flash models pooled, each arm against A's 35
+executed and 15 correct of 40:
+
+| arm | executed | correct | median output tokens |
+| --- | --- | --- | --- |
+| A | 35 | 15 | 2,118 |
+| C | 27 | 8 | 1,334 |
+| C-length | 33 | 8 | 1,707 |
+| C-direct | 34 | 9 | 1,762 |
+| P | 35 | 15 | 1,987 |
+
+- **Only the whole block cut executions noticeably.** Either half alone cost
+  correctness about as much as the whole, and neither p is below 0.14.
+- **The prediction that C-direct does most of the damage is not supported.**
+  The one striking cell is DeepSeek under C-direct: 1 of 20 correct, against
+  8 under A.
+- **The decomposition is underpowered.** It says the cost is spread across
+  the block rather than living in one sentence, and not much more.
+
+### P, the prose-only rule
+
+| run | executed P vs A | correct P vs A | output tokens saved vs A (C saved) |
+| --- | --- | --- | --- |
+| main, Flash pooled | 55 vs 50 of 80 | 47 vs 45 | 17% (28%) |
+| pinned, Flash pooled | 35 vs 35 of 40 | 15 vs 15 | 6% (37%) |
+
+- **P cost nothing measurable in either run.**
+- **Its saving was modest.** It met rule 3's "at least half of C's saving" in
+  the main run (203 tokens saved, 171 needed). It missed it in the follow-up
+  (131 saved, 392 needed).
+- **So P is safe, but it is not the answer to short output.** That needs
+  something that shortens the prose more and still leaves the work alone. It
+  is the obvious next arm.
+
+### Coach's notes: the Claude models
+
+- **Neither Claude model ran code here,** under any arm: 0 executions in 80
+  Sonnet sessions and 1 in 200 Haiku run-task sessions.
+- **They read instead, and Sonnet reads well.** Question 3 of `tally` asks
+  whether codes keep their first-appearance order. The key is "no", because
+  integer-like codes come first. Sonnet answered "Yes, with one exception"
+  and stated the exception exactly, in 38 of its 39 "wrong" answers. Scored
+  leniently, counting an answer that states the exception as right
+  ([`data/lenient.py`](data/lenient.py), post hoc), Sonnet's `tally` scores
+  are A 19 of 20 and C 20 of 20. All three traps were caught by reading, and
+  the block cost nothing.
+- **Haiku, both fixtures:** correct 24/40 under A, 21/40 under C. Its
+  bottleneck is the `parseInt` question, 5 of 20 under A.
+- **Against the pinned Flash drop** (15 → 8 of 40), the Claude models lost
+  little: Haiku −3, Sonnet −1 strictly, +1 leniently. That is the direction
+  coach's notes predicts. But the test cannot separate "the correction fits a
+  Claude model" from "a model that answers by reading has no work for the
+  block to remove". Both Claude models were at the floor on work before the
+  block arrived.
+
+### Caveat dropped
+
+- **No arm differed from A** in any run. The measure works: the pilot
+  sessions it flagged were read, and five of six were real.
+- **The block did not move it.**
+- **The question-3 finding above** shows the measure's limit on that
+  question: a yes/no format forces a model that understands the exception to
+  pick a side. Questions without that ambiguity would make it a sharper
+  instrument.
+
+### The read task
+
+All 600 read-task sessions were correct in every arm, and almost none ran
+code. The block shortened the answers: MiMo's median output fell from 294 to
+194 tokens, Haiku's from 419 to 228. Where reading is enough, the block saves
+tokens at no cost found here.
+
+### Predictions, scored
+
+1. **Rule 1 holds, as in the pilot, on both fixtures:** no. The direction
+   holds in the pinned follow-up; significance does not.
+2. **C-direct does most of the damage:** no. The cost is spread across the
+   block.
+3. **P succeeds:** half. No cost in either run; enough saving in one.
+4. **The Claude models lose less correctness than the Flash models:** yes in
+   direction (Haiku −3, Sonnet ≈ 0, Flash pinned −7). The second half, that
+   they drop more caveats under C, is no.
+5. **Caveat dropped is highest under C-direct:** no difference anywhere.
+
+### What to take from it
+
+- **For harness authors:** this block's measured effect is a modest loss of
+  work and accuracy on investigation, with a real saving where the answer is
+  found by reading. It is not the large effect the private pilot suggested.
+  The effect also depends on whether the model in the harness answers by
+  running or by reading.
+- **For this project:**
+  - Pin the provider in every MiMo trial. That belongs in the handbook beside
+    "pin reasoning low".
+  - Earlier MiMo results should be read knowing their routing was not
+    controlled.
+- **About Claude Code's 2025 prompt,** the coach's-notes question, on what
+  could be measured: on a Claude model the block cost nothing, consistent
+  with its having been written for one. On models that work by running code,
+  it cost something. A prompt is half of a pair, and here the other half was
+  measured.
