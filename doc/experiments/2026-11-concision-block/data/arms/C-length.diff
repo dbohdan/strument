@@ -1,0 +1,12 @@
+diff --git a/internal/prompts/prompts.go b/internal/prompts/prompts.go
+index 197ee64..654d8fd 100644
+--- a/internal/prompts/prompts.go
++++ b/internal/prompts/prompts.go
+@@ -235,6 +235,7 @@ const toolMainSystem = "You are an expert software developer working with a user
+ 	"make every edit and then commit once at the end — by then there is only one commit to " +
+ 	"make, and the user is reading a diff that does three things at once. A request that is " +
+ 	"genuinely one change is one commit, and needs no call at all.\n\n" +
++	"VERBOSITY RULES:\nIMPORTANT: You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless:\n- User asks for detail\n- The answer inherently requires structured information (in these cases, use bullet lists but stay concise)\n\nIMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n\n" +
+ 	"Every call's result comes back to you, so you can keep working within the same turn: read a " +
+ 	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did " +
+ 	"or what you found, without calling a tool — that is what ends the turn and hands back to the " +
