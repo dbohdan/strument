@@ -147,6 +147,42 @@ All counts, from each session's own log. See [`data/score.py`](data/score.py).
   The patterns match the behavior, not the conclusion. The scorer's
   self-test covers both directions.
 
+## Pilot
+
+One session per cell for MiMo, DeepSeek and Haiku: 60 sessions. Plus four
+extra Haiku baseline run-task sessions per fixture, for the floor rule, and
+eight Sonnet sessions. In all $0.55. No pilot session is counted.
+
+- **The floor rule fired.** Haiku ran project code in 0 of 10 baseline
+  run-task sessions, yet answered all four questions right in 7 of them by
+  reading. As written in advance, Sonnet 5.5 was then tried, and it ran code
+  in 0 of 5 baseline sessions (4 correct). Strument's Claude models read their
+  way to answers here. That includes the `map(parseInt)` trap, which no Flash
+  session in the bash-bullet trial caught without running code.
+- **So the coach's-notes comparison cannot be about work for either Claude
+  model.** Both start at the floor. It is about correctness and dropped
+  caveats, where both have room to fall. Executed is still reported.
+- **`pricetag` is at the ceiling under A:** 7 of 7 run-task sessions correct,
+  mostly without running anything. That is fine for detecting harm, since C
+  can only pull it down. But it makes `pricetag` a test of keeping a caveat
+  found by reading, and leaves `tally` carrying the signal about running code.
+- **Plumbing:**
+  - every pilot session finished, with no failures and no unparseable
+    answers;
+  - every read-task answer was correct;
+  - the dropped-caveat count fired on 6 sessions, and on reading, each
+    names the planted behavior and answers against it.
+
+**Changes, made before the main run:**
+
+- **Sonnet 5.5 runs arms A and C only,** on both fixtures' run task, 20 reps
+  each: 80 sessions, at about $0.05 a session. P is left out for Sonnet: P's
+  question is whether work is kept, and Sonnet does none here to keep.
+- **Haiku stays in every arm,** as the terse Claude model.
+- **All jobs, Sonnet's included, run in one seeded shuffle,** so no model is
+  confounded with when it ran.
+- **Rule 4 is now judged on correct and caveat dropped,** not on executed.
+
 ## Rule
 
 All p-values are Fisher two-sided. The Flash models are pooled over models and
@@ -164,11 +200,13 @@ fixtures: n = 80 per arm per task.
 
    If P succeeds, the write-up recommends it, or something like it, to anyone
    who wants short answers from an agent.
-4. **Coach's notes:** C against A on Haiku (or Sonnet), the same measures.
-   - It is supported if the Claude model's drop in executed and correct is
-     smaller than the pooled Flash drop.
-   - It is contradicted if the Claude model loses as much or more.
-   - With n = 40 it is reported as an effect size, not ruled on by p.
+4. **Coach's notes:** C against A on Haiku and on Sonnet, each with n = 40.
+   - Judged on correct and caveat dropped, not executed, because both Claude
+     models start at the floor on executed (see the pilot).
+   - Supported if each Claude model's drop in correct is smaller than the
+     pooled Flash drop.
+   - Contradicted if a Claude model loses as much or more.
+   - Reported as effect sizes, not ruled on by p.
 5. **Caveat dropped** is reported for every arm against A. The prediction is
    that C and C-direct raise it.
 
@@ -181,5 +219,6 @@ fixtures: n = 80 per arm per task.
   tokens but much less work.
 - **P succeeds:** answers about as short as under C-length, with executed and
   correct within noise of A.
-- **Haiku loses less than the Flash models,** but still loses something.
+- **The Claude models lose less correctness than the Flash models,** but
+  still lose some: they drop more caveats under C than under A.
 - **Caveat dropped is highest under C-direct.**
