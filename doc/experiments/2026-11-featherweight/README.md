@@ -105,22 +105,62 @@ All are counts from each session, via [`data/score.py`](data/score.py).
   - files left behind, which git does not ignore;
   - commits made.
 
+## Pilots
+
+**The first pilot** was one session per cell: 24 sessions, $0.06. It found:
+- **Plumbing:** every session finished, every response came from its pinned
+  provider, and the scorer read both harnesses.
+- **The fix tasks at the ceiling,** 12 of 12. Their reports named both causes
+  ("`x,3,4,5` should add 12"; "ascending numeric order"). They were rewritten
+  as symptoms, as users report them: the input, what was expected, that
+  something else came out. The hidden tests were unchanged.
+- **Featherweight leaving a file named `&1`.** The model wrote shell
+  redirection (`2>&1`) inside Tcl's `exec`, which creates a file by that name.
+
+**The second pilot** was the rewritten fix tasks, two sessions per cell: 24
+sessions, $0.15.
+- **Still at the ceiling.** 24 of 24 passed every hidden check, in every arm,
+  with both models.
+- **Featherweight's side effects:**
+  - one session left an `npm.err` file;
+  - one edited `README.md` and `docs/notes.md` while fixing the code;
+  - its MiMo sessions took 16 to 22 steps, against Strument's 11 to 12.
+- **S-fw edited `docs/notes.md` once.** S changed nothing outside `src/` and
+  `test/`.
+
+**Decision, made before the main run:** the fix tasks stay as they are, and
+the rule is changed to read them for what they can show.
+- Small fixes are within reach of both models in every arm. Harder ones would
+  be a different trial.
+- So success on the fix tasks is a floor check: any failure in any arm is
+  news.
+- The fix tasks carry the cost, work and side-effects comparisons.
+- The success comparisons of rules 1 and 2 are made on the two ask tasks,
+  where the pilots did vary: `tally-ask` went 2 of 4 for S, 4 of 4 for S-fw
+  and 3 of 4 for FW. Neither pilot's sessions are counted.
+
 ## Rule
 
-All p-values are Fisher two-sided. Models and tasks are pooled per comparison,
-n = 160 per arm. They are also reported per task.
+All p-values are Fisher two-sided. Rules 1 and 2 pool the two ask tasks and
+both models: n = 80 per arm. Every task is also reported on its own.
 
-1. **Prompt:** S against S-fw on success. A significant loss for S-fw says
+1. **Prompt:** S against S-fw on success on the ask tasks. A significant loss for S-fw says
    Strument's prompt earns its length. No significant difference, with S-fw
    no more than 5 points below S, supports cutting the prompt toward
    Featherweight's.
-2. **Harness:** S-fw against FW on success, read the same way. A significant
+2. **Harness:** S-fw against FW on success on the ask tasks, read the same
+   way. A significant
    loss for FW says Strument's tools and loop help. No significant difference
    says they do not show on tasks like these.
 3. **Cost:** the median cost per session in each arm, per task. A difference
    in success is weighed against this, not reported alone.
-4. **Side effects** are reported for every arm. No rule; a harness that
-   succeeds by leaving the project dirty is not the same as one that doesn't.
+4. **Fix tasks:** success is reported as a floor check, with every failure
+   read. Steps, cost and side effects are compared across arms. For each
+   side-effect count (out of scope, files left behind, own tests broken),
+   FW against S and S-fw against S, Fisher, n = 80 per arm.
+5. **Side effects** on the ask tasks are reported the same way. A harness
+   that succeeds by leaving the project dirty is not the same as one that
+   doesn't.
 
 ## Prediction
 
@@ -131,6 +171,7 @@ n = 160 per arm. They are also reported per task.
   steps on the ask tasks, because Tcl `exec` is a less direct way to run
   `node` than `bash`, and costs about the same or less, because its fixed
   prefix is about a fifth of Strument's.
-- **Side effects:** Featherweight leaves more stray files. The pilot found a
+- **Side effects:** Featherweight leaves more stray files and edits more
+  outside the code, significantly on the fix tasks. The pilot found a
   file named `&1`, from shell redirection written inside Tcl's `exec`.
   Strument commits every fix turn, and Featherweight none.
