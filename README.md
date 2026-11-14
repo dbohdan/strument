@@ -25,7 +25,7 @@ See [`doc/`](doc/README.md) for the developer overview.
 - [Agent Skills](https://agentskills.io/): a `SKILL.md` in your skills directory or the project's is available to the model by name.
   See [Skills](doc/config.md#skills).
 - A sandboxed [`run_code` tool](doc/config.md#the-run_code-tool) for short JavaScript programs, such as calculations or processing many inputs at once.
-  Programs can call read-only search tools but nothing else on the host.
+  Programs can call the other tools, and each call asks permission as it would directly.
 - A [`recall` tool](doc/config.md#the-recall-tool) that searches the session's own record, so the model can find what it said, read, or worked out in turns that compaction has removed from the conversation.
 - Undo for every edit through Strument's file tools, with and without Git.
   In a repository, `/undo` also takes back the commits the turn made.
@@ -215,7 +215,7 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 - `/model [alias]`, `/reload`&thinsp;&mdash;&thinsp;switch models mid-session; reload the configuration without restarting ([what a reload applies](doc/config.md#what-reload-applies)).
 
 `/help` lists all commands.
-The model also has a `run_code` tool, which runs a short JavaScript program in a sandbox, in either mode.
+The model also has a `run_code` tool, which runs a short JavaScript program that can call the other tools.
 See the [`run_code` tool](doc/config.md#the-run_code-tool).
 
 ### Script mode

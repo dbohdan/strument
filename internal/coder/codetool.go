@@ -9,6 +9,7 @@ import (
 	"maps"
 	"regexp"
 	"runtime/metrics"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +24,9 @@ import (
 // tool (doc/plans/code-mode.md): arithmetic costs a quarter of the reasoning
 // lines in this repository's own experiments, and models spend full request
 // round trips on runs of read-only calls a program could make in one step.
-// This file is both halves — pure computation, and the read-only bridge.
+// This file is both halves — pure computation, and the bridge. The bridge
+// reached only the observation tools until every tool was bridged
+// (codebridge.go).
 //
 // It was Monty, a restricted Python interpreter compiled to WebAssembly, until
 // doc/experiments/2026-09-run-code-arms. Models took Monty for full Python and
@@ -57,7 +60,7 @@ var codeLimits = struct {
 	MaxCallStackSize: 1000,
 }
 
-// maxBridgedCalls caps how many read-only tool calls one program may issue.
+// maxBridgedCalls caps how many tool calls one program may issue.
 // The bridge is a tool call, never a per-element helper — a program that loops
 // over a list calling read() on each element is a run of observation calls
 // with extra steps — and without a cap the number is unbounded.
@@ -89,10 +92,15 @@ const maxBridgedCalls = 50
 // for general execution, though the description already said import and
 // commands were elsewhere. What was missing was the need mapped to the tool,
 // the mapping doc/experiments/2026-08-symbol-uptake found moves behavior.
+//
+// Since bash became callable from a program, the clause says the interpreter
+// cannot run the project's code and bash can, from a program or directly: the
+// distinction that mattered was never which tool call, but that the
+// JavaScript is the harness's and the commands are the project's.
 func codeCommandsClause(shell bool) string {
 	if shell {
-		return "the bash tool, not this one, runs commands, and it is the one for " +
-			"running the project's own code: its tests, a probe script, git."
+		return "the interpreter cannot import or run the project's own code, and bash() " +
+			"or the bash tool can: its tests, a probe script, git."
 	}
 	return "nothing in this session runs shell commands or the project's own code."
 }
@@ -105,9 +113,11 @@ func codeCommandsClause(shell bool) string {
 func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {
 	var b strings.Builder
 	b.WriteString("Run a short JavaScript program. " +
-		"The program can call the read-only tools directly — " +
+		"The program can call your other tools as functions — " +
 		"grep({pattern: \"TODO\", glob: \"**/*.go\"}), read({path: \"a.go\", limit: 20})" +
-		fmt.Sprintf(" — up to %d calls, each shown to the user like a direct call. ", maxBridgedCalls) +
+		fmt.Sprintf(" — up to %d calls. ", maxBridgedCalls) +
+		"Each call does what calling the tool directly does, and the user sees it the same way: " +
+		"an edit lands, and a command asks the user first. " +
 		"Each function takes an options object as shown; a single leading argument may also " +
 		"be passed on its own, as in read(\"a.go\"). Example:\n\n" +
 		codeExampleText() +
@@ -132,8 +142,12 @@ func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {
 	if len(callable) > 0 {
 		fmt.Fprintf(&b, "\n\nThe callable functions are exactly: %s.", strings.Join(callable, ", "))
 	}
+	if shell && slices.Contains(callable, toolBash) {
+		data = append(slices.Clone(data), bashDataDoc)
+	}
 	b.WriteString(codeDataFuncDoc(callable, data))
 	b.WriteString(codeFuncDoc())
+	b.WriteString(codeRefusalDoc)
 
 	return llm.ToolDef{
 		Name:        toolRunCode,
@@ -207,9 +221,9 @@ type bridgeFunc func(ctx context.Context, call *bridgedCall) (any, error)
 // runCode executes the program and returns the value, or the error text for
 // the model to act on.
 //
-// No confirmation, like the other read-only tools: a program computes and
-// reads, it does not touch anything outside its own interpreter and the
-// project's observation tools. It is announced twice, the two renderings of
+// The program itself asks nothing: what could need permission is a call it
+// makes, and each call asks as the direct call would (codebridge.go). It is
+// announced twice, the two renderings of
 // one event (the ask_user_question pattern): the shaped source block for the
 // screen before the run, and one prose line after — for the transcript and as
 // the outcome — naming what the program actually called, collected at the
@@ -220,12 +234,19 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	vm := goja.New()
 	vm.SetMaxCallStackSize(codeLimits.MaxCallStackSize)
 
+	prog := &programState{}
+	c.program, c.programCallID = prog, cc.callID
+	defer func() { c.program, c.programCallID, c.lastRefusal = nil, "", nil }()
+
 	var printed strings.Builder
 	var log bridgeLog
 	names := c.codeCallableTools()
 	bridge := c.bridgeCall(names, &log)
 
 	stringifyV, err := vm.RunString(jsStringify)
+	if err == nil {
+		_, err = vm.RunString(jsNotRun)
+	}
 	if err != nil {
 		return fmt.Sprintf("The JavaScript interpreter failed to start: %v", err)
 	}
@@ -256,9 +277,27 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 		panic(obj)
 	}
 
+	throwNotRun := func(e *notRunError) {
+		ctor, _ := goja.AssertConstructor(vm.Get("NotRun"))
+		obj, err := ctor(nil, vm.ToValue(e.tool), vm.ToValue(e.by), vm.ToValue(e.reason))
+		if err != nil {
+			throw(e.Error())
+		}
+		panic(obj)
+	}
 	register := func(name string, params []string) {
 		_ = vm.Set(name, func(call goja.FunctionCall) goja.Value {
-			v, err := bridge(ctx, &bridgedCall{Name: name, Args: jsArgs(call.Arguments, params)})
+			bc := &bridgedCall{Name: name, Args: jsArgs(call.Arguments, params)}
+			// The clock stops for the call: a command can take minutes and a
+			// prompt waits on a person, and neither is the program running.
+			prog.clock.pause()
+			v, err := bridge(ctx, bc)
+			prog.clock.resume()
+			var nr *notRunError
+			if errors.As(err, &nr) {
+				prog.notRun = append(prog.notRun, notRunRecord{call: bridgedCallLabel(bc), refusal: nr.refusal})
+				throwNotRun(nr)
+			}
 			if err != nil {
 				log.failed++
 				if log.firstFailure == "" {
@@ -293,11 +332,11 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	}
 	_ = vm.Set("console", console)
 
-	stop := watchProgram(ctx, vm)
+	stop := watchProgram(ctx, vm, &prog.clock)
 	var value goja.Value
-	prog, err := compileProgram(cc.code)
+	compiled, err := compileProgram(cc.code)
 	if err == nil {
-		value, err = vm.RunProgram(prog)
+		value, err = vm.RunProgram(compiled)
 	}
 	stop()
 
@@ -312,6 +351,9 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 		// again with no idea what had gone wrong the first time.
 		text := jsErrorText(err, cc.code, c.offersShell())
 		c.Out.Warningf("%s", firstLine(text))
+		if nr := notRunText(prog.notRun); nr != "" {
+			text += "\n\n" + nr
+		}
 		return text
 	}
 	failures := codeFailuresNote(&log)
@@ -339,20 +381,31 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 	if result != nil || printed.Len() == 0 {
 		b.WriteString(show(value))
 	}
+	// What the program returned and printed goes inside a fence it cannot
+	// close (fenceFor), and everything Strument says goes after it. A program
+	// returns what its calls returned — a command's output, a file, a page —
+	// and any of those can hold a sentence in Strument's voice; the fence is
+	// what makes "outside" mean "the harness". A value with no notes is fenced
+	// too, so the shape never varies.
 	var notes []string
+	block, cut := fencedCapped(b.String(), maxToolOutputBytes-8192)
+	if cut {
+		notes = append(notes, outputCutNote)
+	}
+	if note := notRunText(prog.notRun); note != "" {
+		notes = append(notes, note)
+	}
 	if note := codeLostCallsNote(result, printed.String(), &log); note != "" {
 		notes = append(notes, note)
 	}
 	if failures != "" {
 		notes = append(notes, failures)
 	}
+	out := "The program's result:\n" + block
 	if len(notes) > 0 {
-		// One blank line between the value and the notes, whether or not the
-		// value already ended in a newline — grep's content mode does, and two
-		// blank lines read as a missing paragraph.
-		return truncateResult(strings.TrimRight(b.String(), "\n") + "\n\n" + strings.Join(notes, "\n\n"))
+		out += "\n" + strings.Join(notes, "\n\n")
 	}
-	return truncateResult(b.String())
+	return truncateResult(strings.TrimRight(out, "\n"))
 }
 
 // codeFailuresNote reports the tool calls that raised inside a program that
@@ -392,7 +445,7 @@ var errHeapLimit = errors.New("memory limit")
 // that stops watching. The heap is sampled rather than metered — goja offers
 // no allocation hook — through runtime/metrics, which reads without stopping
 // the world.
-func watchProgram(ctx context.Context, vm *goja.Runtime) (stop func()) {
+func watchProgram(ctx context.Context, vm *goja.Runtime, clock *programClock) (stop func()) {
 	done := make(chan struct{})
 	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
 	heap := func() uint64 {
@@ -403,9 +456,8 @@ func watchProgram(ctx context.Context, vm *goja.Runtime) (stop func()) {
 		return sample[0].Value.Uint64()
 	}
 	base := heap()
+	clock.start()
 	go func() {
-		deadline := time.NewTimer(codeLimits.MaxDuration)
-		defer deadline.Stop()
 		tick := time.NewTicker(20 * time.Millisecond)
 		defer tick.Stop()
 		for {
@@ -415,10 +467,11 @@ func watchProgram(ctx context.Context, vm *goja.Runtime) (stop func()) {
 			case <-ctx.Done():
 				vm.Interrupt(ctx.Err())
 				return
-			case <-deadline.C:
-				vm.Interrupt("time limit")
-				return
 			case <-tick.C:
+				if clock.elapsed() > codeLimits.MaxDuration {
+					vm.Interrupt("time limit")
+					return
+				}
 				if h := heap(); h > base && h-base > codeLimits.MaxHeapGrowth {
 					vm.Interrupt(errHeapLimit)
 					return
@@ -522,34 +575,6 @@ func codeCalledText(n int, called []string) string {
 	return fmt.Sprintf("Ran %s of code calling %s.", size, strings.Join(called, ", "))
 }
 
-// codeCallableTools is the one list behind the run_code description, the
-// registration, and the bridge's allow check.
-//
-// It is InspectorTools() minus symbol when there is no repo map, because that
-// is exactly the condition under which toolDefs offers the symbol tool: symbol
-// reads the tree-sitter layer the repo map is built from, and without it every
-// call answers "The language parser is not available".
-//
-// Naming it unconditionally was the mirror image of a bug this repository has
-// already reasoned about once. internal/prompts leaves symbol out of the
-// run_code bullet on purpose — "prose promising a conditional tool is the bug
-// this comment is about" — while the tool description, which is prose the model
-// reads just as surely, promised it in every session. The prompt was right and
-// the schema was wrong, which is the opposite of how that drift usually runs.
-func (c *Coder) codeCallableTools() []string {
-	names := InspectorTools()
-	if c.RepoMap != nil {
-		return names
-	}
-	out := make([]string, 0, len(names))
-	for _, n := range names {
-		if n != toolSymbol {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
 // codeToolParams is the positional order of each bridged tool's arguments,
 // for a program that passes them positionally rather than in an options
 // object (jsArgs).
@@ -575,12 +600,25 @@ func (c *Coder) codeCallableTools() []string {
 // A positional past the end of this list is dropped, so the list is every
 // parameter the schema has, not just the required one. codeparams_test.go
 // holds it to the schemas.
+//
+// The tools a program can reach since every tool was bridged follow their
+// direct call's habit: edit's three in the order the schema states them, and
+// bash's command first, as `bash("go test ./...")` reads.
 var codeToolParams = map[string][]string{
-	toolRead:   {"path", "offset", "limit"},
-	toolGrep:   {"pattern", "path", "glob", "mode", "ignore_case", "context_lines"},
-	toolGlob:   {"pattern"},
-	toolLS:     {"path"},
-	toolSymbol: {"name", "kind"},
+	toolRead:      {"path", "offset", "limit"},
+	toolGrep:      {"pattern", "path", "glob", "mode", "ignore_case", "context_lines"},
+	toolGlob:      {"pattern"},
+	toolLS:        {"path"},
+	toolSymbol:    {"name", "kind"},
+	toolEdit:      {"path", "old_string", "new_string"},
+	toolWrite:     {"path", "content"},
+	toolBash:      {"command", "purpose", "timeout", "tail"},
+	toolCommit:    {"subject", "body"},
+	toolWebfetch:  {"url", "purpose", "outline", "range"},
+	toolWebsearch: {"query"},
+	toolCheck:     {"name"},
+	toolSkill:     {"name"},
+	toolAbout:     {},
 }
 
 // bridgeCall is the function that answers one bridged call. It is an adapter,
@@ -611,14 +649,14 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 	}
 
 	seen := map[string]bool{}
-	return func(_ context.Context, call *bridgedCall) (any, error) {
+	return func(ctx context.Context, call *bridgedCall) (any, error) {
 		// Fail closed. A name outside `allowed` is not registered at all and
 		// raises a ReferenceError inside the program — but the check lives
 		// here too so the invariant does not depend on the registration list
 		// staying in step with it.
 		if !isAllowed[call.Name] {
-			return nil, fmt.Errorf("unknown function %q: only the read-only tools "+
-				"(%s) can be called from a program", call.Name, strings.Join(allowed, ", "))
+			return nil, fmt.Errorf("unknown function %q: only these tools "+
+				"can be called from a program: %s", call.Name, strings.Join(allowed, ", "))
 		}
 		if !seen[call.Name] {
 			seen[call.Name] = true
@@ -659,7 +697,20 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 		// program that computes over a result needs the result, not the report
 		// about it: glob's prose names the pattern and explains syntax, and
 		// sorting that prose sorts its characters.
+		if v, ok, err := c.runBridgedAction(ctx, call, log.calls); ok {
+			if err == nil {
+				log.last = v
+			}
+			return v, err
+		}
+		c.lastRefusal = nil
 		out := c.inspector().Run(call.Name, call.ArgsJSON())
+		// An observation tool can ask too: a read outside the project. Its
+		// refusal used to come back as the sentence saying so, an ordinary
+		// string the program went on computing over as file contents.
+		if r := c.takeRefusal(); r != nil {
+			return nil, &notRunError{tool: call.Name, refusal: *r}
+		}
 
 		// A tool failure throws instead of returning, at the line that made
 		// the call, where a try/catch can catch it like any other exception.

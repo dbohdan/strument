@@ -43,6 +43,36 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 // after the tail rather than inside it, so asking for 20 lines never costs
 // the line that says why the command stopped.
 func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTimeout time.Duration, tail int) (int, string) {
+	r := c.runShellCommand(ctx, command, requestedTimeout, tail)
+	return r.exit, r.joined()
+}
+
+// shellRun is one model-caused command's outcome, with what the command
+// printed kept apart from what Strument says about it. The two used to arrive
+// as one string, so a command could print "The command was stopped after 2m
+// by Strument's shell_timeout." and be read as Strument; the bash result now
+// fences the output and puts the notices outside the fence (shellResultText).
+type shellRun struct {
+	exit   int
+	output string // the command's own output, or its last lines when tail asked
+	// shown and total are lines of output kept and lines there were, when tail
+	// cut some; shown is 0 when nothing was cut.
+	shown, total int
+	notice       string // Strument's: timeout, Ctrl-C, sandbox hint or refusal
+}
+
+// joined is the outcome as one string, the shape runAndShowTail has always
+// returned: the tail header, the output, then the notices.
+func (r shellRun) joined() string {
+	head := ""
+	if r.shown > 0 {
+		head = tailHeader(r.shown, r.total)
+	}
+	return head + r.output + r.notice
+}
+
+// runShellCommand is runAndShowTail with the outcome kept in its parts.
+func (c *Coder) runShellCommand(ctx context.Context, command string, requestedTimeout time.Duration, tail int) shellRun {
 	c.Out.Printf("")
 	c.Out.Toolf("Running %s", quoteToolArg(command))
 	if c.approvalNote != "" {
@@ -56,7 +86,7 @@ func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTim
 	if c.Sandbox.blocksExecution() {
 		refusal := c.Sandbox.refusal()
 		c.Out.Errorf("%s", refusal)
-		return -1, refusal
+		return shellRun{exit: -1, notice: refusal}
 	}
 
 	// A model-caused block gets a deadline. The turn context is cancellable but
@@ -138,21 +168,35 @@ func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTim
 		// already ends in one doesn't print a blank line.
 		c.Out.CommandOutput(strings.TrimRight(shown, "\n"))
 	}
-	return exitCode, lastLines(output, tail) + notice
+	kept, shown, total := tailLines(output, tail)
+	return shellRun{exit: exitCode, output: kept, shown: shown, total: total, notice: notice}
 }
 
 // lastLines keeps the last n lines of output, saying how many it left out.
 // n <= 0, or output no longer than n lines, returns output unchanged.
 func lastLines(output string, n int) string {
+	kept, shown, total := tailLines(output, n)
+	if shown == 0 {
+		return kept
+	}
+	return tailHeader(shown, total) + kept
+}
+
+// tailLines is lastLines in parts: the kept lines, and how many were kept of
+// how many, or 0 kept when nothing was cut.
+func tailLines(output string, n int) (kept string, shown, total int) {
 	if n <= 0 {
-		return output
+		return output, 0, 0
 	}
 	lines := strings.SplitAfter(strings.TrimSuffix(output, "\n"), "\n")
 	if len(lines) <= n {
-		return output
+		return output, 0, 0
 	}
-	return fmt.Sprintf("(The last %d of %d lines. The user saw all of them.)\n", n, len(lines)) +
-		strings.Join(lines[len(lines)-n:], "") + "\n"
+	return strings.Join(lines[len(lines)-n:], "") + "\n", n, len(lines)
+}
+
+func tailHeader(shown, total int) string {
+	return fmt.Sprintf("(The last %d of %d lines. The user saw all of them.)\n", shown, total)
 }
 
 // defaultShellTimeout bounds a model-caused command. Two minutes is what
