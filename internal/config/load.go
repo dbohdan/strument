@@ -238,13 +238,8 @@ type fileGlobals struct {
 	hasEnvSet bool
 	envSetVal map[string]string
 
-	hasPromptSystemPrefix bool
-	promptSystemPrefixVal string
-	hasPromptCode         bool
-	promptCodeVal         string
-
-	hasChatLanguage bool
-	chatLanguageVal string
+	hasSystemPrompt bool
+	systemPromptVal string
 }
 
 // defaultSandbox is what `sandbox` means when a config does not say.
@@ -564,14 +559,8 @@ func Load(opts Options) (*Config, error) {
 	if user.hasEnvSet {
 		cfg.EnvSet = user.envSetVal
 	}
-	if user.hasPromptSystemPrefix {
-		cfg.PromptSystemPrefix = user.promptSystemPrefixVal
-	}
-	if user.hasPromptCode {
-		cfg.PromptCode = user.promptCodeVal
-	}
-	if user.hasChatLanguage {
-		cfg.ChatLanguage = user.chatLanguageVal
+	if user.hasSystemPrompt {
+		cfg.SystemPrompt = user.systemPromptVal
 	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
@@ -700,20 +689,11 @@ func Load(opts Options) (*Config, error) {
 		}
 		// Appended, not replaced: examples are additive teaching, and a
 		// project's pair alongside the user's is worth more than either alone.
-		// Whole-value, like env_allow: a project's prompt override is one
-		// decision about how the model reads this repository, and the trust gate
-		// is what makes it the user's own decision — a project must be able to
-		// narrow what the user's config widened. chat_language, by contrast, is
-		// a per-project preference empty unless set, so it follows env_set's
-		// rule: a project naming a language should not silently drop the user's.
-		if project.hasPromptSystemPrefix {
-			cfg.PromptSystemPrefix = project.promptSystemPrefixVal
-		}
-		if project.hasPromptCode {
-			cfg.PromptCode = project.promptCodeVal
-		}
-		if project.hasChatLanguage {
-			cfg.ChatLanguage = project.chatLanguageVal
+		// Whole-value, like env_allow: a project's prompt is one decision about
+		// how the model reads this repository, and the trust gate is what makes
+		// it the user's own decision.
+		if project.hasSystemPrompt {
+			cfg.SystemPrompt = project.systemPromptVal
 		}
 	}
 
@@ -830,75 +810,6 @@ func predeclaredGlobals(env envResolver, root string) starlark.StringDict {
 
 // execConfig executes one Starlark file with the builtins predeclared and
 // extracts the required globals.
-// promptSlots is the closed placeholder set each Tier 1 prompt accepts. The
-// keys match what pyFormat fills at assembly time, kept closed so a config
-// cannot invent a slot the harness does not render — code is the source of
-// truth for what reaches a model, and a template that names a slot nobody
-// fills would be a silent lie.
-var promptSlots = map[string]map[string]bool{
-	"prompt_code": {
-		"platform": true, "language": true, "final_reminders": true,
-		"code_tools": true, "observation_tools": true,
-	},
-	// prompt_system_prefix is literal: no slots.
-	"prompt_system_prefix": {},
-}
-
-// parsePromptString reads one prompt_* setting. All share the shape — a
-// string, optional, empty means unset — and all are validated against the
-// closed placeholder set so a typo is a load error that says so rather than a
-// slot that silently never fills.
-func parsePromptString(path, name string, v starlark.Value) (string, error) {
-	s, ok := starlark.AsString(v)
-	if !ok {
-		return "", fmt.Errorf("%s: `%s` must be a string, got %s", path, name, v.Type())
-	}
-	slots, ok := promptSlots[name]
-	if !ok {
-		return "", fmt.Errorf("%s: `%s` has no defined placeholder set", path, name)
-	}
-	if err := validatePromptSlots(path, name, s, slots); err != nil {
-		return "", err
-	}
-	return s, nil
-}
-
-// validatePromptSlots checks that every {placeholder} in a prompt string is a
-// member of the key's closed set. Literal braces must be doubled, as in the
-// templates pyFormat consumes, so an unbraced `{` that is not the start of a
-// known slot is a load error with the list of what would have been accepted.
-func validatePromptSlots(path, name, s string, allowed map[string]bool) error {
-	for i := 0; i < len(s); {
-		if s[i] != '{' {
-			i++
-			continue
-		}
-		if i+1 < len(s) && s[i+1] == '{' {
-			i += 2 // a doubled brace is a literal brace
-			continue
-		}
-		j := strings.Index(s[i:], "}")
-		if j < 0 {
-			return fmt.Errorf("%s: `%s` has an unmatched \"{\"; write literal braces as {{ and }}", path, name)
-		}
-		slot := s[i+1 : i+j]
-		if !allowed[slot] {
-			known := strings.Join(slices.Sorted(maps.Keys(allowed)), ", ")
-			want := "no placeholders"
-			if known != "" {
-				want = "the placeholders: " + known
-			}
-			// Both mentions of the key are backticked: doc/messages.md's rule is
-			// that a config key is a name you type bare, and one message
-			// spelling the same key two ways is the drift that page exists to
-			// stop.
-			return fmt.Errorf(
-				"%s: `%s` uses {%s}, which is not one of its slots — `%s` takes %s", path, name, slot, name, want)
-		}
-		i += j + 1
-	}
-	return nil
-}
 
 func execConfig(path string, src []byte, env envResolver, root string) (*fileGlobals, error) {
 	return execConfigThread(path, src, env, root, nil)
@@ -1352,34 +1263,30 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.envSetVal = vals
 	}
 
-	for _, name := range []string{"prompt_system_prefix", "prompt_code"} {
-		v, ok := globals[name]
-		if !ok {
-			continue
-		}
-		val, err := parsePromptString(path, name, v)
-		if err != nil {
-			return nil, err
-		}
-		switch name {
-		case "prompt_system_prefix":
-			out.hasPromptSystemPrefix = true
-			out.promptSystemPrefixVal = val
-		case "prompt_code":
-			out.hasPromptCode = true
-			out.promptCodeVal = val
+	// The template engine went, and with it the keys that fed it. Each is
+	// refused by name rather than ignored, because a config that still sets
+	// one is asking for an effect it would silently stop getting.
+	removedPromptKeys := map[string]string{
+		"prompt_code": "it is now `system_prompt`, which takes the prompt verbatim: " +
+			"there are no {placeholders}, and the platform facts follow it on their own",
+		"prompt_system_prefix": "write the whole prompt in `system_prompt`, or put a " +
+			"project's standing rules in AGENTS.md, which the model is asked to read",
+		"chat_language": "the model replies in the language you write to it in; " +
+			"to insist on one, say so in `system_prompt`",
+	}
+	for _, name := range slices.Sorted(maps.Keys(removedPromptKeys)) {
+		why := removedPromptKeys[name]
+		if _, ok := globals[name]; ok {
+			return nil, fmt.Errorf("%s: `%s` has been removed: %s", path, name, why)
 		}
 	}
-
-	if lv, ok := globals["chat_language"]; ok {
-		s, ok := starlark.AsString(lv)
+	if v, ok := globals["system_prompt"]; ok {
+		s, ok := starlark.AsString(v)
 		if !ok {
-			return nil, fmt.Errorf("%s: `chat_language` must be a string language code, got %s", path, lv.Type())
+			return nil, fmt.Errorf("%s: `system_prompt` must be a string, got %s", path, v.Type())
 		}
-		// An empty string is an explicit "don't force a language", distinct from
-		// the key being absent (which leaves the env-var detection in charge).
-		out.hasChatLanguage = true
-		out.chatLanguageVal = strings.TrimSpace(s)
+		out.hasSystemPrompt = true
+		out.systemPromptVal = s
 	}
 
 	return out, nil

@@ -228,9 +228,7 @@ var projectKeyOrder = []string{
 	"hasAutoApprove",
 	"hasApproveModel",
 	"hasEnvSet",
-	"hasPromptSystemPrefix",
-	"hasPromptCode",
-	"hasChatLanguage",
+	"hasSystemPrompt",
 }
 
 var projectKeys = map[string]projectKey{
@@ -468,12 +466,8 @@ var projectKeys = map[string]projectKey{
 		},
 	},
 
-	"hasPromptSystemPrefix": promptKey("prompt_system_prefix", "prepends to every system prompt",
-		func(g *fileGlobals) (bool, string) { return g.hasPromptSystemPrefix, g.promptSystemPrefixVal }),
-	"hasPromptCode": promptKey("prompt_code", "replaces the system prompt",
-		func(g *fileGlobals) (bool, string) { return g.hasPromptCode, g.promptCodeVal }),
-
-	"hasChatLanguage": {name: "chat_language", set: func(g *fileGlobals) bool { return g.hasChatLanguage }},
+	"hasSystemPrompt": promptKey("system_prompt", "replaces the system prompt",
+		func(g *fileGlobals) (bool, string) { return g.hasSystemPrompt, g.systemPromptVal }),
 }
 
 // promptKey builds the entry for one prompt_* key. The text itself is not

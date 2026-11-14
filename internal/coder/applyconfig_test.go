@@ -1,31 +1,29 @@
 package coder
 
 import (
-	"strings"
 	"testing"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/prompts"
 )
 
-// ApplyConfig is idempotent, and the prompt layer is where that matters: a
-// reload rebuilds the active set from the built-in before layering overrides.
+// ApplyConfig is idempotent, and a reload that drops a setting restores its
+// default rather than keeping the last value.
 func TestApplyConfigIsIdempotent(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{})
-	cfg := &config.Config{
-		PromptCode: "REPLACED {platform} {language} {final_reminders} {code_tools} {observation_tools}",
-	}
+	cfg := &config.Config{SystemPrompt: "REPLACED"}
 
 	ApplyConfig(c, cfg)
 	ApplyConfig(c, cfg)
-	if !strings.HasPrefix(c.Prompts.MainSystem, "REPLACED") {
-		t.Errorf("prompt_code override did not reach the active prompt:\n%.60s", c.Prompts.MainSystem)
+	if got := c.systemPrompt(); got != "REPLACED" {
+		t.Errorf("system_prompt did not reach the active prompt:\n%.60s", got)
 	}
 
 	// And a config that stops saying restores the default rather than keeping
 	// the last value, which is what a reload means.
 	ApplyConfig(c, &config.Config{})
-	if strings.HasPrefix(c.Prompts.MainSystem, "REPLACED") {
-		t.Error("dropping prompt_code from the config did not restore the built-in prompt")
+	if c.systemPrompt() != prompts.System {
+		t.Error("dropping system_prompt from the config did not restore the built-in prompt")
 	}
 	if c.MaxSteps != defaultMaxSteps {
 		t.Errorf("MaxSteps = %d after a config that omits it, want the default %d", c.MaxSteps, defaultMaxSteps)

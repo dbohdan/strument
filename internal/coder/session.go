@@ -72,16 +72,6 @@ func (c *Coder) SetModel(m *config.Model) {
 	c.tokenScale = 0
 }
 
-// SetChatLanguage replaces the env-var language detection that defaultPlatformInfo
-// ran at New with an explicitly configured code, re-deriving the platform's
-// language. It exists because `chat_language` is a config key, and config is
-// loaded after the Coder is built — so the language slot has to be recomputable
-// rather than fixed at construction.
-func (c *Coder) SetChatLanguage(code string) {
-	c.ChatLanguage = code
-	c.Platform.Language = detectUserLanguage(code)
-}
-
 // LastCommitHash is the short hash of the session's last commit ("" if
 // none); the REPL uses it for the undo hint.
 func (c *Coder) LastCommitHash() string { return c.lastCommitHash }

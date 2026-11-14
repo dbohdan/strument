@@ -167,14 +167,20 @@ func (ch *chatChunks) addConversationBreakpoints(lastOnly bool) {
 	}
 }
 
-// platformText renders the {platform} slot from injected PlatformInfo.
-func (c *Coder) platformText() string {
+// factsText is the part of the system prompt the harness writes about this
+// session: the platform, the model, and the project's standing instructions.
+// It follows the instructions — the built-in System or the config's
+// system_prompt — and a replacement does not replace it, because it is not
+// instructions but what is true here.
+//
+// It was the {platform} slot of a template once, spliced into the middle of
+// the prompt. Facts at the end leave the instructions one literal string, and
+// keep them a byte-stable prefix across projects and models.
+func (c *Coder) factsText() string {
 	var b strings.Builder
+	b.WriteString("Keep in mind these details about the user's platform and environment:\n")
 	b.WriteString("- Platform: " + c.Platform.Platform + "\n")
 	b.WriteString("- Shell: " + c.Platform.ShellVar + "=" + c.Platform.ShellVal + "\n")
-	if c.Platform.Language != "" {
-		b.WriteString("- Language: " + c.Platform.Language + "\n")
-	}
 	// Not "Current date", which is aider's label: the date is taken once, when
 	// Strument starts, so after midnight the label was the false part. The
 	// date stays because a model without one assumes the year its training
@@ -186,121 +192,37 @@ func (c *Coder) platformText() string {
 	}
 	if c.Platform.InGit {
 		b.WriteString("- The user is operating inside a git repository\n")
-		b.WriteString("- Git is available via the bash tool: git log, git diff, git status, etc.\n")
+		// Only with the tool to run it: a model told about a tool it does not
+		// have may call it (doc/experiments/2026-09-tool-disclosure, arm C).
+		if c.offersShell() {
+			b.WriteString("- Git is available via the bash tool: git log, git diff, git status, etc.\n")
+		}
 	}
-	return b.String()
+	// The model's own name, as the provider calls it. A model asked what it
+	// is otherwise answers from training, which names an older model or the
+	// wrong vendor, and one switched in by /model reads an earlier model's
+	// turns as its own (the restore seam says so; this says who it is now).
+	if c.Model != nil && c.Model.Slug != "" {
+		b.WriteString("- Model: " + c.Model.Slug + "\n")
+	}
+	if note := c.agentsNote(); note != "" {
+		b.WriteString("\n" + note + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
-// codeToolsText renders the {code_tools} slot: the code bullet when the code
-// tool is in this session's tool set, "" when it is not. The condition is the
-// same one toolDefs uses, so the prose tracks the schema by construction
-// rather than by a second copy of the condition drifting away from it.
-func (c *Coder) codeToolsText() string {
-	if !c.OfferCode {
-		return ""
+// systemPrompt is the instructions this session sends: the config's
+// system_prompt when it sets one, the built-in otherwise.
+func (c *Coder) systemPrompt() string {
+	if c.SystemPrompt != "" {
+		return c.SystemPrompt
 	}
-	return fmt.Sprintf(prompts.CodeToolsBullet, andList(c.codeCallableTools()))
-}
-
-// andList writes names as English prose: "read, grep, glob, and ls". The prompt
-// slots that take it are sentences, and a bare comma-joined list reads as a
-// fragment dropped into one.
-func andList(names []string) string {
-	switch len(names) {
-	case 0:
-		return ""
-	case 1:
-		return names[0]
-	case 2:
-		return names[0] + " and " + names[1]
-	}
-	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
-}
-
-// fmtSystemPrompt substitutes the template slots.
-//
-// Four slots remain. The fence and shell-command slots went with the text edit
-// formats: fences framed SEARCH/REPLACE blocks, and the shell-command guidance
-// described a format where commands were prose the harness parsed back out.
-// Both are the schema's job now.
-//
-// {code_tools} is filled from the same condition that offers the run_code tool in
-// the schema, so the prose and the schema cannot drift apart in either
-// direction: a prompt naming a tool the model does not have, or a schema tool
-// the prompt's cost list omits — the closed-world reading that produced the
-// 0/36 uptake in doc/experiments/2026-08-code-mode/README.md.
-func (c *Coder) fmtSystemPrompt(prompt string) string {
-	var finalReminders []string
-	if c.Platform.Language != "" {
-		finalReminders = append(finalReminders, "Reply in "+c.Platform.Language+".\n")
-	}
-
-	language := c.Platform.Language
-	if language == "" {
-		language = "the same language they are using"
-	}
-
-	return pyFormat(prompt, map[string]string{
-		"final_reminders":   strings.Join(finalReminders, "\n\n"),
-		"platform":          c.platformText(),
-		"language":          language,
-		"code_tools":        c.codeToolsText(),
-		"observation_tools": c.observationToolsText(),
-	})
-}
-
-// observationToolsText renders the {observation_tools} slot.
-func (c *Coder) observationToolsText() string {
-	return prompts.ObservationBullet
-}
-
-// filesNoFullFilesText picks the how-to-look note, which must not tell the
-// model to use a tool the schema withholds.
-func (c *Coder) filesNoFullFilesText() string {
-	// The withheld case, which this function used to miss: the note offers a
-	// run_code call as an alternative to a run of lookups, and with the tool
-	// out of the schema that is prose promising a tool the model does not
-	// have. The {code_tools} bullet was already gated on this flag; this
-	// sentence was not, so the rule held in one place and not the other.
-	if !c.OfferCode {
-		return c.Prompts.FilesNoFullFilesNoCode
-	}
-	return c.Prompts.FilesNoFullFiles
+	return prompts.System
 }
 
 // formatChatChunks builds the canonical slots.
 func (c *Coder) formatChatChunks() *chatChunks {
-	mainSys := c.fmtSystemPrompt(c.Prompts.MainSystem)
-	if c.SystemPromptPrefix != "" {
-		mainSys = c.SystemPromptPrefix + "\n" + mainSys
-	}
-
-	// The reminder rides in the system prompt and nowhere else.
-	//
-	// aider also appends it again at the end of the conversation — rules at the
-	// top and at the bottom, the standard hedge against instructions getting
-	// lost in the middle. Strument carried that, so the editing rules went out
-	// twice in every request. Claude Haiku reported it when asked what looked
-	// odd about the harness, and a probe confirmed it: two copies per send,
-	// stable across turns.
-	//
-	// The end copy is the one that went. The system prompt is a stable prefix
-	// and therefore cacheable, where a copy appended to the last user turn is
-	// regenerated every send. The tool schema now carries most of the format
-	// rules and travels beside the messages, so recency buys less than it did
-	// when a SEARCH/REPLACE block had to be parsed out of prose. And the "user"
-	// placement worked by editing words into the user's own message, which is
-	// one fewer place the harness pretends the user said something.
-	if c.Prompts.SystemReminder != "" {
-		mainSys += "\n" + c.fmtSystemPrompt(c.Prompts.SystemReminder)
-	}
-
-	// How to find things. This was the nothing-pinned note, shown when /add
-	// had pinned nothing; with pinning gone it is what every session gets.
-	mainSys += "\n\n" + c.filesNoFullFilesText()
-	if note := c.agentsNote(); note != "" {
-		mainSys += "\n\n" + note
-	}
+	mainSys := strings.TrimRight(c.systemPrompt(), "\n") + "\n\n" + c.factsText()
 
 	chunks := &chatChunks{}
 
@@ -456,41 +378,3 @@ func (c *Coder) countMessages(msgs []llm.Message) int {
 
 func osName() string   { return strings.ToTitle(runtime.GOOS[:1]) + runtime.GOOS[1:] }
 func archName() string { return runtime.GOARCH }
-
-// detectUserLanguage: explicit config, else LANG-style env vars, normalized
-// through a small fallback map (aider prefers Babel; we keep the fallback).
-func detectUserLanguage(explicit string) string {
-	if explicit != "" {
-		return normalizeLanguage(explicit)
-	}
-	for _, envVar := range []string{"LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"} {
-		if v := os.Getenv(envVar); v != "" {
-			return normalizeLanguage(strings.SplitN(v, ".", 2)[0])
-		}
-	}
-	return ""
-}
-
-var languageNames = map[string]string{
-	"en": "English", "fr": "French", "es": "Spanish", "de": "German",
-	"it": "Italian", "pt": "Portuguese", "zh": "Chinese", "ja": "Japanese",
-	"ko": "Korean", "ru": "Russian",
-}
-
-func normalizeLanguage(code string) string {
-	if code == "" {
-		return ""
-	}
-	up := strings.ToUpper(code)
-	if up == "C" || up == "POSIX" {
-		return ""
-	}
-	if len(code) > 3 && !strings.ContainsAny(code, "_-") && code[0] >= 'A' && code[0] <= 'Z' {
-		return code
-	}
-	primary := strings.ToLower(strings.SplitN(strings.ReplaceAll(code, "-", "_"), "_", 2)[0])
-	if name, ok := languageNames[primary]; ok {
-		return name
-	}
-	return code
-}

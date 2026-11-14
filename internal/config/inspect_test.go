@@ -55,9 +55,7 @@ env_allow = ["PATH", "HOME"]
 auto_approve = ["websearch"]
 approve_model = decision_model("systemone", "laya", url = "http://localhost:11435/v1/systemone")
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
-prompt_system_prefix = "House rules."
-prompt_code = "Be terse."
-chat_language = "en"
+system_prompt = "Be terse."
 `
 
 func inspect(t *testing.T, body string, env map[string]string) *ProjectInspection {
@@ -125,11 +123,11 @@ func TestInspectReportsEveryClassifiedKey(t *testing.T) {
 // it the test above would pass just as well on an inspection that called every
 // key a capability.
 func TestInspectAnnouncesNothingForPreferencesAlone(t *testing.T) {
-	insp := inspect(t, "max_steps = 40\nchat_language = \"en\"\n", nil)
+	insp := inspect(t, "max_steps = 40\nmax_undo_turns = 5\n", nil)
 	if len(insp.Capabilities) != 0 {
 		t.Errorf("a config setting only preferences announced %v", keys(insp.Capabilities))
 	}
-	if !slices.Equal(insp.Preferences, []string{"max_steps", "chat_language"}) {
+	if !slices.Equal(insp.Preferences, []string{"max_steps", "max_undo_turns"}) {
 		t.Errorf("preferences = %v", insp.Preferences)
 	}
 	if insp.Empty() {
