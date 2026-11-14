@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
 )
 
@@ -100,21 +99,6 @@ func TestCommitTurnNoopAfterToolCommit(t *testing.T) {
 // message's full text, so the call grew with the turn until a provider refused
 // it. These pin the bound and, more importantly, pin *what gives* when the
 // input does not fit.
-
-// sideInputBound is the rule compaction already used; the commit message now
-// reads the same one. A model that reports its window uses it, and only a model
-// that does not falls back.
-func TestSideInputBoundPrefersTheModelsOwnWindow(t *testing.T) {
-	if got := sideInputBound(&config.Model{Context: 200_000}); got != 200_000 {
-		t.Errorf("bound = %d, want the model's own 200000", got)
-	}
-	if got := sideInputBound(&config.Model{}); got != summaryFallbackInput {
-		t.Errorf("bound = %d, want the %d fallback", got, summaryFallbackInput)
-	}
-	if got := sideInputBound(nil); got != summaryFallbackInput {
-		t.Errorf("bound = %d for a nil model, want the %d fallback", got, summaryFallbackInput)
-	}
-}
 
 // A commit that git refuses — a pre-commit hook is the everyday case — is not
 // "nothing to commit". The commit tool inferred that from the hash not moving

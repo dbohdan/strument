@@ -50,7 +50,6 @@ func TestRefusedSwitchKeepsRecording(t *testing.T) {
 		t.Fatal(err)
 	}
 	model := &config.Model{Provider: config.Provider{Adapter: config.AdapterOpenRouter}, Slug: "m"}
-	model.SideModel = model
 	cdr := coder.New(root, model)
 	cdr.Session = "here"
 	l := &sessionLog{projectRoot: root}

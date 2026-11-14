@@ -723,8 +723,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 //
 // Restored context is invisible until the first request, and by then the request
 // has failed. aider #2979 is the shape: an 80k-token restored history fails on
-// the wire, and configuring the side model for summarization does not help,
-// because compaction runs at the end of a turn and there has not been one yet.
+// the wire, and compaction does not help, because it runs at the end of a turn and there has not been one yet.
 //
 // This comment used to add that Strument restored less — pins, notes, and the
 // read-only block rather than a conversation. With `--continue` it restores a
@@ -860,7 +859,7 @@ func (c *Coder) moveBackCurMessages() {
 	c.turns = append(c.turns, TurnSpan{Start: start, End: len(c.doneMessages), Files: c.TurnEditedFiles()})
 	c.curMessages = nil
 	c.recordedMessages = 0
-	c.maybeSummarize()
+	c.maybeCompact()
 }
 
 // endTurnHistory settles the finished turn and compacts if it has outgrown the
@@ -921,66 +920,27 @@ func maxChatHistoryTokens(context int) int {
 	return max(context/historyShare, minChatHistoryTokens)
 }
 
-// countSummaryMessages reports how many retained history messages are compaction summaries.
-// summaryTexts is the text of the summary messages among msgs, joined.
-func summaryTexts(msgs []llm.Message) string {
-	var texts []string
-	for _, m := range msgs {
-		if isSummaryMessage(m) {
-			texts = append(texts, m.Text())
-		}
-	}
-	return strings.Join(texts, "\n\n")
-}
-
-func countSummaryMessages(msgs []llm.Message) int {
-	n := 0
-	for _, m := range msgs {
-		if isSummaryMessage(m) {
-			n++
-		}
-	}
-	return n
-}
-
-func validCompaction(msgs []llm.Message, beforeTokens, beforeMessages, afterTokens int) bool {
-	return len(msgs) < beforeMessages && afterTokens < beforeTokens && hasSummaryContent(msgs)
-}
-
-func hasSummaryContent(msgs []llm.Message) bool {
-	for _, m := range msgs {
-		if isSummaryMessage(m) && strings.TrimSpace(strings.TrimPrefix(m.Text(), summaryPrefix)) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// maybeSummarize compacts the settled history when it outgrows the chat-history
-// budget. It runs only when a summarizer is wired and the model's window is
-// known (Context > 0) — mirroring checkTokens, which treats an unknown window
-// as "no limit to enforce". Synchronous: the side-model call happens here,
-// before the next prompt is assembled. On failure the history is left intact.
-func (c *Coder) maybeSummarize() {
-	if c.Summarizer == nil || c.Model.Context <= 0 {
+// maybeCompact compacts the settled history when it outgrows the chat-history
+// budget: old tool output first, then the oldest turns. It runs only when the
+// model's window is known (Context > 0) — mirroring checkTokens, which treats an
+// unknown window as "no limit to enforce".
+func (c *Coder) maybeCompact() {
+	if c.Model == nil || c.Model.Context <= 0 || c.Tokens == nil {
 		return
 	}
 	budget := c.historyBudget()
-	if !c.Summarizer.tooBig(c.doneMessages, budget) {
+	if c.historyTokens(c.doneMessages) <= budget {
 		return
 	}
-	if c.summaryBackoff {
-		c.summaryBackoff = false
+	if c.compactBackoff {
+		c.compactBackoff = false
 		return
 	}
 	if c.pruneHistory(budget) {
 		return
 	}
-	if c.CompactionMode == "" || c.CompactionMode == CompactionSummary {
-		c.Out.Printf("Summarizing chat history to fit the context window...")
-	}
-	if !c.compactHistory(budget) {
-		c.summaryBackoff = true
+	if !c.rollHistory(budget) {
+		c.compactBackoff = true
 	}
 }
 
@@ -995,10 +955,10 @@ func (c *Coder) maybeSummarize() {
 // classified the refusal and ended the turn. With compaction moved late in the
 // window, this is the backstop it relies on.
 func (c *Coder) foldForOverflow() bool {
-	if c.Summarizer == nil || len(c.doneMessages) == 0 {
+	if c.Tokens == nil || len(c.doneMessages) == 0 {
 		return false
 	}
-	target := c.Summarizer.total(c.doneMessages) / 2
+	target := c.historyTokens(c.doneMessages) / 2
 	if c.Model.Context > 0 {
 		target = min(target, c.historyBudget())
 	}
@@ -1008,38 +968,7 @@ func (c *Coder) foldForOverflow() bool {
 	if c.pruneHistory(target) {
 		return true
 	}
-	c.Out.Printf("The request is over the context limit; summarizing the chat history to make room...")
-	return c.compactHistory(target)
-}
-
-// compactHistory folds the settled history to fit budget and reports whether
-// it did. On failure the history is left intact and the user told why.
-func (c *Coder) compactHistory(budget int) bool {
-	if c.CompactionMode == CompactionRoll || c.CompactionMode == CompactionRollBare {
-		return c.rollHistory(budget, c.CompactionMode == CompactionRoll)
-	}
-	beforeTokens := c.Summarizer.total(c.doneMessages)
-	beforeMessages := len(c.doneMessages)
-	out, err := c.Summarizer.summarize(c.doneMessages, budget)
-	if err != nil {
-		c.Out.Warningf("Could not summarize chat history: %v", err)
-		return false
-	}
-	afterTokens := c.Summarizer.total(out)
-	if !validCompaction(out, beforeTokens, beforeMessages, afterTokens) {
-		c.recordCompaction("summary", "not_smaller", summaryTexts(out), beforeTokens, afterTokens)
-		c.Out.Warningf("Could not summarize the chat history: the summary was not smaller than the history.")
-		return false
-	}
-	c.recordCompaction("summary", "ok", summaryTexts(out), beforeTokens, afterTokens)
-	c.doneMessages = out
-	// The summary absorbed the turns, so there are none left to rewind.
-	c.turns, c.compactedTurns = nil, true
-	c.Out.Printf("Chat history compacted: %d tokens/%s -> %d tokens/%s; %s retained.",
-		beforeTokens, plural(beforeMessages, "message", "messages"),
-		afterTokens, plural(len(out), "message", "messages"),
-		plural(countSummaryMessages(out), "summary", "summaries"))
-	return true
+	return c.rollHistory(target)
 }
 
 // finalizeUsage resolves cost — (1) in-band cost, (2) config
@@ -1180,83 +1109,6 @@ func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int
 		report += " (estimated)"
 	}
 	return report
-}
-
-// FlushSideUsage prints and consumes the token/cost line for the current
-// session-notes request. Notes can be generated between turns, so their usage
-// has its own accumulator rather than sharing the current turn's totals.
-func (c *Coder) FlushSideUsage() {
-	if !c.sideUsageRecorded {
-		return
-	}
-	// No duration: a side request (session notes, a commit message) goes out
-	// on its own path that does not run through streamOnce's clock, so there
-	// is no measurement to report and a zero suppresses the rate rather than
-	// printing a wrong one.
-	report := usageReport("message", "", c.sideTokensSent, c.sideCacheWrite,
-		c.sideCacheRead, c.sideTokensReceived, 0, c.sideCost, c.sideCostKnown,
-		c.totalCost, false)
-	c.sideCost = 0
-	c.sideCostKnown = false
-	c.sideTokensSent = 0
-	c.sideTokensReceived = 0
-	c.sideCacheRead = 0
-	c.sideCacheWrite = 0
-	c.sideUsageRecorded = false
-	c.Out.Printf("%s", report)
-}
-
-// sideUsageDoneMessage is the message printed after a side usage line that
-// named the charge — the session notes — so the user knows what the charge was
-// for. Both the startup --continue notes call and /notes generate print it.
-const sideUsageDoneMessage = "Session notes generated from the session record."
-
-// ReportSideUsageDone prints sideUsageDoneMessage through the coder's output
-// writer. Call it after FlushSideUsage so the charge — the session notes — is
-// named on screen rather than left to the token/cost line alone.
-func (c *Coder) ReportSideUsageDone() {
-	c.Out.Printf("%s", sideUsageDoneMessage)
-}
-
-// RecordTurnSideUsage folds in a request the turn made outside the tool loop.
-// It is used for commit-message requests, which belong in the enclosing turn's
-// totals.
-func (c *Coder) RecordTurnSideUsage(u llm.Usage) {
-	c.messageTokensSent += u.PromptTokens
-	c.messageTokensReceived += u.CompletionTokens
-	c.messageCacheRead += u.CacheReadTokens
-	c.messageCacheWrite += u.CacheWriteTokens
-	c.totalTokensSent += u.PromptTokens
-	c.totalTokensReceived += u.CompletionTokens
-	c.peakTokensSent = max(c.peakTokensSent, u.PromptTokens)
-	if u.Cost != nil {
-		c.messageCost += *u.Cost
-		c.totalCost += *u.Cost
-		c.costKnown, c.runKnown = true, true
-	}
-}
-
-// RecordSideUsage records one session-notes request in its independent
-// accumulator and folds it into the run totals. FlushSideUsage consumes the
-// accumulator after the request is complete.
-func (c *Coder) RecordSideUsage(u llm.Usage) {
-	c.sideTokensSent += u.PromptTokens
-	c.sideTokensReceived += u.CompletionTokens
-	c.sideCacheRead += u.CacheReadTokens
-	c.sideCacheWrite += u.CacheWriteTokens
-	c.totalTokensSent += u.PromptTokens
-	c.totalTokensReceived += u.CompletionTokens
-	c.peakTokensSent = max(c.peakTokensSent, u.PromptTokens)
-	if u.Cost != nil {
-		c.sideCost += *u.Cost
-		c.totalCost += *u.Cost
-		c.sideCostKnown = true
-		c.runKnown = true
-	}
-	if u.PromptTokens != 0 || u.CompletionTokens != 0 || u.CacheReadTokens != 0 ||
-		u.CacheWriteTokens != 0 || u.Cost != nil {
-		c.sideUsageRecorded = true
-	}
 }
 
 // formatTokenLine renders the token half of the usage report, for one send and

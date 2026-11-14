@@ -89,12 +89,12 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 func (c *Coder) pruneHistory(budget int) bool {
 	// A copy, so that a slice sharing the old backing array keeps its results.
 	msgs := slices.Clone(c.doneMessages)
-	n, freed := pruneToolResults(msgs, budget, c.Summarizer.count, c.clearedPlaceholder())
+	n, freed := pruneToolResults(msgs, budget, c.msgTokens, c.clearedPlaceholder())
 	if n == 0 {
 		return false
 	}
 	c.doneMessages = msgs
 	c.Out.Printf("Cleared %s from the chat history (about %d tokens); the calls are kept.",
 		plural(n, "old tool result", "old tool results"), freed)
-	return !c.Summarizer.tooBig(c.doneMessages, budget)
+	return c.historyTokens(c.doneMessages) <= budget
 }

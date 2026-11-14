@@ -346,7 +346,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 
 	// First session: nothing recorded, so it is offered.
 	c1 := newCoder()
-	_, offered, _ := restoreSession(c1, root, history.DefaultSession, history.Resume{})
+	_, offered := restoreSession(c1, root, history.DefaultSession, history.Resume{})
 	if len(offered) == 0 {
 		t.Fatal("a project with AGENTS.md and no record should be offered it")
 	}
@@ -357,7 +357,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// Second session, with the offer recorded and the user having dropped it:
 	// dropped stays dropped.
 	c2 := newCoder()
-	_, offered, _ = restoreSession(c2, root, history.DefaultSession, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
+	_, offered = restoreSession(c2, root, history.DefaultSession, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
 	if len(offered) > 0 {
 		t.Error("the offer must not repeat once recorded")
 	}
@@ -368,7 +368,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 	// And with it recorded *and* still pinned, it comes back as an ordinary
 	// resume entry rather than as a fresh offer.
 	c3 := newCoder()
-	_, offered, _ = restoreSession(c3, root, history.DefaultSession, history.Resume{
+	_, offered = restoreSession(c3, root, history.DefaultSession, history.Resume{
 		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
 	})
 	if len(offered) > 0 {
@@ -387,7 +387,7 @@ func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	root := t.TempDir()
 	c := coder.New(root, &config.Model{Slug: "m"})
 
-	if _, offered, _ := restoreSession(c, root, history.DefaultSession, history.Resume{}); len(offered) > 0 {
+	if _, offered := restoreSession(c, root, history.DefaultSession, history.Resume{}); len(offered) > 0 {
 		t.Error("nothing to offer in a project with no AGENTS.md")
 	}
 	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {
@@ -437,7 +437,7 @@ func TestRestoreSessionNote(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cdr := coder.New(root, &config.Model{Slug: "test"})
-			note, _, _ := restoreSession(cdr, root, history.DefaultSession, tt.res)
+			note, _ := restoreSession(cdr, root, history.DefaultSession, tt.res)
 			if tt.empty {
 				if note != "" {
 					t.Errorf("note = %q, want empty", note)
@@ -1000,7 +1000,7 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		return c
 	}
 
-	note, offered, _ := restoreSession(newCoder(), root, history.DefaultSession, history.Resume{})
+	note, offered := restoreSession(newCoder(), root, history.DefaultSession, history.Resume{})
 	if !slices.Contains(offered, coder.AgentsLocalFileName) {
 		t.Fatalf("offered = %v, want %s", offered, coder.AgentsLocalFileName)
 	}
@@ -1012,7 +1012,7 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		t.Errorf("git still offers the file: %q (%v)", status, err)
 	}
 
-	note, offered, _ = restoreSession(newCoder(), root, history.DefaultSession,
+	note, offered = restoreSession(newCoder(), root, history.DefaultSession,
 		history.Resume{AutoPinned: []string{coder.AgentsLocalFileName}})
 	if len(offered) > 0 || strings.Contains(note, "info/exclude") {
 		t.Errorf("second session: offered %v, note %q; want neither", offered, note)

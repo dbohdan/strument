@@ -1,5 +1,13 @@
 # Sessions, compaction, and resuming work
 
+> **November 2026.** Compaction no longer summarizes, and session notes and
+> `/session fork` are gone, with the side model that wrote all three: a long
+> history now drops its oldest turns and keeps what the user said in them, and
+> the `recall` tool finds the rest in the session record. What follows is the
+> design history as it was argued; the turn-boundary reasoning and the
+> resume design still hold, and the summary and notes sections describe what
+> was removed and why it was built.
+
 Why picking a project back up works the way it does here, what was borrowed,
 and what was rejected. Written down because most of this reasoning existed
 nowhere but a conversation, and the alternatives are the ones a reasonable

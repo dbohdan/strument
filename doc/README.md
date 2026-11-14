@@ -114,7 +114,7 @@ inherited from aider.
   (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
   `bash` and the `check` tool to run things, `commit` to commit), turn-scoped
   snapshots with `/undo`, `/symbol`,
-  reflection, chat-history summarization.
+  reflection, chat-history compaction.
   Architect mode, voice, GUI, and analytics are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
   extensions replaces litellm; Starlark `config.star` replaces layered
@@ -129,10 +129,10 @@ inherited from aider.
   loop above all, and then atomic batch writes that roll back whole and
   preserve the file's mode, an undo substrate that does not need git, usage
   accounting that survives an aborted turn, an in-chat-file exemption on path
-  containment. Chat-history summarization keeps aider's recursive-split
-  algorithm, but runs **synchronously** (aider uses a background thread) and only
-  when the model's context window is declared (`context=`), where aider always
-  summarizes. Three further divergences are described below. When you diverge,
+  containment. Chat-history compaction drops the oldest turns and keeps what
+  the user said in them, where aider has a side model summarize; it runs only
+  when the model's context window is declared (`context=`). Three further
+  divergences are described below. When you diverge,
   say why in the code comment and the commit message.
 
 - **Compaction fires at a turn boundary, and that is the whole trick.** Every
@@ -146,8 +146,11 @@ inherited from aider.
   and safety turns out to decide compaction quality too. If the loop ever grows
   a reason to compact mid-turn, this is what it would be spending.
 
-  Two things follow from the same principle. The summary is a **system**
-  message: aider's prompt asked the side model to write *as the user* ("Begin
+  (Compaction was a side model's summary until November 2026; it is a roll
+  now, and the two paragraphs below describe the summary it was.)
+
+  Two things followed from the same principle. The summary was not a **system**
+  message, and not the user's either: aider's prompt asked the side model to write *as the user* ("Begin
   with \"I asked you...\""), the result went in as a user turn, and the coder
   appended an assistant `"Ok."` agreeing to it — a fabricated exchange, the same
   shape `readOnlyFilesPrefix` was written to remove. And the summary is
@@ -851,8 +854,8 @@ asks for one, is a rolling hash over a ring buffer, which needs no dependency.
 **The harness never speaks as the assistant, and mid-conversation it speaks as a
 marked user.** `llm.HarnessNote` is the one way to say something into an ongoing
 conversation — an interruption, an `/undo`, a decision the user made. The
-honest role would be `system`, and `system` is what the *prefix* uses for
-session notes, but it cannot be used once the conversation
+honest role would be `system`, and `system` is what the *prefix* uses, but it
+cannot be used once the conversation
 is under way: Anthropic rejects a system message that follows an assistant turn
 outright ("role 'system' must follow a 'user' message or an 'assistant' message
 ending in a server tool result"), which is exactly where such a note goes. A
@@ -876,8 +879,9 @@ the compaction trial caught one inventing a rationale nobody had given, so the
 highest-trust channel was the wrong home for it. Every other harness surveyed
 agrees: Codex CLI and Kimi CLI both re-inject the summary as a prefixed user
 message, OpenCode as an assistant message flagged `summary: true`. None uses
-`system`. Session notes stay in the prefix, because they genuinely are
-scaffolding read every turn rather than history.
+`system`. (The roll's note that replaced the summary is a marked harness turn
+too. Session notes, which sat in the prefix as scaffolding read every turn,
+were removed with the side model that wrote them.)
 
 **The summary's voice, and why it is not first person.** aider's summary was
 written "as the user, in the first person" — a user turn the user never wrote,

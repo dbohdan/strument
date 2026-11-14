@@ -21,13 +21,9 @@ func rollTurn(n int) []llm.Message {
 	}
 }
 
-func rollCoder(t *testing.T, mode string) (*Coder, *summaryStub) {
-	t.Helper()
-	c := testCoder(t)
-	side := &summaryStub{}
-	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
-	c.CompactionMode = mode
-	return c, side
+// rolled reports whether the history now opens with a roll's note.
+func rolled(c *Coder) bool {
+	return len(c.doneMessages) > 0 && strings.Contains(c.doneMessages[0].Text(), prompts.RollLabelStem)
 }
 
 // pairedCalls reports a tool result whose call is not in the history.
@@ -45,15 +41,12 @@ func unpairedResult(msgs []llm.Message) string {
 }
 
 func TestRollKeepsWhatTheUserSaid(t *testing.T) {
-	c, side := rollCoder(t, CompactionRoll)
+	c := testCoder(t)
 	for n := 1; n <= 8; n++ {
 		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
 	}
-	if !c.compactHistory(1200) {
+	if !c.rollHistory(1200) {
 		t.Fatal("nothing was rolled")
-	}
-	if side.calls != 0 {
-		t.Errorf("a roll called the side model %d times", side.calls)
 	}
 	note := c.doneMessages[0].Text()
 	if !strings.Contains(note, prompts.RollLabel) {
@@ -79,22 +72,22 @@ func TestRollKeepsWhatTheUserSaid(t *testing.T) {
 	if id := unpairedResult(c.doneMessages); id != "" {
 		t.Errorf("result %s lost its call", id)
 	}
-	if c.Summarizer.total(c.doneMessages) > 1200 {
-		t.Errorf("the rolled history is over budget: %d", c.Summarizer.total(c.doneMessages))
+	if c.historyTokens(c.doneMessages) > 1200 {
+		t.Errorf("the rolled history is over budget: %d", c.historyTokens(c.doneMessages))
 	}
 }
 
 // A second roll carries the first one's messages forward, in one note, in order.
 func TestRollTwiceKeepsOneNote(t *testing.T) {
-	c, _ := rollCoder(t, CompactionRoll)
+	c := testCoder(t)
 	for n := 1; n <= 6; n++ {
 		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
 	}
-	c.compactHistory(1200)
+	c.rollHistory(1200)
 	for n := 7; n <= 12; n++ {
 		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
 	}
-	if !c.compactHistory(1200) {
+	if !c.rollHistory(1200) {
 		t.Fatal("the second roll dropped nothing")
 	}
 	notes := 0
@@ -112,18 +105,6 @@ func TestRollTwiceKeepsOneNote(t *testing.T) {
 	}
 }
 
-func TestRollBareKeepsNothing(t *testing.T) {
-	c, _ := rollCoder(t, CompactionRollBare)
-	for n := 1; n <= 8; n++ {
-		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
-	}
-	c.compactHistory(1200)
-	note := c.doneMessages[0].Text()
-	if !strings.Contains(note, prompts.RollBareLabel) || strings.Contains(note, "TURN-001") {
-		t.Errorf("the bare roll's note: %q", note)
-	}
-}
-
 // Over the cap — a quarter of the budget, never under minRollNoteCap — the
 // oldest messages give way, and the note says how many.
 func TestRollNoteCap(t *testing.T) {
@@ -131,7 +112,7 @@ func TestRollNoteCap(t *testing.T) {
 	for i := range said {
 		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 4000))
 	}
-	note := rollNote(said, 2000, true, false).Text()
+	note := rollNote(said, 2000, false).Text()
 	if !strings.Contains(note, "message 39") {
 		t.Error("the newest message was left out")
 	}
@@ -145,12 +126,12 @@ func TestRollNoteCap(t *testing.T) {
 
 // The harness's own notes are not the user's words and are not quoted.
 func TestRollQuotesOnlyTheUser(t *testing.T) {
-	c, _ := rollCoder(t, CompactionRoll)
+	c := testCoder(t)
 	c.doneMessages = append(c.doneMessages, llm.HarnessNote("The turns above are from a different model."))
 	for n := 1; n <= 8; n++ {
 		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
 	}
-	c.compactHistory(1200)
+	c.rollHistory(1200)
 	if strings.Contains(c.doneMessages[0].Text(), "different model") {
 		t.Error("a harness note was quoted as something the user said")
 	}
@@ -167,37 +148,35 @@ func TestRollNoteCapFloor(t *testing.T) {
 	for i := range said {
 		said[i] = fmt.Sprintf("message %02d %s", i, strings.Repeat("y", 300))
 	}
-	note := rollNote(said, 4000, true, false).Text()
+	note := rollNote(said, 4000, false).Text()
 	if !strings.Contains(note, "message 00") || strings.Contains(note, "did not fit") {
 		t.Error("a small budget cut ordinary messages from the note")
 	}
 }
 
 // Each fold leaves a compaction record holding the text that replaced the
-// folded turns, so a wrong answer drawn from a summary can be traced to it.
+// folded turns, so a wrong answer drawn from it can be traced back.
 func TestCompactionIsRecordedWithItsText(t *testing.T) {
-	for _, mode := range []string{CompactionSummary, CompactionRoll} {
-		c, _ := rollCoder(t, mode)
-		rec := &capture{}
-		c.Recorder = rec
-		for n := 1; n <= 8; n++ {
-			c.doneMessages = append(c.doneMessages, rollTurn(n)...)
+	c := testCoder(t)
+	rec := &capture{}
+	c.Recorder = rec
+	for n := 1; n <= 8; n++ {
+		c.doneMessages = append(c.doneMessages, rollTurn(n)...)
+	}
+	if !c.rollHistory(1200) {
+		t.Fatal("nothing was folded")
+	}
+	var got []Record
+	for _, r := range rec.recs {
+		if r.Type == "compaction" {
+			got = append(got, r)
 		}
-		if !c.compactHistory(1200) {
-			t.Fatalf("%s: nothing was folded", mode)
-		}
-		var got []Record
-		for _, r := range rec.recs {
-			if r.Type == "compaction" {
-				got = append(got, r)
-			}
-		}
-		if len(got) != 1 {
-			t.Fatalf("%s: %d compaction records, want 1", mode, len(got))
-		}
-		r := got[0]
-		if r.Mode != mode || r.Outcome != "ok" || r.Text != c.doneMessages[0].Text() || r.TokensAfter >= r.TokensBefore {
-			t.Errorf("%s: record = %+v; want the text of the first message, %q", mode, r, c.doneMessages[0].Text())
-		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("%d compaction records, want 1", len(got))
+	}
+	r := got[0]
+	if r.Mode != "roll" || r.Outcome != "ok" || r.Text != c.doneMessages[0].Text() || r.TokensAfter >= r.TokensBefore {
+		t.Errorf("record = %+v; want the text of the first message, %q", r, c.doneMessages[0].Text())
 	}
 }

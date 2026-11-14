@@ -54,17 +54,6 @@ type Options struct {
 	// nowhere for another conversation to be.
 	Sessions *SessionOps
 
-	// Notes returns the current session notes for /notes. nil disables the
-	// command.
-	Notes func() string
-
-	// GenerateNotes regenerates notes from the transcript into memory.
-	// Called by /notes generate. nil when notes are unavailable.
-	GenerateNotes func(ctx context.Context) error
-
-	// DropNotes discards the notes for this session.
-	DropNotes func()
-
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
@@ -149,7 +138,7 @@ type Options struct {
 //
 // The REPL knows a conversation by name and nothing else. Where one lives,
 // what it restores and how its record is opened are the host's, for the same
-// reason SaveResume and GenerateNotes are: neither the coder nor the REPL
+// reason SaveResume is: neither the coder nor the REPL
 // learns the layout of the state directory.
 type SessionOps struct {
 	// Current is the conversation in use.
@@ -163,8 +152,6 @@ type SessionOps struct {
 	// /model changes it. The host writes it into the new session's record
 	// header and its resume file, and has no other way to know it.
 	Switch func(name string, create bool, alias string) (string, error)
-	// Fork starts a new conversation carrying this one's notes.
-	Fork func(name, alias string) (string, error)
 	// Rename renames one, following the process into it when it is the one in
 	// use.
 	Rename func(from, to string) error

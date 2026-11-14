@@ -49,7 +49,6 @@ shell_timeout = 30
 retry_timeout = 600
 git_sign = "ABCD1234"
 commits = False
-compaction = "summary"
 secret_files_add = ["*.pem"]
 secret_files_exempt = [".env.test"]
 env_allow = ["PATH", "HOME"]

@@ -19,7 +19,7 @@ flash = model(router, "deepseek/deepseek-v4-flash", reasoning = "low", reasoning
 
 models = {
     "flash": flash,
-    "pro": model(router, "deepseek/deepseek-v4-pro", side_model = "flash", temperature = 0.2),
+    "pro": model(router, "deepseek/deepseek-v4-pro", temperature = 0.2),
 }
 default = "flash"
 `
@@ -142,14 +142,7 @@ func TestLoadUserConfig(t *testing.T) {
 	if flash.Provider.Adapter != "openrouter" || flash.Provider.APIKey != "test-key-not-real" {
 		t.Errorf("provider = %+v", flash.Provider)
 	}
-	// side_model resolution: string ref and None->self.
 	pro := cfg.Models["pro"]
-	if pro.SideModel != flash {
-		t.Error("pro.SideModel should be flash")
-	}
-	if flash.SideModel != flash {
-		t.Error("flash.SideModel should be itself (None => self)")
-	}
 	if pro.Temperature == nil || *pro.Temperature != 0.2 {
 		t.Errorf("pro.Temperature = %v", pro.Temperature)
 	}
@@ -206,34 +199,14 @@ func TestGitSignParsing(t *testing.T) {
 	}
 }
 
-// TestCompaction: absent leaves the mode to the coder's default, a trusted
-// project's value wins over the user's, and anything but "roll" or "summary"
-// fails the load by name.
-func TestCompaction(t *testing.T) {
-	for _, tc := range []struct{ expr, want string }{
-		{"", ""}, {`compaction = "roll"`, CompactionRoll}, {`compaction = "summary"`, CompactionSummary},
-	} {
-		cfg, err := Load(harness(t, userConfig+"\n"+tc.expr+"\n", "", testEnv))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.Compaction != tc.want {
-			t.Errorf("%q: Compaction = %q, want %q", tc.expr, cfg.Compaction, tc.want)
-		}
-	}
-
-	opts := harness(t, userConfig+"\ncompaction = \"summary\"\n", "compaction = \"roll\"\n", testEnv)
-	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
-		t.Fatal(err)
-	}
-	if cfg, err := Load(opts); err != nil || cfg.Compaction != CompactionRoll {
-		t.Errorf("a trusted project's compaction should win: %q, %v", cfg.Compaction, err)
-	}
-
-	for _, bad := range []string{`compaction = "roll-bare"`, `compaction = True`} {
-		if _, err := Load(harness(t, userConfig+"\n"+bad+"\n", "", testEnv)); err == nil ||
-			!strings.Contains(err.Error(), "compaction") {
-			t.Errorf("%s should fail: %v", bad, err)
+// TestCompactionIsRefused: the setting chose between rolling and a side
+// model's summary, and both the summary and the choice are gone; a config that
+// still sets it is told so by name rather than ignored.
+func TestCompactionIsRefused(t *testing.T) {
+	for _, expr := range []string{`compaction = "roll"`, `compaction = "summary"`} {
+		if _, err := Load(harness(t, userConfig+"\n"+expr+"\n", "", testEnv)); err == nil ||
+			!strings.Contains(err.Error(), "`compaction` has been removed") {
+			t.Errorf("%s should fail by name: %v", expr, err)
 		}
 	}
 }
@@ -450,7 +423,7 @@ func TestTrustedProjectConfigMergesAndWins(t *testing.T) {
 p = provider("openai", base_url = "https://proxy.corp/v1", api_key = "corp")
 models = {
     "flash": model(p, "corp-flash"),
-    "extra": model(p, "corp-extra", side_model = "pro"),
+    "extra": model(p, "corp-extra"),
 }
 default = "extra"
 `
@@ -469,11 +442,6 @@ default = "extra"
 	// Project default wins.
 	if cfg.Default != "extra" {
 		t.Errorf("default = %q", cfg.Default)
-	}
-	// Cross-file side_model: project model references the user's alias
-	// (resolution is post-merge).
-	if cfg.Models["extra"].SideModel != cfg.Models["pro"] {
-		t.Error("extra.SideModel should resolve to the user's pro model")
 	}
 }
 
@@ -635,22 +603,19 @@ p = provider("bedrock", api_key = "k")
 models = {"m": model(p, "s")}
 default = "m"
 `, "unknown adapter"},
-		{"missing side alias", `
+		// side_model, and weak_model before it, are still recognized so a
+		// config using them gets a sentence saying they are gone rather than
+		// "unexpected keyword argument", which is true and useless.
+		{"removed side_model", `
 p = provider("openai", api_key = "k")
-models = {"m": model(p, "s", side_model = "ghost")}
+models = {"m": model(p, "s", side_model = "m")}
 default = "m"
-`, "ghost"},
-		// weak_model was renamed to side_model, and is still recognized so a
-		// config using it gets a sentence naming the new name rather than
-		// "unexpected keyword argument", which is true and useless. The old
-		// name made a claim about capability, and claims about model
-		// capability go stale: the model that usually sits here now is a
-		// near-peer of a frontier one.
-		{"renamed weak_model", `
+`, "side_model has been removed"},
+		{"removed weak_model", `
 p = provider("openai", api_key = "k")
 models = {"m": model(p, "s", weak_model = "m")}
 default = "m"
-`, "side_model"},
+`, "weak_model has been removed"},
 		// repo_map left model() for a top-level language_parser. The error
 		// names the new key; True is refused as well as False, since either
 		// way the setting would otherwise be silently doing nothing.
@@ -689,27 +654,6 @@ default = "flash"
 	}
 	if len(cfg.Models) != 2 || cfg.Models["pro"].Reasoning != "low" {
 		t.Errorf("cfg = %+v", cfg.Models)
-	}
-}
-
-func TestSideModelInlineValue(t *testing.T) {
-	src := `
-p = provider("openai", api_key = "k")
-cheap = model(p, "cheap-slug")
-models = {"main": model(p, "main-slug", side_model = cheap)}
-default = "main"
-`
-	cfg, err := Load(harness(t, src, "", nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-	main := cfg.Models["main"]
-	if main.SideModel == nil || main.SideModel.Slug != "cheap-slug" {
-		t.Fatalf("side = %+v", main.SideModel)
-	}
-	// The inline side model is its own side model.
-	if main.SideModel.SideModel != main.SideModel {
-		t.Error("inline side model should self-resolve")
 	}
 }
 

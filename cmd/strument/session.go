@@ -1,14 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"dbohdan.com/strument/internal/client"
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/jsonlog"
@@ -307,15 +305,12 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 	s.cdr.Session = name
 	s.cdr.RecordSession(alias)
 
-	// Everything that belonged to the conversation being left. Notes go with
-	// it: they describe the session they were written from, and carrying them
-	// into another one is what /session fork does deliberately.
+	// Everything that belonged to the conversation being left.
 	s.cdr.ClearHistory()
 	s.cdr.DropAll()
 	s.cdr.SetUndoStack(nil)
 	s.cdr.RestoreLastCommit("")
 	s.cdr.RestorePending(coder.Pending{}) // the new conversation knows nothing of those edits
-	s.cdr.SessionNotes, s.cdr.SessionNotesDate, s.cdr.SessionNotesSession = "", "", ""
 
 	return s.open(name), nil
 }
@@ -326,7 +321,7 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 func (s *sessionSwitcher) open(name string) string {
 	lines := []string{fmt.Sprintf("Now in %s.", name)}
 	res := history.LoadResume(s.projectRoot, name)
-	if pins, offered, _ := restoreSession(s.cdr, s.projectRoot, name, res); pins != "" {
+	if pins, offered := restoreSession(s.cdr, s.projectRoot, name, res); pins != "" {
 		lines = append(lines, pins)
 		_ = offered
 	}
@@ -339,49 +334,6 @@ func (s *sessionSwitcher) open(name string) string {
 		lines = append(lines, conv)
 	}
 	return strings.Join(lines, "\n")
-}
-
-// fork starts a new conversation carrying this one's notes.
-//
-// It is the ritual it replaces — /notes generate, then a fresh conversation
-// — with what the hand ritual cannot do: the conversation gets its own
-// session, so --continue tells it apart from this one, and the notes arrive
-// labelled with the session they were written from.
-//
-// /model does not do this. Many conversations on one strong model is the
-// common case, so forking belongs to the session rather than to the model.
-func (s *sessionSwitcher) fork(name, alias string) (string, error) {
-	if err := history.ValidSessionName(name); err != nil {
-		return "", err
-	}
-	if s.exists(name) {
-		return "", fmt.Errorf("a session named %q already exists", name)
-	}
-	if s.cdr.Model.SideModel == nil {
-		return "", errors.New("no side model is configured, so there are no notes to carry forward")
-	}
-	parent := s.cdr.Session
-	transcript := sessionMarkdown(s.projectRoot, parent)
-	if transcript == "" {
-		return "", fmt.Errorf("%s has nothing recorded yet, so there is nothing to carry forward; "+
-			"/session new %s starts an empty one", parent, name)
-	}
-	notes, err := writeSessionNotes(s.cdr, transcript)
-	if err != nil {
-		return "", err
-	}
-	if notes == "" {
-		return "", errors.New("the model returned no notes, so nothing would be carried forward")
-	}
-
-	note, err := s.switchTo(name, true, alias)
-	if err != nil {
-		return "", err
-	}
-	s.cdr.SessionNotes = notes
-	s.cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
-	s.cdr.SessionNotesSession = parent
-	return note + fmt.Sprintf("\nNotes from %s are in context.", parent), nil
 }
 
 // rename renames a session, following the process into it when it is the one
@@ -414,10 +366,6 @@ func (s *sessionSwitcher) remove(name string) error {
 
 // sessionOps builds the /session surface, or nil when there is no state to
 // hold another conversation in.
-//
-// A fork's notes come from writeSessionNotes, the function `/notes generate`
-// uses, because a fork that summarized differently from `/notes generate` would
-// be two answers to one question.
 func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string, slog *sessionLog, keepState bool) *repl.SessionOps {
 	if !keepState {
 		return nil
@@ -435,35 +383,7 @@ func sessionOps(cdr *coder.Coder, defaultAlias func() string, projectRoot string
 		Current: sw.current,
 		List:    sw.list,
 		Switch:  sw.switchTo,
-		Fork:    sw.fork,
 		Rename:  sw.rename,
 		Delete:  sw.remove,
 	}
-}
-
-// errNoSideModel is what asking for notes gets when the active model has no
-// side model to write them.
-var errNoSideModel = errors.New("no side model configured")
-
-// writeSessionNotes has the active model's side model write notes from a
-// session transcript, accounting its usage like any side call.
-//
-// The side model is read here, at the call, and not when the session was set
-// up. /model and /reload change it, and the fork path used to bind the startup
-// model's side model into a closure, so a fork after a switch was written by —
-// and billed to — a model the session had left.
-func writeSessionNotes(cdr *coder.Coder, transcript string) (string, error) {
-	side := cdr.Model.SideModel
-	if side == nil {
-		return "", errNoSideModel
-	}
-	write := coder.NotesWriter(client.ForProvider(side.Provider), side,
-		cdr.RecordSideUsage, cdr.Out, cdr.Clock, cdr.RecordSideCall)
-	notes, err := write(transcript)
-	cdr.FlushSideUsage()
-	if err != nil {
-		return "", err
-	}
-	cdr.ReportSideUsageDone()
-	return notes, nil
 }

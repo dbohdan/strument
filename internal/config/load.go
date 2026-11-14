@@ -224,9 +224,6 @@ type fileGlobals struct {
 	hasCommits bool
 	commitsVal bool
 
-	hasCompaction bool
-	compactionVal string
-
 	hasSecretFilesAdd    bool
 	secretFilesAddVal    []string
 	hasSecretFilesExempt bool
@@ -405,7 +402,7 @@ The full reference is %s.`,
 const DocsURL = "https://github.com/dbohdan/strument"
 
 // Load runs the config pipeline: user config, gated project
-// config, whole-key merge, post-merge side_model resolution, validation.
+// config, whole-key merge, validation.
 func Load(opts Options) (*Config, error) {
 	warn := opts.Warn
 	if warn == nil {
@@ -554,9 +551,6 @@ func Load(opts Options) (*Config, error) {
 	if user.hasCommits {
 		cfg.NoCommits = !user.commitsVal
 	}
-	if user.hasCompaction {
-		cfg.Compaction = user.compactionVal
-	}
 	if user.hasEnvAllow {
 		cfg.EnvAllow = user.envAllowVal
 	}
@@ -667,9 +661,6 @@ func Load(opts Options) (*Config, error) {
 		if project.hasCommits {
 			cfg.NoCommits = !project.commitsVal
 		}
-		if project.hasCompaction {
-			cfg.Compaction = project.compactionVal
-		}
 		// Whole-value like check_auto, not per-element: this is one decision
 		// about what the model's commands may see, and a project's word must be
 		// able to narrow what the user's config widened — merging the two lists
@@ -734,26 +725,6 @@ func Load(opts Options) (*Config, error) {
 		}
 	}
 
-	// 5. Resolve side_model refs post-merge; nil => self, permanently.
-	for alias, m := range cfg.Models {
-		switch ref := m.sideRef.(type) {
-		case nil:
-			m.SideModel = m
-		case string:
-			target, ok := cfg.Models[ref]
-			if !ok {
-				return nil, fmt.Errorf("model %q: side_model alias %q not found in merged models", alias, ref)
-			}
-			m.SideModel = target
-		case *Model:
-			if ref.SideModel == nil {
-				ref.SideModel = ref // inline side models are their own side model
-			}
-			m.SideModel = ref
-		}
-		m.sideRef = nil
-	}
-
 	// 5b. Resolve each provider's proxy against the global fallback, once per
 	// distinct *Model — aliases and inline side models repeat pointers, and the
 	// "direct"->inherit rewrite is not idempotent. "direct" forces a direct
@@ -812,9 +783,6 @@ func Load(opts Options) (*Config, error) {
 	}
 	for alias, m := range cfg.Models {
 		if err := resolveProxy(alias, m); err != nil {
-			return nil, err
-		}
-		if err := resolveProxy(alias, m.SideModel); err != nil {
 			return nil, err
 		}
 	}
@@ -1175,13 +1143,11 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.commitsVal = bool(b)
 	}
 
-	if cv, ok := globals["compaction"]; ok {
-		s, ok := starlark.AsString(cv)
-		if !ok || (s != CompactionRoll && s != CompactionSummary) {
-			return nil, fmt.Errorf("%s: `compaction` must be %q or %q, got %s", path, CompactionRoll, CompactionSummary, cv.String())
-		}
-		out.hasCompaction = true
-		out.compactionVal = s
+	// compaction chose between rolling and a side model's summary. The summary
+	// went with the side model, and a setting with one value says nothing.
+	if _, ok := globals["compaction"]; ok {
+		return nil, fmt.Errorf("%s: `compaction` has been removed: a long history always drops its "+
+			"oldest turns, keeping what the user said in them; drop the setting", path)
 	}
 
 	if sh, ok := globals["shell"]; ok {

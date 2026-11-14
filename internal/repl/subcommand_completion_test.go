@@ -24,7 +24,7 @@ func TestSubcommandCompletion(t *testing.T) {
 		line string
 		want []string
 	}{
-		{"/session ", []string{"new", "switch", "fork", "rename", "delete"}},
+		{"/session ", []string{"new", "switch", "rename", "delete"}},
 		{"/session sw", []string{"itch"}},
 		// Switching to or deleting the current session is refused, so it is
 		// not offered; renaming it is allowed.
@@ -32,7 +32,6 @@ func TestSubcommandCompletion(t *testing.T) {
 		{"/session delete sp", []string{"ike", "ike-2"}},
 		{"/session rename ", []string{"main", "spike", "spike-2"}},
 		{"/session new ", nil},
-		{"/notes ", []string{"generate", "drop"}},
 		{"/commits o", []string{"n", "ff"}},
 		{"/consult scope ", []string{"none", "files", "chat"}},
 		{"/yes ", []string{"add", "drop", "reset"}},

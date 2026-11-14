@@ -110,7 +110,7 @@ func (c *Coder) consultPrompt(question string, scope ConsultScope) string {
 		// ViewContext is the fold as the model reads it, and it is already the
 		// answer to "what is in this conversation" that /context prints. Using
 		// it means there is one renderer rather than two that drift.
-		b.WriteString(strings.TrimRight(c.ViewContext(-1), "\n"))
+		b.WriteString(strings.TrimRight(c.ViewContext(), "\n"))
 		b.WriteString("\n")
 		b.WriteString(consultChatSuffix)
 		b.WriteString("\n")

@@ -367,7 +367,7 @@ func (c *Coder) RestoreHistory(msgs []llm.Message, turns []TurnSpan) {
 	}
 	c.doneMessages = msgs
 	c.turns = turns
-	c.maybeSummarize()
+	c.maybeCompact()
 }
 
 // NoteRestoredFromAnotherModel puts a seam in a conversation the current model

@@ -114,7 +114,7 @@ OPENROUTER_API_KEY=sk-or-... strument
 ```
 
 Set `context` so Strument can warn you before a request exceeds the model's context window and can make older chat history fit between turns.
-By default it drops the oldest turns, keeping what you said in them, and the model can search the rest with `recall`; [`compaction = "summary"`](doc/config.md#compaction) summarizes them instead.
+It drops the oldest turns, keeping what you said in them, and the model can search the rest with `recall`.
 Without it, a long session can exceed the provider's limit and have its requests rejected.
 
 Cost fields are optional.
@@ -200,8 +200,7 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 - `/attach <file> ...`&thinsp;&mdash;&thinsp;attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Unlike pinned files, attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can.
 - `/check [<name>]`&thinsp;&mdash;&thinsp;run a project check by name, or all checks if no name is given. Checks run in the order the config lists them and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is not offered to the chat.
 - `/consult <alias> <question>`, `/consult scope [<name>]`&thinsp;&mdash;&thinsp;ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug.
-- `/session`, `/session new|switch|fork|rename|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, fork, rename, or delete one. See [Sessions](#sessions).
-- `/notes`, `/notes generate`, `/notes drop`&thinsp;&mdash;&thinsp;show the session notes, regenerate them from the session record, or discard them. Notes stay in memory and are not saved to disk. They carry context from one session to another; to pick up *this* session's conversation, use `--continue`. See [`doc/sessions.md`](doc/sessions.md).
+- `/session`, `/session new|switch|rename|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, rename, or delete one. See [Sessions](#sessions).
 - `/read-only <file> ...`&thinsp;&mdash;&thinsp;pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself.
 - `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether the model may commit its edits. With no argument, it shows the current setting. `--no-commits` starts a session with commits off, and `commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
 - `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commits the turn made, if they are still the newest on the branch and unpushed.
@@ -237,7 +236,7 @@ The option `-s <name>` (`--session`) picks the session, creating it if necessary
 A bare `strument` command returns to the last session used, or `default`.
 A session starts with an empty conversation; `-c` (`--continue`) restores its conversation from the session record.
 
-Inside Strument, `/session` lists, switches, forks, renames, and deletes sessions; `/notes` carries context from one session into another.
+Inside Strument, `/session` lists, switches, renames, and deletes sessions.
 From the shell, the subcommands `strument session list`, `rename`, and `delete` do the same.
 [`doc/history.md`](doc/history.md) and [`doc/sessions.md`](doc/sessions.md) have the details.
 
@@ -358,7 +357,6 @@ models = {
         cache=True,  # OpenRouter reports prompt caching for this model.
         reasoning="medium",  # The effort: "max", "xhigh", "high", "medium", or "low".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
     "qwen": model(
         local_llm,
@@ -383,7 +381,7 @@ Cache-write and cache-hit tokens are included in the sent total.
 Writing `context`, `max_output`, and the costs by hand for every model is tedious.
 Instead, `strument model-config z-ai/glm-5.3` fetches them from the provider's catalog (OpenRouter by default) and prints a `model` block you can copy into your configuration.
 While this command works before you have a config, an OpenRouter token is recommended to avoid getting rate-limited or IP-banned from OpenRouter.
-Settings that are your choice (`reasoning`, `reasoning_tag`, `side_model`) appear as commented-out placeholders.
+Settings that are your choice (`reasoning`, `reasoning_tag`) appear as commented-out placeholders.
 The catalog is fetched on demand and cached.
 
 Some settings live at the top level rather than on a model:

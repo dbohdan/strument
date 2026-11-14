@@ -22,7 +22,6 @@ func TestPlatformDateFollowsTheSessionZone(t *testing.T) {
 	t.Cleanup(func() { time.Local = saved }) //nolint:gosmopolitan // Restoring it.
 
 	m := &config.Model{Slug: "test"}
-	m.SideModel = m
 
 	dateIn := func(zone string) string {
 		t.Helper()

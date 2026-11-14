@@ -172,7 +172,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 // builtinModel implements
 // model(provider, slug, *, display_name=None,
 //
-//	side_model=None, reasoning=None, reasoning_tag=None, temperature=None,
+//	reasoning=None, reasoning_tag=None, temperature=None,
 //	cache=False, context=None, max_output=None, prefill=False,
 //	input_cost=None, output_cost=None, extra_params={}).
 //
@@ -185,7 +185,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var slug string
 	var displayName string
 	var retiredEditFormat starlark.Value
-	var sideModel starlark.Value
+	var retiredSideModel starlark.Value
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
 	var repoMap starlark.Value
@@ -201,7 +201,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"slug", &slug,
 		"display_name?", &displayName,
 		"edit_format?", &retiredEditFormat,
-		"side_model?", &sideModel,
+		"side_model?", &retiredSideModel,
 		"weak_model?", &retiredWeakModel,
 		"reasoning?", &reasoning,
 		"reasoning_tag?", &reasoningTag,
@@ -227,13 +227,19 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	// weak_model is still unpacked so a config using it gets this sentence
 	// rather than "unexpected keyword argument", which says nothing about what
 	// to do next.
-	if retiredWeakModel != nil && retiredWeakModel != starlark.None {
-		return nil, errors.New(
-			"model: weak_model has been renamed to side_model; rename the argument. " +
-				"The old name described the model's capability, and that stopped being " +
-				"true — the models used here are not weak. The new name describes its " +
-				"role: it writes commit messages, session notes, and compaction " +
-				"summaries, off to the side of the turn")
+	//
+	// side_model (once weak_model) wrote commit messages, session notes and
+	// compaction summaries. The model now writes its own commit messages, and
+	// notes and summaries are gone, so there is nothing left for it to do.
+	for _, retired := range []struct {
+		name string
+		v    starlark.Value
+	}{{"side_model", retiredSideModel}, {"weak_model", retiredWeakModel}} {
+		if retired.v != nil && retired.v != starlark.None {
+			return nil, fmt.Errorf("model: %s has been removed; drop it from model(). It wrote commit "+
+				"messages, session notes and compaction summaries: the model now writes its own "+
+				"commit messages, and the other two are gone", retired.name)
+		}
 	}
 
 	// repo_map is unpacked for the same reason. It moved out of model() and
@@ -276,17 +282,6 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		InputModalities: modalities,
 	}
 
-	switch w := sideModel.(type) {
-	case nil, starlark.NoneType:
-		// nil ref => self, bound at resolution.
-	case starlark.String:
-		m.sideRef = string(w)
-	case *modelValue:
-		m.sideRef = w.m
-	default:
-		return nil, fmt.Errorf("model: side_model must be a model value or alias string, got %s", sideModel.Type())
-	}
-
 	if m.Temperature, err = optFloat("temperature", temperature); err != nil {
 		return nil, err
 	}
@@ -313,7 +308,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 // modelWithExtraParams implements model.with_extra_params(**overrides): it
 // returns a copy of the receiver model whose extra_params are the current
 // ones (or an empty dict) overridden by the keyword arguments. The receiver
-// is unchanged; the copy keeps an unresolved side_model ref.
+// is unchanged.
 func modelWithExtraParams(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 0 {
 		return nil, errors.New("with_extra_params: extra params must be passed by keyword")

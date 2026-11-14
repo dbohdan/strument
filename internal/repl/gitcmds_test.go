@@ -153,11 +153,9 @@ func TestModelSwitchUpdatesTrailer(t *testing.T) {
 
 	small := testModel()
 	small.Slug = "vendor/small:nitro" // readable name drops prefix + :nitro
-	small.SideModel = &config.Model{Provider: small.Provider, Slug: "vendor/small-side"}
 	big := testModel()
 	big.Slug = "vendor/big-model"
 	big.DisplayName = "Big Model"
-	big.SideModel = &config.Model{Provider: big.Provider, Slug: "vendor/big-side"}
 
 	g.CommitTrailer = gitrepo.Trailer(small.ReadableName())
 	client := &fixture.StreamStub{}

@@ -56,7 +56,6 @@ func testModel() *config.Model {
 		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:     "test-model",
 	}
-	m.SideModel = m
 	return m
 }
 
@@ -261,11 +260,9 @@ func TestScriptedSession(t *testing.T) {
 	}
 }
 
-// /context is a pure view: it sends nothing and mutates no state. The bare form
-// renders everything; an [n] caps the number of summaries; a non-numeric [n] is
-// a usage error.
+// /context is a pure view: it sends nothing and mutates no state.
 func TestContextCommandSendsNothingAndMutatesNothing(t *testing.T) {
-	input := strings.NewReader("/context\n/context 2\n/context bogus\n/exit\n")
+	input := strings.NewReader("/context\n/context\n/exit\n")
 	stub := &fixture.StreamStub{} // whatever Send reaches is an error
 	r, _, out := newTestREPL(t, stub, input)
 	defer r.Close()
@@ -275,10 +272,7 @@ func TestContextCommandSendsNothingAndMutatesNothing(t *testing.T) {
 	}
 	got := out.String()
 	if n := strings.Count(got, "Context as the model sees it:"); n != 2 {
-		t.Errorf("bare and [n] should each render, got %d render(s):\n%s", n, got)
-	}
-	if !strings.Contains(got, usage("context")) {
-		t.Errorf("bad [n] should give usage:\n%s", got)
+		t.Errorf("each /context should render, got %d render(s):\n%s", n, got)
 	}
 	if stub.Remaining() != 0 {
 		t.Errorf("/context must never reach the client: %d turn(s) consumed", -stub.Remaining())

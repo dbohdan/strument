@@ -17,7 +17,7 @@ import (
 // `models`, splice the two dicts rather than pasting a second `models =`.
 //
 // Objective fields become real values; the judgment calls (reasoning,
-// reasoning_tag, side_model) are emitted commented, so a pasted entry reads as a
+// reasoning_tag) are emitted commented, so a pasted entry reads as a
 // scaffold to finish rather than a finished declaration.
 func EmitStarlark(infos []ModelInfo, providerName string) string {
 	used := make(map[string]bool, len(infos))
@@ -140,7 +140,6 @@ func emitEntry(info ModelInfo, providerName, alias string) string {
 		fmt.Fprintf(&b, "        # reasoning=%q,  # Uncomment and set the effort: %s.\n", defaultEffort, effortComment)
 		b.WriteString("        # reasoning_tag=\"think\",  # Uncomment if the model emits reasoning in inline tags.\n")
 	}
-	b.WriteString("        # side_model=\"...\",  # Uncomment to use a different model for summaries and commits.\n")
 	b.WriteString("    ),\n")
 	return b.String()
 }
