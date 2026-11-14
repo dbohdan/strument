@@ -8,9 +8,9 @@ Strument started life as a close reverse-engineering of
 [aider](https://github.com/Aider-AI/aider) at commit `5dc9490`, driven by a
 set of written specifications. Those port specs and their journal have since
 been retired — the code is now the source of truth, and Strument follows its
-own direction: closer to aider in some places, further in others. A read-only
-clone of aider is still handy when you want to compare (`task setup:reference`
-drops it in a gitignored `reference/`).
+own direction: closer to aider in some places, further in others. To compare
+against aider, shallow-clone it into scratch space for the occasion; nothing
+in the repository depends on a copy.
 
 ## Philosophy
 
@@ -254,16 +254,12 @@ inherited from aider.
     `strument usage` and `/usage`.
   - `fixture/` — the record/replay harness: JSON-Lines scenarios and
     replay stubs for the coder's ports.
-- `script/` — release build, the grammar build-tag list,
-  `setup-reference.sh`, and live probes that need a key and a network:
+- `script/` — release build, the grammar build-tag list, and live probes that need a key and a network:
   `opencode-live-pass.sh` drives the real binary through opencode Go's three
   dialects and scores from the files on disk, with an offline self-test that
   refuses to spend if its own scorer cannot tell success from failure.
 - `testdata/` — distilled scenario fixtures and tests transliterated from
   aider's suite.
-- `reference/` — a gitignored clone of aider at commit `5dc9490`; a
-  read-only grep target for comparing against upstream
-  (`task setup:reference`).
 - `attic/` — local capture artifacts; gitignored, never committed.
 
 ## The coder's ports
@@ -1346,5 +1342,3 @@ error that looks like their own.
    committing.
 4. For repo-map or release work: `task build:strument:subset` builds the
    release variant against `script/grammar-tags.txt`.
-5. To compare against upstream: `task setup:reference` clones aider at
-   commit `5dc9490` into `reference/`.
