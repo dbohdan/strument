@@ -1,6 +1,7 @@
 package coder
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -42,16 +43,18 @@ type ignoringRepo struct{ dirtyRepo }
 
 func (r *ignoringRepo) GitIgnored(string) bool { return true }
 
-// Ignored so that it stays private, not because it is out of scope, so the
-// edit tools still write it; other ignored files stay refused.
-func TestAgentsLocalIsEditableThoughIgnored(t *testing.T) {
+// Ignored so that it stays private, which is its purpose, so an edit to it
+// carries no note; another ignored file's edit is told it will not be
+// committed and may be generated.
+func TestIgnoredEditNote(t *testing.T) {
 	c := testCoder(t)
 	c.Out = &captureOut{}
 	c.Repo = &ignoringRepo{dirtyRepo{root: c.Root}}
-	if ok, why := c.allowedToEdit(AgentsLocalFileName); !ok {
-		t.Errorf("AGENTS.local.md was refused: %s", why)
+	if note := c.ignoredEditNote(AgentsLocalFileName); note != "" {
+		t.Errorf("AGENTS.local.md drew a note: %s", note)
 	}
-	if ok, _ := c.allowedToEdit("build/out.txt"); ok {
-		t.Error("an ordinary ignored file must still be refused")
+	if note := c.ignoredEditNote("build/out.txt"); !strings.Contains(note, "will not be committed") ||
+		!strings.Contains(note, "generated") {
+		t.Errorf("an ignored file's note = %q", note)
 	}
 }

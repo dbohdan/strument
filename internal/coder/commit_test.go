@@ -162,3 +162,54 @@ func TestCommitToolReportsARefusedCommit(t *testing.T) {
 		t.Errorf("retry = %q; the refused commit's edits were dropped from what is pending", got)
 	}
 }
+
+// An edit to an ignored file lands and is told it will not be committed, and
+// a commit that includes it commits the rest: git add refuses an ignored path
+// and would fail the whole commit with it.
+func TestIgnoredEditLandsAndIsLeftOutOfTheCommit(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Skipf("git %v: %v %s", args, err, out)
+		}
+		return string(out)
+	}
+	git("init", "-q")
+	git("config", "user.email", "t@example.com")
+	git("config", "user.name", "T")
+	for name, body := range map[string]string{".gitignore": "build/\n", "a.go": "one\n", "build/out.js": "x = 1\n"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("add", ".")
+	git("commit", "-qm", "base")
+
+	c := toolCoder(t, dir)
+	c.Out = &captureOut{}
+	c.Commits = true
+	repo, err := gitrepo.Discover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Repo = repo
+
+	got := run(c, `[edit({path: "build/out.js", old_string: "x = 1", new_string: "x = 2"}),
+  edit({path: "a.go", old_string: "one", new_string: "two"}),
+  commit({subject: "change both"})]`)
+	if data, _ := os.ReadFile(filepath.Join(dir, "build/out.js")); string(data) != "x = 2\n" {
+		t.Fatalf("the ignored file's edit did not land: %q\n%s", data, got)
+	}
+	if !strings.Contains(got, "will not be committed") {
+		t.Errorf("the ignored edit was not told it will not be committed:\n%s", got)
+	}
+	if files := git("show", "--name-only", "--format=", "HEAD"); strings.TrimSpace(files) != "a.go" {
+		t.Errorf("the commit holds %q, want a.go alone", files)
+	}
+}

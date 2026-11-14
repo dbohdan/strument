@@ -186,21 +186,29 @@ func (c *Coder) normalizeToolPath(p string) string {
 // once per file or once per turn only slows that training down.
 //
 // What guards an edit is everything here that is not a question: path
-// containment (unsafePath, checked before this), the gitignore refusal below,
-// the turn's snapshot so /undo has the exact prior contents, and the diff scrolling past as it happens. Review lives in the diff and in
-// being able to undo, not in a y/n the user has learned to dismiss.
-func (c *Coder) allowedToEdit(rel string) (bool, string) {
-	// Still refused, and not as a prompt: an ignored file is one the project
-	// declared out of scope, and the observation tools do not show it either.
-	// AGENTS.local.md is the exception, being ignored so that it stays private
-	// rather than because it is out of scope: refusing it left a model asked
-	// to remember something reaching for `printf >>` in bash instead.
-	if c.Repo != nil && c.Repo.GitIgnored(rel) && filepath.ToSlash(rel) != AgentsLocalFileName {
-		c.Out.Warningf("Skipping edits to %s: it matches an ignore rule.", rel)
-		return false, "that file matches a gitignore pattern, so the project treats it as out of scope."
+// containment (unsafePath, checked before this), the turn's snapshot so /undo
+// has the exact prior contents, and the diff scrolling past as it happens.
+// Review lives in the diff and in being able to undo, not in a y/n the user
+// has learned to dismiss.
+//
+// ignoredEditNote is what an edit to a file git ignores is told, "" for any
+// other file. Such an edit used to be refused. Most ignored files are
+// generated, so the refusal caught a real mistake — but it did not stop the
+// edit, it moved it to bash, with no snapshot, no diff and a prompt instead;
+// AGENTS.local.md's exemption was made after exactly that, a model reaching
+// for `printf >>`. And git's ignore rules also cover the user's own local
+// files — the global excludes, .git/info/exclude, a config.local.json —
+// which they may well ask to have changed. So the edit lands, with its
+// snapshot and diff, and the note says what a refusal used to imply: it will
+// not be committed, and a generated file is the wrong place for a fix.
+func (c *Coder) ignoredEditNote(rel string) string {
+	if c.Repo == nil || !c.Repo.GitIgnored(rel) || filepath.ToSlash(rel) == AgentsLocalFileName {
+		return ""
 	}
-
-	return true, ""
+	c.Out.Warningf("%s is ignored by git: this edit will not be committed.", rel)
+	return "Note: git ignores this file, so the change will not be committed. If the file is generated " +
+		"(build output, a dependency, a cache), the next build or install may overwrite it, and the " +
+		"change usually belongs in its source; if the user asked for this file, that is fine."
 }
 
 // newFileMode is what a file Strument creates gets. It matches what git

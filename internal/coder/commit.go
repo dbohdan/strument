@@ -194,9 +194,25 @@ func (c *Coder) committablePaths(paths []string) []string {
 		keep = append(keep, p)
 	}
 	keep = c.dropAgentsLocal(keep)
+	// Files git ignores are left out for the reason outside paths are: git
+	// add refuses an ignored path and fails the whole add with it. An edit to
+	// one is allowed, and told it will not be committed (ignoredEditNote).
+	var ignored []string
+	kept := keep[:0:0]
+	for _, p := range keep {
+		if c.Repo.GitIgnored(p) && filepath.ToSlash(p) != AgentsLocalFileName {
+			ignored = append(ignored, p)
+			continue
+		}
+		kept = append(kept, p)
+	}
+	keep = kept
 	if len(dropped) > 0 {
 		c.Out.Toolf("Not committing %s: outside the repository. These changes can still be restored with /undo.",
 			strings.Join(dropped, ", "))
+	}
+	if len(ignored) > 0 {
+		c.Out.Toolf("Not committing %s: git ignores it. /undo can still restore it.", strings.Join(ignored, ", "))
 	}
 	return keep
 }

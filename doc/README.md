@@ -369,6 +369,11 @@ Ten tools, in three natures:
   them ask the user anything, except `read` and `ls` outside the project.
   Search skips what the project ignores; `ls` and `glob` name it, marked, and
   `read` opens an ignored file the model names, unless it is secret-shaped.
+  An edit to an ignored file lands, with its snapshot and diff, and is told
+  that it will not be committed and that a generated file is usually the
+  wrong place for a fix; the commit leaves it out. It used to be refused, and
+  the refusal sent a model that meant it to `bash`, with no snapshot and no
+  diff, which is how `AGENTS.local.md` came to be exempt.
   Paths are root-relative, and results are always reported that way; an
   absolute path that resolves inside the root is accepted as a spelling of the
   same file (small models habitually send one — see

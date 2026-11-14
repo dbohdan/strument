@@ -1315,11 +1315,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			recordEdit(e, "skipped", reason)
 			continue
 		}
-		if ok, why := c.allowedToEdit(e.path); !ok {
-			results.setText(e.callID, fmt.Sprintf("Skipped %s: %s", quoteToolArg(e.path), why))
-			recordEdit(e, "skipped", why)
-			continue
-		}
 
 		// Staleness before matching. The two failures need different answers —
 		// a mismatch means look harder, a moved file means read again — and
@@ -1472,6 +1467,9 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		applied[e.callID] = true
 		text := fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
 		if note := callNote[e.callID]; note != "" {
+			text += " " + note
+		}
+		if note := c.ignoredEditNote(e.path); note != "" {
 			text += " " + note
 		}
 		results.setText(e.callID, text)
