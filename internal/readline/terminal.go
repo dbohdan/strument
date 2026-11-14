@@ -3,11 +3,11 @@ package readline
 import (
 	"bufio"
 	"bytes"
-	"strings"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
