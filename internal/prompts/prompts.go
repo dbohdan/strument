@@ -125,7 +125,7 @@ const codeToolsBullet = "- run_code runs a short JavaScript program, which can i
 const observationBullet = "- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
-	"not searched or read; ls names them, marked as ignored. Paths are relative to the project root; an absolute path that lies " +
+	"not searched, but ls names them, marked as ignored, and read opens one you name. Paths are relative to the project root; an absolute path that lies " +
 	"inside the project is also accepted.\n"
 
 // commitBullet says what the commit tool does and nothing about when to use

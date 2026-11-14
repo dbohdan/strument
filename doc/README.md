@@ -366,7 +366,9 @@ Ten tools, in three natures:
   path; `ls(path)` lists a directory and names a symlink's target;
   `symbol(name, kind)` answers "where is this defined" from the tree-sitter
   tags rather than from text, and is offered only where grammars are. None of
-  them ask the user anything, and none of them see a file the project ignores.
+  them ask the user anything, except `read` and `ls` outside the project.
+  Search skips what the project ignores; `ls` and `glob` name it, marked, and
+  `read` opens an ignored file the model names, unless it is secret-shaped.
   Paths are root-relative, and results are always reported that way; an
   absolute path that resolves inside the root is accepted as a spelling of the
   same file (small models habitually send one — see

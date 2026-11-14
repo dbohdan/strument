@@ -333,18 +333,6 @@ func (w *Workspace) refuseSecret(rel, full string) error {
 	return nil
 }
 
-// refuseIgnored is the message a caller gives back for an ignored path.
-func (w *Workspace) refuseIgnored(rel string) error {
-	yes, err := w.ignored(rel, false)
-	if err != nil {
-		return err
-	}
-	if yes {
-		return fmt.Errorf("%s is ignored by the project, so it is out of scope", rel)
-	}
-	return nil
-}
-
 // OutsideOf reports a path that lies outside the project root and has not been
 // granted, or nil for anything else — inside, granted, or refused for another
 // reason, which the read or listing itself will give.

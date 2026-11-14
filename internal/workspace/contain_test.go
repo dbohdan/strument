@@ -129,38 +129,26 @@ func TestAbsolutePathsInsideTheRootAreContained(t *testing.T) {
 	}
 }
 
-// README.md said the lookup tools "never see a file the project ignores", which
-// was true of ls, glob, and grep and false of read: a gitignored .env was
-// invisible to every way of finding it and one guessed filename away from being
-// read.
-func TestReadHonorsGitignore(t *testing.T) {
+// read opens a file the project ignores when the model names it: a
+// dependency's source or a build's log is often what it needs, and the ignore
+// rules are about keeping search out, not about privacy. The refusal used to
+// be how a gitignored .env stayed unread; the secret patterns do that now, by
+// what the file is, ignored or not.
+func TestReadOpensIgnoredFilesButNotSecrets(t *testing.T) {
 	root := tree(t, map[string]string{
-		".gitignore":                "secret.env\nnode_modules/\n",
-		"secret.env":                "TOKEN=xyz\n",
+		".gitignore":                ".env\nnode_modules/\n",
+		".env":                      "TOKEN=xyz\n",
 		"node_modules/pkg/index.js": "module.exports = 1\n",
 		"src/.gitignore":            "generated.go\n",
 		"src/generated.go":          "package src\n",
-		"src/real.go":               "package src\n",
-		"keep.txt":                  "visible\n",
 	})
 	w := New(root)
-
-	for _, ignored := range []string{
-		"secret.env",
-		// No rule names this file; the directory above it is ignored, and git
-		// prunes at the directory.
-		"node_modules/pkg/index.js",
-		// A nested .gitignore applies to its own subtree.
-		"src/generated.go",
-	} {
-		if _, err := w.Read(ignored, 0, 0); err == nil ||
-			!strings.Contains(err.Error(), "ignored by the project") {
-			t.Errorf("Read(%q) err = %v, want it refused as ignored", ignored, err)
+	for _, ignored := range []string{"node_modules/pkg/index.js", "src/generated.go"} {
+		if _, err := w.Read(ignored, 0, 0); err != nil {
+			t.Errorf("Read(%q) = %v, want an ignored file read when named", ignored, err)
 		}
 	}
-	for _, visible := range []string{"keep.txt", "src/real.go", ".gitignore"} {
-		if _, err := w.Read(visible, 0, 0); err != nil {
-			t.Errorf("Read(%q) = %v, want it to work", visible, err)
-		}
+	if _, err := w.Read(".env", 0, 0); err == nil || !strings.Contains(err.Error(), "secret") {
+		t.Errorf("Read(.env) err = %v, want it refused as a secret", err)
 	}
 }

@@ -475,7 +475,7 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if l.DirIgnored {
 		// Said first, because it is the answer to "why can I not read or
 		// search anything here", and every entry below is ignored with it.
-		fmt.Fprintf(&b, "%s is ignored by the project, so grep, glob and read skip everything in it. "+
+		fmt.Fprintf(&b, "%s is ignored by the project, so grep and glob skip everything in it; read opens a file you name. "+
 			"Its entries:\n\n", displayDir(a.Path))
 	} else {
 		fmt.Fprintf(&b, "%s:\n\n", displayDir(a.Path))
@@ -486,7 +486,7 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 			if len(entries) > 0 {
 				b.WriteString("\n")
 			}
-			b.WriteString("Ignored by the project, so grep, glob and read skip them:\n")
+			b.WriteString("Ignored by the project, so grep and glob skip them; read opens one you name:\n")
 		}
 	}
 	for _, e := range ignored {

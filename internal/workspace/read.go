@@ -70,18 +70,13 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 	if rel == "" {
 		return FileText{}, errors.New("no path given")
 	}
-	// A path outside the project — temp or granted — comes back with
-	// rel absolute, and the project's ignore rules do not apply to it. A
-	// project that itself lives under /tmp gets a relative rel for its own
-	// files, so its ignore rules still bind them.
-	if !isAbsRel(rel) {
-		// The ignore rules bind here too. They always bound ls, glob, and grep,
-		// which is what made this easy to miss: a gitignored .env was invisible to
-		// every way of finding it and one guessed filename away from being read.
-		if err := w.refuseIgnored(rel); err != nil {
-			return FileText{}, err
-		}
-	}
+	// A file the project ignores is read when it is named. The ignore rules
+	// keep search out of node_modules and build output; they are not a
+	// statement that the files are private, and a dependency's source or a
+	// build's log is often exactly what the model needs. They used to bind
+	// here too, because a gitignored .env was invisible to every way of
+	// finding it and one guessed filename away from being read; the secret
+	// patterns below refuse that file by what it is, ignored or not.
 	if err := w.refuseSecret(rel, full); err != nil {
 		return FileText{}, err
 	}
@@ -247,12 +242,7 @@ func (w *Workspace) openable(rel string, maxBytes int64) (string, string, os.Fil
 	if rel == "" {
 		return "", "", nil, errors.New("no path given")
 	}
-	// The same exception as Read's, for the same reason.
-	if !isAbsRel(rel) {
-		if err := w.refuseIgnored(rel); err != nil {
-			return "", "", nil, err
-		}
-	}
+	// Ignored files are read when named, as by Read.
 	if err := w.refuseSecret(rel, full); err != nil {
 		return "", "", nil, err
 	}
