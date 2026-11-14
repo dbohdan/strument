@@ -221,7 +221,7 @@ var projectKeyOrder = []string{
 	"hasShellTimeout",
 	"hasRetryTimeout",
 	"hasGitSign",
-	"hasAutoCommits",
+	"hasCommits",
 	"hasCompaction",
 	"hasSecretFilesAdd",
 	"hasSecretFilesExempt",
@@ -231,7 +231,6 @@ var projectKeyOrder = []string{
 	"hasEnvSet",
 	"hasPromptSystemPrefix",
 	"hasPromptCode",
-	"hasPromptCommit",
 	"hasPromptReadOnly",
 	"hasChatLanguage",
 }
@@ -421,14 +420,14 @@ var projectKeys = map[string]projectKey{
 			return "a long history drops its oldest turns, keeping what the user said"
 		},
 	},
-	"hasAutoCommits": {
-		name: "auto_commits",
-		set:  func(g *fileGlobals) bool { return g.hasAutoCommits },
+	"hasCommits": {
+		name: "commits",
+		set:  func(g *fileGlobals) bool { return g.hasCommits },
 		detail: func(g *fileGlobals, _ func(string) string) string {
-			if g.autoCommitsVal {
-				return "a turn that changes a file ends in a commit"
+			if g.commitsVal {
+				return "the model may commit its edits"
 			}
-			return "edits are written but not committed"
+			return "edits are written but never committed"
 		},
 	},
 	"hasSecretFilesAdd": {
@@ -483,10 +482,8 @@ var projectKeys = map[string]projectKey{
 
 	"hasPromptSystemPrefix": promptKey("prompt_system_prefix", "prepends to every system prompt",
 		func(g *fileGlobals) (bool, string) { return g.hasPromptSystemPrefix, g.promptSystemPrefixVal }),
-	"hasPromptCode": promptKey("prompt_code", "replaces the code-mode system prompt",
+	"hasPromptCode": promptKey("prompt_code", "replaces the system prompt",
 		func(g *fileGlobals) (bool, string) { return g.hasPromptCode, g.promptCodeVal }),
-	"hasPromptCommit": promptKey("prompt_commit", "replaces the commit-message prompt",
-		func(g *fileGlobals) (bool, string) { return g.hasPromptCommit, g.promptCommitVal }),
 	"hasPromptReadOnly": promptKey("prompt_read_only", "replaces the read-only-mode system prompt",
 		func(g *fileGlobals) (bool, string) { return g.hasPromptReadOnly, g.promptReadOnlyVal }),
 

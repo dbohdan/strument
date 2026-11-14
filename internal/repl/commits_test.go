@@ -9,19 +9,19 @@ import (
 	"dbohdan.com/strument/internal/gitrepo"
 )
 
-// The point of the command: --no-auto-commits becomes a decision you can make
+// The point of the command: --no-commits becomes a decision you can make
 // mid-session.
 func TestCommitsTogglesAutoCommits(t *testing.T) {
 	r, cdr, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
 	cdr.Repo = &gitrepo.Repo{}
-	cdr.AutoCommits = true
+	cdr.Commits = true
 
 	cmdCommits(context.Background(), r, "off")
-	if cdr.AutoCommits {
+	if cdr.Commits {
 		t.Error("/commits off left auto-commits on")
 	}
 	cmdCommits(context.Background(), r, "on")
-	if !cdr.AutoCommits {
+	if !cdr.Commits {
 		t.Error("/commits on left auto-commits off")
 	}
 	if !strings.Contains(out.String(), "Commits: on") {
@@ -38,9 +38,9 @@ func TestCommitsBareDoesNotChangeState(t *testing.T) {
 	cdr.Repo = &gitrepo.Repo{}
 
 	for _, want := range []bool{true, false} {
-		cdr.AutoCommits = want
+		cdr.Commits = want
 		cmdCommits(context.Background(), r, "")
-		if cdr.AutoCommits != want {
+		if cdr.Commits != want {
 			t.Errorf("bare /commits flipped auto-commits from %v", want)
 		}
 	}
@@ -61,17 +61,17 @@ func TestCommitsReportsWhatActuallyGatesACommit(t *testing.T) {
 	}{
 		{
 			name:  "no repository",
-			setup: func(c *coder.Coder) { c.Repo = nil; c.AutoCommits = true },
+			setup: func(c *coder.Coder) { c.Repo = nil; c.Commits = true },
 			want:  "Git integration is disabled",
 		},
 		{
 			name:  "dry run outranks the setting",
-			setup: func(c *coder.Coder) { c.Repo = &gitrepo.Repo{}; c.AutoCommits = true; c.DryRun = true },
+			setup: func(c *coder.Coder) { c.Repo = &gitrepo.Repo{}; c.Commits = true; c.DryRun = true },
 			want:  "dry run",
 		},
 		{
 			name:    "plainly off",
-			setup:   func(c *coder.Coder) { c.Repo = &gitrepo.Repo{}; c.AutoCommits = false },
+			setup:   func(c *coder.Coder) { c.Repo = &gitrepo.Repo{}; c.Commits = false },
 			want:    "Commits: off",
 			wantNot: "dry run",
 		},
@@ -98,7 +98,7 @@ func TestCommitsOnWithoutARepositoryIsRefused(t *testing.T) {
 	cdr.Repo = nil
 
 	cmdCommits(context.Background(), r, "on")
-	if cdr.AutoCommits {
+	if cdr.Commits {
 		t.Error("auto-commits was set with no repository to commit to")
 	}
 	if !strings.Contains(out.String(), "nothing to commit to") {
@@ -109,10 +109,10 @@ func TestCommitsOnWithoutARepositoryIsRefused(t *testing.T) {
 func TestCommitsRejectsAnUnknownWord(t *testing.T) {
 	r, cdr, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
 	cdr.Repo = &gitrepo.Repo{}
-	cdr.AutoCommits = true
+	cdr.Commits = true
 
 	cmdCommits(context.Background(), r, "yes")
-	if !cdr.AutoCommits {
+	if !cdr.Commits {
 		t.Error("an unrecognized word changed the setting")
 	}
 	if !strings.Contains(out.String(), "Usage: /commits") {

@@ -149,24 +149,16 @@ func TestCommitContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.CommitTrailer = gitrepo.Trailer("test-model")
-	var gotDiffs, gotContext string
-	g.Message = func(diffs, context string) string {
-		gotDiffs, gotContext = diffs, context
-		return `"feat: change the greeting"` // models love quoting; stripped
-	}
 
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello strument\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, message, ok, err := g.Commit([]string{"main.txt"}, nil, "USER: change it", "", true)
+	hash, message, ok, err := g.Commit([]string{"main.txt"}, nil, "  feat: change the greeting\n")
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if hash == "" || message != "feat: change the greeting" {
 		t.Errorf("hash=%q message=%q", hash, message)
-	}
-	if !strings.Contains(gotDiffs, "hello strument") || gotContext != "USER: change it" {
-		t.Errorf("message inputs: diffs=%q context=%q", gotDiffs, gotContext)
 	}
 
 	body := run(t, root, "git", "log", "-1", "--format=%B")
@@ -184,7 +176,7 @@ func TestCommitContract(t *testing.T) {
 
 	// Nothing staged => ok=false, no error, no commit.
 	head := g.HeadSHA()
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true); ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "again"); ok || err != nil {
 		t.Errorf("no-op commit: ok=%v err=%v", ok, err)
 	}
 	if g.HeadSHA() != head {
@@ -242,7 +234,7 @@ func TestCommitSignFlag(t *testing.T) {
 			}
 			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", true); err != nil || !ok {
+			if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "edit"); err != nil || !ok {
 				// Missing gpg (notably on Windows CI, where the shim is ignored)
 				// is environmental; don't fail the plumbing check over it.
 				if strings.Contains(errOrEmpty(err), "gpg") || strings.Contains(errOrEmpty(err), "GPG") {
@@ -262,26 +254,24 @@ func TestCommitSignFlag(t *testing.T) {
 	}
 }
 
-func TestUnattributedCommitHasNoTrailer(t *testing.T) {
+// An empty message still makes a commit, under aider's placeholder, rather
+// than failing: the commit tool refuses an empty subject before this is
+// reached, so this is the backstop, not the path.
+func TestEmptyMessageFallsBack(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	g.CommitTrailer = gitrepo.Trailer("test-model")
-
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, message, ok, err := g.Commit([]string{"main.txt"}, nil, "", "", false)
+	_, message, ok, err := g.Commit([]string{"main.txt"}, nil, " ")
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if message != "(no commit message provided)" {
 		t.Errorf("fallback message: %q", message)
-	}
-	if body := run(t, root, "git", "log", "-1", "--format=%B"); strings.Contains(body, "Assisted-by") {
-		t.Errorf("an unattributed commit must not carry the trailer: %q", body)
 	}
 }
 
@@ -294,7 +284,7 @@ func TestCommitNewFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "created.txt"), []byte("new\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"created.txt"}, nil, "", "", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"created.txt"}, nil, "add created"); !ok || err != nil {
 		t.Fatalf("new-file commit: ok=%v err=%v", ok, err)
 	}
 	if !g.PathInRepo("created.txt") {
@@ -302,20 +292,37 @@ func TestCommitNewFile(t *testing.T) {
 	}
 }
 
-// editStub replays an edit tool call against main.txt, then the closing answer
-// that ends the turn. Two turns, because a reply ending in a tool call is
-// mid-sentence: the harness re-sends on the result.
+// The scripted model: an edit to main.txt, a commit, and a closing answer,
+// each a send of its own, because a reply ending in a tool call is
+// mid-sentence and the harness re-sends on the result.
+const editArgs = `{"path":"main.txt","old_string":"hello world\n","new_string":"hello strument\n"}`
+
+func call(id, name, args string) fixture.Turn {
+	return fixture.Turn{Events: []fixture.Event{
+		{Kind: "ToolCall", ToolIndex: 0, ToolID: id, ToolName: name, ToolArgs: args},
+		{Kind: "Finish", FinishReason: "tool_calls"},
+	}}
+}
+
+func answer(text string) fixture.Turn {
+	return fixture.Turn{Events: []fixture.Event{
+		{Kind: "Answer", Text: text},
+		{Kind: "Finish", FinishReason: "stop"},
+	}}
+}
+
 func editStub() *fixture.StreamStub {
-	args := `{"path":"main.txt","old_string":"hello world\n","new_string":"hello strument\n"}`
 	return &fixture.StreamStub{Turns: []fixture.Turn{
-		{Events: []fixture.Event{
-			{Kind: "ToolCall", ToolIndex: 0, ToolID: "call_1", ToolName: "edit", ToolArgs: args},
-			{Kind: "Finish", FinishReason: "tool_calls"},
-		}},
-		{Events: []fixture.Event{
-			{Kind: "Answer", Text: "Changed the greeting."},
-			{Kind: "Finish", FinishReason: "stop"},
-		}},
+		call("call_1", "edit", editArgs),
+		answer("Changed the greeting."),
+	}}
+}
+
+func editCommitStub() *fixture.StreamStub {
+	return &fixture.StreamStub{Turns: []fixture.Turn{
+		call("call_1", "edit", editArgs),
+		call("call_2", "commit", `{"subject":"feat: greet strument"}`),
+		answer("Changed the greeting and committed it."),
 	}}
 }
 
@@ -348,23 +355,24 @@ func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Code
 	model.SideModel = model
 
 	c := coder.New(root, model)
-	c.Client = editStub()
+	c.Client = editCommitStub()
 	c.Confirm = yesConfirmer{}
 	c.Out = quietOutput{t}
 	c.Repo = g
-	c.AutoCommits = true
+	c.Commits = true
 	c.AddFile("main.txt")
 	return c
 }
 
-func TestCoderAutoCommitIntegration(t *testing.T) {
+// The model's commit tool is what commits: its message, the trailer, and a
+// clean tree afterwards.
+func TestCoderCommitsThroughTheTool(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	g.CommitTrailer = gitrepo.Trailer("test-model")
-	g.Message = func(_, _ string) string { return "feat: greet strument" }
 
 	c := newIntegrationCoder(t, root, g)
 	baseHead := g.HeadSHA()
@@ -374,27 +382,49 @@ func TestCoderAutoCommitIntegration(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(got) != "hello strument\n" {
 		t.Fatalf("file = %q", got)
 	}
-	head := g.HeadSHA()
-	if head == baseHead {
-		t.Fatal("no auto-commit created")
+	if g.HeadSHA() == baseHead {
+		t.Fatal("the commit tool made no commit")
 	}
 	body := run(t, root, "git", "log", "-1", "--format=%B")
 	if !strings.Contains(body, "feat: greet strument") ||
 		!strings.Contains(body, "Assisted-by: test-model via Strument") {
 		t.Errorf("commit body: %q", body)
 	}
-	if c.LastCommitHash() == "" || !c.IsSessionCommit(c.LastCommitHash()) {
-		t.Errorf("session commit tracking: last=%q", c.LastCommitHash())
+	if c.LastCommitHash() == "" {
+		t.Error("the session did not record its commit")
 	}
-	// Worktree clean after commit.
 	if g.IsDirty("main.txt") {
-		t.Error("main.txt dirty after auto-commit")
+		t.Error("main.txt dirty after the commit")
 	}
 }
 
-// TestUncommittedChangesCommittedFirst: a file with uncommitted changes before
-// the model's edit gets a commit of its own, unattributed and holding exactly
-// those changes, and the model's commit on top holds only the model's.
+// A turn that does not commit leaves its edits uncommitted: nothing at turn
+// end commits for the model any more.
+func TestTurnEndDoesNotCommit(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newIntegrationCoder(t, root, g)
+	c.Client = editStub()
+	baseHead := g.HeadSHA()
+
+	c.Run(t.Context(), "change the greeting")
+
+	if g.HeadSHA() != baseHead {
+		t.Error("a turn that never called commit moved HEAD")
+	}
+	if !g.IsDirty("main.txt") {
+		t.Error("the model's edit is not in the working tree")
+	}
+}
+
+// The user's uncommitted changes get a commit of their own, unattributed and
+// holding exactly those changes, and the model's commit on top holds only the
+// model's — including when the model edits in one turn and commits in the
+// next, where a baseline retaken at the second turn's start would read the
+// model's own edit as the user's.
 func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	root := initRepo(t)
 	g, err := gitrepo.Discover(root)
@@ -402,7 +432,6 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.CommitTrailer = gitrepo.Trailer("test-model")
-	g.Message = func(_, _ string) string { return "feat: greet strument" }
 	base := g.HeadSHA()
 
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("hello world\nuser addition\n"), 0o644); err != nil {
@@ -410,7 +439,17 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	}
 
 	c := newIntegrationCoder(t, root, g)
+	c.Client = &fixture.StreamStub{Turns: []fixture.Turn{
+		call("call_1", "edit", editArgs),
+		answer("Changed the greeting."),
+		call("call_2", "commit", `{"subject":"feat: greet strument"}`),
+		answer("Committed."),
+	}}
 	c.Run(t.Context(), "change the greeting")
+	if g.HeadSHA() != base {
+		t.Fatal("the first turn committed")
+	}
+	c.Run(t.Context(), "commit it")
 
 	subjects := strings.TrimSpace(run(t, root, "git", "log", "--format=%s", base+"..HEAD"))
 	if subjects != "feat: greet strument\nCommit existing changes to main.txt before Strument's edits" {
@@ -429,7 +468,75 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 		t.Errorf("model's commit diff:\n%s\nwant only the greeting change", got)
 	}
 	if g.IsDirty("main.txt") {
-		t.Error("main.txt dirty after the turn's commit")
+		t.Error("main.txt dirty after the model's commit")
+	}
+}
+
+// /undo takes back a committing turn whole: the files, and the commits — the
+// model's and the separate one of the user's changes — leaving the user's
+// changes uncommitted again, where they were.
+func TestUndoTakesTheTurnsCommits(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := g.HeadSHA()
+	userVersion := "hello world\nuser addition\n"
+	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte(userVersion), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := newIntegrationCoder(t, root, g)
+	c.Run(t.Context(), "change the greeting")
+	if n := strings.Count(strings.TrimSpace(run(t, root, "git", "log", "--format=%h", base+"..HEAD")), "\n") + 1; n != 2 {
+		t.Fatalf("want two commits on top of base, got %d", n)
+	}
+
+	res, err := c.UndoLastTurn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.HeadSHA() != base {
+		t.Errorf("HEAD = %s, want the base %s", g.HeadSHA(), base)
+	}
+	if len(res.Removed) != 2 {
+		t.Errorf("removed = %v, want both commits", res.Removed)
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(got) != userVersion {
+		t.Errorf("main.txt = %q, want the user's version back", got)
+	}
+	if staged := run(t, root, "git", "diff", "--cached", "--name-only"); strings.TrimSpace(staged) != "" {
+		t.Errorf("index still holds %q after the undo", staged)
+	}
+	if !g.IsDirty("main.txt") {
+		t.Error("the user's change is not uncommitted again")
+	}
+}
+
+// /undo will not take a commit someone made on top of the turn's.
+func TestUndoRefusesWhenSomeoneCommittedOnTop(t *testing.T) {
+	root := initRepo(t)
+	g, err := gitrepo.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newIntegrationCoder(t, root, g)
+	c.Run(t.Context(), "change the greeting")
+	if err := os.WriteFile(filepath.Join(root, "other.txt"), []byte("mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", "other.txt")
+	run(t, root, "git", "commit", "-qm", "the user's own")
+	head := g.HeadSHA()
+
+	if _, err := c.UndoLastTurn(); err == nil || !strings.Contains(err.Error(), "no longer the newest") {
+		t.Fatalf("err = %v, want a refusal naming the commit on top", err)
+	}
+	if g.HeadSHA() != head {
+		t.Error("a refused undo moved HEAD")
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(got) != "hello strument\n" {
+		t.Errorf("a refused undo changed main.txt: %q", got)
 	}
 }
 
@@ -887,7 +994,7 @@ func TestCommitTakesStagedFromDisk(t *testing.T) {
 		t.Fatalf("changed = %q", got)
 	}
 
-	_, _, ok, err := g.Commit(nil, []string{"main.txt", "moved.txt"}, "", "rename main", true)
+	_, _, ok, err := g.Commit(nil, []string{"main.txt", "moved.txt"}, "rename main")
 	if err != nil || !ok {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
@@ -920,11 +1027,11 @@ func TestCommitStagedWithoutHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true); ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "first"); ok || err != nil {
 		t.Fatalf("unstaged path in an empty repo: ok=%v err=%v, want nothing to commit", ok, err)
 	}
 	run(t, root, "git", "add", "a.txt")
-	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "", "first", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"a.txt"}, "first"); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := run(t, root, "git", "show", "HEAD:a.txt"); got != "a\n" {
@@ -1024,7 +1131,7 @@ func TestCommitCaseOnlyRename(t *testing.T) {
 	if err != nil || strings.Join(staged, ",") != "NOTES.md,notes.md" {
 		t.Fatalf("staged = %v, %v", staged, err)
 	}
-	if _, _, ok, err := g.Commit(nil, staged, "", "rename notes", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, staged, "rename notes"); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); !strings.Contains(got, "NOTES.md") || strings.Contains(got, "notes.md") {
@@ -1056,7 +1163,7 @@ func TestCommitHooksSeeTheTemporaryIndex(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "main.txt"), []byte("edited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "", "edit", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit([]string{"main.txt"}, nil, "edit"); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := run(t, root, "git", "show", "HEAD:main.txt"); got != "formatted\n" {
@@ -1078,7 +1185,7 @@ func TestCommitStagedUntrack(t *testing.T) {
 		t.Fatal(err)
 	}
 	run(t, root, "git", "rm", "-q", "--cached", "main.txt")
-	if _, _, ok, err := g.Commit(nil, []string{"main.txt"}, "", "untrack main", true); !ok || err != nil {
+	if _, _, ok, err := g.Commit(nil, []string{"main.txt"}, "untrack main"); !ok || err != nil {
 		t.Fatalf("Commit: ok=%v err=%v", ok, err)
 	}
 	if got := strings.TrimSpace(run(t, root, "git", "ls-tree", "--name-only", "HEAD")); got != "" {

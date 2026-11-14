@@ -1,32 +1,29 @@
 package coder
 
 import (
-	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"dbohdan.com/strument/internal/config"
-	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
 )
 
-// commitTurn commits everything the turn changed, as one commit.
+// commitTurn commits the model's work since its last commit, as one commit
+// with the model's message. It is the commit tool's, the only way the model's
+// edits are committed: a turn no longer ends in one. See settleEdits.
 //
-// One commit per turn, not one per send. The two things a commit can be — an
-// undo substrate and a message to whoever reads the history later — used to be
-// the same object, which worked while a turn was one send. It stopped working
-// when the loop closed: a turn that edits across six steps wrote six commits,
-// each described by a side model that had seen only its own fragment. The
-// substrate is the snapshot now (snapshot.go), so the commit can be just the
-// communication.
+// What is committed is what the model has written since it last committed,
+// which can span turns — pendingEdits holds what earlier settles closed,
+// turnSnap what this stretch of the turn wrote — and what its shell commands
+// staged (staging.go). Handing git a path the model did not write since then
+// would be invisible while only Strument is writing, since git commits what
+// differs and those files no longer do. It stops being invisible the moment
+// the user edits one of them, and their work joins a model-authored commit
+// they never saw.
 //
-// Waiting also improves the message for free: commitContext formats curMessages,
-// which at turn end holds the user's request and the whole turn's work.
-//
-// A no-op without a repo, with auto-commits off, or in dry-run — the edits are
+// A no-op without a repo, with commits off, or in dry-run — the edits are
 // still applied, and /undo still reaches them through the snapshot.
 //
 // The error is git refusing the commit — a pre-commit hook, most often — and
@@ -34,25 +31,13 @@ import (
 // why. Returning nothing left it to infer "nothing to commit" from the hash
 // not moving, which is the one reading the hook's refusal rules out.
 //
-// The result says what else went in: paths the model's shell commands staged
-// (staging.go), said on screen here and told to the model by the commit tool.
+// The hashes it makes go on the open snapshot, so /undo can take them back.
 func (c *Coder) commitTurn(message string) (turnCommit, error) {
-	// What is new since the last commit, not what the turn has touched.
-	//
-	// These were the same set while a turn made one commit. They stopped being
-	// the same when a turn could commit twice — first through an interrupt the
-	// user steered, now through the commit tool — because turnEditedFiles
-	// accumulates across the whole turn for the end-of-turn history record.
-	// Handing git the earlier commit's paths is invisible while only Strument
-	// is writing, since git commits what differs and those files no longer do.
-	// It stops being invisible the moment the user edits one of them
-	// themselves between two commits, and their work joins a model-authored
-	// commit they never saw.
 	var tc turnCommit
-	if c.Repo == nil || !c.AutoCommits || c.DryRun {
+	if c.Repo == nil || !c.Commits || c.DryRun {
 		return tc, nil
 	}
-	edited := c.committablePaths(c.turnSnap.paths())
+	edited := c.committablePaths(c.pendingPaths())
 	staged, conflicted := c.stagedForCommit(edited)
 	tc.conflicted = conflicted
 	if len(conflicted) > 0 {
@@ -63,49 +48,73 @@ func (c *Coder) commitTurn(message string) (turnCommit, error) {
 	}
 	slices.Sort(edited)
 
-	// Uncommitted changes from before the turn first, in a commit of their
-	// own, for files only a shell command changed; the edit tools did theirs
-	// before writing.
-	c.commitUncommittedFirst(append(slices.Clone(edited), staged...))
+	// The user's uncommitted changes to these files from before the model's
+	// work began, first, in a commit of their own.
+	if h := c.commitUncommittedFirst(append(slices.Clone(edited), staged...)); h != "" {
+		c.noteCommit(h)
+	}
 
-	hash, message, ok, err := c.Repo.Commit(edited, staged, c.commitContext(), message, true)
+	hash, message, ok, err := c.Repo.Commit(edited, staged, message)
 	if err != nil {
-		// A commit failure after the writes leaves the edits in the tree, where
-		// /undo still reaches them through the turn's snapshot.
+		// A commit failure leaves the edits in the tree and pending, where
+		// the next commit finds them and /undo still reaches them.
 		c.Out.Errorf("Could not commit: %v", err)
 		return tc, err
 	}
 	// Edited paths too: one the model staged and then edited went in as an
 	// edit, and must not be announced again by the next commit.
 	for _, p := range append(slices.Clone(staged), edited...) {
-		delete(c.turnStaged, p)
+		delete(c.pendingStaged, p)
+		delete(c.pendingEdits, p)
 	}
+	c.closePending()
 	if !ok {
-		// The turn's writes since the last settle net out against what is
+		// The writes since the last commit net out against what is
 		// committed — a change and its reversal, or a rewrite of what was
-		// already there. Since the commit tool arrived, this can also be the
-		// tail of a turn that already committed: the message must not say
-		// "the turn left the files as they were", which is false the moment
-		// the turn holds a commit.
+		// already there.
 		if c.lastCommitHash != "" {
 			c.Out.Toolf("Nothing to commit since %s.", c.lastCommitHash)
 		} else {
-			c.Out.Toolf("The turn left the files as they were; nothing to commit.")
+			c.Out.Toolf("The files are as they were; nothing to commit.")
 		}
 		return tc, nil
 	}
 
-	c.lastCommitHash = hash
-	if c.sessionCommits == nil {
-		c.sessionCommits = map[string]bool{}
-	}
-	c.sessionCommits[hash] = true
+	c.noteCommit(hash)
 	c.Out.Toolf("Commit %s %s", hash, message)
 	tc.staged = staged
 	if len(staged) > 0 {
 		c.Out.Toolf("Included what the model's commands staged with git: %s.", strings.Join(staged, ", "))
 	}
 	return tc, nil
+}
+
+// pendingPaths is everything the model has written since its last commit:
+// what earlier settles closed and what the open snapshot holds.
+func (c *Coder) pendingPaths() []string {
+	set := maps.Clone(c.pendingEdits)
+	if set == nil {
+		set = map[string]bool{}
+	}
+	for _, p := range c.turnSnap.paths() {
+		set[p] = true
+	}
+	return slices.Sorted(maps.Keys(set))
+}
+
+// hasPending reports whether there is anything for a commit to take.
+func (c *Coder) hasPending() bool {
+	return !c.turnSnap.empty() || len(c.pendingEdits) > 0 || len(c.pendingStaged) > 0
+}
+
+// noteCommit records a commit the session made: as the newest, and on the
+// open snapshot, for /undo.
+func (c *Coder) noteCommit(hash string) {
+	c.lastCommitHash = hash
+	if c.turnSnap == nil {
+		c.turnSnap = newTurnSnapshot()
+	}
+	c.turnSnap.commits = append(c.turnSnap.commits, hash)
 }
 
 // turnCommit is what commitTurn put in a commit beyond the turn's own edits.
@@ -145,13 +154,9 @@ func (c *Coder) attributeShellCommits(before string) {
 	if len(hashes) == 0 {
 		return
 	}
-	if c.sessionCommits == nil {
-		c.sessionCommits = map[string]bool{}
+	for _, h := range slices.Backward(hashes) { // newest first; the snapshot wants oldest first
+		c.noteCommit(h)
 	}
-	for _, h := range hashes {
-		c.sessionCommits[h] = true
-	}
-	c.lastCommitHash = hashes[0] // newest first
 	c.saveUndo()
 	c.Out.Toolf("Added model attribution to %s created by the command.",
 		render.Plural(len(hashes), "commit", "commits"))
@@ -194,200 +199,4 @@ func (c *Coder) committablePaths(paths []string) []string {
 			strings.Join(dropped, ", "))
 	}
 	return keep
-}
-
-// commitContext formats curMessages for the commit-message model (aider's
-// get_context_from_history).
-//
-// Tool calls are rendered, not only tool results. Message.Text() returns
-// Content, and a model's calls live in the separate ToolCalls field, so
-// formatting text alone gave the commit-message model the answers without the
-// questions: the contents that came back from a read with no record of what was
-// read or why, and none of the purpose strings the bash tool goes out of its way
-// to require. In a harness where the whole of a turn's work arrives as tool
-// calls, that is most of the turn.
-//
-// Arguments are capped hard. The commit model is handed the diff separately, so
-// an edit call's arguments — the entire new text of a file — are the one thing
-// here that is both enormous and already known. What the cap keeps is the
-// leading, identifying part: the path, the query, the purpose.
-const maxCommitArgs = 300
-
-// maxCommitHistory bounds the earlier turns fed to the commit-message model.
-// The tail is kept: the reason for a change is usually stated a turn or two
-// before the change lands, not at the start of the session.
-const maxCommitHistory = 8000
-
-func (c *Coder) commitContext() string {
-	prior := renderCommitMessages(c.doneMessages)
-	if len(prior) > maxCommitHistory {
-		prior = prior[len(prior)-maxCommitHistory:]
-		if i := strings.IndexByte(prior, '\n'); i >= 0 {
-			prior = prior[i+1:]
-		}
-		prior = "(Earlier conversation omitted.)\n" + prior
-	}
-	return prior + renderCommitMessages(c.curMessages)
-}
-
-func renderCommitMessages(msgs []llm.Message) string {
-	var b strings.Builder
-	for _, m := range msgs {
-		b.WriteString("\n" + strings.ToUpper(m.Role) + ": " + m.Text() + "\n")
-		for _, tc := range m.ToolCalls {
-			args := strings.Join(strings.Fields(tc.Arguments), " ")
-			if len(args) > maxCommitArgs {
-				args = args[:maxCommitArgs] + "…"
-			}
-			b.WriteString("CALL: " + tc.Name + " " + args + "\n")
-		}
-	}
-	return b.String()
-}
-
-// commitMessageTimeout bounds the side-model commit-message call; on
-// timeout the commit proceeds with the fallback message.
-const commitMessageTimeout = sideTimeout
-
-// commitInputCutNote marks a truncated diff, so the model reads it as cut
-// rather than as a change that ends there — the same reason clipForSummary and
-// maxToolOutputBytes announce their cuts.
-//
-// Phrased for its reader, which is the model writing the message. It first said
-// the diff was "cut to fit the side model's context", which got the audience
-// wrong twice over: "side model" is this codebase's name for a role, not
-// something the model on the other end knows it occupies, and why the cut
-// happened is not something it can act on. What it can act on is the scope of
-// what it was given.
-const commitInputCutNote = "\n… (cut; the rest of the diff is not part of this input — " +
-	"describe only the changes shown)"
-
-// commitCharsPerToken converts a token bound into a character budget.
-//
-// RuneCounter estimates at 4 characters per token, and its own comment says
-// code runs closer to 3.3 — which is what a diff is. Everywhere else that
-// estimate is advisory; here it decides what to cut, so it rounds the wrong way
-// deliberately. At 3 the budget cuts a little more than it strictly must; at 4
-// a dense diff slips through and the provider rejects the whole request, which
-// is the failure this exists to prevent.
-const commitCharsPerToken = 3
-
-// commitContextOmittedNote marks a chat context cut to fit, matching the phrase
-// commitContext already uses when maxCommitHistory trims the same material.
-const commitContextOmittedNote = "(Earlier conversation omitted.)\n"
-
-// fitCommitInput assembles the commit-message input within bound tokens,
-// sacrificing the chat context before the diff.
-//
-// The order is the whole point. The prompt tells the model to "describe only
-// what the diff does" and treats earlier turns as background, so when something
-// has to go, background is what goes: a message written from a full diff and no
-// context is worse-explained, while one written from full context and half a
-// diff is wrong about what changed. The diff is cut only when it exceeds the
-// budget by itself.
-//
-// Sized in characters against a token bound at commitCharsPerToken.
-func fitCommitInput(chatContext, diffs string, bound int, out Output) string {
-	budget := (bound - summaryInputBuffer) * commitCharsPerToken
-	if budget <= 0 {
-		return "# Diffs:\n" + diffs
-	}
-
-	body := "# Diffs:\n" + diffs
-	if len(body) >= budget {
-		// No room for context at all, and the diff itself must give.
-		keep := budget - len(commitInputCutNote)
-		if keep < len(body) && keep > 0 {
-			out.Toolf("The diff is too large for the commit-message model; describing the first %s of it.",
-				render.Plural(keep, "character", "characters"))
-			return body[:keep] + commitInputCutNote
-		}
-		return body
-	}
-	if chatContext == "" {
-		return body
-	}
-
-	if room := budget - len(body) - 1; room >= len(chatContext) { // -1 for the joining newline
-		return chatContext + "\n" + body
-	}
-	// The marker is part of what gets sent, so it comes out of the budget
-	// rather than being added on top of it — which is what it did first, and
-	// what put the result 29 characters over a bound the whole function exists
-	// to hold.
-	room := budget - len(body) - 1 - len(commitContextOmittedNote)
-	if room <= 0 {
-		return body
-	}
-	// Keep the tail: the reason for a change is usually stated a turn or two
-	// before it lands, which is the same reasoning maxCommitHistory follows.
-	cut := chatContext[len(chatContext)-room:]
-	if i := strings.IndexByte(cut, '\n'); i >= 0 {
-		cut = cut[i+1:]
-	}
-	return commitContextOmittedNote + cut + "\n" + body
-}
-
-// CommitMessenger returns a commit-message generator backed by a model,
-// packaged as the git port's Message func. An empty return means "no message"
-// and the caller falls back.
-//
-// record receives the request's usage, and exists because this call was
-// spending money nobody could see: it goes out through the client directly, so
-// it never reached finalizeUsage, and a measured turn reported $0.00084 having
-// paid $0.00093. Nil is accepted for a caller that does not account.
-func CommitMessenger(
-	cl llm.ModelClient, model *config.Model, language string, record func(llm.Usage),
-	out Output, clock Clock, prompt string, report SideCallReporter,
-) func(diffs, context string) string {
-	return func(diffs, chatContext string) string { //nolint:contextcheck // its own timeout; the turn's context is already done here.
-		languageInstruction := ""
-		if language != "" {
-			languageInstruction = "\n- Is written in " + language + "."
-		}
-		// prompt is the user's whole-string replacement for the commit system
-		// prompt (`prompt_commit`), or the built-in when empty. Both are
-		// pyFormat templates sharing the {language_instruction} slot.
-		p := prompts.CommitSystem
-		if prompt != "" {
-			p = prompt
-		}
-		system := pyFormat(p, map[string]string{
-			"language_instruction": languageInstruction,
-		})
-
-		content := fitCommitInput(chatContext, diffs, sideInputBound(model), out)
-
-		ctx, cancel := context.WithTimeout(context.Background(), commitMessageTimeout)
-		defer cancel()
-
-		answer, _ := sendSide(ctx, cl, llm.Request{
-			Model: model.Slug,
-			Messages: []llm.Message{
-				llm.TextMessage("system", system),
-				llm.TextMessage("user", content),
-			},
-			// The side model's own reasoning setting, like the summary call.
-			//
-			// This field used to be left unset, with a comment claiming that
-			// stopped a reasoning model from thinking its way to a subject
-			// line. It did not: client.go reads "" as "defer to the provider
-			// default; send nothing", so the model reasoned exactly as much as
-			// it pleased and Strument merely gave up the ability to say
-			// otherwise. Live, every one of four side models reasoned here —
-			// one spent 36,141 characters of reasoning on a 202-character
-			// commit message, taking 845.9s.
-			//
-			// Passing the configured effort through is what makes the comment's
-			// intent reachable: `reasoning="off"` on the side model now turns it
-			// off, where before the setting was ignored on this path. It is not
-			// forced off here, because "off" is not universally accepted —
-			// glm-5.3-flash rejects reasoning:{enabled:false} with HTTP 400 —
-			// so the choice belongs in config, where the user knows their model.
-			ReasoningEffort: model.Reasoning,
-			Temperature:     model.Temperature,
-			ExtraParams:     model.RequestExtraParams(),
-		}, "commit message", out, clock, record, report)
-		return strings.TrimSpace(answer) // "" after exhausted retries => caller falls back
-	}
 }

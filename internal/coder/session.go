@@ -143,14 +143,9 @@ func (c *Coder) SetChatLanguage(code string) {
 	c.Platform.Language = detectUserLanguage(code)
 }
 
-// LastCommitHash is the short hash of the session's last auto-commit ("" if
+// LastCommitHash is the short hash of the session's last commit ("" if
 // none); the REPL uses it for the undo hint.
 func (c *Coder) LastCommitHash() string { return c.lastCommitHash }
-
-// IsSessionCommit reports whether the short hash is one of this session's
-// auto-commits (/undo refuses anything else, like aider's
-// aider_commit_hashes gate).
-func (c *Coder) IsSessionCommit(short string) bool { return c.sessionCommits[short] }
 
 // NoteUndo records in the chat history that the user reverted a turn's edits.
 //

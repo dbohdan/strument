@@ -85,15 +85,19 @@ inherited from aider.
   recorded before the first write to it, so `/undo` restores a turn whether or
   not there is a repository — which is what makes the harness usable on a live
   configuration directory or under another SCM. Git is layered on top where it
-  exists: one commit per turn and `/squash` to merge turns. The commit takes
-  what the model's shell commands staged, found by recording the index around
-  each one, so a `git mv` lands whole. A file that had uncommitted changes when
-  the turn began gets a commit of its own first, as aider does, holding those
-  changes as the turn found them, so nothing the model did is in it; a trial
-  in which they rode along in the model's commit instead had models deleting
-  the user's lines to keep them out.
-  Every attributed commit — auto-commit, the commit tool, or commits a model
-  makes directly with git through bash — carries the `Assisted-by` trailer, so
+  exists: the model commits with its `commit` tool, when the work is done and
+  in as many commits as it has parts, and `/undo` takes a turn's commits back
+  with its files. Nothing commits at turn end; that went with the side model
+  that wrote the message, because the model that made a change is better
+  placed to say why. A commit takes what the model wrote since its last
+  commit, across turns if need be, and what its shell commands staged, found
+  by recording the index around each one, so a `git mv` lands whole. A file
+  that had uncommitted changes before the model's work on it began gets a
+  commit of its own first, as aider does, holding those changes as they were,
+  so nothing the model did is in it; a trial in which they rode along in the
+  model's commit instead had models deleting the user's lines to keep them out.
+  Every attributed commit — the commit tool's, or commits a model makes
+  directly with git through bash — carries the `Assisted-by` trailer, so
   the history itself says which model did the work; commits the model runs
   through bash get it retroactively, with merges and other people's
   cherry-picked work left alone.
@@ -108,8 +112,8 @@ inherited from aider.
 
 - **Scope.** Essentials only: a standard tool set driven in a closed loop
   (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
-  `bash` and the `check` tool to run things), turn-scoped snapshots with `/undo` and
-  `/squash`, git auto-commit where there is a repository, `/symbol`,
+  `bash` and the `check` tool to run things, `commit` to commit), turn-scoped
+  snapshots with `/undo`, `/symbol`,
   reflection, chat-history summarization.
   Architect mode, voice, GUI, and analytics are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter

@@ -37,9 +37,9 @@ func TestUndoRoundTrip(t *testing.T) {
 			turn("bin.dat", binary, binary+"!", true),
 			turn("new.go", "", "package x\n", false),
 		},
-		Commits: []string{"abc1234", "def5678"},
-		Last:    "def5678",
+		Last: "def5678",
 	}
+	want.Turns[0].Commits = []string{"abc1234", "def5678"}
 	if err := SaveUndo(root, DefaultSession, want, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +57,8 @@ func TestUndoRoundTrip(t *testing.T) {
 	if got.Turns[0].Entries[0].Mode != 0o644 {
 		t.Errorf("mode = %v, want 0644", got.Turns[0].Entries[0].Mode)
 	}
-	if strings.Join(got.Commits, ",") != "abc1234,def5678" || got.Last != "def5678" {
-		t.Errorf("commits = %v, last = %q", got.Commits, got.Last)
+	if strings.Join(got.Turns[0].Commits, ",") != "abc1234,def5678" || got.Last != "def5678" {
+		t.Errorf("commits = %v, last = %q", got.Turns[0].Commits, got.Last)
 	}
 }
 

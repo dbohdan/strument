@@ -2,216 +2,40 @@ package repl
 
 import (
 	"context"
-	"fmt"
-	"slices"
-	"strconv"
 	"strings"
 )
 
-// cmdUndo undoes the last turn.
+// cmdUndo undoes the last turn: the files come back from the turn's snapshot,
+// and the commits made during it come off the branch (Coder.UndoLastTurn).
 //
-// It means one turn because a turn is one commit (coder.commitTurn). With a
-// repository this ports aider's raw_cmd_undo — restore the files of the last
-// commit from its parent, move HEAD back soft — keeping its safety gates:
-// session commit only, single parent, clean files, files present in the parent,
-// not already pushed. Without one it restores the turn's snapshot instead.
-//
-// The two substrates are not interchangeable. Only git can move HEAD, and only
-// git knows whether a commit has been pushed; only the snapshot exists in a
-// directory that is not a repository. So the command has two paths, and both
-// pop the same stack, so a session that has both never loses count.
+// It used to mean one commit, with a repository, because a turn was one
+// commit: aider's raw_cmd_undo, which restores the files of the last commit
+// from its parent and moves HEAD back. Committing is the model's now, so a
+// turn can end with no commit, or two, and the snapshot is the only record
+// that knows which turn did what. The gates aider's version had stay, in the
+// coder: the commits must be the newest on the branch, made in this session,
+// unpushed, not merges, and the files they touch clean.
 func cmdUndo(_ context.Context, r *REPL, _ string) string {
-	g := r.opts.Git
-	if g == nil {
-		return undoFromSnapshot(r)
-	}
-
-	sha, short, subject, parents, err := g.HeadInfo()
+	res, err := r.coder.UndoLastTurn()
 	if err != nil {
 		r.out.Errorf("Could not undo: %v", err)
 		return ""
 	}
-	if parents == 0 {
-		r.out.Errorf("Cannot undo the repository's first commit.")
-		return ""
-	}
-	if !r.coder.IsSessionCommit(short) {
-		r.out.Errorf("The last commit was not made by Strument in this chat session.")
-		r.printf("To remove it anyway, use git: `git reset --hard HEAD^` discards the commit and any uncommitted changes.")
-		return ""
-	}
-	if parents > 1 {
-		r.out.Errorf("Cannot undo %s: it is a merge commit.", sha)
-		return ""
-	}
-
-	changed, err := g.ChangedInHead()
-	if err != nil {
-		r.out.Errorf("Could not undo: %v", err)
-		return ""
-	}
-	for _, f := range changed {
-		if g.IsDirty(f) {
-			r.out.Errorf("Cannot undo: %s has uncommitted changes. Commit or stash them first.", f)
-			return ""
-		}
-		if !g.InCommit("HEAD^", f) {
-			r.out.Errorf("Cannot undo safely: %s did not exist in the previous commit.", f)
-			return ""
-		}
-	}
-
-	if g.Published(sha) {
-		r.out.Errorf("The last commit has already been pushed. Undoing it would rewrite published history.")
-		return ""
-	}
-
-	var restored, unrestored []string
-	for _, f := range changed {
-		if err := g.CheckoutFileFrom("HEAD~1", f); err != nil {
-			unrestored = append(unrestored, f)
-		} else {
-			restored = append(restored, f)
-		}
-	}
-	if len(unrestored) > 0 {
-		r.out.Errorf("Could not restore %s, so the undo was stopped.", unrestored[len(unrestored)-1])
-		r.printf("Restored files:")
-		for _, f := range restored {
+	r.coder.NoteUndo(res.Restored) // or the model builds on edits that are no longer there
+	if len(res.Restored) > 0 {
+		r.printf("Undid the last turn's edits:")
+		for _, f := range res.Restored {
 			r.printf("  %s", f)
 		}
-		r.printf("Could not restore:")
-		for _, f := range unrestored {
-			r.printf("  %s", f)
-		}
-		return ""
 	}
-
-	if err := g.ResetSoft("HEAD~1"); err != nil {
-		r.out.Errorf("Could not undo: %v", err)
-		return ""
-	}
-	r.coder.DropTurnSnapshot() // the commit was the record here; keep the stacks level
-	r.coder.NoteUndo(changed)  // or the model builds on edits that are no longer there
-	r.printf("Removed: %s %s", short, subject)
-	if _, nowShort, nowSubject, _, err := g.HeadInfo(); err == nil {
-		r.printf("Now at:  %s %s", nowShort, nowSubject)
-	}
-	return ""
-}
-
-// undoFromSnapshot is /undo without a repository: put back what the last turn
-// wrote. This is what makes Strument usable on a live configuration directory
-// or under another SCM — the edits are as recoverable there as in a repo, just
-// through a different record.
-func undoFromSnapshot(r *REPL) string {
-	restored, err := r.coder.UndoLastTurn()
-	if err != nil {
-		r.out.Errorf("Could not undo: %v", err)
-		return ""
-	}
-	r.coder.NoteUndo(restored)
-	r.printf("Undid the last turn's edits:")
-	for _, f := range restored {
-		r.printf("  %s", f)
-	}
-	return ""
-}
-
-// cmdSquash folds the last n turn-commits into one, with a message written for
-// the whole of it.
-//
-// One commit per turn is the right default granularity and the wrong one often
-// enough: three turns that felt separate while you were driving read afterwards
-// as a single change. Merging upward is safe — the human has seen the result
-// and is naming a unit they recognize. Splitting downward is not, so Strument
-// never tries to detect a boundary on its own.
-//
-// The gates are /undo's, for the same reason: every commit folded must be one
-// this session made, none may have been pushed, and none of the files may carry
-// uncommitted changes — a soft reset keeps the worktree, so a dirty file would
-// otherwise be swept into the squash commit without being asked.
-func cmdSquash(_ context.Context, r *REPL, args string) string {
-	g := r.opts.Git
-	if g == nil {
-		r.out.Errorf("No git repository; edits are applied, not committed.")
-		return ""
-	}
-
-	n := 2
-	if arg := strings.TrimSpace(args); arg != "" {
-		parsed, err := strconv.Atoi(arg)
-		if err != nil || parsed < 2 {
-			r.out.Errorf("%s, where n is 2 or more.", usage("squash"))
-			return ""
-		}
-		n = parsed
-	}
-
-	commits, err := g.LastCommits(n)
-	if err != nil {
-		r.out.Errorf("Could not squash: %v", err)
-		return ""
-	}
-	if len(commits) < n {
-		r.out.Errorf("There are only %d commits to squash.", len(commits))
-		return ""
-	}
-	for _, c := range commits {
-		if !r.coder.IsSessionCommit(c.Short) {
-			r.out.Errorf("Commit %s was not made by Strument in this chat session.", c.Short)
-			return ""
+	if len(res.Removed) > 0 {
+		r.printf("Removed %s: %s", plural(len(res.Removed), "commit", "commits"), strings.Join(res.Removed, ", "))
+		if g := r.opts.Git; g != nil {
+			if _, short, subject, _, err := g.HeadInfo(); err == nil {
+				r.printf("Now at:  %s %s", short, subject)
+			}
 		}
 	}
-
-	base := fmt.Sprintf("HEAD~%d", n)
-	// Oldest first: a pushed commit's ancestors are pushed too, so the first
-	// one found is the one to name.
-	for _, c := range slices.Backward(commits) {
-		if g.Published(c.SHA) {
-			r.out.Errorf("Commit %s has already been pushed. Squashing it would rewrite published history.", c.Short)
-			return ""
-		}
-	}
-
-	files, err := g.ChangedInRange(base)
-	if err != nil {
-		r.out.Errorf("Could not squash: %v", err)
-		return ""
-	}
-	if len(files) == 0 {
-		r.out.Errorf("Those commits change nothing between them; there is nothing to squash.")
-		return ""
-	}
-	for _, f := range files {
-		if g.IsDirty(f) {
-			r.out.Errorf("Cannot squash: %s has uncommitted changes. Commit or stash them first.", f)
-			return ""
-		}
-	}
-
-	if err := g.ResetSoft(base); err != nil {
-		r.out.Errorf("Could not squash: %v", err)
-		return ""
-	}
-	// Commit re-stages the files, diffs them, and asks the side model for a
-	// message covering the whole range — the same path an ordinary turn takes.
-	// The context is the subjects being replaced, so the new message describes
-	// the same work rather than starting from the diff alone.
-	var context strings.Builder
-	context.WriteString("These commits are being combined into one:\n")
-	for _, c := range slices.Backward(commits) {
-		fmt.Fprintf(&context, "- %s\n", c.Subject)
-	}
-	hash, message, ok, err := g.Commit(files, nil, context.String(), "", true)
-	if err != nil || !ok {
-		r.out.Errorf("The commits were undone and their changes staged, but the combined commit failed: %v", err)
-		r.printf("Your changes are staged; commit them yourself with `git commit`.")
-		return ""
-	}
-
-	r.coder.SquashTurns(hash, n)
-	r.printf("Squashed %d commits into %s %s", n, hash, message)
 	return ""
 }
 

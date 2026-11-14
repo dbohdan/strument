@@ -187,12 +187,12 @@ func TestSettleEditsIsIdempotent(t *testing.T) {
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "after")
 
-	c.settleEdits("")
+	c.settleEdits()
 	if got := len(c.undoStack); got != 1 {
 		t.Fatalf("undo stack = %d after the first settle, want 1", got)
 	}
 
-	c.settleEdits("")
+	c.settleEdits()
 	if got := len(c.undoStack); got != 1 {
 		t.Errorf("undo stack = %d after settling again, want 1 — /undo would need two presses", got)
 	}
@@ -242,9 +242,9 @@ func TestSteerContinueSaysToContinue(t *testing.T) {
 //
 // commitTurn used to pass every file the *turn* had touched, because the
 // end-of-turn history record wants that set and, while a turn made one commit,
-// the two were the same thing. Steering made them different: an
-// interrupted-then-steered turn commits twice, and the second call was handing
-// git the first commit's paths as well.
+// the two were the same thing. Steering, and then the commit tool, made them
+// different, and the second call was handing git the first commit's paths as
+// well.
 //
 // Git only commits what actually differs, so this is invisible until someone
 // edits one of those files themselves between the two commits — at which point
@@ -253,21 +253,21 @@ func TestSteerContinueSaysToContinue(t *testing.T) {
 func TestSecondCommitNamesOnlyWhatIsNew(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	repo := &countingRepo{}
-	c.AutoCommits = true
+	c.Commits = true
 	c.Repo = repo
 
 	// First batch: a.go. Settle it.
 	c.turnEditedFiles["a.go"] = true
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "one")
-	c.settleEdits("")
+	c.runCommitTool(commitArgs{subject: "first"})
 
 	// Second batch: b.go only. turnEditedFiles still holds both, because the
 	// turn's history record wants every file the turn touched.
 	c.turnEditedFiles["b.go"] = true
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("b.go", snapEntry{}, "two")
-	c.settleEdits("")
+	c.runCommitTool(commitArgs{subject: "second"})
 
 	staged := repo.calls
 	if len(staged) != 2 {

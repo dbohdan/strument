@@ -48,7 +48,7 @@ sandbox_write = ["{{writable}}"]
 shell_timeout = 30
 retry_timeout = 600
 git_sign = "ABCD1234"
-auto_commits = False
+commits = False
 compaction = "summary"
 secret_files_add = ["*.pem"]
 secret_files_exempt = [".env.test"]
@@ -58,7 +58,6 @@ approve_model = decision_model("systemone", "laya", url = "http://localhost:1143
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
 prompt_system_prefix = "House rules."
 prompt_code = "Be terse."
-prompt_commit = "One line."
 prompt_read_only = "Look only."
 chat_language = "en"
 `

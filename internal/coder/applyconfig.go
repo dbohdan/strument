@@ -80,7 +80,7 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	// them back on. A reload also discards a /commits made this session, as it
 	// discards /env changes, and returns to what the config and flag say.
 	// Without a repository the value is inert; commitTurn checks Repo first.
-	c.AutoCommits = !cfg.NoAutoCommits && !c.CommitsWithheld
+	c.Commits = !cfg.NoCommits && !c.CommitsWithheld
 	// Roll unless the config or the flag says otherwise, the flag winning for
 	// the run it was given to (doc/experiments/2026-10-recall-models).
 	c.CompactionMode = CompactionRoll
@@ -115,7 +115,6 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	// overrides on top, which is what makes this idempotent.
 	c.SystemPromptPrefix = cfg.PromptSystemPrefix
 	c.PromptCode = cfg.PromptCode
-	c.PromptCommit = cfg.PromptCommit
 	c.PromptReadOnly = cfg.PromptReadOnly
 	c.SetChatLanguage(cfg.ChatLanguage)
 	c.setPrompts()

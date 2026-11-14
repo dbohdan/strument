@@ -125,7 +125,7 @@ func TestTurnCommitSkipsTempFiles(t *testing.T) {
 	c := toolCoder(t, root)
 	repo := &committingRepo{asked: [][]string{}, root: root}
 	c.Repo = repo
-	c.AutoCommits = true
+	c.Commits = true
 
 	if err := os.WriteFile(filepath.Join(root, "in.go"), []byte("package in\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestTurnCommitSkipsSymlinkEscapes(t *testing.T) {
 	c.AddFile(filepath.Join(link, "outside.txt"))
 	repo := &committingRepo{asked: [][]string{}, root: root}
 	c.Repo = repo
-	c.AutoCommits = true
+	c.Commits = true
 
 	results := toolResults{}
 	var matchFailure bool
@@ -189,7 +189,7 @@ func TestTurnCommitAnnouncesSkippedTempFiles(t *testing.T) {
 	root := t.TempDir()
 	c := toolCoder(t, root)
 	c.Repo = &committingRepo{root: root}
-	c.AutoCommits = true
+	c.Commits = true
 
 	temp := filepath.Join(t.TempDir(), "scratch.txt")
 	c.turnSnap = newTurnSnapshot()

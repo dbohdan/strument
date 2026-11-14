@@ -26,8 +26,8 @@ import (
 // did it. /run never comes through here, so what the user stages stays
 // theirs.
 //
-// Uncommitted changes a file had when the turn began are committed on their
-// own, before the model's first change to the file, as aider does. Strument
+// Uncommitted changes a file had before the model first touched it are
+// committed on their own, ahead of the model's commit, as aider does. Strument
 // briefly put them in the model's commit instead, named in a trailer, and a
 // trial (doc/experiments/2026-10-commit-whole-file) showed what that costs:
 // in 5 of 96 runs a model deleted the user's uncommitted line to keep it out
@@ -38,9 +38,22 @@ import (
 // around. It fired at the first edit and took the file from disk, so a
 // model's `git mv` or `sed -i` before the edit was committed as the user's
 // work — half a rename, under a side model's message. Now the baseline is
-// taken at turn start, contents included, and the commit is of those
-// contents, so nothing the model did can be in it; its message is fixed; and
-// it needs auto-commits on and no dry run, like any other commit.
+// taken before the model's work begins, contents included, and the commit is
+// of those contents, so nothing the model did can be in it; its message is
+// fixed; and it needs commits on and no dry run, like any other commit.
+//
+// "Before the model's work begins" is the start of the first turn after the
+// model's last commit, not the start of every turn. While each turn ended in
+// a commit the two were the same. Now a turn can leave its edits for a later
+// turn to commit, and a baseline retaken in that later turn would read the
+// model's own uncommitted edits as the user's. So the record — edits, staged
+// paths, index mark, baseline — runs from one commit to the next, across as
+// many turns as it takes, and only the commit closes it.
+//
+// It also commits the baseline only when the model commits. It used to commit
+// it at the model's first edit to the file, which was harmless while that
+// edit was certain to be committed at turn end; without that it would commit
+// the user's work for a model that never commits.
 
 // stagingRepo is the optional part of a Repo that can record the index, list
 // the dirty paths, and commit saved contents. gitrepo implements it; without
@@ -72,18 +85,24 @@ type indexMark struct {
 // staging returns the Repo's staging part when there is a commit for it to
 // feed, or nil.
 func (c *Coder) staging() stagingRepo {
-	if c.Repo == nil || !c.AutoCommits || c.DryRun {
+	if c.Repo == nil || !c.Commits || c.DryRun {
 		return nil
 	}
 	s, _ := c.Repo.(stagingRepo)
 	return s
 }
 
-// takeStagingBaseline starts a turn's record: what was already uncommitted
-// and its contents, the index as the turn found it, and nothing staged yet.
+// takeStagingBaseline starts the record of the model's work since its last
+// commit, unless one is already open: what was already uncommitted and its
+// contents, the index as the turn found it, and nothing pending yet. Called at
+// turn start.
 func (c *Coder) takeStagingBaseline() {
+	if c.pendingOpen {
+		return
+	}
 	c.dropStartMark()
-	c.uncommittedAtStart, c.turnStaged = nil, nil
+	c.userBaseline, c.pendingStaged, c.pendingEdits = nil, nil, nil
+	c.pendingOpen = true
 	s := c.staging()
 	if s == nil {
 		return
@@ -93,7 +112,7 @@ func (c *Coder) takeStagingBaseline() {
 	if err != nil {
 		return
 	}
-	c.uncommittedAtStart = c.readUncommitted(slices.Sorted(maps.Keys(dirty)))
+	c.userBaseline = c.readUncommitted(slices.Sorted(maps.Keys(dirty)))
 }
 
 // Limits on what the baseline reads at turn start. A file past them is not
@@ -146,26 +165,45 @@ func (c *Coder) readUncommitted(paths []string) map[string][]byte {
 	return saved
 }
 
+// notePending adds the paths a settle closed to the model's uncommitted work.
+func (c *Coder) notePending(paths []string) {
+	for _, p := range paths {
+		if c.pendingEdits == nil {
+			c.pendingEdits = map[string]bool{}
+		}
+		c.pendingEdits[p] = true
+	}
+}
+
+// closePending ends the record after a commit took everything in it, so the
+// next turn starts a new one. The baseline is kept until then: a later edit
+// in this turn still has its user's version recorded.
+func (c *Coder) closePending() {
+	if len(c.pendingEdits) == 0 && len(c.pendingStaged) == 0 {
+		c.pendingOpen = false
+	}
+}
+
 // commitUncommittedFirst commits, on its own, what any of paths had
-// uncommitted when the turn began, before the model's changes to them are
-// written or committed. Each path is committed this way once a turn. A
+// uncommitted before the model's work on them began, ahead of the model's
+// commit. Each path is committed this way once a record. A
 // failure — a hook refusing the commit, most often — is said and not
 // retried: the changes then go in with the model's, which is where they
 // would have been anyway.
-func (c *Coder) commitUncommittedFirst(paths []string) {
+func (c *Coder) commitUncommittedFirst(paths []string) string {
 	s := c.staging()
-	if s == nil || len(c.uncommittedAtStart) == 0 {
-		return
+	if s == nil || len(c.userBaseline) == 0 {
+		return ""
 	}
 	files := map[string][]byte{}
 	for _, p := range paths {
-		if data, ok := c.uncommittedAtStart[p]; ok {
+		if data, ok := c.userBaseline[p]; ok {
 			files[p] = data
-			delete(c.uncommittedAtStart, p)
+			delete(c.userBaseline, p)
 		}
 	}
 	if len(files) == 0 {
-		return
+		return ""
 	}
 	names := strings.Join(slices.Sorted(maps.Keys(files)), ", ")
 	hash, ok, err := s.CommitContents(files, "Commit existing changes to "+names+" before Strument's edits")
@@ -174,7 +212,9 @@ func (c *Coder) commitUncommittedFirst(paths []string) {
 		c.Out.Errorf("Could not commit the existing changes to %s first, so they will be in the model's commit: %v", names, err)
 	case ok:
 		c.Out.Toolf("Committed existing changes to %s first: %s", names, hash)
+		return hash
 	}
+	return ""
 }
 
 // dropStartMark deletes the turn's starting record of the index, once the
@@ -215,10 +255,10 @@ func (c *Coder) noteStaged(m indexMark) {
 		return
 	}
 	for _, p := range changed {
-		if c.turnStaged == nil {
-			c.turnStaged = map[string]bool{}
+		if c.pendingStaged == nil {
+			c.pendingStaged = map[string]bool{}
 		}
-		c.turnStaged[p] = true
+		c.pendingStaged[p] = true
 	}
 }
 
@@ -236,7 +276,7 @@ func (c *Coder) noteStaged(m indexMark) {
 // turn found it and from HEAD; the rest are dropped from the record.
 func (c *Coder) stagedForCommit(edited []string) (staged, conflicted []string) {
 	s := c.staging()
-	if len(c.turnStaged) == 0 || s == nil {
+	if len(c.pendingStaged) == 0 || s == nil {
 		return nil, nil
 	}
 	var sinceStart []string
@@ -247,12 +287,12 @@ func (c *Coder) stagedForCommit(edited []string) (staged, conflicted []string) {
 		}
 	}
 	var cands []string
-	for _, p := range c.dropAgentsLocal(slices.Sorted(maps.Keys(c.turnStaged))) {
+	for _, p := range c.dropAgentsLocal(slices.Sorted(maps.Keys(c.pendingStaged))) {
 		switch {
 		case slices.Contains(edited, p):
 			// Committed from the working tree as an edit.
 		case c.startMark.ok && !slices.Contains(sinceStart, p):
-			delete(c.turnStaged, p)
+			delete(c.pendingStaged, p)
 		default:
 			cands = append(cands, p)
 		}
@@ -270,7 +310,7 @@ func (c *Coder) stagedForCommit(edited []string) (staged, conflicted []string) {
 		if slices.Contains(changed, p) {
 			staged = append(staged, p)
 		} else {
-			delete(c.turnStaged, p)
+			delete(c.pendingStaged, p)
 		}
 	}
 	return staged, conflicted

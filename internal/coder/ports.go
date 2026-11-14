@@ -274,16 +274,10 @@ type Repo interface {
 	GitIgnored(rel string) bool
 	HeadSHA() string
 	// Commit commits fnames and staged — the paths the model's shell
-	// commands staged — as they are on disk, and nothing else; returns hash
-	// and message, or ok=false when there was nothing to commit. attributed
-	// adds the attribution trailer.
-	//
-	// An empty message is generated from the staged diff and context, which is
-	// the automatic path and the only one there used to be. A non-empty one is
-	// used verbatim: the commit tool lets the model write its own, and the
-	// model that made the change knows why it made it, where the generator is
-	// a side model inferring intent from a diff.
-	Commit(fnames, staged []string, context, message string, attributed bool) (hash, message2 string, ok bool, err error)
+	// commands staged — as they are on disk, and nothing else, with message
+	// and the attribution trailer; returns the short hash and the message
+	// used, or ok=false when there was nothing to commit.
+	Commit(fnames, staged []string, message string) (hash, used string, ok bool, err error)
 	// AttributeDirectCommits retro-attributes the commits a model-caused shell
 	// command made directly with git (bypassing the commit tool): it appends
 	// the trailer to the new commits and returns their final hashes —

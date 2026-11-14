@@ -24,8 +24,8 @@ func TestUndoStackSurvivesAProcessBoundary(t *testing.T) {
 	dir := t.TempDir()
 	first := toolCoder(t, dir)
 
-	var saved [][]TurnEdit
-	first.SaveUndo = func(stack [][]TurnEdit, _ []string, _ string) { saved = stack }
+	var saved []UndoTurn
+	first.SaveUndo = func(stack []UndoTurn, _ string, _ Pending) { saved = stack }
 
 	editTurn(t, first, "a.txt", "one\n")
 	editTurn(t, first, "a.txt", "two\n")
@@ -40,12 +40,12 @@ func TestUndoStackSurvivesAProcessBoundary(t *testing.T) {
 		t.Fatal("a restored stack must be undoable")
 	}
 
-	restored, err := second.UndoLastTurn()
+	res, err := second.UndoLastTurn()
 	if err != nil {
 		t.Fatalf("undo after restore: %v", err)
 	}
-	if len(restored) != 1 || restored[0] != "a.txt" {
-		t.Errorf("restored = %v", restored)
+	if len(res.Restored) != 1 || res.Restored[0] != "a.txt" {
+		t.Errorf("restored = %v", res.Restored)
 	}
 	got, _ := os.ReadFile(filepath.Join(dir, "a.txt"))
 	if string(got) != "one\n" {
@@ -68,8 +68,8 @@ func TestUndoStackSurvivesAProcessBoundary(t *testing.T) {
 func TestRestoredStackStillRefusesToClobber(t *testing.T) {
 	dir := t.TempDir()
 	first := toolCoder(t, dir)
-	var saved [][]TurnEdit
-	first.SaveUndo = func(stack [][]TurnEdit, _ []string, _ string) { saved = stack }
+	var saved []UndoTurn
+	first.SaveUndo = func(stack []UndoTurn, _ string, _ Pending) { saved = stack }
 	editTurn(t, first, "a.txt", "strument wrote this\n")
 
 	// Someone edits the file after Strument exits.
@@ -92,58 +92,17 @@ func TestRestoredStackStillRefusesToClobber(t *testing.T) {
 	}
 }
 
-// /undo on a repository gates on the session's own commit hashes. Held only in
-// memory, that gate refused a commit Strument had made itself an hour earlier,
-// purely because the process had restarted.
-func TestSessionCommitsRoundTrip(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	c.SquashTurns("abc1234", 0) // records the hash; no turns to merge
-	c.SquashTurns("def5678", 0)
-
-	hashes, last := c.SessionCommits()
-	if len(hashes) != 2 || last != "def5678" {
-		t.Fatalf("hashes = %v, last = %q", hashes, last)
-	}
-
-	next := toolCoder(t, t.TempDir())
-	if next.IsSessionCommit("abc1234") {
-		t.Fatal("a fresh coder knows no commits")
-	}
-	next.RestoreSessionCommits(hashes, last)
-	for _, h := range hashes {
-		if !next.IsSessionCommit(h) {
-			t.Errorf("%s should be a session commit after restore", h)
-		}
-	}
-	if next.LastCommitHash() != "def5678" {
-		t.Errorf("last = %q", next.LastCommitHash())
-	}
-	// The gate is not the only one: a commit Strument never made stays refused.
-	if next.IsSessionCommit("0000000") {
-		t.Error("restore must not widen the gate")
-	}
-}
-
 // Every mutation of the stack has to reach disk, or a crash between two of them
-// leaves a record that disagrees with the tree. The easiest one to miss is the
-// squash that merges nothing but still records its commit.
+// leaves a record that disagrees with the tree.
 func TestEveryStackMutationSaves(t *testing.T) {
 	dir := t.TempDir()
 	c := toolCoder(t, dir)
 	saves := 0
-	c.SaveUndo = func([][]TurnEdit, []string, string) { saves++ }
+	c.SaveUndo = func([]UndoTurn, string, Pending) { saves++ }
 
 	editTurn(t, c, "a.txt", "one\n") // push
 	if saves != 1 {
 		t.Fatalf("push: saves = %d, want 1", saves)
-	}
-	c.DropTurnSnapshot() // the git path's pop
-	if saves != 2 {
-		t.Errorf("drop: saves = %d, want 2", saves)
-	}
-	c.SquashTurns("abc1234", 0) // records a hash, merges nothing
-	if saves != 3 {
-		t.Errorf("squash with nothing to merge must still save the hash: saves = %d", saves)
 	}
 
 	editTurn(t, c, "b.txt", "two\n")
@@ -153,5 +112,43 @@ func TestEveryStackMutationSaves(t *testing.T) {
 	}
 	if saves != before+1 {
 		t.Errorf("undo: saves = %d, want %d", saves, before+1)
+	}
+}
+
+// The model's uncommitted work survives the process: the next run's commit
+// takes the file the last run edited, and commits the user's own changes to
+// it separately first, from the baseline the record carried.
+func TestPendingWorkSurvivesAProcessBoundary(t *testing.T) {
+	dir := t.TempDir()
+	first := toolCoder(t, dir)
+	first.Commits = true
+	first.Repo = &countingRepo{committingRepo: committingRepo{root: dir, tracked: []string{"a.txt"}}, dirty: true}
+	var saved Pending
+	first.SaveUndo = func(_ []UndoTurn, _ string, p Pending) { saved = p }
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("the user's\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	first.initBeforeMessage()
+	res := toolResults{}
+	var reflect bool
+	first.applyToolEdits([]plannedEdit{wholeFileWrite("w1", "a.txt", "the model's\n")}, res, &reflect)
+	first.settleEdits()
+	if strings.Join(saved.Edits, ",") != "a.txt" || string(saved.Baseline["a.txt"]) != "the user's\n" {
+		t.Fatalf("saved = %+v, want a.txt pending with the user's contents as its baseline", saved)
+	}
+
+	next := toolCoder(t, dir)
+	repo := &countingRepo{committingRepo: committingRepo{root: dir, tracked: []string{"a.txt"}}, dirty: true}
+	next.Commits, next.Repo = true, repo
+	next.RestorePending(saved)
+	next.initBeforeMessage()
+	if got := next.runCommitTool(commitArgs{subject: "finish"}); !strings.HasPrefix(got, "Committed ") {
+		t.Fatalf("commit = %q", got)
+	}
+	if len(repo.calls) != 1 || strings.Join(repo.calls[0], ",") != "a.txt" {
+		t.Errorf("model commit took %v, want a.txt", repo.calls)
+	}
+	if len(repo.pre) != 1 || string(repo.pre[0]["a.txt"]) != "the user's\n" {
+		t.Errorf("baseline commit = %q, want the user's version, separately", repo.pre)
 	}
 }

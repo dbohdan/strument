@@ -286,59 +286,6 @@ const (
 		"about this one."
 )
 
-// CommitSystem is the commit-message system prompt, with the
-// {language_instruction} format slot intact.
-//
-// It replaces aider's, which said "one-line" five times and closed with "without
-// any additional text, explanations, or line breaks" — so a body was not merely
-// discouraged, it was forbidden. The diff says what changed; nothing could say
-// why. That was the wrong half to make impossible.
-//
-// Three things are sharpened against the Conventional Commits v1.0.0 spec,
-// which the old prompt half-remembered:
-//
-//   - Scope. "fix(parser):" is in the spec (rule 4) and was missing here
-//     entirely. It is the single most scannable thing a subject can carry.
-//   - Breaking changes. The "!" marker and the BREAKING CHANGE footer (rules
-//     11-13) were both absent, which for a harness that commits every turn is
-//     the one omission that can actually cost someone.
-//   - 72 characters is git convention, not the spec, which imposes no limit at
-//     all. Kept, but no longer attributed to a rule that does not exist.
-//
-// The body is permitted and discouraged in the same breath. An unconditional
-// "you may add a body" grows a paragraph on every commit restating the diff;
-// "usually empty" plus a short list of what earns one does the real work.
-//
-// The background clause exists because commitContext was widened to earlier
-// turns (see maxCommitHistory). Without it the wider view leaks: on a turn
-// whose diff adds one trivial function, models wrote bodies describing the
-// *previous* turn's change — 4 of 28 in one live run and 8 of 28 in another,
-// three of those carrying a BREAKING CHANGE marker for a break the commit did
-// not contain. The clause removed it (0 of 28) at no cost to the reason it was
-// widened for (11/26 against the unclaused arm's 12/27).
-// See doc/experiments/2026-08-commit-context/README.md.
-const CommitSystem = "Write the Git commit message for the changes below. " +
-	"You are given the request that prompted them, the work that followed, and the diff.\n\n" +
-	"Earlier turns are background. Take the reason for this change from them if it is " +
-	"there, and describe only what the diff does — work from an earlier turn is not part " +
-	"of this commit.\n\n" +
-	"The subject is one line, in the form \"type(scope): description\", " +
-	"e.g. \"fix(workspace): stop counting cache writes twice\".{language_instruction}\n" +
-	"- Use feat for a new capability and fix for a bug. build, chore, ci, docs, perf, " +
-	"refactor, style, and test are also conventional.\n" +
-	"- The scope names the part of the codebase the change is confined to. Leave it out " +
-	"when the change spans several.\n" +
-	"- Imperative mood (\"add feature\", not \"added\" or \"adding\"), no trailing period, " +
-	"under 72 characters.\n" +
-	"- If the change breaks existing behavior, put \"!\" before the colon.\n\n" +
-	"A body is optional and usually empty. Add one only for something the diff cannot " +
-	"say: why this approach, what was rejected, the constraint or measurement behind the " +
-	"choice. The diff already says what changed, so a body that restates it is noise. " +
-	"When there is a body, leave one blank line after the subject. If the change breaks " +
-	"existing behavior, include a paragraph starting \"BREAKING CHANGE: \" saying what " +
-	"breaks.\n\n" +
-	"Reply with the commit message and nothing else — no preamble, no quotes, no code fence.\n"
-
 // Summarize is the system prompt for chat-history compaction: the side model
 // condenses older conversation so a long session stays within the context
 // window.

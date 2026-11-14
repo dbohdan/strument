@@ -60,25 +60,34 @@ type UndoEntry struct {
 // them in, which is why it is a slice and not a map.
 type UndoTurn struct {
 	Entries []UndoEntry `json:"entries"`
+	// Commits are the short hashes of the commits made during the turn,
+	// oldest first, which /undo takes off the branch with it.
+	Commits []string `json:"commits,omitempty"`
 }
 
-// UndoState is the persisted stack, oldest turn first, plus the git half.
+// UndoState is the persisted stack, oldest turn first, plus the last commit.
 //
-// Commits are the short hashes of this project's Strument auto-commits. /undo
-// with a repository gates on them (coder.IsSessionCommit) and the gate was
-// session-scoped, so a restart made /undo refuse a commit it had made itself an
-// hour earlier. Persisting them is safe because the gate is not the only one:
-// the commit must still be HEAD, unpushed, single-parent, and its files clean.
-// If a human committed on top, HEAD is not a Strument commit and the gate fails
-// as it should.
+// Each turn carries the commits made during it, which is what lets /undo take
+// them off the branch after a restart. Persisting them is safe because they
+// are not the only gate: the commits must still be the newest on the branch,
+// unpushed, not merges, and their files clean. If a human committed on top,
+// the gate fails as it should. (Files from before per-turn commits carry a
+// flat "commits" list instead; nothing reads it.)
 type UndoState struct {
 	Version int        `json:"version"`
 	Updated string     `json:"updated"`
 	Turns   []UndoTurn `json:"turns,omitempty"`
-	Commits []string   `json:"commits,omitempty"`
 	Last    string     `json:"last_commit,omitempty"`
+	// Pending are the paths the model has written since its last commit, and
+	// Baseline, for the ones that had the user's uncommitted changes before
+	// the model's work began, those contents (null: deleted). They carry the
+	// model's uncommitted work across a restart, so a commit in the next run
+	// still takes it, and still keeps the user's changes out of it.
+	Pending  []string          `json:"pending,omitempty"`
+	Baseline map[string][]byte `json:"baseline,omitempty"`
 	// Uncommitted marks the newest turn as saved on the way out of a run it
-	// did not finish, with its commit left for the next start.
+	// did not finish, for the next start to take up. (The name is from when
+	// the next start committed it.)
 	Uncommitted bool `json:"uncommitted,omitempty"`
 }
 

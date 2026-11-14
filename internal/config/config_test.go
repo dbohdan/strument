@@ -238,23 +238,23 @@ func TestCompaction(t *testing.T) {
 	}
 }
 
-// TestAutoCommits: absent means commits on, False turns them off, a trusted
+// TestCommits: absent means commits on, False turns them off, a trusted
 // project may decide either way, and a non-boolean fails the load by name.
-func TestAutoCommits(t *testing.T) {
+func TestCommits(t *testing.T) {
 	for _, tc := range []struct {
 		expr string
 		off  bool
-	}{{"", false}, {"auto_commits = True", false}, {"auto_commits = False", true}} {
+	}{{"", false}, {"commits = True", false}, {"commits = False", true}} {
 		cfg, err := Load(harness(t, userConfig+"\n"+tc.expr+"\n", "", testEnv))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cfg.NoAutoCommits != tc.off {
-			t.Errorf("%q: NoAutoCommits = %v, want %v", tc.expr, cfg.NoAutoCommits, tc.off)
+		if cfg.NoCommits != tc.off {
+			t.Errorf("%q: NoCommits = %v, want %v", tc.expr, cfg.NoCommits, tc.off)
 		}
 	}
 
-	opts := harness(t, userConfig+"\nauto_commits = False\n", "auto_commits = True\n", testEnv)
+	opts := harness(t, userConfig+"\ncommits = False\n", "commits = True\n", testEnv)
 	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
 		t.Fatal(err)
 	}
@@ -262,13 +262,20 @@ func TestAutoCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.NoAutoCommits {
-		t.Error("a trusted project's auto_commits = True should win")
+	if cfg.NoCommits {
+		t.Error("a trusted project's commits = True should win")
 	}
 
-	if _, err := Load(harness(t, userConfig+"\nauto_commits = 1\n", "", testEnv)); err == nil ||
-		!strings.Contains(err.Error(), "auto_commits") {
-		t.Errorf("a non-boolean auto_commits should fail: %v", err)
+	if _, err := Load(harness(t, userConfig+"\ncommits = 1\n", "", testEnv)); err == nil ||
+		!strings.Contains(err.Error(), "commits") {
+		t.Errorf("a non-boolean commits should fail: %v", err)
+	}
+
+	// The old name is refused by name rather than ignored: it asked for a
+	// commit at the end of every turn, which Strument no longer makes.
+	if _, err := Load(harness(t, userConfig+"\nauto_commits = True\n", "", testEnv)); err == nil ||
+		!strings.Contains(err.Error(), "replaced by `commits`") {
+		t.Errorf("auto_commits should be refused with a pointer to commits: %v", err)
 	}
 }
 
@@ -1071,7 +1078,6 @@ func TestPromptSettingsParse(t *testing.T) {
 	src := userConfig + `
 prompt_system_prefix = "Be terse.\n\n"
 prompt_code = "You are a senior engineer.\n{platform}\n{language}\n"
-prompt_commit = "Write a conventional commit for the diff.{language_instruction}"
 prompt_read_only = "Reference files follow."
 chat_language = "fr"
 `
@@ -1084,9 +1090,6 @@ chat_language = "fr"
 	}
 	if !strings.Contains(cfg.PromptCode, "{platform}") || !strings.Contains(cfg.PromptCode, "{language}") {
 		t.Errorf("PromptCode = %q", cfg.PromptCode)
-	}
-	if !strings.Contains(cfg.PromptCommit, "{language_instruction}") {
-		t.Errorf("PromptCommit = %q", cfg.PromptCommit)
 	}
 	if cfg.PromptReadOnly != "Reference files follow." {
 		t.Errorf("PromptReadOnly = %q", cfg.PromptReadOnly)

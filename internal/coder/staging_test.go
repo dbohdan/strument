@@ -80,10 +80,10 @@ func (r *fakeStagingRepo) CommitContents(files map[string][]byte, _ string) (str
 
 func (r *fakeStagingRepo) DirtyPaths() (map[string]bool, error) { return r.dirty, nil }
 
-func (r *fakeStagingRepo) Commit(fnames, staged []string, context, message string, attributed bool) (string, string, bool, error) {
+func (r *fakeStagingRepo) Commit(fnames, staged []string, message string) (string, string, bool, error) {
 	r.staged = append(r.staged, staged)
 	r.order = append(r.order, "commit")
-	return r.committingRepo.Commit(fnames, staged, context, message, attributed)
+	return r.committingRepo.Commit(fnames, staged, message)
 }
 
 // A model command's staging reaches the turn's commit: both halves of a
@@ -115,7 +115,7 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 		}
 	}
 	c.Repo = repo
-	c.AutoCommits = true
+	c.Commits = true
 	c.initBeforeMessage()
 
 	snap := c.markIndex()
@@ -154,8 +154,8 @@ func TestStagedByCommandIsCommitted(t *testing.T) {
 			t.Errorf("screen lacks %q:\n%s", want, screen)
 		}
 	}
-	if c.turnStaged["a.txt"] || c.turnStaged["b.txt"] || !c.turnStaged["c.txt"] {
-		t.Errorf("turnStaged after commit = %v, want only c.txt left", c.turnStaged)
+	if c.pendingStaged["a.txt"] || c.pendingStaged["b.txt"] || !c.pendingStaged["c.txt"] {
+		t.Errorf("pendingStaged after commit = %v, want only c.txt left", c.pendingStaged)
 	}
 }
 
@@ -165,9 +165,9 @@ func TestStagingUntrackedWhenCommitsOff(t *testing.T) {
 	c := testCoder(t)
 	repo := &fakeStagingRepo{index: map[string]string{"a.txt": "x"}}
 	c.Repo = repo
-	c.AutoCommits = false
+	c.Commits = false
 	c.initBeforeMessage()
-	if c.markIndex().ok || c.startMark.ok || c.uncommittedAtStart != nil || len(repo.marks) != 0 {
+	if c.markIndex().ok || c.startMark.ok || c.userBaseline != nil || len(repo.marks) != 0 {
 		t.Error("tracked staging with auto-commits off")
 	}
 }
@@ -182,7 +182,7 @@ func TestCommitToolCommitsStagingAlone(t *testing.T) {
 		head:  map[string]string{"a.txt": "100644 aaa 0;"},
 	}
 	c.Repo = repo
-	c.AutoCommits = true
+	c.Commits = true
 	c.initBeforeMessage()
 	snap := c.markIndex()
 	delete(repo.index, "a.txt")
@@ -218,7 +218,7 @@ func TestUnstagingIsNotStaging(t *testing.T) {
 				dirty: map[string]bool{"user.txt": true},
 			}
 			c.Repo = repo
-			c.AutoCommits = true
+			c.Commits = true
 			c.initBeforeMessage()
 			snap := c.markIndex()
 			repo.index["user.txt"] = "100644 u0 0;" // unstaged
@@ -233,7 +233,7 @@ func TestUnstagingIsNotStaging(t *testing.T) {
 			if len(repo.staged) != 0 {
 				t.Errorf("Commit called with staged %v, want no commit", repo.staged)
 			}
-			if c.turnStaged["user.txt"] {
+			if c.pendingStaged["user.txt"] {
 				t.Error("user.txt still recorded as staged")
 			}
 		})
@@ -250,7 +250,7 @@ func TestStagedThenEditedIsAnnouncedOnce(t *testing.T) {
 		head:  map[string]string{"a.txt": "100644 aaa 0;"},
 	}
 	c.Repo = repo
-	c.AutoCommits = true
+	c.Commits = true
 	c.initBeforeMessage()
 	snap := c.markIndex()
 	delete(repo.index, "a.txt")
@@ -262,7 +262,7 @@ func TestStagedThenEditedIsAnnouncedOnce(t *testing.T) {
 	if _, err := c.commitTurn("first"); err != nil {
 		t.Fatal(err)
 	}
-	if c.turnStaged["b.txt"] || c.turnStaged["a.txt"] {
-		t.Errorf("turnStaged after the first commit = %v, want empty", c.turnStaged)
+	if c.pendingStaged["b.txt"] || c.pendingStaged["a.txt"] {
+		t.Errorf("pendingStaged after the first commit = %v, want empty", c.pendingStaged)
 	}
 }
