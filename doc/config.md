@@ -43,7 +43,6 @@ The loader reads these module-level variables after running your file:
 | `language_parser` | boolean | Optional. The tree-sitter parser behind `symbol`, `/symbol`, and the after-edit parse check. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
 | `commits` | boolean | Optional. Whether the model's `commit` tool commits. Default `True`. See below. |
-| `compaction` | string | Optional. How a long chat history is made to fit the context window: `"roll"` or `"summary"`. Default `"roll"`. See below. |
 | `git_sign` | boolean or string | Optional. Sign the model's commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `secret_files_add` | list of strings | Optional. More gitignore-style patterns for files the model may not read or edit. A project's are added to the user's. See below. |
 | `secret_files_exempt` | list of strings | Optional. Patterns taken back from the secret-file list. User config only. See below. |
@@ -770,9 +769,6 @@ ask again. An unattended run has no one to do that. The unattended
 [FrontierHarness trial](experiments/2026-09-frontier-harness/README.md) lost
 three of twelve tasks to a provider's rate limits that outlasted the minute.
 
-Side calls (session notes, compaction) keep their own shorter
-ladder, since each runs under a budget of its own.
-
 ### `commits`
 
 Whether the model's `commit` tool commits. `True` is the default; `False`
@@ -815,39 +811,24 @@ commit, your changes go into the model's commit instead and Strument says so.
 Files past a size limit (200 dirty files, 4 MB each, 16 MB in all) are not
 separated. With commits off, nothing is committed either way.
 
-### `compaction`
+### History compaction
 
-How a chat history that has outgrown its budget is made to fit the context
-window:
+A chat history that has outgrown its budget drops its oldest turns and puts a
+note in their place that quotes, word for word, what you said in them. The
+model's own work in those turns, its replies and every tool result, stays in
+the session record, where the [`recall` tool](#the-recall-tool) searches it.
+It costs no extra request.
 
-```python
-compaction = "roll"      # the default
-compaction = "summary"
-```
+It is not configurable. A `compaction` setting used to choose between this and
+a side model's summary of the oldest turns; with `recall`, rolling kept more in
+[`2026-10-recall-models`](experiments/2026-10-recall-models/README.md) — asked
+about results worked out in turns compaction had removed, rolled sessions
+answered 71 of 72 questions on three models, against 56 for summarized ones —
+and the summary went with the side model. A config that still sets
+`compaction` gets an error saying so, as does `--compaction`.
 
-- **`"roll"`** drops the oldest turns and puts a note in their place that
-  quotes, word for word, what you said in them. The model's own work in those
-  turns, its replies and every tool result, stays in the session record,
-  where the [`recall` tool](#the-recall-tool) searches it. Rolling costs no
-  extra request.
-- **`"summary"`** has the side model write a summary of the oldest turns
-  first, and folds them into it. The summary keeps a rough account of the
-  work itself, at the cost of a request per fold, and a summary can lose or
-  garble what it compresses.
-
-Roll is the default because, with `recall`, it kept more in
-[`2026-10-recall-models`](experiments/2026-10-recall-models/README.md). Asked
-about results worked out in turns that compaction had removed, rolled sessions
-answered 71 of 72 questions on three models, against 56 for summarized ones.
-Every rolled session searched the record for the answers. On the model with
-the weakest summaries, summarized sessions answered from the summary without
-searching, and gave 4 wrong answers against the rolled sessions' 1.
-
-`--compaction roll|summary` overrides the setting for one run, and the flag
-survives `/reload`. A trusted project config may set it too. A session started
-with `--no-history` keeps no record, so a roll there drops work that nothing
-can search again; Strument says so at startup and suggests `--compaction
-summary`.
+A session started with `--no-history` keeps no record, so a roll there drops
+work that nothing can search again; Strument says so at startup.
 
 ### `git_sign`
 
@@ -1360,7 +1341,7 @@ use `--yes add-output` to answer them automatically.
 
 `/reload` re-reads `config.star` (or the `--config` file) into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
-`shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `compaction`, `env_allow`, `check` and `check_auto`,
+`shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
 `webfetch_allow`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 
@@ -1667,7 +1648,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, side_model=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1678,22 +1659,10 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`edit_format`** is no longer accepted. Strument edits through tool calls
   only and has no other modes, so a config still naming it gets an error
   saying so; the fix is to drop the setting.
-- **`side_model`** — the model for Strument's own writing: session notes and
-  compaction summaries. An alias string or an inline
-  `model()`; unset means the main model does its own. These are *side requests*
-  — prose about the session rather than work on your code — which is where the
-  name comes from, and why a cheaper and/or faster model usually belongs here.
-
-  Its `reasoning` applies to all three, which is worth knowing because these
-  calls happen while you wait for your prompt back and a reasoning model can
-  spend a great deal of thought on a one-line commit subject — measured at 845.9
-  seconds and 36,141 characters of reasoning for a 202-character message, in
-  [`doc/experiments/2026-09-side-call-timing`](experiments/2026-09-side-call-timing/).
-  Set `reasoning="off"` on the side model if your provider accepts it; some,
-  such as `z-ai/glm-5.3-flash`, reject the request outright instead.
-
-  The setting was previously called `weak_model`. A config still using
-  `weak_model` gets an error naming the new key.
+- **`side_model`** and **`weak_model`** are no longer accepted. The side model
+  wrote commit messages, session notes and compaction summaries; the model now
+  writes its own commit messages, and notes and summaries are gone. A config
+  still naming either gets an error saying so.
 - **`reasoning`** — reasoning effort. OpenRouter accepts `"max"`, `"xhigh"`,
   `"high"`, `"medium"`, `"low"`, and `"minimal"` where the model supports
   them; other provider-specific values pass through. `"off"` disables reasoning
@@ -1718,7 +1687,7 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   overruns the window, and the compaction that keeps the settled chat history
   inside `max(context/2, 2048)` tokens — first by clearing old tool results
   (the calls stay, so the model can make them again), then, if that is not
-  enough, by summarizing. A request still over the limit, by Strument's count or
+  enough, by dropping the oldest turns. A request still over the limit, by Strument's count or
   because the provider refuses it, folds the history once more and is sent
   again. Without `context` a long session grows its history until the provider
   refuses the request. Both are silent when
@@ -1916,7 +1885,6 @@ models = {
         cache=True,  # OpenRouter reports prompt caching for this model.
         # reasoning="low",  # Uncomment and set the effort: "low", "medium", or "high".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 ```

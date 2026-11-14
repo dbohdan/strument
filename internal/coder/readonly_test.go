@@ -160,7 +160,6 @@ func TestReadOnlyNameIsUsable(t *testing.T) {
 			}
 
 			m := &config.Model{Slug: "test"}
-			m.SideModel = m
 			c := New(proj, m)
 			c.AddReadOnlyFile(spec)
 

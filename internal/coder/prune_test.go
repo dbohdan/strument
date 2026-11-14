@@ -23,7 +23,7 @@ func TestPruneClearsOldResultsAndKeepsTheRest(t *testing.T) {
 	for _, id := range []string{"a", "b", "c", "d"} {
 		msgs = append(msgs, toolTurn(id, 1000)...)
 	}
-	count := func(m llm.Message) int { return (&ChatSummary{tokens: RuneCounter{}}).count(m) }
+	count := testCoder(t).msgTokens
 
 	n, freed := pruneToolResults(msgs, 3000, count, clearedToolResult)
 
@@ -55,29 +55,24 @@ func TestPruneSkipsASmallGain(t *testing.T) {
 	for _, id := range []string{"a", "b", "c"} {
 		msgs = append(msgs, toolTurn(id, 60)...)
 	}
-	count := func(m llm.Message) int { return (&ChatSummary{tokens: RuneCounter{}}).count(m) }
+	count := testCoder(t).msgTokens
 	if n, _ := pruneToolResults(msgs, 4000, count, clearedToolResult); n != 0 {
 		t.Errorf("cleared %d results for a gain under an eighth of the budget", n)
 	}
 }
 
-// A history that clearing brings under budget gets no summary: no side call,
-// and everything said stays word for word.
-func TestPruneBeforeSummarizing(t *testing.T) {
+// A history that clearing brings under budget is not rolled: everything said
+// stays word for word.
+func TestPruneBeforeRolling(t *testing.T) {
 	c := testCoder(t)
-	side := &summaryStub{}
-	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	c.Model.Context = 8000 // budget 4000
 	for _, id := range []string{"a", "b", "c", "d"} {
 		c.doneMessages = append(c.doneMessages, toolTurn(id, 1000)...)
 	}
 	before := c.doneMessages // shares the backing array
 
-	c.maybeSummarize()
+	c.maybeCompact()
 
-	if side.calls != 0 {
-		t.Errorf("the side model was called %d times though clearing was enough", side.calls)
-	}
 	if len(c.doneMessages) != len(before) {
 		t.Fatalf("messages were dropped: %d -> %d", len(before), len(c.doneMessages))
 	}

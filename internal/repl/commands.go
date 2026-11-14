@@ -80,7 +80,7 @@ func init() {
 		{"clear", "", "Start a fresh conversation in this session, keeping pins, notes, and grants.", cmdClear},
 		{"commits", "[on | off]", "Show or change whether the model may commit its edits.", cmdCommits},
 		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
-		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
+		{"context", "", "Show the chat history as the model receives it.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"drop", "[<file> ...]", "Unpin files. With no files, unpin all of them.", cmdDrop},
 		{"editor", "[<command>]", "Write your message in an editor, $VISUAL or $EDITOR unless a command is given. It comes back to the prompt to send.", cmdEditor},
@@ -89,7 +89,6 @@ func init() {
 		{"help", "", "Show this help.", cmdHelp},
 		{"ls", "", "List the pinned files.", cmdLs},
 		{"model", "[<alias>]", "Show or switch the active model.", cmdModel},
-		{"notes", "[generate | drop]", "Show, regenerate, or discard the session notes.", cmdNotes},
 		{"quit", "", "Exit Strument.", cmdExit},
 		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
@@ -97,7 +96,7 @@ func init() {
 		{"rewind", "[<n>]", "Take the last n turns (default 1) out of the conversation. Files are not changed.", cmdRewind},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
-		{"session", "[new | switch | fork | rename | delete] [<name>]", "List this project's sessions, or create, switch to, fork, rename, or delete one.", cmdSession},
+		{"session", "[new | switch | rename | delete] [<name>]", "List this project's sessions, or create, switch to, rename, or delete one.", cmdSession},
 		{"skill", "[<name>]", "List the available skills, or add a skill's instructions to the chat.", cmdSkill},
 		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined or used, using the language parser.", cmdSymbol},
@@ -119,12 +118,11 @@ func (r *REPL) saveResume() {
 }
 
 // useModel switches everything that follows from the active model. All of it,
-// every time: the coder's model, the commit trailer that names it, the client
-// and the summarizer built from its provider, and the commit-message function
-// bound to its side model.
+// every time: the coder's model, the commit trailer that names it, and the
+// client built from its provider.
 //
 // One function because there are two callers — /model and /reload's re-resolve
-// — and they carried byte-identical copies of these five steps. Nothing had gone
+// — and they carried byte-identical copies of these steps. Nothing had gone
 // wrong yet, which is the only reason this is a refactor and not a bug report:
 // the next person to add a sixth step would have added it to /model, where a
 // model switch obviously happens, and left /reload half-switching a session in
@@ -138,8 +136,6 @@ func (r *REPL) useModel(m *config.Model) {
 	r.refreshTrailer(m)
 	if r.opts.MakeClient != nil {
 		r.coder.Client = r.opts.MakeClient(m)
-		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel,
-			r.coder.Tokens, r.coder.Out, r.coder.Clock, r.coder.RecordSideCall)
 	}
 }
 
@@ -302,20 +298,17 @@ func (r *REPL) completer() readline.AutoCompleter {
 			sub = append(sub, readline.PcItem("scope", scopes...), readline.PcItemDynamic(r.completeAliases))
 		case "session":
 			// The subcommands first, then a name where an existing one is
-			// meant. new and fork take a name that does not exist yet, which
-			// nothing can complete.
+			// meant. new takes a name that does not exist yet, which nothing
+			// can complete.
 			names := func(excludeCurrent bool) func(string) []string {
 				return func(string) []string { return r.completeSessions(excludeCurrent) }
 			}
 			sub = append(sub,
 				readline.PcItem("new"),
 				readline.PcItem("switch", readline.PcItemDynamic(names(true))),
-				readline.PcItem("fork"),
 				readline.PcItem("rename", readline.PcItemDynamic(names(false))),
 				readline.PcItem("delete", readline.PcItemDynamic(names(true))),
 			)
-		case "notes":
-			sub = append(sub, readline.PcItem("generate"), readline.PcItem("drop"))
 		case "commits":
 			sub = append(sub, readline.PcItem("on"), readline.PcItem("off"))
 		case "yes":
@@ -725,52 +718,6 @@ func cmdReset(_ context.Context, r *REPL, _ string) string {
 	return ""
 }
 
-// cmdNotes shows, generates, or discards the session notes.
-//
-// The notes are written by the side model and go into a future prompt, so they
-// have to be readable: a summary nobody can inspect is a summary nobody should
-// trust.
-//
-// "drop" is a subcommand rather than an argument to /drop, which would have
-// read as unpinning a file called "notes" — a plausible real filename, and
-// ambiguous the moment a project has one. It also keeps notes out of the pin
-// vocabulary entirely, which is right: /drop unpins things the *user* chose,
-// and the notes are something the harness wrote.
-func cmdNotes(ctx context.Context, r *REPL, args string) string {
-	switch strings.TrimSpace(args) {
-	case "generate":
-		if r.opts.GenerateNotes == nil {
-			r.printf("Session notes are disabled for this run.")
-			return ""
-		}
-		if err := r.opts.GenerateNotes(ctx); err != nil {
-			r.out.Errorf("Could not generate notes: %v", err)
-			return ""
-		}
-	case "drop":
-		if r.opts.DropNotes == nil {
-			r.printf("Session notes are disabled for this run.")
-			return ""
-		}
-		r.opts.DropNotes()
-		r.printf("Discarded the session notes.")
-	case "":
-		notes := r.opts.Notes
-		if notes == nil {
-			r.printf("Session notes are disabled for this run.")
-			return ""
-		}
-		if strings.TrimSpace(notes()) == "" {
-			r.printf("No session notes. Use `/notes generate` to create them from the session record.")
-			return ""
-		}
-		r.printf("%s", strings.TrimRight(notes(), "\n"))
-	default:
-		r.out.Errorf("%s", usage("notes"))
-	}
-	return ""
-}
-
 func cmdTokens(_ context.Context, r *REPL, _ string) string {
 	r.printf("%s", r.coder.TokensReport())
 	return ""
@@ -824,22 +771,12 @@ func cmdUsage(_ context.Context, r *REPL, args string) string {
 	return ""
 }
 
-// cmdContext shows the conversation the way the model currently reads it: the
-// compaction summaries in order, then the live tail the summaries do not cover.
+// cmdContext shows the conversation the way the model currently reads it.
 // /tokens says how full the window is and the transcript says what was actually
 // said; what neither shows is the fold — the thing the model sees — which is the
 // niche this command fills.
-func cmdContext(_ context.Context, r *REPL, args string) string {
-	n := -1
-	if arg := strings.TrimSpace(args); arg != "" {
-		parsed, err := strconv.Atoi(arg)
-		if err != nil || parsed <= 0 {
-			r.out.Errorf("%s, where n is the number of summaries to show.", usage("context"))
-			return ""
-		}
-		n = parsed
-	}
-	r.printf("%s", strings.TrimRight(r.coder.ViewContext(n), "\n"))
+func cmdContext(_ context.Context, r *REPL, _ string) string {
+	r.printf("%s", strings.TrimRight(r.coder.ViewContext(), "\n"))
 	return ""
 }
 
@@ -1344,9 +1281,7 @@ func humanBytes(n int64) string {
 // switch and new are separate for the same reason the host refuses to guess
 // between them: opening a conversation that is not there and creating one over
 // a conversation that is are different mistakes, and both are cheap to make
-// with a typo. fork is the third, and the one worth having a word for — it is
-// the ritual of `/notes generate`, `/clear` and carrying on, with the parent
-// recorded so the notes can say whose they are.
+// with a typo.
 func cmdSession(_ context.Context, r *REPL, args string) string {
 	ops := r.opts.Sessions
 	if ops == nil {
@@ -1358,7 +1293,7 @@ func cmdSession(_ context.Context, r *REPL, args string) string {
 	switch verb {
 	case "":
 		r.listSessions(ops)
-	case "new", "switch", "fork", "rename", "delete":
+	case "new", "switch", "rename", "delete":
 		if name == "" {
 			r.out.Errorf("`/session %s` needs a name. %s", verb, usage("session"))
 			return ""
@@ -1378,13 +1313,6 @@ func (r *REPL) runSessionVerb(ops *SessionOps, verb, name string) {
 		note, err := ops.Switch(name, verb == "new", r.opts.ModelAlias)
 		if err != nil {
 			r.out.Errorf("%v", err)
-			return
-		}
-		r.printf("%s", note)
-	case "fork":
-		note, err := ops.Fork(name, r.opts.ModelAlias)
-		if err != nil {
-			r.out.Errorf("Could not fork: %v", err)
 			return
 		}
 		r.printf("%s", note)

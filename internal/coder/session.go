@@ -239,7 +239,6 @@ func (c *Coder) TokensReport() string {
 		// The schemas are not part of any message, so they were missing from
 		// this table entirely while being sent with every single request.
 		{"tool schemas", c.countTools()},
-		{"session notes", c.countMessages(chunks.notes)},
 		{"read-only files", c.countMessages(chunks.readonlyFiles)},
 		// Pinned files no longer have a section of their own: their names ride
 		// in the system prompt and their contents arrive as tool results, which

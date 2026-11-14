@@ -48,7 +48,6 @@ func TestDisplayPathThreshold(t *testing.T) {
 	root := filepath.Join(base, "work", "code", "proj")
 
 	m := &config.Model{Slug: "test"}
-	m.SideModel = m
 	c := New(root, m)
 
 	tests := []struct {

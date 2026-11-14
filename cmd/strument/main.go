@@ -64,18 +64,6 @@ type chatCmd struct {
 	Unattended   bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
 	ConsultScope string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
 	Files        []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
-
-	Compaction string `help:"How a long chat history is made to fit the context window, for this run: roll (drop the oldest turns, keep what you said) or summary. Overrides the compaction setting." placeholder:"<roll|summary>"`
-}
-
-// Validate checks --compaction by hand: kong's enum needs a default, and an
-// empty value here means "as the config says".
-func (c *chatCmd) Validate() error {
-	switch c.Compaction {
-	case "", config.CompactionRoll, config.CompactionSummary:
-		return nil
-	}
-	return fmt.Errorf("--compaction must be %q or %q, not %q", config.CompactionRoll, config.CompactionSummary, c.Compaction)
 }
 
 func (c *chatCmd) Run() error {
@@ -182,7 +170,6 @@ func (c *chatCmd) Run() error {
 	// like they had worked; internal/repl's reload test guards against it.
 	cdr.ShellWithheld = c.NoShell
 	cdr.CommitsWithheld = c.NoCommits
-	cdr.CompactionFlag = c.Compaction
 	// Before ApplyConfig, which fills in the config half. The first version of
 	// this set it *after*, so auto_approve was written to a nil Grants and
 	// silently dropped -- found by running the binary, not by a test.
@@ -193,8 +180,6 @@ func (c *chatCmd) Run() error {
 		// from the config it already carries.
 		std.Thinking = coder.ThinkingDisplay(cfg.ReasoningDisplay)
 	}
-	cdr.Summarizer = coder.NewChatSummary(client.ForProvider(model.SideModel.Provider), model.SideModel, cdr.Tokens,
-		cdr.Out, cdr.Clock, cdr.RecordSideCall)
 	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{unattended: c.Unattended}}
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
@@ -457,10 +442,9 @@ func (c *chatCmd) Run() error {
 	}
 	// A roll drops the oldest turns and leaves recall to find their work, and
 	// recall searches the session record. Without one, rolled-away work is
-	// gone; a summary would at least keep an account of it. Said once here
-	// rather than switching modes behind the user's back.
-	if cdr.SessionRecords == nil && cdr.CompactionMode == coder.CompactionRoll {
-		noticef("this session keeps no record (--no-history), so turns dropped to fit the context window cannot be searched again; --compaction summary keeps a summary of them instead")
+	// gone. Said once here.
+	if cdr.SessionRecords == nil {
+		noticef("this session keeps no record (--no-history), so turns dropped to fit the context window cannot be searched again")
 	}
 
 	// --continue restores the conversation itself.
@@ -498,16 +482,9 @@ func (c *chatCmd) Run() error {
 		note := restoreNote
 		if len(c.Files) == 0 && rootErr == nil {
 			var offered []string
-			var notesRestored bool
 			var pins string
-			pins, offered, notesRestored = restoreSession(cdr, projectRoot, session, res)
+			pins, offered = restoreSession(cdr, projectRoot, session, res)
 			note = strings.TrimSpace(note + "\n" + pins)
-			if notesRestored {
-				// Announced, never silent. The notes go into every request this
-				// session, so a user who never types /notes should still know
-				// they are there and how to look.
-				note = strings.TrimSpace(note + "\n/notes from your last session are in context.")
-			}
 			// Record the offer immediately rather than waiting for a command to
 			// trigger a save. A session where the user pins nothing and drops
 			// nothing would otherwise never write it down, and AGENTS.md would
@@ -712,7 +689,7 @@ func fileInProject(root, file string) bool {
 // coder's root is the invocation directory and the project is the git worktree.
 // A file that has since moved is skipped rather than reported: the point is to
 // save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered []string, notesRestored bool) {
+func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered []string) {
 	abs := func(rel string) (string, bool) {
 		p := filepath.FromSlash(rel)
 		if !filepath.IsAbs(p) {
@@ -743,12 +720,6 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 		cdr.SetUndoStack(stack)
 		cdr.RestoreLastCommit(u.Last)
 	}
-
-	// Notes are in memory only when something put them there before the REPL
-	// started. --continue no longer does (it restores the conversation), so
-	// this reports what is in the field rather than assuming it is empty; the
-	// REPL serves /notes from the same field.
-	notesRestored = strings.TrimSpace(cdr.SessionNotes) != ""
 
 	// AGENTS.md is the cross-tool convention for a project's standing
 	// instructions to a coding agent (Codex, Cursor, Amp, Gemini CLI read it;
@@ -818,7 +789,7 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 			render.Plural(files+readOnly, "pin", "pins"), readOnly)
 	}
 	// A write to the user's repository is said, however small.
-	return strings.TrimSpace(note + "\n" + excluded), offered, notesRestored
+	return strings.TrimSpace(note + "\n" + excluded), offered
 }
 
 // saveResumeFunc returns the callback the REPL calls after a command changes
@@ -940,22 +911,6 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 	return note
 }
 
-// sessionMarkdown is the session's history as the notes writer reads it: the
-// record rendered by the same renderer `strument history markdown` uses.
-//
-// It reads every segment, so notes regenerate from the whole session rather
-// than from the run that happens to be current — and, in a running session,
-// from the turns of that session too, since the writer flushes per record.
-//
-// "" for a session with nothing in it, which is the caller's cue to say so.
-func sessionMarkdown(projectRoot, session string) string {
-	turns, err := history.ReadTurns(projectRoot, session)
-	if err != nil || len(turns) == 0 {
-		return ""
-	}
-	return history.Markdown(turns)
-}
-
 // paletteTheme picks the color palette from the --dark-mode/--light-mode
 // flags (mutually exclusive), defaulting to aider's default palette.
 func (c *chatCmd) paletteTheme() render.Theme {
@@ -1018,34 +973,7 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 			return config.Load(loadOptions(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef}))
 		},
 		Rediscover: func() []skill.Skill { return discoverSkills(cdr.Root) },
-		Notes:      func() string { return cdr.SessionNotes },
-		DropNotes: func() {
-			cdr.SessionNotes, cdr.SessionNotesDate, cdr.SessionNotesSession = "", "", ""
-		},
-		Sessions: sessionOps(cdr, currentDefault, projectRoot, slog, keepState),
-		GenerateNotes: func(_ context.Context) error {
-			if !keepState {
-				return errors.New("no session record available")
-			}
-			if cdr.Model.SideModel == nil {
-				return errNoSideModel
-			}
-			transcript := sessionMarkdown(projectRoot, cdr.Session)
-			if transcript == "" {
-				return errors.New("the session record is empty")
-			}
-			notes, err := writeSessionNotes(cdr, transcript)
-			if err != nil {
-				return err
-			}
-			if notes == "" {
-				return errors.New("the model returned no notes")
-			}
-			cdr.SessionNotes = notes
-			cdr.SessionNotesDate = time.Now().UTC().Format("2006-01-02 15:04")
-			cdr.SessionNotesSession = cdr.Session
-			return nil
-		},
+		Sessions:   sessionOps(cdr, currentDefault, projectRoot, slog, keepState),
 		Color:      !c.NoColor && stdoutIsTerminal() && os.Getenv("NO_COLOR") == "",
 		IsTerminal: drivingATerminal,
 		// Only stdin: `strument | tee log` still has a human to ask.

@@ -36,23 +36,21 @@ func (c *promptRecorder) Confirm(r ConfirmRequest) ConfirmResult {
 	return ConfirmResult{Yes: true}
 }
 
-func overflowCoder(t *testing.T, client llm.ModelClient) (*Coder, *summaryStub) {
+func overflowCoder(t *testing.T, client llm.ModelClient) *Coder {
 	t.Helper()
 	c := testCoder(t)
 	c.Client = client
-	side := &summaryStub{}
-	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	for range 6 {
-		c.doneMessages = append(c.doneMessages, msgTok("user", 400), msgTok("assistant", 400))
+		c.doneMessages = append(c.doneMessages, msgTok("user"), msgTok("assistant"))
 	}
-	return c, side
+	return c
 }
 
 // A provider's "too long" folds the settled history and the request goes
 // again, once; the turn succeeds instead of ending on the refusal.
 func TestOverflowFoldsAndRetries(t *testing.T) {
 	client := &refusingClient{refuse: 1}
-	c, side := overflowCoder(t, client)
+	c := overflowCoder(t, client)
 	before := len(c.doneMessages)
 
 	outcome, _ := c.sendMessage(context.Background(), "carry on")
@@ -60,9 +58,8 @@ func TestOverflowFoldsAndRetries(t *testing.T) {
 	if client.sends != 2 {
 		t.Fatalf("the main model saw %d requests, want the refused one and one retry", client.sends)
 	}
-	if side.calls == 0 || len(c.doneMessages) >= before || !hasSummaryContent(c.doneMessages) {
-		t.Errorf("the history was not folded: %d -> %d messages, %d summary calls",
-			before, len(c.doneMessages), side.calls)
+	if len(c.doneMessages) >= before || !rolled(c) {
+		t.Errorf("the history was not folded: %d -> %d messages", before, len(c.doneMessages))
 	}
 	if outcome == OutcomeContextExhausted {
 		t.Error("the turn still ended on the refusal")
@@ -73,7 +70,7 @@ func TestOverflowFoldsAndRetries(t *testing.T) {
 // can help: the turn ends as before, without a third request.
 func TestOverflowRetriesOnlyOnce(t *testing.T) {
 	client := &refusingClient{refuse: 99}
-	c, _ := overflowCoder(t, client)
+	c := overflowCoder(t, client)
 
 	outcome, _ := c.sendMessage(context.Background(), "carry on")
 
@@ -89,15 +86,15 @@ func TestOverflowRetriesOnlyOnce(t *testing.T) {
 // anything is sent, and the user is not asked whether to send it anyway.
 func TestOverLimitFoldsBeforeAsking(t *testing.T) {
 	client := &refusingClient{}
-	c, side := overflowCoder(t, client)
+	c := overflowCoder(t, client)
 	conf := &promptRecorder{}
 	c.Confirm = conf
-	// The window holds the turn and a summary, not the whole history.
+	// The window holds the turn and a folded history, not the whole of it.
 	c.Model.Context = c.requestTokens(projectForModel(c.formatMessages().allMessages(), c.Model)) - 1000
 
 	c.sendMessage(context.Background(), "carry on")
 
-	if side.calls == 0 {
+	if !rolled(c) {
 		t.Fatal("the history was not folded before sending")
 	}
 	for _, p := range conf.prompts {
@@ -110,7 +107,7 @@ func TestOverLimitFoldsBeforeAsking(t *testing.T) {
 	}
 }
 
-// No summarizer or no settled history: nothing to fold, and the refusal ends
+// No settled history: nothing to fold, and the refusal ends
 // the turn as it always did.
 func TestOverflowWithNothingToFold(t *testing.T) {
 	client := &refusingClient{refuse: 1}

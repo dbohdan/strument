@@ -1,85 +1,35 @@
 package coder
 
 import (
-	"strconv"
+	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 )
 
 // ViewContext renders the chat the way the model currently reads it: the
-// compaction summaries (detected by the SummaryLabel prefix) in order, then the
-// live tail that the summaries do not cover. A positive n caps the number of
-// summaries shown; a n <= 0 shows them all.
+// settled history, a roll's note standing for any turns compaction dropped,
+// then the turn in progress.
 //
-// The summaries and the live tail both live in the done/cur slots — the settled
-// history and the current turn. The system prompt, examples, and notes are
-// scaffolding the model reads every turn rather than history it is asked to
-// remember, so they are not part of this view.
+// The system prompt is scaffolding the model reads every turn rather than
+// history it is asked to remember, so it is not part of this view.
 //
 // /tokens says how full the window is and the transcript says what was actually
 // said; what neither shows is the fold — the thing the model sees — which is
-// the niche this command fills. It is deliberately a single mode: the fold is
-// the fold, there is no second half to hide.
-func (c *Coder) ViewContext(n int) string {
+// the niche this command fills.
+//
+// It used to list compaction summaries first and take a count of them to
+// show; the summaries went with the side model that wrote them.
+func (c *Coder) ViewContext() string {
 	chunks := c.formatMessages()
-
-	var summaries []llm.Message
-	var tail []llm.Message
-	for _, m := range chunks.done {
-		if isSummaryMessage(m) {
-			summaries = append(summaries, m)
-		} else {
-			tail = append(tail, m)
-		}
+	msgs := append(slices.Clone(chunks.done), chunks.cur...)
+	if len(msgs) == 0 {
+		return "Context as the model sees it: no conversation yet.\n"
 	}
-	tail = append(tail, chunks.cur...)
-
-	var b strings.Builder
-	b.WriteString("Context as the model sees it:\n")
-
-	if len(summaries) == 0 {
-		b.WriteString("No compaction summaries; the whole history is the live tail.\n")
-	} else if n > 0 && n < len(summaries) {
-		word := "summaries"
-		if n == 1 {
-			word = "summary"
-		}
-		b.WriteString("first " + strconv.Itoa(n) + " of " + strconv.Itoa(len(summaries)) + " " +
-			word + " shown.\n")
-	}
-
-	shown := summaries
-	if n > 0 && n < len(summaries) {
-		shown = summaries[:n]
-	}
-	for _, s := range shown {
-		b.WriteString(s.Text())
-		b.WriteString("\n")
-	}
-
-	if len(tail) > 0 {
-		b.WriteString("\nLive tail:\n")
-		b.WriteString(renderTail(tail))
-	}
-	return b.String()
+	return "Context as the model sees it:\n\n" + renderTail(msgs)
 }
 
-// summaryPrefix is what every compaction summary begins with on the wire: the
-// marker HarnessNote prepends, then the label.
-var summaryPrefix = llm.HarnessMarker + " " + prompts.SummaryLabel
-
-// isSummaryMessage reports whether a message is a compaction summary: a marked
-// harness turn carrying the SummaryLabel. An earlier summary is itself one of
-// these, so this must check by content, not by role alone — otherwise every
-// earlier summary would be silently dropped on a later fold.
-func isSummaryMessage(m llm.Message) bool {
-	return m.Role == llm.RoleUser && strings.HasPrefix(m.Text(), summaryPrefix)
-}
-
-// renderTail lays out the message slice as the model reads it — the turns the
-// summaries do not cover.
+// renderTail lays out the message slice as the model reads it.
 func renderTail(msgs []llm.Message) string {
 	var b strings.Builder
 	for _, m := range msgs {

@@ -23,7 +23,6 @@ func TestRepoMapStaysOutOfThePrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	model := &config.Model{Provider: config.Provider{Adapter: config.AdapterOpenRouter}, Slug: "test-model"}
-	model.SideModel = model
 	c := New(dir, model)
 	c.Out = testOutput{t}
 	c.RepoMap = repomap.New(dir)

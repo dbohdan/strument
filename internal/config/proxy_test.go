@@ -18,7 +18,7 @@ own = provider("openrouter", api_key = env("OPENROUTER_API_KEY"), proxy = "socks
 models = {
     "inherit": model(orouter, "openrouter/x"),
     "own": model(own, "openrouter/y"),
-    "d1": model(direct_prov, "local/z", side_model = model(direct_prov, "local/w")),
+    "d1": model(direct_prov, "local/z"),
     "d2": None,
 }
 models["d2"] = models["d1"]
@@ -43,10 +43,6 @@ default = "inherit"
 	}
 	if got := cfg.Proxy; got != "socks5://global:1080" {
 		t.Errorf("cfg.Proxy = %q", got)
-	}
-	// The inline side model of a "direct" provider also resolves to direct.
-	if got := cfg.Models["d1"].SideModel.Provider.Proxy; got != "" {
-		t.Errorf("d1 side proxy = %q, want direct (empty)", got)
 	}
 }
 

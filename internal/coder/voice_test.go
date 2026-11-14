@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 )
 
 // No path by which the harness adds to the conversation may write an assistant
@@ -57,9 +56,10 @@ func TestTheHarnessNeverSpeaksAsTheAssistant(t *testing.T) {
 	}
 }
 
-// The compaction summary is a marked harness turn, not a system message.
+// What stands for compacted turns — a roll's note now, a side model's summary
+// before it — is a marked harness turn, not a system message.
 //
-// It was a system message, on the reasoning that the summary is the harness's
+// The summary was a system message, on the reasoning that it is the harness's
 // artifact — true, and the wrong conclusion. The system role belongs to the
 // prefix; this lands mid-conversation, in done, which is the position
 // HarnessNote exists for. It stayed legal only because it is always spliced at
@@ -69,10 +69,10 @@ func TestTheHarnessNeverSpeaksAsTheAssistant(t *testing.T) {
 //
 // Codex CLI and Kimi CLI both use a prefixed user message; OpenCode an
 // assistant message flagged as a summary. None uses system.
-func TestTheCompactionSummaryIsAMarkedHarnessTurn(t *testing.T) {
+func TestTheCompactionNoteIsAMarkedHarnessTurn(t *testing.T) {
 	c := testCoder(t)
 	c.doneMessages = []llm.Message{
-		llm.HarnessNote(prompts.SummaryLabel + "EARLIER WORK"),
+		rollNote([]string{"EARLIER WORK"}, 4000, false),
 		llm.TextMessage(llm.RoleUser, "and then?"),
 		llm.TextMessage(llm.RoleAssistant, "I read the file."),
 	}
@@ -80,13 +80,13 @@ func TestTheCompactionSummaryIsAMarkedHarnessTurn(t *testing.T) {
 
 	summary := c.doneMessages[0]
 	if summary.Role == llm.RoleSystem {
-		t.Error("the summary is a system message again; it is mid-conversation history")
+		t.Error("the note is a system message; it is mid-conversation history")
 	}
 	if summary.Role == llm.RoleAssistant {
-		t.Error("the summary is an assistant turn; the model did not say this")
+		t.Error("the note is an assistant turn; the model did not say this")
 	}
 	if !strings.HasPrefix(summary.Text(), llm.HarnessMarker) {
-		t.Errorf("the summary is unmarked, so it reads as the user's own words: %q", summary.Text())
+		t.Errorf("the note is unmarked, so it reads as the user's own words: %q", summary.Text())
 	}
 
 	msgs := c.formatChatChunks().allMessages()

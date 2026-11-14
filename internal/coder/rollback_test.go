@@ -35,7 +35,6 @@ func toolCoder(t *testing.T, dir string) *Coder {
 		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:     "test-model",
 	}
-	model.SideModel = model
 	c := New(dir, model)
 	c.Confirm = yesConfirmer{}
 	c.Out = testOutput{t}

@@ -31,7 +31,6 @@ func TestEmitStarlarkFull(t *testing.T) {
         cache=True,  # OpenRouter reports prompt caching for this model.
         # reasoning="high",  # Uncomment and set the effort: "high", "low", or "off".
         # reasoning_tag="think",  # Uncomment if the model emits reasoning in inline tags.
-        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 `
@@ -76,7 +75,6 @@ func TestEmitStarlarkPlain(t *testing.T) {
         context=32768,
         input_cost=0,
         output_cost=0,
-        # side_model="...",  # Uncomment to use a different model for summaries and commits.
     ),
 }
 `

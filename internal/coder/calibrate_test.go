@@ -56,15 +56,13 @@ func (a *countingAnswer) Send(_ context.Context, req llm.Request) iter.Seq2[llm.
 // provider's count folds once the provider has said so, at the end of the turn.
 func TestCalibratedBudgetFolds(t *testing.T) {
 	c := testCoder(t)
-	side := &summaryStub{}
-	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	for range 6 {
-		c.doneMessages = append(c.doneMessages, msgTok("user", 400), msgTok("assistant", 400))
+		c.doneMessages = append(c.doneMessages, msgTok("user"), msgTok("assistant"))
 	}
-	est := c.Summarizer.total(c.doneMessages)
+	est := c.historyTokens(c.doneMessages)
 	c.Model.Context = 2*est + 2000 // the budget, half the window, sits just above the estimate
-	c.maybeSummarize()
-	if side.calls != 0 {
+	c.maybeCompact()
+	if rolled(c) {
 		t.Fatal("folded before any provider count, on the estimate alone")
 	}
 
@@ -74,7 +72,7 @@ func TestCalibratedBudgetFolds(t *testing.T) {
 	if c.tokenScale < 1.3 {
 		t.Fatalf("the provider's count was not learned: scale %v", c.tokenScale)
 	}
-	if side.calls == 0 && !hasSummaryContent(c.doneMessages) {
+	if !rolled(c) {
 		t.Error("a history over budget by the provider's count did not fold at turn end")
 	}
 }
@@ -84,8 +82,6 @@ func TestCalibratedBudgetFolds(t *testing.T) {
 // made, recorded with both counts.
 func TestRestoreSeedsTheTokenScale(t *testing.T) {
 	c := testCoder(t)
-	side := &summaryStub{}
-	c.Summarizer = NewChatSummary(side, c.Model.SideModel, c.Tokens, c.Out, c.Clock, nil)
 	var recs []Record
 	for range 6 {
 		recs = append(recs, msg(llm.RoleUser, strings.Repeat("x", 1600)), msg(llm.RoleAssistant, strings.Repeat("y", 1600)))
@@ -95,7 +91,7 @@ func TestRestoreSeedsTheTokenScale(t *testing.T) {
 		Record{Type: "request", Call: "turn", Model: "elsewhere/other", Sent: 300, Estimated: 100},
 		Record{Type: "request", Call: "turn", Model: c.Model.QualifiedSlug(), Sent: 140, Estimated: 100})
 	msgs, stats := MessagesFromRecords(recs)
-	est := c.Summarizer.total(msgs)
+	est := c.historyTokens(msgs)
 	c.Model.Context = 2*est + 2000 // fits by the estimate, not by the provider's count
 
 	c.SeedTokenScale(stats)
@@ -103,7 +99,7 @@ func TestRestoreSeedsTheTokenScale(t *testing.T) {
 		t.Fatalf("scale %v, want this model's 1.4 (not the other model's 3)", c.tokenScale)
 	}
 	c.RestoreHistory(msgs, stats.Turns)
-	if side.calls == 0 {
+	if !rolled(c) {
 		t.Error("the restored history, over budget in the provider's units, did not fold")
 	}
 }

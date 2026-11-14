@@ -32,14 +32,7 @@ had it, whether that ended in a crash, a closed laptop, or a power loss.
 
 Inside Strument, `/session` lists the sessions and switches between them
 without restarting; switching restores the conversation of the session you
-move to. `/session fork <name>` starts a new session that carries this one's
-notes forward, with the parent recorded so the notes say where they came from.
-`/model` does not fork: many conversations on one strong model is the common
-case, so forking belongs to sessions.
-
-Session notes carry context from one session to another. `/notes` shows them,
-`/notes generate` regenerates them from the session record, and `/notes drop`
-discards them. They stay in memory and are not saved to disk.
+move to.
 
 From the shell:
 
@@ -149,8 +142,9 @@ the same request: a restored session learns from the pair how far its estimate
 undercounts the provider's tokenizer, and measures the history budget with that.
 
 A **`side_call`** record covers each request Strument makes for itself:
-session notes or a compaction summary (and, in sessions from before the model
-wrote its own commit messages, a commit message). These requests are
+before November 2026, a commit message, session notes or a compaction summary,
+written by the side model. Nothing makes one now; the records stay readable in
+older sessions. These requests are
 separate from the conversation, so they appear nowhere else in the log.
 Without these records, a failed one showed only as its consequence, such as
 notes that never appeared. The record carries:

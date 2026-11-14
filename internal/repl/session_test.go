@@ -14,7 +14,6 @@ type fakeSessions struct {
 	current  string
 	rows     []history.Session
 	switched []string // "name create" per call
-	forked   []string
 	renamed  []string
 	deleted  []string
 	fail     error
@@ -30,13 +29,6 @@ func (f *fakeSessions) ops() *SessionOps {
 			}
 			f.switched = append(f.switched, name+" create="+boolWord(create)+" alias="+alias)
 			f.current = name
-			return "Now in " + name + ".", nil
-		},
-		Fork: func(name, alias string) (string, error) {
-			if f.fail != nil {
-				return "", f.fail
-			}
-			f.forked = append(f.forked, name+" alias="+alias)
 			return "Now in " + name + ".", nil
 		},
 		Rename: func(from, to string) error {
@@ -77,14 +69,10 @@ func TestSessionVerbsCarryTheLiveModelAlias(t *testing.T) {
 
 	cmdSession(context.Background(), r, "new spike")
 	cmdSession(context.Background(), r, "switch default")
-	cmdSession(context.Background(), r, "fork impl")
 
 	want := []string{"spike create=true alias=big", "default create=false alias=big"}
 	if strings.Join(f.switched, "; ") != strings.Join(want, "; ") {
 		t.Errorf("switches = %v, want %v", f.switched, want)
-	}
-	if len(f.forked) != 1 || f.forked[0] != "impl alias=big" {
-		t.Errorf("forks = %v", f.forked)
 	}
 }
 
@@ -128,13 +116,13 @@ func TestSessionVerbsRefuseAnEmptyName(t *testing.T) {
 	f := &fakeSessions{current: "default"}
 	r, out := replWithSessions(t, f)
 
-	for _, verb := range []string{"new", "switch", "fork", "rename", "delete"} {
+	for _, verb := range []string{"new", "switch", "rename", "delete"} {
 		cmdSession(context.Background(), r, verb)
 	}
-	if len(f.switched)+len(f.forked)+len(f.renamed)+len(f.deleted) != 0 {
+	if len(f.switched)+len(f.renamed)+len(f.deleted) != 0 {
 		t.Error("a verb with no name reached the host")
 	}
-	if n := strings.Count(out.String(), "needs a name"); n != 5 {
+	if n := strings.Count(out.String(), "needs a name"); n != 4 {
 		t.Errorf("said `needs a name` %d times, want once per verb:\n%s", n, out.String())
 	}
 }

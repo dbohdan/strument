@@ -12,7 +12,7 @@ import (
 
 // TestClearAndResetStayInTheSession: both commands are soft restarts. The
 // conversation goes and the session does not — /clear keeps the pins, /reset
-// drops them after, notes survive both, and since neither writes to the
+// drops them after, and since neither writes to the
 // record, both say that --continue restores what was cleared.
 func TestClearAndResetStayInTheSession(t *testing.T) {
 	root := t.TempDir()
@@ -23,7 +23,6 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 	cdr := coder.New(root, model)
 	cdr.Client = answerStub("Reply.\n")
 	cdr.Session = "foo"
-	cdr.SessionNotes, cdr.SessionNotesSession = "Keep the API stable.", "earlier"
 	cdr.Recorder = &records{}
 
 	out := &syncBuffer{}
@@ -58,7 +57,7 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 	if !strings.Contains(got, "Reply.") {
 		t.Fatalf("the stub turn did not run; the test proves nothing:\n%s", got)
 	}
-	if fold := cdr.ViewContext(-1); strings.Contains(fold, "Reply.") {
+	if fold := cdr.ViewContext(); strings.Contains(fold, "Reply.") {
 		t.Errorf("the conversation survived /clear:\n%s", fold)
 	}
 
@@ -84,10 +83,6 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 	}
 	if len(cdr.ChatFiles()) != 0 {
 		t.Errorf("/reset kept the pins: %v", cdr.ChatFiles())
-	}
-	if cdr.SessionNotes != "Keep the API stable." || cdr.SessionNotesSession != "earlier" {
-		t.Errorf("notes = %q from %q; want them kept — neither command drops notes",
-			cdr.SessionNotes, cdr.SessionNotesSession)
 	}
 }
 

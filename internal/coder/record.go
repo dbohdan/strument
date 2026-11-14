@@ -353,49 +353,6 @@ func isConversation(m llm.Message) bool {
 	return false
 }
 
-// SideCall is one finished side request, as sendSide saw it.
-type SideCall struct {
-	What     string
-	Model    string
-	Duration time.Duration
-	Attempts int
-	Outcome  string
-	Err      string
-	Usage    llm.Usage
-}
-
-// SideCallReporter receives a finished side call. Nil means no log.
-//
-// A function rather than a Recorder, and passed as a method value, for the
-// same reason RecordTurnSideUsage is: the side callers are built in main.go
-// before the Coder's Recorder is necessarily set, so a Recorder captured by
-// value there would be the nil it had at construction.
-type SideCallReporter func(SideCall)
-
-// RecordSideCall logs one side request. It is the method value handed to
-// CommitMessenger, NotesWriter and NewChatSummary.
-func (c *Coder) RecordSideCall(s SideCall) {
-	r := Record{
-		Type:       "side_call",
-		Call:       s.What,
-		Model:      s.Model,
-		Attempts:   s.Attempts,
-		Seconds:    s.Duration.Round(time.Millisecond).Seconds(),
-		Outcome:    s.Outcome,
-		Error:      s.Err,
-		Sent:       s.Usage.PromptTokens,
-		Received:   s.Usage.CompletionTokens,
-		CacheRead:  s.Usage.CacheReadTokens,
-		CacheWrite: s.Usage.CacheWriteTokens,
-		Reasoning:  s.Usage.ReasoningTokens,
-		Provider:   s.Usage.Provider,
-	}
-	if s.Usage.Cost != nil {
-		r.Cost, r.CostKnown = *s.Usage.Cost, true
-	}
-	c.record(r)
-}
-
 // recordCompaction logs one fold of the history and the text that replaced
 // the folded turns.
 func (c *Coder) recordCompaction(mode, outcome, text string, before, after int) {

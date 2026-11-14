@@ -352,7 +352,6 @@ func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Code
 		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:     "test-model",
 	}
-	model.SideModel = model
 
 	c := coder.New(root, model)
 	c.Client = editCommitStub()

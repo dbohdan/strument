@@ -94,8 +94,7 @@ type Coder struct {
 	LoopDetection bool
 
 	// Ports.
-	Client     llm.ModelClient
-	Summarizer *ChatSummary // nil => chat-history summarization disabled
+	Client llm.ModelClient
 	// Grants are the prompts answered without asking, from --yes, from
 	// auto_approve, and from /yes. See grants.go for why the sources are kept
 	// apart rather than merged.
@@ -217,17 +216,6 @@ type Coder struct {
 	// lives.
 	Session string
 
-	// SessionNotes are the session's notes, generated from the session
-	// record on demand (/notes generate, and a fork carrying its parent's
-	// notes forward). SessionNotesDate says when they were generated and
-	// SessionNotesSession which session they were generated in — the pair
-	// the header needs to say whose they are. "" leaves the slot out of the
-	// prompt entirely. Notes live in memory only; the record is the durable
-	// artifact they derive from.
-	SessionNotes        string
-	SessionNotesDate    string
-	SessionNotesSession string
-
 	// Chat state.
 	absFnames         []string // ordered, deduped
 	absReadOnlyFnames []string
@@ -274,17 +262,10 @@ type Coder struct {
 	// unchanged tree can only produce the identical output.
 	editedSinceCheck bool
 	lastSendOutcome  SendOutcome // observability for tests/REPL status
-	summaryBackoff   bool        // skip one compaction attempt after a failure
+	compactBackoff   bool        // skip one compaction attempt after a failure
 	// tokenScale is the provider's count of a request over Strument's estimate
 	// of it, smoothed; 0 until the first main-model response. See calibrateTokens.
 	tokenScale float64
-	// CompactionMode is how an over-budget history is compacted: rolled or
-	// summarized. ApplyConfig sets it from the `compaction` setting, roll by
-	// default; the zero value summarizes. See roll.go.
-	CompactionMode string
-	// CompactionFlag is --compaction, remembered so that a /reload does not
-	// undo a choice made on the command line. Empty when not given.
-	CompactionFlag string
 	// rolledSaid is what the user said in turns a roll has dropped, oldest
 	// first, carried into each later roll's note.
 	rolledSaid []string
@@ -352,15 +333,6 @@ type Coder struct {
 	messageModelTime    time.Duration
 	totalTokensSent     int
 	totalTokensReceived int
-	// side* is the current session-notes request. It is separate from the
-	// turn totals because notes can be generated between turns.
-	sideCost           float64
-	sideCostKnown      bool
-	sideTokensSent     int
-	sideTokensReceived int
-	sideCacheRead      int
-	sideCacheWrite     int
-	sideUsageRecorded  bool
 	// peakTokensSent is the largest single request this session. The session
 	// and turn totals are sums over sends, which is what you are billed but not
 	// what fills the window: a five-step turn re-sends its whole conversation

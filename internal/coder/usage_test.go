@@ -180,30 +180,6 @@ func TestFallbackCostPricesEachTokenOnce(t *testing.T) {
 	}
 }
 
-// The commit-message request went out through the client directly and never
-// reached finalizeUsage, so the turn line reported four requests where five
-// were paid for — $0.00084 against $0.00093 on a measured turn, and the share
-// grows with the diff because that call re-sends it uncached.
-func TestSideUsageReachesTheTurnTotals(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	c.finalizeUsage(&sendUsage{prompt: 2000, completion: 100})
-
-	cost := 0.0001
-	c.RecordTurnSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &cost})
-
-	if sent, recv := c.RunTokens(); sent != 2794 || recv != 113 {
-		t.Errorf("session tokens = (%d, %d), want (2794, 113)", sent, recv)
-	}
-	if got, known := c.RunCost(); !known || got != cost {
-		t.Errorf("cost = %v (known=%v), want %v", got, known, cost)
-	}
-	// The peak is a high-water mark, not a sum: the 794-token side request
-	// never displaces the 2000-token one it rode behind.
-	if got := c.TokensReport(); !strings.Contains(got, "Largest request so far: 2000") {
-		t.Errorf("peak should stay at the largest single request:\n%s", got)
-	}
-}
-
 // The cache figures are parenthesized because they are a breakdown. A flat
 // comma list reads as separate quantities, which is how the arithmetic bug
 // above stayed plausible for as long as it did.
@@ -221,104 +197,6 @@ func TestTokenLineParenthesizesTheBreakdown(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
-	}
-}
-
-// The startup --continue notes call is a side request that reports its usage
-// through RecordSideUsage. FlushSideUsage prints the same token/cost line a turn
-// ends with, so the charge is not invisible — but only when something was
-// actually spent.
-func TestFlushSideUsageReportsTheSideCall(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	out := &summaryOutput{}
-	c.Out = out
-
-	cost := 0.0003
-	c.RecordSideUsage(llm.Usage{
-		PromptTokens:     794,
-		CompletionTokens: 13,
-		Cost:             &cost,
-	})
-
-	c.FlushSideUsage()
-
-	lines := strings.Join(out.lines, "\n")
-	if !strings.Contains(lines, "Tokens: 794 sent, 13 received.") {
-		t.Errorf("side usage line missing token counts:\n%s", lines)
-	}
-	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 run.") {
-		t.Errorf("side usage line missing the cost:\n%s", lines)
-	}
-}
-
-func TestFlushSideUsageConsumesOnlySideUsage(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	out := &summaryOutput{}
-	c.Out = out
-
-	c.finalizeUsage(&sendUsage{prompt: 2000, completion: 100})
-	c.flushTurnUsage()
-
-	firstCost := 0.0003
-	c.RecordSideUsage(llm.Usage{PromptTokens: 794, CompletionTokens: 13, Cost: &firstCost})
-	c.FlushSideUsage()
-
-	secondCost := 0.0004
-	c.RecordSideUsage(llm.Usage{PromptTokens: 500, CompletionTokens: 7, Cost: &secondCost})
-	c.FlushSideUsage()
-	c.FlushSideUsage()
-
-	lines := strings.Join(out.lines, "\n")
-	if strings.Count(lines, "Tokens:") != 3 {
-		t.Errorf("unexpected number of usage lines:\n%s", lines)
-	}
-	for _, want := range []string{
-		"Tokens: 794 sent, 13 received.",
-		"Cost: $0.00030 message, $0.00030 run.",
-		"Tokens: 500 sent, 7 received.",
-		"Cost: $0.00040 message, $0.00070 run.",
-	} {
-		if !strings.Contains(lines, want) {
-			t.Errorf("side usage line missing %q:\n%s", want, lines)
-		}
-	}
-	if strings.Contains(lines, "Tokens: 2.3k sent") {
-		t.Errorf("side usage was compounded:\n%s", lines)
-	}
-	if sent, received := c.RunTokens(); sent != 3294 || received != 120 {
-		t.Errorf("session tokens = (%d, %d), want (3294, 120)", sent, received)
-	}
-}
-
-func TestFlushSideUsageReportsCostOnly(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	out := &summaryOutput{}
-	c.Out = out
-
-	cost := 0.0003
-	c.RecordSideUsage(llm.Usage{Cost: &cost})
-	c.FlushSideUsage()
-
-	lines := strings.Join(out.lines, "\n")
-	if !strings.Contains(lines, "Tokens: 0 sent, 0 received.") {
-		t.Errorf("cost-only usage line missing token counts:\n%s", lines)
-	}
-	if !strings.Contains(lines, "Cost: $0.00030 message, $0.00030 run.") {
-		t.Errorf("cost-only usage line missing the cost:\n%s", lines)
-	}
-}
-
-// A side request that recorded nothing must print nothing — a --continue with
-// no transcript, or a model that returned empty, is not a charge to surface.
-func TestFlushSideUsageIsSilentWhenNothingSpent(t *testing.T) {
-	c := toolCoder(t, t.TempDir())
-	out := &summaryOutput{}
-	c.Out = out
-
-	c.FlushSideUsage()
-
-	if len(out.lines) != 0 {
-		t.Errorf("expected no lines when nothing was spent, got:\n%s", strings.Join(out.lines, "\n"))
 	}
 }
 

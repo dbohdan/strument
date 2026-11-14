@@ -33,7 +33,6 @@ import (
 // "where is this defined" is the question a reader actually has.
 type chatChunks struct {
 	system        []llm.Message
-	notes         []llm.Message
 	done          []llm.Message
 	readonlyFiles []llm.Message
 	cur           []llm.Message
@@ -41,14 +40,9 @@ type chatChunks struct {
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
-		len(ch.system)+len(ch.notes)+len(ch.readonlyFiles)+
+		len(ch.system)+len(ch.readonlyFiles)+
 			len(ch.done)+len(ch.cur))
 	out = append(out, ch.system...)
-	// Notes sit *before* the read-only files, deliberately. Breakpoints go on
-	// the system prompt and on read-only files, so anything between them rides
-	// inside the cached prefix — and a mid-session /read-only, which rewrites
-	// that block, does not invalidate the notes with it.
-	out = append(out, ch.notes...)
 	out = append(out, ch.readonlyFiles...)
 	out = append(out, ch.done...)
 	out = append(out, ch.cur...)
@@ -441,25 +435,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		chunks.readonlyFiles = []llm.Message{
 			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
 		}
-	}
-
-	// A system message, and the only harness artifact that is one: the
-	// compaction summary and the context-exhausted note are marked user turns
-	// (llm.HarnessNote), because they arrive mid-conversation and the system
-	// role belongs to the prefix. Notes are different on both counts. They are
-	// the harness's artifact — not something the user said, and not something
-	// this model said either, since a different model usually wrote them and a
-	// different model again is reading them now — and they land in the prefix,
-	// before the conversation, where the system role is the honest one. The
-	// read-only block above is a user message for historical reasons its own
-	// comment records; that is the precedent not to follow.
-	if notes := strings.TrimSpace(c.SessionNotes); notes != "" {
-		chunks.notes = []llm.Message{llm.TextMessage(llm.RoleSystem,
-			prompts.SessionNotesPrefix(prompts.SessionNotesContext{
-				When: c.SessionNotesDate,
-				From: c.SessionNotesSession,
-				In:   c.Session,
-			})+"\n"+notes+"\n")}
 	}
 
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)

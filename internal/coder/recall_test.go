@@ -217,7 +217,7 @@ func TestRecallIsNotInProgramsWhenNotOffered(t *testing.T) {
 // recall it is byte for byte what it was.
 func TestRollNoteWithRecallPointsAtTheRecord(t *testing.T) {
 	said := []string{"Note for later: the codename is Marigold-417.", "Read big.go."}
-	with := rollNote(said, 4000, true, true).Text()
+	with := rollNote(said, 4000, true).Text()
 	if !strings.Contains(with, prompts.RollLabelStem) {
 		t.Errorf("the stem is gone:\n%s", with)
 	}
@@ -228,7 +228,7 @@ func TestRollNoteWithRecallPointsAtTheRecord(t *testing.T) {
 	if quote < 0 || tail < quote {
 		t.Errorf("the instruction does not follow the quotes:\n%s", with)
 	}
-	without := rollNote(said, 4000, true, false).Text()
+	without := rollNote(said, 4000, false).Text()
 	if !strings.Contains(without, prompts.RollLabel) || strings.Contains(without, "recall") {
 		t.Errorf("the note without recall changed:\n%s", without)
 	}

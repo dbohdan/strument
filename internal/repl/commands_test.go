@@ -581,7 +581,7 @@ func TestHelpFitsTheTerminal(t *testing.T) {
 	for _, tc := range []struct {
 		cols    int
 		stacked bool
-	}{{200, false}, {100, true}, {60, true}} {
+	}{{200, false}, {80, true}, {60, true}} {
 		t.Run(strconv.Itoa(tc.cols), func(t *testing.T) {
 			r, _, out := newTestREPL(t, answerStub("ok\n"), nil)
 			defer r.Close()

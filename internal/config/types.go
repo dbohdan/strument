@@ -79,7 +79,6 @@ type Model struct {
 	Provider     Provider
 	Slug         string
 	DisplayName  string // human-readable label; "" => derived from Slug
-	SideModel    *Model // non-nil after resolution (self if unset)
 	Reasoning    string // request-side effort: "low"/"medium"/"high"; "off" disables; "" or "default" => provider default
 	ReasoningTag string // response-side inline tag to strip; "" => none
 	Temperature  *float64
@@ -116,10 +115,6 @@ type Model struct {
 	InputCost       *llm.Money // per-token USD (config declares per-million); nil => unknown (never fabricate cost)
 	OutputCost      *llm.Money
 	ExtraParams     map[string]any
-
-	// sideRef holds an unresolved string alias or inline model between
-	// construction and resolution.
-	sideRef any
 }
 
 // Accepts reports whether this model takes content blocks of the given kind.
@@ -310,10 +305,6 @@ type Config struct {
 	// default, as with NoShell. --no-commits sets the same thing for one run
 	// and wins over the config either way.
 	NoCommits bool
-	// Compaction is how a history over its budget is made to fit:
-	// CompactionRoll (the default, also when empty) or CompactionSummary.
-	// --compaction overrides it for one run.
-	Compaction string
 	// EnvAllow names environment variables to pass to model-run commands
 	// (the bash tool, checks, the scraper command) on top of the built-in
 	// default allowlist. See coder/envallow.go. Empty means defaults only.
@@ -533,12 +524,3 @@ type DecisionModel struct {
 	// prompt is shown instead.
 	Timeout float64
 }
-
-// The `compaction` setting's values.
-const (
-	// CompactionRoll drops the oldest turns and keeps what the user said in
-	// them, word for word; the recall tool searches the rest.
-	CompactionRoll = "roll"
-	// CompactionSummary has a side model summarize the oldest turns.
-	CompactionSummary = "summary"
-)

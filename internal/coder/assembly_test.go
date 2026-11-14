@@ -22,7 +22,6 @@ func testCoder(t *testing.T) *Coder {
 		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
 		Slug:     "test-model",
 	}
-	model.SideModel = model
 	c := New(t.TempDir(), model)
 	c.Out = testOutput{t}
 	c.Confirm = yesConfirmer{}
