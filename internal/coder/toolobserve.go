@@ -522,8 +522,14 @@ func (c *Coder) runChecks(ctx context.Context, names []string) (transcript strin
 		}
 
 		fmt.Fprintf(&b, "%s: %s\nExit status: %d\n", ch.Name, strings.Join(ch.Argv, " "), exit)
+		// Fenced for the reason bash's output is (shellResultText): a check
+		// prints whatever it likes, Strument's own sentences included.
 		if strings.TrimSpace(output) != "" {
-			fmt.Fprintf(&b, "Output:\n%s\n", output)
+			block, cut := fencedCapped(output, maxToolOutputBytes-4096)
+			b.WriteString("Output:\n" + block)
+			if cut {
+				b.WriteString(outputCutNote + "\n")
+			}
 		}
 		if exit != 0 {
 			// Stop at the first failure: the later checks would mostly report

@@ -20,7 +20,32 @@ import (
 // verified to fail, and stays red if a goja upgrade ever makes it pass.
 
 func run(c *Coder, code string) string {
-	return c.runCode(context.Background(), codeCall{code: code})
+	return unfenceResult(c.runCode(context.Background(), codeCall{code: code}))
+}
+
+// unfenceResult is a run_code result with its frame taken off — the label
+// and the fence around what the program returned — leaving the value, then
+// any notes Strument wrote after it, a blank line apart, as the result read
+// before the fence. Most tests here are about the value; the frame has its
+// own test (TestCodeResultIsFenced).
+func unfenceResult(got string) string {
+	const label = "The program's result:\n"
+	if !strings.HasPrefix(got, label) {
+		return got
+	}
+	fence, rest, ok := strings.Cut(got[len(label):], "\n")
+	if !ok {
+		return got
+	}
+	body, after, ok := strings.Cut(rest, "\n"+fence)
+	if !ok {
+		return got
+	}
+	after = strings.TrimLeft(after, "\n")
+	if after == "" {
+		return body
+	}
+	return body + "\n\n" + after
 }
 
 func TestCodeArithmetic(t *testing.T) {
@@ -229,7 +254,7 @@ func TestCodeProjectImportPointsAtBash(t *testing.T) {
 func TestCodeDescriptionSaysWhatRunsTheProject(t *testing.T) {
 	desc := codeTool([]string{"read", "grep", "glob", "ls"}, true, codeDataFuncs).Description
 	for _, want := range []string{
-		"running the project's own code",
+		"cannot import or run the project's own code, and bash() or the bash tool can",
 		"read returns the same text it returns to you, as a string",
 	} {
 		if !strings.Contains(desc, want) {
@@ -409,14 +434,15 @@ func TestCodeBridgeGrepReturnsData(t *testing.T) {
 }
 
 // TestCodeBridgeForbiddenToolsFail is the fail-closed claim, one test per
-// forbidden tool. Two layers both hold: a mutating tool is not registered in
-// the interpreter, so the program itself raises a ReferenceError — nothing
-// this side can answer — and even a name that were registered cannot pass the
-// allowlist check in bridgeCall.
+// tool a program cannot call: the three excluded ones, and two this session
+// does not offer (no shell, no checks). Two layers both hold: the name is not
+// registered in the interpreter, so the program itself raises a
+// ReferenceError — nothing this side can answer — and even a name that were
+// registered cannot pass the allowlist check in bridgeCall.
 func TestCodeBridgeForbiddenToolsFail(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 
-	for _, name := range []string{"bash", "edit", "write", "commit", "check"} {
+	for _, name := range []string{"run_code", "interrupt", "ask_user_question", "bash", "check"} {
 		t.Run(name, func(t *testing.T) {
 			got := run(c, name+`({command: "rm -rf /"})`)
 			if !strings.Contains(got, "The program failed") || !strings.Contains(got, "not defined") {
@@ -627,7 +653,7 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 		t.Errorf("with no repo map the callable list must not offer symbol, got %v", got)
 	}
 
-	if desc := codeTool(withMap.codeCallableTools(), true, codeDataFuncs).Description; !strings.Contains(desc, "ls, symbol") {
+	if desc := codeTool(withMap.codeCallableTools(), true, codeDataFuncs).Description; !strings.Contains(desc, ", symbol") {
 		t.Errorf("the description must name symbol where it works:\n%s", desc)
 	}
 	if desc := codeTool(without.codeCallableTools(), true, codeDataFuncs).Description; strings.Contains(desc, "symbol") {

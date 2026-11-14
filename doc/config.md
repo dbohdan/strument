@@ -2096,19 +2096,27 @@ models took Monty for full Python and reached for `os`, `open` and `glob`,
 while described as JavaScript they did not reach for Node, and correctness was
 the same in both.
 
-The program is sandboxed by construction: no filesystem, no network, and
-explicit resource limits — 5 s, 256 MiB of heap growth, and 1,000 stack
-frames. A program that runs away terminates on a limit rather than hanging
-the turn, and a Ctrl-C stops it.
+The interpreter itself has no filesystem and no network, and explicit
+resource limits — 5 s of the program's own running time, 256 MiB of heap
+growth, and 1,000 stack frames. The clock stops while a tool call the program
+made is running, so a test suite or a prompt waiting on you does not spend it.
+A program that runs away terminates on a limit rather than hanging the turn,
+and a Ctrl-C stops it.
 
-The tool never asks permission. It can compute and read through the exposed
-tools, but cannot modify files or access the network. It is announced like any
-other tool call.
+The program itself never asks permission; the tool calls it makes do, exactly
+as they would if the model made them directly. It is announced like any other
+tool call.
 
-### The read-only bridge
+### The bridge
 
-Inside a `run_code` program, the five observation tools — `read`, `grep`,
-`glob`, `ls`, `symbol` — are callable as functions, each taking an options
+Inside a `run_code` program, every tool the session offers is callable as a
+function except `run_code` itself, `interrupt` (a program returns; it does not
+end the turn) and `ask_user_question` (the answer is for the model). Each call
+does what the direct call does: an edit lands, with its diff and its `/undo`;
+a command asks you first, or is judged by `approve_model`, as it would be;
+a commit is a commit.
+
+The observation tools — `read`, `grep`, `glob`, `ls`, `symbol` — take an options
 object (`grep({pattern: "TODO", glob: "**/*.go"})`) or a leading positional
 argument (`read("a.go")`), and each returns the same
 text the tool itself would return, with its outcome line under the program
@@ -2140,9 +2148,24 @@ shape: `recall({pattern, from, ...})` or `recall("pattern")` returns matching
 lines as `{id, turn, speaker, in_conversation, line, text, match}` objects,
 including the lines still in the conversation (marked by `in_conversation`).
 
-Only the five read-only observation tools and `recall` are callable from a
-`run_code` program. `bash`, `edit`, `write`, `commit`, and `check` are not exposed, so a
-program cannot initiate commands or modifications through the bridge.
+`bash` returns `{status, output, notice}` in a program: the exit status, what
+the command printed, and Strument's note about the run. `edit`, `write` and
+`commit` return their direct call's text, and throw when they did nothing — an
+edit that does not match, a commit with nothing to commit. The rest return
+their direct call's text.
+
+A call that is declined throws `NotRun`, an `Error` subclass with `tool`,
+`by` — `"user"`, `"approve_model"` or `"nobody"` — and `reason`. After one,
+the program's later calls that would ask are refused without asking: you are
+asked once per program, not once per iteration of its loop. The model reads
+the program's result inside a fenced block, and Strument's account — what was
+not run, and by whose decision — after it, where nothing the program returned
+can reach. `bash`'s own result is fenced the same way, with the command's
+output inside and Strument's notices outside. See
+[`2026-11-bridge-all`](experiments/2026-11-bridge-all/README.md).
+
+`strument tool run_code` keeps its program to the observation tools: it is not
+a session and keeps no snapshot, so an edit made there could not be undone.
 
 Trials so far have not earned the tool a default slot:
 [`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md)

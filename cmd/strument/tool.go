@@ -114,10 +114,11 @@ func (c *toolCmd) coder() (*coder.Coder, error) {
 		return nil, err
 	}
 	return &coder.Coder{
-		Root:    root,
-		Out:     toolStderr{},
-		Files:   workspace.New(root),
-		RepoMap: repomap.New(root),
+		Root:        root,
+		Out:         toolStderr{},
+		Files:       workspace.New(root),
+		RepoMap:     repomap.New(root),
+		ObserveOnly: true,
 	}, nil
 }
 

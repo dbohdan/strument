@@ -37,7 +37,7 @@ func TestToolRunCodeStdoutIsOnlyTheResult(t *testing.T) {
 	// be sent is not repainted — while a terminal gets the papercut newline.
 	out, errOut := run("tool", "run_code", `console.log("hello")
 console.log("world")`)
-	if out != "hello\nworld" {
+	if out != "The program's result:\n```\nhello\nworld\n```" {
 		t.Errorf("stdout = %q, want the program's printed output; the result alone is what a pipe measures", out)
 	}
 	if !strings.Contains(errOut, "‹run_code›") || !strings.Contains(errOut, "Ran 2 lines of code.") {
@@ -79,7 +79,7 @@ func TestToolRunCodeDataShapes(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("tool run_code: %v\nstderr: %s", err, errOut.String())
 	}
-	if strings.TrimSpace(out.String()) != `["a.go","b.go"]` {
+	if !strings.Contains(out.String(), "```\n[\"a.go\",\"b.go\"]\n```") {
 		t.Errorf("glob must return sorted data, got:\n%s", out.String())
 	}
 }

@@ -72,6 +72,17 @@ func intProp(desc string) map[string]any {
 // What is still conditional is what depends on configuration: bash, check,
 // the parser, a scraper, search, skills.
 func (c *Coder) toolDefs() []llm.ToolDef {
+	// run_code goes ahead of edit, where it has always been: the order is the
+	// cached prefix, and moving a tool moves every tool after it.
+	others := c.otherToolDefs()
+	at := slices.IndexFunc(others, func(d llm.ToolDef) bool { return d.Name == toolEdit })
+	code := codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs())
+	return slices.Insert(others, at, code)
+}
+
+// otherToolDefs is toolDefs without run_code, which is what a program can
+// reach (codeCallableTools), less the excluded few.
+func (c *Coder) otherToolDefs() []llm.ToolDef {
 	var defs []llm.ToolDef
 	defs = readOnlyTools()
 	defs = append(defs, askTool())
@@ -105,7 +116,6 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if len(skill.Usable(c.Skills)) > 0 {
 		defs = append(defs, skillTool(c.Skills))
 	}
-	defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
 	defs = append(defs, editTools()...)
 	if c.offersShell() {
 		defs = append(defs, bashTool())
@@ -788,23 +798,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 
 	// Edits apply directly. The commit comes at turn end, once, so a result
 	// here names what the call did rather than a commit that has not happened.
-	edited := c.applyToolEdits(edits, results, &needsReflection)
-	// The mutation signal belongs here, after the edits are applied, not where
-	// they were queued. Signalling on a *queued* edit meant a failing one reset
-	// both loop counters, so a model retrying an edit that could never match
-	// wiped the detector's memory on every attempt -- the one situation where
-	// the detector is most needed was the one it could never see.
-	if len(edited) > 0 {
-		c.toolLoops.observeMutation()
-	}
-	for _, f := range edited {
-		c.turnEditedFiles[f] = true
-		if !c.DryRun {
-			// Nothing landed under --dry-run, so there is nothing for the
-			// automatic checks to check.
-			c.editedSinceCheck = true
-		}
-	}
+	c.noteEdited(c.applyToolEdits(edits, results, &needsReflection))
 
 	// Shell commands run after the edits, so a test run in the same turn sees
 	// the edited files.
@@ -1007,12 +1001,18 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 		// The purpose is deliberately not printed. It exists to inform a
 		// decision, and here there is no decision; what the user needs is which
 		// check matched and how it went, which runChecks' own two lines say.
-		transcript, _ := c.runChecks(ctx, []string{name})
+		transcript, passed := c.runChecks(ctx, []string{name})
 		// %q rather than quoteToolArg, which drops the quotes on a word that
 		// does not need them: this sentence is showing the model a call it can
 		// copy, and check(test) is not one.
-		return fmt.Sprintf("That command is the configured check %q, so it ran without asking the "+
-			"user. Call check(%q) to run it directly.\n\n%s", name, name, transcript), true
+		note := fmt.Sprintf("That command is the configured check %q, so it ran without asking the "+
+			"user. Call check(%q) to run it directly.", name, name)
+		status := 0
+		if !passed {
+			status = 1
+		}
+		c.lastShell = &shellRun{exit: status, output: transcript, notice: note}
+		return note + "\n\n" + transcript, true
 	}
 
 	// "a = all this turn" is offered only when the sandbox is enforcing, and the
@@ -1046,9 +1046,10 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if keys, ok := c.removesOnlyOwnFiles(command); ok {
 		c.approvalNote = "Ran without asking: it only removes files this turn created."
 		requested := time.Duration(cmd.timeout) * time.Second
-		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
+		r := c.runShellCommand(ctx, command, requested, cmd.tail)
 		c.forgetRemoved(keys)
-		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
+		c.lastShell = &r
+		return shellResultText(command, r, ""), true
 	}
 	// The same command, declined earlier this turn with no one at a terminal,
 	// is declined again without asking anything. Live, MiMo sent a declined
@@ -1056,6 +1057,11 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	// it could change would change the answer, and nothing said so.
 	if why, ok := c.turnDeclined[command]; ok {
 		c.Out.Toolf("Declined again: %s", quoteToolArg(command))
+		r := refusal{by: refusedByNobody, reason: "it was declined earlier in this turn with no one at a terminal"}
+		if why != "" {
+			r = refusal{by: refusedByApproveModel, reason: why + ", earlier in this turn, and no one is at a terminal to overrule it"}
+		}
+		c.lastRefusal = &r
 		return declinedAgain(why), false
 	}
 	// A command that names a secret-shaped file goes to the user: not to
@@ -1091,7 +1097,8 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if split {
 		defer c.forgetRemoved(ownKeys)
 	}
-	if secretNote == "" && c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) {
+	programRefused := c.program != nil && c.program.refused != nil
+	if secretNote == "" && c.Approve != nil && c.Sandbox.Active && !c.shellPromptAnswered(group) && !programRefused {
 		judged := command
 		if split {
 			judged = rest
@@ -1152,19 +1159,46 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	// the same way the sandbox's deniedHint does.
 	requested := time.Duration(cmd.timeout) * time.Second
 	if ceiling := c.shellTimeout(requested); cmd.timeout > 0 && ceiling < requested {
-		notice := fmt.Sprintf("\nThe requested timeout of %d seconds was clamped to the configured limit of %s.",
+		notice := fmt.Sprintf("The requested timeout of %d seconds was clamped to the configured limit of %s.",
 			cmd.timeout, ceiling)
-		exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
+		r := c.runShellCommand(ctx, command, requested, cmd.tail)
 		c.attributeShellCommits(before)
 		c.noteStaged(index)
-		return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s%s",
-			quoteToolArg(command), exitCode, output, notice), true
+		c.lastShell = &r
+		return shellResultText(command, r, notice), true
 	}
 
-	exitCode, output := c.runAndShowTail(ctx, command, requested, cmd.tail)
+	r := c.runShellCommand(ctx, command, requested, cmd.tail)
 	c.attributeShellCommits(before)
 	c.noteStaged(index)
-	return fmt.Sprintf("Command: %s\nExit status: %d\nOutput:\n%s", quoteToolArg(command), exitCode, output), true
+	c.lastShell = &r
+	return shellResultText(command, r, ""), true
+}
+
+// shellResultText is the bash tool's result: the command and its exit status,
+// then what it printed inside a fence it cannot close (fenceFor), then
+// Strument's notices after the fence. Before the fence, a command could print
+// a sentence in Strument's voice — "The user chose not to run the command." —
+// and be believed; the fence is what tells the model which lines are whose.
+// A command that did not run has no fence at all.
+func shellResultText(command string, r shellRun, extra string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Command: %s\nExit status: %d\n", quoteToolArg(command), r.exit)
+	switch {
+	case r.output == "":
+		b.WriteString("The command printed nothing.\n")
+	case r.shown > 0:
+		fmt.Fprintf(&b, "Output, the last %d of %d lines (the user saw all of them):\n%s",
+			r.shown, r.total, fenced(r.output))
+	default:
+		b.WriteString("Output:\n" + fenced(r.output))
+	}
+	for _, n := range []string{r.notice, extra} {
+		if n = strings.TrimSpace(n); n != "" {
+			b.WriteString(n + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // toolResult is one tool call's answer: text, plus any images the tool

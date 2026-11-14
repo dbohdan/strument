@@ -51,7 +51,7 @@ func tableBlock() string {
 	return b.String()
 }
 
-func fenced(s string) string { return "Here is the file:\n\n```html\n" + s + "```\n" }
+func fencedHTML(s string) string { return "Here is the file:\n\n```html\n" + s + "```\n" }
 
 func feedAll(t *testing.T, kind, text string) *loopFinding {
 	t.Helper()
@@ -88,9 +88,9 @@ func TestLoopDetectorSeparatesLoopsFromQuotedMaterial(t *testing.T) {
 			"Thinking.\n" + sentence, true},
 
 		// Quoted material. None of these may fire.
-		{"fenced svg", fenced(gridBlock()), false},
+		{"fenced svg", fencedHTML(gridBlock()), false},
 		{"unfenced svg", "Current file:\n\n" + gridBlock() + "\nThat is the chart.\n", false},
-		{"fenced json", fenced(jsonBlock()), false},
+		{"fenced json", fencedHTML(jsonBlock()), false},
 		{"unfenced json", jsonBlock(), false},
 		{"markdown table", tableBlock(), false},
 		{"svg quoted twice, as an edit's two sides",

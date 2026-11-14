@@ -46,6 +46,10 @@ type Coder struct {
 	// says whether the commit tool commits.
 	CommitsWithheld bool
 	Stream          bool
+	// ObserveOnly limits a run_code program to the observation tools. Set by
+	// `strument tool`, which shows what a tool returns and is not a session:
+	// it keeps no snapshot, so a program's edit there could not be undone.
+	ObserveOnly bool
 	// SystemPrompt is the config's system_prompt, which replaces the built-in
 	// prompts.System. Empty means the built-in.
 	SystemPrompt string
@@ -344,6 +348,17 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
+	// lastShell is the last command runShell ran, in its parts, for a
+	// run_code program's bash(), which returns them as data. Set only when
+	// the command ran.
+	lastShell *shellRun
+	// lastRefusal is the last prompt declined, by whom and why (noteRefusal),
+	// until a bridged call takes it to throw as a NotRun.
+	lastRefusal *refusal
+	// program is the run_code program running now, nil between programs;
+	// programCallID is its tool call's id.
+	program       *programState
+	programCallID string
 	// What the model has done since its last commit, which can span turns:
 	// pendingEdits the paths its edit and write calls changed, pendingStaged
 	// the paths its shell commands staged, and userBaseline, for the tracked
@@ -594,10 +609,18 @@ func (c *Coder) ConfirmGrouped(req ConfirmRequest) bool {
 // confirmGrouped is ConfirmGrouped with the whole answer, for the callers that
 // tell the model how a decline came about.
 func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
+	// Ahead of the grants: a program refused once is refused for the rest of
+	// its run, whatever would have approved the call unseen.
+	if res, refused := c.refusedInProgram(); refused {
+		return res
+	}
 	if req.Group != "" && (c.turnAutoApprove[req.Group] || c.sessionAutoApprove[req.Group]) {
 		return ConfirmResult{Yes: true, Auto: true}
 	}
 	res := c.Confirm.Confirm(req)
+	if !res.Yes && !res.Always {
+		c.noteRefusal(req, res)
+	}
 	if res.Always && req.Group != "" {
 		if req.GroupSession {
 			c.sessionAutoApprove[req.Group] = true

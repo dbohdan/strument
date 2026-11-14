@@ -102,15 +102,17 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // a felt need to a tool, and the arithmetic clause is explicit because models
 // do not recognize their own mental arithmetic as costly.
 //
-// The tool list names symbol with "where it is offered" because symbol is
-// offered only where a repo map is. Naming it unconditionally would promise a
-// tool half the sessions do not have, and leaving it out hid a tool a program
-// really can call wherever grammars exist. It was a slot filled from
-// Coder.codeCallableTools; a clause says the same in a literal string.
+// "your other tools" since every tool was bridged; the list is the tool
+// description's to give (Coder.codeCallableTools), which follows the schema.
+// The bullet used to say "It changes nothing and needs no permission", true
+// while a program could only look; it says now what each call does instead,
+// with the two cases a model would guess wrong: an edit really lands, and a
+// command still asks.
 const codeToolsBullet = "- run_code runs a short JavaScript program, which can itself call " +
-	"read, grep, glob, ls, and symbol where it is offered" +
+	"your other tools" +
 	" — the results come back to the program, not to you, until it returns. " +
-	"It changes nothing and needs no permission, and it runs inside the harness, " +
+	"Each call does what the direct call does: an edit lands, a command asks the user first. " +
+	"The program runs inside the harness, " +
 	"not the project: it cannot import or run the project's own code. Reach for it when one answer " +
 	"needs several lookups combined — three greps you already know you need are " +
 	"one program, and each tool call you make separately costs the user a full " +
