@@ -175,17 +175,11 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 		}
 		return n
 	}
-	// No prompt set ships few-shot examples any more — the schema carries the
-	// format — so the examples slot is empty and its breakpoint falls back to
-	// system, which is the documented fallback in addCacheControlHeaders.
-	// readonly is empty here, so that breakpoint is a no-op. chat_files is
-	// gone: pinned files are named in the system prompt now, so there is no
-	// per-turn block left to cache separately.
-	if got := countBreakpoints(chunks.examples); got != 0 {
-		t.Errorf("examples breakpoints = %d, want 0 (no examples ship now)", got)
-	}
+	// One on the system prompt. readonly is empty here, so that breakpoint
+	// is a no-op. chat_files is gone: pinned files are named in the system
+	// prompt now, so there is no per-turn block left to cache separately.
 	if got := countBreakpoints(chunks.system); got != 1 {
-		t.Errorf("system breakpoints = %d, want 1 (the examples fallback)", got)
+		t.Errorf("system breakpoints = %d, want 1", got)
 	}
 	// Two roll with the conversation: on the request's last message, and on
 	// the message before the last assistant turn, where the previous
@@ -446,64 +440,6 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 	sys := withheld.fmtSystemPrompt(prompts.Tool.MainSystem)
 	if strings.Contains(sys, "run_code runs a short JavaScript program") {
 		t.Error("the run_code tool is withheld, but the prompt names it")
-	}
-}
-
-// The force arm's prompt must state the arrangement as fact and must not name
-// the withheld tools as directly callable — the closed-world hazard in mirror
-// image: a prompt saying "use read, grep, glob, and ls" beside a schema that
-// offers none of them is the self-contradiction the first trial's arms
-// shipped, read the other way.
-func TestObservationViaRunCodePromptTracksTheSchema(t *testing.T) {
-	c := testCoder(t)
-	c.ObservationViaRunCode = true
-	sys := c.fmtSystemPrompt(prompts.Tool.MainSystem)
-
-	if !strings.Contains(sys, "all file observation") {
-		t.Errorf("the force arm is on, but the prompt does not state it:\n%s", sys)
-	}
-	if strings.Contains(sys, "- read, grep, glob, and ls look at the project") {
-		t.Errorf("the force arm names the withheld tools as a direct-call bullet:\n%s", sys)
-	}
-
-	// The nothing-pinned note follows the same flag.
-	if note := c.filesNoFullFilesText(); !strings.Contains(note, "run_code tool") {
-		t.Errorf("the force arm's nothing-pinned note still steers to direct tools: %q", note)
-	}
-
-	// And the tool set itself: no read-only tools, code present even with
-	// OfferCode false.
-	c.OfferCode = false
-	defs := c.toolDefs()
-	names := map[string]bool{}
-	for _, d := range defs {
-		names[d.Name] = true
-	}
-	for _, withheld := range []string{toolRead, toolGrep, toolGlob, toolLS, toolSymbol} {
-		if names[withheld] {
-			t.Errorf("tool %q is offered under ObservationViaRunCode", withheld)
-		}
-	}
-	if !names[toolRunCode] {
-		t.Error("ObservationViaRunCode did not force the run_code tool on")
-	}
-	if !names[toolAskUser] {
-		t.Error("ask_user_question vanished under ObservationViaRunCode")
-	}
-
-	// A direct read-only call under the arm redirects, quoting the model's own
-	// arguments, rather than running as if the schema had offered it.
-	tc := llm.ToolCall{ID: "t1", Name: toolGrep, Arguments: `{"pattern":"TODO"}`}
-	got, _ := c.runObservationRedirect(tc)
-	if !strings.Contains(got, `"grep" is not offered directly`) ||
-		!strings.Contains(got, `grep({pattern: "TODO", glob: "**/*.go"})`) {
-		t.Errorf("the redirect does not teach the call shape:\n%s", got)
-	}
-
-	// With the arm off, the same dispatch runs the tool for real.
-	off := testCoder(t)
-	if text, _ := off.runObservationRedirect(tc); strings.Contains(text, "not offered directly") {
-		t.Error("the redirect fired with ObservationViaRunCode off")
 	}
 }
 

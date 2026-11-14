@@ -43,9 +43,6 @@ func TestAskAssemblyNoExamplesReminderPresent(t *testing.T) {
 
 	chunks := c.formatChatChunks()
 
-	if len(chunks.examples) != 0 {
-		t.Errorf("ask must have no few-shot examples chunk, got %d", len(chunks.examples))
-	}
 	if !strings.Contains(chunks.system[0].Text(), "Reply in English") {
 		t.Errorf("ask system prompt lost the language reminder:\n%s", chunks.system[0].Text())
 	}
@@ -81,13 +78,8 @@ func TestAskCacheBreakpointFallsBackToSystem(t *testing.T) {
 		}
 		return n
 	}
-	// No examples chunk in ask mode, so the examples-else-system breakpoint
-	// lands on system.
-	if got := count(chunks.examples); got != 0 {
-		t.Errorf("examples breakpoints = %d, want 0 (no examples in ask)", got)
-	}
 	if got := count(chunks.system); got != 1 {
-		t.Errorf("system breakpoints = %d, want 1 (fallback)", got)
+		t.Errorf("system breakpoints = %d, want 1", got)
 	}
 }
 

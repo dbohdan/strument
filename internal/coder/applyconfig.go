@@ -90,9 +90,6 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	if c.CompactionFlag != "" {
 		c.CompactionMode = c.CompactionFlag
 	}
-	c.AnchoredEdits = cfg.AnchoredEdits
-	c.IndentColumn = cfg.AnchoredEdits && cfg.IndentColumn
-	c.ObservationViaRunCode = cfg.ObservationViaRunCode
 	c.WebfetchAllow = cfg.WebfetchAllow
 	c.Check = cfg.Check
 	c.CheckAuto = cfg.CheckAuto
@@ -115,15 +112,12 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 
 	// The prompt layer last, and through setPrompts rather than by hand.
 	// setPrompts rebuilds the active set from the built-in before layering the
-	// overrides and the examples on top, which is what makes this idempotent:
-	// the old reload appended example_messages to the live set every time, so
-	// reloading twice showed the model its examples twice.
+	// overrides on top, which is what makes this idempotent.
 	c.SystemPromptPrefix = cfg.PromptSystemPrefix
 	c.PromptCode = cfg.PromptCode
 	c.PromptAsk = cfg.PromptAsk
 	c.PromptCommit = cfg.PromptCommit
 	c.PromptReadOnly = cfg.PromptReadOnly
-	c.Examples = cfg.ExampleMessages
 	c.SetChatLanguage(cfg.ChatLanguage)
 	c.setPrompts()
 }

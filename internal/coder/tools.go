@@ -73,38 +73,27 @@ func intProp(desc string) map[string]any {
 // engine that parses nothing.
 func (c *Coder) toolDefs() []llm.ToolDef {
 	var defs []llm.ToolDef
-	// ObservationViaRunCode withholds the direct read-only tools — including
-	// symbol, which the bridge itself carries — and forces code on. The mode
-	// is incoherent without the tool it redirects to, so the force arm ignores
-	// OfferCode=false rather than producing a session that can look at
-	// nothing.
-	if !c.ObservationViaRunCode {
-		defs = readOnlyTools()
-		// ask_user_question is always offered: it has no side effect to gate, and
-		// a discussion turn is exactly where a clarifying question belongs.
-		defs = append(defs, askTool())
-		// interrupt is always offered too, and for the same structural reason:
-		// it mutates nothing, and the turn it ends may be a discussion one.
-		defs = append(defs, interruptTool())
-		// about mutates nothing and answers what the model cannot find out by
-		// looking, which a discussion turn needs as much as any other.
-		defs = append(defs, aboutTool())
-		if c.offersRecall() {
-			// recall reads the session record, which mutates nothing; offered
-			// from the first turn rather than from the first compaction, because
-			// a tool list that changes mid-session confuses models and breaks
-			// the cached prefix.
-			defs = append(defs, recallTool())
-		}
-		if c.RepoMap != nil {
-			// symbol reads the same tree-sitter layer the repo map is built from,
-			// so it is offered exactly when that layer is available.
-			defs = append(defs, symbolTool())
-		}
-	} else {
-		defs = append(defs, askTool())
-		defs = append(defs, interruptTool())
-		defs = append(defs, aboutTool())
+	defs = readOnlyTools()
+	// ask_user_question is always offered: it has no side effect to gate, and
+	// a discussion turn is exactly where a clarifying question belongs.
+	defs = append(defs, askTool())
+	// interrupt is always offered too, and for the same structural reason:
+	// it mutates nothing, and the turn it ends may be a discussion one.
+	defs = append(defs, interruptTool())
+	// about mutates nothing and answers what the model cannot find out by
+	// looking, which a discussion turn needs as much as any other.
+	defs = append(defs, aboutTool())
+	if c.offersRecall() {
+		// recall reads the session record, which mutates nothing; offered
+		// from the first turn rather than from the first compaction, because
+		// a tool list that changes mid-session confuses models and breaks
+		// the cached prefix.
+		defs = append(defs, recallTool())
+	}
+	if c.RepoMap != nil {
+		// symbol reads the same tree-sitter layer the repo map is built from,
+		// so it is offered exactly when that layer is available.
+		defs = append(defs, symbolTool())
 	}
 	// Offered in ask mode too: fetching mutates nothing, and reading a
 	// specification is exactly what a discussion turn is for. The port is
@@ -129,15 +118,13 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	// Also before the ask-mode return: computing mutates nothing, and a
 	// discussion turn is exactly where a calculator belongs. Offered unless
 	// withheld — OfferCode, and the {code_tools} slot follows the same flag.
-	// ObservationViaRunCode forces it past that flag: the redirect arm has no
-	// other way to look at anything.
-	if c.OfferCode || c.ObservationViaRunCode {
+	if c.OfferCode {
 		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
 	}
 	if c.editFormat == "ask" {
 		return defs
 	}
-	defs = append(defs, editTools(c.AnchoredEdits, c.IndentColumn)...)
+	defs = append(defs, editTools()...)
 	if c.offersShell() {
 		defs = append(defs, bashTool())
 	}
@@ -229,27 +216,11 @@ func readOnlyTools() []llm.ToolDef {
 	}
 }
 
-// newStringProp describes the replacement, whose grammar depends on whether the
-// indent column is in play. With it the model states indentation rather than
-// reproducing it, which is the point: it cannot get whitespace wrong in a way
-// that reaches the file, because a name that does not parse is refused.
-func newStringProp(indentColumn bool) map[string]any {
-	if !indentColumn {
-		return strProp("The lines to put in their place, with the indentation they " +
-			"should have in the file. An empty string deletes the range.")
-	}
-	return strProp("The lines to put in their place, in the same form read prints them: " +
-		"each line is its indentation in words, a tab, then the text. Write the " +
-		"indentation as a count and a unit — \"2 tabs\", \"1 tab 2 spaces\", or " +
-		"\"0 spaces\" for none — and never as actual spaces or tabs. " +
-		"An empty string deletes the range.")
-}
-
 // editTools change files directly — the change lands the moment the call
 // arrives, exactly like an ordinary edit, with git auto-commit and /undo as the
 // safety net.
-func editTools(anchored, indentColumn bool) []llm.ToolDef {
-	defs := []llm.ToolDef{
+func editTools() []llm.ToolDef {
+	return []llm.ToolDef{
 		{
 			Name: toolEdit,
 			Description: "Replace an exact span of text in a file. The edit applies immediately. " +
@@ -292,37 +263,6 @@ func editTools(anchored, indentColumn bool) []llm.ToolDef {
 			},
 		},
 	}
-
-	if !anchored {
-		return defs
-	}
-	// Anchored addressing replaces the quoted-span form rather than sitting
-	// beside it. Offering both would let the model pick the one that can be
-	// ambiguous, which is the failure this format exists to remove — and a
-	// schema that accepts two ways to say where is a schema that can disagree
-	// with itself.
-	for i := range defs {
-		if defs[i].Name != toolEdit {
-			continue
-		}
-		defs[i].Description = "Replace whole lines of a file, addressed by the anchors that " +
-			"read prints. The edit applies immediately. Make one call per change."
-		defs[i].Parameters = map[string]any{
-			"type": "object",
-			// Ordered, and path first: see orderedProps.
-			"properties": orderedProps{
-				{"path", strProp("The file's path, relative to the project root. An absolute path that lies inside the project or under the platform's standard temporary directory also works; relative is preferred for project files.")},
-				{"anchor", strProp("The anchor of the first line to replace, exactly as read printed " +
-					"it: two dash-joined words, like copper-otter. It names one line, so you never " +
-					"need to include surrounding context to be unambiguous.")},
-				{"end_anchor", strProp("The anchor of the last line to replace, when replacing several " +
-					"lines. Omit to replace only the anchored line.")},
-				{"new_string", newStringProp(indentColumn)},
-			},
-			"required": []any{"path", "anchor", "new_string"},
-		}
-	}
-	return defs
 }
 
 // bashTool runs a shell command, and is the tool that asks first. Everything
@@ -638,11 +578,6 @@ type plannedEdit struct {
 	// replaceAll replaces every exact occurrence rather than failing when
 	// there is more than one.
 	replaceAll bool
-	// anchor and endAnchor name a line range by identity. When anchor is set,
-	// search is unused: the range is the address, and there is nothing to
-	// match, which is what makes an anchored edit unambiguous by construction.
-	anchor    string
-	endAnchor string
 }
 
 // toolCommand is one bash call.
@@ -671,10 +606,6 @@ type editArgs struct {
 	// ReplaceAll turns the uniqueness requirement off for this one call.
 	ReplaceAll bool   `json:"replace_all"`
 	Content    string `json:"content"`
-	// Anchor and EndAnchor address lines by identity instead of by quoting
-	// them, when the session runs with anchored edits. See anchors.go.
-	Anchor    string `json:"anchor"`
-	EndAnchor string `json:"end_anchor"`
 }
 
 // parseEditArgs decodes an edit tool call's arguments into a toolEdit.
@@ -692,23 +623,6 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 	case toolWrite:
 		return plannedEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
 	default: // toolEdit
-		if a.ReplaceAll && a.Anchor != "" {
-			return plannedEdit{}, "Send either \"anchor\" or \"replace_all\", not both: " +
-				"an anchor names one range by identity, so there is nothing for " +
-				"\"replace all of them\" to mean."
-		}
-		if a.Anchor != "" {
-			if a.OldString != "" {
-				return plannedEdit{}, "Send either \"anchor\" or \"old_string\", not both: " +
-					"an anchor already names the lines, so a search would only be a second, " +
-					"possibly disagreeing, way to say where."
-			}
-			return plannedEdit{callID: tc.ID, path: a.Path, replace: a.NewString,
-				anchor: a.Anchor, endAnchor: a.EndAnchor}, ""
-		}
-		if a.EndAnchor != "" {
-			return plannedEdit{}, "\"end_anchor\" needs \"anchor\": it says where a range ends, not where it is."
-		}
 		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString,
 			replace: a.NewString, replaceAll: a.ReplaceAll}, ""
 	}
@@ -783,10 +697,8 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 		// Only what this step offered runs. The mode's tool set was enforced
 		// by the schema alone, and a model can name a tool the schema left
 		// out: in ask mode, bash ran when a model was asked to try it anyway,
-		// and edit, write, and commit would have too. The one withheld name
-		// with its own answer is a direct observation call under
-		// ObservationViaRunCode, which gets the run_code redirect.
-		if !offered[tc.Name] && (!c.ObservationViaRunCode || !isObservationTool(tc.Name)) {
+		// and edit, write, and commit would have too.
+		if !offered[tc.Name] {
 			results.setText(tc.ID, c.notOfferedText(tc.Name))
 			continue
 		}
@@ -832,7 +744,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			commit = &parsed
 			c.toolLoops.observeMutation()
 		case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
-			text, images := c.runObservationRedirect(tc)
+			text, images := c.runObservationCall(tc)
 			results.setImages(tc.ID, text, images)
 		case toolCheck:
 			results.setText(tc.ID, c.runCheckTool(ctx, tc))
@@ -1022,15 +934,6 @@ func (c *Coder) offeredToolNames() []string {
 	return names
 }
 
-// isObservationTool reports the five direct read-only tools.
-func isObservationTool(name string) bool {
-	switch name {
-	case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
-		return true
-	}
-	return false
-}
-
 // notOfferedText is the result for a call to a tool this step did not offer.
 // In ask mode it says why and what the model can do instead, since the tools
 // that are missing there are missing on purpose and the user can bring them
@@ -1056,50 +959,14 @@ func isAskWithheld(name string) bool {
 	return false
 }
 
-// runObservationRedirect answers a direct read-only call. Normally it is the
-// call itself; under ObservationViaRunCode the tool was withheld from the schema,
-// and a model calling it anyway is acting on habit rather than on the schema.
-// The answer is a redirect — which tool to use, and what a program calling it
-// looks like — rather than "Unknown tool": the name is known, the habit is
-// fixable in one reflection, and the redirect text is the only dialect
-// instruction that arrives exactly when the model is trying to observe.
-// argsJSON is passed through so the bridged example can quote the model's own
-// arguments back at it.
-func (c *Coder) runObservationRedirect(tc llm.ToolCall) (string, []llm.ImageSource) {
-	if !c.ObservationViaRunCode {
-		// read is the one observation tool whose answer can carry something
-		// that is not text, so it does not go through the text-shaped Run.
-		if tc.Name == toolRead {
-			return c.runRead(tc)
-		}
-		return c.inspector().Run(tc.Name, tc.Arguments), nil
+// runObservationCall answers a direct read-only call. read is the one observation
+// tool whose answer can carry something that is not text, so it does not go
+// through the text-shaped Run.
+func (c *Coder) runObservationCall(tc llm.ToolCall) (string, []llm.ImageSource) {
+	if tc.Name == toolRead {
+		return c.runRead(tc)
 	}
-	return fmt.Sprintf("%q is not offered directly in this session: all file observation "+
-		"goes through the run_code tool. Call run_code with a program that calls %s(%s) — for "+
-		"example:\n\n```javascript\n%s\n```\n\nThe result of the call comes back to the "+
-		"program; return what you need from the program's final value.",
-		tc.Name, tc.Name, quoteToolArg(strings.TrimSpace(tc.Arguments)),
-		observationExample(tc.Name)), nil
-}
-
-// observationExample renders one bridged call for the redirect text, in the
-// dialect the program actually speaks: the result is assigned and ended on,
-// because only the program's last value comes back.
-func observationExample(name string) string {
-	switch name {
-	case toolRead:
-		return "const text = read({path: \"a.go\", limit: 20});\ntext"
-	case toolGrep:
-		return "const hits = grep({pattern: \"TODO\", glob: \"**/*.go\"});\nhits"
-	case toolGlob:
-		return "const paths = glob({pattern: \"**/*.go\"});\npaths"
-	case toolLS:
-		return "const entries = ls({path: \"internal\"});\nentries"
-	case toolSymbol:
-		return "const found = symbol({name: \"runOne\", kind: \"definition\"});\nfound"
-	default:
-		return name + "()"
-	}
+	return c.inspector().Run(tc.Name, tc.Arguments), nil
 }
 
 // parseCommandArgs decodes a bash call. The second return is a model-facing
@@ -1472,29 +1339,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		content, exists := read(e.path)
 		var newContent string
 		switch {
-		case e.anchor != "":
-			// Anchored: the identities name the range, so there is no search to
-			// match and no way for the edit to be ambiguous.
-			resolved, failure := c.resolveEdit(e, content)
-			if failure != "" {
-				results.setText(e.callID, failure)
-				recordEdit(e, "not_resolved", strings.SplitN(failure, "\n", 2)[0])
-				*matchFailure = true
-				// The first line verbatim. Lowercasing it mangled the quoted
-				// examples the message exists to show ("2 tabs" is not "2 TABS"
-				// nor a sentence fragment).
-				c.Out.Warningf("Could not edit %s. %s", e.path,
-					strings.SplitN(failure, "\n", 2)[0])
-				continue
-			}
-			newContent = resolved
-			c.editsExact++ // an address, not a guess
-			recordEdit(e, "anchored", "")
-			callVerb[e.callID] = "Applied the edit to"
-			if writeVerb[e.path] == "" {
-				writeVerb[e.path] = "Applied edit to"
-			}
-
 		case e.create:
 			// write puts down the whole file: create it fresh, or overwrite an
 			// existing one — never the old append-on-empty-search behavior.
@@ -1627,13 +1471,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			edited = append(edited, e.path)
 		}
 		applied[e.callID] = true
-		if e.anchor != "" && !c.DryRun {
-			// The digest, not "Applied.": the model's next edit to this file
-			// needs the identities this one produced, and without them it has
-			// to re-read — which is most of what anchors are for.
-			results.setText(e.callID, c.anchorDigest(e.path, pending[e.path]))
-			continue
-		}
 		text := fmt.Sprintf("%s %s.", callVerb[e.callID], quoteToolArg(e.path))
 		if note := callNote[e.callID]; note != "" {
 			text += " " + note
@@ -1650,13 +1487,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	if !c.DryRun {
 		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
 			c.Out.Errorf("Could not write the edits, so none were applied: %v", err)
-			// The batch rolled back, so any digest already handed out describes
-			// content that is not on disk. Drop those anchors: the next edit is
-			// then told to read again, which is true, instead of resolving
-			// against a version that never landed.
-			for _, rel := range writeOrder {
-				c.anchors.forget(rel)
-			}
 			// The batch rolled back, so every intended write must be reported as
 			// failed or the model will assume success. It is told what happened
 			// but this is deliberately not a reflection: a filesystem failure —

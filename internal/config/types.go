@@ -304,44 +304,6 @@ type Config struct {
 	// out. `shell = False` and --no-shell both set it. Execution stays gated
 	// too, so a path that does not go through the tool cannot slip past.
 	NoShell bool
-	// AnchoredEdits gives read a stable identity per line and lets edit
-	// address lines by it instead of by quoting them back.
-	//
-	// It exists because ambiguity is most of what makes an edit fail: 13 of 16
-	// first-try failures across the model panel were "the text appears N
-	// times", and an anchor names one line, so that cannot happen
-	// (doc/experiments/2026-09-anchored-edit/m1.md). It costs about 4% more
-	// input on every read, which is what the anchor column adds over the line
-	// numbers read already prints.
-	//
-	// Off by default: the comparison that would justify a default is phase 1 of
-	// that trial, and it has not run.
-	AnchoredEdits bool
-	// IndentColumn puts a line's leading whitespace in its own column, named in
-	// words, so the model states indentation rather than reproducing it.
-	//
-	// It needs AnchoredEdits: it is the safety net anchoring removes. Under a
-	// quoted-span edit the line matcher repairs whitespace drift; anchored
-	// editing has no matching, and phase 1 measured 30 of 72 outputs coming
-	// back misindented as a result.
-	IndentColumn bool
-
-	// ObservationViaRunCode turns on the code-observation force arm: the direct
-	// read-only tools are withheld from the schema and all file observation
-	// goes through code programs. Default false; `observation_via_run_code = True`
-	// sets it. It is the experimental arm of the code-uptake trials
-	// (doc/experiments/2026-09-code-mode2/README.md), not a supported mode — yet.
-	ObservationViaRunCode bool
-
-	// ExampleMessages are few-shot example messages appended to the prompt
-	// set's example block, from the `example_messages` setting — a list of
-	// [role, content] pairs. Empty means none. It exists for the
-	// shell-parallelism trial's EX arm (doc/experiments/2026-09-shell-parallel/README.md):
-	// the planning-side lever the code-only report named, which prose in the
-	// system prompt could not supply on its own. Like observation_via_run_code it
-	// is an experimental arm, not a supported mode — yet.
-	ExampleMessages []ExampleMessage
-
 	// Sandbox names the confinement mechanism: SandboxLandlock or "" for
 	// none. It defaults to Landlock on Linux and "" elsewhere, and when it is
 	// set it is a requirement rather than a preference — see doc/security.md.
@@ -423,13 +385,6 @@ type Config struct {
 	PromptCommit       string
 	PromptReadOnly     string
 	ChatLanguage       string
-}
-
-// ExampleMessage is one few-shot example: a role ("user" or "assistant") and
-// its content.
-type ExampleMessage struct {
-	Role    string
-	Content string
 }
 
 // ReasoningMode is what ReasoningDisplay does with a thinking block.

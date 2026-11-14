@@ -182,42 +182,6 @@ func TestLoopDetectionRejectsNonBooleans(t *testing.T) {
 	}
 }
 
-// TestObservationViaRunCodeDefaultsOff mirrors the loop_detection shape: unset
-// leaves the force arm off, `True` turns it on, and a non-boolean is refused.
-// The arm is off by default because it is an experiment, not a supported mode.
-func TestObservationViaRunCodeDefaultsOff(t *testing.T) {
-	cfg, err := loadBudget(t, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ObservationViaRunCode {
-		t.Error("unset observation_via_run_code should leave the force arm off")
-	}
-}
-
-func TestObservationViaRunCodeOn(t *testing.T) {
-	cfg, err := loadBudget(t, "observation_via_run_code = True")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !cfg.ObservationViaRunCode {
-		t.Error("observation_via_run_code = True did not take effect")
-	}
-}
-
-func TestObservationViaRunCodeRejectsNonBooleans(t *testing.T) {
-	for _, setting := range []string{`observation_via_run_code = "yes"`, "observation_via_run_code = 1"} {
-		_, err := loadBudget(t, setting)
-		if err == nil {
-			t.Errorf("%s should not load", setting)
-			continue
-		}
-		if !strings.Contains(err.Error(), "must be a boolean") {
-			t.Errorf("%s: error %q should say it must be a boolean", setting, err)
-		}
-	}
-}
-
 // A project can turn it off — a repo whose model output legitimately repeats
 // (generated tables, fixtures) is exactly who needs to.
 func TestLoopDetectionProjectOverrides(t *testing.T) {
@@ -405,42 +369,6 @@ func TestSearchValueDoesNotPrintTheKey(t *testing.T) {
 	v := &searchValue{s: WebSearch{Backend: SearchAnySearch, APIKey: "as_sk_supersecret"}}
 	if strings.Contains(v.String(), "supersecret") {
 		t.Errorf("the API key is in the value's repr: %s", v.String())
-	}
-}
-
-// TestExampleMessagesParse pins the example_messages setting: a list of
-// [role, content] pairs reaches the merged config, roles are restricted to
-// user/assistant, and malformed shapes are refused rather than ignored.
-func TestExampleMessagesParse(t *testing.T) {
-	cfg, err := loadBudget(t, `example_messages = [
-    ["user", "run the checks for a, b and c"],
-    ["assistant", "a & b & c & wait, one call"],
-]`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cfg.ExampleMessages) != 2 {
-		t.Fatalf("got %d example messages, want 2", len(cfg.ExampleMessages))
-	}
-	if cfg.ExampleMessages[0].Role != "user" || cfg.ExampleMessages[1].Role != "assistant" {
-		t.Errorf("roles = %q, %q", cfg.ExampleMessages[0].Role, cfg.ExampleMessages[1].Role)
-	}
-	if cfg.ExampleMessages[1].Content != "a & b & c & wait, one call" {
-		t.Errorf("content = %q", cfg.ExampleMessages[1].Content)
-	}
-}
-
-func TestExampleMessagesRejectsBadShapes(t *testing.T) {
-	for _, setting := range []string{
-		`example_messages = "teach me"`,
-		`example_messages = ["user", "hi"]`,
-		`example_messages = [["system", "hi"]]`,
-		`example_messages = [["user", 1]]`,
-	} {
-		_, err := loadBudget(t, setting)
-		if err == nil {
-			t.Errorf("%s should not load", setting)
-		}
 	}
 }
 

@@ -21,7 +21,6 @@ func TestNoPromptFragmentNamesAWithheldTool(t *testing.T) {
 		c := testCoder(t)
 		c.editFormat = format
 		c.OfferCode = false
-		c.ObservationViaRunCode = false
 
 		var offered []string
 		for _, d := range c.toolDefs() {
@@ -49,7 +48,6 @@ func TestNoPromptFragmentNamesAWithheldTool(t *testing.T) {
 func TestNothingPinnedNoteOffersRunCodeWhenItIsOffered(t *testing.T) {
 	c := testCoder(t)
 	c.OfferCode = true
-	c.ObservationViaRunCode = false
 	if !strings.Contains(c.filesNoFullFilesText(), "run_code") {
 		t.Error("run_code is offered, but the nothing-pinned note does not mention it")
 	}

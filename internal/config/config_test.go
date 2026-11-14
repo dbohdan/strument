@@ -1237,29 +1237,6 @@ default = "m"
 	}
 }
 
-// observation_via_run_code was read from both files and merged from one: the
-// user block applied it and the project block never mentioned it, so a
-// trusted project's setting was silently dropped and `strument trust` did not
-// list it either.
-func TestProjectObservationViaRunCodeOverridesUser(t *testing.T) {
-	user := `
-p = provider("openai", api_key = "k")
-models = {"m": model(p, "s")}
-default = "m"
-`
-	opts := harness(t, user, "observation_via_run_code = True\n", nil)
-	if _, err := TrustProject(opts.ProjectRoot, opts.TrustStorePath); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := Load(opts)
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if !cfg.ObservationViaRunCode {
-		t.Error("a trusted project config's `observation_via_run_code = True` was ignored")
-	}
-}
-
 // Every key the user block of Load's merge applies, the project block applies
 // too, unless it is named here with a reason. The two blocks are parallel
 // lists edited by hand, and a key added to one and not the other is read from

@@ -42,8 +42,6 @@ The loader reads these module-level variables after running your file:
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `language_parser` | boolean | Optional. The tree-sitter parser behind `symbol`, `/symbol`, and the after-edit parse check. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
-| `observation_via_run_code` | boolean | Optional. Experimental: withhold the direct read-only tools and route all observation through `run_code` programs. Default `False`. See below. |
-| `example_messages` | list of [role, content] pairs | Optional. Experimental: few-shot messages appended to the prompt set's example block. Default `[]`. See below. |
 | `auto_commits` | boolean | Optional. Whether a turn that changes a file ends in a commit. Default `True`. See below. |
 | `compaction` | string | Optional. How a long chat history is made to fit the context window: `"roll"` or `"summary"`. Default `"roll"`. See below. |
 | `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
@@ -731,42 +729,6 @@ repository went into the prompt and its size depended on the model reading it.
 The map is gone and the parser reads the project, not the model, so the setting
 is global. A `model()` that still passes `repo_map` is refused with a message
 naming this key.
-
-### `observation_via_run_code`
-
-```python
-observation_via_run_code = False    # the default
-observation_via_run_code = True
-```
-
-Experimental. With `True`, the direct read-only tools (`read`, `grep`, `glob`,
-`ls`, `symbol`) are withheld from the tool schema and all file observation goes
-through the `run_code` tool: the model writes a short JavaScript program that calls
-those tools itself, and the results come back to the program. A direct call a
-model makes anyway is answered with a pointer to the `run_code` route.
-
-This setting is the direct-tool-withholding arm of the code-uptake experiments
-(`doc/experiments/2026-09-code-mode2/README.md`). It is off by default and may
-change or be withdrawn based on those results.
-
-### `example_messages`
-
-```python
-example_messages = [
-    ["user", "check services a, b, c and d and tell me which are down"],
-    ["assistant", "Checking all four in one call, since none depends on another:\n\n`a & b & c & d & wait`"],
-]
-```
-
-Optional. A list of `[role, content]` pairs (`"user"` or `"assistant"`)
-appended to the prompt set's example block, so the model sees them as a
-worked exchange before the conversation starts. Empty means none.
-
-Experimental, like `observation_via_run_code`: this setting is used in the
-shell-parallelism trial (`doc/experiments/2026-09-shell-parallel/README.md`) to
-test whether worked examples change how models batch commands. User and project
-configs append rather than replace: a project's examples appear alongside the
-user's.
 
 ### `shell_timeout`
 
