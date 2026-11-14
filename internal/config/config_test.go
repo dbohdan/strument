@@ -1022,7 +1022,6 @@ func TestPromptSettingsParse(t *testing.T) {
 	src := userConfig + `
 prompt_system_prefix = "Be terse.\n\n"
 prompt_code = "You are a senior engineer.\n{platform}\n{language}\n"
-prompt_read_only = "Reference files follow."
 chat_language = "fr"
 `
 	cfg, err := Load(harness(t, src, "", testEnv))
@@ -1034,9 +1033,6 @@ chat_language = "fr"
 	}
 	if !strings.Contains(cfg.PromptCode, "{platform}") || !strings.Contains(cfg.PromptCode, "{language}") {
 		t.Errorf("PromptCode = %q", cfg.PromptCode)
-	}
-	if cfg.PromptReadOnly != "Reference files follow." {
-		t.Errorf("PromptReadOnly = %q", cfg.PromptReadOnly)
 	}
 	if cfg.ChatLanguage != "fr" {
 		t.Errorf("ChatLanguage = %q", cfg.ChatLanguage)
@@ -1054,12 +1050,12 @@ func TestPromptRejectsUnknownPlaceholder(t *testing.T) {
 	}
 }
 
-// prompt_system_prefix and prompt_read_only take no placeholders at all; a
+// prompt_system_prefix takes no placeholders at all; a
 // brace that is not doubled is refused, matching the pyFormat templates.
 func TestPromptLiteralRejectsAnyBrace(t *testing.T) {
 	// A single brace in a literal prompt is not the doubled-brace escape the
 	// pyFormat templates require, so it must be refused at load.
-	src := userConfig + "prompt_read_only = \"Reference {files} follow.\"\n"
+	src := userConfig + "prompt_system_prefix = \"Reference {files} follow.\"\n"
 	_, err := Load(harness(t, src, "", testEnv))
 	if err == nil {
 		t.Fatal("a single brace in a literal prompt must fail the load")

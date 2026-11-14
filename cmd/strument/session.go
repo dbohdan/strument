@@ -132,7 +132,7 @@ func (c *sessionDeleteCmd) Run() error {
 		return fmt.Errorf("no session named %q; `strument session list` lists the sessions", c.Name)
 	}
 
-	fmt.Println("This deletes the session's conversation, pinned files, and undo record:")
+	fmt.Println("This deletes the session's conversation, resume state, and undo record:")
 	fmt.Println(sessionLine(*target))
 	fmt.Println("\nStored tool output is shared between sessions and is kept.")
 	if !c.Yes && !confirmDeleteSession() {
@@ -307,7 +307,6 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 
 	// Everything that belonged to the conversation being left.
 	s.cdr.ClearHistory()
-	s.cdr.DropAll()
 	s.cdr.SetUndoStack(nil)
 	s.cdr.RestoreLastCommit("")
 	s.cdr.RestorePending(coder.Pending{}) // the new conversation knows nothing of those edits
@@ -315,15 +314,13 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 	return s.open(name), nil
 }
 
-// open brings a session's own state back: its pins, its undo record and its
+// open brings a session's own state back: its undo record and its
 // conversation. Shared by switching and by starting up, so the two cannot
 // restore different things.
 func (s *sessionSwitcher) open(name string) string {
 	lines := []string{fmt.Sprintf("Now in %s.", name)}
-	res := history.LoadResume(s.projectRoot, name)
-	if pins, offered := restoreSession(s.cdr, s.projectRoot, name, res); pins != "" {
-		lines = append(lines, pins)
-		_ = offered
+	if note := restoreSession(s.cdr, s.projectRoot, name); note != "" {
+		lines = append(lines, note)
 	}
 	// Switching is an interactive "open that conversation", so it restores
 	// one. The --session flag does not, and the difference is deliberate: the

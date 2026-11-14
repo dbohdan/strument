@@ -359,7 +359,6 @@ func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Code
 	c.Out = quietOutput{t}
 	c.Repo = g
 	c.Commits = true
-	c.AddFile("main.txt")
 	return c
 }
 

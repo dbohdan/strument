@@ -240,27 +240,6 @@ func TestResumeIsNotSavedWithoutState(t *testing.T) {
 	}
 }
 
-// Paths are recorded relative to the project root rather than the coder's, so
-// they survive --no-git, where the coder works from the invocation directory
-// while the project is still the worktree.
-func TestResumePathsAreProjectRelative(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	root, sub := newRepo(t)
-	if err := os.WriteFile(filepath.Join(sub, "b.go"), []byte("package b\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// A --no-git session in sub/: the coder's root is sub, the project is root.
-	cdr := coder.New(sub, &config.Model{Slug: "x"})
-	cdr.AddFile(filepath.Join(sub, "b.go"))
-
-	saveResumeFunc(cdr, func() string { return "m" }, root, true)("m")
-
-	got := history.LoadResume(root, history.DefaultSession).Files
-	if len(got) != 1 || got[0] != "sub/b.go" {
-		t.Errorf("files = %v, want [sub/b.go]", got)
-	}
-}
-
 // The REPL has always had Options.IsTerminal, and interactive() defaults to
 // true when it is nil — so an unwired seam does not fail, it silently makes the
 // binary believe a pipe is a terminal. Piping the output then wrote the banner,
@@ -289,168 +268,19 @@ func TestTerminalDetectionIsWired(t *testing.T) {
 	}
 }
 
-// A file argument resolved through a symlinked working directory must still be
-// accepted when it is genuinely inside the project — the same case /add handles
-// by joining the pattern with the already-resolved coder root. The project root
-// is git's symlink-resolved path while cwd can sit in the symlink namespace, so
-// the containment check has to resolve both before comparing. Without that, a
-// real in-project file arrived as "../../link/..." and was refused — the CLI
-// and /add disagreeing about the same rule.
-func TestFileInProjectThroughSymlink(t *testing.T) {
-	base := t.TempDir()
-	realDir := filepath.Join(base, "real")
-	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// A symlinked alias for the real project, like a symlinked checkout or a
-	// working directory reached through a symlink.
-	link := filepath.Join(base, "link")
-	if err := os.Symlink(realDir, link); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
-	}
-	// git reports the resolved root; the working directory uses the symlink.
-	root := realDir
-	cwd := filepath.Join(link, "sub")
-
-	if !fileInProject(root, filepath.Join(cwd, "file.go")) {
-		t.Error("an in-project file reached through a symlink must be accepted")
-	}
-	if !fileInProject(root, filepath.Join(cwd, "nested", "file.go")) {
-		t.Error("a not-yet-created in-project file must be accepted")
-	}
-	// A sibling directory is genuinely outside, symlink or not.
-	outside := filepath.Join(base, "other", "file.go")
-	if err := os.MkdirAll(filepath.Dir(outside), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if fileInProject(root, outside) {
-		t.Error("a file in a sibling directory must still be refused")
-	}
-}
-
-// AGENTS.md is the cross-tool convention for a project's standing instructions
-// (agents.md), and the one this repository keeps. Strument pins it once and
-// then gets out of the way.
-//
-// The lifecycle is the point, not the pin: an assistant that re-adds a file you
-// dropped is worse than one that never offered.
-func TestAgentsFileIsOfferedOnce(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, coder.AgentsFileName), []byte("# rules\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	newCoder := func() *coder.Coder {
-		return coder.New(root, &config.Model{Slug: "m"})
-	}
-
-	// First session: nothing recorded, so it is offered.
-	c1 := newCoder()
-	_, offered := restoreSession(c1, root, history.DefaultSession, history.Resume{})
-	if len(offered) == 0 {
-		t.Fatal("a project with AGENTS.md and no record should be offered it")
-	}
-	if got := c1.ChatFiles(); len(got) != 1 || got[0] != coder.AgentsFileName {
-		t.Fatalf("pinned files = %v, want [%s]", got, coder.AgentsFileName)
-	}
-
-	// Second session, with the offer recorded and the user having dropped it:
-	// dropped stays dropped.
-	c2 := newCoder()
-	_, offered = restoreSession(c2, root, history.DefaultSession, history.Resume{AutoPinned: []string{coder.AgentsFileName}})
-	if len(offered) > 0 {
-		t.Error("the offer must not repeat once recorded")
-	}
-	if got := c2.ChatFiles(); len(got) != 0 {
-		t.Errorf("pinned files = %v, want none — the user dropped it", got)
-	}
-
-	// And with it recorded *and* still pinned, it comes back as an ordinary
-	// resume entry rather than as a fresh offer.
-	c3 := newCoder()
-	_, offered = restoreSession(c3, root, history.DefaultSession, history.Resume{
-		AutoPinned: []string{coder.AgentsFileName}, Files: []string{coder.AgentsFileName},
-	})
-	if len(offered) > 0 {
-		t.Error("a file already in Files is a restore, not an offer")
-	}
-	if got := c3.ChatFiles(); len(got) != 1 {
-		t.Errorf("pinned files = %v, want it restored", got)
-	}
-}
-
-// A project without one is left alone. Strument never creates the file — on a
-// live configuration directory, which the harness is meant to be usable on,
-// writing an AGENTS.md nobody asked for would be its own small rudeness.
-func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
+// A project without AGENTS.md is left alone. Strument never creates the file
+// — on a live configuration directory, which the harness is meant to be usable
+// on, writing an AGENTS.md nobody asked for would be its own small rudeness.
+func TestAgentsFileIsNotCreated(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
 	c := coder.New(root, &config.Model{Slug: "m"})
 
-	if _, offered := restoreSession(c, root, history.DefaultSession, history.Resume{}); len(offered) > 0 {
-		t.Error("nothing to offer in a project with no AGENTS.md")
+	if note := restoreSession(c, root, history.DefaultSession); note != "" {
+		t.Errorf("note = %q, want none in a project with nothing to restore", note)
 	}
 	if _, err := os.Stat(filepath.Join(root, coder.AgentsFileName)); !os.IsNotExist(err) {
 		t.Error("AGENTS.md must not be created")
-	}
-	if got := c.ChatFiles(); len(got) != 0 {
-		t.Errorf("pinned files = %v, want none", got)
-	}
-}
-
-// TestRestoreSessionNote covers the line a resumed session opens with. It had
-// no test at all, which is how three of its four branches came to say "for
-// editing" — a permission /add does not grant, since any file in the project is
-// editable whether or not it is pinned. Only the read-only half names anything,
-// matching /ls and the startup banner.
-func TestRestoreSessionNote(t *testing.T) {
-	root := t.TempDir()
-	for _, name := range []string{"a.go", "b.go", "spec.md"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("x\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	tests := []struct {
-		name  string
-		res   history.Resume
-		want  string
-		empty bool
-	}{
-		{name: "nothing", res: history.Resume{}, empty: true},
-		{
-			name: "plain only",
-			res:  history.Resume{Files: []string{"a.go", "b.go"}},
-			want: "Restored 2 pins from your last session.",
-		},
-		{
-			name: "read-only only",
-			res:  history.Resume{ReadOnly: []string{"spec.md"}},
-			want: "Restored 1 pin from your last session, read-only.",
-		},
-		{
-			name: "both",
-			res:  history.Resume{Files: []string{"a.go"}, ReadOnly: []string{"spec.md"}},
-			want: "Restored 2 pins from your last session, 1 of them read-only.",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cdr := coder.New(root, &config.Model{Slug: "test"})
-			note, _ := restoreSession(cdr, root, history.DefaultSession, tt.res)
-			if tt.empty {
-				if note != "" {
-					t.Errorf("note = %q, want empty", note)
-				}
-				return
-			}
-			if note != tt.want {
-				t.Errorf("note = %q, want %q", note, tt.want)
-			}
-			if strings.Contains(note, "for editing") {
-				t.Errorf("note = %q: pinning grants no editing right to report", note)
-			}
-		})
 	}
 }
 
@@ -962,11 +792,11 @@ func TestPickVersion(t *testing.T) {
 	}
 }
 
-// AGENTS.local.md is pinned once like AGENTS.md, and on first sight is kept
-// out of git's view through info/exclude, which is itself never committed.
+// AGENTS.local.md is kept out of git's view on first sight through
+// info/exclude, which is itself never committed, and only once.
 // The write is said in the note, because it is a change to the user's
 // repository.
-func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
+func TestAgentsLocalIsExcludedOnce(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
 	}
@@ -1000,10 +830,7 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		return c
 	}
 
-	note, offered := restoreSession(newCoder(), root, history.DefaultSession, history.Resume{})
-	if !slices.Contains(offered, coder.AgentsLocalFileName) {
-		t.Fatalf("offered = %v, want %s", offered, coder.AgentsLocalFileName)
-	}
+	note := restoreSession(newCoder(), root, history.DefaultSession)
 	if !strings.Contains(note, "info/exclude") {
 		t.Errorf("the exclude was not announced: %q", note)
 	}
@@ -1012,10 +839,9 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		t.Errorf("git still offers the file: %q (%v)", status, err)
 	}
 
-	note, offered = restoreSession(newCoder(), root, history.DefaultSession,
-		history.Resume{AutoPinned: []string{coder.AgentsLocalFileName}})
-	if len(offered) > 0 || strings.Contains(note, "info/exclude") {
-		t.Errorf("second session: offered %v, note %q; want neither", offered, note)
+	// The second session finds the file already ignored and says nothing.
+	if note := restoreSession(newCoder(), root, history.DefaultSession); strings.Contains(note, "info/exclude") {
+		t.Errorf("second session: note %q; the exclude was announced twice", note)
 	}
 }
 
@@ -1029,7 +855,8 @@ func TestScriptMessage(t *testing.T) {
 		{"fix the bug", "fix the bug", ""},
 		{"/etc/hosts has a typo, fix it", "/etc/hosts has a typo, fix it", ""},
 		{"/tmp/out.log shows a panic", "/tmp/out.log shows a panic", ""},
-		{"/add main.go", "", "does not run /add"},
+		{"/undo", "", "does not run /undo"},
+		{"/add main.go", "", "pinned files have been removed"},
 		{"/ask what does this do?", "", "have been removed"},
 		{"/code add a test", "", "have been removed"},
 	} {

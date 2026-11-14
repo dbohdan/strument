@@ -156,7 +156,7 @@ var artifacts = map[string]artifact{
 var sessionArtifacts = map[string]artifact{
 	sartResume: {
 		name: "resume.json", policy: keepNewest,
-		why: "one value: there is no meaningful union of two pinned file sets",
+		why: "one value: there is no meaningful union of two model choices",
 	},
 	sartUndo: {
 		name: "undo.json", policy: keepNewest,

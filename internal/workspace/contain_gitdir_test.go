@@ -45,13 +45,9 @@ func TestUnderGitDir(t *testing.T) {
 	}
 }
 
-// The read path refuses it, and refuses it even for a pinned file.
-//
-// Pinning is the strongest signal the interface has, and it still does not
-// unlock this one; it must stay a record of user intent (/add, /read-only).
+// The read path refuses it.
 func TestContainRefusesGitDir(t *testing.T) {
 	w := New(t.TempDir())
-	w.Pinned = func(string) bool { return true } // everything pinned
 
 	for _, p := range []string{".git/config", ".GIT/config", "/abs/repo/.git/config"} {
 		_, _, reason := w.contain(p)

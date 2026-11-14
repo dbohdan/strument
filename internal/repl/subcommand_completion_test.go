@@ -33,7 +33,7 @@ func TestSubcommandCompletion(t *testing.T) {
 		{"/session rename ", []string{"main", "spike", "spike-2"}},
 		{"/session new ", nil},
 		{"/commits o", []string{"n", "ff"}},
-		{"/consult scope ", []string{"none", "files", "chat"}},
+		{"/consult scope ", []string{"none", "chat"}},
 		{"/yes ", []string{"add", "drop", "reset"}},
 		{"/yes add b", []string{"ash"}},
 		{"/yes add bash ", []string{"bash", "webfetch", "websearch", "read-outside", "steps", "context", "add-output", "all"}},

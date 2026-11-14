@@ -242,8 +242,6 @@ type fileGlobals struct {
 	promptSystemPrefixVal string
 	hasPromptCode         bool
 	promptCodeVal         string
-	hasPromptReadOnly     bool
-	promptReadOnlyVal     string
 
 	hasChatLanguage bool
 	chatLanguageVal string
@@ -572,9 +570,6 @@ func Load(opts Options) (*Config, error) {
 	if user.hasPromptCode {
 		cfg.PromptCode = user.promptCodeVal
 	}
-	if user.hasPromptReadOnly {
-		cfg.PromptReadOnly = user.promptReadOnlyVal
-	}
 	if user.hasChatLanguage {
 		cfg.ChatLanguage = user.chatLanguageVal
 	}
@@ -717,9 +712,6 @@ func Load(opts Options) (*Config, error) {
 		if project.hasPromptCode {
 			cfg.PromptCode = project.promptCodeVal
 		}
-		if project.hasPromptReadOnly {
-			cfg.PromptReadOnly = project.promptReadOnlyVal
-		}
 		if project.hasChatLanguage {
 			cfg.ChatLanguage = project.chatLanguageVal
 		}
@@ -848,8 +840,7 @@ var promptSlots = map[string]map[string]bool{
 		"platform": true, "language": true, "final_reminders": true,
 		"code_tools": true, "observation_tools": true,
 	},
-	// prompt_read_only and prompt_system_prefix are literal: no slots.
-	"prompt_read_only":     {},
+	// prompt_system_prefix is literal: no slots.
 	"prompt_system_prefix": {},
 }
 
@@ -1361,7 +1352,7 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.envSetVal = vals
 	}
 
-	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_read_only"} {
+	for _, name := range []string{"prompt_system_prefix", "prompt_code"} {
 		v, ok := globals[name]
 		if !ok {
 			continue
@@ -1377,9 +1368,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		case "prompt_code":
 			out.hasPromptCode = true
 			out.promptCodeVal = val
-		case "prompt_read_only":
-			out.hasPromptReadOnly = true
-			out.promptReadOnlyVal = val
 		}
 	}
 

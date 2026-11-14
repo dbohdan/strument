@@ -22,7 +22,7 @@ those printed outside one.
 
 | method | voice | how it looks |
 | --- | --- | --- |
-| `Printf` | REPL messages, such as the banner and `/add` acknowledgements | plain |
+| `Printf` | REPL messages, such as the banner and `/commits` acknowledgements | plain |
 | `Toolf` | tool status and outcomes | `Theme.Tool`, muted |
 | `Warningf` | warnings that do not stop the turn | `Theme.Warning` |
 | `Errorf` | something failed | `Theme.Error` |
@@ -63,7 +63,7 @@ everywhere.
 - **Backticks for commands, flags, and config keys**: `` `strument trust` ``,
   `` `check_auto` ``, `` `--no-shell` ``. Three things stay bare, because
   backticks would cost more than they explain:
-    - REPL commands written without arguments (for example, `/add`, `/exit`);
+    - REPL commands written without arguments (for example, `/undo`, `/exit`);
     - REPL commands in the `/help` table, which is already a table of them;
     - a command placed at the end of a line to be copied out, as in
       `Merge saved state: strument project adopt ~/src/proj`.

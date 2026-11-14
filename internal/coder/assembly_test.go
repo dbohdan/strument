@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/config"
-	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
 )
@@ -85,70 +84,6 @@ func TestRulesSurviveATinyWindow(t *testing.T) {
 	}
 }
 
-func TestFenceEscalationWhenChatFileHasBackticks(t *testing.T) {
-	c := testCoder(t)
-	p := filepath.Join(c.Root, "doc.md")
-	if err := os.WriteFile(p, []byte("intro\n```go\ncode\n```\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile("doc.md")
-	c.chooseFence()
-	if c.fence.open != "````" {
-		t.Errorf("fence = %q, want quad backticks", c.fence.open)
-	}
-	// The escalation no longer reaches the prompt — fences framed SEARCH/REPLACE
-	// blocks, and those are gone. It still matters for the fenced did-you-mean
-	// an unmatched edit returns, which must not be cut short by a fence the
-	// file's own content already uses.
-	quoted := editblock.FindSimilarLines("```go\ncode\n```\n", "intro\n```go\ncode\n```\n", 0.6)
-	if quoted == "" {
-		t.Fatal("did-you-mean found nothing to quote")
-	}
-	if strings.HasPrefix(quoted, c.fence.open) {
-		t.Error("the chosen fence must not collide with the content it wraps")
-	}
-}
-
-func TestChatFileRetentionDuringChooseFence(t *testing.T) {
-	c := testCoder(t)
-	if err := os.WriteFile(filepath.Join(c.Root, "good.txt"), []byte("fine\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(filepath.Join(c.Root, "adir"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile("good.txt")
-	c.AddFile("gone.txt") // never created: a to-be-created file, kept as empty
-	c.AddFile("adir")     // a directory reads as a non-ENOENT error: dropped
-	c.chooseFence()
-
-	kept := map[string]bool{}
-	for _, f := range c.absFnames {
-		kept[c.relFname(f)] = true
-	}
-	if !kept["good.txt"] || !kept["gone.txt"] || kept["adir"] {
-		t.Errorf("absFnames = %v (want good.txt + gone.txt, not adir)", c.absFnames)
-	}
-}
-
-// A pinned file that does not exist yet is named as one to create. Telling the
-// model to read it would send it after something that is not there — the case
-// the A0/A2 run never covered, because every fixture file existed.
-func TestNonexistentPinnedFileIsNamedAsOneToCreate(t *testing.T) {
-	c := testCoder(t)
-	c.AddFile("new.go") // never created
-	note := c.pinnedFilesNote()
-	if !strings.Contains(note, "new.go") || !strings.Contains(note, "does not exist yet") {
-		t.Errorf("nonexistent file not offered for creation:\n%q", note)
-	}
-	if strings.Contains(note, "Read them before editing") {
-		t.Errorf("the model was told to read a file that is not there:\n%q", note)
-	}
-	if !slices.Contains(c.absFnames, c.absRootPath("new.go")) {
-		t.Errorf("nonexistent file was dropped from the chat: %v", c.absFnames)
-	}
-}
-
 func TestCacheBreakpointsSnapshot(t *testing.T) {
 	c := testCoder(t)
 	c.Model.Cache = true
@@ -156,7 +91,6 @@ func TestCacheBreakpointsSnapshot(t *testing.T) {
 	if err := os.WriteFile(p, []byte("content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c.AddFile("a.txt")
 	c.doneMessages = []llm.Message{llm.TextMessage("user", "old"), llm.TextMessage("assistant", "old reply")}
 	c.curMessages = []llm.Message{llm.TextMessage("user", "new")}
 
@@ -230,7 +164,6 @@ func TestCacheBreakpointTTL(t *testing.T) {
 	if err := os.WriteFile(p, []byte("content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c.AddFile("a.txt")
 	c.curMessages = []llm.Message{llm.TextMessage("user", "new")}
 
 	chunks := c.formatMessages()
@@ -305,75 +238,6 @@ func TestPyFormat(t *testing.T) {
 	}
 }
 
-// The note is read by a model, so it has to read like a sentence. A wire
-// capture caught "pinned 1 file … These are the files" and "Create them" for a
-// single file, so the counted forms are pinned here.
-//
-// The sentence that used to carry most of that risk is gone: the instruction to
-// read is now generic-singular ("Read a file before …"), which agrees with
-// itself whatever the count and leaves nothing to get wrong.
-func TestPinnedFilesNoteAgreesInNumber(t *testing.T) {
-	one := testCoder(t)
-	if err := os.WriteFile(filepath.Join(one.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	one.AddFile("a.go")
-	one.AddFile("gone.go") // never created
-	got := one.pinnedFilesNote()
-	for _, want := range []string{"pinned 1 file", "1 file that does not exist yet",
-		"Create it with write"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("singular form missing %q:\n%s", want, got)
-		}
-	}
-
-	many := testCoder(t)
-	for _, f := range []string{"a.go", "b.go"} {
-		if err := os.WriteFile(filepath.Join(many.Root, f), []byte("package a\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		many.AddFile(f)
-	}
-	got = many.pinnedFilesNote()
-	for _, want := range []string{"pinned 2 files"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("plural form missing %q:\n%s", want, got)
-		}
-	}
-}
-
-// Pinning a file is not a request to change it.
-//
-// The note used to say "These are the files they want changed", which asserts
-// an intention the act of pinning does not carry — a user pins files to put
-// them in front of the model, and the message says what to do with them.
-// GLM-5.3 was caught reconciling the two out loud: "the pinned files are for
-// changes... but the user question is analysis/proposal", then talking itself
-// back to answering the question actually asked. The prompt made it argue
-// against the prompt.
-func TestPinnedFilesNoteClaimsNoIntent(t *testing.T) {
-	c := testCoder(t)
-	if err := os.WriteFile(filepath.Join(c.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile("a.go")
-
-	got := c.pinnedFilesNote()
-	// The claim, not the words. A first draft of this check also forbade "they
-	// want", and the sentence that *denies* the claim — "the user's message
-	// says what they want" — tripped it. Same fault as the scorers in
-	// doc/experimenting.md, one layer up: a pattern matching text present for
-	// the opposite reason.
-	for _, unwanted := range []string{"want changed", "wants changed"} {
-		if strings.Contains(got, unwanted) {
-			t.Errorf("the note asserts what the user wants (%q):\n%s", unwanted, got)
-		}
-	}
-	if !strings.Contains(got, "not itself a request") {
-		t.Errorf("the note does not say pinning is not a request:\n%s", got)
-	}
-}
-
 // The {code_tools} slot tracks the schema, in both directions. The code-mode
 // trial found 0/36 uptake with the tool offered in the schema but absent from
 // the prompt's tool list, which models read as closed-world
@@ -407,17 +271,6 @@ func TestPromptCodeOverridesMainSystem(t *testing.T) {
 	}
 	if strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "code-format prompt") {
 		t.Error("the built-in singleton was mutated, not the session copy")
-	}
-}
-
-// prompt_read_only replaces the prefix that frames injected reference files.
-func TestPromptReadOnlyOverridesPrefix(t *testing.T) {
-	c := testCoder(t)
-	c.PromptReadOnly = "These are read-only reference files.\n"
-	c.setPrompts()
-
-	if got := c.Prompts.ReadOnlyFilesPrefix; got != "These are read-only reference files.\n" {
-		t.Errorf("ReadOnlyFilesPrefix = %q, want the override", got)
 	}
 }
 

@@ -1,32 +1,8 @@
 package coder
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 )
-
-// Each file is named in the prompt only when it is pinned, and the private one
-// is told apart from the shared one.
-func TestAgentsLocalIsNamedInThePrompt(t *testing.T) {
-	c := testCoder(t)
-	for _, name := range []string{AgentsFileName, AgentsLocalFileName} {
-		if err := os.WriteFile(filepath.Join(c.Root, name), []byte("# rules\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	c.AddFile(filepath.Join(c.Root, AgentsFileName))
-	if note := c.pinnedFilesNote(); strings.Contains(note, AgentsLocalFileName) {
-		t.Errorf("the private file is named while unpinned:\n%s", note)
-	}
-	c.AddFile(filepath.Join(c.Root, AgentsLocalFileName))
-	note := c.pinnedFilesNote()
-	if !strings.Contains(note, AgentsLocalFileName+" holds the user's private instructions") ||
-		!strings.Contains(note, "it wins") {
-		t.Errorf("the private file's clause is missing:\n%s", note)
-	}
-}
 
 // dirtyRepo is a Repo rooted somewhere, reporting some paths as dirty.
 type dirtyRepo struct {

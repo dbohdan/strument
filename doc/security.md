@@ -154,10 +154,7 @@ rather than a choice — `git check-ignore` reports `.git/config` as not ignored
 so nothing stopped a `write` call to it. Both read and edit operations now use
 the same check (`workspace.UnderGitDir`), which checks for `.git` path
 components at any depth, case-insensitively, with trailing dots and spaces
-trimmed, because `.GIT/config` opens the real file on APFS and NTFS. Pinning a
-file does not bypass this check. The model can grow the pinned-file list
-through the edit path, so membership in that list cannot authorize access to
-`.git`.
+trimmed, because `.GIT/config` opens the real file on APFS and NTFS.
 
 The path check applies after normalization. An absolute path is resolved
 against the root, and the git-directory check runs on the resolved form as well
@@ -407,8 +404,8 @@ the transcript, so the model's file tools draw their own boundary:
 - **Secret-shaped files are refused, inside the project or out.** `.env`,
   `.netrc`, SSH private keys, `.aws/credentials` and the rest of the list in
   [`secret_files_add`](config.md#secret_files_add-and-secret_files_exempt) are
-  not read, searched, or edited on the model's own say-so. Pinning one with
-  `/read-only` or `/add` is how you allow it. A project config can extend the
+  not read, searched, or edited on the model's own say-so. `secret_files_exempt`
+  in your user config is how you allow one. A project config can extend the
   list but not shorten it.
 - **A shell command that names a secret file goes to you.** The command is
   parsed and its words expanded as the shell would, and a hit skips

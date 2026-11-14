@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"dbohdan.com/strument/internal/workspace"
@@ -63,27 +62,9 @@ func (c *Coder) unsafePath(rel string) string {
 	if workspace.UnderGitDir(rel) {
 		return "the repository's own .git directory is not project content"
 	}
-	// A file the user pinned was chosen by the user, so it may live outside the
-	// project root (a sibling project reached through a symlinked directory, an
-	// out-of-tree file added by relative path). The containment boundary below
-	// guards against the model inventing new out-of-root paths, not against
-	// editing what the user deliberately added.
-	//
-	// Read-only pins are exempt here too, and that grants nothing: allowedToEdit
-	// refuses every one of them unconditionally. What it buys is the *right
-	// refusal*. An out-of-tree reference used to be rejected here first, with
-	// "path escapes the project root" — true, but not the reason — and the model
-	// never saw the read-only message at all. Live sessions show what that cost:
-	// models retried with an absolute path, then through the shell, then went
-	// looking for a writable copy of the file inside the project, one of them for
-	// twelve steps. Told it is read-only, they say so and move on.
-	if c.isPinned(rel) {
-		return ""
-	}
-	// A secret-shaped file, after the pinned exemption and before every other
-	// grant. Writing one is not the whole concern: a failed edit answers with
-	// the file's closest lines ("Did you mean to match…"), so an edit the model
-	// can send is a read it can make.
+	// A secret-shaped file, before every grant. Writing one is not the whole
+	// concern: a failed edit answers with the file's closest lines ("Did you
+	// mean to match…"), so an edit the model can send is a read it can make.
 	if reason := c.secretReason(rel); reason != "" {
 		return reason
 	}
@@ -170,9 +151,7 @@ func (c *Coder) unsafePath(rel string) string {
 // teach each of those about two spellings, the absolute one is folded away
 // here: the model gets its answer in the same namespace every other tool
 // result uses, and the write lands on the file it named. Out-of-root absolute
-// paths pass through unchanged — they name a pinned file (unsafePath's
-// carve-out, and fullPath already keeps those straight) or they will be
-// refused.
+// paths pass through unchanged, and unsafePath refuses or grants them.
 func (c *Coder) normalizeToolPath(p string) string {
 	if !filepath.IsAbs(p) && !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "\\") {
 		return p
@@ -211,25 +190,6 @@ func (c *Coder) normalizeToolPath(p string) string {
 // the turn's snapshot so /undo has the exact prior contents, and the diff scrolling past as it happens. Review lives in the diff and in
 // being able to undo, not in a y/n the user has learned to dismiss.
 func (c *Coder) allowedToEdit(rel string) (bool, string) {
-	full := c.absRootPath(rel)
-
-	// Read-only first, so it wins over a file that is in both lists. This is
-	// checked here rather than left to the prompt because the prompt was all
-	// there was: /read-only asked the model not to edit and nothing enforced
-	// it, so the file fell through below and was quietly promoted into the
-	// editable set. A reference the user reached outside the project for is the
-	// worst thing to edit by accident — it is outside the repo, outside the
-	// diff they are watching, and outside git's undo.
-	if slices.Contains(c.absReadOnlyFnames, full) {
-		// The user-facing warning uses the interface's vocabulary ("pinned
-		// read-only"); the tool result below keeps the prompt's, which the
-		// read-only live trial settled (see prompts.readOnlyFilesPrefix). The two
-		// registers do not have to match — nobody reads both.
-		c.Out.Warningf("Skipping edits to %s, which is pinned read-only.", rel)
-		return false, "that file is pinned as read-only reference, so it was not changed. " +
-			"Make the change elsewhere, or ask the user to add it with /add if it should be editable."
-	}
-
 	// Still refused, and not as a prompt: an ignored file is one the project
 	// declared out of scope, and the observation tools do not show it either.
 	// AGENTS.local.md is the exception, being ignored so that it stays private
@@ -395,7 +355,7 @@ func (c *Coder) secretReason(rel string) string {
 	}
 	if pat, ok := c.Files.Secret.Match(full); ok {
 		return fmt.Sprintf("it matches the secret-file pattern %q, so it is not edited; "+
-			"if the user wants you to change it, they can add it with /add", pat)
+			"the user can allow it with secret_files_exempt in their configuration", pat)
 	}
 	return ""
 }

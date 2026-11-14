@@ -3,8 +3,6 @@ package coder
 import (
 	"context"
 	"iter"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,9 +25,8 @@ func (s *consultStub) Send(_ context.Context, req llm.Request) iter.Seq2[llm.Str
 	}
 }
 
-// consultFixture is a session with one pinned file and one turn of history, each
-// carrying a token that appears nowhere else. Both directions are checked at
-// every rung, which is what makes the ladder a measurement rather than a claim:
+// consultFixture is a session with one turn of history carrying a token that
+// appears nowhere else. Both directions are checked at every rung, which is what makes the ladder a measurement rather than a claim:
 // an assertion that only ever looks for presence passes for a scope that sends
 // everything.
 func consultFixture(t *testing.T) (*Coder, *consultStub) {
@@ -38,11 +35,6 @@ func consultFixture(t *testing.T) (*Coder, *consultStub) {
 	stub := &consultStub{}
 	c.Client = stub
 
-	path := filepath.Join(c.Root, "pinned.go")
-	if err := os.WriteFile(path, []byte("package p // FILE-NEEDLE\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile(path)
 	c.doneMessages = []llm.Message{
 		llm.TextMessage(llm.RoleUser, "the earlier turn said CHAT-NEEDLE"),
 		llm.TextMessage(llm.RoleAssistant, "understood"),
@@ -54,12 +46,10 @@ func TestConsultScopeDecidesWhatTheAdvisorSees(t *testing.T) {
 	tests := []struct {
 		name     string
 		scope    ConsultScope
-		wantFile bool
 		wantChat bool
 	}{
-		{"none", ConsultNothing, false, false},
-		{"files", ConsultFiles, true, false},
-		{"chat", ConsultChat, true, true},
+		{"none", ConsultNothing, false},
+		{"chat", ConsultChat, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,9 +61,6 @@ func TestConsultScopeDecidesWhatTheAdvisorSees(t *testing.T) {
 				t.Fatalf("advisor got %d messages, want 1", len(stub.req.Messages))
 			}
 			sent := stub.req.Messages[0].Text()
-			if got := strings.Contains(sent, "FILE-NEEDLE"); got != tt.wantFile {
-				t.Errorf("pinned file content present = %v, want %v:\n%s", got, tt.wantFile, sent)
-			}
 			if got := strings.Contains(sent, "CHAT-NEEDLE"); got != tt.wantChat {
 				t.Errorf("conversation present = %v, want %v:\n%s", got, tt.wantChat, sent)
 			}

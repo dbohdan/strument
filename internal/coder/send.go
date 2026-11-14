@@ -1230,7 +1230,6 @@ func (c *Coder) flushTurnUsage() {
 		// From the same two numbers the usage line above divides, so the row
 		// and the screen cannot disagree.
 		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),
-		Pinned:          c.pinnedRecordPaths(),
 		EditsExact:      c.editsExact,
 		EditsFuzzy:      c.editsFuzzy,
 		Files:           c.TurnEditedFiles(),

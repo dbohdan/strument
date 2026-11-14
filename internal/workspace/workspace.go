@@ -108,21 +108,11 @@ func (l Limits) fileBytes() int64 {
 type Workspace struct {
 	Root   string
 	Limits Limits
-	// Pinned reports whether an absolute path is one the user explicitly
-	// pinned with /add or /read-only. Those are sanctioned wherever they live,
-	// the same exemption unsafePath makes for edits: containment guards against
-	// a model inventing a path out of the project, not against what the user
-	// deliberately reached for.
-	//
-	// A predicate rather than a list, because a list would go stale the first
-	// time /drop ran. nil means nothing is pinned, which is what `strument
-	// tool` passes: the command line is contained with no exception at all.
-	Pinned func(abs string) bool
 	// Secret marks the files the model may not read on its own say-so — the
 	// conventional homes of credentials. Read refuses them and grep skips
-	// them; listing their names is fine, since a name reveals nothing. A
-	// pinned file is exempt, which is how the user says "this one, yes".
-	// nil marks nothing.
+	// them; listing their names is fine, since a name reveals nothing.
+	// secret_files_exempt is how the user says "this one, yes". nil marks
+	// nothing.
 	Secret *secretfile.Matcher
 	// OutsideGranted reports whether an absolute path outside the root has been
 	// granted for reading: a file, or anything under a directory, the user
@@ -381,8 +371,8 @@ func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	// Outside the project — a temp directory, a granted one, a pinned file's
-	// — rel comes back absolute, and the project's ignore rules have nothing
+	// Outside the project — a temp directory or a granted one — rel comes
+	// back absolute, and the project's ignore rules have nothing
 	// to say about it.
 	temp := isAbsRel(rel)
 	var domain []string

@@ -57,7 +57,6 @@ approve_model = decision_model("systemone", "laya", url = "http://localhost:1143
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
 prompt_system_prefix = "House rules."
 prompt_code = "Be terse."
-prompt_read_only = "Look only."
 chat_language = "en"
 `
 

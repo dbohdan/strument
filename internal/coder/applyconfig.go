@@ -106,7 +106,6 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	// overrides on top, which is what makes this idempotent.
 	c.SystemPromptPrefix = cfg.PromptSystemPrefix
 	c.PromptCode = cfg.PromptCode
-	c.PromptReadOnly = cfg.PromptReadOnly
 	c.SetChatLanguage(cfg.ChatLanguage)
 	c.setPrompts()
 }

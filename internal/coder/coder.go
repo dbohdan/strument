@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -53,12 +51,10 @@ type Coder struct {
 	// PromptCode is the user's replacement for MainSystem (the `prompt_code`
 	// config). Empty means "use the built-in". It lives on the Coder rather than
 	// in the prompts.Set built-in so a session does not mutate the shared
-	// singleton. PromptReadOnly is the same override for the read-only
-	// reference prefix. Both are applied by setPrompts, which ApplyConfig and
-	// New both funnel through.
-	PromptCode     string
-	PromptReadOnly string
-	ChatLanguage   string
+	// singleton. It is applied by setPrompts, which ApplyConfig and New both
+	// funnel through.
+	PromptCode   string
+	ChatLanguage string
 	// OfferCode, when false, withholds the run_code tool from the schema and
 	// empties the {code_tools} prompt slot. Default true, set in New; the
 	// false case is the feature-reverted arm of the code-mode trial and a
@@ -217,9 +213,7 @@ type Coder struct {
 	Session string
 
 	// Chat state.
-	absFnames         []string // ordered, deduped
-	absReadOnlyFnames []string
-	doneMessages      []llm.Message
+	doneMessages []llm.Message
 	// pendingAttachments are images staged by /attach, consumed by the next
 	// user message and gone after it. Not session state and not in the resume
 	// file: see userMessage in attach.go.
@@ -396,8 +390,8 @@ type Coder struct {
 
 type fence struct{ open, close string }
 
-// setPrompts applies this session's user overrides (prompt_code,
-// prompt_read_only) onto the built-in prompt set. The built-in is a
+// setPrompts applies this session's user override (prompt_code) onto the
+// built-in prompt set. The built-in is a
 // module-level singleton shared by every session, so an override is written to
 // a fresh copy rather than mutating prompts.Tool in place — a second Coder in
 // the same process must not inherit the first's custom prompt.
@@ -421,9 +415,6 @@ func (c *Coder) setPrompts() {
 	base := prompts.Tool
 	if c.PromptCode != "" {
 		base.MainSystem = c.PromptCode
-	}
-	if c.PromptReadOnly != "" {
-		base.ReadOnlyFilesPrefix = c.PromptReadOnly
 	}
 	c.Prompts = base
 }
@@ -467,7 +458,6 @@ func New(root string, model *config.Model) *Coder {
 	// exemption edits get: a file the user pinned is sanctioned wherever it
 	// lives. A predicate rather than a snapshot, so /add and /drop need no
 	// bookkeeping and the two lists cannot go stale.
-	c.Files.Pinned = c.isPinned
 	c.Files.OutsideGranted = c.outsideGranted
 	return c
 }
@@ -488,15 +478,6 @@ func (c *Coder) syncParser(on bool) {
 	}
 }
 
-// isPinned reports whether abs is a file the user added with /add or
-// /read-only. Out-of-tree references are the case it exists for: /read-only is
-// the only channel for a file outside the project, and a model that has its
-// contents in context will sometimes read it to check.
-func (c *Coder) isPinned(path string) bool {
-	abs := c.absRootPath(path)
-	return slices.Contains(c.absFnames, abs) || slices.Contains(c.absReadOnlyFnames, abs)
-}
-
 func defaultPlatformInfo(c *Coder) PlatformInfo {
 	shellVar := "SHELL"
 	if os.PathSeparator == '\\' {
@@ -509,23 +490,6 @@ func defaultPlatformInfo(c *Coder) PlatformInfo {
 		Language: detectUserLanguage(c.ChatLanguage),
 		Date:     time.Now().Format("2006-01-02"),
 		WorkDir:  c.Root,
-	}
-}
-
-// AddFile adds an editable file to the chat by absolute or root-relative
-// path.
-func (c *Coder) AddFile(path string) {
-	abs := c.absRootPath(path)
-	if !slices.Contains(c.absFnames, abs) {
-		c.absFnames = append(c.absFnames, abs)
-	}
-}
-
-// AddReadOnlyFile adds a read-only reference file.
-func (c *Coder) AddReadOnlyFile(path string) {
-	abs := c.absRootPath(path)
-	if !slices.Contains(c.absReadOnlyFnames, abs) {
-		c.absReadOnlyFnames = append(c.absReadOnlyFnames, abs)
 	}
 }
 
@@ -605,19 +569,6 @@ func (c *Coder) relFname(abs string) string {
 		return abs
 	}
 	return filepath.ToSlash(rel)
-}
-
-func (c *Coder) inchatRelativeFiles() []string {
-	set := map[string]bool{}
-	for _, f := range c.absFnames {
-		set[c.displayName(f)] = true
-	}
-	out := make([]string, 0, len(set))
-	for f := range set {
-		out = append(out, f)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // initBeforeMessage resets per-top-level-message state.

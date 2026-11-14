@@ -195,19 +195,17 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 
 ### REPL commands
 
-- `/add <file> ...`, `/drop`, `/ls`&thinsp;&mdash;&thinsp;pin files you want the model to inspect or change. Strument gives the model their names; the model reads them as needed and can find other project files itself.
 - `/yes [add <name> ... | drop <name> ... | reset]`&thinsp;&mdash;&thinsp;show or change which prompts are approved automatically. On its own it lists each approval and where it came from: `--yes`, the config's `auto_approve`, or this run. Dropping one makes Strument ask again mid-run, which is useful when a turn starts going somewhere unexpected.
-- `/attach <file> ...`&thinsp;&mdash;&thinsp;attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Unlike pinned files, attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can.
+- `/attach <file> ...`&thinsp;&mdash;&thinsp;attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can.
 - `/check [<name>]`&thinsp;&mdash;&thinsp;run a project check by name, or all checks if no name is given. Checks run in the order the config lists them and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is not offered to the chat.
-- `/consult <alias> <question>`, `/consult scope [<name>]`&thinsp;&mdash;&thinsp;ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none`, `files` (the pinned files, the default), or `chat` (the pinned files and the conversation); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug.
+- `/consult <alias> <question>`, `/consult scope [<name>]`&thinsp;&mdash;&thinsp;ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none` (the question alone, the default) or `chat` (the conversation too); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug.
 - `/session`, `/session new|switch|rename|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, rename, or delete one. See [Sessions](#sessions).
-- `/read-only <file> ...`&thinsp;&mdash;&thinsp;pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself.
 - `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether the model may commit its edits. With no argument, it shows the current setting. `--no-commits` starts a session with commits off, and `commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
 - `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commits the turn made, if they are still the newest on the branch and unpushed.
-- `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns that compaction has rolled away or summarized cannot be rewound.
+- `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns that compaction has rolled away cannot be rewound.
 - `/usage [<provider> | all]`&thinsp;&mdash;&thinsp;show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports).
 - `/diff`, `/tokens`&thinsp;&mdash;&thinsp;show what changed and how full the context window is.
-- `/context [<n>]`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: the roll note or compaction summaries, followed by recent messages. With `n`, show only the first `n` summaries.
+- `/context`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: the roll note, if compaction has rolled turns away, followed by recent messages.
 - `/skill [<name>]`&thinsp;&mdash;&thinsp;list the available skills, or add a skill's instructions to the chat yourself. See [Skills](doc/config.md#skills).
 - `/symbol <name> [definition | reference]`&thinsp;&mdash;&thinsp;find where a name is defined or used, using the language parser rather than a text search.
 - `/editor [<command>]`&thinsp;&mdash;&thinsp;write your message in an editor: `$VISUAL`, then `$EDITOR`, or the command given. What you save comes back to the prompt to read and send. <kbd>Ctrl+X Ctrl+E</kbd> opens it with what you have typed.
@@ -230,7 +228,7 @@ read [script mode](doc/config.md#script-mode--m) before giving an unattended run
 
 ### Sessions
 
-A project can hold several _sessions_, each with its own conversation, choice of model, pinned files, and undo history.
+A project can hold several _sessions_, each with its own conversation, choice of model, and undo history.
 Each invocation of Strument is called a _run_.
 The option `-s <name>` (`--session`) picks the session, creating it if necessary.
 A bare `strument` command returns to the last session used, or `default`.

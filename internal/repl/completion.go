@@ -118,7 +118,7 @@ func runesHasPrefix(s, prefix []rune) bool {
 // the tracked, chat, and read-only files, each contributing both its
 // repo-relative path and its basename (so "scra" completes "scrape.go" and
 // "internal/co" descends the path). Without git, TrackedFiles is nil, so
-// completion falls back to this session's editable and reference files.
+// there is nothing to offer.
 func (r *REPL) completePromptFiles() []string {
 	set := map[string]struct{}{}
 	add := func(rel string) {
@@ -133,18 +133,11 @@ func (r *REPL) completePromptFiles() []string {
 	for _, f := range r.coder.TrackedFiles() {
 		add(f)
 	}
-	for _, f := range r.coder.ChatFiles() {
-		add(f)
-	}
-	for _, f := range r.coder.ReadOnlyFiles() {
-		add(f)
-	}
 	return slices.Sorted(maps.Keys(set))
 }
 
-// completePaths completes /read-only and /submit arguments against the real
-// filesystem, absolute paths included. completePathsFor also serves /add with
-// outside paths filtered out, since editable files must stay inside the project.
+// completePaths completes /submit and /attach arguments against the real
+// filesystem, absolute paths included.
 //
 // The dynamic callback receives the whole typed line, so the word being
 // completed is extracted here. Candidates are returned in the same terms the
@@ -152,8 +145,7 @@ func (r *REPL) completePromptFiles() []string {
 // — the typed word, directory parts included — against each candidate and
 // offers the suffix past it: `internal/co` is answered with `internal/…`
 // candidates, `/tmp/…/pro` with absolute ones. A relative word's directory
-// resolves against the project root, the same resolution cmdSubmit and
-// expandPatterns apply. A directory entry carries a trailing slash, which
+// resolves against the project root, the same resolution cmdSubmit applies. A directory entry carries a trailing slash, which
 // both signals "descend" and lets the next Tab list into it. Dotfiles stay
 // hidden unless the typed word starts with one, as a shell does.
 func (r *REPL) completePaths(line string) []string {

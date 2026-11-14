@@ -23,32 +23,12 @@ type Resume struct {
 	Version int    `json:"version"`
 	Updated string `json:"updated"`
 
-	// Files and ReadOnly are relative to the *project* root — the one the state
-	// directory is keyed on — not to the coder's root. Under --no-git the coder
-	// works from the invocation directory while the project is still the git
-	// worktree, so a coder-relative path written in one session and read in
-	// another would point somewhere else entirely. The project root is the
-	// stable referent, which is the property the whole layout rests on.
-	Files    []string `json:"files,omitempty"`
-	ReadOnly []string `json:"read_only,omitempty"`
-
 	// Model is recorded only when the alias was *chosen* — -M or /model — and
 	// never when it fell back to the config's default. Recording the fallback
 	// would silently pin a project to whatever the default was the first time
 	// it was opened, so that later editing `default` in config.star would
 	// mysteriously not take effect there.
 	Model string `json:"model,omitempty"`
-
-	// AutoPinned records files Strument pinned on its own initiative, so it
-	// does each exactly once. Today that is only AGENTS.md.
-	//
-	// It cannot be inferred from Files: /drop would erase the evidence and the
-	// file would come back next session, which is the shape of an assistant
-	// that will not take no for an answer. Offer once, then the pin set is
-	// authoritative — dropped stays dropped, and /add brings it back the
-	// ordinary way. The same principle as Model recording only a *chosen*
-	// alias.
-	AutoPinned []string `json:"auto_pinned,omitempty"`
 }
 
 // ResumePath is the resume file for a project root.

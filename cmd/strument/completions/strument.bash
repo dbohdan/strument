@@ -144,10 +144,9 @@ _strument_complete() {
 
     case "$command" in
     "" | chat)
-        # The default command. Its positional arguments are files to pin, so
-        # offer them alongside the command names.
+        # The default command. It takes no positional arguments, so the
+        # command names are all there is to offer besides its flags.
         _strument_words "$_strument_commands $_strument_chat_options"
-        [[ $cur == -* ]] || compopt -o default
         ;;
     trust)
         if [[ $cur == -* ]]; then

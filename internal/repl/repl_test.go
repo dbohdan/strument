@@ -217,12 +217,9 @@ func (r testCommandRunner) Run(ctx context.Context, command, cwd string) (int, s
 func TestScriptedSession(t *testing.T) {
 	input := strings.NewReader(
 		"/help\n" +
-			"/add hello.txt\n" +
-			"/ls\n" +
 			"/tokens\n" +
 			"hi there\n" +
 			"/nonsense\n" +
-			"/drop\n" +
 			"/exit\n" +
 			"never reached\n")
 	stub := answerStub("Hello! Some **bold** and `code` here.\n")
@@ -235,18 +232,10 @@ func TestScriptedSession(t *testing.T) {
 
 	got := out.String()
 	for _, want := range []string{
-		"/read-only <file> ...", // /help output
-		"Pinned hello.txt.",
-		"Pinned:",
-		"hello.txt",
-		"read-only files", // /tokens section (chat files no
-		//                                    longer have one: pinned files are
-		//                                    named in the system prompt and
-		//                                    their contents arrive as tool
-		//                                    results, landing in the history)
+		"/submit <file>",                  // /help output
+		"system messages",                 // /tokens section
 		"Hello! Some bold and code here.", // rendered plain (no color)
 		"Unknown command: /nonsense.",
-		"Unpinned all files.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q:\n%s", want, got)
@@ -305,8 +294,6 @@ func TestBannerAndPromptHeader(t *testing.T) {
 		model := testModel()
 		cdr := coder.New(root, model)
 		cdr.Client = answerStub("ok\n")
-		cdr.AddFile("hello.txt")
-		cdr.AddReadOnlyFile("spec.md")
 
 		out := &syncBuffer{}
 		r, err := New(Options{
@@ -339,11 +326,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Session: review", // the conversation this run writes to
 			"Git repo: none",
 			"Language parser: off",
-			"Pinned hello.txt.",         // banner: an /add pin, unmarked
-			"Pinned spec.md read-only.", // banner: only the exception is named
-			"spec.md (read-only)",       // prompt header, same convention
-			strings.Repeat("─", 24),     // solid rule (aider's console.rule), honors GetSize width
-			"hello.txt",                 // file listing
+			strings.Repeat("─", 24), // solid rule (aider's console.rule), honors GetSize width
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("color=%v: output missing %q:\n%q", color, want, got)
@@ -506,38 +489,6 @@ func TestReloadConfigErrorKeepsConfig(t *testing.T) {
 	}
 	if !strings.Contains(got, "Switched to model other") {
 		t.Errorf("session should stay usable on the old config after a failed reload:\n%s", got)
-	}
-}
-
-func TestAddDropDirectory(t *testing.T) {
-	// The test root is not a git repo, so /add <dir> uses the filesystem walk.
-	input := strings.NewReader("/add sub\n/ls\n/drop sub\n/ls\n/exit\n")
-	r, cdr, out := newTestREPL(t, &fixture.StreamStub{}, input)
-	defer r.Close()
-
-	sub := filepath.Join(cdr.Root, "sub")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, n := range []string{"a.txt", "b.txt"} {
-		if err := os.WriteFile(filepath.Join(sub, n), []byte("x\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := r.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	got := out.String()
-	for _, want := range []string{
-		"Pinned sub/a.txt.",
-		"Pinned sub/b.txt.",
-		"Unpinned sub/a.txt.",
-		"Unpinned sub/b.txt.",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q:\n%s", want, got)
-		}
 	}
 }
 
@@ -1267,7 +1218,7 @@ func TestSubmitCommandSendsFileContents(t *testing.T) {
 	}
 
 	input := strings.NewReader(`/submit "hello.txt"` + "\n/exit\n")
-	r, cdr, out := newTestREPL(t, stub, input)
+	r, _, out := newTestREPL(t, stub, input)
 	defer r.Close()
 
 	if err := r.Run(context.Background()); err != nil {
@@ -1279,13 +1230,10 @@ func TestSubmitCommandSendsFileContents(t *testing.T) {
 	if !strings.Contains(out.String(), "hello") {
 		t.Errorf("/submit did not print the file contents:\n%s", out.String())
 	}
-	if len(cdr.ChatFiles()) != 0 {
-		t.Errorf("files pinned after /submit: %v", cdr.ChatFiles())
-	}
 }
 
-// /submit takes one path from the project root, but outside paths are allowed
-// like /read-only's — a drafted prompt often lives outside the project.
+// /submit takes one path from the project root, but outside paths are allowed:
+// a drafted prompt often lives outside the project.
 func TestSubmitCommandOutsidePath(t *testing.T) {
 	stub := answerStub("ok\n")
 	var reqText string

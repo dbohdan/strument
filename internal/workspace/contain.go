@@ -53,33 +53,14 @@ import (
 // tool layer uses, because these become sentences a model reads.
 func (w *Workspace) contain(raw string) (full, rel, reason string) {
 	raw = expandHome(raw)
-	// First, and ahead of the pinned exemption below rather than after it.
-	// .git is machine state at any depth and however the caller spells it, and
-	// the exemption must stay a record of user intent (/add, /read-only). The
-	// user has /run for the rare legitimate look at their own repository's
-	// internals.
+	// First, ahead of every exemption below. .git is machine state at any
+	// depth and however the caller spells it. The user has /run for the rare
+	// legitimate look at their own repository's internals.
 	if UnderGitDir(raw) {
 		return "", "", gitDirRefusal
 	}
 	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`) {
-		// A pinned file may be named absolutely, which is the carve-out
-		// unsafePath has always made and this side did not. The two are
-		// documented as mirrors, and they had drifted on exactly this case: the
-		// same absolute path for a pinned file was accepted for editing and
-		// refused for reading. The order is what differed — unsafePath asks
-		// "pinned?" before "absolute?", and this asked the other way round, so
-		// the exemption below was unreachable for an absolute path.
-		//
-		// It matters beyond consistency now that DisplayPath names an
-		// out-of-tree pin absolutely: that is the string the prompt hands the
-		// model, so it has to be a string the model can read back.
-		//
-		// Nothing widens here. The exemption is exactly the set of files the
-		// user pinned, and Pinned cannot answer true for anything else.
 		full = filepath.Clean(raw)
-		if w.Pinned != nil && w.Pinned(full) {
-			return full, filepath.ToSlash(full), ""
-		}
 		rootAbs, err := filepath.Abs(w.Root)
 		if err != nil {
 			return "", "", "the project root cannot be resolved"
@@ -120,14 +101,6 @@ func (w *Workspace) contain(raw string) (full, rel, reason string) {
 		return w.Root, "", ""
 	}
 	full = filepath.Clean(filepath.Join(w.Root, filepath.FromSlash(rel)))
-
-	// A pinned file is one the user reached for deliberately, so it is
-	// sanctioned wherever it lives — the same carve-out unsafePath makes for
-	// edits. The boundary guards against a model inventing a path out of the
-	// project, not against what the user put in front of it.
-	if w.Pinned != nil && w.Pinned(full) {
-		return full, rel, ""
-	}
 
 	rootAbs, err := filepath.Abs(w.Root)
 	if err != nil {
@@ -349,27 +322,19 @@ func (w *Workspace) ignored(rel string, isDir bool) (bool, error) {
 // at what to exempt, and it names the way the user can allow it, so the model
 // can say so rather than reach for cat.
 func (w *Workspace) refuseSecret(rel, full string) error {
-	if w.Pinned != nil && w.Pinned(full) {
-		return nil
-	}
 	abs, err := filepath.Abs(full)
 	if err != nil {
 		return err
 	}
 	if pat, ok := w.Secret.Match(abs); ok {
 		return fmt.Errorf("%s matches the secret-file pattern %q, so it is not read. "+
-			"The user can pin it with /read-only to let you read it, or with /add to let you read and edit it", rel, pat)
+			"The user can allow it with secret_files_exempt in their configuration", rel, pat)
 	}
 	return nil
 }
 
-// refuseIgnored is the message a caller gives back for an ignored path. A
-// pinned file is exempt here as well: the user naming a file is a stronger
-// signal than the project's blanket rule, and /add already accepts one.
-func (w *Workspace) refuseIgnored(rel, full string) error {
-	if w.Pinned != nil && w.Pinned(full) {
-		return nil
-	}
+// refuseIgnored is the message a caller gives back for an ignored path.
+func (w *Workspace) refuseIgnored(rel string) error {
 	yes, err := w.ignored(rel, false)
 	if err != nil {
 		return err

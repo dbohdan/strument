@@ -3,7 +3,6 @@ package repl
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,51 +19,6 @@ func replWithSaves(t *testing.T) (*REPL, *saveRecorder, string) {
 	rec := &saveRecorder{}
 	r.opts.SaveResume = rec.save
 	return r, rec, cdr.Root
-}
-
-// The reported bug. `/drop` with no arguments unpinned everything in memory and
-// returned before its own saveResume call, so every restart restored the pin —
-// and nothing else saves: a turn does not, so running one after the drop did not
-// help either. Three sessions in dbohdan's log dropped the same file and the
-// fourth still restored it.
-func TestBareDropPersists(t *testing.T) {
-	r, rec, root := replWithSaves(t)
-	if err := os.WriteFile(filepath.Join(root, "pinned.txt"), []byte("x\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	r.dispatch(context.Background(), "/add pinned.txt")
-	afterAdd := rec.calls
-	if afterAdd == 0 {
-		t.Fatal("/add did not save; the resume file would never be written at all")
-	}
-
-	r.dispatch(context.Background(), "/drop")
-	if len(r.coder.ChatFiles()) != 0 {
-		t.Fatal("/drop did not unpin in memory")
-	}
-	if rec.calls == afterAdd {
-		t.Error("bare /drop changed the pins and saved nothing, so a restart restores them")
-	}
-}
-
-// The counter-arm, and the regression that slipped past build and `go test`
-// while an empty `if` body sat in dispatch: a command that *does* change pins
-// must save. Without this, "nothing was written" and "nothing needed writing"
-// are the same green.
-func TestPinningPersists(t *testing.T) {
-	for _, cmd := range []string{"/add pinned.txt", "/read-only pinned.txt"} {
-		t.Run(cmd, func(t *testing.T) {
-			r, rec, root := replWithSaves(t)
-			if err := os.WriteFile(filepath.Join(root, "pinned.txt"), []byte("x\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			r.dispatch(context.Background(), cmd)
-			if rec.calls == 0 {
-				t.Errorf("%s pinned a file and saved nothing", cmd)
-			}
-		})
-	}
 }
 
 // And the other direction: a command that changes nothing must not write, or the

@@ -230,7 +230,6 @@ var projectKeyOrder = []string{
 	"hasEnvSet",
 	"hasPromptSystemPrefix",
 	"hasPromptCode",
-	"hasPromptReadOnly",
 	"hasChatLanguage",
 }
 
@@ -473,8 +472,6 @@ var projectKeys = map[string]projectKey{
 		func(g *fileGlobals) (bool, string) { return g.hasPromptSystemPrefix, g.promptSystemPrefixVal }),
 	"hasPromptCode": promptKey("prompt_code", "replaces the system prompt",
 		func(g *fileGlobals) (bool, string) { return g.hasPromptCode, g.promptCodeVal }),
-	"hasPromptReadOnly": promptKey("prompt_read_only", "replaces the read-only-mode system prompt",
-		func(g *fileGlobals) (bool, string) { return g.hasPromptReadOnly, g.promptReadOnlyVal }),
 
 	"hasChatLanguage": {name: "chat_language", set: func(g *fileGlobals) bool { return g.hasChatLanguage }},
 }

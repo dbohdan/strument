@@ -9,7 +9,7 @@ see [`sessions.md`](sessions.md). For where the files live on disk, see
 ## Sessions
 
 A project can hold several sessions, each with its own name, conversation,
-pinned files, and undo history. `--session <name>` (`-s`) says which one to
+model, and undo history. `--session <name>` (`-s`) says which one to
 work in. It creates the session the first time, and the name is remembered as
 the one a bare `strument` picks up next. The cost ledger is one file per
 project and names the session on every row, so it answers both "what has this

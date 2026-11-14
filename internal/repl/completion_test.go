@@ -96,20 +96,9 @@ func TestPromptCompleterRouting(t *testing.T) {
 	}
 }
 
-func TestDropCompletionIncludesReadOnlyFiles(t *testing.T) {
-	r, cdr, _ := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader("/exit\n"))
-	defer r.Close()
-	cdr.AddReadOnlyFile("hello.txt")
-
-	got := completionsFor(r.completer(), "/drop hel")
-	if len(got) != 1 || got[0] != "lo.txt" {
-		t.Errorf("/drop completion = %v, want [lo.txt] for the read-only pin", got)
-	}
-}
-
-// TestPathCommandCompletion pins the /read-only and /submit argument
+// TestPathCommandCompletion pins the /submit and /submit argument
 // completer: arbitrary filesystem paths, absolute included — the point of
-// /read-only is material outside the project, which completeAddable's flat
+// /submit is material outside the project, which completeAddable's flat
 // listing of the root could never offer.
 func TestPathCommandCompletion(t *testing.T) {
 	r, _, _ := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader("/exit\n"))
@@ -128,7 +117,6 @@ func TestPathCommandCompletion(t *testing.T) {
 		{"/submit " + filepath.Join(outside, "pro"), "mpt.md"},
 		// Project-relative word.
 		{"/submit hel", "lo.txt"},
-		{"/read-only hel", "lo.txt"},
 	} {
 		got := completionsFor(r.completer(), tc.line)
 		if len(got) != 1 || got[0] != tc.want {
@@ -147,9 +135,9 @@ func TestPathCommandCompletion(t *testing.T) {
 	// A trailing slash lists the directory: both entries, the directory one
 	// with its slash so the next Tab descends.
 	slash := outside + string(filepath.Separator)
-	got = completionsFor(r.completer(), "/read-only "+slash)
+	got = completionsFor(r.completer(), "/submit "+slash)
 	if len(got) != 2 || got[0] != "prompt.md" || got[1] != "subdir/" {
-		t.Errorf("/read-only %s = %q, want [prompt.md subdir/]", slash, got)
+		t.Errorf("/submit %s = %q, want [prompt.md subdir/]", slash, got)
 	}
 }
 
@@ -167,29 +155,19 @@ func TestPathCompletionMultiSegmentDescends(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := completionsFor(r.completer(), "/read-only docs")
+	got := completionsFor(r.completer(), "/submit docs")
 	if len(got) != 1 || got[0] != "/" {
-		t.Errorf("/read-only docs = %q, want [/]", got)
+		t.Errorf("/submit docs = %q, want [/]", got)
 	}
 
-	got = completionsFor(r.completer(), "/read-only docs/")
+	got = completionsFor(r.completer(), "/submit docs/")
 	if len(got) != 1 || got[0] != "spec.md" {
-		t.Errorf("/read-only docs/ = %q, want [spec.md]", got)
+		t.Errorf("/submit docs/ = %q, want [spec.md]", got)
 	}
 
-	got = completionsFor(r.completer(), "/add docs")
-	if len(got) != 1 || got[0] != "/" {
-		t.Errorf("/add docs = %q, want [/]", got)
-	}
-
-	got = completionsFor(r.completer(), "/add docs/")
-	if len(got) != 1 || got[0] != "spec.md" {
-		t.Errorf("/add docs/ = %q, want [spec.md]", got)
-	}
-
-	got = completionsFor(r.completer(), "/read-only docs/s")
+	got = completionsFor(r.completer(), "/submit docs/s")
 	if len(got) != 1 || got[0] != "pec.md" {
-		t.Errorf("/read-only docs/s = %q, want [pec.md]", got)
+		t.Errorf("/submit docs/s = %q, want [pec.md]", got)
 	}
 }
 

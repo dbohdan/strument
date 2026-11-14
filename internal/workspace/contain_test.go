@@ -128,38 +128,6 @@ func TestAbsolutePathsInsideTheRootAreContained(t *testing.T) {
 	}
 }
 
-// A path the user pinned is sanctioned wherever it lives, the same carve-out
-// unsafePath makes for edits. /read-only is the only channel for a file outside
-// the project, and models with such a file's contents in context were observed
-// reading it to check — so containing it without this would break a path the
-// design depends on.
-func TestPinnedFilesAreExemptFromContainment(t *testing.T) {
-	root := tree(t, map[string]string{"normal.txt": "inside\n"})
-	outside := filepath.Join(filepath.Dir(root), "spec.md")
-	if err := os.WriteFile(outside, []byte("GET /widgets\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	w := New(root)
-
-	rel := "../" + filepath.Base(outside)
-	if _, err := w.Read(rel, 0, 0); err == nil {
-		t.Fatal("with nothing pinned, an outside file must be refused")
-	}
-
-	w.Pinned = func(abs string) bool { return abs == outside }
-	got, err := w.Read(rel, 0, 0)
-	if err != nil {
-		t.Fatalf("a pinned file should stay readable: %v", err)
-	}
-	if len(got.Lines) == 0 || !strings.Contains(got.Lines[0], "GET /widgets") {
-		t.Errorf("contents = %+v", got.Lines)
-	}
-	// The exemption is exactly that one file, not its directory.
-	if _, err := w.Read("../elsewhere.txt", 0, 0); err == nil {
-		t.Error("the exemption must not widen to the whole parent directory")
-	}
-}
-
 // README.md said the lookup tools "never see a file the project ignores", which
 // was true of ls, glob, and grep and false of read: a gitignored .env was
 // invisible to every way of finding it and one guessed filename away from being
@@ -193,12 +161,5 @@ func TestReadHonorsGitignore(t *testing.T) {
 		if _, err := w.Read(visible, 0, 0); err != nil {
 			t.Errorf("Read(%q) = %v, want it to work", visible, err)
 		}
-	}
-
-	// Pinning one is the user overriding their own project's rule, which /add
-	// already accepts.
-	w.Pinned = func(abs string) bool { return abs == filepath.Join(root, "secret.env") }
-	if _, err := w.Read("secret.env", 0, 0); err != nil {
-		t.Errorf("a pinned ignored file should be readable: %v", err)
 	}
 }
