@@ -20,7 +20,7 @@ func TestSecretFilesAreNotEdited(t *testing.T) {
 	}
 	c := toolCoder(t, dir)
 	for _, p := range []string{".env", filepath.Join(dir, ".env"), "deploy/.env.production"} {
-		if r := c.unsafePath(p); !strings.Contains(r, "secret-file pattern") || !strings.Contains(r, "/add") {
+		if r := c.unsafePath(p); !strings.Contains(r, "secret-file pattern") || !strings.Contains(r, "secret_files_exempt") {
 			t.Errorf("%s: reason %q, want the secret-file refusal", p, r)
 		}
 	}
@@ -34,11 +34,5 @@ func TestSecretFilesAreNotEdited(t *testing.T) {
 	}
 	if r := c.unsafePath(".env"); r != "" {
 		t.Errorf("a pattern exempted by secret_files_exempt still refused: %q", r)
-	}
-
-	ApplyConfig(c, &config.Config{})
-	c.AddFile(filepath.Join(dir, ".env"))
-	if r := c.unsafePath(".env"); r != "" {
-		t.Errorf("a pinned secret file was refused: %q", r)
 	}
 }

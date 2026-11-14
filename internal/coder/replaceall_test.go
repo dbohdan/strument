@@ -149,7 +149,6 @@ func TestOverlappingMatchesAreAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false

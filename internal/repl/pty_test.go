@@ -94,8 +94,8 @@ func TestInteractivePty(t *testing.T) {
 	}
 
 	expect("> ")
-	_, _ = ptmx.WriteString("/ls\r")
-	expect("No files are pinned.")
+	_, _ = ptmx.WriteString("/tokens\r")
+	expect("system messages")
 
 	_, _ = ptmx.WriteString("hi\r")
 	expect("plain ")

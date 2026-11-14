@@ -60,10 +60,8 @@ complete -c strument -n __fish_use_subcommand -a tool -d "Run one observation to
 complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell completions"
 
 # Chat: the default command, so its flags stand until another command is named.
-# Its positional arguments are files to pin, which is the one place the bare
-# command line wants file completion.
+# It takes no positional arguments, so it offers no files.
 set -l chat_cmd "not __fish_seen_subcommand_from $subcommands"
-complete -c strument -n $chat_cmd -F
 complete -c strument -n $chat_cmd -s m -l message -d "Send one message, apply the edits, and exit" -x
 complete -c strument -n $chat_cmd -s s -l session -d "Conversation to work in, created if new" -x -a "(__strument_sessions)"
 complete -c strument -n $chat_cmd -s c -l continue -d "Resume this session: restore its conversation from the record"

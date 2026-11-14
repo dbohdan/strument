@@ -53,7 +53,6 @@ The loader reads these module-level variables after running your file:
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
 | `prompt_code` | string | Optional. Whole-string replacement for the system prompt. See below. |
-| `prompt_read_only` | string | Optional. Whole-string replacement for the read-only reference prefix. See below. |
 | `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
 
 Other top-level names are not treated as settings. You can use them for helper
@@ -99,7 +98,7 @@ projects/myproj-9428ba2d/
     blobs/          stored tool output of 1 KiB or more, named by its SHA-256
     sessions/<name>/    one directory per session
         log/        the session record, one JSON Lines file per run
-        resume.json pinned files and the model alias, so a restart costs no retyping
+        resume.json the model alias, so a restart costs no retyping
         undo.json   file contents to step back through
 ```
 
@@ -554,15 +553,14 @@ Use `/web` to inspect the run's grants and revoke them:
 | `/web allow <host[:port]>` | Approve a host for the run without waiting to be asked |
 | `/web drop <host[:port]>` | Withdraw one session grant |
 | `/web reset` | Withdraw all of them |
-| `/reset` | Withdraws them too, along with the pins and the history |
+| `/reset` | Withdraws them too, along with the history |
 
 `/web allow` expands an entry exactly as the config does, so a bare host grants
 both default ports. Nothing here writes to `config.star`; use
 `webfetch_allow` for a persistent approval.
 
 `/clear` starts a fresh conversation in the current session, preserving
-pinned files, notes, and session grants. See
-[sessions](sessions.md#the-notes-lifecycle).
+session grants. See [sessions](sessions.md#the-notes-lifecycle).
 
 Automatically approved fetches still print their purpose and URL.
 
@@ -861,14 +859,8 @@ touch the CI config" — without rewriting anything else:
 prompt_system_prefix = "You work on the Acme codebase.\n\n"
 ```
 
-**Replace a built-in prompt.** `prompt_code` and `prompt_read_only` replace the corresponding built-in prompt entirely:
-
-| Key | Replaces |
-|---|---|
-| `prompt_code` | the system prompt (`Tool.MainSystem`) |
-| `prompt_read_only` | the prefix framing injected read-only reference files |
-
-A replacement removes the corresponding built-in instructions. To add a rule
+**Replace the built-in prompt.** `prompt_code` replaces the system prompt
+(`Tool.MainSystem`) entirely, removing the built-in instructions. To add a rule
 without replacing a prompt, use `prompt_system_prefix`.
 
 Replacements are templates that may use the built-ins' **closed placeholder
@@ -876,7 +868,6 @@ set** — the same `{...}` slots `pyFormat` fills at assembly time:
 
 - `prompt_code`: `{platform}`, `{language}`, `{final_reminders}`,
   `{code_tools}`, `{observation_tools}`.
-- `prompt_read_only`: none (literal).
 
 Only the placeholders listed below are supported. Unknown placeholders cause a
 configuration error. Double literal braces as `{{` and `}}`.
@@ -1107,7 +1098,7 @@ Some files are where credentials conventionally live: `.env`, `~/.netrc`,
 search them, or edit them on the model's own say-so. A failed edit answers with
 the file's closest lines, so an edit is a read too. `ls` and `glob` still list
 their names, because a name gives nothing away. When you do want the model to
-see one, pin it: `/read-only` to read it, `/add` to edit it.
+see one, list it in `secret_files_exempt`.
 
 The built-in patterns are in `internal/secretfile/secretfile.go`. They cover
 `.env` and `.env.*` (but not `.env.example`, `.env.sample` or
@@ -1259,7 +1250,7 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
-A message that begins with a command, such as `/add`, is refused with a nonzero exit, because
+A message that begins with a command, such as `/undo`, is refused with a nonzero exit, because
 script mode sends one message and nothing else. A message that begins with a
 slash but no command name, such as a path (`/etc/hosts has a typo`), is sent as
 written.

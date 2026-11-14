@@ -60,8 +60,6 @@ func TestApplyRollbackReturnsEmptyEdited(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
-	c.AddFile("blocker/b.txt")
 
 	results := toolResults{}
 	matchFailure := false
@@ -131,7 +129,6 @@ func TestCleanWriteEditedIsWrittenSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false

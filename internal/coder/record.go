@@ -27,7 +27,6 @@
 package coder
 
 import (
-	"slices"
 	"strings"
 	"time"
 
@@ -421,20 +420,6 @@ func (c *Coder) record(r Record) {
 		return
 	}
 	c.Recorder.Record(r)
-}
-
-func (c *Coder) pinnedRecordPaths() []string {
-	paths := make([]string, 0, len(c.absFnames)+len(c.absReadOnlyFnames))
-	seen := make(map[string]bool, cap(paths))
-	for _, abs := range append(append([]string{}, c.absFnames...), c.absReadOnlyFnames...) {
-		path := c.displayName(abs)
-		if !seen[path] {
-			seen[path] = true
-			paths = append(paths, path)
-		}
-	}
-	slices.Sort(paths)
-	return paths
 }
 
 // RecordSession writes the header record. Called once, by whoever built the

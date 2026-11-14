@@ -3,9 +3,7 @@ package coder
 import (
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"dbohdan.com/strument/internal/config"
@@ -15,9 +13,6 @@ import (
 
 // This file is the REPL-facing session surface:
 // slash commands own their I/O and mutate chat state through these methods.
-
-// ChatFiles returns the editable chat files, root-relative and sorted.
-func (c *Coder) ChatFiles() []string { return c.inchatRelativeFiles() }
 
 // TurnEditedFiles returns what the turn just finished changed, sorted.
 //
@@ -33,62 +28,6 @@ func (c *Coder) TurnEditedFiles() []string { return slices.Sorted(maps.Keys(c.tu
 // turn than after a finished one: an interruption looks like a kill and is not,
 // and the difference is invisible from the outside.
 func (c *Coder) LastOutcome() SendOutcome { return c.lastSendOutcome }
-
-// ReadOnlyFiles returns the read-only reference files, root-relative and
-// sorted.
-func (c *Coder) ReadOnlyFiles() []string {
-	out := make([]string, 0, len(c.absReadOnlyFnames))
-	for _, f := range c.absReadOnlyFnames {
-		out = append(out, c.displayName(f))
-	}
-	sort.Strings(out)
-	return out
-}
-
-// DropFile removes a file (editable or read-only) from the chat by
-// absolute or root-relative path; it reports whether anything was dropped.
-func (c *Coder) DropFile(path string) bool {
-	abs := c.absRootPath(path)
-	if i := slices.Index(c.absFnames, abs); i >= 0 {
-		c.absFnames = slices.Delete(c.absFnames, i, i+1)
-		return true
-	}
-	if i := slices.Index(c.absReadOnlyFnames, abs); i >= 0 {
-		c.absReadOnlyFnames = slices.Delete(c.absReadOnlyFnames, i, i+1)
-		return true
-	}
-	return false
-}
-
-// DropAll removes every file from the chat.
-func (c *Coder) DropAll() {
-	c.absFnames = nil
-	c.absReadOnlyFnames = nil
-}
-
-// DropUnder removes the exact file at path and every chat/read-only file
-// beneath it when path is a directory, resolving path the same way AddFile
-// does. It returns the root-relative names dropped, sorted.
-func (c *Coder) DropUnder(path string) []string {
-	dir := c.absRootPath(path)
-	prefix := dir + string(filepath.Separator)
-	var dropped []string
-	filter := func(list []string) []string {
-		kept := make([]string, 0, len(list))
-		for _, abs := range list {
-			if abs == dir || strings.HasPrefix(abs, prefix) {
-				dropped = append(dropped, c.displayName(abs))
-			} else {
-				kept = append(kept, abs)
-			}
-		}
-		return kept
-	}
-	c.absFnames = filter(c.absFnames)
-	c.absReadOnlyFnames = filter(c.absReadOnlyFnames)
-	sort.Strings(dropped)
-	return dropped
-}
 
 // TrackedFiles returns the git-tracked files (repo-root-relative), or nil
 // outside a repository — the file set /add expands a directory to.
@@ -239,7 +178,6 @@ func (c *Coder) TokensReport() string {
 		// The schemas are not part of any message, so they were missing from
 		// this table entirely while being sent with every single request.
 		{"tool schemas", c.countTools()},
-		{"read-only files", c.countMessages(chunks.readonlyFiles)},
 		// Pinned files no longer have a section of their own: their names ride
 		// in the system prompt and their contents arrive as tool results, which
 		// land in the history like any other tool result.

@@ -536,8 +536,8 @@ type updatedAt struct {
 
 // keepNewestFile leaves the destination alone unless the source is newer.
 //
-// For state that is one value rather than a record of events: a pinned file
-// list, an undo stack. There is no union to take — two undo stacks describe
+// For state that is one value rather than a record of events: the resume
+// state, an undo stack. There is no union to take — two undo stacks describe
 // overlapping periods of one tree and cannot be ordered into a single history —
 // so the question is only which one to keep, and the recorded timestamp answers
 // it.

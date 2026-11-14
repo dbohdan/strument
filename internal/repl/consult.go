@@ -125,10 +125,8 @@ func (r *REPL) consultScopeCmd(name string) string {
 		switch r.opts.ConsultScope {
 		case coder.ConsultNothing:
 			r.printf("  The advisor sees the question alone.")
-		case coder.ConsultFiles:
-			r.printf("  The advisor sees the pinned files and the question.")
 		case coder.ConsultChat:
-			r.printf("  The advisor sees the conversation, the pinned files, and the question.")
+			r.printf("  The advisor sees the conversation and the question.")
 		}
 		return ""
 	}

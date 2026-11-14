@@ -108,7 +108,6 @@ func TestUndoWithoutGitSession(t *testing.T) {
 	model := testModel()
 	cdr := coder.New(root, model)
 	cdr.Client = &fixture.StreamStub{Turns: editTurn("call_1", "main.txt", `hello world\n`, `hello strument\n`)}
-	cdr.AddFile("main.txt")
 
 	out := &syncBuffer{}
 	r, err := New(Options{
@@ -205,7 +204,6 @@ func TestDiffAndUndoSession(t *testing.T) {
 	cdr.Client = editCommitStub()
 	cdr.Repo = g
 	cdr.Commits = true
-	cdr.AddFile("main.txt")
 
 	// /undo before any turn: there is nothing of the session's to undo.
 	input := strings.NewReader(

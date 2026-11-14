@@ -127,14 +127,6 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 	c.Runner = scriptRunner{t, commands}
 	c.Out = testOutput{t}
 	c.Clock = RealClock{} // replay streams never sleep long; retries use Clock below
-	if sc.Chat != nil {
-		for _, f := range sc.Chat.Editable {
-			c.AddFile(f)
-		}
-		for _, f := range sc.Chat.Readonly {
-			c.AddReadOnlyFile(f)
-		}
-	}
 	if mutate != nil {
 		mutate(c)
 	}

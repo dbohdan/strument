@@ -41,7 +41,6 @@ func TestUnreadFileIsStillEditable(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false
@@ -69,7 +68,6 @@ func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 	c.shown.note("a.txt", path)
 
 	// Somebody else writes the file. "world" is still in it, so the edit would
@@ -120,7 +118,6 @@ func TestStaleAfterACommandDoesNotBlameAnOutsideEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 	c.shown.note("a.txt", path)
 
 	c.runAndShow(context.Background(), "echo 'hello world, reformatted' > a.txt", 0)
@@ -154,7 +151,6 @@ func TestOurOwnWriteRefreshesTheStamp(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 	c.shown.note("a.txt", path)
 
 	results := toolResults{}
@@ -191,7 +187,6 @@ func TestWriteIsNotGatedOnStaleness(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 	c.shown.note("a.txt", path)
 	touchLater(t, path, "changed by somebody else entirely\n")
 
@@ -243,7 +238,6 @@ func TestFuzzyEditIsCountedAndAnnounced(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false
@@ -274,7 +268,6 @@ func TestExactEditIsNotCountedAsFuzzy(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false
@@ -301,7 +294,6 @@ func TestFuzzyAmbiguityIsRefused(t *testing.T) {
 	}
 
 	c := toolCoder(t, dir)
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false
@@ -339,7 +331,6 @@ func TestLooseEditIsExplainedAndRecorded(t *testing.T) {
 	c := toolCoder(t, dir)
 	rec := &capture{}
 	c.Recorder = rec
-	c.AddFile("a.txt")
 
 	results := toolResults{}
 	matchFailure := false

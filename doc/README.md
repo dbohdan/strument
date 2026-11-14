@@ -319,13 +319,10 @@ the conversation. `RunConsult` (`consult.go`) is the same call with two
 additions: the advisor may be a different model, and it may be shown some of the
 session.
 
-`ConsultScope` is that ladder — `none`, `files`, `chat` — set by
-`--consult-scope`. `files` sends the contents of every pinned file, the `/add`
-set included, which is the one place those contents still travel: a normal turn
-sends only their *names* and lets the model read them (`pinnedFilesNote`), and
-an advisor with no tools cannot follow a name. `chat` adds `ViewContext`'s
-render of the fold, so there is one renderer for "what is in this conversation"
-rather than two that drift.
+`ConsultScope` is `none` or `chat`, set by `--consult-scope`. `chat` adds
+`ViewContext`'s render of the fold, so there is one renderer for "what is in
+this conversation" rather than two that drift. A `files` scope sent the pinned
+files' contents and went with them.
 
 The advisor's client and model are swapped in for the call and restored after,
 which is what puts the cost row under the advisor's own slug and price. That is
@@ -429,44 +426,21 @@ Ten tools, in three natures:
   five observation tools hold nothing but a root, a `Workspace`, a `RepoMap`,
   and somewhere to report, so they run without a model, a client, or a
   conversation. `*Coder` keeps its methods as delegations to one.
-- **Pinned files are named, not injected.** `/add` puts a file's *name* in the
-  system prompt with an instruction to read it; the contents arrive through a
-  `read` call like everything else. This replaced a fabricated user turn
-  carrying the contents and a fabricated assistant turn agreeing they were
-  current, and it was measured before it was adopted
-  ([`doc/experiments/2026-08-add-instruct/README.md`](experiments/2026-08-add-instruct/README.md)):
-  across 600 samples and three models, identical task success, one extra step,
-  and blind edits — a pinned file written without ever reading it — from 383
-  across 230 runs to **zero across none**. The earlier
-  [characterization pass](experiments/2026-08-add-authority/README.md)
-  is why it was tried at all: under the old design the model re-read a pinned
-  file in 31% of runs anyway, usually before editing. It did not believe the
-  block.
-
-  A pinned file that does not exist yet is named as one to create, not one to
-  read — there is nothing there to read, and sending the model after it would
-  waste a step.
-- **Reference material is pinned, and refused as an edit target.** `/read-only`
-  puts a file's contents in the prompt and `allowedToEdit` refuses any edit to
-  it, answering the call with why so the model adapts within the turn. It is
-  also the way to show the model a file *outside* the project: `grep`, `glob`,
-  and `ls` walk the workspace root, so an out-of-tree spec or a sibling repo's
-  header is invisible to the model's own searching. That is why `/read-only`
-  still *injects* where `/add` no longer does — telling the model to go and find
-  a file three of the four observation tools cannot see would be an instruction
-  it could not follow. Editable files stay inside the root: `/add` and
-  command-line arguments both refuse to leave it, and point at `/read-only`
-  instead.
-
-  What it no longer does is answer *itself*. The injected block used to be
-  followed by a fabricated assistant turn agreeing to use the files as
-  references; that is gone, and the prefix now says plainly who pinned them and
-  that an edit will be refused. Thirty-six live sessions
-  ([`doc/experiments/2026-08-readonly-honest/README.md`](experiments/2026-08-readonly-honest/README.md))
-  say the agreement was buying nothing — an unfetchable reference was used just
-  as readily without it — while "an edit is refused" in place of aider's "do not
-  propose edits" stopped models from spending whole turns litigating a request
-  that asked for one anyway.
+- **There are no pinned files.** aider's `/add` and `/read-only` are gone, and
+  the model finds what it needs with `read`, `grep`, `glob` and `ls`. They had
+  already stopped doing what they were for. `/add` had become a name in the
+  system prompt with an instruction to read it, adopted after
+  [`doc/experiments/2026-08-add-instruct/README.md`](experiments/2026-08-add-instruct/README.md)
+  measured identical task success and blind edits — a pinned file written
+  without ever reading it — falling from 383 to zero; the
+  [characterization pass](experiments/2026-08-add-authority/README.md) before
+  it found the model re-reading an injected file in 31% of runs anyway. A name
+  the model must go and read is a sentence the user could type. `/read-only`
+  still injected contents, and was the one way to show the model a file outside
+  the project; `read` outside the root now asks first, which covers that case
+  without a second channel into the prompt. Both kept state across sessions in
+  `resume.json` and changed the cached prefix mid-session, and neither earned
+  that.
 
   One correction that pass forced, worth recording because the sentence above
   used to contain it: `read` and `ls` accept an absolute path under the
@@ -1213,15 +1187,13 @@ These are not hypothetical. Applied to ten candidates, they rejected four
 without further argument.
 
 `resume.json` is the one that passed cleanly, and it is deliberately the *cheap*
-half of a session: the pins (plain and read-only) and the model alias — what you
-would otherwise retype. Not the conversation. Storing `doneMessages` would make
+half of a session: the model alias — what you would otherwise retype. It held
+the pins too, until pinning went. Not the conversation. Storing `doneMessages` would make
 Strument re-send a context the user pays for, assert something about what the
 model remembers, and blur the turn boundary; the transcript already exists for
-reading. Two rules keep it from surprising anyone: paths are relative to the
-project root rather than the coder's, so they survive `--no-git` from a
-subdirectory, and the model alias is recorded only when it differs from the
-config's `default`, so a project is never silently pinned to a stale default.
-Restoring is announced in the banner, and `--no-history` writes none of it.
+reading. The model alias is recorded only when it differs from the config's
+`default`, so a project is never silently held to a stale default, and
+`--no-history` writes none of it.
 
 `cost.jsonl` is one JSON line per turn — the same numbers the closing usage line
 prints, kept as data rather than as prose. It exists because the question "which

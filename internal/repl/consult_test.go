@@ -179,28 +179,28 @@ func TestAddOutputAsksEveryTime(t *testing.T) {
 // inside a question is a flag or part of the question.
 func TestConsultScopeShowsAndSets(t *testing.T) {
 	r, _, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
-	r.opts.ConsultScope = coder.ConsultFiles
+	r.opts.ConsultScope = coder.ConsultChat
 
 	cmdConsult(context.Background(), r, "scope")
-	if !strings.Contains(out.String(), "Consult scope: files") {
+	if !strings.Contains(out.String(), "Consult scope: chat") {
 		t.Errorf("bare scope did not report the current value:\n%s", out.String())
 	}
-	if r.opts.ConsultScope != coder.ConsultFiles {
+	if r.opts.ConsultScope != coder.ConsultChat {
 		t.Error("reporting the scope changed it")
 	}
 
-	cmdConsult(context.Background(), r, "scope chat")
-	if r.opts.ConsultScope != coder.ConsultChat {
-		t.Errorf("scope = %v, want chat", r.opts.ConsultScope)
+	cmdConsult(context.Background(), r, "scope none")
+	if r.opts.ConsultScope != coder.ConsultNothing {
+		t.Errorf("scope = %v, want none", r.opts.ConsultScope)
 	}
 }
 
 func TestConsultScopeRejectsAnUnknownName(t *testing.T) {
 	r, _, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
-	r.opts.ConsultScope = coder.ConsultFiles
+	r.opts.ConsultScope = coder.ConsultChat
 
 	cmdConsult(context.Background(), r, "scope everything")
-	if r.opts.ConsultScope != coder.ConsultFiles {
+	if r.opts.ConsultScope != coder.ConsultChat {
 		t.Error("an unknown scope name changed the setting")
 	}
 	got := out.String()

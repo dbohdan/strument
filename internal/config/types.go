@@ -341,8 +341,6 @@ type Config struct {
 	//     prompt. It shares the built-ins' closed
 	//     placeholder set ({platform}, {language}, {final_reminders},
 	//     {code_tools}, {observation_tools}) and are validated at load.
-	//   - prompt_read_only is the same Tier 1 replacement for the read-only
-	//     reference prefix.
 	//
 	// The prompt_ keys are project- and user-settable; the trust gate that
 	// guards .strument.star is what makes a project's prompt overrides the
@@ -351,7 +349,6 @@ type Config struct {
 	// relying on LANG-style environment variables.
 	PromptSystemPrefix string
 	PromptCode         string
-	PromptReadOnly     string
 	ChatLanguage       string
 }
 

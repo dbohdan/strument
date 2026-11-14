@@ -11,12 +11,12 @@ func TestResumeRoundTrip(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	want := Resume{Files: []string{"a.go", "sub/b.go"}, ReadOnly: []string{"ref.md"}, Model: "sonnet"}
+	want := Resume{Model: "sonnet"}
 	if err := SaveResume(project, DefaultSession, want); err != nil {
 		t.Fatal(err)
 	}
 	got := LoadResume(project, DefaultSession)
-	if got.Model != want.Model || len(got.Files) != 2 || got.Files[1] != "sub/b.go" || len(got.ReadOnly) != 1 {
+	if got.Model != want.Model {
 		t.Errorf("round trip lost data: %+v", got)
 	}
 	if got.Version != resumeVersion {
@@ -43,15 +43,15 @@ func TestLoadResumeToleratesJunk(t *testing.T) {
 	}
 
 	for _, body := range []string{
-		`{`,                                     // malformed
-		`{"version": 99, "files": ["a.go"]}`,    // a version we do not know
-		`{"files": ["a.go"]}`,                   // no version at all
-		`{"version": 1, "files": "not-a-list"}`, // right version, wrong shape
+		`{`,                             // malformed
+		`{"version": 99, "model": "m"}`, // a version we do not know
+		`{"model": "m"}`,                // no version at all
+		`{"version": 1, "model": 7}`,    // right version, wrong shape
 	} {
 		if err := os.WriteFile(p, []byte(body), fileMode); err != nil {
 			t.Fatal(err)
 		}
-		if got := LoadResume(project, DefaultSession); len(got.Files) != 0 || got.Model != "" {
+		if got := LoadResume(project, DefaultSession); got.Model != "" {
 			t.Errorf("%s should have yielded nothing, got %+v", body, got)
 		}
 	}
@@ -75,7 +75,7 @@ func TestSaveResumeIsOwnerOnly(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	if err := SaveResume(project, DefaultSession, Resume{Files: []string{"a.go"}}); err != nil {
+	if err := SaveResume(project, DefaultSession, Resume{Model: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := ResumePath(project, DefaultSession)
@@ -87,10 +87,10 @@ func TestSaveResumeIsOwnerOnly(t *testing.T) {
 		t.Errorf("resume.json mode = %04o, want %04o", perm, fileMode)
 	}
 	// Rewriting must replace rather than accumulate, and leave no temp behind.
-	if err := SaveResume(project, DefaultSession, Resume{Files: []string{"b.go"}}); err != nil {
+	if err := SaveResume(project, DefaultSession, Resume{Model: "b"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadResume(project, DefaultSession); len(got.Files) != 1 || got.Files[0] != "b.go" {
+	if got := LoadResume(project, DefaultSession); got.Model != "b" {
 		t.Errorf("rewrite did not replace: %+v", got)
 	}
 	if _, err := os.Stat(p + ".tmp"); !os.IsNotExist(err) {

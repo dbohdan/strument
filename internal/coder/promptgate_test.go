@@ -51,9 +51,11 @@ func TestNothingPinnedNoteOffersRunCodeWhenItIsOffered(t *testing.T) {
 
 // The splice must not have changed the wording 2026-09-code-mode2.md measured.
 // Both variants are built from shared parts precisely so they cannot drift, and
-// this pins the composed result against the text as it shipped for that trial.
-func TestNothingPinnedNoteIsByteIdenticalToTheTrialsWording(t *testing.T) {
-	const asMeasured = "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
+// this pins the composed result against the text as it shipped for that trial,
+// less its first sentence, "Nothing is pinned for editing.", which went with
+// pinning.
+func TestHowToLookNoteIsTheTrialsWording(t *testing.T) {
+	const asMeasured = "Use read, grep, glob, and ls to find " +
 		"what you need — or one run_code call that calls them, when you already " +
 		"know the several things you are looking for. You can edit any file in " +
 		"the project. If the user asks how something here works, read the code " +

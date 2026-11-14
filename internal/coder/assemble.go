@@ -2,15 +2,13 @@ package coder
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 
-	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
 )
@@ -32,18 +30,16 @@ import (
 // The ranked rendering has since gone entirely: /map became /symbol, because
 // "where is this defined" is the question a reader actually has.
 type chatChunks struct {
-	system        []llm.Message
-	done          []llm.Message
-	readonlyFiles []llm.Message
-	cur           []llm.Message
+	system []llm.Message
+	done   []llm.Message
+	cur    []llm.Message
 }
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
-		len(ch.system)+len(ch.readonlyFiles)+
+		len(ch.system)+
 			len(ch.done)+len(ch.cur))
 	out = append(out, ch.system...)
-	out = append(out, ch.readonlyFiles...)
 	out = append(out, ch.done...)
 	out = append(out, ch.cur...)
 	return out
@@ -115,7 +111,6 @@ func withBreakpoint(m llm.Message) llm.Message {
 // was either a cache read or a cache write.
 func (ch *chatChunks) addCacheControlHeaders(lastOnly bool) {
 	addCacheControl(ch.system)
-	addCacheControl(ch.readonlyFiles)
 	ch.addConversationBreakpoints(lastOnly)
 }
 
@@ -170,102 +165,6 @@ func (ch *chatChunks) addConversationBreakpoints(lastOnly bool) {
 			return
 		}
 	}
-}
-
-// allFences is the escalation list; shared with editblock.
-var allFences = editblock.AllFences
-
-// chooseFence picks the first fence whose open/close begins no line in the
-// read-only content, which is the only fenced content left. It still walks the
-// chat files, because absFnamesContent is what drops an unreadable one from the
-// chat with a warning — an observable state mutation during assembly.
-func (c *Coder) chooseFence() {
-	var allContent strings.Builder
-	for _, content := range c.absFnamesContent() {
-		allContent.WriteString(content)
-		allContent.WriteString("\n")
-	}
-	for _, fname := range c.absReadOnlyFnames {
-		if data, err := os.ReadFile(fname); err == nil {
-			allContent.Write(data)
-			allContent.WriteString("\n")
-		}
-	}
-
-	lines := strings.Split(allContent.String(), "\n")
-	for _, f := range allFences {
-		bad := false
-		for _, line := range lines {
-			if strings.HasPrefix(line, f.Open) || strings.HasPrefix(line, f.Close) {
-				bad = true
-				break
-			}
-		}
-		if !bad {
-			c.fence = fence{f.Open, f.Close}
-			return
-		}
-	}
-	c.fence = fence{allFences[0].Open, allFences[0].Close}
-	c.Out.Warningf("Could not find suitable content delimiters. Falling back to %s...%s.", c.fence.open, c.fence.close)
-}
-
-// absFnamesContent reads chat files in order. A file that does not exist yet is
-// kept with empty content (a to-be-created file); other read failures drop the
-// file from the chat with a warning.
-func (c *Coder) absFnamesContent() []string {
-	var contents []string
-	var kept []string
-	for _, fname := range c.absFnames {
-		data, err := os.ReadFile(fname)
-		switch {
-		case err == nil:
-			kept = append(kept, fname)
-			contents = append(contents, string(data))
-		case errors.Is(err, os.ErrNotExist):
-			// A file that does not exist yet is a to-be-created file: keep it in
-			// the chat with empty content so the model can write it. It is
-			// created on apply, never here.
-			kept = append(kept, fname)
-			contents = append(contents, "")
-		default:
-			// Say why: "dropping" alone left a pinned file vanishing for no
-			// reason the user could act on.
-			var pe *fs.PathError
-			if errors.As(err, &pe) {
-				err = pe.Err
-			}
-			c.Out.Warningf("Unpinned %s: it could not be read (%v).", c.displayName(fname), err)
-		}
-	}
-	c.absFnames = kept
-	return contents
-}
-
-func (c *Coder) readOnlyFilesContent() string {
-	type entry struct{ rel, content string }
-	var entries []entry
-	for _, fname := range c.absReadOnlyFnames {
-		data, err := os.ReadFile(fname)
-		if err != nil {
-			continue
-		}
-		entries = append(entries, entry{c.displayName(fname), string(data)})
-	}
-	for i := 1; i < len(entries); i++ {
-		for j := i; j > 0 && entries[j].rel < entries[j-1].rel; j-- {
-			entries[j], entries[j-1] = entries[j-1], entries[j]
-		}
-	}
-	var b strings.Builder
-	for _, e := range entries {
-		b.WriteString("\n")
-		b.WriteString(e.rel)
-		b.WriteString("\n" + c.fence.open + "\n")
-		b.WriteString(e.content)
-		b.WriteString(c.fence.close + "\n")
-	}
-	return b.String()
 }
 
 // platformText renders the {platform} slot from injected PlatformInfo.
@@ -355,7 +254,7 @@ func (c *Coder) observationToolsText() string {
 	return prompts.ObservationBullet
 }
 
-// filesNoFullFilesText picks the nothing-pinned note, which must not tell the
+// filesNoFullFilesText picks the how-to-look note, which must not tell the
 // model to use a tool the schema withholds.
 func (c *Coder) filesNoFullFilesText() string {
 	// The withheld case, which this function used to miss: the note offers a
@@ -371,8 +270,6 @@ func (c *Coder) filesNoFullFilesText() string {
 
 // formatChatChunks builds the canonical slots.
 func (c *Coder) formatChatChunks() *chatChunks {
-	c.chooseFence()
-
 	mainSys := c.fmtSystemPrompt(c.Prompts.MainSystem)
 	if c.SystemPromptPrefix != "" {
 		mainSys = c.SystemPromptPrefix + "\n" + mainSys
@@ -398,10 +295,10 @@ func (c *Coder) formatChatChunks() *chatChunks {
 		mainSys += "\n" + c.fmtSystemPrompt(c.Prompts.SystemReminder)
 	}
 
-	// What /add pinned, in the harness's own voice. This used to be the files'
-	// contents in a fabricated user turn answered by a fabricated assistant one;
-	// it is now their names in the system prompt. See pinnedFilesNote.
-	if note := c.pinnedFilesNote(); note != "" {
+	// How to find things. This was the nothing-pinned note, shown when /add
+	// had pinned nothing; with pinning gone it is what every session gets.
+	mainSys += "\n\n" + c.filesNoFullFilesText()
+	if note := c.agentsNote(); note != "" {
 		mainSys += "\n\n" + note
 	}
 
@@ -419,127 +316,52 @@ func (c *Coder) formatChatChunks() *chatChunks {
 
 	chunks.done = c.doneMessages
 
-	// Read-only files keep their injection, and this is not an oversight. glob,
-	// ls, and grep are scoped to the workspace root, so /read-only is the only
-	// channel for a file *outside* the project — an out-of-tree spec, a sibling
-	// repo's header. Instructing the model to go and find one, as /add now does,
-	// would send it after something three of the four observation tools cannot
-	// see.
-	//
-	// What did go is the fabricated assistant reply agreeing to it. Twelve live
-	// sessions across three models with the honest prefix and no reply are in
-	// doc/experiments/2026-08-readonly-honest/README.md: the contents were used as
-	// readily as before, and the one case that had been going wrong — a request
-	// to edit the reference — stopped producing stalled turns.
-	if roContent := c.readOnlyFilesContent(); roContent != "" {
-		chunks.readonlyFiles = []llm.Message{
-			llm.TextMessage("user", c.Prompts.ReadOnlyFilesPrefix+roContent),
-		}
-	}
-
 	chunks.cur = append([]llm.Message(nil), c.curMessages...)
 	return chunks
 }
 
-// pinnedFilesNote is what the system prompt says about the files /add pinned.
-//
-// It replaces the file *contents* that used to ride in a fabricated user turn
-// with the file *names* and an instruction to read them. Measured over 600
-// samples against three models (doc/experiments/2026-08-add-instruct/README.md): the
-// same task success, one extra step, and blind edits — a pinned file written
-// without ever reading it — from 383 across 230 runs down to zero across none.
-//
-// It also removes Strument's last always-on synthetic turn. Everything the
-// model learns about the project now arrives through a tool call, with no
-// exception carved out for /add, and the harness stops asserting in the user's
-// voice that a block of text is a file's current contents.
-//
-// A pinned file that does not exist yet is named separately. Telling the model
-// to read it would send it after something that is not there; it is a file to
-// create, and saying so is the whole of what it needs.
-func (c *Coder) pinnedFilesNote() string {
-	if len(c.absFnames) == 0 {
-		return c.filesNoFullFilesText()
-	}
+// AgentsFileName is the cross-tool conventional name for a project's standing
+// instructions (https://agents.md/). agentsNote is where the model is told
+// what it is.
+const AgentsFileName = "AGENTS.md"
 
-	var existing, missing []string
-	for _, fname := range c.absFnames {
-		rel := c.displayName(fname)
-		if _, err := os.Stat(fname); err == nil {
-			existing = append(existing, rel)
-		} else {
-			missing = append(missing, rel)
-		}
+// agentsNote names AGENTS.md and AGENTS.local.md when they exist, and asks the
+// model to read them. Naming the file as standing instructions is what makes
+// it work, and that is measured rather than assumed: over 24 live sessions on
+// a rule contrary to habit, compliance was 0/8 with no AGENTS.md, 2/8 with it
+// merely pinned, and 6/8 with this clause (doc/experiments/2026-08-agents-md).
+//
+// The model is told to read the files rather than handed their contents. That
+// keeps one channel into the conversation for project files, the read tool,
+// with what came back visible in the transcript, and it keeps a file the user
+// did not write for the model out of a prompt the model takes as the harness.
+// A project without the file says nothing about it, rather than claiming
+// standing instructions exist when none do.
+func (c *Coder) agentsNote() string {
+	has := func(name string) bool {
+		_, err := os.Stat(filepath.Join(c.Root, name)) //nolint:gosec // the project root and a constant name, never a model-supplied path.
+		return err == nil
 	}
-	slices.Sort(existing)
-	slices.Sort(missing)
-
+	shared, local := has(AgentsFileName), has(AgentsLocalFileName)
 	var b strings.Builder
-	if len(existing) > 0 {
-		fmt.Fprintf(&b, "The user has pinned %s to this session: %s.\n",
-			plural(len(existing), "file", "files"), strings.Join(existing, ", "))
-		// What pinning is, and what it is not.
-		//
-		// This used to say "These are the files they want changed", which
-		// asserts an intention the act of pinning does not carry. A user pins
-		// files to put them in front of the model; what to do with them is the
-		// message's job. GLM-5.3 was caught reconciling the two out loud —
-		// "the pinned files are for changes... but the user question is
-		// analysis/proposal" — and had to talk itself back to answering the
-		// question actually asked.
-		b.WriteString("Pinning says what the conversation is about. It is not itself a " +
-			"request to change anything: the user's message says what they want.\n")
-		b.WriteString("Pinning puts their names here, not their contents: read a file before " +
-			"you work on it, unless it is already in this conversation.\n")
+	if shared {
+		fmt.Fprintf(&b, "%s holds the project's standing instructions. Read it before "+
+			"you start, and follow it for every change you make here.", AgentsFileName)
 	}
-	if len(missing) > 0 {
-		does, them := "do", "them"
-		if len(missing) == 1 {
-			does, them = "does", "it"
-		}
-		if b.Len() > 0 {
+	// The private file is told apart from the shared one so that a note lands
+	// in the right place: a machine's paths or the user's own preferences in
+	// the file nobody else reads, conventions for everyone in the one that is
+	// committed.
+	if local {
+		if shared {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "The user has also pinned %s that %s not exist yet: %s.\n",
-			plural(len(missing), "file", "files"), does, strings.Join(missing, ", "))
-		fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
-	}
-	// Naming AGENTS.md is what makes it work, and that is measured rather than
-	// assumed. Over 24 live sessions on a rule contrary to habit — every
-	// exported function gets a "Contract:" doc comment — compliance was 0/8
-	// with no AGENTS.md at all, 2/8 with it merely pinned, and 6/8 with this
-	// clause (none vs slot p=0.007). Pinned and unexplained, a model reads it as
-	// one more source file it happens to have been given.
-	//
-	// It goes here rather than in MainSystem because it must not claim standing
-	// instructions exist when none do: a project without the file should say
-	// nothing about it.
-	if slices.Contains(existing, AgentsFileName) {
-		if b.Len() > 0 {
-			b.WriteString("\n")
-		}
-		fmt.Fprintf(&b, "%s holds the project's standing instructions. "+
-			"Follow them for every change you make here.\n", AgentsFileName)
-	}
-	// The private file is named for the same reason, and told apart from the
-	// shared one so that a note lands in the right place: a machine's paths or
-	// the user's own preferences in the file nobody else reads, conventions
-	// for everyone in the one that is committed.
-	if slices.Contains(existing, AgentsLocalFileName) {
-		if b.Len() > 0 {
-			b.WriteString("\n")
-		}
-		fmt.Fprintf(&b, "%s holds the user's private instructions for this checkout. It is not "+
-			"committed or shared. Follow it too, and where it conflicts with %s, it wins.\n",
+		fmt.Fprintf(&b, "%s holds the user's private instructions for this checkout. It is "+
+			"not committed or shared. Read it too, and where it conflicts with %s, it wins.",
 			AgentsLocalFileName, AgentsFileName)
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return b.String()
 }
-
-// AgentsFileName is the cross-tool conventional name for a project's standing
-// instructions (https://agents.md/). cmd/strument pins it; this is where the
-// model is told what it is.
-const AgentsFileName = "AGENTS.md"
 
 // formatMessages = formatChatChunks + cache decoration; decoration
 // applies only when the provider supports caching.

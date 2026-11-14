@@ -29,8 +29,8 @@ func TestSecretFilesAreNotRead(t *testing.T) {
 
 	w := New(root)
 	_, err := w.Read(".env", 0, 0)
-	if err == nil || !strings.Contains(err.Error(), `".env"`) || !strings.Contains(err.Error(), "/read-only") {
-		t.Fatalf("read .env: err = %v, want a refusal naming the pattern and /read-only", err)
+	if err == nil || !strings.Contains(err.Error(), `".env"`) || !strings.Contains(err.Error(), "secret_files_exempt") {
+		t.Fatalf("read .env: err = %v, want a refusal naming the pattern and secret_files_exempt", err)
 	}
 	if _, _, _, err := w.openable(".env", 1<<20); err == nil {
 		t.Error("openable (read_bin, images) let a secret file through")
@@ -64,12 +64,6 @@ func TestSecretFilesAreNotRead(t *testing.T) {
 	}
 	if !listed {
 		t.Error("ls hid .env; a name is not a secret")
-	}
-
-	abs := filepath.Join(root, ".env")
-	w.Pinned = func(p string) bool { return p == abs }
-	if ft, err := w.Read(".env", 0, 0); err != nil || len(ft.Lines) != 1 {
-		t.Errorf("a pinned secret file should read: %v", err)
 	}
 }
 

@@ -19,33 +19,9 @@ type Set struct {
 	FilesNoFullFilesNoCode           string
 	FilesNoFullFilesWithRepoMap      string
 	FilesNoFullFilesWithRepoMapReply string
-	ReadOnlyFilesPrefix              string
 }
 
 // Shared strings used identically across the editing formats.
-
-// readOnlyFilesPrefix speaks as the harness, which is what it is. It replaces
-// aider's "Here are some read-only files, provided for your reference. Do not
-// propose edits to these files." — a user turn the user never wrote, followed
-// by a fabricated assistant reply agreeing to it.
-//
-// Two things it must get right, both learned from live sessions
-// (doc/experiments/2026-08-readonly-honest/README.md):
-//
-// Say where the contents come from, because a reference pinned from outside the
-// project cannot be found with glob, ls, or grep, and a model that goes looking
-// for the "real" file finds nothing and starts theorising. The hedge is
-// deliberate: a reference inside the project is the common case and is findable.
-//
-// Say that an edit is refused, not that edits are unwelcome. "Do not propose
-// edits" reads as a preference the task can override, and when a request asked
-// for one anyway, models spent whole turns litigating the contradiction. Naming
-// the enforcement ends it: they say they cannot, and do the rest of the work.
-const readOnlyFilesPrefix = "The user pinned these files as read-only reference, and their contents " +
-	"follow.\n" +
-	"Some may live outside the project, where glob, ls, and grep will not find them, so treat " +
-	"what follows as the copy you have.\n" +
-	"Do not edit them: an edit to a pinned reference is refused.\n"
 
 const lazyPrompt = "Implement requested changes completely.\n" +
 	"Never leave placeholder comments (like \"... rest of code ...\" or \"implement this later\") " +
@@ -248,11 +224,9 @@ var Tool = Set{
 	// "I ask" because this text lands in the system prompt now, where a
 	// first-person "I" is the harness wearing the user's voice.
 	//
-	// "Nothing is pinned for editing" rather than "no files are pinned": a
-	// read-only reference is pinned and its contents are right there in the
-	// request, and a model handed both read the flat denial as evidence that the
-	// reference block was not to be trusted. One session spent twelve steps
-	// hunting the project for the "real" file it thought the denial implied.
+	// It began "Nothing is pinned for editing.", from when /add could pin
+	// files and this note was what a session with none got. Pinning went, and
+	// with it the sentence; the rest is unchanged.
 	FilesNoFullFiles:       toolNoPinsHead + runCodeClause + toolNoPinsTail,
 	FilesNoFullFilesNoCode: toolNoPinsHead + toolNoPinsTail,
 	// The empty-string sentinel disables the repo-map branch in assembly. Its text was written for a harness where the model could not look:
@@ -261,11 +235,10 @@ var Tool = Set{
 	// place it made the model explore and then refuse to edit.
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
-	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 }
 
 // runCodeClause is the half-sentence that offers a program as an alternative
-// to a run of direct lookups. It is spliced into the nothing-pinned notes
+// to a run of direct lookups. It is spliced into the how-to-look notes
 // rather than written twice, so the offered text stays byte-identical to what
 // 2026-09-code-mode2.md measured and the withheld text is provably the same
 // sentence without it.
@@ -276,9 +249,9 @@ var Tool = Set{
 const runCodeClause = " — or one run_code call that calls them, when you " +
 	"already know the several things you are looking for"
 
-// The tool set's nothing-pinned note, either side of the clause.
+// The tool set's how-to-look note, either side of the clause.
 const (
-	toolNoPinsHead = "Nothing is pinned for editing. Use read, grep, glob, and ls to find " +
+	toolNoPinsHead = "Use read, grep, glob, and ls to find " +
 		"what you need"
 	toolNoPinsTail = ". You can edit any file in " +
 		"the project. If the user asks how something here works, read the code " +

@@ -364,13 +364,13 @@ func TestAdoptMergesASharedSessionByArtifact(t *testing.T) {
 	// second tie, and keepNewest keeps the destination on a tie. Real adopts
 	// merge state written on different days; a test that used the real writer
 	// would be measuring the clock rather than the policy.
-	writeResume := func(project, session, updated, file string) {
+	writeResume := func(project, session, updated, model string) {
 		t.Helper()
 		dir, err := EnsureSessionDir(project, session)
 		if err != nil {
 			t.Fatal(err)
 		}
-		body := mustJSON(t, Resume{Version: resumeVersion, Updated: updated, Files: []string{file}})
+		body := mustJSON(t, Resume{Version: resumeVersion, Updated: updated, Model: model})
 		if err := os.WriteFile(filepath.Join(dir, sessionArtifacts[sartResume].name),
 			[]byte(body+"\n"), fileMode); err != nil {
 			t.Fatal(err)
@@ -385,11 +385,10 @@ func TestAdoptMergesASharedSessionByArtifact(t *testing.T) {
 		t.Fatalf("adopt: %v", err)
 	}
 
-	if got := LoadResume(dst, DefaultSession); len(got.Files) != 1 || got.Files[0] != "new.go" {
-		t.Errorf("shared session resume = %v, want the newer pins; a union kept the destination's",
-			got.Files)
+	if got := LoadResume(dst, DefaultSession); got.Model != "new.go" {
+		t.Errorf("shared session resume = %q, want the newer one; a union kept the destination's", got.Model)
 	}
-	if got := LoadResume(dst, "other"); len(got.Files) != 1 || got.Files[0] != "elsewhere.go" {
-		t.Errorf("a session only the source had did not come across: %v", got.Files)
+	if got := LoadResume(dst, "other"); got.Model != "elsewhere.go" {
+		t.Errorf("a session only the source had did not come across: %q", got.Model)
 	}
 }

@@ -1244,7 +1244,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		return nil
 	}
 
-	fen := editblock.Fence{Open: c.fence.open, Close: c.fence.close}
+	fen := editblock.AllFences[0]
 	reader := diskReader{root: c.Root}
 	pending := map[string]string{}
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"

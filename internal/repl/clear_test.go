@@ -11,8 +11,7 @@ import (
 )
 
 // TestClearAndResetStayInTheSession: both commands are soft restarts. The
-// conversation goes and the session does not — /clear keeps the pins, /reset
-// drops them after, and since neither writes to the
+// conversation goes and the session does not, and since neither writes to the
 // record, both say that --continue restores what was cleared.
 func TestClearAndResetStayInTheSession(t *testing.T) {
 	root := t.TempDir()
@@ -32,10 +31,8 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 		ModelAlias: "test",
 		SaveResume: func(string) {},
 		Stdin: strings.NewReader(
-			"/add hello.txt\n" +
-				"hi there\n" +
+			"hi there\n" +
 				"/clear\n" +
-				"/ls\n" +
 				"/reset\n" +
 				"/exit\n"),
 		Stdout:     out,
@@ -63,26 +60,14 @@ func TestClearAndResetStayInTheSession(t *testing.T) {
 
 	const (
 		cleared = "Chat history cleared. The record keeps the conversation; --continue restores it."
-		reset   = "Unpinned everything and cleared the chat history. The record keeps the conversation; --continue restores it."
+		reset   = "Cleared the chat history. The record keeps the conversation; --continue restores it."
 	)
-	// /ls runs between the two clears: the pin it lists is the one /clear kept.
-	iClear := strings.Index(got, cleared)
-	iReset := strings.Index(got, reset)
-	if iClear == -1 || iReset == -1 {
+	if !strings.Contains(got, cleared) || !strings.Contains(got, reset) {
 		t.Fatalf("a clear message is missing:\n%s", got)
-	}
-	iLS := strings.Index(got[iClear:iReset], "Pinned:")
-	if iLS == -1 {
-		t.Errorf("/ls after /clear listed no pins:\n%s", got)
-	} else if !strings.Contains(got[iClear:iReset], "hello.txt") {
-		t.Errorf("/clear dropped the pins:\n%s", got)
 	}
 
 	if cdr.Session != "foo" {
 		t.Errorf("session = %q; /clear and /reset must not switch sessions", cdr.Session)
-	}
-	if len(cdr.ChatFiles()) != 0 {
-		t.Errorf("/reset kept the pins: %v", cdr.ChatFiles())
 	}
 }
 
@@ -127,7 +112,7 @@ func TestClearPromisesOnlyWhatTheRecordHolds(t *testing.T) {
 			}
 			got := out.String()
 			if !strings.Contains(got, "Chat history cleared.") ||
-				!strings.Contains(got, "Unpinned everything and cleared the chat history.") {
+				!strings.Contains(got, "Cleared the chat history.") {
 				t.Fatalf("a clear message is missing:\n%s", got)
 			}
 			if strings.Contains(got, "--continue") {

@@ -60,21 +60,6 @@ func TestEditPathRefusesGitDir(t *testing.T) {
 	}
 }
 
-// Pinning does not unlock it: isPinned's result is fed to Workspace as a
-// containment exemption, so if an edit could add to absFnames the model could
-// widen its own permissions one edit at a time. It cannot; only /add writes
-// there.
-func TestEditPathRefusesGitDirEvenWhenPinned(t *testing.T) {
-	c := gitDirCoder(t)
-	full := filepath.Join(c.Root, ".git", "config")
-	c.absFnames = append(c.absFnames, full)
-	c.absReadOnlyFnames = append(c.absReadOnlyFnames, full)
-
-	if reason := c.unsafePath(".git/config"); reason == "" {
-		t.Error("a pinned .git/config was accepted for editing")
-	}
-}
-
 // The counter-test: ordinary dot-files stay editable. A guard that refused
 // .github or .gitignore would break the harness editing its own CI config,
 // which is a thing it is explicitly meant to do.

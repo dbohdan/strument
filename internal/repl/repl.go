@@ -35,9 +35,9 @@ type Options struct {
 	Config     *config.Config
 	ModelAlias string // alias of the active model, for /model display
 
-	// ResumeNote is a banner line naming what a previous session left pinned,
-	// "" when nothing was restored. The banner lists the files either way; this
-	// says where they came from, so restored context is never invisible.
+	// ResumeNote is a banner line saying what the start did on the user's
+	// behalf — restoring a session, keeping AGENTS.local.md out of commits —
+	// "" when there is nothing to say, so that no such change is invisible.
 	ResumeNote string
 
 	// SaveResume records what a resume would restore, called after any command
@@ -60,7 +60,7 @@ type Options struct {
 	// ConsultScope is how much of the session /consult shows the advisor. The
 	// zero value is coder.ConsultNothing — the binary sets this from
 	// --consult-scope, whose default is where the shipped behaviour lives,
-	// because the ladder's order is what makes `scope >= ConsultFiles` read
+	// because the ladder's order is what makes `scope >= ConsultChat` read
 	// correctly and "none" is the bottom of it.
 	ConsultScope coder.ConsultScope
 
@@ -428,27 +428,11 @@ func (r *REPL) announce() {
 	if r.opts.ResumeNote != "" {
 		r.printf("%s", r.opts.ResumeNote)
 	}
-	// Bare for an /add pin and marked for a /read-only one, matching
-	// renderPromptHeader and the messages the commands themselves print. Only
-	// the exception is named, because only the exception is a property: any file
-	// in the project is editable whether or not it is pinned, so "for editing"
-	// described a permission /add does not grant.
-	for _, f := range r.coder.ChatFiles() {
-		r.printf("Pinned %s.", f)
-	}
-	// Restored read-only pins were silent here, which left the one kind of pin
-	// whose contents actually ride in every request as the one kind the user was
-	// not told about.
-	for _, f := range r.coder.ReadOnlyFiles() {
-		r.printf("Pinned %s read-only.", f)
-	}
-	// After the file list, so a warning about the size of what was restored
-	// lands next to the list of what was restored.
 	r.coder.CheckRestoredContext()
 }
 
-// renderPromptHeader draws the full-width rule and the in-chat file listing
-// above each prompt (aider's io.rule + format_files_for_input).
+// renderPromptHeader draws the full-width rule above each prompt (aider's
+// io.rule; its in-chat file listing went with pinning).
 func (r *REPL) renderPromptHeader() {
 	if !r.interactive() {
 		return
@@ -457,12 +441,6 @@ func (r *REPL) renderPromptHeader() {
 	// which uses "─"). The dashed hyphen is reserved for markdown rules — aider
 	// draws those through Rich's Markdown, whose thematic break is "-".
 	r.printf("%s%s%s", r.sgr(r.opts.Theme.UserInput), strings.Repeat("─", r.termWidth()), r.sgr("0"))
-	for _, f := range r.coder.ReadOnlyFiles() {
-		r.printf("%s (read-only)", f)
-	}
-	for _, f := range r.coder.ChatFiles() {
-		r.printf("%s", f)
-	}
 }
 
 func (r *REPL) printf(format string, args ...any) {

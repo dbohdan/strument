@@ -142,92 +142,15 @@ func TestRestOfLineArgsComeLast(t *testing.T) {
 // prints when its arguments are wrong is built from the table, so a reader who
 // gets it wrong twice sees the same syntax both times.
 func TestUsageMatchesHelp(t *testing.T) {
-	got := usage("add")
-	want := "Usage: /add " + findCommand("add").args
+	got := usage("submit")
+	want := "Usage: /submit " + findCommand("submit").args
 	if got != want {
-		t.Errorf("usage(\"add\") = %q, want %q", got, want)
+		t.Errorf("usage(\"submit\") = %q, want %q", got, want)
 	}
 	// A command with no arguments has no syntax to quote, and asking for one
 	// must not produce a line ending in a stray space.
 	if got := usage("help"); got != "Usage: /help" {
 		t.Errorf("usage(\"help\") = %q", got)
-	}
-}
-
-// TestPinMessagesMatchLs is the harmonization: the name /add and /read-only
-// print for a file is the name /ls, the banner, and the per-prompt header use
-// for it. They disagreed for anything outside the project — /read-only echoed
-// an absolute path, everything else counted back to the file with ../.. — so
-// one pin appeared under two names in the same session.
-//
-// The assertion is congruence, and it is made on both sides of the display
-// threshold, since a rule with a branch in it can be congruent on one side and
-// not the other.
-func TestPinMessagesMatchLs(t *testing.T) {
-	tests := []struct {
-		name    string
-		depth   []string // project root, under the temp dir
-		wantAbs bool
-	}{
-		{name: "sibling stays relative", depth: []string{"proj"}},
-		{name: "distant is absolute", depth: []string{"a", "b", "proj"}, wantAbs: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			root := t.TempDir()
-			outside := filepath.Join(root, "outside")
-			proj := filepath.Join(append([]string{root}, tt.depth...)...)
-			for _, d := range []string{outside, proj} {
-				if err := os.MkdirAll(d, 0o755); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, f := range []string{filepath.Join(proj, "a.go"), filepath.Join(outside, "spec.md")} {
-				if err := os.WriteFile(f, []byte("x\n"), 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			cdr := coder.New(proj, testModel())
-			cdr.Client = answerStub("ok\n")
-			out := &syncBuffer{}
-			input := strings.NewReader("/add a.go\n/read-only " + filepath.Join(outside, "spec.md") + "\n/ls\n/exit\n")
-			r, err := New(Options{
-				Coder: cdr, Config: testConfig(cdr.Model), ModelAlias: "test",
-				Stdin: input, Stdout: out, Stderr: out,
-				IsTerminal: func() bool { return false },
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer r.Close()
-			if err := r.Run(context.Background()); err != nil {
-				t.Fatalf("Run: %v", err)
-			}
-
-			// /ls is the reference: whatever it lists is the file's name.
-			ro := cdr.ReadOnlyFiles()
-			if len(ro) != 1 {
-				t.Fatalf("ReadOnlyFiles() = %v, want one entry", ro)
-			}
-			name := ro[0]
-			if got := filepath.IsAbs(name); got != tt.wantAbs {
-				t.Errorf("pin listed as %q, absolute = %v, want %v", name, got, tt.wantAbs)
-			}
-
-			got := out.String()
-			if n := strings.Count(got, "Pinned "+name+" read-only."); n != 1 {
-				t.Errorf("confirmation should name the file %q:\n%s", name, got)
-			}
-			// The in-tree pin stays root-relative on both sides: the project's
-			// own files are named the way every tool result names them.
-			if chat := cdr.ChatFiles(); len(chat) != 1 || chat[0] != "a.go" {
-				t.Errorf("ChatFiles() = %v, want [a.go]", chat)
-			}
-			if !strings.Contains(got, "Pinned a.go.") {
-				t.Errorf("in-tree confirmation should be root-relative:\n%s", got)
-			}
-		})
 	}
 }
 
@@ -244,19 +167,16 @@ func TestQuotingAppliesToFileArgumentsOnly(t *testing.T) {
 
 	t.Run("a file argument is tokenized", func(t *testing.T) {
 		r, cdr, out := newTestREPL(t, answerStub("ok\n"), strings.NewReader(
-			`/add "`+spaced+`"`+"\n/ls\n/exit\n"))
+			`/submit "`+spaced+`"`+"\n/exit\n"))
 		defer r.Close()
-		if err := os.WriteFile(filepath.Join(cdr.Root, spaced), []byte("hi\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(cdr.Root, spaced), []byte("SPACED-CONTENTS\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := r.Run(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if got := cdr.ChatFiles(); len(got) != 1 || got[0] != spaced {
-			t.Errorf("ChatFiles() = %v, want [%q]; the quotes should not survive", got, spaced)
-		}
-		if !strings.Contains(out.String(), "Pinned "+spaced+".") {
-			t.Errorf("confirmation should name the file without quotes:\n%s", out.String())
+		if !strings.Contains(out.String(), "SPACED-CONTENTS") {
+			t.Errorf("/submit did not read %q; the quotes should not survive:\n%s", spaced, out.String())
 		}
 	})
 
@@ -277,28 +197,6 @@ func TestQuotingAppliesToFileArgumentsOnly(t *testing.T) {
 			t.Errorf("expected the quotes to reach the lookup verbatim:\n%s", got)
 		}
 	})
-}
-
-// TestDropTakesAnAbsolutePath closes a gap the Windows work opened: splitArgs
-// used to eat the separators out of C:\proj\a.go, so no path command could take
-// an absolute path there at all. /add and /read-only are covered by
-// TestPinMessagesMatchLs; /drop was not covered anywhere.
-func TestDropTakesAnAbsolutePath(t *testing.T) {
-	r, cdr, out := newTestREPL(t, answerStub("ok\n"), nil)
-	defer r.Close()
-	abs := filepath.Join(cdr.Root, "hello.txt")
-	cdr.AddFile(abs)
-	if len(cdr.ChatFiles()) != 1 {
-		t.Fatalf("fixture did not pin: %v", cdr.ChatFiles())
-	}
-
-	cmdDrop(context.Background(), r, abs)
-	if got := cdr.ChatFiles(); len(got) != 0 {
-		t.Errorf("an absolute path did not drop the pin: still %v\n%s", got, out.String())
-	}
-	if !strings.Contains(out.String(), "Unpinned hello.txt.") {
-		t.Errorf("the message should name the file the way /ls does:\n%s", out.String())
-	}
 }
 
 // TestSymbolAcceptsBothKinds covers a value /help advertises. "definition" was

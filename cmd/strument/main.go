@@ -33,7 +33,6 @@ import (
 	"dbohdan.com/strument/internal/repl"
 	"dbohdan.com/strument/internal/sandbox"
 	"dbohdan.com/strument/internal/skill"
-	"dbohdan.com/strument/internal/workspace"
 )
 
 var version = devVersion
@@ -48,22 +47,21 @@ var version = devVersion
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message      string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                      short:"m"`
-	Session      string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"                                      short:"s"`
-	Continue     bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
-	Model        string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
+	Message      string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"  short:"m"`
+	Session      string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"  short:"s"`
+	Continue     bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"       short:"c"`
+	Model        string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>" short:"M"`
 	NoGit        bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
 	NoColor      bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode     bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
-	LightMode    bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
+	DarkMode     bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"      xor:"palette"`
+	LightMode    bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"     xor:"palette"`
 	NoCommits    bool     `help:"Keep git integration but never commit edits."                                                                                                               name:"no-commits"`
 	NoHistory    bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
 	DryRun       bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
 	NoShell      bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
 	Yes          []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
 	Unattended   bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
-	ConsultScope string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
-	Files        []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
+	ConsultScope string   `default:"none"                                                                                                                                                    enum:"none,chat"      help:"Session context to include in /consult requests." name:"consult-scope"`
 }
 
 func (c *chatCmd) Run() error {
@@ -188,33 +186,6 @@ func (c *chatCmd) Run() error {
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.Platform.InGit = true
-	}
-
-	// File arguments are relative to the invocation directory, not the git
-	// root, so resolve them here — kong no longer does, now that a nonexistent
-	// file is accepted (the model creates it on request). AddFile only tracks
-	// the path; the file need not exist yet.
-	for _, f := range c.Files {
-		if !filepath.IsAbs(f) {
-			f = filepath.Join(cwd, f)
-		}
-		// Held to the same boundary as /add. This path used to skip the check
-		// entirely, so `strument ../other/file.go` produced an editable
-		// out-of-root file that /add would have refused — two layers disagreeing
-		// about the same rule. Reference material outside the project goes
-		// through /read-only, which is the one sanctioned way in.
-		//
-		// The check runs before AddFile, which resolves the path itself, so it
-		// must resolve here too: the project root is git's symlink-resolved path,
-		// while cwd may be in the symlink namespace (a symlinked working
-		// directory, or a path reached through one). Comparing the two
-		// un-resolved names puts a genuine in-project file at "../../link/..." and
-		// rejects it — exactly the divergence from /add this fixes.
-		if !fileInProject(root, f) {
-			noticef("skipping %s: outside the project root; pin it with /read-only instead.", f)
-			continue
-		}
-		cdr.AddFile(f)
 	}
 
 	// --no-history means leave no trace: no transcript, no input history, no
@@ -476,24 +447,10 @@ func (c *chatCmd) Run() error {
 
 	if c.Message == "" {
 		// Restoring only in the REPL keeps a scripted run reproducible from its
-		// own arguments: `strument -m ...` should send what it was told to, not
-		// whatever an interactive session left pinned, which the user would pay
-		// for without seeing it.
+		// own arguments: `strument -m ...` should send what it was told to.
 		note := restoreNote
-		if len(c.Files) == 0 && rootErr == nil {
-			var offered []string
-			var pins string
-			pins, offered = restoreSession(cdr, projectRoot, session, res)
-			note = strings.TrimSpace(note + "\n" + pins)
-			// Record the offer immediately rather than waiting for a command to
-			// trigger a save. A session where the user pins nothing and drops
-			// nothing would otherwise never write it down, and AGENTS.md would
-			// be offered again next time — which is only "once" in the sense
-			// that it happens once per session.
-			if len(offered) > 0 && keepState {
-				res.AutoPinned = append(res.AutoPinned, offered...)
-				_ = history.SaveResume(projectRoot, session, resumeWithPins(cdr, projectRoot, res))
-			}
+		if rootErr == nil {
+			note = strings.TrimSpace(note + "\n" + restoreSession(cdr, projectRoot, session))
 		}
 		return c.runREPL(cfg, cdr, repo, slog, alias, projectRoot, keepState, note)
 	}
@@ -660,46 +617,9 @@ func acquireProjectLock(projectRoot string) (*flock.Flock, bool, error) {
 	return lk, true, nil
 }
 
-// fileInProject reports whether file — resolved against the invocation
-// directory and possibly absolute — lies inside the project root.
-//
-// Both paths are normalized through EvalSymlinks before comparison, so a
-// working directory reached through a symlink, or a file argument that names
-// one, is judged in the same namespace the /add path uses (it joins the pattern
-// with the already-resolved coder root). Without this, a real in-project file
-// arrived through the symlink namespace as "../../link/..." and was refused —
-// the CLI and /add disagreeing about the same rule.
-//
-// A not-yet-created file resolves through its deepest existing ancestor, so
-// `strument newdir/file.go` is accepted when newdir/ is inside the project.
-func fileInProject(root, file string) bool {
-	resolved := workspace.ResolveSymlinks(filepath.Clean(file))
-	rootResolved := workspace.ResolveSymlinks(root)
-	rel, err := filepath.Rel(rootResolved, resolved)
-	if err != nil {
-		return false
-	}
-	return !workspace.EscapesRoot(rel)
-}
-
-// restoreSession re-pins what the last session had pinned, returning a line for
-// the banner or "" when nothing was restored.
-//
-// Paths are project-root-relative, so they survive the --no-git case where the
-// coder's root is the invocation directory and the project is the git worktree.
-// A file that has since moved is skipped rather than reported: the point is to
-// save retyping, not to litigate what happened to the tree.
-func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.Resume) (note string, offered []string) {
-	abs := func(rel string) (string, bool) {
-		p := filepath.FromSlash(rel)
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(projectRoot, p)
-		}
-		if _, err := os.Stat(p); err != nil {
-			return "", false
-		}
-		return p, true
-	}
+// restoreSession brings back what the last session left besides its
+// conversation: the undo record. It returns a line for the banner, or "".
+func restoreSession(cdr *coder.Coder, projectRoot, session string) string {
 	// The undo record comes back before anything else, and silently: it changes
 	// nothing the user can see until they type /undo, and announcing "3 turns
 	// are undoable" on every start would be noise for a fact they can ask for.
@@ -721,75 +641,16 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 		cdr.RestoreLastCommit(u.Last)
 	}
 
-	// AGENTS.md is the cross-tool convention for a project's standing
-	// instructions to a coding agent (Codex, Cursor, Amp, Gemini CLI read it;
-	// Claude Code, which long read only CLAUDE.md, now reads it too). Supporting
-	// it costs one rule and adds no filename of Strument's own.
-	//
-	// It is pinned for *editing*, not read-only, and that needs no new safety
-	// story: updating it is then an ordinary edit, which already shows a diff,
-	// is snapshotted before the write, is one /undo away with or without git,
-	// and lands in the turn's commit where there is one. Strument already has a
-	// review surface for model-authored durable state, and it is called an
-	// edit. A read-only pin would instead *refuse* the update, on a file whose
-	// whole purpose is being kept current.
-	//
-	// Never created, only noticed. On a live configuration directory with no
-	// AGENTS.md, nothing happens.
-	//
-	// AGENTS.local.md, the user's private counterpart, gets the same lifecycle,
-	// and on first sight is kept out of git's view if nothing ignores it yet.
-	var excluded string
-	for _, name := range []string{coder.AgentsFileName, coder.AgentsLocalFileName} {
-		if p, ok := abs(name); ok && !slices.Contains(res.AutoPinned, name) {
-			cdr.AddFile(p)
-			offered = append(offered, name)
-			if name == coder.AgentsLocalFileName && cdr.KeepAgentsLocalUncommitted() {
-				excluded = fmt.Sprintf("Added %s to .git/info/exclude, so it stays out of commits.", name)
-			}
-		}
+	// AGENTS.local.md, the user's private counterpart to AGENTS.md, is kept
+	// out of git's view on first sight if nothing ignores it yet. It used to be
+	// pinned along with AGENTS.md, and this ran then; pinning went, and the
+	// file still has to stay out of commits. A write to the user's repository
+	// is said, however small.
+	if _, err := os.Stat(filepath.Join(projectRoot, coder.AgentsLocalFileName)); err == nil &&
+		cdr.KeepAgentsLocalUncommitted() {
+		return fmt.Sprintf("Added %s to .git/info/exclude, so it stays out of commits.", coder.AgentsLocalFileName)
 	}
-
-	var files, readOnly int
-	for _, rel := range res.Files {
-		if p, ok := abs(rel); ok {
-			cdr.AddFile(p)
-			files++
-		}
-	}
-	for _, rel := range res.ReadOnly {
-		if p, ok := abs(rel); ok {
-			cdr.AddReadOnlyFile(p)
-			readOnly++
-		}
-	}
-	// One count, then the split, so the number the user checks against /ls is the
-	// first thing on the line. "2 pins: 1 read-only" also stays on one line where
-	// "1 file and 1 read-only file" was already the longer half of a sentence
-	// that grows with every category.
-	//
-	// Only the read-only half is named, matching /ls and the banner: an ordinary
-	// pin has no property to report, since any file in the project is editable
-	// whether pinned or not.
-	//
-	// An auto-pinned AGENTS.md is deliberately not counted here. This line says
-	// what a *previous session* left, and the first time AGENTS.md is noticed it
-	// came from the project rather than from a session. It needs no announcement
-	// of its own either: the banner lists every pinned file directly below, so
-	// "Pinned AGENTS.md." is already on screen, in the same words /add would have
-	// used.
-	switch {
-	case files == 0 && readOnly == 0:
-	case readOnly == 0:
-		note = fmt.Sprintf("Restored %s from your last session.", render.Plural(files, "pin", "pins"))
-	case files == 0:
-		note = fmt.Sprintf("Restored %s from your last session, read-only.", render.Plural(readOnly, "pin", "pins"))
-	default:
-		note = fmt.Sprintf("Restored %s from your last session, %d of them read-only.",
-			render.Plural(files+readOnly, "pin", "pins"), readOnly)
-	}
-	// A write to the user's repository is said, however small.
-	return strings.TrimSpace(note + "\n" + excluded), offered
+	return ""
 }
 
 // saveResumeFunc returns the callback the REPL calls after a command changes
@@ -811,62 +672,12 @@ func saveResumeFunc(cdr *coder.Coder, defaultAlias func() string, projectRoot st
 		return nil
 	}
 	return func(alias string) {
-		// Carry AutoPinned forward by re-reading rather than by remembering. A
-		// save that dropped it would re-offer AGENTS.md next session, and the
-		// first /add of any session would be enough to trigger that — so the one
-		// field whose whole job is "this happened once" would be erased by
-		// ordinary use. Re-reading a small JSON file per /add costs nothing and
-		// cannot go out of sync with what is on disk.
-		res := resumeWithPins(cdr, projectRoot, history.Resume{
-			AutoPinned: history.LoadResume(projectRoot, cdr.Session).AutoPinned,
-		})
+		var res history.Resume
 		if alias != defaultAlias() {
 			res.Model = alias
 		}
 		_ = history.SaveResume(projectRoot, cdr.Session, res)
 	}
-}
-
-// resumeWithPins fills in what is currently pinned, keeping everything else in
-// base. Shared by the per-command save above and the one-off write that records
-// an auto-pin at startup, so both produce the same shape — a second path that
-// wrote paths differently would resume to a different set of files than the
-// first, which is the kind of divergence nobody notices until it matters.
-func resumeWithPins(cdr *coder.Coder, projectRoot string, base history.Resume) history.Resume {
-	base.Files = toProjectPaths(cdr, projectRoot, cdr.ChatFiles())
-	base.ReadOnly = toProjectPaths(cdr, projectRoot, cdr.ReadOnlyFiles())
-	return base
-}
-
-// toProjectPaths rewrites coder-relative paths as project-relative where
-// possible and absolute where not.
-//
-// A read-only reference reached outside the project has no project-relative
-// form, and dropping it would silently forget the entry that took the most
-// effort to find. Editable files are always inside, so this only ever produces
-// an absolute path for a reference.
-func toProjectPaths(cdr *coder.Coder, projectRoot string, rels []string) []string {
-	out := make([]string, 0, len(rels))
-	base := projectRoot
-	if resolved, err := filepath.EvalSymlinks(base); err == nil {
-		base = resolved
-	}
-	for _, rel := range rels {
-		p := rel
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(cdr.Root, filepath.FromSlash(rel))
-		}
-		if resolved, err := filepath.EvalSymlinks(p); err == nil {
-			p = resolved
-		}
-		r, err := filepath.Rel(base, p)
-		if err != nil || strings.HasPrefix(r, "..") {
-			out = append(out, filepath.ToSlash(p))
-			continue
-		}
-		out = append(out, filepath.ToSlash(r))
-	}
-	return out
 }
 
 // restoreConversation rebuilds a session's conversation from its record and
@@ -2245,6 +2056,11 @@ func scriptMessage(text string) (string, error) {
 	name, _, _ := strings.Cut(strings.TrimPrefix(trimmed, "/"), " ")
 	if name == "ask" || name == "code" {
 		return "", fmt.Errorf("-m /%s: /ask and /code have been removed; send the message on its own", name)
+	}
+	// Pinning went with these; an old script that still pins would otherwise
+	// send "/add main.go" to the model as a message.
+	if slices.Contains([]string{"add", "drop", "ls", "read-only"}, name) {
+		return "", fmt.Errorf("-m /%s: pinned files have been removed; the model reads what it needs", name)
 	}
 	if !repl.IsCommand(name) {
 		return text, nil

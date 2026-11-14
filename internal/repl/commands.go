@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
-	"dbohdan.com/strument/internal/workspace"
 )
 
 // command is one slash command. run returns a message to send to the model
@@ -50,7 +48,7 @@ type command struct {
 //
 // Only <file> is tokenized, and this comment used to claim otherwise: it said
 // the line is split on whitespace so a value with a space has to be quoted,
-// which is true of /add, /read-only, /drop, and /submit and of nothing else.
+// which is true of /submit and /attach and of nothing else.
 // The rest take the trimmed remainder, so `/model "test"` looks up an alias
 // spelled with the quotes in it and answers `Unknown model alias "\"test\""`.
 // Measured, not read. TestQuotingAppliesToFileArgumentsOnly holds the line
@@ -73,26 +71,22 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"add", "<file> ...", "Pin files for the model to inspect or edit (globs allowed).", cmdAdd},
 		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message. With no files, list what is attached; drop removes attachments.", cmdAttach},
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
-		{"clear", "", "Start a fresh conversation in this session, keeping pins, notes, and grants.", cmdClear},
+		{"clear", "", "Start a fresh conversation in this session, keeping grants.", cmdClear},
 		{"commits", "[on | off]", "Show or change whether the model may commit its edits.", cmdCommits},
 		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
 		{"context", "", "Show the chat history as the model receives it.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
-		{"drop", "[<file> ...]", "Unpin files. With no files, unpin all of them.", cmdDrop},
 		{"editor", "[<command>]", "Write your message in an editor, $VISUAL or $EDITOR unless a command is given. It comes back to the prompt to send.", cmdEditor},
 		{"env", "[add <name> ... | drop <name> ... | reset]", "Show or change which environment variables model-run commands receive this run.", cmdEnv},
 		{"exit", "", "Exit Strument.", cmdExit},
 		{"help", "", "Show this help.", cmdHelp},
-		{"ls", "", "List the pinned files.", cmdLs},
 		{"model", "[<alias>]", "Show or switch the active model.", cmdModel},
 		{"quit", "", "Exit Strument.", cmdExit},
-		{"read-only", "<file> ...", "Pin reference files that the model's file tools cannot edit, including files outside the project.", cmdReadOnly},
 		{"reload", "", "Reload the configuration without restarting.", cmdReload},
-		{"reset", "", "Unpin all files, clear the conversation, and revoke this run's webfetch approvals.", cmdReset},
+		{"reset", "", "Clear the conversation and revoke this run's webfetch approvals.", cmdReset},
 		{"rewind", "[<n>]", "Take the last n turns (default 1) out of the conversation. Files are not changed.", cmdRewind},
 		{"run", "<command>", "Run a shell command; optionally add its output to the chat.", cmdRun},
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
@@ -179,15 +173,12 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 		return "", false
 	}
 	// Persisted here rather than by each command, because a command could
-	// forget and one did. /drop with no arguments unpinned everything in memory
-	// and returned before its own saveResume call, so the pin came back on every
-	// restart — a stubborn pin no amount of dropping would shift, since a turn
-	// does not save resume state either. The early return was the whole bug, and
-	// the sibling commands were only correct by not having one after a mutation.
+	// forget and one did: a command that returned early, before its own
+	// saveResume call, left the old state to come back on every restart.
 	//
 	// Comparing before and after beats a per-command flag: nothing to annotate, a
-	// new command cannot forget, and a command that changed nothing — /help, /ls,
-	// a usage error — still writes nothing, so this does not churn the file or its
+	// new command cannot forget, and a command that changed nothing — /help, a
+	// usage error — still writes nothing, so this does not churn the file or its
 	// timestamp on every keystroke.
 	before := r.resumeState()
 	out := cmd.run(ctx, r, args)
@@ -201,27 +192,19 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 }
 
 // resumeState is everything the resume file takes from live session state, in
-// one comparable value. AutoPinned is absent on purpose: saveResumeFunc re-reads
-// it from disk, so it is not something a command can change.
+// one comparable value: the model alias, now that nothing is pinned.
 func (r *REPL) resumeState() string {
-	return strings.Join(r.coder.ChatFiles(), "\x00") + "\x01" +
-		strings.Join(r.coder.ReadOnlyFiles(), "\x00") + "\x01" +
-		r.opts.ModelAlias
+	return r.opts.ModelAlias
 }
 
-// completer offers command names and, under the file commands, chat or
-// addable file paths; a bare (non-command) line completes file paths in the
+// completer offers command names and, under the commands that take a path,
+// file paths; a bare (non-command) line completes file paths in the
 // message itself, aider-style. See promptCompleter in completion.go.
 func (r *REPL) completer() readline.AutoCompleter {
-	pinnedFiles := func(string) []string {
-		return append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...)
-	}
 	items := make([]*readline.PrefixCompleter, 0, len(commands))
 	for _, c := range commands {
 		var sub []*readline.PrefixCompleter
 		switch c.name {
-		case "add":
-			sub = append(sub, recursiveDynamic(r.completeAddable))
 		case "attach":
 			// Arbitrary paths, and a drop word that completes what is staged.
 			// A screenshot is almost never inside the project, so the flat
@@ -240,16 +223,12 @@ func (r *REPL) completer() readline.AutoCompleter {
 				readline.PcItem("drop", names),
 				recursiveDynamic(r.completePaths),
 			)
-		case "submit", "read-only":
-			// Arbitrary filesystem paths, absolute included: /read-only's
-			// documented purpose is material outside the project, and /submit
-			// reads a drafted prompt from anywhere. completeAddable's flat
-			// root listing cannot offer those.
+		case "submit":
+			// Arbitrary filesystem paths, absolute included: /submit reads a
+			// drafted prompt from anywhere.
 			sub = append(sub, recursiveDynamic(r.completePaths))
 		case "check":
 			sub = append(sub, readline.PcItemDynamic(r.completeChecks))
-		case "drop":
-			sub = append(sub, recursiveDynamic(pinnedFiles))
 		case "env":
 			// /env takes a subcommand first, then any number of names: add
 			// offers set variables the allowlist does not yet pass, drop offers
@@ -400,10 +379,6 @@ func (r *REPL) completeUsageProviders(string) []string {
 	return append(slices.Clone(known), history.UsageAll)
 }
 
-func (r *REPL) completeAddable(line string) []string {
-	return r.completePathsFor(line, false)
-}
-
 func (r *REPL) completeAliases(string) []string {
 	if r.opts.Config == nil {
 		return nil
@@ -496,180 +471,6 @@ func wrapWords(text string, width int) []string {
 
 func cmdExit(_ context.Context, _ *REPL, _ string) string { return quitSentinel }
 
-// expandPatterns resolves glob patterns relative to the coder root, returning
-// root-relative paths of existing regular files.
-//
-// outside allows matches that fall outside the project, returned absolute. Only
-// /read-only passes it: reference material is the one thing the workspace tools
-// cannot reach, since read, grep, glob, and ls are all scoped to the root, so
-// pinning it is the only channel there is. Editable out-of-project files stay
-// refused — that is the direction where a mistake is worst.
-func (r *REPL) expandPatterns(patterns []string, outside bool) []string {
-	var out []string
-	for _, pat := range patterns {
-		abs := pat
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(r.coder.Root, pat)
-		}
-		matches, err := filepath.Glob(abs)
-		if err != nil || len(matches) == 0 {
-			r.out.Warningf("No files matched %q.", pat)
-			continue
-		}
-		for _, m := range matches {
-			st, err := os.Stat(m)
-			if err != nil {
-				continue
-			}
-			if st.IsDir() {
-				out = append(out, r.expandDir(m)...)
-				continue
-			}
-			rel, err := filepath.Rel(r.coder.Root, m)
-			if err != nil || workspace.EscapesRoot(rel) {
-				if !outside {
-					r.out.Warningf("Skipping %s: outside the project root. Pin it with /read-only instead.", r.coder.DisplayPath(m))
-					continue
-				}
-				abs, err := filepath.Abs(m)
-				if err != nil {
-					continue
-				}
-				out = append(out, abs)
-				continue
-			}
-			out = append(out, filepath.ToSlash(rel))
-		}
-	}
-	sort.Strings(out)
-	return slices.Compact(out)
-}
-
-// expandDir returns the root-relative files under directory abs. In a git repo
-// it uses the tracked files (so .gitignore is honored, like aider); without git
-// it walks regular, non-hidden files and warns that the set is unfiltered.
-func (r *REPL) expandDir(abs string) []string {
-	relDir, err := filepath.Rel(r.coder.Root, abs)
-	if err != nil || workspace.EscapesRoot(relDir) {
-		r.out.Warningf("Skipping %s: outside the project root.", abs)
-		return nil
-	}
-	relDir = filepath.ToSlash(relDir)
-
-	if tracked := r.coder.TrackedFiles(); tracked != nil {
-		prefix := relDir + "/"
-		if relDir == "." {
-			prefix = ""
-		}
-		var out []string
-		for _, f := range tracked {
-			if prefix == "" || strings.HasPrefix(f, prefix) {
-				out = append(out, f)
-			}
-		}
-		if len(out) == 0 {
-			r.out.Warningf("No tracked files under %s.", relDir)
-		}
-		return out
-	}
-
-	r.out.Warningf("Adding every file under %s: without a git repository, .gitignore rules are not applied.", relDir)
-	var out []string
-	_ = filepath.WalkDir(abs, func(p string, de os.DirEntry, err error) error {
-		switch {
-		case err != nil:
-			// Skip an unreadable entry and keep walking the rest.
-		case de.IsDir():
-			if p != abs && strings.HasPrefix(de.Name(), ".") {
-				return filepath.SkipDir
-			}
-		case strings.HasPrefix(de.Name(), "."):
-			// Skip hidden files.
-		default:
-			if rel, relErr := filepath.Rel(r.coder.Root, p); relErr == nil && !workspace.EscapesRoot(rel) {
-				out = append(out, filepath.ToSlash(rel))
-			}
-		}
-		//nolint:nilerr // a per-entry walk error is intentionally skipped, not propagated
-		return nil
-	})
-	return out
-}
-
-func cmdAdd(_ context.Context, r *REPL, args string) string {
-	if args == "" {
-		r.out.Errorf("%s", usage("add"))
-		return ""
-	}
-	for _, rel := range r.expandPatterns(splitArgs(args), false) {
-		r.coder.AddFile(rel)
-		r.printf("Pinned %s.", r.coder.DisplayPath(rel))
-	}
-	return ""
-}
-
-func cmdReadOnly(_ context.Context, r *REPL, args string) string {
-	if args == "" {
-		r.out.Errorf("%s", usage("read-only"))
-		return ""
-	}
-	for _, rel := range r.expandPatterns(splitArgs(args), true) {
-		r.coder.AddReadOnlyFile(rel)
-		r.printf("Pinned %s read-only.", r.coder.DisplayPath(rel))
-	}
-	return ""
-}
-
-func cmdDrop(_ context.Context, r *REPL, args string) string {
-	if args == "" {
-		r.coder.DropAll()
-		r.printf("Unpinned all files.")
-		return ""
-	}
-
-	for _, pat := range splitArgs(args) {
-		// DropUnder handles an exact path or a whole directory subtree; the glob
-		// loop then handles wildcard patterns against what remains.
-		dropped := r.coder.DropUnder(pat)
-		for _, rel := range append(r.coder.ChatFiles(), r.coder.ReadOnlyFiles()...) {
-			if ok, _ := filepath.Match(pat, rel); ok {
-				if r.coder.DropFile(rel) {
-					dropped = append(dropped, rel)
-				}
-			}
-		}
-		for _, rel := range dropped {
-			r.printf("Unpinned %s.", rel)
-		}
-		if len(dropped) == 0 {
-			r.out.Warningf("No pinned file matched %q.", pat)
-		}
-	}
-	return ""
-}
-
-func cmdLs(_ context.Context, r *REPL, _ string) string {
-	chat := r.coder.ChatFiles()
-	ro := r.coder.ReadOnlyFiles()
-	if len(chat) == 0 && len(ro) == 0 {
-		r.printf("No files are pinned.")
-		return ""
-	}
-	if len(chat) > 0 {
-		r.printf("Pinned:")
-		for _, f := range chat {
-			r.printf("  %s", f)
-		}
-	}
-	if len(ro) > 0 {
-		r.printf("Pinned read-only (contents included in the request; edits through file tools are blocked):")
-		for _, f := range ro {
-			r.printf("  %s", f)
-		}
-	}
-	return ""
-}
-
 // clearedMsg is the record's half of a clear's message: the session log is
 // append-only, so what was cleared is restored by --continue. A run that
 // writes no record has nothing to restore, and the plain line is the whole of
@@ -684,7 +485,7 @@ func (r *REPL) clearedMsg(base string) string {
 }
 
 // cmdClear is a soft restart: forget what was said, stay in the session.
-// Pins, notes, grants and webfetch approvals stay; only the conversation
+// Grants and webfetch approvals stay; only the conversation
 // goes, as when the process starts again without --continue.
 //
 // The older /clear moved to a new session (foo to foo-2) so the record could
@@ -697,19 +498,16 @@ func cmdClear(_ context.Context, r *REPL, _ string) string {
 }
 
 // cmdReset is the one command that ends everything the session accumulated,
-// which is why the webfetch origins go here and not in /clear. /clear leaves
-// the pins alone, so a user reaching for it is asking to forget what was
-// *said*, not to give anything back — dropping a permission there would be the
-// surprise. There is no "/reset pins": that is /drop with no arguments
-// already, and a second spelling would only make the first harder to find.
+// which is why the webfetch origins go here and not in /clear: a user reaching
+// for /clear is asking to forget what was *said*, not to give anything back,
+// and dropping a permission there would be the surprise.
 //
 // Like /clear it stays in the session: the record, and the undo it holds,
 // outlive the reset, as they outlive a restart.
 func cmdReset(_ context.Context, r *REPL, _ string) string {
-	r.coder.DropAll()
 	r.coder.ClearHistory()
 	forgotten := r.coder.ForgetOrigins()
-	msg := r.clearedMsg("Unpinned everything and cleared the chat history.")
+	msg := r.clearedMsg("Cleared the chat history.")
 	if forgotten > 0 {
 		msg += fmt.Sprintf(" Forgot %d %s approved for fetching.",
 			forgotten, render.PluralWord(forgotten, "origin", "origins"))
@@ -1200,13 +998,12 @@ const submitLimit = 100 * 1024
 // undo hint — without touching readline (the typed /submit line is what input
 // history keeps; the file's contents never enter it). The contents are printed
 // first, in their trimmed form, so the echo is the very text the model
-// receives. Unlike /add, nothing is
-// pinned: the text is sent once and only exists in the conversation.
+// receives. The text is sent once and only exists in the conversation.
 //
-// Paths resolve against the coder root but outside paths are allowed, like
-// /read-only's: drafting a long prompt in an editor often happens outside the
-// project, and unlike a pinned file this is the user's own words being sent
-// verbatim, not model-facing reference material.
+// Paths resolve against the coder root but outside paths are allowed: drafting
+// a long prompt in an editor often happens outside the project, and this is
+// the user's own words being sent verbatim, not model-facing reference
+// material.
 //
 // The returned message is not re-dispatched even when it starts with "/", so a
 // file cannot issue commands — /submit's output takes the send path, not the
@@ -1396,7 +1193,7 @@ func (r *REPL) confirmSessionDelete(ops *SessionOps, name string) bool {
 		// Not found in the listing; let the host say so in its own words.
 		return true
 	}
-	r.printf("Deleting %s discards its conversation (%s), its pinned files, and its undo record. "+
+	r.printf("Deleting %s discards its conversation (%s), its resume state, and its undo record. "+
 		"Stored tool output is shared between sessions and is kept.", name, lost)
 
 	if !r.canAsk() {
