@@ -638,12 +638,20 @@ func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
 // different path" that might be asked differently (doc/experiments/
 // 2026-11-bridge-all): the sentence said why this request was declined and
 // nothing about the next one.
+//
+// It names the process and the restart rather than "the rest of this run".
+// Asked how long declines would last, MiMo and DeepSeek echoed "the rest of
+// this run" in 12 of 12 answers, said "session" in 8, and mentioned a restart
+// in 2; with this wording, 12 of 12 mentioned a restart or Strument being
+// started again (doc/experiments/2026-11-bridge-all). In Strument a session
+// outlives a run, so the session reading was the wrong one.
 func declined(res ConfirmResult, what, grant string) string {
 	if res.Unattended {
 		return fmt.Sprintf("Strument declined to %s: no one is available to approve it, and the "+
-			"session was not started with `--yes %s`. Every request that needs approval will be declined "+
-			"the same way for the rest of this run, including calls from a run_code program. "+
-			"Do without it, or say what you would have done.", what, grant)
+			"session was not started with `--yes %s`. No one can be asked while this Strument process runs, "+
+			"so every request that needs approval will be declined the same way until Strument is started "+
+			"again, including calls from a run_code program. Do without it, or say what you would have done.",
+			what, grant)
 	}
 	return "The user chose not to " + what + "."
 }

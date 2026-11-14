@@ -1611,7 +1611,7 @@ func replacedVerb(n int) string {
 // spending steps on it: a classifier gives the same command the same answer,
 // and no terminal will appear mid-run.
 func declinedAgain(verdict string) string {
-	why := "no one is at a terminal to approve it, and that will not change during this run"
+	why := "no one is at a terminal to approve it, and that will not change until Strument is started again"
 	if verdict != "" {
 		why = verdict + ". It is a classifier, not a person, and it gives the same command the same answer; " +
 			"no one is at a terminal to overrule it"

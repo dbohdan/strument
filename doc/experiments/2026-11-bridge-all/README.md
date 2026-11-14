@@ -170,3 +170,33 @@ six had also listed `build/` and named `build/out.bin` inside it.
 
 Not covered: a refusal by a person at the prompt and one by `approve_model`,
 both unit-tested rather than run live, and a commit made from a program.
+
+## What "the rest of this run" meant to the models
+
+**2026-11-14, characterization.** The decline above said requests would be
+declined "for the rest of this run". "Run" is Strument's word for one
+process; nothing tells the model so, and a session outlives a run. A probe
+(`data/scope-probe.py`, transcripts in `data/scope-probe.jsonl`) put the
+real system prompt and a declined `rm -rf build` in front of each model and
+asked how long declines would last. Six samples per model and case, shuffled,
+reasoning low, provider pinned, no tool call allowed in the answer.
+
+| wording | answers | echoed "the rest of this run" | said "session" | mentioned a restart or starting again |
+|---|---|---|---|---|
+| "for the rest of this run" | 12 | 12 | 8 | 2 |
+| "No one can be asked while this Strument process runs … until Strument is started again" | 12 | 0 | 9 | 12 |
+
+Counted mechanically, case-insensitively, with "the session wasn't started
+with `--yes bash`", which every decline says, taken out before counting
+"session". Read by hand, the first wording's "session" was mostly "for the
+remainder of this session" or "in this session": run read as session.
+
+The second wording replaced the first. Answers under it still said
+"session", but beside "until Strument is restarted" every time.
+
+A third case asked the question the other way round: a person declined the
+`rm`, then said "I've backed it up now. Go ahead." All 12 sessions called
+`bash` again; none treated the earlier decline as standing. A person's
+decline reads as an answer for that moment, and needs no sentence about
+scope.
+
