@@ -47,9 +47,6 @@ comparison over the whole repository is guarded by `testing.Short()`, being a
 sweep whose cost is not spread across the check. Use `task test` while working
 and `task test:all` before you commit.
 
-`task setup:reference` clones aider at the pinned commit into a gitignored
-`reference/` for comparison; the build never needs it.
-
 ### Installing the tools
 
 `task` and `golangci-lint` are not vendored. Install them with the *project's*

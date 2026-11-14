@@ -484,9 +484,6 @@ The tag list lives in [`script/grammar-tags.txt`](script/grammar-tags.txt).
 A test keeps it in sync with the supported languages.
 
 Strument builds and tests offline, with no API keys or extra setup.
-To read aider's source alongside it, run `task setup:reference`, which clones aider at commit `5dc9490`
-into a gitignored `reference/` directory.
-Nothing in the build needs it.
 
 
 ## Credits and license
