@@ -30,7 +30,7 @@ func quoteForTest(s string) string {
 func TestCommitToolUsesTheModelsMessage(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	repo := &countingRepo{}
-	c.AutoCommits = true
+	c.Commits = true
 	c.Repo = repo
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "one")
@@ -67,7 +67,7 @@ func TestCommitToolUsesTheModelsMessage(t *testing.T) {
 func TestCommitToolCommitsTwiceInOneTurn(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	repo := &countingRepo{}
-	c.AutoCommits = true
+	c.Commits = true
 	c.Repo = repo
 
 	for _, f := range []string{"a.go", "b.go"} {
@@ -98,7 +98,7 @@ func TestCommitToolCommitsTwiceInOneTurn(t *testing.T) {
 func TestCommitToolLeavesTheTurnEndNothingToDo(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	repo := &countingRepo{}
-	c.AutoCommits = true
+	c.Commits = true
 	c.Repo = repo
 	c.turnSnap = newTurnSnapshot()
 	c.turnSnap.record("a.go", snapEntry{}, "one")
@@ -109,7 +109,7 @@ func TestCommitToolLeavesTheTurnEndNothingToDo(t *testing.T) {
 
 	args, _ := parseCommitArgs(commitCall("call_1", "feat: add a thing", ""))
 	c.runCommitTool(args)
-	c.settleEdits("") // what the turn-end defer does
+	c.settleEdits() // what the turn-end defer does
 
 	if len(repo.calls) != 1 {
 		t.Errorf("%d commits, want the turn end to add none", len(repo.calls))
@@ -130,16 +130,16 @@ func TestCommitToolExplainsWhyItDidNot(t *testing.T) {
 		{"no repo", func(c *Coder) { c.Repo = nil }, "no git repository"},
 		{"auto-commits off", func(c *Coder) {
 			c.Repo = &countingRepo{}
-			c.AutoCommits = false
+			c.Commits = false
 		}, "turned committing off"},
 		{"dry run", func(c *Coder) {
 			c.Repo = &countingRepo{}
-			c.AutoCommits = true
+			c.Commits = true
 			c.DryRun = true
 		}, "dry run"},
 		{"nothing written", func(c *Coder) {
 			c.Repo = &countingRepo{}
-			c.AutoCommits = true
+			c.Commits = true
 			c.turnSnap = nil
 		}, "Nothing has been written"},
 	} {

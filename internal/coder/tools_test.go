@@ -155,7 +155,7 @@ func (r *committingRepo) PathInRepo(_ string) bool { return true }
 func (r *committingRepo) IsDirty(_ string) bool    { return false }
 func (r *committingRepo) GitIgnored(_ string) bool { return false }
 func (r *committingRepo) HeadSHA() string          { return "deadbeef" }
-func (r *committingRepo) Commit(fnames, _ []string, _, _ string, _ bool) (string, string, bool, error) {
+func (r *committingRepo) Commit(fnames, _ []string, _ string) (string, string, bool, error) {
 	if r.asked != nil {
 		r.asked = append(r.asked, fnames)
 	}
@@ -237,22 +237,17 @@ type countingRepo struct {
 
 	dirty bool // report every file as dirty, as a tree with the user's own work is
 	calls [][]string
-	attrs []bool
-	msgs  []string // what the caller asked for, "" when it wanted one generated
+	msgs  []string // the messages the caller committed with
 
-	// pre records each CommitContents call, with what was on disk for its
-	// first path at that moment, so a test can tell it came before the write.
-	pre       []map[string][]byte
-	preOnDisk []string
+	// pre records each CommitContents call, and order the sequence of the
+	// two kinds of commit.
+	pre   []map[string][]byte
+	order []string
 }
 
 func (r *countingRepo) CommitContents(files map[string][]byte, _ string) (string, bool, error) {
 	r.pre = append(r.pre, files)
-	for p := range files {
-		data, _ := os.ReadFile(filepath.Join(r.root, p))
-		r.preOnDisk = append(r.preOnDisk, string(data))
-		break
-	}
+	r.order = append(r.order, "pre")
 	return "pre1234", true, nil
 }
 
@@ -272,18 +267,16 @@ func (r *countingRepo) DirtyPaths() (map[string]bool, error) {
 	return m, nil
 }
 
-func (r *countingRepo) Commit(fnames, staged []string, context, message string, attributed bool) (string, string, bool, error) {
+func (r *countingRepo) Commit(fnames, staged []string, message string) (string, string, bool, error) {
 	r.calls = append(r.calls, fnames)
-	r.attrs = append(r.attrs, attributed)
+	r.order = append(r.order, "commit")
 	r.msgs = append(r.msgs, message)
-	return r.committingRepo.Commit(fnames, staged, context, message, attributed)
+	return r.committingRepo.Commit(fnames, staged, message)
 }
 
-// TestOneCommitPerTurn is the point of moving the commit to turn end. A turn
-// that edits two files across two sends is one change, and the history should
-// say so once — not twice, with each half described by a model that saw only
-// its own fragment.
-func TestOneCommitPerTurn(t *testing.T) {
+// TestCommitTakesEverythingPending: edits made across two sends and committed
+// once land in that one commit, both files of it.
+func TestCommitTakesEverythingPending(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"one-commit-per-turn","source":"authored"}
 {"kind":"fs","path":"a.txt","content":"hello\nworld\n"}
@@ -292,13 +285,14 @@ func TestOneCommitPerTurn(t *testing.T) {
 {"kind":"user","text":"change world to mars, then this to that"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"edit","tool_args":"{\"path\":\"b.txt\",\"old_string\":\"this\\n\",\"new_string\":\"that\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_c","tool_name":"commit","tool_args":"{\"subject\":\"feat: change it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_fs","path":"b.txt","content":"keep\nthat\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
 	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt", "b.txt"}}}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.AutoCommits = true
+		c.Commits = true
 		c.Repo = repo
 	})
 	env.run(t)
@@ -307,17 +301,17 @@ func TestOneCommitPerTurn(t *testing.T) {
 		t.Fatalf("Commit called %d times, want 1: %v", len(repo.calls), repo.calls)
 	}
 	if got := strings.Join(repo.calls[0], ","); got != "a.txt,b.txt" {
-		t.Errorf("committed %q, want both files the turn touched", got)
+		t.Errorf("committed %q, want both files the model edited", got)
 	}
 }
 
 // TestUncommittedChangesCommittedFirst: a file with uncommitted changes when
-// the turn began gets a commit of its own, of its turn-start contents, before
-// the edit is written; then the turn commits once, attributed.
+// the model's work began gets a commit of its own, of those contents, ahead of
+// the model's commit — and only when the model commits.
 //
 // The second edit is the regression the old dirty commit had once: the turn's
 // first edit leaves the file dirty, which must not read as uncommitted work
-// a second time. The baseline is taken at turn start, so it cannot.
+// a second time. The baseline is taken before the model's work, so it cannot.
 func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"uncommitted-before-edit","source":"authored"}
@@ -326,12 +320,13 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 {"kind":"user","text":"change both lines, one at a time"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"one\\n\",\"new_string\":\"ONE\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_2","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"two\\n\",\"new_string\":\"TWO\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_c","tool_name":"commit","tool_args":"{\"subject\":\"feat: change it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"ONE\nTWO\n"}
 `+closingTurn)
 	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.AutoCommits = true
+		c.Commits = true
 		c.Repo = repo
 		c.Out = out
 		repo.root = c.Root
@@ -341,11 +336,11 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	if len(repo.pre) != 1 || string(repo.pre[0]["a.txt"]) != "one\ntwo\n" {
 		t.Fatalf("CommitContents calls = %q, want one, of a.txt as the turn found it", repo.pre)
 	}
-	if repo.preOnDisk[0] != "one\ntwo\n" {
-		t.Errorf("disk at the separate commit = %q, want it before the edit", repo.preOnDisk[0])
+	if len(repo.calls) != 1 {
+		t.Fatalf("Commit calls = %v; want one, the model's", repo.calls)
 	}
-	if len(repo.calls) != 1 || !repo.attrs[0] {
-		t.Fatalf("Commit calls = %v, attributed = %v; want one attributed commit", repo.calls, repo.attrs)
+	if repo.order[0] != "pre" {
+		t.Errorf("order = %v, want the user's changes committed first", repo.order)
 	}
 	screen := strings.Join(out.lines, "\n")
 	if got := strings.Count(screen, "Committed existing changes to a.txt first: pre1234"); got != 1 {
@@ -353,10 +348,10 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	}
 }
 
-// TestNoCommitWhenAutoCommitsOff: with auto-commits off, a file with
-// uncommitted changes is edited and nothing is committed at all. The old dirty
-// commit fired here regardless.
-func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
+// TestNoCommitWhenCommitsOff: with commits off, or in a dry run, a file with
+// uncommitted changes is edited, the model asks to commit, and nothing is
+// committed at all. The old dirty commit fired here regardless.
+func TestNoCommitWhenCommitsOff(t *testing.T) {
 	for _, dry := range []bool{false, true} {
 		sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"no-commit-when-off","source":"authored"}
@@ -364,10 +359,11 @@ func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change it"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"one\\n\",\"new_string\":\"ONE\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_c","tool_name":"commit","tool_args":"{\"subject\":\"feat: change it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 `+closingTurn)
 		repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
 		env := setupScenario(t, sc, func(c *Coder) {
-			c.AutoCommits = dry // off for the first case; on for the dry run, which must still not commit
+			c.Commits = dry // off for the first case; on for the dry run, which must still not commit
 			c.DryRun = dry
 			c.Repo = repo
 			repo.root = c.Root
@@ -379,11 +375,9 @@ func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
 	}
 }
 
-// TestToolEditCommits asserts the turn's single commit happens and is reported
-// to the user. The commit is deliberately *not* in the tool result: it lands at
-// turn end, after the call has already been answered, and its hash is a fact
-// about the user's history rather than about whether the edit applied. What the
-// model gets is what it needs — the edit landed, in this file.
+// TestToolEditCommits asserts the model's commit happens and is reported to
+// the user, and that the hash goes in the commit tool's result, not the
+// edit's: the edit result says what it needs — the edit landed, in this file.
 func TestToolEditCommits(t *testing.T) {
 	sc := inlineScenario(t, `
 {"kind":"meta","v":1,"scenario":"tool-commit","source":"authored"}
@@ -391,12 +385,13 @@ func TestToolEditCommits(t *testing.T) {
 {"kind":"chat","editable":["a.txt"]}
 {"kind":"user","text":"change world to mars"}
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"edit","tool_args":"{\"path\":\"a.txt\",\"old_string\":\"world\\n\",\"new_string\":\"mars\\n\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
+{"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_c","tool_name":"commit","tool_args":"{\"subject\":\"feat: change it\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.AutoCommits = true
+		c.Commits = true
 		c.Repo = &committingRepo{tracked: []string{"a.txt"}}
 		c.Out = out
 	})
@@ -405,12 +400,8 @@ func TestToolEditCommits(t *testing.T) {
 	if joined := strings.Join(out.lines, "\n"); !strings.Contains(joined, "Commit abc1234") {
 		t.Errorf("the commit was not reported to the user:\n%s", joined)
 	}
-	result := lastToolResult(t, env.coder).Text()
-	if !strings.Contains(result, "a.txt") {
-		t.Errorf("tool result = %q, want it to name the file it edited", result)
-	}
-	if strings.Contains(result, "abc1234") {
-		t.Errorf("tool result = %q: the commit does not belong in it", result)
+	if result := lastToolResult(t, env.coder).Text(); !strings.Contains(result, "Committed abc1234") {
+		t.Errorf("commit result = %q, want the hash", result)
 	}
 }
 
@@ -1058,11 +1049,11 @@ func TestShellCommitGetsTrailer(t *testing.T) {
 	if strings.Contains(log, "base test-model") {
 		t.Errorf("log = %q, want the base commit untouched", log)
 	}
-	// The rewritten commits join the session's records: /undo gates on them,
-	// and a commit the model made through bash is as undoable as one it
-	// made through the tool.
-	if len(c.sessionCommits) != 2 {
-		t.Errorf("sessionCommits = %v, want 2", c.sessionCommits)
+	// The rewritten commits join the open snapshot, oldest first: /undo takes
+	// them back with the turn, and a commit the model made through bash is
+	// as undoable as one it made through the tool.
+	if c.turnSnap == nil || len(c.turnSnap.commits) != 2 || c.turnSnap.commits[1] != c.lastCommitHash {
+		t.Errorf("snapshot commits = %v, last = %q; want both, newest last", c.turnSnap, c.lastCommitHash)
 	}
 	if c.lastCommitHash == "" {
 		t.Error("lastCommitHash not set")

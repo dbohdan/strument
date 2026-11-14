@@ -305,11 +305,11 @@ type Config struct {
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes
 	// from the `git_sign` setting (a boolean or a key-id string).
 	GitSign string
-	// NoAutoCommits is `auto_commits = False`: edits are written to the
-	// working tree and not committed. Negated so the zero value is the
-	// default, as with NoShell. --no-auto-commits sets the same thing for
-	// one run and wins over the config either way.
-	NoAutoCommits bool
+	// NoCommits is `commits = False`: the commit tool commits nothing, so
+	// edits stay in the working tree. Negated so the zero value is the
+	// default, as with NoShell. --no-commits sets the same thing for one run
+	// and wins over the config either way.
+	NoCommits bool
 	// Compaction is how a history over its budget is made to fit:
 	// CompactionRoll (the default, also when empty) or CompactionSummary.
 	// --compaction overrides it for one run.
@@ -350,8 +350,8 @@ type Config struct {
 	//     prompt. It shares the built-ins' closed
 	//     placeholder set ({platform}, {language}, {final_reminders},
 	//     {code_tools}, {observation_tools}) and are validated at load.
-	//   - prompt_commit / prompt_read_only are the same Tier 1 replacement for
-	//     the commit-message system prompt and the read-only reference prefix.
+	//   - prompt_read_only is the same Tier 1 replacement for the read-only
+	//     reference prefix.
 	//
 	// The prompt_ keys are project- and user-settable; the trust gate that
 	// guards .strument.star is what makes a project's prompt overrides the
@@ -360,7 +360,6 @@ type Config struct {
 	// relying on LANG-style environment variables.
 	PromptSystemPrefix string
 	PromptCode         string
-	PromptCommit       string
 	PromptReadOnly     string
 	ChatLanguage       string
 }

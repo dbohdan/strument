@@ -48,12 +48,12 @@ func TestSnapshotKeepsTheFirstTouch(t *testing.T) {
 	}
 
 	c.pushTurnSnapshot()
-	restored, err := c.UndoLastTurn()
+	res, err := c.UndoLastTurn()
 	if err != nil {
 		t.Fatalf("undo: %v", err)
 	}
-	if len(restored) != 1 || restored[0] != "a.txt" {
-		t.Errorf("restored = %v", restored)
+	if len(res.Restored) != 1 || res.Restored[0] != "a.txt" {
+		t.Errorf("restored = %v", res.Restored)
 	}
 	if got := read(t, dir, "a.txt"); got != "one\n" {
 		t.Errorf("undo left %q, want the state before the turn's first write", got)
@@ -518,11 +518,11 @@ func TestUndoStillWorksAfterTheStackIsTrimmed(t *testing.T) {
 func TestSetUndoStackTrimsWhatItLoads(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 
-	stack := make([][]TurnEdit, 0, defaultUndoDepth*2)
+	stack := make([]UndoTurn, 0, defaultUndoDepth*2)
 	for i := range defaultUndoDepth * 2 {
-		stack = append(stack, []TurnEdit{{
+		stack = append(stack, UndoTurn{Edits: []TurnEdit{{
 			Path: "a.txt", Before: []byte("b"), After: []byte(strconv.Itoa(i)), Existed: true, Mode: 0o644,
-		}})
+		}}})
 	}
 	c.SetUndoStack(stack)
 
@@ -533,28 +533,6 @@ func TestSetUndoStackTrimsWhatItLoads(t *testing.T) {
 	newest := c.undoStack[len(c.undoStack)-1]
 	if got := string(newest.entries["a.txt"].after); got != strconv.Itoa(defaultUndoDepth*2-1) {
 		t.Errorf("kept turn has after = %q, want the newest", got)
-	}
-}
-
-// /squash gates on IsSessionCommit, and the session's commit set is not
-// bounded, so a long session can ask to squash further back than the stack
-// retains. That used to merge nothing at all, leaving /undo to unwind one turn
-// of a range covering many.
-func TestSquashMergesWhatIsRetained(t *testing.T) {
-	dir := t.TempDir()
-	c := toolCoder(t, dir)
-
-	for i := range 3 {
-		applyBatch(t, c, plannedEdit{
-			callID: strconv.Itoa(i), path: "a.txt", search: "", replace: "v" + strconv.Itoa(i) + "\n",
-		})
-		c.pushTurnSnapshot()
-	}
-
-	c.SquashTurns("abc1234", 50) // far past what is there
-
-	if got := len(c.undoStack); got != 1 {
-		t.Errorf("stack holds %d turns after squashing past its depth, want 1 merged turn", got)
 	}
 }
 

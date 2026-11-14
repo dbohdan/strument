@@ -221,8 +221,8 @@ type fileGlobals struct {
 	hasGitSign bool
 	gitSignVal string
 
-	hasAutoCommits bool
-	autoCommitsVal bool
+	hasCommits bool
+	commitsVal bool
 
 	hasCompaction bool
 	compactionVal string
@@ -245,8 +245,6 @@ type fileGlobals struct {
 	promptSystemPrefixVal string
 	hasPromptCode         bool
 	promptCodeVal         string
-	hasPromptCommit       bool
-	promptCommitVal       string
 	hasPromptReadOnly     bool
 	promptReadOnlyVal     string
 
@@ -553,8 +551,8 @@ func Load(opts Options) (*Config, error) {
 	if user.hasGitSign {
 		cfg.GitSign = user.gitSignVal
 	}
-	if user.hasAutoCommits {
-		cfg.NoAutoCommits = !user.autoCommitsVal
+	if user.hasCommits {
+		cfg.NoCommits = !user.commitsVal
 	}
 	if user.hasCompaction {
 		cfg.Compaction = user.compactionVal
@@ -579,9 +577,6 @@ func Load(opts Options) (*Config, error) {
 	}
 	if user.hasPromptCode {
 		cfg.PromptCode = user.promptCodeVal
-	}
-	if user.hasPromptCommit {
-		cfg.PromptCommit = user.promptCommitVal
 	}
 	if user.hasPromptReadOnly {
 		cfg.PromptReadOnly = user.promptReadOnlyVal
@@ -669,8 +664,8 @@ func Load(opts Options) (*Config, error) {
 		if project.hasGitSign {
 			cfg.GitSign = project.gitSignVal
 		}
-		if project.hasAutoCommits {
-			cfg.NoAutoCommits = !project.autoCommitsVal
+		if project.hasCommits {
+			cfg.NoCommits = !project.commitsVal
 		}
 		if project.hasCompaction {
 			cfg.Compaction = project.compactionVal
@@ -730,9 +725,6 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasPromptCode {
 			cfg.PromptCode = project.promptCodeVal
-		}
-		if project.hasPromptCommit {
-			cfg.PromptCommit = project.promptCommitVal
 		}
 		if project.hasPromptReadOnly {
 			cfg.PromptReadOnly = project.promptReadOnlyVal
@@ -888,7 +880,6 @@ var promptSlots = map[string]map[string]bool{
 		"platform": true, "language": true, "final_reminders": true,
 		"code_tools": true, "observation_tools": true,
 	},
-	"prompt_commit": {"language_instruction": true},
 	// prompt_read_only and prompt_system_prefix are literal: no slots.
 	"prompt_read_only":     {},
 	"prompt_system_prefix": {},
@@ -1167,13 +1158,21 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 	}
 
-	if ac, ok := globals["auto_commits"]; ok {
+	// auto_commits is refused by name: it used to mean "every turn that
+	// changes a file ends in a commit", and a config that still says
+	// auto_commits = True would otherwise be read as asking for something
+	// Strument no longer does.
+	if _, ok := globals["auto_commits"]; ok {
+		return nil, fmt.Errorf("%s: `auto_commits` has been replaced by `commits`: a turn no longer ends "+
+			"in a commit, and `commits` says whether the model may commit with its commit tool", path)
+	}
+	if ac, ok := globals["commits"]; ok {
 		b, ok := ac.(starlark.Bool)
 		if !ok {
-			return nil, fmt.Errorf("%s: `auto_commits` must be a boolean, got %s", path, ac.Type())
+			return nil, fmt.Errorf("%s: `commits` must be a boolean, got %s", path, ac.Type())
 		}
-		out.hasAutoCommits = true
-		out.autoCommitsVal = bool(b)
+		out.hasCommits = true
+		out.commitsVal = bool(b)
 	}
 
 	if cv, ok := globals["compaction"]; ok {
@@ -1396,7 +1395,7 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.envSetVal = vals
 	}
 
-	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_commit", "prompt_read_only"} {
+	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_read_only"} {
 		v, ok := globals[name]
 		if !ok {
 			continue
@@ -1412,9 +1411,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		case "prompt_code":
 			out.hasPromptCode = true
 			out.promptCodeVal = val
-		case "prompt_commit":
-			out.hasPromptCommit = true
-			out.promptCommitVal = val
 		case "prompt_read_only":
 			out.hasPromptReadOnly = true
 			out.promptReadOnlyVal = val

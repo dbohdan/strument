@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // errNothingToUndo is what /undo reports when this session has changed nothing.
@@ -37,6 +38,11 @@ type snapEntry struct {
 type turnSnapshot struct {
 	order   []string
 	entries map[string]*snapEntry
+	// commits are the short hashes of the commits made while this snapshot
+	// was open — by the commit tool, the separate commit of the user's
+	// uncommitted changes before it, or a git commit the model ran — oldest
+	// first. /undo moves HEAD back past them. See undoRepo.
+	commits []string
 }
 
 func newTurnSnapshot() *turnSnapshot {
@@ -55,7 +61,7 @@ func (s *turnSnapshot) record(path string, before snapEntry, after string) {
 	e.after = []byte(after)
 }
 
-func (s *turnSnapshot) empty() bool { return s == nil || len(s.order) == 0 }
+func (s *turnSnapshot) empty() bool { return s == nil || (len(s.order) == 0 && len(s.commits) == 0) }
 
 // paths lists what has been written since the last settle, in first-touch
 // order. It is the set a commit should name — turnEditedFiles accumulates
@@ -203,21 +209,32 @@ type TurnEdit struct {
 	Mode    os.FileMode
 }
 
+// UndoTurn is one entry of the undo stack in the shape a caller can persist:
+// the files' before and after, and the commits made while it was open.
+type UndoTurn struct {
+	Edits   []TurnEdit
+	Commits []string
+}
+
 // UndoStack exports the stack, oldest turn first, for a caller that stores it.
-func (c *Coder) UndoStack() [][]TurnEdit {
-	out := make([][]TurnEdit, 0, len(c.undoStack))
+func (c *Coder) UndoStack() []UndoTurn {
+	out := make([]UndoTurn, 0, len(c.undoStack))
 	for _, snap := range c.undoStack {
-		turn := make([]TurnEdit, 0, len(snap.order))
-		for _, rel := range snap.order {
-			e := snap.entries[rel]
-			turn = append(turn, TurnEdit{
-				Path: rel, Before: e.before, After: e.after,
-				Existed: e.existed, Mode: e.mode,
-			})
-		}
-		out = append(out, turn)
+		out = append(out, snap.export())
 	}
 	return out
+}
+
+func (s *turnSnapshot) export() UndoTurn {
+	turn := UndoTurn{Edits: make([]TurnEdit, 0, len(s.order)), Commits: slices.Clone(s.commits)}
+	for _, rel := range s.order {
+		e := s.entries[rel]
+		turn.Edits = append(turn.Edits, TurnEdit{
+			Path: rel, Before: e.before, After: e.after,
+			Existed: e.existed, Mode: e.mode,
+		})
+	}
+	return turn
 }
 
 // SetUndoStack replaces the stack with one a caller loaded. Called once at
@@ -229,11 +246,12 @@ func (c *Coder) UndoStack() [][]TurnEdit {
 // the refusal "<file> has changed since Strument wrote it" instead of
 // overwriting whatever replaced it. The load is therefore allowed to be
 // optimistic — the guard is downstream and already exists.
-func (c *Coder) SetUndoStack(stack [][]TurnEdit) {
+func (c *Coder) SetUndoStack(stack []UndoTurn) {
 	c.undoStack = nil
 	for _, turn := range stack {
 		snap := newTurnSnapshot()
-		for _, e := range turn {
+		snap.commits = slices.Clone(turn.Commits)
+		for _, e := range turn.Edits {
 			snap.order = append(snap.order, e.Path)
 			snap.entries[e.Path] = &snapEntry{
 				before: e.Before, existed: e.Existed, mode: e.Mode, after: e.After,
@@ -249,24 +267,51 @@ func (c *Coder) SetUndoStack(stack [][]TurnEdit) {
 	c.trimUndoStack()
 }
 
-// SessionCommits exports the auto-commit hashes /undo gates on, and
-// RestoreSessionCommits puts them back. Persisting them is what lets /undo work
-// on a repository after a restart; the gate's other halves — still HEAD,
-// unpushed, single parent, clean files — are unaffected and still run.
-func (c *Coder) SessionCommits() (hashes []string, last string) {
-	return slices.Sorted(maps.Keys(c.sessionCommits)), c.lastCommitHash
+// RestoreLastCommit puts back the short hash of the session's last commit,
+// which the undo record carries across a restart.
+func (c *Coder) RestoreLastCommit(last string) { c.lastCommitHash = last }
+
+// Pending is the model's uncommitted work in the shape a caller can persist:
+// the paths it has written since its last commit, and the user's contents of
+// those of them that had uncommitted changes before it began (nil: deleted).
+type Pending struct {
+	Edits    []string
+	Baseline map[string][]byte
 }
 
-func (c *Coder) RestoreSessionCommits(hashes []string, last string) {
-	if c.sessionCommits == nil {
-		c.sessionCommits = map[string]bool{}
+// PendingWork exports the record for saveUndo and the startup recovery. Only the baseline of pending paths
+// is kept: the rest describes files the model has not touched, which the next
+// run's turn start reads afresh.
+func (c *Coder) PendingWork() Pending {
+	p := Pending{Edits: slices.Sorted(maps.Keys(c.pendingEdits))}
+	for _, rel := range p.Edits {
+		if data, ok := c.userBaseline[rel]; ok {
+			if p.Baseline == nil {
+				p.Baseline = map[string][]byte{}
+			}
+			p.Baseline[rel] = data
+		}
 	}
-	for _, h := range hashes {
-		c.sessionCommits[h] = true
+	return p
+}
+
+// RestorePending puts back what the last run left uncommitted, at startup. The
+// record is open from here, so the next turn does not retake a baseline that
+// would read the model's own edits as the user's; the user's other dirty files
+// are then not separated from a model commit, which only matters for files the
+// model also touches before committing, and those it will have read first.
+func (c *Coder) RestorePending(p Pending) {
+	c.pendingEdits, c.pendingStaged, c.userBaseline, c.pendingOpen = nil, nil, nil, false
+	c.dropStartMark()
+	if len(p.Edits) == 0 {
+		return
 	}
-	if last != "" {
-		c.lastCommitHash = last
+	c.pendingEdits = map[string]bool{}
+	for _, rel := range p.Edits {
+		c.pendingEdits[rel] = true
 	}
+	c.userBaseline = maps.Clone(p.Baseline)
+	c.pendingOpen = true
 }
 
 // saveUndo hands the stack to whoever stores it. A callback rather than a
@@ -276,87 +321,78 @@ func (c *Coder) saveUndo() {
 	if c.SaveUndo == nil {
 		return
 	}
-	hashes, last := c.SessionCommits()
-	c.SaveUndo(c.UndoStack(), hashes, last)
+	c.SaveUndo(c.UndoStack(), c.lastCommitHash, c.PendingWork())
 }
 
-// DropTurnSnapshot discards the most recent turn's snapshot without restoring
-// anything — what the git path calls after undoing through the repository, so
-// the two records of the same turn stay in step.
-func (c *Coder) DropTurnSnapshot() {
-	if n := len(c.undoStack); n > 0 {
-		c.undoStack = c.undoStack[:n-1]
-	}
-	c.saveUndo()
+// UndoResult is what /undo did: the files it put back and the commits it took
+// off the branch, oldest first.
+type UndoResult struct {
+	Restored []string
+	Removed  []string
 }
 
-// SquashTurns collapses the last n turns into one on the undo stack and records
-// hash as a session commit, so /undo after a /squash unwinds the same range the
-// squash commit covers. Earliest before-state per path wins; latest after-state
-// wins — exactly what one long turn would have recorded.
-func (c *Coder) SquashTurns(hash string, n int) {
-	if hash != "" {
-		if c.sessionCommits == nil {
-			c.sessionCommits = map[string]bool{}
-		}
-		c.sessionCommits[hash] = true
-		c.lastCommitHash = hash
-	}
-
-	// Even when there is nothing to merge, the hash above changed and has to
-	// reach disk: /undo gates on it, and a squash that recorded its commit only
-	// in memory would be un-undoable after a restart.
-	defer c.saveUndo()
-
-	if n < 2 || len(c.undoStack) == 0 {
-		return
-	}
-	// Merge what is retained rather than nothing when the range reaches past
-	// the stack's depth. /squash gates on IsSessionCommit, and the session's
-	// commit set is not bounded, so a long session can legitimately squash
-	// further back than twenty turns — and the old `len < n` guard answered
-	// that by merging nothing at all, leaving /undo to unwind one turn of a
-	// range covering many. Folding the turns that are still here is partial,
-	// but it is the closest to the range the squash actually covers, and it is
-	// what an /undo of that squash should reach.
-	//
-	// Reachable before this by restarting, since the writer has always trimmed
-	// to its retention; bounding the in-memory stack is what makes it reachable
-	// without one.
-	n = min(n, len(c.undoStack))
-	head := len(c.undoStack) - n
-	merged := newTurnSnapshot()
-	for _, snap := range c.undoStack[head:] {
-		for _, rel := range snap.order {
-			e := snap.entries[rel]
-			merged.record(rel, *e, string(e.after))
-		}
-	}
-	c.undoStack = append(c.undoStack[:head], merged)
+// undoRepo is the part of a Repo /undo needs to take a turn's commits back
+// off the branch. gitrepo implements it.
+type undoRepo interface {
+	// LastShorts lists the n newest commits' short hashes, newest first.
+	LastShorts(n int) ([]string, error)
+	MergesSince(base string) (bool, error)
+	Published(sha string) bool
+	ChangedInRange(rev string) ([]string, error)
+	InCommit(commitish, rel string) bool
+	IsDirty(rel string) bool
+	CheckoutFileFrom(rev, rel string) error
+	ResetSoft(rev string) error
+	// ResetPaths sets the index entries of paths to rev's, leaving the
+	// working tree alone.
+	ResetPaths(rev string, paths []string) error
 }
 
-// UndoLastTurn puts back what the last turn wrote and returns the paths it
-// restored. It is the no-git undo; with a repository the commit is the record
-// and /undo moves HEAD instead.
+// UndoLastTurn puts back what the last turn wrote, and when the turn made
+// commits, takes them back off the branch.
+//
+// The snapshot is the record either way. It used to be only the no-git
+// undo, and with a repository /undo moved HEAD back one commit, because every
+// turn ended in exactly one. That stopped being true when committing became
+// the model's: a turn can now end uncommitted, or commit twice, or commit
+// work an earlier turn wrote. So the files come back from the snapshot, and
+// the commits the snapshot recorded go with it — provided they are still the
+// newest on the branch, unpushed and not merges. If someone committed on top,
+// /undo refuses rather than unwinding their commit along with the model's.
 //
 // Nothing is restored unless everything is: a file whose contents no longer
 // match what Strument wrote has been changed by someone else, and quietly
-// overwriting that is the one outcome an undo must never produce. This is the
-// same judgement as the git path's refusal to undo over uncommitted changes.
-// A file the undo cannot write — read-only, or a directory now standing where
-// the file was — is the same problem arriving later, so a failure part of the
-// way through puts the turn's own result back rather than leaving the tree in a
+// overwriting that is the one outcome an undo must never produce. A file the
+// undo cannot write — read-only, or a directory now standing where the file
+// was — is the same problem arriving later, so a failure part of the way
+// through puts the turn's own result back rather than leaving the tree in a
 // state neither the user nor Strument asked for.
 //
 // It restores contents and not modes, deliberately. writeAtomically preserves a
 // file's mode through an edit, so the turn never changed one; a chmod between
 // the turn and the undo belongs to whoever ran it.
-func (c *Coder) UndoLastTurn() ([]string, error) {
+func (c *Coder) UndoLastTurn() (UndoResult, error) {
 	n := len(c.undoStack)
 	if n == 0 {
-		return nil, errNothingToUndo
+		return UndoResult{}, errNothingToUndo
 	}
 	snap := c.undoStack[n-1]
+
+	// The git half is checked first and done last: every refusal comes before
+	// anything is touched.
+	var r undoRepo
+	var base string
+	var gitOnly, gitAlso []string
+	if len(snap.commits) > 0 {
+		var ok bool
+		if r, ok = c.Repo.(undoRepo); !ok || c.Repo == nil {
+			return UndoResult{}, errors.New("the last turn made commits, and there is no repository to undo them in")
+		}
+		var err error
+		if base, gitOnly, gitAlso, err = c.checkTurnCommits(r, snap); err != nil {
+			return UndoResult{}, err
+		}
+	}
 
 	// Undo rewrites files behind the harness's back, so every stamp is now
 	// about a version that no longer exists. Dropping them returns to
@@ -373,31 +409,125 @@ func (c *Coder) UndoLastTurn() ([]string, error) {
 			continue
 		}
 		if string(current) != string(e.after) {
-			return nil, fmt.Errorf("%s has changed since Strument wrote it; undo would discard that", rel)
+			return UndoResult{}, fmt.Errorf("%s has changed since Strument wrote it; undo would discard that", rel)
 		}
 		if e.existed {
 			// Fail before touching anything rather than halfway through. The
 			// rollback below is the backstop, not the plan.
 			f, err := os.OpenFile(full, os.O_WRONLY, 0)
 			if err != nil {
-				return nil, fmt.Errorf("cannot write %s to undo it: %w", rel, err)
+				return UndoResult{}, fmt.Errorf("cannot write %s to undo it: %w", rel, err)
 			}
 			f.Close()
 		}
 	}
 
-	var restored []string
+	var res UndoResult
 	for _, rel := range snap.order {
 		if err := c.restoreFile(rel, snap.entries[rel]); err != nil {
-			c.redoFiles(snap, restored)
-			return nil, fmt.Errorf("could not restore %s, so nothing was undone: %w", rel, err)
+			c.redoFiles(snap, res.Restored)
+			return UndoResult{}, fmt.Errorf("could not restore %s, so nothing was undone: %w", rel, err)
 		}
-		restored = append(restored, rel)
+		res.Restored = append(res.Restored, rel)
+	}
+
+	if r != nil {
+		// Files only git touched — a git mv, a staged formatter run — come
+		// back from the base commit; the snapshot's own files are already
+		// back, and only their index entries need to follow HEAD down.
+		for _, rel := range gitOnly {
+			if err := r.CheckoutFileFrom(base, rel); err != nil {
+				return res, fmt.Errorf("restored the files, but could not restore %s from before the commits: %w", rel, err)
+			}
+			res.Restored = append(res.Restored, rel)
+		}
+		if err := r.ResetSoft(base); err != nil {
+			return res, fmt.Errorf("restored the files, but could not move the branch back: %w", err)
+		}
+		if err := r.ResetPaths(base, gitAlso); err != nil {
+			return res, fmt.Errorf("moved the branch back, but could not reset the index for %s: %w",
+				strings.Join(gitAlso, ", "), err)
+		}
+		res.Removed = slices.Clone(snap.commits)
+		c.lastCommitHash = ""
 	}
 
 	c.undoStack = c.undoStack[:n-1]
 	c.saveUndo()
-	return restored, nil
+	c.repend(res.Restored)
+	return res, nil
+}
+
+// checkTurnCommits is /undo's gate on taking a turn's commits off the branch,
+// and works out what the git half has to do: base, the commit before the
+// turn's first; gitOnly, the files the commits changed that the snapshot does
+// not hold; gitAlso, those it does.
+func (c *Coder) checkTurnCommits(r undoRepo, snap *turnSnapshot) (base string, gitOnly, gitAlso []string, err error) {
+	k := len(snap.commits)
+	newest, err := r.LastShorts(k + 1)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("could not read the branch: %w", err)
+	}
+	if len(newest) < k+1 {
+		return "", nil, nil, errors.New("the last turn's first commit is the repository's first; undo it with git")
+	}
+	for i := range k {
+		if newest[i] != snap.commits[k-1-i] {
+			return "", nil, nil, fmt.Errorf("the last turn's commits are no longer the newest on the branch "+
+				"(%s is on top of them); undo would remove that too", newest[0])
+		}
+	}
+	base = newest[k]
+	if merges, err := r.MergesSince(base); err != nil || merges {
+		return "", nil, nil, errors.New("the last turn's commits include a merge; undo them with git")
+	}
+	if r.Published(snap.commits[k-1]) {
+		return "", nil, nil, errors.New("the last turn's commits have already been pushed; undoing them would rewrite published history")
+	}
+	changed, err := r.ChangedInRange(base)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("could not read what the commits changed: %w", err)
+	}
+	for _, rel := range changed {
+		if snap.wrote(rel) {
+			gitAlso = append(gitAlso, rel)
+			continue
+		}
+		if r.IsDirty(rel) {
+			return "", nil, nil, fmt.Errorf("%s has uncommitted changes; commit or stash them first", rel)
+		}
+		if !r.InCommit(base, rel) {
+			return "", nil, nil, fmt.Errorf("%s did not exist before the commits; undo them with git", rel)
+		}
+		gitOnly = append(gitOnly, rel)
+	}
+	return base, gitOnly, gitAlso, nil
+}
+
+// repend brings the pending record in line with files an undo just put back.
+// They are no longer the model's work as far as a commit is concerned, and
+// what they hold now, if it differs from HEAD, is treated as the user's: it is
+// committed on its own before a later model commit touching the file, rather
+// than inside it. That can credit an earlier turn's uncommitted edit to the
+// user, which is the safer of the two mistakes — the other puts the user's
+// work in a commit with the model's name on it.
+func (c *Coder) repend(paths []string) {
+	for _, rel := range paths {
+		delete(c.pendingEdits, rel)
+		delete(c.pendingStaged, rel)
+		if c.Repo == nil || !c.Repo.IsDirty(rel) {
+			delete(c.userBaseline, rel)
+			continue
+		}
+		data, err := os.ReadFile(c.fullPath(rel))
+		if err != nil {
+			data = nil // gone: the user's deletion, as readUncommitted records it
+		}
+		if c.userBaseline == nil {
+			c.userBaseline = map[string][]byte{}
+		}
+		c.userBaseline[rel] = data
+	}
 }
 
 // restoreFile puts one file back the way the turn found it.

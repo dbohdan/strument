@@ -58,14 +58,19 @@ func initScratchRepo(t *testing.T) string {
 	return root
 }
 
-// editResponseStub replays an edit tool call against main.txt, then the closing
-// answer that ends the turn — a reply ending in a tool call is mid-sentence, so
-// the harness re-sends on the result.
-func editResponseStub() *fixture.StreamStub {
+// editCommitStub replays an edit tool call against main.txt, the model's
+// commit of it, and the closing answer that ends the turn — each a send of its
+// own, since a reply ending in a tool call is mid-sentence and the harness
+// re-sends on the result.
+func editCommitStub() *fixture.StreamStub {
 	args := `{"path":"main.txt","old_string":"hello world\n","new_string":"hello strument\n"}`
 	return &fixture.StreamStub{Turns: []fixture.Turn{
 		{Events: []fixture.Event{
 			{Kind: "ToolCall", ToolIndex: 0, ToolID: "call_1", ToolName: "edit", ToolArgs: args},
+			{Kind: "Finish", FinishReason: "tool_calls"},
+		}},
+		{Events: []fixture.Event{
+			{Kind: "ToolCall", ToolIndex: 0, ToolID: "call_2", ToolName: "commit", ToolArgs: `{"subject":"feat: greet strument"}`},
 			{Kind: "Finish", FinishReason: "tool_calls"},
 		}},
 		{Events: []fixture.Event{
@@ -139,80 +144,7 @@ func TestUndoWithoutGitSession(t *testing.T) {
 	}
 }
 
-// TestSquashSession folds two turns into one commit. Two turns are two
-// commits by construction; /squash is how a human says they were one change
-// after all.
-func TestSquashSession(t *testing.T) {
-	root := initScratchRepo(t)
-	g, err := gitrepo.Discover(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	g.CommitTrailer = gitrepo.Trailer("test-model")
-	g.Message = func(_, chatContext string) string {
-		if strings.Contains(chatContext, "combined into one") {
-			return "feat: greet strument, politely"
-		}
-		return "feat: a turn"
-	}
-
-	model := testModel()
-	cdr := coder.New(root, model)
-	turns := append(
-		editTurn("call_1", "main.txt", `hello world\n`, `hello strument\n`),
-		editTurn("call_2", "main.txt", `hello strument\n`, `hello strument, please\n`)...,
-	)
-	cdr.Client = &fixture.StreamStub{Turns: turns}
-	cdr.Repo = g
-	cdr.AutoCommits = true
-	cdr.AddFile("main.txt")
-
-	out := &syncBuffer{}
-	r, err := New(Options{
-		Coder:      cdr,
-		Config:     testConfig(model),
-		Git:        g,
-		ModelAlias: "test",
-		Stdin:      strings.NewReader("change the greeting\nnow add please\n/squash\n/exit\n"),
-		Stdout:     out,
-		Stderr:     out,
-		IsTerminal: func() bool { return false },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-	cdr.Confirm = coder.AutoConfirmer{Granted: coder.StaticGrants(map[string]bool{coder.GrantBash: true, coder.GrantSteps: true, coder.GrantContext: true}), Fallback: r.Confirmer()}
-
-	if err := r.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	got := out.String()
-	if !strings.Contains(got, "Squashed 2 commits into ") {
-		t.Errorf("output does not report the squash:\n%s", got)
-	}
-	// One commit where there were two, sitting straight on top of the base,
-	// with the message written for the whole range.
-	commits, err := g.LastCommits(3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(commits) != 3 ||
-		commits[0].Subject != "feat: greet strument, politely" ||
-		commits[1].Subject != "base commit" {
-		t.Errorf("history after squash = %+v, want the squash sitting on base commit", commits)
-	}
-	// The edits themselves survive the squash untouched.
-	if data, _ := os.ReadFile(filepath.Join(root, "main.txt")); string(data) != "hello strument, please\n" {
-		t.Errorf("main.txt = %q", data)
-	}
-	if g.IsDirty("main.txt") {
-		t.Error("main.txt dirty after squash")
-	}
-}
-
-func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
+func TestModelSwitchUpdatesTrailer(t *testing.T) {
 	root := initScratchRepo(t)
 	g, err := gitrepo.Discover(root)
 	if err != nil {
@@ -228,18 +160,10 @@ func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
 	big.SideModel = &config.Model{Provider: big.Provider, Slug: "vendor/big-side"}
 
 	g.CommitTrailer = gitrepo.Trailer(small.ReadableName())
-	oldClient := &fixture.StreamStub{}
-	newClient := &fixture.StreamStub{
-		Turns: []fixture.Turn{{Events: []fixture.Event{{Kind: "Answer", Text: "feat: switched"}}}},
-	}
-	var commitModel string
-	newClient.OnRequest = func(_ int, req llm.Request, _ *fixture.Request) error {
-		commitModel = req.Model
-		return nil
-	}
+	client := &fixture.StreamStub{}
 
 	cdr := coder.New(root, small)
-	cdr.Client = oldClient
+	cdr.Client = client
 	cdr.Repo = g
 
 	cfg := testConfig(small)
@@ -251,15 +175,7 @@ func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
 		Config:     cfg,
 		Git:        g,
 		ModelAlias: "test",
-		MakeClient: func(m *config.Model) llm.ModelClient {
-			if m == big.SideModel {
-				return newClient
-			}
-			return oldClient
-		},
-		RefreshCommitMessage: func(m *config.Model) {
-			g.Message = coder.CommitMessenger(newClient, m.SideModel, "", nil, cdr.Out, cdr.Clock, "", nil)
-		},
+		MakeClient: func(*config.Model) llm.ModelClient { return client },
 		Stdin:      strings.NewReader("/model big\n/exit\n"),
 		Stdout:     out,
 		Stderr:     out,
@@ -276,10 +192,6 @@ func TestModelSwitchUpdatesTrailerAndCommitModel(t *testing.T) {
 	if want := gitrepo.Trailer("Big Model"); g.CommitTrailer != want {
 		t.Errorf("trailer after /model = %q, want %q", g.CommitTrailer, want)
 	}
-	g.Message("diff", "")
-	if commitModel != "vendor/big-side" {
-		t.Errorf("commit message model after /model = %q, want vendor/big-side", commitModel)
-	}
 }
 
 func TestDiffAndUndoSession(t *testing.T) {
@@ -289,16 +201,15 @@ func TestDiffAndUndoSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.CommitTrailer = gitrepo.Trailer("test-model")
-	g.Message = func(_, _ string) string { return "feat: greet strument" }
 
 	model := testModel()
 	cdr := coder.New(root, model)
-	cdr.Client = editResponseStub()
+	cdr.Client = editCommitStub()
 	cdr.Repo = g
-	cdr.AutoCommits = true
+	cdr.Commits = true
 	cdr.AddFile("main.txt")
 
-	// /undo before any commit: HEAD is not a session commit.
+	// /undo before any turn: there is nothing of the session's to undo.
 	input := strings.NewReader(
 		"/undo\n" +
 			"change the greeting\n" +
@@ -328,13 +239,13 @@ func TestDiffAndUndoSession(t *testing.T) {
 	got := out.String()
 
 	for _, want := range []string{
-		"The last commit was not made by Strument in this chat session.", // pre-turn /undo
-		"Commit ",                    // auto-commit announcement
+		"no Strument edits to undo in this session", // pre-turn /undo
+		"Commit ",                    // the commit tool's announcement
 		"Use /undo to undo a commit", // undo hint after the turn
 		"Diff since ",
 		"-hello world", // /diff shows the change
 		"+hello strument",
-		"Removed: ", // /undo
+		"Removed 1 commit: ", // /undo
 		"Now at:  ",
 		"base commit",
 	} {

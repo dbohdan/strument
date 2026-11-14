@@ -14,42 +14,8 @@ import (
 
 // The side model fails more often than the main one, and its calls go out at
 // the moments nobody is watching (after the edits, before the prompt returns).
-// A retryable blip used to cost the commit its message outright; these pin
+// A retryable blip used to cost a side call its answer outright; these pin
 // that the side calls ride the same backoff a turn does.
-
-func TestCommitMessengerRetriesTransientError(t *testing.T) {
-	stub := &retryOnceStub{}
-	clock := &fastClock{}
-	out := &summaryOutput{}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, out, clock, "", nil)
-
-	got := msg("", "diff text")
-
-	if got != "42" {
-		t.Errorf("message = %q, want 42 after one retry", got)
-	}
-	if len(clock.slept) != 1 {
-		t.Errorf("expected exactly one backoff sleep, got %v", clock.slept)
-	}
-	// Reported, and named. A countdown during a wait for your own prompt says
-	// nothing about which side call is retrying unless it says so.
-	said := strings.Join(out.lines, "\n")
-	if !strings.Contains(said, "Retrying commit message in") {
-		t.Errorf("the retry was not reported as the commit message's:\n%s", said)
-	}
-}
-
-func TestCommitMessengerGivesUpAfterNonRetryableError(t *testing.T) {
-	clock := &fastClock{}
-	msg := CommitMessenger(nonRetryableStub{}, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, clock, "", nil)
-
-	if got := msg("", "diff text"); got != "" {
-		t.Errorf("message = %q, want empty so the caller falls back", got)
-	}
-	if len(clock.slept) != 0 {
-		t.Errorf("a non-retryable error still slept: %v", clock.slept)
-	}
-}
 
 func TestNotesWriterRetriesTransientError(t *testing.T) {
 	stub := &retryOnceStub{}
@@ -83,15 +49,6 @@ func TestChatSummaryRetriesTransientError(t *testing.T) {
 	}
 	if len(clock.slept) != 1 {
 		t.Errorf("expected exactly one backoff sleep, got %v", clock.slept)
-	}
-}
-
-// nonRetryableStub fails with an auth error, which the retry table refuses.
-type nonRetryableStub struct{}
-
-func (nonRetryableStub) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
-	return func(yield func(llm.StreamEvent, error) bool) {
-		yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrAuth, Message: "bad key"})
 	}
 }
 
@@ -189,20 +146,6 @@ func TestSendSideStopsRetryingEmptyResponses(t *testing.T) {
 	// which of the two happened.
 	if !strings.Contains(strings.Join(out.lines, "\n"), emptySideResponse) {
 		t.Errorf("the failure was not reported:\n%s", strings.Join(out.lines, "\n"))
-	}
-}
-
-// TestCommitMessengerFallsBackOnEmptyResponse walks the whole path a commit
-// takes, since that is where this was found.
-func TestCommitMessengerFallsBackOnEmptyResponse(t *testing.T) {
-	stub := &emptyThenStub{blanks: 99}
-	msg := CommitMessenger(stub, &config.Model{Slug: "side"}, "", nil, &summaryOutput{}, &fastClock{}, "", nil)
-
-	if got := msg("", "diff text"); got != "" {
-		t.Errorf("message = %q, want empty so gitrepo falls back", got)
-	}
-	if stub.calls != maxEmptyRetries+1 {
-		t.Errorf("%d requests went out, want %d", stub.calls, maxEmptyRetries+1)
 	}
 }
 

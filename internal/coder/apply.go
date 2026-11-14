@@ -208,8 +208,7 @@ func (c *Coder) normalizeToolPath(p string) string {
 //
 // What guards an edit is everything here that is not a question: path
 // containment (unsafePath, checked before this), the gitignore refusal below,
-// the turn's snapshot so /undo has the exact prior contents, git auto-commit,
-// and the diff scrolling past as it happens. Review lives in the diff and in
+// the turn's snapshot so /undo has the exact prior contents, and the diff scrolling past as it happens. Review lives in the diff and in
 // being able to undo, not in a y/n the user has learned to dismiss.
 func (c *Coder) allowedToEdit(rel string) (bool, string) {
 	full := c.absRootPath(rel)

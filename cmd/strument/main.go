@@ -48,22 +48,22 @@ var version = devVersion
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message       string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                      short:"m"`
-	Session       string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"                                      short:"s"`
-	Continue      bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
-	Model         string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
-	NoGit         bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
-	NoColor       bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode      bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
-	LightMode     bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
-	NoAutoCommits bool     `help:"Keep git integration but do not auto-commit edits."                                                                                                         name:"no-auto-commits"`
-	NoHistory     bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
-	DryRun        bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
-	NoShell       bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
-	Yes           []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	Unattended    bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
-	ConsultScope  string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
-	Files         []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
+	Message      string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"                                      short:"m"`
+	Session      string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"                                      short:"s"`
+	Continue     bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                           short:"c"`
+	Model        string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                     short:"M"`
+	NoGit        bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor      bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode     bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                          xor:"palette"`
+	LightMode    bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                         xor:"palette"`
+	NoCommits    bool     `help:"Keep git integration but never commit edits."                                                                                                               name:"no-commits"`
+	NoHistory    bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
+	DryRun       bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
+	NoShell      bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
+	Yes          []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	Unattended   bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
+	ConsultScope string   `default:"files"                                                                                                                                                   enum:"none,files,chat"                                    help:"Session context to include in /consult requests." name:"consult-scope"`
+	Files        []string `arg:""                                                                                                                                                            help:"Files to pin for editing; they need not exist yet." optional:""`
 
 	Compaction string `help:"How a long chat history is made to fit the context window, for this run: roll (drop the oldest turns, keep what you said) or summary. Overrides the compaction setting." placeholder:"<roll|summary>"`
 }
@@ -181,7 +181,7 @@ func (c *chatCmd) Run() error {
 	// calls. Adding one here instead is the bug that made three reloads look
 	// like they had worked; internal/repl's reload test guards against it.
 	cdr.ShellWithheld = c.NoShell
-	cdr.CommitsWithheld = c.NoAutoCommits
+	cdr.CommitsWithheld = c.NoCommits
 	cdr.CompactionFlag = c.Compaction
 	// Before ApplyConfig, which fills in the config half. The first version of
 	// this set it *after*, so auto_approve was written to a nil Grants and
@@ -199,10 +199,7 @@ func (c *chatCmd) Run() error {
 	applyEgressConfig(cdr, cfg)
 	cdr.Skills = discoverSkills(root)
 	if repo != nil {
-		side := model.SideModel
 		repo.CommitTrailer = gitrepo.Trailer(model.ReadableName())
-		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
 		repo.Sign = cfg.GitSign
 		cdr.Repo = repo
 		cdr.Platform.InGit = true
@@ -438,11 +435,14 @@ func (c *chatCmd) Run() error {
 		// The undo record, which is the only one there is without git. A write
 		// failure is worth a word here, unlike the ledger above: the user would
 		// otherwise believe a turn is undoable tomorrow when it is not.
-		cdr.SaveUndo = func(stack [][]coder.TurnEdit, commits []string, last string) {
-			st := history.UndoState{Commits: commits, Last: last, Uncommitted: cdr.NewestTurnUncommitted()}
+		cdr.SaveUndo = func(stack []coder.UndoTurn, last string, pending coder.Pending) {
+			st := history.UndoState{
+				Last: last, Uncommitted: cdr.NewestTurnUncommitted(),
+				Pending: pending.Edits, Baseline: pending.Baseline,
+			}
 			for _, turn := range stack {
-				var t history.UndoTurn
-				for _, e := range turn {
+				t := history.UndoTurn{Commits: turn.Commits}
+				for _, e := range turn.Edits {
 					t.Entries = append(t.Entries, history.UndoEntry{
 						Path: e.Path, Before: e.Before, After: e.After,
 						Existed: e.Existed, Mode: e.Mode,
@@ -481,6 +481,12 @@ func (c *chatCmd) Run() error {
 	// leaves. Both modes come through here, scripted runs included, though
 	// only the REPL restores the stack.
 	if keepState {
+		// The model's uncommitted work from the last run comes back in every
+		// mode, unlike the undo stack below: it is a fact about the working
+		// tree rather than about the conversation, and a scripted "commit
+		// your changes" has to find what the last run wrote.
+		u := history.LoadUndo(projectRoot, session)
+		cdr.RestorePending(coder.Pending{Edits: u.Pending, Baseline: u.Baseline})
 		recoverExitedTurn(cdr, projectRoot, session)
 	}
 
@@ -722,12 +728,12 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 	// are undoable" on every start would be noise for a fact they can ask for.
 	// It is safe to restore optimistically because UndoLastTurn refuses any file
 	// whose contents no longer match what Strument wrote.
-	if u := history.LoadUndo(projectRoot, session); len(u.Turns) > 0 || len(u.Commits) > 0 {
-		stack := make([][]coder.TurnEdit, 0, len(u.Turns))
+	if u := history.LoadUndo(projectRoot, session); len(u.Turns) > 0 || u.Last != "" {
+		stack := make([]coder.UndoTurn, 0, len(u.Turns))
 		for _, t := range u.Turns {
-			turn := make([]coder.TurnEdit, 0, len(t.Entries))
+			turn := coder.UndoTurn{Commits: t.Commits, Edits: make([]coder.TurnEdit, 0, len(t.Entries))}
 			for _, e := range t.Entries {
-				turn = append(turn, coder.TurnEdit{
+				turn.Edits = append(turn.Edits, coder.TurnEdit{
 					Path: e.Path, Before: e.Before, After: e.After,
 					Existed: e.Existed, Mode: e.Mode,
 				})
@@ -735,7 +741,7 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string, res history.R
 			stack = append(stack, turn)
 		}
 		cdr.SetUndoStack(stack)
-		cdr.RestoreSessionCommits(u.Commits, u.Last)
+		cdr.RestoreLastCommit(u.Last)
 	}
 
 	// Notes are in memory only when something put them there before the REPL
@@ -985,14 +991,6 @@ func terminalSize() (int, int) {
 func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Repo, slog *sessionLog,
 	alias, projectRoot string, keepState bool, resumeNote string,
 ) error {
-	refreshCommitMessage := func(m *config.Model) {
-		if repo == nil {
-			return
-		}
-		side := m.SideModel
-		repo.Message = coder.CommitMessenger(client.ForProvider(side.Provider), side,
-			cdr.Platform.Language, cdr.RecordTurnSideUsage, cdr.Out, cdr.Clock, cdr.PromptCommit, cdr.RecordSideCall)
-	}
 	// Scoped to the project like the transcript, in the directory Run already
 	// created — and suppressed with it when the session leaves no trace.
 	var inputHistory string
@@ -1005,15 +1003,14 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 	var r *repl.REPL
 	currentDefault := func() string { return r.Config().Default }
 	r, err := repl.New(repl.Options{
-		Coder:                cdr,
-		Config:               cfg,
-		Git:                  repo,
-		ModelAlias:           alias,
-		ResumeNote:           resumeNote,
-		SaveResume:           saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
-		ApplyEgress:          applyEgressConfig,
-		MakeClient:           func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
-		RefreshCommitMessage: refreshCommitMessage,
+		Coder:       cdr,
+		Config:      cfg,
+		Git:         repo,
+		ModelAlias:  alias,
+		ResumeNote:  resumeNote,
+		SaveResume:  saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
+		ApplyEgress: applyEgressConfig,
+		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
 		// Kong's enum has already refused anything else, so the ok is never
 		// false here; the parse is where the name-to-scope mapping lives.
 		ConsultScope: consultScope(c.ConsultScope),
@@ -2328,9 +2325,10 @@ func scriptMessage(text string) (string, error) {
 		"Use the REPL for commands", name)
 }
 
-// recoverExitedTurn finishes a turn the last run exited in the middle of: the
-// files still as that run wrote them are committed, the rest are reported, and
-// the undo record stops marking the turn. See coder.SaveOnExit.
+// recoverExitedTurn takes up a turn the last run exited in the middle of: the
+// files still as that run wrote them become the model's uncommitted work, the
+// rest are reported, and the undo record stops marking the turn. See
+// coder.SaveOnExit.
 func recoverExitedTurn(cdr *coder.Coder, projectRoot, session string) {
 	st := history.LoadUndo(projectRoot, session)
 	if !st.Uncommitted || len(st.Turns) == 0 {
@@ -2341,16 +2339,8 @@ func recoverExitedTurn(cdr *coder.Coder, projectRoot, session string) {
 	for _, e := range newest.Entries {
 		turn = append(turn, coder.TurnEdit{Path: e.Path, Before: e.Before, After: e.After, Existed: e.Existed, Mode: e.Mode})
 	}
-	kept, changed, hash, already, err := cdr.RecoverExited(turn)
-	switch {
-	case already:
-		noticef("The last run ended mid-turn, after committing its edits to %s.", strings.Join(kept, ", "))
-	case err != nil:
-		noticef("The last run ended mid-turn, and committing its edits to %s failed: %v. They are in the files; /undo reaches them.",
-			strings.Join(kept, ", "), err)
-	case hash != "":
-		noticef("The last run ended mid-turn. Its edits to %s are committed as %s.", strings.Join(kept, ", "), hash)
-	case len(kept) > 0:
+	kept, changed := cdr.RecoverExited(turn)
+	if len(kept) > 0 {
 		noticef("The last run ended mid-turn. Its edits to %s are in the files, uncommitted; /undo reaches them.",
 			strings.Join(kept, ", "))
 	}
@@ -2358,10 +2348,8 @@ func recoverExitedTurn(cdr *coder.Coder, projectRoot, session string) {
 		noticef("  %s", coder.ChangedSince(changed))
 	}
 	st.Uncommitted = false
-	if hash != "" {
-		st.Commits = append(st.Commits, hash)
-		st.Last = hash
-	}
+	pending := cdr.PendingWork()
+	st.Pending, st.Baseline = pending.Edits, pending.Baseline
 	if err := history.SaveUndo(projectRoot, session, st, 0); err != nil {
 		noticef("could not update the undo record: %v", err)
 	}

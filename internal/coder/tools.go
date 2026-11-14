@@ -118,7 +118,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		defs = append(defs, checkTool(c.Check))
 	}
 	// Offered whenever editing is, including where it will decline: a session
-	// without git, or with auto-commits off, answers the call with the reason
+	// without git, or with commits off, answers the call with the reason
 	// rather than hiding the tool. Withholding it would leave a model that
 	// wanted a commit boundary with no way to find out why it could not have
 	// one, which is how the plan it wrote silently became one commit.
@@ -203,8 +203,7 @@ func readOnlyTools() []llm.ToolDef {
 }
 
 // editTools change files directly — the change lands the moment the call
-// arrives, exactly like an ordinary edit, with git auto-commit and /undo as the
-// safety net.
+// arrives, exactly like an ordinary edit, with /undo as the safety net.
 func editTools() []llm.ToolDef {
 	return []llm.ToolDef{
 		{
@@ -1449,9 +1448,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	if len(edited) == 0 {
 		return nil
 	}
-	// Before the writes, so the user's changes to these files are committed
-	// as they were and the model's diff is its own (staging.go).
-	c.commitUncommittedFirst(writeOrder)
 	if !c.DryRun {
 		if err := c.writeAtomically(writePlan{Writes: pending, WriteOrder: writeOrder}); err != nil {
 			c.Out.Errorf("Could not write the edits, so none were applied: %v", err)

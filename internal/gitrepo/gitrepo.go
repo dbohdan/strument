@@ -1,7 +1,7 @@
 // Package gitrepo implements the coder's git port by shelling out to the
 // git binary — always argv, never a shell string.
 // Author and committer identity are left alone: attribution is a single
-// sanitized "Assisted-by: <model> via Strument" trailer on auto-commits.
+// sanitized "Assisted-by: <model> via Strument" trailer on the commits the model makes.
 package gitrepo
 
 import (
@@ -25,11 +25,6 @@ type Repo struct {
 	// Trailer is appended to attributed commits via `git commit
 	// --trailer`; build it with Trailer() so the model name is sanitized.
 	CommitTrailer string
-
-	// Message generates a commit message from staged diffs and chat
-	// context (the side-model call); nil or an empty result falls
-	// back to aider's "(no commit message provided)".
-	Message func(diffs, context string) string
 
 	// Sign, when non-empty, is the `git commit` signing flag passed
 	// through as its own argv: "-S" to sign with the default key, or
@@ -278,10 +273,9 @@ func (r *Repo) RootCommit() string {
 // GIT_INDEX_FILE, as they do under `git commit -- paths`, which builds a
 // temporary index of its own.
 //
-// want is the message to use. Empty means generate one from the staged diff
-// through the Message hook, which is the automatic path; a non-empty one is
-// used verbatim, for the commit tool where the model writes its own.
-func (r *Repo) Commit(fnames, staged []string, context, want string, attributed bool) (hash, message string, ok bool, err error) {
+// message is used verbatim: the commit tool's, which the model writes. The
+// commit carries the attribution trailer.
+func (r *Repo) Commit(fnames, staged []string, message string) (hash, used string, ok bool, err error) {
 	if len(fnames) == 0 && len(staged) == 0 {
 		return "", "", false, nil
 	}
@@ -320,19 +314,10 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 		}
 	}
 
-	// A message the caller supplied wins; generating one is what happens when
-	// nobody wrote it. The commit tool writes its own, and the model that made
-	// the change is better placed to say why than a side model reading the
-	// diff afterwards.
-	message = strings.TrimSpace(want)
-	if message == "" && r.Message != nil {
-		diffs, _ := r.gitEnv(env, "", "diff", "--cached")
-		message = strings.TrimSpace(r.Message(diffs, context))
-		// Models love to quote one-liners (aider strips this too).
-		if len(message) >= 2 && message[0] == '"' && message[len(message)-1] == '"' {
-			message = strings.TrimSpace(message[1 : len(message)-1])
-		}
-	}
+	// The model that made the change writes the message. A side model used
+	// to write it from the diff afterwards, when every turn ended in a commit
+	// nobody had asked for; the model is better placed to say why.
+	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "(no commit message provided)"
 	}
@@ -342,7 +327,7 @@ func (r *Repo) Commit(fnames, staged []string, context, want string, attributed 
 		commitArgs = append(commitArgs, r.Sign)
 	}
 	commitArgs = append(commitArgs, "-m", message)
-	if attributed && r.CommitTrailer != "" {
+	if r.CommitTrailer != "" {
 		commitArgs = append(commitArgs, "--trailer", r.CommitTrailer)
 	}
 	if _, err := r.gitEnv(env, "", commitArgs...); err != nil {
@@ -902,7 +887,7 @@ func (r *Repo) ChangedInRange(rev string) ([]string, error) {
 	return files, nil
 }
 
-// Commit describes one commit for the /squash gates.
+// Commit describes one commit, for /undo's gates.
 type Commit struct {
 	SHA     string
 	Short   string
@@ -925,6 +910,40 @@ func (r *Repo) LastCommits(n int) ([]Commit, error) {
 		commits = append(commits, Commit{SHA: parts[0], Short: parts[1], Subject: parts[2]})
 	}
 	return commits, nil
+}
+
+// LastShorts returns the n most recent commits' short hashes, newest first,
+// fewer only when the branch is shorter.
+func (r *Repo) LastShorts(n int) ([]string, error) {
+	commits, err := r.LastCommits(n)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(commits))
+	for i, c := range commits {
+		out[i] = c.Short
+	}
+	return out, nil
+}
+
+// MergesSince reports whether any commit after base and up to HEAD has more
+// than one parent.
+func (r *Repo) MergesSince(base string) (bool, error) {
+	out, err := r.git("rev-list", "--min-parents=2", base+"..HEAD")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "", nil
+}
+
+// ResetPaths sets the index entries of paths to rev's, leaving the working
+// tree alone: `git reset rev -- paths`.
+func (r *Repo) ResetPaths(rev string, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	_, err := r.git(append([]string{"reset", "-q", rev, "--"}, paths...)...)
+	return err
 }
 
 // TrailerValue returns the attribution trailer Commit is appending right now

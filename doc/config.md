@@ -36,15 +36,15 @@ The loader reads these module-level variables after running your file:
 | `reasoning_display` | `"full"`, a number, or `"off"` | Optional. How much of the model's thinking to show. Default `"full"`. See below. |
 | `max_steps` | positive integer | Optional. Work-step budget per turn before the "Keep going?" checkpoint. Default 25. See below. |
 | `max_error_reflections` | positive integer | Optional. Error-reflection budget per turn. Default 3. See below. |
-| `max_undo_turns` | positive integer | Optional. How many turns of file contents are kept for `/undo` and `/squash`. Default 20. See below. |
+| `max_undo_turns` | positive integer | Optional. How many turns of file contents are kept for `/undo`. Default 20. See below. |
 | `webfetch_allow` | list of strings | Optional. Host or host:port entries the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `language_parser` | boolean | Optional. The tree-sitter parser behind `symbol`, `/symbol`, and the after-edit parse check. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
-| `auto_commits` | boolean | Optional. Whether a turn that changes a file ends in a commit. Default `True`. See below. |
+| `commits` | boolean | Optional. Whether the model's `commit` tool commits. Default `True`. See below. |
 | `compaction` | string | Optional. How a long chat history is made to fit the context window: `"roll"` or `"summary"`. Default `"roll"`. See below. |
-| `git_sign` | boolean or string | Optional. Sign auto-commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
+| `git_sign` | boolean or string | Optional. Sign the model's commits with `git commit -S`. `True` signs with the default key; a key-id string signs with that key. Default `False`. See below. |
 | `secret_files_add` | list of strings | Optional. More gitignore-style patterns for files the model may not read or edit. A project's are added to the user's. See below. |
 | `secret_files_exempt` | list of strings | Optional. Patterns taken back from the secret-file list. User config only. See below. |
 | `env_allow` | list of strings | Optional. Environment variable names passed to model-run commands on top of the built-in allowlist. See below. |
@@ -54,7 +54,6 @@ The loader reads these module-level variables after running your file:
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
 | `prompt_code` | string | Optional. Whole-string replacement for the system prompt. See below. |
-| `prompt_commit` | string | Optional. Whole-string replacement for the commit-message system prompt. See below. |
 | `prompt_read_only` | string | Optional. Whole-string replacement for the read-only reference prefix. See below. |
 | `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
 
@@ -426,7 +425,7 @@ preference.
 ### `max_undo_turns`
 
 How many turns of file contents Strument keeps — the record `/undo` restores
-from and `/squash` folds.
+from.
 
 ```python
 max_undo_turns = 20    # the default
@@ -439,22 +438,16 @@ the state directory, so the distance is the same whether or not Strument has
 been restarted since. Lowering it on `/reload` takes effect immediately rather
 than after enough turns have passed to squeeze the older ones out.
 
-**Inside a git repository this is not the limit on `/undo`.** There `/undo`
-unwinds the session's own commits and git restores the contents, so it can step
-back further than the retained depth — the gate is that each commit was made by
-Strument in this session, unpushed and still HEAD. The retained stack is what
-`/undo` uses in a directory that is not a repository, what restores files a
-commit does not cover, and what `/squash` folds.
+It is the limit on `/undo` inside a git repository too. Each turn on the stack
+records the commits made during it, and `/undo` restores the turn's files and
+takes those commits off the branch — when they are still the newest on it,
+unpushed and not merges, and the files only git touched are clean.
 
 Raising it costs memory. A turn holds the full contents of every file it
 touched, twice — before and after — so the stack's size is the depth times what
 a turn edits. Four hundred turns rewriting a 40 KB file hold 32 MB unbounded;
 the default holds 1.6 MB. The saved copy has its own byte cap that is not
 configurable, so a large value is paid for in the session rather than on disk.
-
-`/squash n` folds the last `n` turns into one. A squash reaching further back
-than the retained depth folds what is retained, which is the closest it can get
-to the range the squash commit covers.
 
 ### `max_steps`
 
@@ -777,26 +770,33 @@ ask again. An unattended run has no one to do that. The unattended
 [FrontierHarness trial](experiments/2026-09-frontier-harness/README.md) lost
 three of twelve tasks to a provider's rate limits that outlasted the minute.
 
-Side calls (commit messages, session notes, compaction) keep their own shorter
+Side calls (session notes, compaction) keep their own shorter
 ladder, since each runs under a budget of its own.
 
-### `auto_commits`
+### `commits`
 
-Whether a turn that edits files ends in a commit. `True` is the default;
-`False` writes the edits to the working tree and leaves committing to you:
+Whether the model's `commit` tool commits. `True` is the default; `False`
+writes the edits to the working tree and leaves committing to you, and the
+tool tells the model so:
 
 ```python
-auto_commits = False
+commits = False
 ```
 
-It is the standing form of `--no-auto-commits`, and the flag wins over it
+Nothing commits at the end of a turn. That used to be `auto_commits`, a commit
+of every turn that changed a file under a message a side model wrote from the
+diff; the model now commits its own work, when it is done, and writes the
+message itself. A config that still sets `auto_commits` gets an error naming
+`commits`.
+
+It is the standing form of `--no-commits`, and the flag wins over it
 either way. `/commits on|off` changes the setting for the session, and
 `/reload` returns to what the config and the command line say, as it does for
 `/env`. With commits off, `/undo` and `/diff` still work. A trusted project
 config may set it too.
 
-A turn's commit holds the files the model edited and the files the model's
-shell commands staged with git — `git mv`, `git rm`, `git add` — each as it is
+A commit holds the files the model has edited since its last commit — in this
+turn or an earlier one — and the files the model's shell commands staged with git — `git mv`, `git rm`, `git add` — each as it is
 on disk, so a change the model made after staging is included too. A file a
 command took out of the index, as `git rm --cached` does, is committed as
 untracked and stays on disk. What you stage yourself, before or during the
@@ -804,11 +804,13 @@ turn, stays out of the commit, as do files a command changed without staging
 them. A staged path with unresolved merge conflicts is left out and named on
 screen.
 
-A file with uncommitted changes when the turn began gets a commit of its own
-before the model's changes to it, as aider does: "Commit existing changes to
-src/main.go before Strument's edits", unattributed. It holds the file as the
-turn found it, read at turn start, so a change the model makes first — a
-`git mv`, a `sed -i` — is never committed as yours. If a hook refuses that
+A file with uncommitted changes before the model's work began gets a commit of
+its own ahead of the model's, as aider does: "Commit existing changes to
+src/main.go before Strument's edits", unattributed. It holds the file as it was
+at the start of the first turn after the model's last commit, so a change the
+model makes first — a `git mv`, a `sed -i` — is never committed as yours. It is
+made only when the model commits; if the model never does, nothing of yours is
+committed either. If a hook refuses that
 commit, your changes go into the model's commit instead and Strument says so.
 Files past a size limit (200 dirty files, 4 MB each, 16 MB in all) are not
 separated. With commits off, nothing is committed either way.
@@ -860,9 +862,9 @@ git_sign = "ABC123"     # sign with that key: `git commit -SABC123`
 `False` (the default) and an empty string leave commits unsigned. A string is
 always used as the key id, so write the key alone — Strument adds the `-S`.
 Everything else about signing is Git's domain: which key `-S` uses is decided by
-`user.signingkey`. As with any `git commit`, a failure to sign makes the turn's
-commit fail; the edits stay in the working tree, where `/undo` still reaches
-them through the turn's snapshot.
+`user.signingkey`. As with any `git commit`, a failure to sign makes the
+commit fail, and the commit tool tells the model why; the edits stay in the
+working tree, where `/undo` still reaches them through the turn's snapshot.
 
 ### `prompt_*` — customizing the system prompts
 
@@ -878,13 +880,11 @@ touch the CI config" — without rewriting anything else:
 prompt_system_prefix = "You work on the Acme codebase.\n\n"
 ```
 
-**Replace a built-in prompt.** `prompt_code`, `prompt_commit`, and
-`prompt_read_only` replace the corresponding built-in prompt entirely:
+**Replace a built-in prompt.** `prompt_code` and `prompt_read_only` replace the corresponding built-in prompt entirely:
 
 | Key | Replaces |
 |---|---|
 | `prompt_code` | the system prompt (`Tool.MainSystem`) |
-| `prompt_commit` | the commit-message system prompt |
 | `prompt_read_only` | the prefix framing injected read-only reference files |
 
 A replacement removes the corresponding built-in instructions. To add a rule
@@ -895,7 +895,6 @@ set** — the same `{...}` slots `pyFormat` fills at assembly time:
 
 - `prompt_code`: `{platform}`, `{language}`, `{final_reminders}`,
   `{code_tools}`, `{observation_tools}`.
-- `prompt_commit`: `{language_instruction}`.
 - `prompt_read_only`: none (literal).
 
 Only the placeholders listed below are supported. Unknown placeholders cause a
@@ -1679,8 +1678,8 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`edit_format`** is no longer accepted. Strument edits through tool calls
   only and has no other modes, so a config still naming it gets an error
   saying so; the fix is to drop the setting.
-- **`side_model`** — the model for Strument's own writing: commit messages,
-  session notes, and compaction summaries. An alias string or an inline
+- **`side_model`** — the model for Strument's own writing: session notes and
+  compaction summaries. An alias string or an inline
   `model()`; unset means the main model does its own. These are *side requests*
   — prose about the session rather than work on your code — which is where the
   name comes from, and why a cheaper and/or faster model usually belongs here.

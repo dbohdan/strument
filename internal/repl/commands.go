@@ -78,7 +78,7 @@ func init() {
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
 		{"clear", "", "Start a fresh conversation in this session, keeping pins, notes, and grants.", cmdClear},
-		{"commits", "[on | off]", "Show or change whether each turn's edits are committed automatically.", cmdCommits},
+		{"commits", "[on | off]", "Show or change whether the model may commit its edits.", cmdCommits},
 		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
 		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
@@ -99,7 +99,6 @@ func init() {
 		{"sandbox", "", "Show whether the sandbox is active and which paths allow writes.", cmdSandbox},
 		{"session", "[new | switch | fork | rename | delete] [<name>]", "List this project's sessions, or create, switch to, fork, rename, or delete one.", cmdSession},
 		{"skill", "[<name>]", "List the available skills, or add a skill's instructions to the chat.", cmdSkill},
-		{"squash", "[<n>]", "Combine the last n turns' commits into one (default 2).", cmdSquash},
 		{"submit", "<file>", "Send a file's contents as your message.", cmdSubmit},
 		{"symbol", "<name> [definition | reference]", "Find where a name is defined or used, using the language parser.", cmdSymbol},
 		{"tokens", "", "Report approximate context window usage.", cmdTokens},
@@ -141,9 +140,6 @@ func (r *REPL) useModel(m *config.Model) {
 		r.coder.Client = r.opts.MakeClient(m)
 		r.coder.Summarizer = coder.NewChatSummary(r.opts.MakeClient(m.SideModel), m.SideModel,
 			r.coder.Tokens, r.coder.Out, r.coder.Clock, r.coder.RecordSideCall)
-	}
-	if r.opts.RefreshCommitMessage != nil {
-		r.opts.RefreshCommitMessage(m)
 	}
 }
 

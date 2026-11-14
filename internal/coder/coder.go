@@ -39,26 +39,24 @@ type Coder struct {
 
 	// Options.
 	DryRun               bool
-	AutoCommits          bool
+	Commits              bool
 	SuggestShellCommands bool // false gates execution too
 	// ShellWithheld records --no-shell. The flag can turn the bash tool off and
 	// cannot turn it on, so ApplyConfig has to remember it: a /reload must not
 	// undo a decision made on the command line.
 	ShellWithheld bool
-	// CommitsWithheld records --no-auto-commits, for the same reason.
+	// CommitsWithheld records --no-commits, for the same reason. Commits
+	// says whether the commit tool commits.
 	CommitsWithheld    bool
 	Stream             bool
 	SystemPromptPrefix string
 	// PromptCode is the user's replacement for MainSystem (the `prompt_code`
 	// config). Empty means "use the built-in". It lives on the Coder rather than
 	// in the prompts.Set built-in so a session does not mutate the shared
-	// singleton. PromptCommit
-	// and PromptReadOnly are the same overrides for CommitSystem and the
-	// read-only reference prefix; PromptCommit is threaded to CommitMessenger,
-	// which owns its own prompt so it can run on a side model. All are applied
-	// by setPrompts, which ApplyConfig and New both funnel through.
+	// singleton. PromptReadOnly is the same override for the read-only
+	// reference prefix. Both are applied by setPrompts, which ApplyConfig and
+	// New both funnel through.
 	PromptCode     string
-	PromptCommit   string
 	PromptReadOnly string
 	ChatLanguage   string
 	// OfferCode, when false, withholds the run_code tool from the schema and
@@ -197,7 +195,7 @@ type Coder struct {
 	// hashes whenever either changes. Same shape and same reason as
 	// RecordUsage: the coder never learns where state lives, and a session that
 	// leaves no trace passes nil.
-	SaveUndo func(stack [][]TurnEdit, commits []string, last string)
+	SaveUndo func(stack []UndoTurn, last string, pending Pending)
 
 	// Recorder receives the JSONL log's records when one is wired; nil is the
 	// default and costs nothing. recordedMessages is its watermark into
@@ -379,7 +377,6 @@ type Coder struct {
 	fence               fence
 	commitBeforeMessage []string
 	lastCommitHash      string
-	sessionCommits      map[string]bool // hashes of this session's auto-commits (/undo gate)
 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
 	// sessionAutoApprove is the same thing outliving the turn, and
 	// initBeforeMessage deliberately does not clear it. Only webfetch writes
@@ -395,14 +392,19 @@ type Coder struct {
 	// the decision just made, "" unless it rated the command and said ask.
 	turnDeclined   map[string]string
 	approveVerdict string
-	// uncommittedAtStart holds, for the tracked paths that had uncommitted
-	// changes when the turn began, their contents then (nil: deleted), and
-	// turnStaged the paths the model's shell commands staged during it. The
-	// first are committed on their own before the model's changes to them;
-	// the second go into the turn's commit. See staging.go.
-	uncommittedAtStart map[string][]byte
-	turnStaged         map[string]bool
-	startMark          indexMark
+	// What the model has done since its last commit, which can span turns:
+	// pendingEdits the paths its edit and write calls changed, pendingStaged
+	// the paths its shell commands staged, and userBaseline, for the tracked
+	// paths that had uncommitted changes when that stretch began, their
+	// contents then (nil: deleted). The baseline is committed on its own
+	// before the model's changes to those paths; the rest go into the model's
+	// commit. startMark is the index at the same moment, and pendingOpen says
+	// the baseline has been taken. See staging.go.
+	pendingEdits  map[string]bool
+	pendingStaged map[string]bool
+	userBaseline  map[string][]byte
+	startMark     indexMark
+	pendingOpen   bool
 	// settleMu orders a write batch, a settle and an exit, which can come
 	// from different goroutines: the turn's, and the signal handler's.
 	settleMu sync.Mutex
@@ -778,15 +780,13 @@ func (c *Coder) runOne(ctx context.Context, userMessage string) {
 	}
 	message := userMessage
 
-	// Committing and rotating settled history are both turn-end concerns.
+	// Settling and rotating settled history are both turn-end concerns.
 	// Mid-loop the tool results must stay in cur, and summarizing them away
-	// between steps would compact the very results the next send reacts to;
-	// committing mid-loop would spend one commit per send on fragments of one
-	// change. A defer covers every exit — budget declined, reflection cap,
-	// interrupted, or done. An interrupted turn's edits are real, so they are
-	// committed too.
+	// between steps would compact the very results the next send reacts to.
+	// A defer covers every exit — budget declined, reflection cap,
+	// interrupted, or done.
 	defer func() {
-		c.settleEdits("")
+		c.settleEdits()
 		c.endTurnHistory()
 		// Last, so the accounting closes the turn: the commit line above it, and
 		// nothing under it. This is what the per-send reorder was reaching for,
@@ -945,49 +945,31 @@ func (c *Coder) InterruptSend() {
 	}
 }
 
-// settleEdits commits the turn's edits so far and records a snapshot to undo
-// them by.
+// settleEdits records the turn's edits so far as a snapshot to undo them by.
+//
+// It used to commit them too: every turn that changed a file ended in a
+// commit. Committing is the model's now, through the commit tool, and a turn
+// can end with its edits uncommitted; they stay pending (pendingEdits) until
+// a commit takes them, in this turn or a later one.
 //
 // Factored out of the turn-end defer because an interruption is also a place
-// this belongs. The human stopped to look at something, which makes that point
-// a review boundary: `git show` gives exactly what the model did before it was
-// stopped, separately from what it did after the correction, and /undo steps
-// through the two halves one at a time. Anyone who wanted one commit has
-// /squash.
+// this belongs. The human stopped to look at something, which makes that
+// point a review boundary, and /undo steps through the two halves one at a
+// time.
 //
 // What is *not* here is flushTurnUsage. The spend is a property of the turn,
 // not of each leg of it, so it stays in the defer and reports once.
-func (c *Coder) settleEdits(message string) {
+func (c *Coder) settleEdits() {
 	// Nothing written since the last settle, so there is nothing to settle.
-	// Without this an interrupted-then-steered turn settles twice over the same
-	// edits: the second commit finds the tree already matching HEAD and
-	// announces "the turn left the files as they were", which is true of the
-	// second attempt and false of the turn.
-	//
-	// turnSnap is the right signal rather than turnEditedFiles, which
-	// accumulates across the whole turn because the history record at turn end
-	// wants every file the turn touched. turnSnap is emptied by
-	// pushTurnSnapshot and rebuilt by recordWrites, so it means precisely
-	// "written since the last settle".
+	// turnSnap is emptied by pushTurnSnapshot and rebuilt by recordWrites, so
+	// it means precisely "written since the last settle".
 	c.settleMu.Lock()
 	defer c.settleMu.Unlock()
-	if c.exiting || (c.turnSnap.empty() && len(c.turnStaged) == 0) {
+	if c.exiting || c.turnSnap.empty() {
 		return
 	}
-	// A refused commit still closes the snapshot here. settleEdits runs at
-	// turn end and at an interrupt, and the push is /undo's boundary: keeping
-	// the writes pending would fold the next turn's into this one, and one
-	// /undo would take back two. commitTurn has already said why on screen;
-	// the commit tool, which can retry within the turn, does not come here.
-	// Published while the commit runs, which can take seconds (a hook, the
-	// side model's message): a double Ctrl-C lands exactly there, the first
-	// press having started this settle. Cleared before the push, so an exit
-	// sees either the commit under way or the turn on the stack, not both.
-	c.setSettling(c.turnSnap)
-	_, _ = c.commitTurn(message)
-	c.setSettling(nil)
+	c.notePending(c.turnSnap.paths())
 	c.pushTurnSnapshot()
-	c.dropStartMark()
 }
 
 func (c *Coder) setSettling(s *turnSnapshot) {
@@ -1021,7 +1003,7 @@ func (c *Coder) afterInterrupt() (message string, keepGoing bool) {
 		return "", false
 	}
 	// The edits so far belong to the interrupt, whichever way this goes.
-	c.settleEdits("")
+	c.settleEdits()
 
 	answer := c.Asker.Ask(AskRequest{
 		Question: "You stopped the model. What now?",
@@ -1082,7 +1064,7 @@ func (c *Coder) afterLoop() (message string, keepGoing bool) {
 		return "", false
 	}
 	// The edits so far belong to the stopped reply, whichever way this goes.
-	c.settleEdits("")
+	c.settleEdits()
 
 	answer := c.Asker.Ask(AskRequest{
 		Question: "The model was repeating itself and was stopped. What now?",

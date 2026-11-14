@@ -5,7 +5,7 @@
 Strument is an AI pair-programming tool for the terminal.
 It is designed for developers who want to review and guide technical and UX decisions as the model works.
 Working with Strument is organized into turns.
-Each turn starts with your instructions to the model; changes are recorded in a commit or, outside Git, an undo snapshot.
+Each turn starts with your instructions to the model; changes are recorded in an undo snapshot, and the model commits them in Git when the work is done.
 
 Strument began as a ground-up reimplementation of [aider](https://github.com/Aider-AI/aider) but has since diverged.
 See [`doc/`](doc/README.md) for the developer overview.
@@ -28,7 +28,7 @@ See [`doc/`](doc/README.md) for the developer overview.
   Programs can call read-only search tools but nothing else on the host.
 - A [`recall` tool](doc/config.md#the-recall-tool) that searches the session's own record, so the model can find what it said, read, or worked out in turns that compaction has removed from the conversation.
 - Undo for every edit through Strument's file tools, with and without Git.
-  In a repository, each turn is one commit.
+  In a repository, `/undo` also takes back the commits the turn made.
 - [Project checks](#configuration): named commands such as tests and a linter, which the model can run without a permission prompt and Strument can run after every turn that edits a file.
 - Web fetch: `/web <url>` and the model's `webfetch` tool fetch a page as Markdown.
   The tool asks before the model fetches from an unfamiliar origin.
@@ -138,7 +138,8 @@ Strument prints a status line for each tool call.
 Shell commands ask for permission first, which you can grant for that command or for all commands in the turn; `webfetch` and `websearch` ask too.
 Reading, searching, and editing do not ask.
 
-In a Git repository, each turn that changes a file ends in a commit.
+In a Git repository, the model commits its work with a `commit` tool, writing the message itself; nothing commits for it at the end of a turn.
+The commit takes only the model's edits: your own uncommitted changes to those files are committed separately first.
 `--no-git` turns the Git integration off inside a repository; outside one it is automatically off.
 The `/undo` command works either way: Strument records each file before it first writes to it, so a turn's writes can be undone in a directory that is not a repository, such as a live configuration directory or a checkout under another SCM.
 
@@ -202,10 +203,9 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 - `/session`, `/session new|switch|fork|rename|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, fork, rename, or delete one. See [Sessions](#sessions).
 - `/notes`, `/notes generate`, `/notes drop`&thinsp;&mdash;&thinsp;show the session notes, regenerate them from the session record, or discard them. Notes stay in memory and are not saved to disk. They carry context from one session to another; to pick up *this* session's conversation, use `--continue`. See [`doc/sessions.md`](doc/sessions.md).
 - `/read-only <file> ...`&thinsp;&mdash;&thinsp;pin a file the model can read but not edit, such as a spec or a header from a sibling repository. The model can also ask to read a file outside the project, and you are asked first; pinning skips the question. The search tools see only the project itself.
-- `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether a turn that edits a file ends in a commit. With no argument, it shows the current setting. `--no-auto-commits` starts a session with commits off, and `auto_commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
-- `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commit if there was one.
+- `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether the model may commit its edits. With no argument, it shows the current setting. `--no-commits` starts a session with commits off, and `commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
+- `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commits the turn made, if they are still the newest on the branch and unpushed.
 - `/rewind [<n>]`&thinsp;&mdash;&thinsp;take the last `n` turns (default 1) out of the conversation, for a turn that went wrong in a way that would steer the next one. Files are not changed, and Strument names any the rewound turns edited; `/undo` reverts edits. The turns stay in the session record, and `--continue` restores the conversation without them. Turns that compaction has rolled away or summarized cannot be rewound.
-- `/squash [<n>]`&thinsp;&mdash;&thinsp;combine the last `n` turns' commits into one.
 - `/usage [<provider> | all]`&thinsp;&mdash;&thinsp;show token usage and cost for the last 24 hours, 7 days, and 30 days. Defaults to the current model's provider. See [Usage reports](#usage-reports).
 - `/diff`, `/tokens`&thinsp;&mdash;&thinsp;show what changed and how full the context window is.
 - `/context [<n>]`&thinsp;&mdash;&thinsp;show the chat history as the model receives it: the roll note or compaction summaries, followed by recent messages. With `n`, show only the first `n` summaries.

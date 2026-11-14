@@ -72,7 +72,7 @@ complete -c strument -n $chat_cmd -l no-git -d "Disable git integration even ins
 complete -c strument -n $chat_cmd -l no-color -d "Disable ANSI color and styling"
 complete -c strument -n $chat_cmd -l dark-mode -d "Use colors suited to a dark terminal background"
 complete -c strument -n $chat_cmd -l light-mode -d "Use colors suited to a light terminal background"
-complete -c strument -n $chat_cmd -l no-auto-commits -d "Keep git integration but do not auto-commit edits"
+complete -c strument -n $chat_cmd -l no-commits -d "Keep git integration but never commit edits"
 complete -c strument -n $chat_cmd -l no-history -d "Do not write the session to the chat-history file"
 complete -c strument -n $chat_cmd -l dry-run -d "Report edits without writing files or committing"
 complete -c strument -n $chat_cmd -l no-shell -d "Disable the model's bash tool"

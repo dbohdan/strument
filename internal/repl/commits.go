@@ -5,9 +5,10 @@ import (
 	"strings"
 )
 
-// cmdCommits turns this session's auto-commits off and on.
+// cmdCommits turns this session's commits off and on: whether the model's
+// commit tool commits.
 //
-// It exists because --no-auto-commits was a decision you could only make before
+// It exists because --no-commits was a decision you could only make before
 // starting, and the cases that want it arrive mid-session: deliberately breaking
 // a template to test an XSS filter, trying an edit you intend to throw away,
 // working in a tree whose history you do not want to author.
@@ -37,10 +38,10 @@ func cmdCommits(_ context.Context, r *REPL, args string) string {
 			r.printf("  Start without --no-git, in a directory that is a git repository, to commit.")
 			return ""
 		}
-		r.coder.AutoCommits = true
+		r.coder.Commits = true
 		r.printCommitState()
 	case "off":
-		r.coder.AutoCommits = false
+		r.coder.Commits = false
 		r.printCommitState()
 	default:
 		r.out.Errorf("%s", usage("commits"))
@@ -59,10 +60,10 @@ func (r *REPL) printCommitState() {
 		// DryRun outranks the setting in commitTurn, so reporting the setting
 		// alone would be true and useless.
 		r.printf("Commits: off. This is a dry run, so no files are written either.")
-	case r.coder.AutoCommits:
-		r.printf("Commits: on. Each turn that changes a file ends in a commit.")
+	case r.coder.Commits:
+		r.printf("Commits: on. The model commits its edits with its commit tool.")
 	default:
-		r.printf("Commits: off. Edits are written to the working tree but not committed.")
+		r.printf("Commits: off. Edits are written to the working tree, and the model's commit tool commits nothing.")
 		r.printf("  /undo can still reverse a turn, and /diff still shows what changed.")
 	}
 }

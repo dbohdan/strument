@@ -313,7 +313,8 @@ func (s *sessionSwitcher) switchTo(name string, create bool, alias string) (stri
 	s.cdr.ClearHistory()
 	s.cdr.DropAll()
 	s.cdr.SetUndoStack(nil)
-	s.cdr.RestoreSessionCommits(nil, "")
+	s.cdr.RestoreLastCommit("")
+	s.cdr.RestorePending(coder.Pending{}) // the new conversation knows nothing of those edits
 	s.cdr.SessionNotes, s.cdr.SessionNotesDate, s.cdr.SessionNotesSession = "", "", ""
 
 	return s.open(name), nil
