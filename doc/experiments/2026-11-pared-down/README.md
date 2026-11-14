@@ -157,7 +157,7 @@ Neither pilot's sessions are counted.
 
 ## Results
 
-560 sessions, all finished; 7 ended without an answer, all MiMo's. Every
+560 sessions, all finished; 8 ended without an answer, all MiMo's (4 in each arm), two of them after a fix that passed every hidden check. Every
 response came from its pinned provider. Total cost $1.85. Data:
 - the scorer's rows and tables, in [`data/scores.txt`](data/scores.txt);
 - each session's record, compressed, in `data/runs.tar.xz`: Strument's
