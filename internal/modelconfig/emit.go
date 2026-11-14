@@ -18,8 +18,7 @@ import (
 //
 // Objective fields become real values; the judgment calls (reasoning,
 // reasoning_tag, side_model) are emitted commented, so a pasted entry reads as a
-// scaffold to finish rather than a finished declaration. edit_format is
-// deliberately omitted — the default "tool" fits the expected model class.
+// scaffold to finish rather than a finished declaration.
 func EmitStarlark(infos []ModelInfo, providerName string) string {
 	used := make(map[string]bool, len(infos))
 	var b strings.Builder

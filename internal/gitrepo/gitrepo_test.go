@@ -342,9 +342,8 @@ func (o quietOutput) FlushStream()                        {}
 func newIntegrationCoder(t *testing.T, root string, g *gitrepo.Repo) *coder.Coder {
 	t.Helper()
 	model := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       "test-model",
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     "test-model",
 	}
 	model.SideModel = model
 

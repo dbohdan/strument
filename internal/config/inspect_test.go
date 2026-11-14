@@ -42,8 +42,6 @@ websearch = search("searxng", url = "http://localhost:8888")
 loop_detection = False
 language_parser = False
 shell = True
-anchored_edits = True
-indent_column = True
 observation_via_run_code = True
 sandbox = ""
 sandbox_write = ["{{writable}}"]
@@ -58,10 +56,8 @@ env_allow = ["PATH", "HOME"]
 auto_approve = ["websearch"]
 approve_model = decision_model("systemone", "laya", url = "http://localhost:11435/v1/systemone")
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
-example_messages = [["user", "hi"], ["assistant", "hello"]]
 prompt_system_prefix = "House rules."
 prompt_code = "Be terse."
-prompt_ask = "Answer briefly."
 prompt_commit = "One line."
 prompt_read_only = "Look only."
 chat_language = "en"

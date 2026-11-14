@@ -98,8 +98,8 @@ func codeCommandsClause(shell bool) string {
 }
 
 // shell says whether this session offers bash, from offersShell: the sentence
-// that sends commands elsewhere names bash only when bash is there. Ask mode
-// and shell = False both withhold it, and the description used to point at
+// that sends commands elsewhere names bash only when bash is there. shell =
+// False withholds it, and the description used to point at
 // "the bash tool" anyway — the kind of mismatch
 // doc/experiments/2026-09-tool-disclosure's arm C showed one model will act on.
 func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {

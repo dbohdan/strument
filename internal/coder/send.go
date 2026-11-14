@@ -581,8 +581,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		return OutcomeInterrupted, ""
 	}
 
-	// Everything a turn does now arrives as tool calls, in every mode: ask mode
-	// is the same dispatch with the mutating tools withheld. There is no longer
+	// Everything a turn does now arrives as tool calls. There is no longer
 	// a second path that reads the answer text for edits, shell blocks, or file
 	// mentions — those were the text formats' way of saying what a tool call
 	// says directly.
@@ -707,10 +706,8 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 		ExtraParams:     c.Model.RequestExtraParams(),
 		MaxTokens:       c.Model.MaxOutput,
 	}
-	// Whatever tools this mode offers, offer them. The condition used to be
-	// editFormat == "tool", which meant ask mode sent none at all — and made
-	// toolDefs's own "ask" branch unreachable, so the code read as though ask
-	// had a read-only tool set while the wire carried nothing. A model told to
+	// Whatever tools the session offers, offer them. A condition on the edit
+	// format once meant the old ask mode sent none at all. A model told to
 	// look at the project with no way to do it invents the syntax: MiMo emitted
 	// <bash>ls -la</bash> as prose, and one run spent 759 lines guessing at
 	// markup. RunAside builds its own request and is deliberately not affected.
@@ -871,7 +868,7 @@ func (c *Coder) moveBackCurMessages() {
 //
 // It used to be gated on `editFormat == "tool" && len(turnEditedFiles) > 0`, so
 // only a turn that changed a file produced any settled history at all. A live
-// pass found what that costs: a session of questions, or any stretch of /ask,
+// pass found what that costs: a session of questions, or any stretch of the old /ask,
 // kept everything in curMessages — which goes on the wire in full and which
 // maybeSummarize never examines — so the history budget existed and nothing was
 // ever measured against it.
@@ -1386,7 +1383,6 @@ func (c *Coder) flushTurnUsage() {
 		EditsFuzzy:      c.editsFuzzy,
 		Files:           c.TurnEditedFiles(),
 		Tools:           c.TurnToolLines(),
-		EditFormat:      c.editFormat,
 		OfferedTools:    c.offeredToolNames(),
 		Prompt:          c.turnUserMessage,
 		Answer:          c.turnAnswer(),

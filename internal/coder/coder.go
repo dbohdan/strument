@@ -49,16 +49,15 @@ type Coder struct {
 	CommitsWithheld    bool
 	Stream             bool
 	SystemPromptPrefix string
-	// PromptCode and PromptAsk are user replacements for the active mode's
-	// MainSystem (the `prompt_code` / `prompt_ask` config). Empty means "use the
-	// built-in". They live on the Coder rather than in the prompts.Set built-ins
-	// so a session does not mutate the shared Tool/Ask singletons. PromptCommit
+	// PromptCode is the user's replacement for MainSystem (the `prompt_code`
+	// config). Empty means "use the built-in". It lives on the Coder rather than
+	// in the prompts.Set built-in so a session does not mutate the shared
+	// singleton. PromptCommit
 	// and PromptReadOnly are the same overrides for CommitSystem and the
 	// read-only reference prefix; PromptCommit is threaded to CommitMessenger,
 	// which owns its own prompt so it can run on a side model. All are applied
-	// by setPrompts, which SetEditFormat and New both funnel through.
+	// by setPrompts, which ApplyConfig and New both funnel through.
 	PromptCode     string
-	PromptAsk      string
 	PromptCommit   string
 	PromptReadOnly string
 	ChatLanguage   string
@@ -209,11 +208,6 @@ type Coder struct {
 	// writes its messages, so each lands after the reply it produced rather
 	// than ahead of the user message that prompted it.
 	pendingRequests []Record
-
-	// editFormat is the active mode, "tool" or "ask". It starts as the model's
-	// EditFormat but /ask and /code switch it at runtime without changing the
-	// model, so the tool set and prompt set read this, not Model.EditFormat.
-	editFormat string
 
 	// Session is the name of the conversation this coder is running, as
 	// `strument session list` shows it. "" means the caller did not say,
@@ -428,25 +422,11 @@ type Coder struct {
 
 type fence struct{ open, close string }
 
-// promptsForFormat picks the prompt set for a mode.
-//
-// Two remain. "tool" is how Strument works; "ask" is the same tools with the
-// mutating ones withheld. The three text formats — diff, diff-fenced, and
-// whole — are gone: they existed for models that could not call functions
-// reliably, and a model that cannot do that today cannot drive this harness at
-// all, since finding and reading files are tool calls too.
-func promptsForFormat(format string) prompts.Set {
-	if format == "ask" {
-		return prompts.Ask
-	}
-	return prompts.Tool
-}
-
-// setPrompts selects the prompt set for the active format and applies this
-// session's user overrides (prompt_code/prompt_ask) onto it. The built-ins are
-// module-level singletons shared by every session, so an override is written to
-// a fresh copy rather than mutating prompts.Tool/Ask in place — a second Coder
-// in the same process must not inherit the first's custom prompt.
+// setPrompts applies this session's user overrides (prompt_code,
+// prompt_read_only) onto the built-in prompt set. The built-in is a
+// module-level singleton shared by every session, so an override is written to
+// a fresh copy rather than mutating prompts.Tool in place — a second Coder in
+// the same process must not inherit the first's custom prompt.
 // Defaults for settings a config may omit. Named because ApplyConfig restores
 // them when a reloaded config stops saying, and a constructor that disagreed
 // with that would make the first reload change behaviour on its own.
@@ -461,20 +441,12 @@ const (
 )
 
 func (c *Coder) setPrompts() {
-	c.Prompts = promptsForFormat(c.editFormat)
-	// A copy: see promptsForFormat's callers. The Set is a struct of strings, so
-	// the clone is cheap and gives us a per-session value to hand to the
-	// assembler without reaching into the shared built-in.
-	base := c.Prompts
-	switch c.editFormat {
-	case "tool":
-		if c.PromptCode != "" {
-			base.MainSystem = c.PromptCode
-		}
-	case "ask":
-		if c.PromptAsk != "" {
-			base.MainSystem = c.PromptAsk
-		}
+	// A copy of the built-in: the Set is a struct of strings, so the clone is
+	// cheap and gives us a per-session value to hand to the assembler without
+	// reaching into the shared built-in.
+	base := prompts.Tool
+	if c.PromptCode != "" {
+		base.MainSystem = c.PromptCode
 	}
 	if c.PromptReadOnly != "" {
 		base.ReadOnlyFilesPrefix = c.PromptReadOnly
@@ -509,7 +481,6 @@ func New(root string, model *config.Model) *Coder {
 		Tokens:               RuneCounter{},
 		Clock:                RealClock{},
 		Out:                  &StdOutput{},
-		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
 		shown:                newShownFiles(),
 		turnEditedFiles:      map[string]bool{},

@@ -109,7 +109,7 @@ inherited from aider.
 - **Scope.** Essentials only: a standard tool set driven in a closed loop
   (`read`/`grep`/`glob`/`ls`/`symbol` to look, `edit`/`write` to change,
   `bash` and the `check` tool to run things), turn-scoped snapshots with `/undo` and
-  `/squash`, git auto-commit where there is a repository, `/ask`, `/symbol`,
+  `/squash`, git auto-commit where there is a repository, `/symbol`,
   reflection, chat-history summarization.
   Architect mode, voice, GUI, and analytics are out of scope for v1.
 - **One dialect.** A single OpenAI-compatible client with OpenRouter
@@ -338,13 +338,17 @@ turn is measured, not assumed:
 
 ## The tool loop
 
-`edit_format` accepts one value, `"tool"`: everything the model does, it does
-through a native function call. The API schema enforces the format, so the
-whole class of format-parse failures disappears, the prompts shrink (the
-schema carries the rules), and a file that contains `<<<<<<< SEARCH` is just
-data — which is what lets the harness edit its own prompt strings. `diff`,
-`diff-fenced`, and `whole` have been removed, and `edit_format` now exists
-only to give the old values a migration error.
+Everything the model does, it does through a native function call. The API
+schema enforces the format, so the whole class of format-parse failures
+disappears, the prompts shrink (the schema carries the rules), and a file that
+contains `<<<<<<< SEARCH` is just data — which is what lets the harness edit
+its own prompt strings. The text edit formats (`diff`, `diff-fenced`,
+`whole`) are gone, and so is `edit_format`, the setting that chose between
+them.
+
+There is one tool set for every turn. An ask mode (`/ask`, `/code`) used to
+withhold the mutating tools; it was removed because a tool set that changes
+under the model confuses it, and a user who wants a discussion can say so.
 
 Ten tools, in three natures:
 

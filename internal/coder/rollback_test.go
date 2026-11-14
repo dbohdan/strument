@@ -32,9 +32,8 @@ import (
 func toolCoder(t *testing.T, dir string) *Coder {
 	t.Helper()
 	model := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       "test-model",
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     "test-model",
 	}
 	model.SideModel = model
 	c := New(dir, model)

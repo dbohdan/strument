@@ -14,7 +14,7 @@ import (
 // middle of the file's <style> block; what it needed to be told was to write
 // less per call.
 func TestMalformedArgsNamesTheOutputLimit(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	call := llm.ToolCall{ID: "1", Name: "write", Arguments: `{"path": "a.html", "content": "<!DOCTYPE htm`}
 
 	c.hitOutputLimit = true
@@ -38,7 +38,7 @@ func TestMalformedArgsNamesTheOutputLimit(t *testing.T) {
 // empty string a model sends for a tool that takes none — the tool's own
 // parser says something more useful about what was missing.
 func TestMalformedArgsLeavesUsableCallsAlone(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	c.hitOutputLimit = true
 	for _, args := range []string{`{"path":"a.txt","content":"hi"}`, "", "  ", "{}"} {
 		if got := c.malformedArgs(llm.ToolCall{Name: "write", Arguments: args}); got != "" {

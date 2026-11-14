@@ -11,6 +11,14 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
+// countingRunner records that a command reached it.
+type countingRunner struct{ runs int }
+
+func (r *countingRunner) Run(context.Context, string, string) (int, string, error) {
+	r.runs++
+	return 0, "ran", nil
+}
+
 // TestToolLoopWatcherExactRepeat pins the counting rule: three identical
 // read-class calls trip the note, and the note is said once — a watcher that
 // repeated itself would be a loop detector that loops.

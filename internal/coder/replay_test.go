@@ -112,9 +112,8 @@ func setupScenario(t *testing.T, sc *fixture.Scenario, mutate func(*Coder)) *rep
 		slug = "test-model"
 	}
 	model := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       slug,
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     slug,
 	}
 	model.SideModel = model
 

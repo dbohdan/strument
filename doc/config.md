@@ -53,7 +53,7 @@ The loader reads these module-level variables after running your file:
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
 | `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
-| `prompt_code`, `prompt_ask` | string | Optional. Whole-string replacement for the coding / analysis system prompt. See below. |
+| `prompt_code` | string | Optional. Whole-string replacement for the system prompt. See below. |
 | `prompt_commit` | string | Optional. Whole-string replacement for the commit-message system prompt. See below. |
 | `prompt_read_only` | string | Optional. Whole-string replacement for the read-only reference prefix. See below. |
 | `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
@@ -878,13 +878,12 @@ touch the CI config" — without rewriting anything else:
 prompt_system_prefix = "You work on the Acme codebase.\n\n"
 ```
 
-**Replace a built-in prompt.** `prompt_code`, `prompt_ask`, `prompt_commit`,
-and `prompt_read_only` replace the corresponding built-in prompt entirely:
+**Replace a built-in prompt.** `prompt_code`, `prompt_commit`, and
+`prompt_read_only` replace the corresponding built-in prompt entirely:
 
 | Key | Replaces |
 |---|---|
-| `prompt_code` | the coding-mode system prompt (`Tool.MainSystem`) |
-| `prompt_ask` | the analysis-mode system prompt (`Ask.MainSystem`) |
+| `prompt_code` | the system prompt (`Tool.MainSystem`) |
 | `prompt_commit` | the commit-message system prompt |
 | `prompt_read_only` | the prefix framing injected read-only reference files |
 
@@ -894,7 +893,7 @@ without replacing a prompt, use `prompt_system_prefix`.
 Replacements are templates that may use the built-ins' **closed placeholder
 set** — the same `{...}` slots `pyFormat` fills at assembly time:
 
-- `prompt_code` / `prompt_ask`: `{platform}`, `{language}`, `{final_reminders}`,
+- `prompt_code`: `{platform}`, `{language}`, `{final_reminders}`,
   `{code_tools}`, `{observation_tools}`.
 - `prompt_commit`: `{language_instruction}`.
 - `prompt_read_only`: none (literal).
@@ -1280,9 +1279,7 @@ strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the
 strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
-A message that begins with `/ask` or `/code` runs in that mode, as the one-shot
-form does in the REPL: `strument -m '/ask Why does the poller back off?'`.
-Any other command, such as `/add`, is refused with a nonzero exit, because
+A message that begins with a command, such as `/add`, is refused with a nonzero exit, because
 script mode sends one message and nothing else. A message that begins with a
 slash but no command name, such as a path (`/etc/hosts has a typo`), is sent as
 written.
@@ -1671,7 +1668,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, edit_format="tool", side_model=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, side_model=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1679,12 +1676,9 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 - **`slug`** — the model id sent to the API, e.g. `"anthropic/claude-haiku-4.5"`.
 - **`display_name`** — a human label (used in git commit trailers). Defaults to
   the slug reduced to its core (provider prefix and `:variant` suffix stripped).
-- **`edit_format`** — `"tool"`, which is the default and the only value. The
-  text fallbacks (`"diff"`, `"diff-fenced"`, `"whole"`) have been removed: they
-  existed for models that could not call functions reliably, and such a model
-  can no longer drive Strument at all, because finding, reading, and searching
-  files are tool calls too. A config still naming one gets an error saying so;
-  the fix is to drop the setting.
+- **`edit_format`** is no longer accepted. Strument edits through tool calls
+  only and has no other modes, so a config still naming it gets an error
+  saying so; the fix is to drop the setting.
 - **`side_model`** — the model for Strument's own writing: commit messages,
   session notes, and compaction summaries. An alias string or an inline
   `model()`; unset means the main model does its own. These are *side requests*
@@ -2178,7 +2172,7 @@ the turn, and a Ctrl-C stops it.
 
 The tool never asks permission. It can compute and read through the exposed
 tools, but cannot modify files or access the network. It is announced like any
-other tool call and is available in ask mode.
+other tool call.
 
 ### The read-only bridge
 

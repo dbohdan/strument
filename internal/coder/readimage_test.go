@@ -24,7 +24,6 @@ const readImageScenario = `
 func TestReadToolReturnsAnImage(t *testing.T) {
 	sc := inlineScenario(t, readImageScenario)
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.Model.InputModalities = []string{llm.BlockText, llm.BlockImage}
 	})
 	writeTestPNG(t, filepath.Join(env.coder.Root, "diagram.png"), 40, 30)

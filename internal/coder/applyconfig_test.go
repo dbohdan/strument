@@ -10,7 +10,7 @@ import (
 // ApplyConfig is idempotent, and the prompt layer is where that matters: a
 // reload rebuilds the active set from the built-in before layering overrides.
 func TestApplyConfigIsIdempotent(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	cfg := &config.Config{
 		PromptCode: "REPLACED {platform} {language} {final_reminders} {code_tools} {observation_tools}",
 	}
@@ -34,14 +34,14 @@ func TestApplyConfigIsIdempotent(t *testing.T) {
 
 // --no-shell is a command-line decision a reload must not undo.
 func TestApplyConfigKeepsTheShellFlag(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	c.ShellWithheld = true
 	ApplyConfig(c, &config.Config{}) // config says nothing about shell
 	if c.SuggestShellCommands {
 		t.Error("a reload re-enabled the bash tool that --no-shell withheld")
 	}
 
-	c2 := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c2 := New(t.TempDir(), &config.Model{})
 	ApplyConfig(c2, &config.Config{})
 	if !c2.SuggestShellCommands {
 		t.Error("without the flag the bash tool should be on")
@@ -51,7 +51,7 @@ func TestApplyConfigKeepsTheShellFlag(t *testing.T) {
 // Roll is the default, the config can choose summary, and --compaction wins
 // over the config on every reload, not only the first.
 func TestApplyConfigCompaction(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	ApplyConfig(c, &config.Config{})
 	if c.CompactionMode != CompactionRoll {
 		t.Errorf("default = %q, want roll", c.CompactionMode)

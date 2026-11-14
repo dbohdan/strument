@@ -356,12 +356,8 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 	})
 }
 
-// observationToolsText renders the {observation_tools} slot: the
-// read/grep/glob/ls paragraph for the session's mode.
+// observationToolsText renders the {observation_tools} slot.
 func (c *Coder) observationToolsText() string {
-	if c.editFormat == "ask" {
-		return prompts.AskObservationBullet
-	}
 	return prompts.ObservationBullet
 }
 
@@ -503,8 +499,6 @@ func (c *Coder) pinnedFilesNote() string {
 	slices.Sort(existing)
 	slices.Sort(missing)
 
-	ask := c.editFormat == "ask"
-
 	var b strings.Builder
 	if len(existing) > 0 {
 		fmt.Fprintf(&b, "The user has pinned %s to this session: %s.\n",
@@ -533,13 +527,7 @@ func (c *Coder) pinnedFilesNote() string {
 		}
 		fmt.Fprintf(&b, "The user has also pinned %s that %s not exist yet: %s.\n",
 			plural(len(missing), "file", "files"), does, strings.Join(missing, ", "))
-		if ask {
-			// No write tool here, so telling it to create anything is an
-			// instruction it cannot follow.
-			fmt.Fprintf(&b, "There is nothing to read in %s.\n", them)
-		} else {
-			fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
-		}
+		fmt.Fprintf(&b, "Create %s with write; there is nothing to read.\n", them)
 	}
 	// Naming AGENTS.md is what makes it work, and that is measured rather than
 	// assumed. Over 24 live sessions on a rule contrary to habit — every

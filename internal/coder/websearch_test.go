@@ -255,21 +255,3 @@ func slices2Contains(defs []llm.ToolDef, name string) bool {
 	}
 	return false
 }
-
-// Ask mode keeps search, and that is the point of the mode rather than an
-// exception to it: finding out what exists is what a discussion turn is for,
-// and a search mutates nothing. The mutating tools stay withheld.
-func TestWebsearchSurvivesAskMode(t *testing.T) {
-	c := testCoder(t)
-	c.Search = func(context.Context, string) (SearchResults, error) { return SearchResults{}, nil }
-	c.editFormat = "ask"
-	defs := c.toolDefs()
-	if !slices2Contains(defs, toolWebsearch) {
-		t.Error("ask mode dropped websearch")
-	}
-	for _, mutating := range []string{toolBash, toolEdit} {
-		if slices2Contains(defs, mutating) {
-			t.Errorf("ask mode offered %q", mutating)
-		}
-	}
-}

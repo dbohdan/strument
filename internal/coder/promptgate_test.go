@@ -17,28 +17,24 @@ import (
 // Checking every fragment against the tool set, rather than one fragment
 // against one phrase, is what makes this catch the next one too.
 func TestNoPromptFragmentNamesAWithheldTool(t *testing.T) {
-	for _, format := range []string{"tool", "ask"} {
-		c := testCoder(t)
-		c.editFormat = format
-		c.OfferCode = false
+	c := testCoder(t)
+	c.OfferCode = false
 
-		var offered []string
-		for _, d := range c.toolDefs() {
-			offered = append(offered, d.Name)
-		}
-		if slices.Contains(offered, "run_code") {
-			t.Fatalf("%s: run_code is in the schema; this test assumes it is withheld", format)
-		}
+	var offered []string
+	for _, d := range c.toolDefs() {
+		offered = append(offered, d.Name)
+	}
+	if slices.Contains(offered, "run_code") {
+		t.Fatal("run_code is in the schema; this test assumes it is withheld")
+	}
 
-		for name, text := range map[string]string{
-			"MainSystem":       c.fmtSystemPrompt(c.Prompts.MainSystem),
-			"FilesNoFullFiles": c.filesNoFullFilesText(),
-			"SystemReminder":   c.Prompts.SystemReminder,
-		} {
-			if strings.Contains(text, "run_code") {
-				t.Errorf("%s/%s names run_code while the schema withholds it:\n  %s",
-					format, name, text)
-			}
+	for name, text := range map[string]string{
+		"MainSystem":       c.fmtSystemPrompt(c.Prompts.MainSystem),
+		"FilesNoFullFiles": c.filesNoFullFilesText(),
+		"SystemReminder":   c.Prompts.SystemReminder,
+	} {
+		if strings.Contains(text, "run_code") {
+			t.Errorf("%s names run_code while the schema withholds it:\n  %s", name, text)
 		}
 	}
 }
@@ -74,8 +70,5 @@ func TestNothingPinnedNoteIsByteIdenticalToTheTrialsWording(t *testing.T) {
 	if prompts.Tool.FilesNoFullFilesNoCode != want {
 		t.Errorf("the withheld note is not the offered one minus the clause:\n got %q\nwant %q",
 			prompts.Tool.FilesNoFullFilesNoCode, want)
-	}
-	if strings.Contains(prompts.Ask.FilesNoFullFilesNoCode, "run_code") {
-		t.Error("the ask set's withheld note still names run_code")
 	}
 }

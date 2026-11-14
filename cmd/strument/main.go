@@ -526,12 +526,9 @@ func (c *chatCmd) Run() error {
 	defer stop()
 	defer watchExitSignals(cdr, nil)()
 
-	msg, format, err := scriptMessage(c.Message)
+	msg, err := scriptMessage(c.Message)
 	if err != nil {
 		return err
-	}
-	if format != "" {
-		cdr.SetEditFormat(format)
 	}
 	cdr.Run(ctx, msg)
 	// A scripted run that got no answer must not exit 0. `strument -m …` used
@@ -2309,35 +2306,26 @@ func discoverSkills(root string) []skill.Skill {
 }
 
 // scriptMessage reads -m's text the way the REPL reads a line, as far as script
-// mode can follow it. /ask and /code with a message switch the format for that
-// message, as their one-shot forms do in the REPL. Any other command is refused
-// rather than sent: -m once passed "/ask ..." to the model as plain text in
-// code mode, and nothing said so. A slash that begins something other than a
-// command name, such as a path, is sent as written.
-//
-// format is "" to keep the session's default, which is what /code restores.
-func scriptMessage(text string) (msg, format string, err error) {
+// mode can follow it. A command is refused rather than sent: -m once passed
+// "/ask ..." to the model as plain text, and nothing said so. A slash that
+// begins something other than a command name, such as a path, is sent as
+// written — except /ask and /code, which were commands until the modes went and
+// are still refused by name, so a script written for them fails loudly rather
+// than sending its prefix to the model.
+func scriptMessage(text string) (string, error) {
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "/") {
-		return text, "", nil
+		return text, nil
 	}
-	name, args, _ := strings.Cut(strings.TrimPrefix(trimmed, "/"), " ")
-	args = strings.TrimSpace(args)
+	name, _, _ := strings.Cut(strings.TrimPrefix(trimmed, "/"), " ")
+	if name == "ask" || name == "code" {
+		return "", fmt.Errorf("-m /%s: /ask and /code have been removed; send the message on its own", name)
+	}
 	if !repl.IsCommand(name) {
-		return text, "", nil
+		return text, nil
 	}
-	switch name {
-	case "ask", "code":
-		if args == "" {
-			return "", "", fmt.Errorf("-m /%s needs a message after it; script mode sends one message and exits", name)
-		}
-		if name == "ask" {
-			return args, "ask", nil
-		}
-		return args, "", nil
-	}
-	return "", "", fmt.Errorf("-m does not run /%s: script mode sends one message. "+
-		"Use the REPL for commands, or /ask or /code followed by a message", name)
+	return "", fmt.Errorf("-m does not run /%s: script mode sends one message. "+
+		"Use the REPL for commands", name)
 }
 
 // recoverExitedTurn finishes a turn the last run exited in the middle of: the

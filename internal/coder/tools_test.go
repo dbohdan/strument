@@ -17,9 +17,6 @@ import (
 	"dbohdan.com/strument/internal/render"
 )
 
-// toolMode sets the coder to the "tool" edit format for a replay.
-func toolMode(c *Coder) { c.editFormat = "tool" }
-
 // lastToolResult returns the final tool-result message in the coder's history.
 // With the loop closed, a turn's tool results are followed by the model's
 // closing answer, so counting back from the end of the history is not stable;
@@ -53,7 +50,6 @@ func TestToolRequestCarriesTools(t *testing.T) {
 {"kind":"stream","events":[{"kind":"Answer","text":"hello"},{"kind":"Finish","finish_reason":"stop"}]}
 `)
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.SuggestShellCommands = false
 	})
 	var names []string
@@ -81,8 +77,7 @@ func TestToolRequestCarriesTools(t *testing.T) {
 
 // TestToolSetGating covers the conditional parts of the tool set: bash appears
 // only when shell commands are enabled, check only when the project configured
-// checks, and ask mode offers nothing that changes anything — which is why the
-// ask-mode row is the one that pins commit's absence.
+// checks.
 func TestToolSetGating(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -91,22 +86,21 @@ func TestToolSetGating(t *testing.T) {
 	}{
 		{
 			"shell enabled, no check configured",
-			func(c *Coder) { c.editFormat = "tool"; c.SuggestShellCommands = true },
+			func(c *Coder) { c.SuggestShellCommands = true },
 			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "about", "run_code", "edit", "write", "bash", "commit"},
 		},
 		{
 			"check configured",
 			func(c *Coder) {
-				c.editFormat = "tool"
 				c.SuggestShellCommands = true
 				c.Check = []config.Check{{Name: "test", Argv: []string{"go", "test", "./..."}}}
 			},
 			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "about", "run_code", "edit", "write", "bash", "check", "commit"},
 		},
 		{
-			"ask mode is read-only",
-			func(c *Coder) { c.editFormat = "ask"; c.SuggestShellCommands = true },
-			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "about", "run_code"},
+			"shell = False",
+			func(c *Coder) { c.SuggestShellCommands = false },
+			[]string{"read", "grep", "glob", "ls", "ask_user_question", "interrupt", "about", "run_code", "edit", "write", "commit"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -184,7 +178,7 @@ func TestToolEditApplies(t *testing.T) {
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 {"kind":"expect_history","messages":[{"role":"user","text":"change world to mars"},{"role":"assistant","text":""},{"role":"tool","text":"Applied the edit to a.txt."},{"role":"assistant","text":"Done."}]}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	// The assistant message must carry the tool call, and the tool result must
@@ -210,7 +204,7 @@ func TestToolCreateFile(t *testing.T) {
 {"kind":"expect_fs","path":"hi.txt","content":"hi there\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 }
 
@@ -227,7 +221,7 @@ func TestToolCreateFileOverwrites(t *testing.T) {
 {"kind":"expect_fs","path":"cfg.txt","content":"brand new\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	result := lastToolResult(t, env.coder)
@@ -304,7 +298,6 @@ func TestOneCommitPerTurn(t *testing.T) {
 `+closingTurn)
 	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt", "b.txt"}}}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.AutoCommits = true
 		c.Repo = repo
 	})
@@ -338,7 +331,6 @@ func TestUncommittedChangesCommittedFirst(t *testing.T) {
 	repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.AutoCommits = true
 		c.Repo = repo
 		c.Out = out
@@ -375,7 +367,6 @@ func TestNoCommitWhenAutoCommitsOff(t *testing.T) {
 `+closingTurn)
 		repo := &countingRepo{committingRepo: committingRepo{tracked: []string{"a.txt"}}, dirty: true}
 		env := setupScenario(t, sc, func(c *Coder) {
-			c.editFormat = "tool"
 			c.AutoCommits = dry // off for the first case; on for the dry run, which must still not commit
 			c.DryRun = dry
 			c.Repo = repo
@@ -405,7 +396,6 @@ func TestToolEditCommits(t *testing.T) {
 `+closingTurn)
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.AutoCommits = true
 		c.Repo = &committingRepo{tracked: []string{"a.txt"}}
 		c.Out = out
@@ -436,7 +426,7 @@ func TestToolSuggestCommand(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"bash","tool_args":"{\"command\":\"go test ./...\",\"purpose\":\"run the tests\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	result := lastToolResult(t, env.coder)
@@ -459,7 +449,7 @@ func TestToolSuggestCommandDeclined(t *testing.T) {
 {"kind":"stream","events":[{"kind":"ToolCall","tool_index":0,"tool_id":"call_1","tool_name":"bash","tool_args":"{\"command\":\"rm -rf /\",\"purpose\":\"oops\"}"},{"kind":"Finish","finish_reason":"tool_calls"}]}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	result := lastToolResult(t, env.coder)
@@ -604,7 +594,6 @@ func TestAskUserReplay(t *testing.T) {
 `+closingTurn)
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.Out = out
 	})
 	env.run(t)
@@ -643,7 +632,7 @@ func TestAskUserFreeTextAnswer(t *testing.T) {
 `+askStreamTurn+`
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	if result := lastToolResult(t, env.coder).Text(); !strings.Contains(result, `"rfc3339, but with milliseconds"`) {
@@ -664,7 +653,6 @@ func TestAskUserNoTerminal(t *testing.T) {
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.Asker = nil
 	})
 	env.run(t)
@@ -694,7 +682,7 @@ func TestAskUserValidationReflects(t *testing.T) {
 {"kind":"ask","question":"Which format?","answer":"2"}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	hist := history(env.coder)
@@ -763,7 +751,7 @@ func TestToolEditReflects(t *testing.T) {
 {"kind":"expect_fs","path":"a.txt","content":"hello\nmars\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":1}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	// The reflection must NOT inject a synthetic user turn: the only user
@@ -814,7 +802,7 @@ func TestToolLoopSpansFiles(t *testing.T) {
 {"kind":"expect_fs","path":"app_test.go","content":"package app\n\nfunc TestGreet(t *testing.T) { _ = \"hey\" }\n"}
 {"kind":"expect_outcome","outcome":"Success","reflections":0}
 `+closingTurn)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 
 	// Three tool rounds, then the closing answer. The rounds are work steps,
@@ -862,7 +850,6 @@ func TestToolLoopBudgetStops(t *testing.T) {
 
 	out := &captureOut{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.Out = out
 	})
 	env.coder.Run(t.Context(), sc.User)
@@ -1089,14 +1076,14 @@ func TestParserFollowsConfigNotModel(t *testing.T) {
 	offersSymbol := func(c *Coder) bool {
 		return slices.ContainsFunc(c.toolDefs(), func(d llm.ToolDef) bool { return d.Name == toolSymbol })
 	}
-	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
+	c := New(t.TempDir(), &config.Model{})
 	ApplyConfig(c, &config.Config{})
 	if c.RepoMap == nil || !offersSymbol(c) {
 		t.Fatal("the parser is on by default and must bring the symbol tool")
 	}
 	layer := c.RepoMap
 
-	c.SetModel(&config.Model{EditFormat: "tool"})
+	c.SetModel(&config.Model{})
 	if c.RepoMap != layer {
 		t.Error("a model switch rebuilt or dropped the parse layer")
 	}
@@ -1139,7 +1126,6 @@ func TestRenewedBudgetKeepsTheTurnsStepCount(t *testing.T) {
 	out := &captureOut{}
 	rec := &capture{}
 	env := setupScenario(t, sc, func(c *Coder) {
-		c.editFormat = "tool"
 		c.Out = out
 		c.Recorder = rec
 	})

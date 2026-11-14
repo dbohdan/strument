@@ -43,7 +43,6 @@ const (
 	// description rather than the prompt — see skills.go.
 	toolSkill = "skill"
 	// toolRunCode runs a short JavaScript program in goja — see codetool.go.
-	// Computing mutates nothing, so it is offered in ask mode too.
 	toolRunCode = "run_code"
 	// toolAskUser is the model's channel for asking the user a structured
 	// question mid-turn. It mutates nothing, so it sits with the read-only
@@ -67,21 +66,17 @@ func intProp(desc string) map[string]any {
 
 // toolDefs is the tool set offered to the model this turn.
 //
-// Observation is always available; mutation is conditional. In ask mode only
-// the read-only tools are offered at all, which is what "discussion mode" now
-// means — a restricted tool set rather than a separate prompt set with an
-// engine that parses nothing.
+// One tool set for every turn. There used to be an ask mode that withheld the
+// mutating tools; it went because a tool set that changes under the model
+// confuses it, and a user who wants discussion can say so in the message.
+// What is still conditional is what depends on configuration: bash, check,
+// the parser, a scraper, search, skills.
 func (c *Coder) toolDefs() []llm.ToolDef {
 	var defs []llm.ToolDef
 	defs = readOnlyTools()
-	// ask_user_question is always offered: it has no side effect to gate, and
-	// a discussion turn is exactly where a clarifying question belongs.
 	defs = append(defs, askTool())
-	// interrupt is always offered too, and for the same structural reason:
-	// it mutates nothing, and the turn it ends may be a discussion one.
 	defs = append(defs, interruptTool())
-	// about mutates nothing and answers what the model cannot find out by
-	// looking, which a discussion turn needs as much as any other.
+	// about answers what the model cannot find out by looking.
 	defs = append(defs, aboutTool())
 	if c.offersRecall() {
 		// recall reads the session record, which mutates nothing; offered
@@ -95,34 +90,25 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 		// so it is offered exactly when that layer is available.
 		defs = append(defs, symbolTool())
 	}
-	// Offered in ask mode too: fetching mutates nothing, and reading a
-	// specification is exactly what a discussion turn is for. The port is
-	// always set in the binary, so this is a guard for a directly built
+	// The port is always set in the binary, so this is a guard for a directly built
 	// Coder, not a setting a user can be on the wrong side of.
 	if c.Scrape != nil {
 		defs = append(defs, webfetchTool())
 	}
-	// Offered in ask mode too, and for the same reason: finding out what exists
-	// is what a discussion turn is for. Genuinely conditional, unlike webfetch —
-	// with no configured instance there is no search to offer.
+	// Genuinely conditional, unlike webfetch — with no configured instance
+	// there is no search to offer.
 	if c.Search != nil {
 		defs = append(defs, websearchTool())
 	}
-	// Also before the ask-mode return: loading instructions mutates nothing,
-	// and a discussion turn is where a skill about how to discuss something
-	// belongs. Offered only when there is something to name, because the enum
+	// Offered only when there is something to name, because the enum
 	// would otherwise be empty and the description would list nothing.
 	if len(skill.Usable(c.Skills)) > 0 {
 		defs = append(defs, skillTool(c.Skills))
 	}
-	// Also before the ask-mode return: computing mutates nothing, and a
-	// discussion turn is exactly where a calculator belongs. Offered unless
-	// withheld — OfferCode, and the {code_tools} slot follows the same flag.
+	// Offered unless withheld — OfferCode, and the {code_tools} slot follows
+	// the same flag.
 	if c.OfferCode {
 		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
-	}
-	if c.editFormat == "ask" {
-		return defs
 	}
 	defs = append(defs, editTools()...)
 	if c.offersShell() {
@@ -694,10 +680,9 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			needsReflection = true
 			continue
 		}
-		// Only what this step offered runs. The mode's tool set was enforced
-		// by the schema alone, and a model can name a tool the schema left
-		// out: in ask mode, bash ran when a model was asked to try it anyway,
-		// and edit, write, and commit would have too.
+		// Only what this step offered runs. A model can name a tool the
+		// schema left out: in the old ask mode, bash ran when a model was asked
+		// to try it anyway.
 		if !offered[tc.Name] {
 			results.setText(tc.ID, c.notOfferedText(tc.Name))
 			continue
@@ -922,7 +907,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 // it to add the tool and run_code's description uses it to say where commands
 // run, so the prose names only tools the schema carries.
 func (c *Coder) offersShell() bool {
-	return c.editFormat != "ask" && c.SuggestShellCommands
+	return c.SuggestShellCommands
 }
 
 func (c *Coder) offeredToolNames() []string {
@@ -935,28 +920,11 @@ func (c *Coder) offeredToolNames() []string {
 }
 
 // notOfferedText is the result for a call to a tool this step did not offer.
-// In ask mode it says why and what the model can do instead, since the tools
-// that are missing there are missing on purpose and the user can bring them
-// back; anywhere else the tool is simply not part of this session.
 func (c *Coder) notOfferedText(name string) string {
 	if name == unnamedToolCall {
 		return "Not run: this call arrived without a tool name. Call the tool again, by name."
 	}
-	if c.editFormat == "ask" && isAskWithheld(name) {
-		return fmt.Sprintf("Not run: this is ask mode, where the user wants discussion rather "+
-			"than changes, so %s is not available. Describe what you would do instead; the "+
-			"user can switch to code mode with /code to have it done.", quoteToolArg(name))
-	}
 	return fmt.Sprintf("Not run: %s is not one of the tools offered in this session.", quoteToolArg(name))
-}
-
-// isAskWithheld reports the tools code mode offers and ask mode withholds.
-func isAskWithheld(name string) bool {
-	switch name {
-	case toolEdit, toolWrite, toolBash, toolCheck, toolCommit:
-		return true
-	}
-	return false
 }
 
 // runObservationCall answers a direct read-only call. read is the one observation
