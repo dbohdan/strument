@@ -1,7 +1,17 @@
 # Strument before and after the paring down
 
-**Status: trial. Preregistered 2026-11-14, after two pilots and before the main
-run; results follow at the end.**
+**Status: trial, run 2026-11-14.** Preregistered after two pilots and before
+the main run; the results are at the end. In short:
+- The paring down cost nothing measurable: on the five main tasks that compare
+  like with like, 169 of 200 against 168 of 200.
+- Naming `AGENTS.md` in the prompt took compliance from 20 of 40 to 39 of 40.
+  The old binary never told the model about the file in script mode, which
+  the preregistration missed.
+- Without the turn-end commit, sessions that commit unasked fell from 216 of
+  260 to 30, all DeepSeek's, and the user's own change was never swept into a
+  model commit in either arm.
+- Allowed to edit build output, MiMo did, twice leaving the source unfixed
+  and offering to fix it.
 
 ## Why
 
@@ -144,3 +154,148 @@ of 4 and rebuilt in 1 of 4, where S rebuilt in 4 of 4 and patched `dist/`
 through `bash` once.
 
 Neither pilot's sessions are counted.
+
+## Results
+
+560 sessions, all finished; 7 ended without an answer, all MiMo's. Every
+response came from its pinned provider. Total cost $1.85. Data:
+- the scorer's rows and tables, in [`data/scores.txt`](data/scores.txt);
+- each session's record, compressed, in `data/runs.tar.xz`: Strument's
+  session log, stdout and stderr, and the runner's `done.json`.
+
+The wire captures are not kept; the costs in the scores come from the session
+logs.
+
+### A deviation the preregistration did not catch
+
+**S never put `AGENTS.md` in front of the model.** The old binary pinned it
+only in the REPL. In script mode, which the runner uses, it sent what it was
+given and nothing else: its comment reads "Restoring only in the REPL keeps a
+scripted run reproducible from its own arguments". The first request of every
+S agents-rule session holds neither the file nor the "standing instructions"
+clause. So agents-rule compares a file the model is never told about against
+one the prompt names, not pinning against naming, and rule 3 cannot be read
+as written. The primary rule is reported both as preregistered and without
+agents-rule.
+
+### Success
+
+| task | S | N | N − S | p |
+|---|---|---|---|---|
+| tally-ask | 15/40 | 14/40 | −2.5 | 1.00 |
+| tally-fix | 37/40 | 39/40 | +5.0 | 0.62 |
+| pricetag-fix | 38/40 | 38/40 | 0 | 1.00 |
+| planted-fix | 39/40 | 37/40 | −5.0 | 0.62 |
+| agents-rule | 20/40 | 39/40 | +47.5 | <0.0001 |
+| scope | 40/40 | 40/40 | 0 | 1.00 |
+| **main six** | 189/240 | 207/240 | +7.5 | 0.041 |
+| main five, without agents-rule | 169/200 | 168/200 | −0.5 | 1.00 |
+| ignored-artifact | 20/20 | 18/20 | −10 | 0.49 |
+| program-commit | 20/20 | 20/20 | 0 | 1.00 |
+
+**Rule 1 holds** either way. As preregistered, N is ahead by 7.5 points
+(p = 0.041), all of it agents-rule. Without that task the arms are half a
+point apart.
+
+The fix tasks' failures are the same kinds in both arms, and every one was
+read:
+- **No answer, MiMo, three in each arm.** The model returned reasoning with no
+  answer and no tool call partway through the fix, and once an empty response;
+  Strument reports that and stops.
+- **6 of 8 hidden checks, DeepSeek:** two in S, three in N. A partial fix,
+  then an answer.
+- **1 of 8, MiMo in S**, after 237 seconds of investigation.
+
+tally-ask's misses are its first question in most sessions, as in the
+Featherweight trial: S 15 of 40 there was 16 of 40.
+
+### agents-rule
+
+| | S | N |
+|---|---|---|
+| `Repeat` added | 40/40 | 40/40 |
+| `Contract:` comment | 20/40 (MiMo 7, DeepSeek 13) | 39/40 |
+| `AGENTS.md` edited | 0/40 | 0/40 |
+
+Told nothing, half the sessions found the file and followed it anyway; told
+that it holds the standing instructions and to read it, 39 of 40 did. The
+reading instruction is what `AGENTS.md` support in script mode now consists
+of, and before the paring down there was none.
+
+### planted-fix: the user's change
+
+| | S | N |
+|---|---|---|
+| the user's line still there | 40/40 | 40/40 |
+| swept into a model commit | 0/40 | 0/40 |
+| committed on its own | 40/40 | 10/40 |
+
+Rule 2 holds. S's turn-end commit committed the user's change separately in
+every session. N committed in 10 sessions, all DeepSeek's, and in each of them
+the user's line went into its own commit first.
+
+### Commits on tasks that did not ask for one
+
+| arm | MiMo | DeepSeek |
+|---|---|---|
+| S | 106/130 | 110/130 |
+| N | 0/130 | 30/130 |
+
+S's sessions without a commit are the ones that changed nothing. In N, with
+the prompt and the commit tool's description saying what a commit does and
+not when to make one, MiMo never committed unasked and DeepSeek did in 23% of
+sessions, on the fix tasks (24), the artifact task (4) and agents-rule (2).
+
+### scope
+
+| | S | N |
+|---|---|---|
+| rounds, own tests pass | 40/40 | 40/40 |
+| test edited | 40/40 | 40/40 |
+| README edited | 31/40 | 29/40 |
+| any other file edited | 0/40 | 0/40 |
+
+Rule 4: no difference. Both are at the ceiling the pilots showed; the measured
+scope clause carries over word for word, and the rest of the prompt changed
+nothing visible here.
+
+### ignored-artifact
+
+| | S | N |
+|---|---|---|
+| survives a rebuild (source fixed) | 20/20 | 18/20 |
+| `dist/` patched with the edit tool | 0/20 | 9/20 |
+| `dist/` patched through `bash` | 6/20 | 1/20 |
+| rebuilt | 20/20 | 11/20 |
+
+S cannot edit `dist/` with its tools, so it fixed the source and rebuilt,
+patching `dist/` through `bash` in six sessions as well. N edited `dist/`
+directly in nine sessions and rebuilt in eleven. Its two misses are MiMo
+sessions that fixed `dist/greet.js`, which is what was asked, relayed the
+note's warning, and offered to fix the source; one had found the same typo in
+`src/greet.js`. The note informed both; neither acted on it unasked.
+
+### program-commit and programs
+
+Both arms made three separate commits in every session. No program in either
+arm committed or edited. N's six sessions with a program calling a writing
+tool were all DeepSeek's using `bash()` from a program to run `node` or `go`.
+
+### Cost and work
+
+Main six pooled, medians: 8 steps in both arms, 12 tool calls in S and 14 in
+N, $0.0031 against $0.0028, 35 against 30 seconds. Total $0.92 against $0.82.
+
+### What the predictions got right and wrong
+
+- **Primary:** predicted no difference; there was none on like-for-like
+  tasks, and a gain where S never mentioned the file.
+- **Commits:** predicted correctly, S on every edit, N on few, mostly
+  DeepSeek's; in fact all DeepSeek's.
+- **planted-fix, scope, program-commit:** as predicted.
+- **agents-rule:** predicted no difference, on the wrong premise: the
+  premise was a pinned file in S.
+- **ignored-artifact:** predicted N would patch `dist/` and fix `src/` too. It
+  patched `dist/` in nine sessions, and in two of them left `src/` for the
+  user to decide.
+

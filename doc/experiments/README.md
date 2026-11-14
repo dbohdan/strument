@@ -139,7 +139,7 @@ with current project state.
 
 | experiment | question → result → decision |
 | --- | --- |
-| **trial** — [2026-11-pared-down](2026-11-pared-down/) | Did paring Strument down cost anything a model can show? Preregistered; results to follow. |
+| **trial** — [2026-11-pared-down](2026-11-pared-down/) | Did paring Strument down cost anything a model can show? No: 169/200 against 168/200 on like-for-like tasks, at slightly lower cost. Naming `AGENTS.md` in the prompt took compliance from 20/40 to 39/40, since the old binary never mentioned it in script mode. Unasked commits fell from 216/260 sessions to 30, all DeepSeek's; the user's planted change was never swept into a model commit. Allowed to edit build output, MiMo did, twice leaving the source for the user to decide. |
 
 ## Against other harnesses
 
