@@ -155,7 +155,7 @@ func readOnlyTools() []llm.ToolDef {
 		{
 			Name: toolGrep,
 			Description: "Search file contents with a regular expression. Files the project ignores " +
-				"are not searched.",
+				"are not searched, unless path names an ignored directory.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

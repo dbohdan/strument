@@ -237,6 +237,10 @@ type walker struct {
 	// ignored, when set, hears every entry the ignore rules prune, which is
 	// as far as the walk goes into them.
 	ignored func(rel string, isDir bool)
+	// named, when set, is an ignored path the caller asked for by name: the
+	// ignore rules do not prune it, the directories on the way to it, or
+	// anything inside it.
+	named   string
 	scope   string // root-relative; "" for the whole tree
 	visited int
 	stopped bool // the entry budget ran out
@@ -270,11 +274,15 @@ func (w *Workspace) walkScoped(scope string, fn func(rel string, d fs.DirEntry) 
 // walkScopedIgnoring is walkScoped that also reports each pruned entry.
 func (w *Workspace) walkScopedIgnoring(scope string, fn func(rel string, d fs.DirEntry) bool,
 	ignored func(rel string, isDir bool)) (Truncated, error) {
+	return w.walkWith(walker{w: w, fn: fn, ignored: ignored, scope: strings.Trim(scope, "/")})
+}
+
+// walkWith runs a walker set up by the caller.
+func (w *Workspace) walkWith(wk walker) (Truncated, error) {
 	root, err := gitignore.ReadRoot(w.Root)
 	if err != nil {
 		return Truncated{}, err
 	}
-	wk := &walker{w: w, fn: fn, ignored: ignored, scope: strings.Trim(scope, "/")}
 	if err := wk.dir(w.Root, nil, root); err != nil {
 		return Truncated{}, err
 	}
@@ -329,7 +337,8 @@ func (wk *walker) dir(dir string, domain []string, patterns []gitignore.Pattern)
 
 		components := append(slices.Clone(domain), name)
 		isDir := e.IsDir()
-		if matcher.Match(components, isDir) {
+		if matcher.Match(components, isDir) &&
+			(wk.named == "" || !inScope(strings.Join(components, "/"), wk.named, isDir)) {
 			if wk.ignored != nil {
 				wk.ignored(strings.Join(components, "/"), isDir)
 			}

@@ -308,6 +308,13 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 				}
 				throw(err.Error())
 			}
+			if a, ok := v.(codeArray); ok {
+				arr := vm.NewArray(a.items...)
+				for k, x := range a.extra {
+					_ = arr.Set(k, vm.ToValue(x))
+				}
+				return arr
+			}
 			return vm.ToValue(v)
 		})
 	}

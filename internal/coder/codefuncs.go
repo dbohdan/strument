@@ -17,6 +17,7 @@ package coder
 // the wrong shape here, since these never pass through bridgeToolFailure.
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -79,7 +80,8 @@ var codeDataFuncs = []codeFuncDef{
 	{
 		name: "glob",
 		summary: "glob({pattern}) returns the matching project-relative paths as an array of strings, " +
-			"empty when nothing matches. " +
+			"empty when nothing matches; its .ignored property lists the matches the project ignores, " +
+			"and the ignored directories the pattern reaches into, all left out. " +
 			"The pattern is matched against the whole path, segment by segment; \"**/*.go\" reaches " +
 			"every directory, \"*.go\" only the root, and a bare directory name matches nothing.",
 		params: []string{"pattern"},
@@ -373,8 +375,34 @@ func runGlobData(c *Coder, call *bridgedCall) (any, error) {
 	if paths == nil {
 		paths = []string{}
 	}
-	return paths, nil
+	// Still an array, so sort, map and length work as the description shows,
+	// with the ignored matches on a property of it: an object of two lists
+	// would break every program written against the array. JSON leaves an
+	// array's properties out, so the value reads the same unless a program
+	// asks for .ignored.
+	items := make([]any, len(paths))
+	for k, p := range paths {
+		items[k] = p
+	}
+	ignored := make([]any, 0, len(trunc.IgnoredMatches)+len(trunc.IgnoredDirs))
+	for _, p := range trunc.IgnoredMatches {
+		ignored = append(ignored, p)
+	}
+	for _, d := range trunc.IgnoredDirs {
+		ignored = append(ignored, d+"/")
+	}
+	return codeArray{items: items, extra: map[string]any{"ignored": ignored}}, nil
 }
+
+// codeArray is a program value that is an array with named properties beside
+// its items; runCode builds it as one. It marshals as the bare items, which
+// is what the program's value shows and what codeLostCallsNote compares.
+type codeArray struct {
+	items []any
+	extra map[string]any
+}
+
+func (a codeArray) MarshalJSON() ([]byte, error) { return json.Marshal(a.items) }
 
 // runGrepData answers a grep call from a program with the matches as data.
 //

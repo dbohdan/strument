@@ -85,6 +85,13 @@ type GrepResult struct {
 	// Shortened counts returned lines that were clipped to MaxMatchBytes, so
 	// the caller can say so rather than let a "…" pass for the file's content.
 	Shortened int
+	// Ignored names what the ignore rules kept out of the search within its
+	// scope — directories with a trailing slash — at most maxIgnoredListed of
+	// them, for a caller to say when nothing matched.
+	Ignored []string
+	// NamedIgnored says the search's path was itself ignored and was
+	// searched anyway, because it was asked for by name.
+	NamedIgnored bool
 }
 
 // clipRunes cuts s to at most n bytes without splitting a rune, marking the cut
@@ -131,97 +138,120 @@ func (w *Workspace) Grep(q GrepQuery) (GrepResult, error) {
 	if scope == "" {
 		scope = literalPrefix(glob)
 	}
-	trunc, err := w.walkScoped(scope, func(rel string, d fs.DirEntry) bool {
-		if d.IsDir() {
-			return true
+	// An ignored path named as the search's path is searched, by the rule
+	// read follows: what the model names, it gets. Ignored paths stay out of
+	// a search that did not name them, because the cost is not time — a
+	// 594 MB node_modules took about a second — but results: "useState"
+	// matched 1,110 times in 380 dependency files, against a project's few.
+	named := ""
+	if dir != "" {
+		if yes, err := w.ignored(dir, true); err == nil && yes {
+			named, res.NamedIgnored = dir, true
 		}
-		if dir != "" && !strings.HasPrefix(rel, dir+"/") && rel != dir {
-			return true
+	}
+	noteIgnored := func(rel string, isDir bool) {
+		if len(res.Ignored) >= maxIgnoredListed {
+			return
 		}
-		if glob != "" && !matchGlob(glob, rel) {
-			return true
+		switch {
+		case isDir && (glob == "" || globCouldEnter(glob, rel)):
+			res.Ignored = append(res.Ignored, rel+"/")
+		case !isDir && (glob == "" || matchGlob(glob, rel)):
+			res.Ignored = append(res.Ignored, rel)
 		}
-		res.InScope++
-		full := filepath.Join(w.Root, filepath.FromSlash(rel))
-		if w.refuseSecret(rel, full) != nil {
-			res.Secret++
-			return true
-		}
-
-		if info, err := d.Info(); err == nil && info.Size() > w.Limits.fileBytes() {
-			return true
-		}
-		data, err := os.ReadFile(full)
-		if err != nil || isBinary(data) {
-			return true
-		}
-		res.Scanned++
-
-		fileRes := GrepFileResult{Path: rel}
-		lines := splitLines(string(data))
-
-		// Which lines matched, before any are emitted. Marking them during the
-		// walk gets it wrong whenever one match falls inside the window of an
-		// earlier one: the line is already on screen as context and never
-		// re-marked, so a hit disappears from a listing that counted it. Found
-		// by running the thing, not by reading it.
-		isMatch := make([]bool, len(lines))
-		var matched []int
-		for i, line := range lines {
-			if re.MatchString(line) {
-				isMatch[i] = true
-				matched = append(matched, i)
+	}
+	trunc, err := w.walkWith(walker{w: w, scope: strings.Trim(scope, "/"), ignored: noteIgnored, named: named,
+		fn: func(rel string, d fs.DirEntry) bool {
+			if d.IsDir() {
+				return true
 			}
-		}
-		fileRes.Count = len(matched)
-		res.Total += len(matched)
+			if dir != "" && !strings.HasPrefix(rel, dir+"/") && rel != dir {
+				return true
+			}
+			if glob != "" && !matchGlob(glob, rel) {
+				return true
+			}
+			res.InScope++
+			full := filepath.Join(w.Root, filepath.FromSlash(rel))
+			if w.refuseSecret(rel, full) != nil {
+				res.Secret++
+				return true
+			}
 
-		if q.Mode == GrepContent {
-			lastEmitted := -1
-			for _, i := range matched {
-				// The window this match wants, clamped to the file and to
-				// whatever an earlier match already emitted, so overlapping
-				// context merges into one block instead of repeating.
-				lo := max(i-q.ContextLines, 0)
-				hi := min(i+q.ContextLines, len(lines)-1)
-				if lo <= lastEmitted {
-					lo = lastEmitted + 1
+			if info, err := d.Info(); err == nil && info.Size() > w.Limits.fileBytes() {
+				return true
+			}
+			data, err := os.ReadFile(full)
+			if err != nil || isBinary(data) {
+				return true
+			}
+			res.Scanned++
+
+			fileRes := GrepFileResult{Path: rel}
+			lines := splitLines(string(data))
+
+			// Which lines matched, before any are emitted. Marking them during the
+			// walk gets it wrong whenever one match falls inside the window of an
+			// earlier one: the line is already on screen as context and never
+			// re-marked, so a hit disappears from a listing that counted it. Found
+			// by running the thing, not by reading it.
+			isMatch := make([]bool, len(lines))
+			var matched []int
+			for i, line := range lines {
+				if re.MatchString(line) {
+					isMatch[i] = true
+					matched = append(matched, i)
 				}
-				if lo > hi {
-					continue // wholly inside a block already emitted
-				}
-				gap := lastEmitted >= 0 && lo > lastEmitted+1
-				for n := lo; n <= hi; n++ {
-					text, clipped := clipRunes(lines[n], w.Limits.matchBytes())
-					if clipped {
-						res.Shortened++
+			}
+			fileRes.Count = len(matched)
+			res.Total += len(matched)
+
+			if q.Mode == GrepContent {
+				lastEmitted := -1
+				for _, i := range matched {
+					// The window this match wants, clamped to the file and to
+					// whatever an earlier match already emitted, so overlapping
+					// context merges into one block instead of repeating.
+					lo := max(i-q.ContextLines, 0)
+					hi := min(i+q.ContextLines, len(lines)-1)
+					if lo <= lastEmitted {
+						lo = lastEmitted + 1
 					}
-					fileRes.Lines = append(fileRes.Lines, GrepLine{
-						Number: n + 1, Text: text, Match: isMatch[n], GapBefore: gap && n == lo,
-					})
-					emitted++
-				}
-				lastEmitted = hi
-				// The cap counts emitted lines rather than matches, because
-				// that is what reaches the context: at five lines of context a
-				// hundred matches would otherwise return eleven hundred lines.
-				if emitted >= w.Limits.matches() {
-					capped = true
-					break
+					if lo > hi {
+						continue // wholly inside a block already emitted
+					}
+					gap := lastEmitted >= 0 && lo > lastEmitted+1
+					for n := lo; n <= hi; n++ {
+						text, clipped := clipRunes(lines[n], w.Limits.matchBytes())
+						if clipped {
+							res.Shortened++
+						}
+						fileRes.Lines = append(fileRes.Lines, GrepLine{
+							Number: n + 1, Text: text, Match: isMatch[n], GapBefore: gap && n == lo,
+						})
+						emitted++
+					}
+					lastEmitted = hi
+					// The cap counts emitted lines rather than matches, because
+					// that is what reaches the context: at five lines of context a
+					// hundred matches would otherwise return eleven hundred lines.
+					if emitted >= w.Limits.matches() {
+						capped = true
+						break
+					}
 				}
 			}
-		}
-		if fileRes.Count > 0 {
-			res.Files = append(res.Files, fileRes)
-		}
+			if fileRes.Count > 0 {
+				res.Files = append(res.Files, fileRes)
+			}
 
-		// In content mode the cap counts emitted lines, since that is what
-		// reaches the context; otherwise it counts paths.
-		if q.Mode == GrepContent {
-			return !capped
-		}
-		return len(res.Files) < w.Limits.results()
-	})
+			// In content mode the cap counts emitted lines, since that is what
+			// reaches the context; otherwise it counts paths.
+			if q.Mode == GrepContent {
+				return !capped
+			}
+			return len(res.Files) < w.Limits.results()
+		}})
 	if err != nil {
 		return res, err
 	}

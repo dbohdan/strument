@@ -223,11 +223,15 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 	i.Out.Toolf("Searched for %s: %s", query, matchSummary(res))
 
 	if len(res.Files) == 0 {
-		return grepNothing(query, res)
+		return grepNothing(query, res) + grepIgnoredNote(a.Path, res)
 	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s for %s.\n\n", matchSummary(res), query)
+	if res.NamedIgnored {
+		fmt.Fprintf(&b, "(%s is ignored by the project; it was searched because the path names it.)\n\n",
+			quoteToolArg(a.Path))
+	}
 	for _, f := range res.Files {
 		switch mode {
 		case workspace.GrepContent:
@@ -313,6 +317,22 @@ func grepNothing(query string, res workspace.GrepResult) string {
 		return fmt.Sprintf("No matches for %s. %s searched.", query,
 			plural(res.Scanned, "file", "files"))
 	}
+}
+
+// grepIgnoredNote is what a search that found nothing adds about the ignored
+// paths it did not search: the news a model needs exactly then, and a line of
+// noise on every search that did find something, so only then. And when the
+// path named an ignored directory, that it was searched all the same.
+func grepIgnoredNote(path string, res workspace.GrepResult) string {
+	if res.NamedIgnored {
+		return fmt.Sprintf(" %s is ignored by the project; it was searched because the path names it.",
+			quoteToolArg(path))
+	}
+	if len(res.Ignored) == 0 {
+		return ""
+	}
+	return "\n\nThe project ignores these, so they were not searched: " + strings.Join(res.Ignored, ", ") +
+		". To search inside one, give it as the path."
 }
 
 // matchSummary describes a search's outcome in one line.

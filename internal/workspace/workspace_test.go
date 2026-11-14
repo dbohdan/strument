@@ -569,3 +569,28 @@ func TestGlobNamesWhatItIgnored(t *testing.T) {
 		t.Errorf("docs/*.md named %v", trunc.IgnoredDirs)
 	}
 }
+
+// grep skips ignored paths unless the search's path names one, and says what
+// it skipped, for a caller to report when nothing matched.
+func TestGrepSearchesANamedIgnoredDirectory(t *testing.T) {
+	root := tree(t, map[string]string{
+		".gitignore":                  "node_modules/\n",
+		"src/app.js":                  "render()\n",
+		"node_modules/react/index.js": "export function useState() {}\n",
+	})
+	w := New(root)
+	res, err := w.Grep(GrepQuery{Pattern: "useState"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Files) != 0 || !slices.Equal(res.Ignored, []string{"node_modules/"}) {
+		t.Errorf("a whole-tree grep: files %v, ignored %v; want none, and node_modules/ named", res.Files, res.Ignored)
+	}
+	res, err = w.Grep(GrepQuery{Pattern: "useState", Dir: "node_modules/react"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Files) != 1 || res.Files[0].Path != "node_modules/react/index.js" || !res.NamedIgnored {
+		t.Errorf("a grep naming node_modules/react: %+v, want its file, and NamedIgnored", res)
+	}
+}

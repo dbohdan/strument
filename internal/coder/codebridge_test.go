@@ -174,3 +174,24 @@ func TestProgramClockStopsForCalls(t *testing.T) {
 		t.Errorf("a program that never ends was not stopped:\n%s", got)
 	}
 }
+
+// glob in a program is still an array, so .sort() works, with the ignored
+// matches on a property beside its items.
+func TestProgramGlobCarriesIgnored(t *testing.T) {
+	c := testCoder(t)
+	for name, body := range map[string]string{".gitignore": "*.log\nbuild/\n", "b.go": "", "a.go": "", "run.log": "", "build/x.go": ""} {
+		p := filepath.Join(c.Root, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := run(c, `const g = glob("**/*.go"); [g.sort(), g.ignored]`); got != `[["a.go","b.go"],["build/"]]` {
+		t.Errorf("glob in a program = %s", got)
+	}
+	if got := run(c, `glob("*.log").ignored`); got != `["run.log"]` {
+		t.Errorf("glob(*.log).ignored = %s", got)
+	}
+}
