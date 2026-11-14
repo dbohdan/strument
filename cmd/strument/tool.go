@@ -10,6 +10,7 @@ import (
 	"golang.org/x/term"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
@@ -68,17 +69,21 @@ func (toolStderr) Warningf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
-// The rest of coder.Output is unreachable from these commands — they never
-// stream an answer, print a link, or render a diff — and panics rather than
-// staying silent would hide a future runCode path growing one.
-func (toolStderr) Printf(string, ...any)              { panic("tool: output used as a full Output") }
-func (toolStderr) CommandOutput(string)               { panic("tool: output used as a full Output") }
-func (toolStderr) Errorf(string, ...any)              { panic("tool: output used as a full Output") }
-func (toolStderr) Link(string)                        { panic("tool: output used as a full Output") }
-func (toolStderr) StreamText(string)                  { panic("tool: output used as a full Output") }
-func (toolStderr) StreamReasoning(string)             { panic("tool: output used as a full Output") }
-func (toolStderr) StreamToolCall(int, string, string) { panic("tool: output used as a full Output") }
-func (toolStderr) FlushStream()                       { panic("tool: output used as a full Output") }
+// The rest of coder.Output is reached by a program's writing calls — a
+// command's output, an edit's diff, a commit's line, a fetched URL — which
+// are announcement for this command, like everything but the result, so they
+// go to stderr too. The streaming methods stay unreachable: no model streams
+// here, and a panic would show a future path that grew one.
+func (toolStderr) Printf(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) }
+func (toolStderr) Errorf(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) }
+func (toolStderr) CommandOutput(text string)         { fmt.Fprintln(os.Stderr, text) }
+func (toolStderr) Link(target string)                { fmt.Fprintln(os.Stderr, render.Sanitize(target)) }
+func (toolStderr) StreamText(string)                 { panic("tool: no model streams here") }
+func (toolStderr) StreamReasoning(string)            { panic("tool: no model streams here") }
+func (toolStderr) StreamToolCall(int, string, string) {
+	panic("tool: no model streams here")
+}
+func (toolStderr) FlushStream() {}
 
 // inspector builds the tool layer over the project root.
 //
@@ -114,12 +119,55 @@ func (c *toolCmd) coder() (*coder.Coder, error) {
 		return nil, err
 	}
 	return &coder.Coder{
-		Root:        root,
-		Out:         toolStderr{},
-		Files:       workspace.New(root),
-		RepoMap:     repomap.New(root),
-		ObserveOnly: true,
+		Root:    root,
+		Out:     toolStderr{},
+		Files:   workspace.New(root),
+		RepoMap: repomap.New(root),
 	}, nil
+}
+
+// programCoder is the coder a run_code program runs on here: a session's, so
+// that a program can call every tool it could call in a turn — edits,
+// commands, commits, fetches — with the user's configuration and its prompts.
+// Feature parity is the point: a door that shows what a program does is no
+// use for testing one that edits if it cannot edit.
+//
+// What it is not is a session. There is no snapshot and no undo, no record,
+// and no sandbox, because the sandbox is applied once per process to a
+// session's own writable set; a program's edits and commands here are the
+// user's to be careful with, as a command they typed would be. Prompts go to
+// stderr, with the program block, so stdout stays the result alone.
+func (c *toolCmd) programCoder(yes []string) (*coder.Coder, error) {
+	root, err := c.root()
+	if err != nil {
+		return nil, err
+	}
+	grants, err := coder.ParseGrants(yes)
+	if err != nil {
+		return nil, err
+	}
+	cdr := coder.New(root, &config.Model{})
+	cdr.Out = toolStderr{}
+	cdr.RepoMap = repomap.New(root)
+	cdr.Grants = coder.NewGrants(grants)
+	// Leniently, as `strument config models` reads it: no model is asked
+	// anything here, and a provider key missing from this shell is not a
+	// reason to run the program without the user's settings.
+	opts := config.Options{ProjectRoot: root, Warn: warnNoticef, OnMissingEnv: func(string) {}}
+	if cfg, err := config.Load(loadOptions(opts)); err == nil {
+		coder.ApplyConfig(cdr, cfg)
+		applyEgressConfig(cdr, cfg)
+	} else {
+		noticef("no configuration loaded (%v); the program runs with the defaults.", err)
+	}
+	cdr.Confirm = coder.AutoConfirmer{Granted: cdr.Grants.Effective, Fallback: terminalConfirmer{out: os.Stderr}}
+	cdr.Skills = discoverSkills(root)
+	if repo, err := gitrepo.Discover(root); err == nil {
+		repo.CommitTrailer = gitrepo.Trailer("strument tool")
+		cdr.Repo = repo
+		cdr.Platform.InGit = true
+	}
+	return cdr, nil
 }
 
 // root resolves --root the same way for every subcommand: the flag, else the
@@ -257,11 +305,12 @@ func (t *toolSymbolCmd) Run(c *toolCmd) error {
 // eat its own quoting before kong sees it, so the usual invocation is
 // `strument tool run_code 'console.log(1 + 2)'` with the program single-quoted.
 type toolRunCodeCmd struct {
-	Code string `arg:"" help:"The JavaScript program, as the run_code tool would receive it."`
+	Code string   `arg:""                                                                     help:"The JavaScript program, as the run_code tool would receive it."`
+	Yes  []string `help:"Automatically approve prompts of these types, as chat's --yes does." placeholder:"<name>"`
 }
 
 func (t *toolRunCodeCmd) Run(c *toolCmd) error {
-	cod, err := c.coder()
+	cod, err := c.programCoder(t.Yes)
 	if err != nil {
 		return err
 	}

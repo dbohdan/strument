@@ -84,8 +84,10 @@ an edit that does not match, a commit that commits nothing — throws an
 `webfetch`, `websearch`, `check`, `skill` and `about` return their direct
 call's text whatever it says; only a refusal throws.
 
-`strument tool run_code` keeps its program to the observation tools. It is
-not a session and keeps no snapshot, so an edit there could not be undone.
+`strument tool run_code` first kept its program to the observation tools,
+since it keeps no snapshot; it now has the session's tools too, because a
+door for testing programs that cannot run the programs being tested is no
+use. No snapshot: what a program does there is the user's to be careful with.
 
 ### How the description says what a program may do
 
@@ -150,6 +152,21 @@ shuffled order. Two tasks on one fixture, a Go package of six files sharing
 - **Neither model committed**, unasked, in any session. DeepSeek said why:
   "The user didn't ask to commit. I'll not commit." See
   [2026-11-commit-survey](../2026-11-commit-survey/).
+
+**Rerun of the refused task after two fixes**, six sessions, the same models.
+The fixes: the unattended decline now says it holds for every request needing
+approval for the rest of the run, run_code programs included; and `ls` and
+`glob` name what the project ignores instead of leaving it out, so `ls build`
+on an ignored directory says it is ignored rather than empty.
+
+| | sessions | steps | `bash` attempts | program detours | timed out | named the ignored files |
+|---|---|---|---|---|---|---|
+| before | 6 | 3–7 | 1–2 | 1 | 1 | — |
+| after | 6 | 3–5 | 1 each | 0 | 0 | 6 of 6 |
+
+Every answer after the fixes named `build/`, `run.log` and `test.log` as
+present and gitignored, and gave the commands it would have run; five of the
+six had also listed `build/` and named `build/out.bin` inside it.
 
 Not covered: a refusal by a person at the prompt and one by `approve_model`,
 both unit-tested rather than run live, and a commit made from a program.

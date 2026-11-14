@@ -174,16 +174,3 @@ func TestProgramClockStopsForCalls(t *testing.T) {
 		t.Errorf("a program that never ends was not stopped:\n%s", got)
 	}
 }
-
-// strument tool is not a session, so a program run there reaches only the
-// observation tools: an edit would have no snapshot to undo it by.
-func TestObserveOnlyProgramCannotEdit(t *testing.T) {
-	c := testCoder(t)
-	c.ObserveOnly = true
-	if got := run(c, `edit({path: "a.txt", old_string: "", new_string: "x"})`); !strings.Contains(got, "not defined") {
-		t.Errorf("an observe-only program reached edit:\n%s", got)
-	}
-	if got := run(c, `ls(".")`); strings.Contains(got, "not defined") {
-		t.Errorf("an observe-only program lost the observation tools:\n%s", got)
-	}
-}

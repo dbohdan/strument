@@ -83,3 +83,28 @@ func TestToolRunCodeDataShapes(t *testing.T) {
 		t.Errorf("glob must return sorted data, got:\n%s", out.String())
 	}
 }
+
+// TestToolRunCodeCanEdit: a program run from this door has the session's
+// tools, writing ones included, so a program that edits can be tried here.
+// Announcements go to stderr; stdout is the result alone.
+func TestToolRunCodeCanEdit(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "a.txt")
+	if err := os.WriteFile(path, []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(builtBinary, "tool", "run_code", `edit({path: "a.txt", old_string: "hello", new_string: "bye"})`)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+	var out, errOut strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("tool run_code: %v\nstderr: %s", err, errOut.String())
+	}
+	if data, _ := os.ReadFile(path); string(data) != "bye\n" {
+		t.Errorf("the edit did not land: %q\nstdout: %s\nstderr: %s", data, out.String(), errOut.String())
+	}
+	if !strings.HasPrefix(out.String(), "The program's result:\n```\n") || strings.Contains(out.String(), "‹run_code›") {
+		t.Errorf("stdout must be the result alone, got:\n%s", out.String())
+	}
+}

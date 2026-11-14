@@ -33,8 +33,7 @@ var codeExcluded = []string{toolRunCode, toolInterrupt, toolAskUser}
 func (c *Coder) codeCallableTools() []string {
 	var out []string
 	for _, d := range c.otherToolDefs() {
-		if slices.Contains(codeExcluded, d.Name) ||
-			c.ObserveOnly && !slices.Contains(InspectorTools(), d.Name) {
+		if slices.Contains(codeExcluded, d.Name) {
 			continue
 		}
 		out = append(out, d.Name)
@@ -113,6 +112,9 @@ type notRunError struct {
 }
 
 func (e *notRunError) Error() string { return e.tool + " was not run: " + e.reason }
+
+// jsNotRunScript names the script jsNotRun runs as, for jsNotRunFrame.
+const jsNotRunScript = "notrun.js"
 
 // jsNotRun defines the NotRun error class in the program's global scope. It is
 // an Error subclass so an uncaught one fails the program like any error, with

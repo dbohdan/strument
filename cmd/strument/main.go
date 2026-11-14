@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/signal"
@@ -847,17 +848,30 @@ var stdinReader = bufio.NewReader(os.Stdin)
 
 // terminalConfirmer asks at the terminal. unattended answers every prompt
 // with its safe answer instead, as when there is no terminal (--unattended).
-type terminalConfirmer struct{ unattended bool }
+// terminalConfirmer asks at the terminal. Its prompts go to out, stdout when
+// nil; `strument tool` sends them to stderr, because its stdout is the
+// tool's result alone.
+type terminalConfirmer struct {
+	unattended bool
+	out        io.Writer
+}
+
+func (t terminalConfirmer) w() io.Writer {
+	if t.out == nil {
+		return os.Stdout
+	}
+	return t.out
+}
 
 func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	switch {
 	case req.Command != "":
 		if req.Purpose != "" {
-			fmt.Println("‹shell›", req.Purpose)
+			fmt.Fprintln(t.w(), "‹shell›", req.Purpose)
 		} else {
-			fmt.Println("‹shell› (no purpose given)")
+			fmt.Fprintln(t.w(), "‹shell› (no purpose given)")
 		}
-		fmt.Printf("$ %s\n", req.Command)
+		fmt.Fprintf(t.w(), "$ %s\n", req.Command)
 	case req.URL != "":
 		// The second confirmer, and it has to show what the first one shows.
 		// It did not, and the prompt read "Fetch this page? (Y/n)" with no page
@@ -865,20 +879,20 @@ func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult
 		// no unit test would have. No hyperlink here: this surface has no
 		// color gate to hang one on.
 		if req.Purpose != "" {
-			fmt.Println("‹webfetch›", req.Purpose)
+			fmt.Fprintln(t.w(), "‹webfetch›", req.Purpose)
 		} else {
-			fmt.Println("‹webfetch› (no purpose given)")
+			fmt.Fprintln(t.w(), "‹webfetch› (no purpose given)")
 		}
-		fmt.Println(render.Sanitize(req.URL))
+		fmt.Fprintln(t.w(), render.Sanitize(req.URL))
 	case req.Path != "":
-		fmt.Println("‹read›")
-		fmt.Println(render.Sanitize(req.Path))
+		fmt.Fprintln(t.w(), "‹read›")
+		fmt.Fprintln(t.w(), render.Sanitize(req.Path))
 	}
 	// approve_model's verdict, after the command it is about, as the REPL shows
 	// it. Missing here at first: the REPL got the note and this surface did
 	// not, and only a pty run through script mode showed the prompt without it.
 	if req.Note != "" {
-		fmt.Println(req.Note)
+		fmt.Fprintln(t.w(), req.Note)
 	}
 
 	// The REPL's rlConfirmer declines rather than reading when nobody is at
@@ -893,22 +907,22 @@ func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult
 			why = "this session runs unattended"
 		}
 		if req.Grant == "" {
-			fmt.Printf("Declined: %s, and this prompt cannot be approved with `--yes`.\n", why)
+			fmt.Fprintf(t.w(), "Declined: %s, and this prompt cannot be approved with `--yes`.\n", why)
 			return coder.ConfirmResult{Unattended: true}
 		}
-		fmt.Printf("Declined: %s. Pass `--yes %s` to approve it automatically.\n", why, req.Grant)
+		fmt.Fprintf(t.w(), "Declined: %s. Pass `--yes %s` to approve it automatically.\n", why, req.Grant)
 		return coder.ConfirmResult{Unattended: true}
 	}
 
-	fmt.Printf("%s (Y/n) ", req.Prompt)
+	fmt.Fprintf(t.w(), "%s (Y/n) ", req.Prompt)
 	line, err := stdinReader.ReadString('\n')
 	if err != nil {
 		// No answer available at all — a closed or redirected stdin. Declining
 		// is the safe reading: nobody is there to have meant yes. Said, and on
 		// its own line: the prompt left the cursor after "(Y/n) ", and the next
 		// message used to run on from there.
-		fmt.Println()
-		fmt.Println("Declined: no answer was given.")
+		fmt.Fprintln(t.w())
+		fmt.Fprintln(t.w(), "Declined: no answer was given.")
 		return coder.ConfirmResult{}
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {

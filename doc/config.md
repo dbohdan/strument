@@ -2164,8 +2164,12 @@ can reach. `bash`'s own result is fenced the same way, with the command's
 output inside and Strument's notices outside. See
 [`2026-11-bridge-all`](experiments/2026-11-bridge-all/README.md).
 
-`strument tool run_code` keeps its program to the observation tools: it is not
-a session and keeps no snapshot, so an edit made there could not be undone.
+`strument tool run_code` runs a program with the same tools a turn has,
+writing ones included, under your configuration, and asks at the terminal as
+a session would; `--yes` works as chat's does. It is not a session, though:
+there is no snapshot, no `/undo`, no record and no sandbox, so what a program
+edits or runs there is yours to be careful with, as a command you typed would
+be. Prompts and announcements go to stderr, and stdout is the result alone.
 
 Trials so far have not earned the tool a default slot:
 [`doc/experiments/2026-08-code-mode/README.md`](experiments/2026-08-code-mode/README.md)

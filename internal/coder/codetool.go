@@ -245,7 +245,10 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 
 	stringifyV, err := vm.RunString(jsStringify)
 	if err == nil {
-		_, err = vm.RunString(jsNotRun)
+		// Named, so its frame can be taken out of an error's text: a NotRun
+		// is thrown from the class's constructor, and its first frame pointed
+		// at line 3 of the class, not at the program's line.
+		_, err = vm.RunScript(jsNotRunScript, jsNotRun)
 	}
 	if err != nil {
 		return fmt.Sprintf("The JavaScript interpreter failed to start: %v", err)
@@ -812,6 +815,11 @@ func sameBridgedValue(result, last any) bool {
 // anything the program did.
 var jsNativeFrame = regexp.MustCompile(` at [^ ]+ \(native\)`)
 
+// jsNotRunFrame is a frame in the NotRun class's own script (jsNotRun), which
+// says where the error was built rather than which call of the program's met
+// the refusal.
+var jsNotRunFrame = regexp.MustCompile(` at (?:[^ ]+ \()?` + regexp.QuoteMeta(jsNotRunScript) + `:[^ )]*\)?`)
+
 // jsPosition finds the program line goja's message points at.
 var jsPosition = regexp.MustCompile(`program\.js:(\d+):`)
 
@@ -892,6 +900,7 @@ func jsErrorText(err error, code string, shell bool) string {
 		}
 	}
 	msg = jsNativeFrame.ReplaceAllString(msg, "")
+	msg = jsNotRunFrame.ReplaceAllString(msg, "")
 	if m := jsPosition.FindStringSubmatch(msg); line == 0 && m != nil {
 		_, _ = fmt.Sscan(m[1], &line)
 	}

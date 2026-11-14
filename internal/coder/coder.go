@@ -46,10 +46,6 @@ type Coder struct {
 	// says whether the commit tool commits.
 	CommitsWithheld bool
 	Stream          bool
-	// ObserveOnly limits a run_code program to the observation tools. Set by
-	// `strument tool`, which shows what a tool returns and is not a session:
-	// it keeps no snapshot, so a program's edit there could not be undone.
-	ObserveOnly bool
 	// SystemPrompt is the config's system_prompt, which replaces the built-in
 	// prompts.System. Empty means the built-in.
 	SystemPrompt string
@@ -636,10 +632,18 @@ func (c *Coder) confirmGrouped(req ConfirmRequest) ConfirmResult {
 // asked (no terminal, or a session started --unattended), it says that, and
 // which --yes would have approved it, rather than crediting a user who never
 // saw the question.
+//
+// The unattended answer says it holds for the rest of the run. Without that,
+// MiMo, declined once, sent the same command from a run_code program as "a
+// different path" that might be asked differently (doc/experiments/
+// 2026-11-bridge-all): the sentence said why this request was declined and
+// nothing about the next one.
 func declined(res ConfirmResult, what, grant string) string {
 	if res.Unattended {
 		return fmt.Sprintf("Strument declined to %s: no one is available to approve it, and the "+
-			"session was not started with `--yes %s`. Do without it, or say what you would have done.", what, grant)
+			"session was not started with `--yes %s`. Every request that needs approval will be declined "+
+			"the same way for the rest of this run, including calls from a run_code program. "+
+			"Do without it, or say what you would have done.", what, grant)
 	}
 	return "The user chose not to " + what + "."
 }
