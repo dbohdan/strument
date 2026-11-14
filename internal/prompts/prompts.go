@@ -126,28 +126,20 @@ const observationBullet = "- read, grep, glob, and ls look at the project. They 
 	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
 	"inside the project is also accepted.\n"
 
-// The loop paragraph's worked sequence ends in a commit too, because it is
-// the order of work a model copies and it used to stop at the fix. Neither
-// change was enough on its own for MiMo on a one-line fix: 0/2 sessions
-// committed with the bullet, 0/4 with the bullet and the sequence. They are
-// kept because the old text was false, not because they were shown to work.
+// commitBullet says what the commit tool does and nothing about when to use
+// it. That is deliberate: whether and when a model commits unasked is
+// behavior to watch, not to steer.
 //
-// commitBullet used to end "A request that is genuinely one change is one
-// commit, and needs no call at all", which was true while every turn ended in
-// a commit of its own. That went, and the sentence stayed: in the first live
-// pass without it, MiMo finished a fix and did not commit, reasoning that a
-// commit would sweep in a change the user had left in the tree. Both halves of
-// that are answered here — nothing else commits, and the user's changes are
-// committed apart from the model's — because the tool's description says so
-// too, and the model reads this first.
-const commitBullet = "- commit records the edits you have made so far as one commit, with a " +
-	"message you write. Nothing else commits them: when a change is done, commit it with the " +
-	"commit tool. Changes the user had already made to the same files are committed " +
-	"separately first, so your commit holds only your work. " +
-	"When a request has several parts, work through them one at a time: make the edits for the " +
-	"first part, call commit, and begin the second part after that result comes back. Do not " +
-	"make every edit and then commit once at the end — by then there is only one commit to " +
-	"make, and the user is reading a diff that does three things at once.\n"
+// It used to steer, and the steering did little. The bullet once ended "A
+// request that is genuinely one change is one commit, and needs no call at
+// all", left over from the turn-end commit. Replaced with "when a change is
+// done, commit it", and with a commit added to the loop paragraph's example,
+// MiMo committed a one-line fix in 1 of 14 live sessions. A once-per-turn
+// reminder from the harness took it to 4 of 4, and was not adopted, to keep
+// the harness free of reminders. The panel survey behind that decision found
+// five of six harnesses telling models never to commit unless asked, which is
+// likely the habit those numbers measured.
+const commitBullet = "- commit commits the edits you have made, with a message you write.\n"
 
 // mainSystem is the instructions half of System: who the model is working
 // with, the scope rule, and what each tool costs.
@@ -169,9 +161,9 @@ const mainSystem = "You are an expert software developer working with a user on 
 	"the other tools don't cover; reading and searching have their own tools.\n" +
 	commitBullet + "\n" +
 	"Every call's result comes back to you, so you can keep working within the same turn: read a " +
-	"file, make an edit, run the tests, see what failed, fix it, and commit the fix. Finish by " +
-	"saying what you did or what you found, without calling a tool — that is what ends the turn " +
-	"and hands back to the user.\n\n" +
+	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did " +
+	"or what you found, without calling a tool — that is what ends the turn and hands back to the " +
+	"user.\n\n" +
 	HarnessNoteLine +
 	"Explain your changes briefly in prose alongside the tool calls.\n"
 
