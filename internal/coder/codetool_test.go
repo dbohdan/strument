@@ -603,7 +603,8 @@ func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 
 // symbol is offered exactly where a repo map is, and everything that tells the
 // model about the run_code bridge must follow that condition — the schema's
-// callable list, the registration behind it, and the prompt bullet.
+// callable list and the registration behind it. The system prompt's bullet is
+// literal now, and says "symbol where it is offered".
 //
 // The asymmetry this fixes ran the unusual way round. internal/prompts leaves
 // symbol out of the run_code bullet deliberately, on the rule that prose must
@@ -617,9 +618,7 @@ func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	withMap, _ := observeEnv(t, map[string]string{"a.go": "package a\n\nfunc Target() {}\n"})
 	withMap.RepoMap = repomap.New(withMap.Root)
-	withMap.OfferCode = true
 	without, _ := observeEnv(t, map[string]string{"a.go": "package a\n\nfunc Target() {}\n"})
-	without.OfferCode = true
 
 	if got := withMap.codeCallableTools(); !slices.Contains(got, toolSymbol) {
 		t.Errorf("with a repo map the callable list must offer symbol, got %v", got)
@@ -633,13 +632,6 @@ func TestCodeCallableListFollowsTheRepoMap(t *testing.T) {
 	}
 	if desc := codeTool(without.codeCallableTools(), true, codeDataFuncs).Description; strings.Contains(desc, "symbol") {
 		t.Errorf("the description must not name symbol where every call fails:\n%s", desc)
-	}
-
-	if got := withMap.codeToolsText(); !strings.Contains(got, "glob, ls, and symbol") {
-		t.Errorf("the bullet must name symbol where it works:\n%s", got)
-	}
-	if got := without.codeToolsText(); !strings.Contains(got, "glob, and ls") || strings.Contains(got, "symbol") {
-		t.Errorf("the bullet must stop at ls where symbol does not work:\n%s", got)
 	}
 
 	// Registration follows too: a program calling symbol without a repo map
@@ -745,7 +737,6 @@ func TestRunCodeNamesBashOnlyWhenOffered(t *testing.T) {
 		{"shell = False", false, false},
 	} {
 		c := testCoder(t)
-		c.OfferCode = true
 		c.SuggestShellCommands = tc.shell
 		var desc string
 		offered := false

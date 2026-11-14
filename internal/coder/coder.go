@@ -11,7 +11,6 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/prompts"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/skill"
@@ -45,22 +44,11 @@ type Coder struct {
 	ShellWithheld bool
 	// CommitsWithheld records --no-commits, for the same reason. Commits
 	// says whether the commit tool commits.
-	CommitsWithheld    bool
-	Stream             bool
-	SystemPromptPrefix string
-	// PromptCode is the user's replacement for MainSystem (the `prompt_code`
-	// config). Empty means "use the built-in". It lives on the Coder rather than
-	// in the prompts.Set built-in so a session does not mutate the shared
-	// singleton. It is applied by setPrompts, which ApplyConfig and New both
-	// funnel through.
-	PromptCode   string
-	ChatLanguage string
-	// OfferCode, when false, withholds the run_code tool from the schema and
-	// empties the {code_tools} prompt slot. Default true, set in New; the
-	// false case is the feature-reverted arm of the code-mode trial and a
-	// future user setting. Keeping the condition in one field is what lets
-	// the prompt's tool list track the schema instead of drifting from it.
-	OfferCode bool
+	CommitsWithheld bool
+	Stream          bool
+	// SystemPrompt is the config's system_prompt, which replaces the built-in
+	// prompts.System. Empty means the built-in.
+	SystemPrompt string
 
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked
@@ -165,8 +153,6 @@ type Coder struct {
 	// names from the config's `env_allow`. It applies to every command the
 	// model caused to run — bash, checks, the scraper — never to /run.
 	EnvAllow []string
-
-	Prompts prompts.Set
 
 	// RecordUsage, when set, receives each turn's accounting at turn end. A
 	// callback rather than a writer so the coder keeps knowing nothing about
@@ -390,11 +376,6 @@ type Coder struct {
 
 type fence struct{ open, close string }
 
-// setPrompts applies this session's user override (prompt_code) onto the
-// built-in prompt set. The built-in is a
-// module-level singleton shared by every session, so an override is written to
-// a fresh copy rather than mutating prompts.Tool in place — a second Coder in
-// the same process must not inherit the first's custom prompt.
 // Defaults for settings a config may omit. Named because ApplyConfig restores
 // them when a reloaded config stops saying, and a constructor that disagreed
 // with that would make the first reload change behaviour on its own.
@@ -408,24 +389,12 @@ const (
 	defaultUndoDepth = 20
 )
 
-func (c *Coder) setPrompts() {
-	// A copy of the built-in: the Set is a struct of strings, so the clone is
-	// cheap and gives us a per-session value to hand to the assembler without
-	// reaching into the shared built-in.
-	base := prompts.Tool
-	if c.PromptCode != "" {
-		base.MainSystem = c.PromptCode
-	}
-	c.Prompts = base
-}
-
-// PlatformInfo feeds the {platform} prompt slot deterministically
-// (injectable for fixtures).
+// PlatformInfo is the platform half of the system prompt's facts
+// (factsText), injectable for fixtures.
 type PlatformInfo struct {
 	Platform string // e.g. "Linux-6.1-x86_64"
 	ShellVar string
 	ShellVal string
-	Language string // human-readable, e.g. "English"; "" => none
 	Date     string // YYYY-MM-DD
 	WorkDir  string // absolute path to the project root
 	InGit    bool
@@ -438,7 +407,6 @@ func New(root string, model *config.Model) *Coder {
 		Model:                model,
 		SuggestShellCommands: true,
 		Stream:               true,
-		OfferCode:            true,
 		MaxSteps:             defaultMaxSteps,
 		MaxErrorReflections:  defaultMaxErrorReflections,
 		LoopDetection:        true,
@@ -452,7 +420,6 @@ func New(root string, model *config.Model) *Coder {
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},
 	}
-	c.setPrompts()
 	c.Platform = defaultPlatformInfo(c)
 	// The observation tools are contained to the project root, with the same
 	// exemption edits get: a file the user pinned is sanctioned wherever it
@@ -487,7 +454,6 @@ func defaultPlatformInfo(c *Coder) PlatformInfo {
 		Platform: fmt.Sprintf("%s-%s", osName(), archName()),
 		ShellVar: shellVar,
 		ShellVal: os.Getenv(shellVar),
-		Language: detectUserLanguage(c.ChatLanguage),
 		Date:     time.Now().Format("2006-01-02"),
 		WorkDir:  c.Root,
 	}

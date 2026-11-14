@@ -101,13 +101,7 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	granted, _ := config.ParseGrants("auto_approve", cfg.AutoApprove)
 	c.Grants.SetConfig(granted)
 
-	// The prompt layer last, and through setPrompts rather than by hand.
-	// setPrompts rebuilds the active set from the built-in before layering the
-	// overrides on top, which is what makes this idempotent.
-	c.SystemPromptPrefix = cfg.PromptSystemPrefix
-	c.PromptCode = cfg.PromptCode
-	c.SetChatLanguage(cfg.ChatLanguage)
-	c.setPrompts()
+	c.SystemPrompt = cfg.SystemPrompt
 }
 
 // applySecretFiles rebuilds the secret-file matcher from the config. Load has

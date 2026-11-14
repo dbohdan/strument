@@ -1,25 +1,17 @@
-// Package prompts holds the prompt sets for each edit format.
+// Package prompts holds the model-facing text: the system prompt and the notes
+// the harness writes into a conversation.
 //
-// The prompt strings are Python-str.format-style templates: placeholders
-// like {fence[0]}, {final_reminders}, and {platform} are substituted by
-// the coder at message-assembly time. Literal braces inside prompt text
-// must therefore be doubled ({{ and }}).
+// The system prompt is one literal string. It used to be a set of
+// str.format-style templates, with slots for the platform, the reply
+// language, the run_code bullet and the observation paragraph, filled at
+// assembly time. Every slot but the platform had come to render the same text
+// in every production session, and the platform is facts rather than
+// instructions, so the coder now appends it after this string (see
+// Coder.factsText) instead of splicing it in. What is written here is what the
+// model reads.
 package prompts
 
 import "fmt"
-
-// Set is one edit format's prompt set: the CoderPrompts surface that the
-// message assembler consumes.
-type Set struct {
-	MainSystem       string
-	SystemReminder   string
-	FilesNoFullFiles string
-	// FilesNoFullFilesNoCode is the same note with the run_code clause
-	// removed, for a session whose schema withholds the tool.
-	FilesNoFullFilesNoCode           string
-	FilesNoFullFilesWithRepoMap      string
-	FilesNoFullFilesWithRepoMapReply string
-}
 
 // Shared strings used identically across the editing formats.
 
@@ -79,7 +71,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // where /add put file contents in the prompt. Nothing is supplied now — the
 // model reads what it needs — and the categorical "will request changes" biased
 // a question ("why is startup slow?") toward being treated as a prelude to
-// editing. FilesNoFullFiles already patched that for the nothing-pinned case;
+// editing. The how-to-look note already patched that for the nothing-pinned case;
 // the opening now says it for every case.
 //
 // The tool list said "three groups" and named four. Restoring the count would
@@ -95,36 +87,28 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // read main.go; startup is slow because …", the narration ahead of the answer.
 // "or what you found" is four words against that.
 
-// CodeToolsBullet is the {code_tools} slot's text, exported for the coder's
-// assembler, which fills the slot when (and only when) the run_code tool is
-// offered. It lives beside the prompt it extends because it is prompt prose;
-// the *condition* lives in the coder, derived from the tool set itself.
+// codeToolsBullet is the system prompt's run_code bullet.
 //
 // The tool list is the closed-world hazard the code-mode trial measured: the
 // sentence "these are the ones you will reach for most" reads as policy, and a
 // flash-class model treats the enumeration as exhaustive —
 // doc/experiments/2026-08-code-mode/README.md found 0/36 `run_code` calls with the tool
-// offered in the schema but absent from this list. So `run_code` gets a bullet
-// through the {code_tools} slot, filled at assembly time only when the tool is
-// actually offered (the same mechanism {platform} uses), so the prose can
-// never promise a tool the schema withholds — the rule that kept `run_code` out
-// of the prompt when it was first added. The bullet is a conditional rule
+// offered in the schema but absent from this list. So `run_code` gets a
+// bullet. It used to be a slot, filled only when the tool was offered, so the
+// prose could never promise a tool the schema withheld; nothing withholds it
+// now. The bullet is a conditional rule
 // ("when one answer needs several lookups combined"), not an announcement:
 // per the symbol fix, the description that moves uptake is the one that maps
 // a felt need to a tool, and the arithmetic clause is explicit because models
 // do not recognize their own mental arithmetic as costly.
 //
-// The tool list is a %s slot rather than four names written out, because symbol
-// is offered only where a repo map is. Naming it unconditionally would promise a
-// tool half the sessions do not have — the hazard this file's Ask comment calls
-// out — and leaving it out unconditionally hid a tool a program really can call
-// wherever grammars exist. Coder.codeCallableTools fills it from the same list
-// the schema and the bridge use.
-//
-// The "inside the harness" clause is the bullet's half of codeCommandsClause's
-// fix (see its comment): in a JavaScript project the bullet's first words were
-// read as an offer to run the project's code, and the bullet is read first.
-const CodeToolsBullet = "- run_code runs a short JavaScript program, which can itself call %s" +
+// The tool list names symbol with "where it is offered" because symbol is
+// offered only where a repo map is. Naming it unconditionally would promise a
+// tool half the sessions do not have, and leaving it out hid a tool a program
+// really can call wherever grammars exist. It was a slot filled from
+// Coder.codeCallableTools; a clause says the same in a literal string.
+const codeToolsBullet = "- run_code runs a short JavaScript program, which can itself call " +
+	"read, grep, glob, ls, and symbol where it is offered" +
 	" — the results come back to the program, not to you, until it returns. " +
 	"It changes nothing and needs no permission, and it runs inside the harness, " +
 	"not the project: it cannot import or run the project's own code. Reach for it when one answer " +
@@ -135,48 +119,61 @@ const CodeToolsBullet = "- run_code runs a short JavaScript program, which can i
 	"exploration where each search depends on the last result, is a direct call " +
 	"to the tool itself.\n"
 
-// ObservationBullet is the tool prompt's read/grep/glob/ls paragraph.
-const ObservationBullet = "- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
+// observationBullet is the system prompt's read/grep/glob/ls paragraph.
+const observationBullet = "- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
 	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
 	"inside the project is also accepted.\n"
 
-// {code_tools} renders the code bullet above when the run_code tool is
-// offered, and as "" when it is not — the empty case is the feature-reverted
-// baseline, where prose naming `run_code` would promise a tool the schema does
-// not carry. {observation_tools} renders the observation paragraph for the
-// session's mode.
-const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
+// The loop paragraph's worked sequence ends in a commit too, because it is
+// the order of work a model copies and it used to stop at the fix. Neither
+// change was enough on its own for MiMo on a one-line fix: 0/2 sessions
+// committed with the bullet, 0/4 with the bullet and the sequence. They are
+// kept because the old text was false, not because they were shown to work.
+//
+// commitBullet used to end "A request that is genuinely one change is one
+// commit, and needs no call at all", which was true while every turn ended in
+// a commit of its own. That went, and the sentence stayed: in the first live
+// pass without it, MiMo finished a fix and did not commit, reasoning that a
+// commit would sweep in a change the user had left in the tree. Both halves of
+// that are answered here — nothing else commits, and the user's changes are
+// committed apart from the model's — because the tool's description says so
+// too, and the model reads this first.
+const commitBullet = "- commit records the edits you have made so far as one commit, with a " +
+	"message you write. Nothing else commits them: when a change is done, commit it with the " +
+	"commit tool. Changes the user had already made to the same files are committed " +
+	"separately first, so your commit holds only your work. " +
+	"When a request has several parts, work through them one at a time: make the edits for the " +
+	"first part, call commit, and begin the second part after that result comes back. Do not " +
+	"make every edit and then commit once at the end — by then there is only one commit to " +
+	"make, and the user is reading a diff that does three things at once.\n"
+
+// mainSystem is the instructions half of System: who the model is working
+// with, the scope rule, and what each tool costs.
+const mainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
 	lazyPrompt +
-	"{final_reminders}\n" +
+	"\n" +
 	"The user will ask for changes to the code, or ask questions about it.\n" +
 	"If a request is ambiguous, ask clarifying questions before making changes.\n\n" +
 	"Work through the provided tools. These are the ones you will reach for most, and they differ " +
 	"in what they cost the user:\n\n" +
-	"{code_tools}" +
-	"{observation_tools}" +
+	codeToolsBullet +
+	observationBullet +
 	"- edit and write change files directly: the change lands the moment you call them, with no " +
 	"separate confirmation step, exactly like an ordinary edit. Call them when you are ready to " +
 	"make the change.\n" +
 	"- bash runs a shell command, and the user is asked before it runs. Reach for it only for work " +
 	"the other tools don't cover; reading and searching have their own tools.\n" +
-	"- commit closes the edits you have made so far as one commit, with a message you write. " +
-	"When a request has several parts, work through them one at a time: make the edits for the " +
-	"first part, call commit, and begin the second part after that result comes back. Do not " +
-	"make every edit and then commit once at the end — by then there is only one commit to " +
-	"make, and the user is reading a diff that does three things at once. A request that is " +
-	"genuinely one change is one commit, and needs no call at all.\n\n" +
+	commitBullet + "\n" +
 	"Every call's result comes back to you, so you can keep working within the same turn: read a " +
-	"file, make an edit, run the tests, see what failed, and fix it. Finish by saying what you did " +
-	"or what you found, without calling a tool — that is what ends the turn and hands back to the " +
-	"user.\n\n" +
+	"file, make an edit, run the tests, see what failed, fix it, and commit the fix. Finish by " +
+	"saying what you did or what you found, without calling a tool — that is what ends the turn " +
+	"and hands back to the user.\n\n" +
 	HarnessNoteLine +
-	"Explain your changes briefly in prose alongside the tool calls.\n\n" +
-	"Keep in mind these details about the user's platform and environment:\n" +
-	"{platform}\n"
+	"Explain your changes briefly in prose alongside the tool calls.\n"
 
 // HarnessNoteLine says what the [strument] marker means. Strument speaks to the
 // model mid-conversation in user-role messages (see llm.HarnessNote), and
@@ -189,9 +186,16 @@ const toolMainSystem = "You are an expert software developer working with a user
 const HarnessNoteLine = "Messages that begin with [strument] are written by Strument, the program " +
 	"running this session, not by the user.\n\n"
 
-// toolSystemReminder is the trailing reminder for the tool format: the
-// exact-match rule for search and the one-change-per-call discipline.
-const toolSystemReminder = "# Editing rules\n\n" +
+// editingRules is the exact-match rule for edit and the one-change-per-call
+// discipline.
+//
+// It once went out twice per request: aider also appends it to the last user
+// turn, rules at the top and at the bottom. Claude Haiku reported the
+// duplicate when asked what looked odd about the harness. The end copy went:
+// the system prompt is a cacheable prefix, the copy in the user turn was
+// regenerated every send, and putting it there edited words into the user's
+// own message.
+const editingRules = "# Editing rules\n\n" +
 	"- edit's old_string must match the file's current contents exactly, character for character, " +
 	"including all whitespace, comments, and docstrings. An inexact match is the most common reason " +
 	"an edit is rejected, so double-check it.\n" +
@@ -199,57 +203,38 @@ const toolSystemReminder = "# Editing rules\n\n" +
 	"each call to one small, self-contained change. Use several calls for several changes.\n" +
 	"- To move code, use two calls: one to remove it, one to add it in the new place.\n" +
 	"- Read a file before editing it unless its contents are already in the conversation. Editing " +
-	"from memory is where inexact matches come from.\n\n" +
-	"{final_reminders}"
+	"from memory is where inexact matches come from.\n"
 
-// Tool is the tool-calling edit format: the model edits, suggests commands,
-// and requests files through native function calls instead of text blocks.
-// It is the default format. The schema does the format-parsing work, so the
-// prompt only conveys the tools' natures and the exact-match discipline.
-var Tool = Set{
-	MainSystem:     toolMainSystem,
-	SystemReminder: toolSystemReminder,
-	// Nothing pinned is the normal starting state now, not a problem to report.
-	// The model finds what it needs with read, grep, glob, and ls, so saying so
-	// is the whole message.
-	//
-	// The second sentence is here because the repo map used to be, in this exact
-	// position. The map was not being read as content; it was evidence that a
-	// project existed to look at, and removing it left three of ten models
-	// answering a question about this codebase without opening a file — one of
-	// them inventing a whole subsystem. This says the same thing for thirty
-	// tokens instead of a thousand. It is spelled out for questions because
-	// everything else the model is told is about making changes, and a question
-	// falls outside that contract. It says "the user asks" rather than aider's
-	// "I ask" because this text lands in the system prompt now, where a
-	// first-person "I" is the harness wearing the user's voice.
-	//
-	// It began "Nothing is pinned for editing.", from when /add could pin
-	// files and this note was what a session with none got. Pinning went, and
-	// with it the sentence; the rest is unchanged.
-	FilesNoFullFiles:       toolNoPinsHead + runCodeClause + toolNoPinsTail,
-	FilesNoFullFilesNoCode: toolNoPinsHead + toolNoPinsTail,
-	// The empty-string sentinel disables the repo-map branch in assembly. Its text was written for a harness where the model could not look:
-	// it told the model to name the files it needed and stop so the user could
-	// add them, which is precisely the behavior the tool set replaces. Left in
-	// place it made the model explore and then refuse to edit.
-	FilesNoFullFilesWithRepoMap:      "",
-	FilesNoFullFilesWithRepoMapReply: "",
-}
+// howToLook is the note that closes the instructions.
+//
+// Its second sentence is here because the repo map used to be, in this exact
+// position. The map was not being read as content; it was evidence that a
+// project existed to look at, and removing it left three of ten models
+// answering a question about this codebase without opening a file — one of
+// them inventing a whole subsystem. This says the same thing for thirty
+// tokens instead of a thousand. It is spelled out for questions because
+// everything else the model is told is about making changes, and a question
+// falls outside that contract. It says "the user asks" rather than aider's "I
+// ask" because this text lands in the system prompt, where a first-person "I"
+// is the harness wearing the user's voice.
+//
+// It began "Nothing is pinned for editing.", from when /add could pin files
+// and this note was what a session with none got. Pinning went, and with it
+// the sentence; the rest is unchanged.
+const howToLook = toolNoPinsHead + runCodeClause + toolNoPinsTail
+
+// System is the built-in system prompt, used unless the config's
+// system_prompt replaces it. The coder appends the session's facts after it.
+const System = mainSystem + "\n" + editingRules + "\n" + howToLook
 
 // runCodeClause is the half-sentence that offers a program as an alternative
-// to a run of direct lookups. It is spliced into the how-to-look notes
-// rather than written twice, so the offered text stays byte-identical to what
-// 2026-09-code-mode2.md measured and the withheld text is provably the same
-// sentence without it.
-//
-// Two hand-written variants would be two places to drift, which is the failure
-// this repository has recorded three times for absolute paths (see
-// internal/coder/apply.go) and once for the loop detector's strip.
+// to a run of direct lookups, byte-identical to what 2026-09-code-mode2.md
+// measured. It was kept separate so a session that withheld run_code could
+// get the same note without it; nothing withholds run_code now.
 const runCodeClause = " — or one run_code call that calls them, when you " +
 	"already know the several things you are looking for"
 
-// The tool set's how-to-look note, either side of the clause.
+// The how-to-look note, either side of the clause.
 const (
 	toolNoPinsHead = "Use read, grep, glob, and ls to find " +
 		"what you need"

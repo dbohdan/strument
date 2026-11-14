@@ -166,10 +166,12 @@ inherited from aider.
   enough to see what came back, not enough to pay for the file contents twice.
 - **Borrowed material.** The tree-sitter tag queries under
   `internal/repomap/queries*/` are copied from aider. The built-in prompts in
-  `internal/prompts/` began as aider's and are now ours to change;
-  `prompts_test.go` asserts the *shape* of the two sets — that each slot says
-  the things the loop depends on — rather than pinning a hash, so wording
-  stays free to improve and a rule cannot be deleted by accident.
+  `internal/prompts/` began as aider's and are now ours to change. The system
+  prompt is one literal string, `prompts.System`, with the session's facts
+  appended after it by `Coder.factsText`; aider's str.format templates and
+  their slots are gone. `prompts_test.go` asserts the prompt's *shape* — that
+  it says the things the loop depends on — rather than pinning a hash, so
+  wording stays free to improve and a rule cannot be deleted by accident.
 
 ## Codebase structure
 
@@ -231,7 +233,7 @@ inherited from aider.
     six models loaded a relevant skill 54/54 times, never loaded it on a task
     it did not fit (0/36), and on-demand loading scored the same as having the
     text in context.
-  - `prompts/` — the built-in prompt sets.
+  - `prompts/` — the built-in system prompt and the harness's notes.
   - `render/` — streaming markdown renderer (a Go port of
     thetarnav/streaming-markdown) plus the ANSI terminal renderer and the
     color `Theme`.

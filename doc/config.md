@@ -51,9 +51,7 @@ The loader reads these module-level variables after running your file:
 | `approve_model` | `decision_model()` or `None` | Optional. A decision model asked before a shell command's prompt is shown; it runs commands it rates safe. Default unset. See below. |
 | `sandbox` | `"landlock"` or `""` | Optional. Confinement mechanism. Defaults to `"landlock"` on Linux and `""` (off) elsewhere. See below. |
 | `sandbox_write` | list of strings | Optional. Absolute paths the sandbox may write to on top of the derived set. See below. |
-| `prompt_system_prefix` | string | Optional. Literal text prepended to the active system prompt. See below. |
-| `prompt_code` | string | Optional. Whole-string replacement for the system prompt. See below. |
-| `chat_language` | string | Optional. Language code that fills the `{language}`/`{final_reminders}` prompt slots. See below. |
+| `system_prompt` | string | Optional. Replaces the built-in system prompt's instructions, verbatim. See below. |
 
 Other top-level names are not treated as settings. You can use them for helper
 functions and intermediate values.
@@ -845,61 +843,36 @@ Everything else about signing is Git's domain: which key `-S` uses is decided by
 commit fail, and the commit tool tells the model why; the edits stay in the
 working tree, where `/undo` still reaches them through the turn's snapshot.
 
-### `prompt_*` — customizing the system prompts
+### `system_prompt` — replacing the system prompt
 
-These settings let you change the instructions sent to the model, on top of
-the built-in prompts in `internal/prompts/`.
+The system prompt has two parts. The instructions are one literal string,
+`prompts.System` in `internal/prompts/prompts.go`. After them Strument writes
+the session's facts: the platform and shell, the date, the working directory,
+whether git is there, the model's name, and — when the project has them — a
+line asking the model to read `AGENTS.md` and `AGENTS.local.md`.
 
-**Prepend instructions.** `prompt_system_prefix` is prepended to the active
-system prompt (whatever mode and format) with no placeholder substitution. Use
-it for a rule that applies every turn and in every mode — "be terse", "never
-touch the CI config" — without rewriting anything else:
-
-```python
-prompt_system_prefix = "You work on the Acme codebase.\n\n"
-```
-
-**Replace the built-in prompt.** `prompt_code` replaces the system prompt
-(`Tool.MainSystem`) entirely, removing the built-in instructions. To add a rule
-without replacing a prompt, use `prompt_system_prefix`.
-
-Replacements are templates that may use the built-ins' **closed placeholder
-set** — the same `{...}` slots `pyFormat` fills at assembly time:
-
-- `prompt_code`: `{platform}`, `{language}`, `{final_reminders}`,
-  `{code_tools}`, `{observation_tools}`.
-
-Only the placeholders listed below are supported. Unknown placeholders cause a
-configuration error. Double literal braces as `{{` and `}}`.
+`system_prompt` replaces the instructions and leaves the facts alone. It is
+taken verbatim: there are no placeholders, and a brace is just a brace.
 
 ```python
-prompt_code = """You are a senior engineer on Acme's Go services.
-Reply in {language}.
-{final_reminders}
+system_prompt = """You are a senior engineer on Acme's Go services.
+Work through the tools. Commit each finished change with the commit tool.
 """
 ```
 
-**Which file wins.** Prompt overrides are whole-value like `env_allow`: a
-project's `.strument.star` replaces a user's setting for the same key, and the
-trust gate is what makes a project's prompt the user's own decision. A project
-that wants its own house style says so in the file the whole team reviews.
+A replacement removes every built-in instruction, including the ones that tell
+the model what each tool costs and to commit its work, so start from a copy of
+`prompts.System` rather than from nothing. A rule for one project belongs in
+its `AGENTS.md` instead, where the team reviews it and the prompt stays whole.
 
-### `chat_language`
+**Which file wins.** `system_prompt` is whole-value like `env_allow`: a
+project's `.strument.star` replaces a user's setting, and the trust gate is
+what makes a project's prompt the user's own decision.
 
-`chat_language` fills the `{language}` and `{final_reminders}` prompt slots
-with a language of your choice, replacing the default environment-variable
-detection (`LANG` and friends). It takes a language code and maps it through the
-same small set the environment detection uses (`fr` → "French", `zh` →
-"Chinese", …):
-
-```python
-chat_language = "fr"
-```
-
-An empty string (`""`) leaves environment detection in charge, as does omitting
-the setting. The two cases are distinct when a project config overrides a user
-config. Because it feeds the prompt as normalized text, a code outside the known
-map is left as-is rather than refused.
+Three keys went with the template engine and are refused by name:
+`prompt_code` is now `system_prompt`; `prompt_system_prefix` has no
+replacement but `system_prompt` and `AGENTS.md`; and `chat_language` went
+because models answer in the language they are written to.
 
 ### `auto_approve`
 
@@ -1944,7 +1917,7 @@ what runs, each with its specifics, and the remaining preferences by name:
   env_allow      model-run commands see: PATH, HOME, AWS_PROFILE
   auto_approve   stops asking before: websearch, bash
   sandbox        "": the sandbox is off
-  and sets 3 preferences: default, max_steps, chat_language
+  and sets 3 preferences: default, max_steps, max_undo_turns
 
 1 project skill to trust. A skill is instructions the model follows:
   /home/you/proj/.strument/skills/deploy/SKILL.md (new)

@@ -105,11 +105,7 @@ func (c *Coder) toolDefs() []llm.ToolDef {
 	if len(skill.Usable(c.Skills)) > 0 {
 		defs = append(defs, skillTool(c.Skills))
 	}
-	// Offered unless withheld — OfferCode, and the {code_tools} slot follows
-	// the same flag.
-	if c.OfferCode {
-		defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
-	}
+	defs = append(defs, codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs()))
 	defs = append(defs, editTools()...)
 	if c.offersShell() {
 		defs = append(defs, bashTool())
