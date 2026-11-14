@@ -189,7 +189,27 @@ type Entry struct {
 	// listing that doesn't say so shows one file under two names and gives the
 	// reader no way to tell it from a duplicate.
 	Link string
+	// Ignored marks an entry the project's ignore rules cover: listed, so the
+	// model knows it is there, and skipped by every search and read.
+	Ignored bool
 }
+
+// Listing is one directory's contents as List reports them.
+type Listing struct {
+	// Entries are the directory's entries in name order: those the ignore
+	// rules leave, up to the results limit, then the ignored ones, up to
+	// maxIgnoredListed.
+	Entries []Entry
+	// Total is how many entries the ignore rules leave; Ignored, how many
+	// they cover. Either can exceed what Entries holds.
+	Total, Ignored int
+	// DirIgnored says the directory itself is ignored, so everything in it is.
+	DirIgnored bool
+}
+
+// maxIgnoredListed caps the ignored entries one listing names. A directory
+// of ten thousand cache files is one line of news, not ten thousand.
+const maxIgnoredListed = 20
 
 // Truncated reports that a result was cut short by a limit. Callers surface
 // this to the model, because a silently short answer reads as "nothing more
@@ -197,6 +217,13 @@ type Entry struct {
 type Truncated struct {
 	Entries bool // the walk hit MaxEntries
 	Results bool // the result hit MaxResults
+	// IgnoredMatches are ignored files a glob's pattern matched, and
+	// IgnoredDirs ignored directories the pattern reaches into, which were
+	// not searched; at most maxIgnoredListed of each. Left out rather than
+	// cut short, but the same news: a glob for **/*.log that answered "no
+	// files match" beside two gitignored .log files sent MiMo looking for
+	// files that were there.
+	IgnoredMatches, IgnoredDirs []string
 }
 
 func (t Truncated) Any() bool { return t.Entries || t.Results }
@@ -205,8 +232,11 @@ func (t Truncated) Any() bool { return t.Entries || t.Results }
 // across the whole walk, while the ignore patterns are passed down by value:
 // they accumulate along a branch and must not leak into a sibling.
 type walker struct {
-	w       *Workspace
-	fn      func(rel string, d fs.DirEntry) bool
+	w  *Workspace
+	fn func(rel string, d fs.DirEntry) bool
+	// ignored, when set, hears every entry the ignore rules prune, which is
+	// as far as the walk goes into them.
+	ignored func(rel string, isDir bool)
 	scope   string // root-relative; "" for the whole tree
 	visited int
 	stopped bool // the entry budget ran out
@@ -234,11 +264,17 @@ func (w *Workspace) walk(fn func(rel string, d fs.DirEntry) bool) (Truncated, er
 // being unreliable. The walk still starts at the root, so ignore rules still
 // apply from the top down.
 func (w *Workspace) walkScoped(scope string, fn func(rel string, d fs.DirEntry) bool) (Truncated, error) {
+	return w.walkScopedIgnoring(scope, fn, nil)
+}
+
+// walkScopedIgnoring is walkScoped that also reports each pruned entry.
+func (w *Workspace) walkScopedIgnoring(scope string, fn func(rel string, d fs.DirEntry) bool,
+	ignored func(rel string, isDir bool)) (Truncated, error) {
 	root, err := gitignore.ReadRoot(w.Root)
 	if err != nil {
 		return Truncated{}, err
 	}
-	wk := &walker{w: w, fn: fn, scope: strings.Trim(scope, "/")}
+	wk := &walker{w: w, fn: fn, ignored: ignored, scope: strings.Trim(scope, "/")}
 	if err := wk.dir(w.Root, nil, root); err != nil {
 		return Truncated{}, err
 	}
@@ -294,6 +330,9 @@ func (wk *walker) dir(dir string, domain []string, patterns []gitignore.Pattern)
 		components := append(slices.Clone(domain), name)
 		isDir := e.IsDir()
 		if matcher.Match(components, isDir) {
+			if wk.ignored != nil {
+				wk.ignored(strings.Join(components, "/"), isDir)
+			}
 			continue
 		}
 
@@ -366,10 +405,18 @@ func (w *Workspace) Files() ([]string, Truncated, error) {
 // can say that the list stops short and by how much. It used to stop at the
 // limit without saying so, and a model shown exactly 1,000 entries could only
 // guess whether that was the directory or the tool.
-func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
+//
+// Ignored entries are listed too, marked, after the rest. They used to be
+// left out without a word, and the listing of an ignored directory, all of
+// whose entries the rules cover, said it was empty: MiMo, asked to delete a
+// gitignored build/, saw no build/ in the root's listing, "build is empty"
+// when it listed it by name, and spent seven minutes of a session trying to
+// reconcile the two. Naming what is there costs a line per entry and is
+// capped; the ignore rules still keep search and read out of it.
+func (w *Workspace) List(dir string) (Listing, error) {
 	full, rel, err := w.containErr(dir)
 	if err != nil {
-		return nil, 0, err
+		return Listing{}, err
 	}
 	// Outside the project — a temp directory or a granted one — rel comes
 	// back absolute, and the project's ignore rules have nothing
@@ -381,11 +428,17 @@ func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 	}
 
 	var matcher gitignore.Matcher
+	var l Listing
 	if !temp {
 		var err error
 		matcher, err = w.matcherFor(domain)
 		if err != nil {
-			return nil, 0, err
+			return Listing{}, err
+		}
+		if rel != "" {
+			if l.DirIgnored, err = w.ignored(rel, true); err != nil {
+				return Listing{}, err
+			}
 		}
 	}
 
@@ -394,33 +447,42 @@ func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 	// nothing more.
 	dirents, err := os.ReadDir(full)
 	if err != nil {
-		return nil, 0, err
+		return Listing{}, err
 	}
-	out := make([]Entry, 0, min(len(dirents), w.Limits.results()))
+	var kept, ignored []Entry
 	for _, e := range dirents {
 		name := e.Name()
 		if name == skipAlways {
 			continue
 		}
 		components := append(slices.Clone(domain), name)
-		if !temp && matcher.Match(components, e.IsDir()) {
-			continue
+		isIgnored := !temp && (l.DirIgnored || matcher.Match(components, e.IsDir()))
+		if isIgnored {
+			l.Ignored++
+			if len(ignored) >= maxIgnoredListed {
+				continue
+			}
+		} else {
+			l.Total++
+			if len(kept) >= w.Limits.results() {
+				continue
+			}
 		}
-		total++
-		if len(out) >= w.Limits.results() {
-			continue
-		}
-		ent := Entry{Path: strings.Join(components, "/"), IsDir: e.IsDir()}
+		ent := Entry{Path: strings.Join(components, "/"), IsDir: e.IsDir(), Ignored: isIgnored}
 		if info, err := e.Info(); err == nil && !e.IsDir() {
 			ent.Size = info.Size()
 			if info.Mode()&os.ModeSymlink != 0 {
 				ent.Link, _ = os.Readlink(filepath.Join(full, name))
 			}
 		}
-		out = append(out, ent)
+		if isIgnored {
+			ignored = append(ignored, ent)
+		} else {
+			kept = append(kept, ent)
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, total, nil
+	l.Entries = slices.Concat(kept, ignored)
+	return l, nil
 }
 
 // Glob returns the non-ignored files matching pattern, root-relative and
@@ -429,8 +491,19 @@ func (w *Workspace) List(dir string) (entries []Entry, total int, err error) {
 // does not provide.
 func (w *Workspace) Glob(pattern string) ([]string, Truncated, error) {
 	pattern = path(pattern)
-	var out []string
-	trunc, err := w.walkScoped(literalPrefix(pattern), func(rel string, d fs.DirEntry) bool {
+	var out, ignoredFiles, ignoredDirs []string
+	// What the walk prunes is reported as far as the walk sees it, the pruned
+	// entry itself: a gitignored node_modules costs one check here, not a
+	// descent.
+	noteIgnored := func(rel string, isDir bool) {
+		switch {
+		case !isDir && matchGlob(pattern, rel) && len(ignoredFiles) < maxIgnoredListed:
+			ignoredFiles = append(ignoredFiles, rel)
+		case isDir && globCouldEnter(pattern, rel) && len(ignoredDirs) < maxIgnoredListed:
+			ignoredDirs = append(ignoredDirs, rel)
+		}
+	}
+	trunc, err := w.walkScopedIgnoring(literalPrefix(pattern), func(rel string, d fs.DirEntry) bool {
 		if d.IsDir() {
 			return true
 		}
@@ -438,7 +511,8 @@ func (w *Workspace) Glob(pattern string) ([]string, Truncated, error) {
 			out = append(out, rel)
 		}
 		return len(out) < w.Limits.results()
-	})
+	}, noteIgnored)
+	trunc.IgnoredMatches, trunc.IgnoredDirs = ignoredFiles, ignoredDirs
 	if err != nil {
 		return nil, trunc, err
 	}
@@ -447,6 +521,25 @@ func (w *Workspace) Glob(pattern string) ([]string, Truncated, error) {
 	}
 	sort.Strings(out)
 	return out, trunc, nil
+}
+
+// globCouldEnter reports whether pattern could match something inside dir:
+// every segment of dir is matched by the pattern's segment in its place, and
+// the pattern goes on past it, or reaches a "**" first.
+func globCouldEnter(pattern, dir string) bool {
+	ps, ds := strings.Split(pattern, "/"), strings.Split(dir, "/")
+	for i, d := range ds {
+		if i >= len(ps) {
+			return false
+		}
+		if ps[i] == "**" {
+			return true
+		}
+		if ok, _ := filepath.Match(ps[i], d); !ok {
+			return false
+		}
+	}
+	return len(ps) > len(ds)
 }
 
 // path normalizes a caller-supplied path to the forward-slashed, unrooted form

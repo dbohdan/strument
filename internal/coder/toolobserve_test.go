@@ -234,8 +234,14 @@ func TestGlobAndLS(t *testing.T) {
 	if !strings.Contains(root, "the project root") {
 		t.Errorf("ls with no path should describe the root:\n%s", root)
 	}
-	if strings.Contains(root, "vendor") {
-		t.Errorf("ls listed an ignored directory:\n%s", root)
+	// The ignored directory is named, apart from the rest and marked, not
+	// left out: a model that cannot see it cannot tell it from absent.
+	if !strings.Contains(root, "Ignored by the project, so grep, glob and read skip them:\nvendor/") {
+		t.Errorf("ls must name an ignored directory, marked:\n%s", root)
+	}
+	if v := c.runLS(call("ls", `{"path":"vendor"}`)); !strings.Contains(v, "is ignored by the project") ||
+		strings.Contains(v, "is empty") {
+		t.Errorf("ls of an ignored directory must say it is ignored, not empty:\n%s", v)
 	}
 }
 

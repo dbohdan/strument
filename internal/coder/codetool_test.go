@@ -612,7 +612,7 @@ func TestCodeDataFuncsOverrideTheBridge(t *testing.T) {
 	if !strings.Contains(desc, "return data rather than the tools' prose") {
 		t.Errorf("the description must state the override:\n%s", desc)
 	}
-	for _, want := range []string{"glob({pattern})", "array of strings", "{path, is_dir, link}"} {
+	for _, want := range []string{"glob({pattern})", "array of strings", "{path, is_dir, link, ignored}"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description must name the data shape (%q):\n%s", want, desc)
 		}

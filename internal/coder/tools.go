@@ -196,8 +196,10 @@ func readOnlyTools() []llm.ToolDef {
 			},
 		},
 		{
-			Name:        toolLS,
-			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree.",
+			Name: toolLS,
+			Description: "List one directory's contents. Useful for getting your bearings in an unfamiliar tree. " +
+				"Entries the project ignores are listed after the rest, marked as ignored, and grep, glob " +
+				"and read skip them.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

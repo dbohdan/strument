@@ -54,7 +54,8 @@ func TestSecretFilesAreNotRead(t *testing.T) {
 		t.Errorf("grep Secret = %d, want 1", res.Secret)
 	}
 
-	entries, _, err := w.List("")
+	l, err := w.List("")
+	entries := l.Entries
 	if err != nil {
 		t.Fatal(err)
 	}

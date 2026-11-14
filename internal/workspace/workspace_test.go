@@ -146,7 +146,8 @@ func TestListIsOneLevel(t *testing.T) {
 	})
 	w := New(root)
 
-	entries, _, err := w.List("")
+	l, err := w.List("")
+	entries := l.Entries
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,17 +157,26 @@ func TestListIsOneLevel(t *testing.T) {
 		if e.IsDir {
 			suffix = "/"
 		}
+		if e.Ignored {
+			suffix += " (ignored)"
+		}
 		got = append(got, e.Path+suffix)
 	}
-	want := []string{".gitignore", "main.go", "src/"}
+	// The ignored file is listed, marked, after the rest: hidden, it made a
+	// model wonder what the tools were not showing it.
+	want := []string{".gitignore", "main.go", "src/", "app.log (ignored)"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("List(\"\") = %v, want %v", got, want)
 	}
+	if l.Total != 3 || l.Ignored != 1 {
+		t.Errorf("Total, Ignored = %d, %d; want 3, 1", l.Total, l.Ignored)
+	}
 
-	entries, _, err = w.List("src")
+	l, err = w.List("src")
 	if err != nil {
 		t.Fatal(err)
 	}
+	entries = l.Entries
 	if len(entries) != 2 || entries[0].Path != "src/lib.go" {
 		t.Errorf("List(\"src\") = %+v", entries)
 	}
@@ -189,7 +199,8 @@ func TestReadAndListAllowAbsoluteTempPaths(t *testing.T) {
 		t.Errorf("Read(%q) = %+v", file, got)
 	}
 
-	entries, _, err := w.List(temp)
+	l, err := w.List(temp)
+	entries := l.Entries
 	if err != nil {
 		t.Fatalf("List(%q): %v", temp, err)
 	}
@@ -483,7 +494,8 @@ func TestListReportsTheTotalPastTheLimit(t *testing.T) {
 	root := tree(t, files)
 	w := &Workspace{Root: root, Limits: Limits{MaxResults: 3}}
 
-	entries, total, err := w.List("")
+	l, err := w.List("")
+	entries, total := l.Entries, l.Total
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,11 +503,69 @@ func TestListReportsTheTotalPastTheLimit(t *testing.T) {
 	for _, e := range entries {
 		got = append(got, e.Path)
 	}
-	if want := []string{".gitignore", "a.txt", "b.txt"}; !slices.Equal(got, want) {
-		t.Errorf("List = %v, want the first %v in name order", got, want)
+	// The limit is on the entries the rules leave; the ignored one follows,
+	// under its own, smaller cap.
+	if want := []string{".gitignore", "a.txt", "b.txt", "skip.log"}; !slices.Equal(got, want) {
+		t.Errorf("List = %v, want the first %v in name order, then the ignored entry", got, want)
 	}
 	// Seven visible: .gitignore and six .txt files; skip.log is ignored.
 	if total != 7 {
 		t.Errorf("total = %d, want 7, counting past the limit and not the ignored file", total)
+	}
+}
+
+// An ignored directory listed by name says so, and lists what it holds,
+// marked. It used to answer "is empty", since the rules cover every entry in
+// it, while the root's listing left it out: MiMo, asked to delete a
+// gitignored build/, spent a session reconciling the two.
+func TestListNamesAnIgnoredDirectory(t *testing.T) {
+	root := tree(t, map[string]string{
+		".gitignore":    "build/\n",
+		"main.go":       "package main\n",
+		"build/out.bin": "x",
+	})
+	w := New(root)
+	l, err := w.List("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := l.Entries[len(l.Entries)-1]
+	if last.Path != "build" || !last.IsDir || !last.Ignored {
+		t.Errorf("the root's listing should end with build/, marked ignored: %+v", l.Entries)
+	}
+	l, err = w.List("build")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !l.DirIgnored || len(l.Entries) != 1 || !l.Entries[0].Ignored || l.Entries[0].Path != "build/out.bin" {
+		t.Errorf("List(\"build\") = %+v, want build/out.bin marked, and the directory ignored", l)
+	}
+}
+
+// glob names the ignored files it matched and the ignored directories its
+// pattern reaches into, without descending into them.
+func TestGlobNamesWhatItIgnored(t *testing.T) {
+	root := tree(t, map[string]string{
+		".gitignore":          "*.log\nbuild/\n",
+		"main.go":             "package main\n",
+		"run.log":             "",
+		"build/deep/x.log":    "",
+		"docs/notes.md":       "",
+		"vendor_ok/keep.log2": "",
+	})
+	w := New(root)
+	got, trunc, err := w.Glob("**/*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("glob returned ignored files: %v", got)
+	}
+	if !slices.Equal(trunc.IgnoredMatches, []string{"run.log"}) || !slices.Equal(trunc.IgnoredDirs, []string{"build"}) {
+		t.Errorf("ignored matches %v, dirs %v; want [run.log] and [build]", trunc.IgnoredMatches, trunc.IgnoredDirs)
+	}
+	// A pattern that cannot reach into build/ does not name it.
+	if _, trunc, _ := w.Glob("docs/*.md"); len(trunc.IgnoredDirs) != 0 {
+		t.Errorf("docs/*.md named %v", trunc.IgnoredDirs)
 	}
 }

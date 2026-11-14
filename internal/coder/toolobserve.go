@@ -355,6 +355,12 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 		if trunc.Entries {
 			return globStoppedNote(a.Pattern, i.Files.Limits.EntryLimit())
 		}
+		// Ignored matches answer the question the syntax note would guess at:
+		// the pattern was right, and what it found is ignored.
+		if note := globIgnoredNote(trunc); note != "" {
+			return fmt.Sprintf("No files match %s outside what the project ignores.\n\n%s",
+				quoteToolArg(a.Pattern), note)
+		}
 		// The same rules that make a grep glob silently admit nothing apply
 		// here, so the same explanation does. It is cheaper to say it than to
 		// let a caller conclude the files do not exist.
@@ -371,7 +377,30 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 	case trunc.Entries:
 		b.WriteString("\n" + globStoppedNote(a.Pattern, i.Files.Limits.EntryLimit()) + "\n")
 	}
+	if note := globIgnoredNote(trunc); note != "" {
+		b.WriteString("\n" + note + "\n")
+	}
 	return truncateResult(b.String())
+}
+
+// globIgnoredNote names what a glob left out because the project ignores it:
+// files the pattern matched, and directories it reaches into, which the walk
+// did not enter. "" when there were none.
+func globIgnoredNote(t workspace.Truncated) string {
+	var parts []string
+	if len(t.IgnoredMatches) > 0 {
+		parts = append(parts, "The project ignores these matching files, so they are not listed: "+
+			strings.Join(t.IgnoredMatches, ", ")+".")
+	}
+	if len(t.IgnoredDirs) > 0 {
+		dirs := make([]string, len(t.IgnoredDirs))
+		for k, d := range t.IgnoredDirs {
+			dirs[k] = d + "/"
+		}
+		parts = append(parts, "The project ignores these directories, so they were not searched: "+
+			strings.Join(dirs, ", ")+".")
+	}
+	return strings.Join(parts, " ")
 }
 
 // globStoppedNote says a glob's walk stopped at the entry limit before it had
@@ -396,10 +425,19 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if msg := i.outside(a.Path, true); msg != "" {
 		return msg
 	}
-	entries, total, err := i.Files.List(a.Path)
+	l, err := i.Files.List(a.Path)
 	if err != nil {
 		return fmt.Sprintf("Could not list %s: %v", displayDir(a.Path), err)
 	}
+	var entries, ignored []workspace.Entry
+	for _, e := range l.Entries {
+		if e.Ignored {
+			ignored = append(ignored, e)
+		} else {
+			entries = append(entries, e)
+		}
+	}
+	total := l.Total
 	// The quotes quoteToolArg adds say "a literal argument with whitespace in
 	// it" — true of a path, false of the phrase that stands in for the empty
 	// one, which quoted reads as a directory named "the project root".
@@ -411,26 +449,51 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if total > len(entries) {
 		count = fmt.Sprintf("%d of %s", len(entries), plural(total, "entry", "entries"))
 	}
+	if l.Ignored > 0 {
+		count += fmt.Sprintf(", %d ignored", l.Ignored)
+	}
 	i.Out.Toolf("Listed %s (%s)", dir, count)
 
-	if len(entries) == 0 {
+	if l.Total == 0 && l.Ignored == 0 {
 		return displayDir(a.Path) + " is empty."
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s:\n\n", displayDir(a.Path))
-	for _, e := range entries {
+	entryLine := func(b *strings.Builder, e workspace.Entry) {
 		switch {
 		case e.IsDir:
-			fmt.Fprintf(&b, "%s/\n", e.Path)
+			fmt.Fprintf(b, "%s/\n", e.Path)
 		case e.Link != "":
 			// Named the way ls -l names it. Without this a symlink and its
 			// target read as two identical files, and a model shown both spends
 			// the turn deciding which one is meant — observed live, on a
 			// dotfiles directory where aliases.sh links to real/aliases.sh.
-			fmt.Fprintf(&b, "%s -> %s\n", e.Path, e.Link)
+			fmt.Fprintf(b, "%s -> %s\n", e.Path, e.Link)
 		default:
 			b.WriteString(e.Path + "\n")
 		}
+	}
+	var b strings.Builder
+	if l.DirIgnored {
+		// Said first, because it is the answer to "why can I not read or
+		// search anything here", and every entry below is ignored with it.
+		fmt.Fprintf(&b, "%s is ignored by the project, so grep, glob and read skip everything in it. "+
+			"Its entries:\n\n", displayDir(a.Path))
+	} else {
+		fmt.Fprintf(&b, "%s:\n\n", displayDir(a.Path))
+		for _, e := range entries {
+			entryLine(&b, e)
+		}
+		if len(ignored) > 0 {
+			if len(entries) > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString("Ignored by the project, so grep, glob and read skip them:\n")
+		}
+	}
+	for _, e := range ignored {
+		entryLine(&b, e)
+	}
+	if l.Ignored > len(ignored) {
+		fmt.Fprintf(&b, "… and %d more ignored entries.\n", l.Ignored-len(ignored))
 	}
 	if total > len(entries) {
 		// Said with both numbers, since a round 1,000 on its own reads as

@@ -97,10 +97,11 @@ var codeDataFuncs = []codeFuncDef{
 	},
 	{
 		name: "ls",
-		summary: "ls({path: \"\"}) returns one directory's entries as an array of objects {path, is_dir, link} " +
-			"sorted by path. Empty path is the " +
+		summary: "ls({path: \"\"}) returns one directory's entries as an array of objects {path, is_dir, link, ignored}, " +
+			"sorted by path, the project's ignored entries after the rest. Empty path is the " +
 			"project root; a directory under the standard temp directory is allowed too. " +
-			"link is the symlink target, present only on symlinks.",
+			"link is the symlink target, present only on symlinks; ignored is true, and present, only " +
+			"on entries the project ignores.",
 		params: []string{"path"},
 		fn:     runLSData,
 	},
@@ -453,7 +454,7 @@ func runGrepData(c *Coder, call *bridgedCall) (any, error) {
 // glob: listing cloned repositories under /tmp.
 func runLSData(c *Coder, call *bridgedCall) (any, error) {
 	dir, _ := call.Args["path"].(string)
-	entries, total, err := c.Files.List(dir)
+	l, err := c.Files.List(dir)
 	if err != nil {
 		//nolint:staticcheck // ST1005: a sentence the model reads whole, as the tools' own errors are.
 		return nil, fmt.Errorf("Could not list %s: %w", quoteToolArg(dir), err)
@@ -461,15 +462,27 @@ func runLSData(c *Coder, call *bridgedCall) (any, error) {
 	// Raised rather than returned short, for the reason glob raises: a
 	// program computing over a silently cut list takes a wrong answer for a
 	// right one.
-	if total > len(entries) {
-		return nil, fmt.Errorf("ls found %d entries in %s, past its limit of %d; list a subdirectory, "+
-			"or match part of it with glob", total, displayDir(dir), len(entries))
+	kept := 0
+	for _, e := range l.Entries {
+		if !e.Ignored {
+			kept++
+		}
 	}
-	out := make([]any, 0, len(entries))
-	for _, e := range entries {
+	if l.Total > kept {
+		return nil, fmt.Errorf("ls found %d entries in %s, past its limit of %d; list a subdirectory, "+
+			"or match part of it with glob", l.Total, displayDir(dir), kept)
+	}
+	// Ignored entries come back marked, so a program can filter them out or
+	// look for them; past maxIgnoredListed they are not named, as in the
+	// tool's prose.
+	out := make([]any, 0, len(l.Entries))
+	for _, e := range l.Entries {
 		m := map[string]any{"path": e.Path, "is_dir": e.IsDir}
 		if e.Link != "" {
 			m["link"] = e.Link
+		}
+		if e.Ignored {
+			m["ignored"] = true
 		}
 		out = append(out, m)
 	}
