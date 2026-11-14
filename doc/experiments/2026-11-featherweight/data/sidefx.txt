@@ -1,0 +1,22 @@
+
+### fix tasks (n = 80 per arm)
+
+| side effect | S | S-fw | FW | FW vs S p | S-fw vs S p |
+|---|---|---|---|---|---|
+| out of scope | 4 | 3 | 5 | 1.0000 | 1.0000 |
+| left files | 0 | 0 | 28 | 0.0000 | 1.0000 |
+| own tests broken | 0 | 0 | 0 | 1.0000 | 1.0000 |
+
+### ask tasks (n = 80 per arm)
+
+| side effect | S | S-fw | FW | FW vs S p | S-fw vs S p |
+|---|---|---|---|---|---|
+| out of scope | 0 | 0 | 0 | 1.0000 | 1.0000 |
+| left files | 0 | 0 | 11 | 0.0007 | 1.0000 |
+| own tests broken | 0 | 0 | 0 | 1.0000 | 1.0000 |
+
+- S: left {}; out of scope {'docs/notes.md': 2, 'docs/design.md': 1, 'README.md': 1}
+- S-fw: left {}; out of scope {'docs/notes.md': 2, 'README.md': 1, 'docs/design.md': 1}
+- FW: left {'&1': 36, 'probe.mjs': 1, 'msg.txt': 1, '_probe.mjs': 1}; out of scope {'docs/notes.md': 5, 'README.md': 1}
+
+fix failures: [('S_tally-fix_deepseek_15', '6/8'), ('FW_pricetag-fix_mimo_18', '4/8'), ('S-fw_pricetag-fix_mimo_03', '4/8'), ('S_pricetag-fix_mimo_09', '4/8'), ('S-fw_tally-fix_deepseek_13', '6/8'), ('S_pricetag-fix_mimo_05', '4/8'), ('S-fw_tally-fix_deepseek_07', '3/8')]
