@@ -55,21 +55,17 @@ func TestSystemPromptShape(t *testing.T) {
 	}
 }
 
-// Nothing commits the model's work but the commit tool, and the prompt has to
-// say so: a sentence promising that a one-change request "needs no call at
-// all" outlived the turn-end commit it described, and MiMo left a finished fix
-// uncommitted.
-func TestSystemPromptAsksForCommits(t *testing.T) {
-	for _, want := range []string{
-		"when a change is done, commit it with the commit tool",
-		"committed separately first, so your commit holds only your work",
-	} {
-		if !strings.Contains(System, want) {
-			t.Errorf("System should say %q", want)
-		}
+// The prompt says what commit does and not when to use it: whether a model
+// commits unasked is left to watch. Pinned so that an instruction does not
+// creep back in through a tidy-up.
+func TestSystemPromptDoesNotSteerCommits(t *testing.T) {
+	if !strings.Contains(System, commitBullet) {
+		t.Error("System lost the commit bullet")
 	}
-	if strings.Contains(System, "needs no call at all") {
-		t.Error("System still says a one-change request needs no commit call")
+	for _, steer := range []string{"commit it with", "call commit", "commit the fix", "needs no call"} {
+		if strings.Contains(System, steer) {
+			t.Errorf("System steers commits: %q", steer)
+		}
 	}
 }
 
