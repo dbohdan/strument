@@ -56,7 +56,7 @@ func crashRecord(t *testing.T, c *Coder, turns ...fixture.Turn) Record {
 // The crash contract: what the turn had produced reaches the record, marked as
 // the fragment it is, and the panic is re-raised.
 func TestACrashedTurnIsRecordedWithItsPartialAnswer(t *testing.T) {
-	r := crashRecord(t, askCoder(t, t.TempDir()))
+	r := crashRecord(t, testCoder(t))
 
 	if r.Outcome != OutcomeCrashed {
 		t.Errorf("outcome = %q, want %q", r.Outcome, OutcomeCrashed)
@@ -90,7 +90,7 @@ func TestANormalTurnIsNotMarkedCrashed(t *testing.T) {
 // settled state — the files it changed and the lines it printed — rather than
 // whatever was half-assigned when the panic fired.
 func TestACrashedTurnRecordsTheWorkItHadDone(t *testing.T) {
-	c := askCoder(t, t.TempDir())
+	c := testCoder(t)
 
 	// One step's worth of work, then the crash. The tool line it prints is
 	// recorded by the tee that initBeforeMessage resets, so a line printed

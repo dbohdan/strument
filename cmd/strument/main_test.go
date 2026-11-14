@@ -341,7 +341,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	newCoder := func() *coder.Coder {
-		return coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+		return coder.New(root, &config.Model{Slug: "m"})
 	}
 
 	// First session: nothing recorded, so it is offered.
@@ -385,7 +385,7 @@ func TestAgentsFileIsOfferedOnce(t *testing.T) {
 func TestAgentsFileIsNoticedNotCreated(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
-	c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+	c := coder.New(root, &config.Model{Slug: "m"})
 
 	if _, offered, _ := restoreSession(c, root, history.DefaultSession, history.Resume{}); len(offered) > 0 {
 		t.Error("nothing to offer in a project with no AGENTS.md")
@@ -995,7 +995,7 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 		t.Fatal(err)
 	}
 	newCoder := func() *coder.Coder {
-		c := coder.New(root, &config.Model{Slug: "m", EditFormat: "tool"})
+		c := coder.New(root, &config.Model{Slug: "m"})
 		c.Repo = repo
 		return c
 	}
@@ -1024,25 +1024,24 @@ func TestAgentsLocalIsPinnedOnceAndExcluded(t *testing.T) {
 // slash that begins a path is sent as written.
 func TestScriptMessage(t *testing.T) {
 	for _, tc := range []struct {
-		in, msg, format, err string
+		in, msg, err string
 	}{
-		{"fix the bug", "fix the bug", "", ""},
-		{"/ask what does this do?", "what does this do?", "ask", ""},
-		{"/code add a test", "add a test", "", ""},
-		{"/etc/hosts has a typo, fix it", "/etc/hosts has a typo, fix it", "", ""},
-		{"/tmp/out.log shows a panic", "/tmp/out.log shows a panic", "", ""},
-		{"/add main.go", "", "", "does not run /add"},
-		{"/ask", "", "", "needs a message"},
+		{"fix the bug", "fix the bug", ""},
+		{"/etc/hosts has a typo, fix it", "/etc/hosts has a typo, fix it", ""},
+		{"/tmp/out.log shows a panic", "/tmp/out.log shows a panic", ""},
+		{"/add main.go", "", "does not run /add"},
+		{"/ask what does this do?", "", "have been removed"},
+		{"/code add a test", "", "have been removed"},
 	} {
-		msg, format, err := scriptMessage(tc.in)
+		msg, err := scriptMessage(tc.in)
 		if tc.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tc.err) {
 				t.Errorf("%q: err = %v, want one containing %q", tc.in, err, tc.err)
 			}
 			continue
 		}
-		if err != nil || msg != tc.msg || format != tc.format {
-			t.Errorf("%q: got (%q, %q, %v), want (%q, %q)", tc.in, msg, format, err, tc.msg, tc.format)
+		if err != nil || msg != tc.msg {
+			t.Errorf("%q: got (%q, %v), want %q", tc.in, msg, err, tc.msg)
 		}
 	}
 }

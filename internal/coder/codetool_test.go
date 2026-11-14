@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/repomap"
 )
 
@@ -122,19 +121,6 @@ func TestCodeSyntaxErrorIsUseful(t *testing.T) {
 	got := run(c, "const a = 1;\nconst = 2;")
 	if !strings.Contains(got, "SyntaxError") {
 		t.Errorf("a syntax error must name itself, got: %q", got)
-	}
-}
-
-// TestCodeToolOfferedInAskMode: computing mutates nothing, so a discussion
-// turn gets the calculator too.
-func TestCodeToolOfferedInAskMode(t *testing.T) {
-	c, _ := observeEnv(t, nil)
-	c.OfferCode = true
-	for _, format := range []string{"ask", "tool"} {
-		c.editFormat = format
-		if !slices.ContainsFunc(c.toolDefs(), func(d llm.ToolDef) bool { return d.Name == toolRunCode }) {
-			t.Errorf("the run_code tool must be offered in %s mode", format)
-		}
 	}
 }
 
@@ -753,19 +739,14 @@ func TestRunCodeNamesBashOnlyWhenOffered(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		shell    bool
-		ask      bool
 		wantBash bool
 	}{
-		{"code mode with shell", true, false, true},
-		{"shell = False", false, false, false},
-		{"ask mode", true, true, false},
+		{"shell on", true, true},
+		{"shell = False", false, false},
 	} {
 		c := testCoder(t)
 		c.OfferCode = true
 		c.SuggestShellCommands = tc.shell
-		if tc.ask {
-			c.SetEditFormat("ask")
-		}
 		var desc string
 		offered := false
 		for _, d := range c.toolDefs() {

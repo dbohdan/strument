@@ -166,16 +166,6 @@ const ObservationBullet = "- read, grep, glob, and ls look at the project. They 
 	"not listed or searched. Paths are relative to the project root; an absolute path that lies " +
 	"inside the project is also accepted.\n"
 
-// AskObservationBullet is the ask-mode variant of the same paragraph. Its two
-// divergences from ObservationBullet are the original text's: "answering from
-// memory" because an analysis mode's characteristic failure is the confident
-// answer from nothing, and no mention of editing.
-const AskObservationBullet = "read, grep, glob, and ls look at the project. " +
-	"They change nothing and need no permission, so use them freely rather than " +
-	"answering from memory or guessing at how the project works. Files the project " +
-	"ignores are not listed or searched. Paths are relative to the project root; an " +
-	"absolute path that lies inside the project is also accepted.\n\n"
-
 // {code_tools} renders the code bullet above when the run_code tool is
 // offered, and as "" when it is not — the empty case is the feature-reverted
 // baseline, where prose naming `run_code` would promise a tool the schema does
@@ -265,65 +255,10 @@ var Tool = Set{
 	// hunting the project for the "real" file it thought the denial implied.
 	FilesNoFullFiles:       toolNoPinsHead + runCodeClause + toolNoPinsTail,
 	FilesNoFullFilesNoCode: toolNoPinsHead + toolNoPinsTail,
-	// The empty-string sentinel disables the repo-map branch in assembly, like
-	// Ask. Its text was written for a harness where the model could not look:
+	// The empty-string sentinel disables the repo-map branch in assembly. Its text was written for a harness where the model could not look:
 	// it told the model to name the files it needed and stop so the user could
 	// add them, which is precisely the behavior the tool set replaces. Left in
 	// place it made the model explore and then refuse to edit.
-	FilesNoFullFilesWithRepoMap:      "",
-	FilesNoFullFilesWithRepoMapReply: "",
-	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
-}
-
-// Ask is the discussion mode. What it withholds is enforced by the tool set,
-// not by this prompt: toolDefs drops edit, write, bash, and check, so there is
-// nothing to parse back out and nothing to discard.
-//
-// What it *keeps* has to be said here, though, and for a while was not. Ask
-// offers read, grep, glob, ls, and symbol, and this prompt named none of them
-// while opening with "you cannot apply edits from it" — a sentence a model can
-// read as "you cannot act". The only mention of the observation tools sat in
-// FilesNoFullFiles, which is used solely when nothing is pinned, so /ask after
-// /add described a mode with no way to look at anything. Nothing said results
-// come back either, so a model had no picture of the loop and could repeat a
-// call it had already made. Observed: MiMo looping.
-//
-// So the tool paragraph and the loop sentence are here in the register the tool
-// prompt uses, and the no-editing sentence explains the mechanism (this mode has
-// no editing tools) rather than issuing a prohibition that reads wider than it
-// is. symbol stays unnamed on purpose, exactly as in the tool prompt: it is
-// offered only where grammars are, and prose promising a conditional tool is the
-// bug this comment is about, in mirror image. Its schema description carries it,
-// and models reach for it from that alone.
-//
-// FilesNoFullFilesWithRepoMap is "" — a falsy sentinel that disables that
-// assembly branch, not an empty message.
-var Ask = Set{
-	MainSystem: "You are an expert code analyst.\n" +
-		"Answer questions about the user's codebase.\n" +
-		"Always reply to the user in {language}.\n\n" +
-		"Work through the provided tools. {observation_tools}\n\n" +
-		"Every call's result comes back to you, so you can keep looking within the same " +
-		"turn: grep for a name, read the file it is in, follow what it calls. Finish by " +
-		"answering the question, without calling a tool — that is what ends the turn and " +
-		"hands back to the user.\n\n" +
-		HarnessNoteLine +
-		"This mode has no editing tools. If the user wants a change, describe it rather than " +
-		"making it: say what you would change and where, covering everything the change needs " +
-		"rather than trailing off, and the user can switch to code mode to have it done. " +
-		"Don't write out the finished code or a full diff — a short snippet or pseudo-code is " +
-		"welcome where it makes the plan clearer.\n",
-	SystemReminder: "{final_reminders}",
-	// No flat denial here, for the reason the Tool set's comment records: this
-	// string is used whenever nothing is pinned *for editing*, which includes a
-	// session whose only pin is a read-only reference whose contents are in the
-	// very next message. Code mode narrows the denial with "for editing"; ask
-	// mode has no editing to narrow it with, so it drops the denial instead.
-	// "No files are pinned to this session" shipped for a few hours this
-	// morning and two reviewers independently identified it as
-	// 2026-08-readonly-honest.md's twelve-step file hunt, reintroduced.
-	FilesNoFullFiles:                 askNoPinsHead + runCodeClause + askNoPinsTail,
-	FilesNoFullFilesNoCode:           askNoPinsHead + askNoPinsTail,
 	FilesNoFullFilesWithRepoMap:      "",
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
@@ -349,13 +284,6 @@ const (
 		"the project. If the user asks how something here works, read the code " +
 		"that implements it: what you remember about a project is not evidence " +
 		"about this one."
-)
-
-// The ask set's, likewise.
-const (
-	askNoPinsHead = "Use read, grep, glob, and ls to look at the project, and answer from what " +
-		"you find there rather than from memory"
-	askNoPinsTail = "."
 )
 
 // CommitSystem is the commit-message system prompt, with the

@@ -245,8 +245,6 @@ type fileGlobals struct {
 	promptSystemPrefixVal string
 	hasPromptCode         bool
 	promptCodeVal         string
-	hasPromptAsk          bool
-	promptAskVal          string
 	hasPromptCommit       bool
 	promptCommitVal       string
 	hasPromptReadOnly     bool
@@ -582,9 +580,6 @@ func Load(opts Options) (*Config, error) {
 	if user.hasPromptCode {
 		cfg.PromptCode = user.promptCodeVal
 	}
-	if user.hasPromptAsk {
-		cfg.PromptAsk = user.promptAskVal
-	}
 	if user.hasPromptCommit {
 		cfg.PromptCommit = user.promptCommitVal
 	}
@@ -735,9 +730,6 @@ func Load(opts Options) (*Config, error) {
 		}
 		if project.hasPromptCode {
 			cfg.PromptCode = project.promptCodeVal
-		}
-		if project.hasPromptAsk {
-			cfg.PromptAsk = project.promptAskVal
 		}
 		if project.hasPromptCommit {
 			cfg.PromptCommit = project.promptCommitVal
@@ -893,10 +885,6 @@ func predeclaredGlobals(env envResolver, root string) starlark.StringDict {
 // fills would be a silent lie.
 var promptSlots = map[string]map[string]bool{
 	"prompt_code": {
-		"platform": true, "language": true, "final_reminders": true,
-		"code_tools": true, "observation_tools": true,
-	},
-	"prompt_ask": {
 		"platform": true, "language": true, "final_reminders": true,
 		"code_tools": true, "observation_tools": true,
 	},
@@ -1408,7 +1396,7 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.envSetVal = vals
 	}
 
-	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_ask", "prompt_commit", "prompt_read_only"} {
+	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_commit", "prompt_read_only"} {
 		v, ok := globals[name]
 		if !ok {
 			continue
@@ -1424,9 +1412,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		case "prompt_code":
 			out.hasPromptCode = true
 			out.promptCodeVal = val
-		case "prompt_ask":
-			out.hasPromptAsk = true
-			out.promptAskVal = val
 		case "prompt_commit":
 			out.hasPromptCommit = true
 			out.promptCommitVal = val

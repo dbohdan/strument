@@ -38,26 +38,6 @@ const (
 	AdapterOpenCodeResponses = "opencode-responses"
 )
 
-// Edit formats recognized by model(). Only one remains, and the parameter is
-// kept for the configs that name it: "diff", "diff-fenced", and "whole" were
-// for models that could not call functions reliably, and such a model cannot
-// drive this harness at all now — finding and reading files are tool calls too.
-//
-// "ask" is deliberately absent: it is a runtime-only mode (the /ask command),
-// not a configurable one — a model whose default mode was "ask" could never
-// edit anything.
-var knownEditFormats = map[string]bool{
-	"tool": true,
-}
-
-// retiredEditFormats get a message that says what happened, rather than a bare
-// "unknown": a config carrying one of these worked until this change.
-var retiredEditFormats = map[string]bool{
-	"diff":        true,
-	"diff-fenced": true,
-	"whole":       true,
-}
-
 // reservedParamKeys are transport keys Strument owns; extra_params cannot
 // override them. The value, when non-empty, is the setting that does own the
 // key, so the refusal can say what to write instead of only what not to.
@@ -99,7 +79,6 @@ type Model struct {
 	Provider     Provider
 	Slug         string
 	DisplayName  string // human-readable label; "" => derived from Slug
-	EditFormat   string // "tool" | "diff" | "diff-fenced" | "whole"
 	SideModel    *Model // non-nil after resolution (self if unset)
 	Reasoning    string // request-side effort: "low"/"medium"/"high"; "off" disables; "" or "default" => provider default
 	ReasoningTag string // response-side inline tag to strip; "" => none
@@ -367,8 +346,8 @@ type Config struct {
 	//   - prompt_system_prefix is a Tier 0 literal injector: prepended verbatim
 	//     to the active system prompt, with no placeholder substitution. It is
 	//     how a user adds a standing directive without rewriting anything.
-	//   - prompt_code / prompt_ask are Tier 1 whole-string replacements of the
-	//     active mode's MainSystem. They share the built-ins' closed
+	//   - prompt_code is a Tier 1 whole-string replacement of the main system
+	//     prompt. It shares the built-ins' closed
 	//     placeholder set ({platform}, {language}, {final_reminders},
 	//     {code_tools}, {observation_tools}) and are validated at load.
 	//   - prompt_commit / prompt_read_only are the same Tier 1 replacement for
@@ -381,7 +360,6 @@ type Config struct {
 	// relying on LANG-style environment variables.
 	PromptSystemPrefix string
 	PromptCode         string
-	PromptAsk          string
 	PromptCommit       string
 	PromptReadOnly     string
 	ChatLanguage       string

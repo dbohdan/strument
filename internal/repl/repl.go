@@ -190,10 +190,6 @@ type REPL struct {
 	mu        sync.Mutex
 	lastCtrlC time.Time
 
-	// One-shot /ask and /code restore the previous format after one turn.
-	oneShotPending bool
-	oneShotRestore string
-
 	// envAdded / envDropped are the /env session changes: names added to or
 	// withheld from the config's env_allow for this session only. coder.EnvAllow
 	// always holds the merged result (config ∪ added − dropped), so every
@@ -252,7 +248,7 @@ func New(opts Options) (*REPL, error) {
 		Stdout:          opts.Stdout,
 		Stderr:          opts.Stderr,
 		// We record input history ourselves (saveHistory) so we can keep
-		// every substantive line — prompts, /ask, /add, /model — but drop
+		// every substantive line — prompts, /add, /model — but drop
 		// the pure session-enders that recalling would never help with.
 		DisableAutoSaveHistory: true,
 	}
@@ -308,11 +304,7 @@ func (r *REPL) Config() *config.Config { return r.opts.Config }
 func (r *REPL) Confirmer() coder.Confirmer { return rlConfirmer{r} }
 
 func (r *REPL) prompt() string {
-	label := "> "
-	if r.coder.EditFormat() == "ask" {
-		label = "ask> "
-	}
-	return r.sgr(r.opts.Theme.UserInput) + label + r.sgr("0")
+	return r.sgr(r.opts.Theme.UserInput) + "> " + r.sgr("0")
 }
 
 // refreshTrailer recomputes the commit trailer for the given model so a
@@ -507,7 +499,7 @@ func (r *REPL) chord() bool {
 }
 
 // historyExcluded is the set of commands not worth recalling: the pure
-// session-enders. Everything else — prompts, /ask, /add, /model, /run —
+// session-enders. Everything else — prompts, /add, /model, /run —
 // is saved so up-arrow can bring it back.
 var historyExcluded = map[string]bool{"/exit": true, "/quit": true}
 
@@ -574,11 +566,6 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		r.runTurn(ctx, line)
-		if r.oneShotPending {
-			r.coder.SetEditFormat(r.oneShotRestore)
-			r.rl.SetPrompt(r.prompt())
-			r.oneShotPending = false
-		}
 		r.showInterruptHint()
 		r.showUndoHint()
 	}

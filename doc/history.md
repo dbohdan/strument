@@ -119,8 +119,8 @@ The **`turn`** record carries:
 - token counts, cost, and throughput in tokens per second;
 - the files the turn changed;
 - the one-line summaries of the work that Strument printed;
-- the mode (`edit_format`) and the tools the model was offered
-  (`offered_tools`);
+- the tools the model was offered (`offered_tools`); sessions from before ask
+  mode was removed also carry the mode (`edit_format`);
 - the prompt and answer as a reader sees them.
 
 `tokens_per_second` is absent when there is no rate to report: nothing

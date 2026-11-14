@@ -53,9 +53,8 @@ func (s *syncBuffer) Reset() {
 
 func testModel() *config.Model {
 	m := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       "test-model",
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     "test-model",
 	}
 	m.SideModel = m
 	return m

@@ -93,9 +93,8 @@ func TestRunConsultBillsTheAdvisorAndRestoresTheSessionModel(t *testing.T) {
 	sessionModel := c.Model
 
 	advisor := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       "advisor-model",
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     "advisor-model",
 	}
 	advisor.SideModel = advisor
 	advisorStub := &consultStub{}

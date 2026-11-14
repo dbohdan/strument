@@ -170,7 +170,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 }
 
 // builtinModel implements
-// model(provider, slug, *, display_name=None, edit_format="tool",
+// model(provider, slug, *, display_name=None,
 //
 //	side_model=None, reasoning=None, reasoning_tag=None, temperature=None,
 //	cache=False, context=None, max_output=None, prefill=False,
@@ -184,7 +184,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var providerV starlark.Value
 	var slug string
 	var displayName string
-	editFormat := "tool"
+	var retiredEditFormat starlark.Value
 	var sideModel starlark.Value
 	var reasoning, reasoningTag string
 	var temperature starlark.Value
@@ -200,7 +200,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"provider", &providerV,
 		"slug", &slug,
 		"display_name?", &displayName,
-		"edit_format?", &editFormat,
+		"edit_format?", &retiredEditFormat,
 		"side_model?", &sideModel,
 		"weak_model?", &retiredWeakModel,
 		"reasoning?", &reasoning,
@@ -226,7 +226,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 
 	// weak_model is still unpacked so a config using it gets this sentence
 	// rather than "unexpected keyword argument", which says nothing about what
-	// to do next. Same reason edit_format still recognizes its retired values.
+	// to do next.
 	if retiredWeakModel != nil && retiredWeakModel != starlark.None {
 		return nil, errors.New(
 			"model: weak_model has been renamed to side_model; rename the argument. " +
@@ -248,25 +248,24 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 				"and drop repo_map from model()")
 	}
 
+	// edit_format likewise. Its last values were "tool", the only way
+	// Strument works, and the runtime-only "ask" mode, which is gone; there is
+	// nothing left for it to choose between.
+	if retiredEditFormat != nil && retiredEditFormat != starlark.None {
+		return nil, errors.New(
+			"model: edit_format has been removed; drop it from model(). Strument edits " +
+				"through tool calls only, and there are no other modes to choose")
+	}
+
 	pv, ok := providerV.(*providerValue)
 	if !ok {
 		return nil, fmt.Errorf("model: provider must be a provider value, got %s", providerV.Type())
-	}
-	if !knownEditFormats[editFormat] {
-		if retiredEditFormats[editFormat] {
-			return nil, fmt.Errorf(
-				"model: edit_format %q has been removed; Strument now edits through tool calls only. "+
-					"Drop the setting (or use \"tool\") — a model that cannot call functions can no longer "+
-					"drive Strument, since reading and searching are tool calls too", editFormat)
-		}
-		return nil, fmt.Errorf("model: unknown edit_format %q (the only value is \"tool\")", editFormat)
 	}
 
 	m := &Model{
 		Provider:     pv.p,
 		Slug:         slug,
 		DisplayName:  displayName,
-		EditFormat:   editFormat,
 		Reasoning:    reasoning,
 		ReasoningTag: reasoningTag,
 		Cache:        cache,

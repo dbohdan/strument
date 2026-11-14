@@ -33,8 +33,7 @@ func TestAboutSaysWhenTheBinaryIsNewerThanTheProcess(t *testing.T) {
 
 func TestAboutReportsTheLiveClockAndTheBuild(t *testing.T) {
 	c := &Coder{
-		editFormat: "ask",
-		Build:      BuildInfo{Version: "1.2.3", Commit: "343abb0", Modified: true, GoVersion: "go1.26.0"},
+		Build: BuildInfo{Version: "1.2.3", Commit: "343abb0", Modified: true, GoVersion: "go1.26.0"},
 	}
 	now := time.Date(2026, 9, 25, 0, 30, 0, 0, time.UTC)
 	got := c.About(now)
@@ -43,7 +42,6 @@ func TestAboutReportsTheLiveClockAndTheBuild(t *testing.T) {
 		"Commit: 343abb0 (built with uncommitted changes)",
 		"Go: go1.26.0",
 		"Now (UTC): 2026-09-25 00:30:00 UTC, Friday",
-		"Mode: ask",
 		"Sandbox: none",
 	} {
 		if !strings.Contains(got, want) {
@@ -51,14 +49,10 @@ func TestAboutReportsTheLiveClockAndTheBuild(t *testing.T) {
 		}
 	}
 
-	// A build without a VCS stamp says so rather than printing nothing, and a
-	// Coder with no session (strument tool about) leaves the mode out.
+	// A build without a VCS stamp says so rather than printing nothing.
 	c = &Coder{Build: BuildInfo{Version: "dev"}}
 	got = c.About(now)
 	if !strings.Contains(got, "Commit: unknown") {
 		t.Errorf("an unstamped build did not say its commit is unknown:\n%s", got)
-	}
-	if strings.Contains(got, "Mode:") {
-		t.Errorf("a Coder with no mode reported one:\n%s", got)
 	}
 }

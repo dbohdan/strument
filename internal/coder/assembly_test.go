@@ -19,9 +19,8 @@ import (
 func testCoder(t *testing.T) *Coder {
 	t.Helper()
 	model := &config.Model{
-		Provider:   config.Provider{Adapter: config.AdapterOpenRouter},
-		Slug:       "test-model",
-		EditFormat: "tool",
+		Provider: config.Provider{Adapter: config.AdapterOpenRouter},
+		Slug:     "test-model",
 	}
 	model.SideModel = model
 	c := New(t.TempDir(), model)
@@ -376,51 +375,6 @@ func TestPinnedFilesNoteClaimsNoIntent(t *testing.T) {
 	}
 }
 
-// Ask mode has no editing tools, so the note must not talk about editing or
-// tell the model to create anything.
-//
-// The whole note was mode-blind: a session that could not change a byte was
-// told these were the files the user wanted changed, and that a missing one
-// should be created "with write" — a tool not in its schema. An instruction
-// the model cannot follow is worse than none, because it has to work out that
-// it cannot follow it.
-func TestPinnedFilesNoteSuitsAskMode(t *testing.T) {
-	c := testCoder(t)
-	c.editFormat = "ask"
-	if err := os.WriteFile(filepath.Join(c.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c.AddFile("a.go")
-	c.AddFile("gone.go") // never created
-
-	got := c.pinnedFilesNote()
-	for _, unwanted := range []string{"with write", "changing it", "before editing"} {
-		if strings.Contains(got, unwanted) {
-			t.Errorf("ask mode note mentions editing (%q):\n%s", unwanted, got)
-		}
-	}
-	// The note used to be mode-aware here, saying "before changing it" in code
-	// mode and "before answering questions about it" in ask. It no longer needs
-	// to be: "before you work on it" is true in both, and the branch was the
-	// only thing making one wording wrong in the other mode. What must survive
-	// is the instruction itself — 600 samples took blind edits from 383 to zero
-	// on the strength of it (2026-08-add-instruct.md).
-	if !strings.Contains(got, "read a file before you work on it") {
-		t.Errorf("ask mode note no longer tells the model to read:\n%s", got)
-	}
-
-	// ...and code mode still does say it, or the branch is just deleting text.
-	code := testCoder(t)
-	if err := os.WriteFile(filepath.Join(code.Root, "a.go"), []byte("package a\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code.AddFile("a.go")
-	code.AddFile("gone.go")
-	if got := code.pinnedFilesNote(); !strings.Contains(got, "Create it with write") {
-		t.Errorf("code mode lost its create instruction:\n%s", got)
-	}
-}
-
 // The {code_tools} slot tracks the schema, in both directions. The code-mode
 // trial found 0/36 uptake with the tool offered in the schema but absent from
 // the prompt's tool list, which models read as closed-world
@@ -443,10 +397,8 @@ func TestCodeToolsSlotTracksTheSchema(t *testing.T) {
 	}
 }
 
-// prompt_code and prompt_ask replace the active mode's MainSystem; the switch
-// must carry the replacement to the assembled system prompt, and a format
-// switch must not leak one mode's custom prompt into the other.
-func TestPromptCodeAndAskOverrideMainSystem(t *testing.T) {
+// prompt_code replaces MainSystem, in the session's copy only.
+func TestPromptCodeOverridesMainSystem(t *testing.T) {
 	c := testCoder(t)
 	c.PromptCode = "You are the code-format prompt.\n{final_reminders}\n"
 	c.setPrompts()
@@ -456,12 +408,6 @@ func TestPromptCodeAndAskOverrideMainSystem(t *testing.T) {
 	}
 	if strings.Contains(c.fmtSystemPrompt(prompts.Tool.MainSystem), "code-format prompt") {
 		t.Error("the built-in singleton was mutated, not the session copy")
-	}
-
-	// Switch to ask: the code replacement must not follow.
-	c.SetEditFormat("ask")
-	if got := c.fmtSystemPrompt(c.Prompts.MainSystem); strings.Contains(got, "code-format prompt") {
-		t.Errorf("the ask system prompt inherited code-mode's override:\n%s", got)
 	}
 }
 

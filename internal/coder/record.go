@@ -47,10 +47,9 @@ type Record struct {
 	Type string `json:"type"`
 
 	// session
-	Version    int    `json:"version,omitempty"`
-	Model      string `json:"model,omitempty"`
-	Root       string `json:"root,omitempty"`
-	EditFormat string `json:"edit_format,omitempty"`
+	Version int    `json:"version,omitempty"`
+	Model   string `json:"model,omitempty"`
+	Root    string `json:"root,omitempty"`
 
 	// message
 	Role string `json:"role,omitempty"`
@@ -147,11 +146,11 @@ type Record struct {
 	// dropping a payload leaves its description behind, is a different field
 	// for a different job.
 	Tools []string `json:"tools,omitempty"`
-	// OfferedTools names the tools the turn's model was given, and
-	// EditFormat (shared with the session header) the mode they came from.
-	// A session log once showed a model reporting that bash had vanished
-	// mid-session, and nothing in the record could say whether it had — the
-	// header gives only the mode at startup, and the requests are not kept.
+	// OfferedTools names the tools the turn's model was given. A session log
+	// once showed a model reporting that bash had vanished mid-session, and
+	// nothing in the record could say whether it had — the requests are not
+	// kept. (Sessions from before /ask was removed also carry an edit_format
+	// here and in the header; nothing reads it.)
 	OfferedTools []string `json:"offered_tools,omitempty"`
 	// Prompt and Answer are the turn as a reader sees it: the message that
 	// opened it, and the answer with every interrupted send's content in
@@ -485,11 +484,10 @@ func (c *Coder) pinnedRecordPaths() []string {
 // Coder, because only they know the model alias the user actually typed.
 func (c *Coder) RecordSession(modelName string) {
 	c.record(Record{
-		Type:       "session",
-		Version:    RecordVersion,
-		Model:      modelName,
-		Root:       c.Root,
-		EditFormat: c.editFormat,
+		Type:    "session",
+		Version: RecordVersion,
+		Model:   modelName,
+		Root:    c.Root,
 	})
 }
 

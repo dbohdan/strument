@@ -73,7 +73,6 @@ func TestUntrustedSkillIsNotOffered(t *testing.T) {
 // rather than one whose enum is empty.
 func TestSkillToolNotOfferedWithoutUsableSkills(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{Slug: "x"})
-	c.editFormat = "tool"
 	c.Skills = []skill.Skill{testSkill("evil", "Untrusted.", "body", false)}
 
 	for _, def := range c.toolDefs() {
@@ -91,24 +90,6 @@ func TestSkillToolNotOfferedWithoutUsableSkills(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the skill tool was not offered with a usable skill")
-	}
-}
-
-// TestSkillToolOfferedInAskMode: loading instructions mutates nothing, and a
-// discussion turn is where a skill about how to discuss something belongs.
-func TestSkillToolOfferedInAskMode(t *testing.T) {
-	c := New(t.TempDir(), &config.Model{Slug: "x"})
-	c.editFormat = "ask"
-	c.Skills = []skill.Skill{testSkill("good", "Trusted.", "body", true)}
-
-	var found bool
-	for _, def := range c.toolDefs() {
-		if def.Name == toolSkill {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("the skill tool was withheld in ask mode")
 	}
 }
 
@@ -181,7 +162,6 @@ func TestRunSkillDistinguishesUntrustedFromMissing(t *testing.T) {
 // the session can do.
 func TestSkillCountsMatchTheToolSet(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{Slug: "x"})
-	c.editFormat = "tool"
 	c.Skills = []skill.Skill{
 		testSkill("good", "Trusted.", "body", true),
 		testSkill("evil", "Untrusted.", "body", false),

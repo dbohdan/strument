@@ -117,21 +117,9 @@ func (c *Coder) About(now time.Time) string {
 			line("Context window", fmt.Sprintf("%d tokens", c.Model.Context))
 		}
 	}
-	line("Mode", c.modeName())
 	line("Project root", c.Root)
 	line("Sandbox", c.Sandbox.describe())
 	return out.String()
-}
-
-// modeName is the mode as the user switches to it: ask or code.
-func (c *Coder) modeName() string {
-	switch c.editFormat {
-	case "":
-		return ""
-	case "ask":
-		return "ask (discussion; no edits or commands)"
-	}
-	return "code (edit format: " + c.editFormat + ")"
 }
 
 // utcOffset renders a zone offset in seconds as +HH:MM.

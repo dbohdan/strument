@@ -201,8 +201,7 @@ func TestWebfetchLongPageCarriesTheFetchNote(t *testing.T) {
 	}
 }
 
-// The tool is offered only when there is something to fetch with, and it is
-// offered in ask mode, where reading a specification is the point.
+// The tool is offered only when there is something to fetch with.
 func TestWebfetchToolOffering(t *testing.T) {
 	c := testCoder(t)
 	if hasTool(c.toolDefs(), toolWebfetch) {
@@ -211,10 +210,6 @@ func TestWebfetchToolOffering(t *testing.T) {
 	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) { return "", nil }
 	if !hasTool(c.toolDefs(), toolWebfetch) {
 		t.Error("webfetch not offered with a scraper configured")
-	}
-	c.editFormat = "ask"
-	if !hasTool(c.toolDefs(), toolWebfetch) {
-		t.Error("webfetch not offered in ask mode, where it mutates nothing")
 	}
 }
 

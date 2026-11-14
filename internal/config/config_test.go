@@ -142,9 +142,6 @@ func TestLoadUserConfig(t *testing.T) {
 	if flash.Provider.Adapter != "openrouter" || flash.Provider.APIKey != "test-key-not-real" {
 		t.Errorf("provider = %+v", flash.Provider)
 	}
-	if flash.EditFormat != "tool" {
-		t.Errorf("defaults wrong: %+v", flash)
-	}
 	// side_model resolution: string ref and None->self.
 	pro := cfg.Models["pro"]
 	if pro.SideModel != flash {
@@ -310,16 +307,19 @@ func TestSecretFiles(t *testing.T) {
 	}
 }
 
-func TestAskEditFormatRejectedInConfig(t *testing.T) {
-	// "ask" is a runtime-only format; a config that sets it must fail.
-	src := `
+// edit_format is gone, and a config that still names it is told so by name
+// rather than having it ignored. "tool" was the default and the only value.
+func TestEditFormatRejectedInConfig(t *testing.T) {
+	for _, v := range []string{"tool", "ask"} {
+		src := `
 p = provider("openrouter", api_key = env("OPENROUTER_API_KEY"))
-models = {"m": model(p, "slug", edit_format = "ask")}
+models = {"m": model(p, "slug", edit_format = "` + v + `")}
 default = "m"
 `
-	_, err := Load(harness(t, src, "", testEnv))
-	if err == nil || !strings.Contains(err.Error(), "edit_format") {
-		t.Fatalf("edit_format=ask should be rejected, got err=%v", err)
+		_, err := Load(harness(t, src, "", testEnv))
+		if err == nil || !strings.Contains(err.Error(), "edit_format has been removed") {
+			t.Errorf("edit_format=%s should be rejected by name, got err=%v", v, err)
+		}
 	}
 }
 
@@ -1071,7 +1071,6 @@ func TestPromptSettingsParse(t *testing.T) {
 	src := userConfig + `
 prompt_system_prefix = "Be terse.\n\n"
 prompt_code = "You are a senior engineer.\n{platform}\n{language}\n"
-prompt_ask = "You analyse.\n{final_reminders}\n"
 prompt_commit = "Write a conventional commit for the diff.{language_instruction}"
 prompt_read_only = "Reference files follow."
 chat_language = "fr"
@@ -1085,9 +1084,6 @@ chat_language = "fr"
 	}
 	if !strings.Contains(cfg.PromptCode, "{platform}") || !strings.Contains(cfg.PromptCode, "{language}") {
 		t.Errorf("PromptCode = %q", cfg.PromptCode)
-	}
-	if !strings.Contains(cfg.PromptAsk, "{final_reminders}") {
-		t.Errorf("PromptAsk = %q", cfg.PromptAsk)
 	}
 	if !strings.Contains(cfg.PromptCommit, "{language_instruction}") {
 		t.Errorf("PromptCommit = %q", cfg.PromptCommit)

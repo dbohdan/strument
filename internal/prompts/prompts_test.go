@@ -72,74 +72,6 @@ func TestToolPromptShape(t *testing.T) {
 	}
 }
 
-func TestAskPromptShape(t *testing.T) {
-	// system_reminder is not empty, so the reminder gate still runs. It used to
-	// say "overeager rides in through {final_reminders}", which was never true:
-	// finalReminders holds the language line and nothing else, and Ask's
-	// OvereagerPrompt field was read by no code in the tree. A reviewer grepped
-	// for the splice, found none, and reported that the whole block — "Do not
-	// return fully detailed code or full diffs" — had never reached a model.
-	// The text lives in MainSystem now and the fields are gone.
-	if Ask.SystemReminder != "{final_reminders}" {
-		t.Errorf("ask system_reminder = %q, want {final_reminders}", Ask.SystemReminder)
-	}
-	// The falsy sentinel: empty string disables the repo-map branch (it is
-	// NOT "emit an empty pair"). assemble.go must treat "" as "skip".
-	if Ask.FilesNoFullFilesWithRepoMap != "" {
-		t.Errorf("ask files_no_full_files_with_repo_map must be the empty sentinel, got %q", Ask.FilesNoFullFilesWithRepoMap)
-	}
-	// Ask must describe the tools it actually has. It offers read, grep, glob,
-	// ls, and symbol; it once named none of them and opened by saying what it
-	// could not do, which left a model with no picture of the mode and no reason
-	// to look at anything. These are the sentences whose absence caused that, so
-	// they are pinned rather than left to a future tidy-up.
-	for _, want := range []string{
-		"result comes back to you", // the loop closes here too
-		"ends the turn",
-	} {
-		if !strings.Contains(Ask.MainSystem, want) {
-			t.Errorf("ask main_system should convey %q:\n%s", want, Ask.MainSystem)
-		}
-	}
-	// The observation paragraph rides the {observation_tools} slot; its pinned
-	// phrases live in AskObservationBullet.
-	if !strings.Contains(Ask.MainSystem, "{observation_tools}") {
-		t.Error("ask main_system lost the observation slot")
-	}
-	if obs := AskObservationBullet; !strings.Contains(obs, "change nothing and need no permission") {
-		t.Errorf("the ask observation bullet lost its cost sentence: %q", obs)
-	}
-	// The no-editing rule has to name the mechanism rather than sound like a ban
-	// on acting: this mode has no editing tools, so describe changes instead.
-	if !strings.Contains(Ask.MainSystem, "no editing tools") {
-		t.Errorf("ask main_system should say why it cannot edit:\n%s", Ask.MainSystem)
-	}
-	if strings.Contains(Ask.MainSystem, "cannot apply edits from it") {
-		t.Error("ask main_system reverted to the phrasing that read as 'you cannot act'")
-	}
-	// The brake on a full rewrite. It sat in the unread OvereagerPrompt field
-	// for the whole life of the tool format, so ask mode's only limit on output
-	// was "say briefly", and two reviewers independently said they would be
-	// tempted to paste a finished file. Pinned in the string that ships.
-	if !strings.Contains(Ask.MainSystem, "full diff") {
-		t.Errorf("ask main_system does not rule out returning a full diff:\n%s", Ask.MainSystem)
-	}
-	// Nothing is pinned for editing here because nothing can be: the flat
-	// denial "No files are pinned to this session" co-occurs with a read-only
-	// reference block whose contents are in the next message, which is
-	// 2026-08-readonly-honest.md's twelve-step file hunt.
-	if strings.Contains(Ask.FilesNoFullFiles, "No files are pinned") {
-		t.Errorf("the ask empty-pin line is a flat denial again:\n%s", Ask.FilesNoFullFiles)
-	}
-	// {language} and {observation_tools} are the slots Ask substitutes; a stray
-	// brace would survive into the prompt as a literal.
-	stripped := strings.ReplaceAll(Ask.MainSystem, "{language}", "")
-	stripped = strings.ReplaceAll(stripped, "{observation_tools}", "")
-	if strings.ContainsAny(stripped, "{}") {
-		t.Errorf("ask main_system has an unexpected brace:\n%s", Ask.MainSystem)
-	}
-}
-
 // TestCommitSystemScopesToTheDiff pins the clause that makes the widened
 // commit context safe. Shown earlier turns, models described the *previous*
 // turn's change on this commit — with a BREAKING CHANGE marker for a break the
@@ -267,13 +199,11 @@ func TestSessionNotesPrefixAlwaysCarriesItsStandingClaims(t *testing.T) {
 	}
 }
 
-// The harness speaks to the model in marked user-role messages, and both modes
-// have to say what the mark means: without it, models read an unmarked note as
+// The harness speaks to the model in marked user-role messages, and the prompt
+// has to say what the mark means: without it, models read an unmarked note as
 // the user's words (doc/experiments/2026-09-note-attribution).
-func TestBothModesDefineTheHarnessMarker(t *testing.T) {
-	for name, set := range map[string]Set{"tool": Tool, "ask": Ask} {
-		if !strings.Contains(set.MainSystem, HarnessNoteLine) {
-			t.Errorf("%s main_system does not define the [strument] marker", name)
-		}
+func TestPromptDefinesTheHarnessMarker(t *testing.T) {
+	if !strings.Contains(Tool.MainSystem, HarnessNoteLine) {
+		t.Error("main_system does not define the [strument] marker")
 	}
 }

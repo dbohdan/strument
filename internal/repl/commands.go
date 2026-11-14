@@ -74,12 +74,10 @@ var commands []command
 func init() {
 	commands = []command{
 		{"add", "<file> ...", "Pin files for the model to inspect or edit (globs allowed).", cmdAdd},
-		{"ask", "[<question>]", "Ask about the code without editing. With no question, switch to ask mode.", cmdAsk},
 		{"attach", "[<file> ... | drop [<file> ...]]", "Attach images to your next message. With no files, list what is attached; drop removes attachments.", cmdAttach},
 		{"btw", "<question>", "Ask a one-off question without using or changing the conversation context.", cmdBtw},
 		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
 		{"clear", "", "Start a fresh conversation in this session, keeping pins, notes, and grants.", cmdClear},
-		{"code", "[<request>]", "Request code changes. With no request, switch to code mode.", cmdCode},
 		{"commits", "[on | off]", "Show or change whether each turn's edits are committed automatically.", cmdCommits},
 		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
 		{"context", "[<n>]", "Show the chat history as the model receives it. With n, show only the first n summaries.", cmdContext},
@@ -508,38 +506,6 @@ func wrapWords(text string, width int) []string {
 }
 
 func cmdExit(_ context.Context, _ *REPL, _ string) string { return quitSentinel }
-
-// cmdAsk / cmdCode switch the active edit format (commands.py:1182-1229).
-// Bare = persistent switch until the mirror command; with args = one-shot
-// (run once in the target format, then restore). History is shared by
-// construction, so an /ask answer is in context for the next /code turn —
-// the whole point.
-func cmdAsk(_ context.Context, r *REPL, args string) string {
-	return r.switchFormat("ask", args)
-}
-
-func cmdCode(_ context.Context, r *REPL, args string) string {
-	return r.switchFormat("", args) // "" restores the model's default format
-}
-
-func (r *REPL) switchFormat(target, args string) string {
-	if args == "" {
-		r.coder.SetEditFormat(target)
-		r.rl.SetPrompt(r.prompt())
-		if r.coder.EditFormat() == "ask" {
-			r.printf("Ask mode: the model will answer questions without editing files. Use /code to switch back.")
-		} else {
-			r.printf("Code mode: file-editing tools are enabled.")
-		}
-		return ""
-	}
-	// One-shot: remember the current format, switch, send the args, and
-	// restore after the turn (in REPL.Run).
-	r.oneShotRestore = r.coder.EditFormat()
-	r.oneShotPending = true
-	r.coder.SetEditFormat(target)
-	return args
-}
 
 // expandPatterns resolves glob patterns relative to the coder root, returning
 // root-relative paths of existing regular files.
@@ -1296,7 +1262,7 @@ func webDrop(r *REPL, entry string) string {
 const submitLimit = 100 * 1024
 
 // cmdSubmit reads a file and returns its contents as the message for this
-// turn: the same path /ask's one-shot arguments take, so a submitted file goes
+// turn, so a submitted file goes
 // through runTurn like typed input — transcript, token accounting, Ctrl-C, the
 // undo hint — without touching readline (the typed /submit line is what input
 // history keeps; the file's contents never enter it). The contents are printed

@@ -183,20 +183,20 @@ func TestRecordIsOffByDefault(t *testing.T) {
 	c.runOne(context.Background(), "do the thing") // must not panic
 }
 
-// A turn record says which mode the turn ran in and what tools the model had.
-// Without it, a log where a model reported bash missing could not say whether
-// it was: the header records the mode at startup only.
-func TestTurnRecordNamesTheModeAndTheOfferedTools(t *testing.T) {
+// A turn record says what tools the model had. Without it, a log where a model
+// reported bash missing could not say whether it was.
+func TestTurnRecordNamesTheOfferedTools(t *testing.T) {
 	for _, tc := range []struct {
-		mode     string
+		name     string
+		shell    bool
 		wantBash bool
-	}{{"tool", true}, {"ask", false}} {
-		t.Run(tc.mode, func(t *testing.T) {
+	}{{"shell on", true, true}, {"shell off", false, false}} {
+		t.Run(tc.name, func(t *testing.T) {
 			c := testCoder(t)
 			rec := &capture{}
 			c.Recorder = rec
 			c.Client = &toolThenAnswer{}
-			c.SetEditFormat(tc.mode)
+			c.SuggestShellCommands = tc.shell
 			c.runOne(context.Background(), "look at it")
 
 			var turn *Record
@@ -208,14 +208,11 @@ func TestTurnRecordNamesTheModeAndTheOfferedTools(t *testing.T) {
 			if turn == nil {
 				t.Fatal("no turn record")
 			}
-			if turn.EditFormat != tc.mode {
-				t.Errorf("edit_format = %q, want %q", turn.EditFormat, tc.mode)
-			}
 			if got := slices.Contains(turn.OfferedTools, toolBash); got != tc.wantBash {
 				t.Errorf("offered_tools = %v; bash offered = %v, want %v", turn.OfferedTools, got, tc.wantBash)
 			}
 			if !slices.Contains(turn.OfferedTools, toolRead) {
-				t.Errorf("offered_tools = %v, want read in every mode", turn.OfferedTools)
+				t.Errorf("offered_tools = %v, want read", turn.OfferedTools)
 			}
 		})
 	}

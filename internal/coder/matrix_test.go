@@ -335,7 +335,7 @@ func TestStaleAccumulatorRegression(t *testing.T) {
 `)
 	// The scenario's first stream ends on length, so this needs the
 	// continuation to happen at all before it can check what it leaves behind.
-	env := setupScenario(t, sc, func(c *Coder) { toolMode(c); c.Model.Prefill = true })
+	env := setupScenario(t, sc, func(c *Coder) { c.Model.Prefill = true })
 	env.run(t)
 	if env.coder.partialResponseContent != "understood, no edit" {
 		t.Errorf("final answer = %q (stale accumulator?)", env.coder.partialResponseContent)
@@ -360,7 +360,7 @@ func TestReflectionCapFourSends(t *testing.T) {
 	}
 	rows += b.String()
 	sc := inlineScenario(t, rows)
-	env := setupScenario(t, sc, toolMode)
+	env := setupScenario(t, sc, nil)
 	env.run(t)
 	// Budget: initial + 3 follow-ups = 4 sends; the 5th fixture turn stays.
 	if got := 5 - env.stub.Remaining(); got != 4 {

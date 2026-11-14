@@ -49,7 +49,7 @@ func TestRefusedSwitchKeepsRecording(t *testing.T) {
 	if _, err := history.EnsureProjectDir(root, ""); err != nil {
 		t.Fatal(err)
 	}
-	model := &config.Model{Provider: config.Provider{Adapter: config.AdapterOpenRouter}, Slug: "m", EditFormat: "tool"}
+	model := &config.Model{Provider: config.Provider{Adapter: config.AdapterOpenRouter}, Slug: "m"}
 	model.SideModel = model
 	cdr := coder.New(root, model)
 	cdr.Session = "here"

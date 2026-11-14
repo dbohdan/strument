@@ -126,18 +126,12 @@ func (c *Coder) AppendContext(text string) {
 }
 
 // SetModel switches the chat to a different model (/model). The caller
-// swaps the Client to match the model's provider. Switching models resets
-// the active edit format to the new model's default (leaving ask mode, if
-// any).
+// swaps the Client to match the model's provider.
 func (c *Coder) SetModel(m *config.Model) {
 	c.Model = m
 	// Another model counts with another tokenizer.
 	c.tokenScale = 0
-	c.SetEditFormat(m.EditFormat)
 }
-
-// EditFormat returns the active edit format.
-func (c *Coder) EditFormat() string { return c.editFormat }
 
 // SetChatLanguage replaces the env-var language detection that defaultPlatformInfo
 // ran at New with an explicitly configured code, re-deriving the platform's
@@ -147,21 +141,6 @@ func (c *Coder) EditFormat() string { return c.editFormat }
 func (c *Coder) SetChatLanguage(code string) {
 	c.ChatLanguage = code
 	c.Platform.Language = detectUserLanguage(code)
-}
-
-// SetEditFormat switches the active edit format and its prompt set without
-// changing the model — the mechanism behind /ask and /code. An empty
-// format restores the model's default.
-func (c *Coder) SetEditFormat(format string) {
-	if format == "" {
-		format = c.Model.EditFormat
-	}
-	c.editFormat = format
-	// setPrompts rebuilds the active prompt set from the built-in and reapplies
-	// this session's prompt overrides and example_messages, so a format switch
-	// (/ask, /code) never carries the previous mode's custom prompt into the new
-	// one.
-	c.setPrompts()
 }
 
 // LastCommitHash is the short hash of the session's last auto-commit ("" if
