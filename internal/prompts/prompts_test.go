@@ -70,19 +70,9 @@ func TestToolPromptShape(t *testing.T) {
 	if !strings.Contains(Tool.MainSystem, "no drive-by refactoring") {
 		t.Error("the scope block lost its ban list")
 	}
-
-	// The schema carries the format, so no few-shot examples are needed.
-	if len(Tool.ExampleMessages) != 0 {
-		t.Errorf("tool example_messages should be empty, got %d", len(Tool.ExampleMessages))
-	}
 }
 
 func TestAskPromptShape(t *testing.T) {
-	// Ask has no few-shot examples: the examples chunk is absent, so the
-	// cache-placement breakpoint falls back to system (assembly test).
-	if len(Ask.ExampleMessages) != 0 {
-		t.Errorf("ask example_messages must be empty, got %d", len(Ask.ExampleMessages))
-	}
 	// system_reminder is not empty, so the reminder gate still runs. It used to
 	// say "overeager rides in through {final_reminders}", which was never true:
 	// finalReminders holds the language line and nothing else, and Ask's

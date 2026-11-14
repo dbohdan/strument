@@ -188,30 +188,24 @@ type fileGlobals struct {
 	hasReasoningDisplay bool
 	reasoningDisplayVal ReasoningDisplay
 
-	hasMaxSteps              bool
-	maxStepsVal              int
-	hasMaxUndoTurns          bool
-	maxUndoTurnsVal          int
-	hasMaxErrorReflections   bool
-	maxErrorReflectionsVal   int
-	hasLoopDetection         bool
-	loopDetectionVal         bool
-	hasLanguageParser        bool
-	languageParserVal        bool
-	hasShell                 bool
-	shellVal                 bool
-	hasAnchoredEdits         bool
-	anchoredEditsVal         bool
-	hasIndentColumn          bool
-	indentColumnVal          bool
-	hasObservationViaRunCode bool
-	observationViaRunCodeVal bool
-	hasWebfetchAllow         bool
-	webfetchAllowVal         []string
-	hasWebSearch             bool
-	webSearchVal             *WebSearch
-	hasApproveModel          bool
-	approveModelVal          *DecisionModel
+	hasMaxSteps            bool
+	maxStepsVal            int
+	hasMaxUndoTurns        bool
+	maxUndoTurnsVal        int
+	hasMaxErrorReflections bool
+	maxErrorReflectionsVal int
+	hasLoopDetection       bool
+	loopDetectionVal       bool
+	hasLanguageParser      bool
+	languageParserVal      bool
+	hasShell               bool
+	shellVal               bool
+	hasWebfetchAllow       bool
+	webfetchAllowVal       []string
+	hasWebSearch           bool
+	webSearchVal           *WebSearch
+	hasApproveModel        bool
+	approveModelVal        *DecisionModel
 
 	hasSandbox      bool
 	sandboxVal      string
@@ -246,9 +240,6 @@ type fileGlobals struct {
 
 	hasEnvSet bool
 	envSetVal map[string]string
-
-	hasExampleMessages bool
-	exampleMessagesVal []ExampleMessage
 
 	hasPromptSystemPrefix bool
 	promptSystemPrefixVal string
@@ -549,15 +540,6 @@ func Load(opts Options) (*Config, error) {
 	if user.hasShell {
 		cfg.NoShell = !user.shellVal
 	}
-	if user.hasAnchoredEdits {
-		cfg.AnchoredEdits = user.anchoredEditsVal
-	}
-	if user.hasIndentColumn {
-		cfg.IndentColumn = user.indentColumnVal
-	}
-	if user.hasObservationViaRunCode {
-		cfg.ObservationViaRunCode = user.observationViaRunCodeVal
-	}
 	if user.hasSandbox {
 		cfg.Sandbox = user.sandboxVal
 	}
@@ -593,9 +575,6 @@ func Load(opts Options) (*Config, error) {
 	}
 	if user.hasEnvSet {
 		cfg.EnvSet = user.envSetVal
-	}
-	if user.hasExampleMessages {
-		cfg.ExampleMessages = user.exampleMessagesVal
 	}
 	if user.hasPromptSystemPrefix {
 		cfg.PromptSystemPrefix = user.promptSystemPrefixVal
@@ -680,15 +659,6 @@ func Load(opts Options) (*Config, error) {
 		if project.hasShell {
 			cfg.NoShell = !project.shellVal
 		}
-		if project.hasAnchoredEdits {
-			cfg.AnchoredEdits = project.anchoredEditsVal
-		}
-		if project.hasIndentColumn {
-			cfg.IndentColumn = project.indentColumnVal
-		}
-		if project.hasObservationViaRunCode {
-			cfg.ObservationViaRunCode = project.observationViaRunCodeVal
-		}
 		if project.hasSandbox {
 			cfg.Sandbox = project.sandboxVal
 		}
@@ -754,9 +724,6 @@ func Load(opts Options) (*Config, error) {
 		}
 		// Appended, not replaced: examples are additive teaching, and a
 		// project's pair alongside the user's is worth more than either alone.
-		if project.hasExampleMessages {
-			cfg.ExampleMessages = append(cfg.ExampleMessages, project.exampleMessagesVal...)
-		}
 		// Whole-value, like env_allow: a project's prompt override is one
 		// decision about how the model reads this repository, and the trust gate
 		// is what makes it the user's own decision — a project must be able to
@@ -1257,33 +1224,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.languageParserVal = bool(b)
 	}
 
-	if ae, ok := globals["anchored_edits"]; ok {
-		b, ok := ae.(starlark.Bool)
-		if !ok {
-			return nil, fmt.Errorf("%s: `anchored_edits` must be a boolean, got %s", path, ae.Type())
-		}
-		out.hasAnchoredEdits = true
-		out.anchoredEditsVal = bool(b)
-	}
-
-	if ic, ok := globals["indent_column"]; ok {
-		b, ok := ic.(starlark.Bool)
-		if !ok {
-			return nil, fmt.Errorf("%s: `indent_column` must be a boolean, got %s", path, ic.Type())
-		}
-		out.hasIndentColumn = true
-		out.indentColumnVal = bool(b)
-	}
-
-	if ov, ok := globals["observation_via_run_code"]; ok {
-		b, ok := ov.(starlark.Bool)
-		if !ok {
-			return nil, fmt.Errorf("%s: `observation_via_run_code` must be a boolean, got %s", path, ov.Type())
-		}
-		out.hasObservationViaRunCode = true
-		out.observationViaRunCodeVal = bool(b)
-	}
-
 	if sv, ok := globals["sandbox"]; ok {
 		name, ok := starlark.AsString(sv)
 		if !ok {
@@ -1466,54 +1406,6 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		}
 		out.hasEnvSet = true
 		out.envSetVal = vals
-	}
-
-	if em, ok := globals["example_messages"]; ok {
-		list, ok := em.(*starlark.List)
-		if !ok {
-			return nil, fmt.Errorf(
-				"%s: `example_messages` must be a list of [role, content] pairs, got %s", path, em.Type())
-		}
-		examples := make([]ExampleMessage, 0, list.Len())
-		for i := range list.Len() {
-			// Both spellings are accepted: ["user", "..."] is what a user
-			// naturally writes, and a starlark tuple ("user", "...") is the
-			// same pair — refusing the list spelling because it is not a
-			// tuple would be refusing the obvious way to write it.
-			var items []starlark.Value
-			switch pair := list.Index(i).(type) {
-			case *starlark.List:
-				if pair.Len() != 2 {
-					return nil, fmt.Errorf(
-						"%s: `example_messages`[%d] must be a [role, content] pair, got a list of %d", path, i, pair.Len())
-				}
-				items = []starlark.Value{pair.Index(0), pair.Index(1)}
-			case *starlark.Tuple:
-				if pair.Len() != 2 {
-					return nil, fmt.Errorf(
-						"%s: `example_messages`[%d] must be a [role, content] pair, got a tuple of %d", path, i, pair.Len())
-				}
-				items = []starlark.Value{pair.Index(0), pair.Index(1)}
-			default:
-				return nil, fmt.Errorf(
-					"%s: `example_messages`[%d] must be a [role, content] pair, got %s", path, i, list.Index(i).Type())
-			}
-			role, ok := starlark.AsString(items[0])
-			if !ok {
-				return nil, fmt.Errorf("%s: `example_messages`[%d] role must be a string", path, i)
-			}
-			if role != "user" && role != "assistant" {
-				return nil, fmt.Errorf(
-					"%s: `example_messages`[%d] role must be \"user\" or \"assistant\", got %q", path, i, role)
-			}
-			content, ok := starlark.AsString(items[1])
-			if !ok {
-				return nil, fmt.Errorf("%s: `example_messages`[%d] content must be a string", path, i)
-			}
-			examples = append(examples, ExampleMessage{Role: role, Content: content})
-		}
-		out.hasExampleMessages = true
-		out.exampleMessagesVal = examples
 	}
 
 	for _, name := range []string{"prompt_system_prefix", "prompt_code", "prompt_ask", "prompt_commit", "prompt_read_only"} {

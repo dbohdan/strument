@@ -68,19 +68,6 @@ type Coder struct {
 	// future user setting. Keeping the condition in one field is what lets
 	// the prompt's tool list track the schema instead of drifting from it.
 	OfferCode bool
-	// ObservationViaRunCode, when true, withholds the direct read-only tools
-	// (read, grep, glob, ls, symbol) from the schema and forces OfferCode on:
-	// all observation goes through code programs calling the bridged tools.
-	// This is the force arm of the code-uptake trials — the complement of
-	// OfferCode=false. Rather than persuading the model to prefer `run_code`, it
-	// removes the competing tools, the closed-world condition the 2026-08
-	// trial measured from the other side. A direct call the model makes anyway
-	// is answered with a redirect to code, not silently dropped — see
-	// redirectNote. Default false; set from config `observation_via_run_code`.
-	// Off in this mode are only the observation tools: edit, bash, check,
-	// commit, webfetch, and ask_user_question are unchanged, and webfetch
-	// stays direct because the bridge cannot carry it.
-	ObservationViaRunCode bool
 
 	// MaxSteps is the work-step budget per turn — a checkpoint, not a wall.
 	// On exhaustion the user is shown what the turn has done and asked
@@ -154,16 +141,6 @@ type Coder struct {
 	editsExact int
 	editsFuzzy int
 
-	// AnchoredEdits gives read a stable identity per line and lets edit address
-	// lines by it. See anchors.go and config.Config.AnchoredEdits.
-	AnchoredEdits bool
-	// IndentColumn names each line's leading whitespace in its own column, so
-	// the model states indentation rather than retyping it. Needs
-	// AnchoredEdits. See config.Config.IndentColumn.
-	IndentColumn bool
-	// anchors is the session's registry of those identities.
-	anchors *anchorRegistry
-
 	// shown records the version of each file the model was last shown, so an
 	// edit to a file that moved underneath is refused rather than applied to
 	// content the model never saw. See staleness.go.
@@ -191,11 +168,6 @@ type Coder struct {
 	// RetryTimeout bounds how long a turn waits between retries of one failed
 	// request, summed over the waits. Zero takes retryTimeout, aider's minute.
 	RetryTimeout time.Duration
-
-	// Examples are config-provided few-shot messages (example_messages),
-	// appended to the active prompt set's examples on every format switch.
-	// nil in a session without them. See SetEditFormat.
-	Examples []config.ExampleMessage
 
 	// EnvAllow extends the default environment allowlist (envallow.go) with
 	// names from the config's `env_allow`. It applies to every command the
@@ -508,17 +480,6 @@ func (c *Coder) setPrompts() {
 		base.ReadOnlyFilesPrefix = c.PromptReadOnly
 	}
 	c.Prompts = base
-
-	// Config-provided examples (example_messages) ride on top of whatever
-	// format's set is active. They are re-applied on every switch because a
-	// switch rebuilds the set from the built-in; they live on the Coder rather
-	// than in prompts.Set, as experimental-arm input (the shell-parallelism
-	// trial's EX arm).
-	for _, ex := range c.Examples {
-		c.Prompts.ExampleMessages = append(c.Prompts.ExampleMessages, prompts.Example{
-			Role: ex.Role, Content: ex.Content,
-		})
-	}
 }
 
 // PlatformInfo feeds the {platform} prompt slot deterministically
@@ -551,7 +512,6 @@ func New(root string, model *config.Model) *Coder {
 		editFormat:           model.EditFormat,
 		Files:                workspace.New(root),
 		shown:                newShownFiles(),
-		anchors:              newAnchorRegistry(nil),
 		turnEditedFiles:      map[string]bool{},
 		turnAutoApprove:      map[string]bool{},
 		sessionAutoApprove:   map[string]bool{},

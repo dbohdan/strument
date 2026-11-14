@@ -216,9 +216,6 @@ var projectKeyOrder = []string{
 	"hasLoopDetection",
 	"hasLanguageParser",
 	"hasShell",
-	"hasAnchoredEdits",
-	"hasIndentColumn",
-	"hasObservationViaRunCode",
 	"hasSandbox",
 	"hasSandboxWrite",
 	"hasShellTimeout",
@@ -232,7 +229,6 @@ var projectKeyOrder = []string{
 	"hasAutoApprove",
 	"hasApproveModel",
 	"hasEnvSet",
-	"hasExampleMessages",
 	"hasPromptSystemPrefix",
 	"hasPromptCode",
 	"hasPromptAsk",
@@ -369,15 +365,6 @@ var projectKeys = map[string]projectKey{
 		},
 	},
 
-	"hasAnchoredEdits": {name: "anchored_edits", set: func(g *fileGlobals) bool { return g.hasAnchoredEdits }},
-	"hasIndentColumn":  {name: "indent_column", set: func(g *fileGlobals) bool { return g.hasIndentColumn }},
-	// Withholds tools rather than granting any: the model loses the direct
-	// read-only calls and keeps the same reach through run_code.
-	"hasObservationViaRunCode": {
-		name: "observation_via_run_code",
-		set:  func(g *fileGlobals) bool { return g.hasObservationViaRunCode },
-	},
-
 	"hasSandbox": {
 		name: "sandbox",
 		set:  func(g *fileGlobals) bool { return g.hasSandbox },
@@ -492,14 +479,6 @@ var projectKeys = map[string]projectKey{
 			names := slices.Sorted(maps.Keys(g.envSetVal))
 			return fmt.Sprintf("sets %s in model-run commands: %s",
 				render.Plural(len(names), "variable", "variables"), strings.Join(names, ", "))
-		},
-	},
-	"hasExampleMessages": {
-		name: "example_messages",
-		set:  func(g *fileGlobals) bool { return g.hasExampleMessages },
-		detail: func(g *fileGlobals, _ func(string) string) string {
-			return fmt.Sprintf("adds %s the model reads as prior turns",
-				render.Plural(len(g.exampleMessagesVal), "example message", "example messages"))
 		},
 	},
 

@@ -8,18 +8,11 @@ package prompts
 
 import "fmt"
 
-// Example is one few-shot example message.
-type Example struct {
-	Role    string
-	Content string
-}
-
 // Set is one edit format's prompt set: the CoderPrompts surface that the
 // message assembler consumes.
 type Set struct {
 	MainSystem       string
 	SystemReminder   string
-	ExampleMessages  []Example
 	FilesNoFullFiles string
 	// FilesNoFullFilesNoCode is the same note with the run_code clause
 	// removed, for a session whose schema withholds the tool.
@@ -166,31 +159,7 @@ const CodeToolsBullet = "- run_code runs a short JavaScript program, which can i
 	"exploration where each search depends on the last result, is a direct call " +
 	"to the tool itself.\n"
 
-// ObservationViaRunCodeParagraph is what the {code_tools} slot renders under the
-// force arm (coder.ObservationViaRunCode): all direct observation tools
-// withheld, all observation through code programs. It replaces the run_code
-// bullet, whose "reach for it when one answer needs several lookups"
-// presupposes a direct-call alternative that no longer exists, and would read
-// as optional. It states the arrangement as fact, in the register the rest of
-// the prompt uses, and carries the two facts the mode leans on: results come
-// back to the program, and the program's final value is what the model
-// receives.
-//
-// The kinds it enumerates stop at listing, while the %s slot beside them may or
-// may not end in symbol. The asymmetry is deliberate and matches the Ask
-// prompt's: under-promising costs a model nothing, and naming symbol lookup as
-// something this session does would be false wherever there is no repo map —
-// which is exactly where the slot leaves symbol out.
-const ObservationViaRunCodeParagraph = "- run_code runs a short JavaScript program. In this session all file observation — " +
-	"reading, searching, and listing — goes through it: the " +
-	"program calls %s itself, and the results " +
-	"come back to the program, not to you, until it returns. Write one program " +
-	"for the several lookups you need. It changes nothing and needs no permission.\n"
-
-// ObservationBullet is the tool prompt's read/grep/glob/ls paragraph, moved
-// here from toolMainSystem so the same slot can render the force arm's
-// replacement (an empty string — the paragraph above already says what the
-// model needs) without the prompt naming tools the schema withholds.
+// ObservationBullet is the tool prompt's read/grep/glob/ls paragraph.
 const ObservationBullet = "- read, grep, glob, and ls look at the project. They change nothing and need no permission, " +
 	"so use them freely rather than guessing at a file's contents or at how the project works. " +
 	"Files the project ignores are " +
@@ -210,9 +179,8 @@ const AskObservationBullet = "read, grep, glob, and ls look at the project. " +
 // {code_tools} renders the code bullet above when the run_code tool is
 // offered, and as "" when it is not — the empty case is the feature-reverted
 // baseline, where prose naming `run_code` would promise a tool the schema does
-// not carry. {observation_tools}
-// renders the same paragraph or, under the force arm, nothing — the
-// ObservationViaRunCodeParagraph has already described how observation works.
+// not carry. {observation_tools} renders the observation paragraph for the
+// session's mode.
 const toolMainSystem = "You are an expert software developer working with a user on their codebase.\n" +
 	"Follow the conventions, style, and libraries already present in the codebase.\n" +
 	overeagerPrompt +
@@ -273,9 +241,8 @@ const toolSystemReminder = "# Editing rules\n\n" +
 // It is the default format. The schema does the format-parsing work, so the
 // prompt only conveys the tools' natures and the exact-match discipline.
 var Tool = Set{
-	MainSystem:      toolMainSystem,
-	SystemReminder:  toolSystemReminder,
-	ExampleMessages: nil,
+	MainSystem:     toolMainSystem,
+	SystemReminder: toolSystemReminder,
 	// Nothing pinned is the normal starting state now, not a problem to report.
 	// The model finds what it needs with read, grep, glob, and ls, so saying so
 	// is the whole message.
@@ -307,27 +274,6 @@ var Tool = Set{
 	FilesNoFullFilesWithRepoMapReply: "",
 	ReadOnlyFilesPrefix:              readOnlyFilesPrefix,
 }
-
-// FilesNoFullFilesViaCode replaces Tool.FilesNoFullFiles under the force arm:
-// the base text tells the model to "use read, grep, glob, and ls", which the
-// schema withholds — the exact task-proximal steering fable.md identified in
-// arm B/C of the first trial, here a self-contradiction rather than mere
-// competition. The replacement says the same thing about the one channel that
-// exists. The trailing sentences (edit anything; read, don't recall) are
-// unchanged and shared.
-const FilesNoFullFilesViaCode = "Nothing is pinned for editing. Look at the project with the run_code tool: " +
-	"write a program that calls read, grep, glob, and ls, and answer from what " +
-	"it returns. You can edit any file in " +
-	"the project. If the user asks how something here works, read the code " +
-	"that implements it: what you remember about a project is not evidence " +
-	"about this one."
-
-// AskFilesNoFullFilesViaCode replaces Ask.FilesNoFullFiles under the force
-// arm, for the same reason. Ask mode has no editing to narrow the denial
-// with, so — like its base text — this one drops it.
-const AskFilesNoFullFilesViaCode = "Look at the project with the run_code tool: write a program that calls " +
-	"read, grep, glob, and ls, and answer from what it returns rather than " +
-	"from memory."
 
 // Ask is the discussion mode. What it withholds is enforced by the tool set,
 // not by this prompt: toolDefs drops edit, write, bash, and check, so there is
@@ -367,8 +313,7 @@ var Ask = Set{
 		"rather than trailing off, and the user can switch to code mode to have it done. " +
 		"Don't write out the finished code or a full diff — a short snippet or pseudo-code is " +
 		"welcome where it makes the plan clearer.\n",
-	SystemReminder:  "{final_reminders}",
-	ExampleMessages: nil,
+	SystemReminder: "{final_reminders}",
 	// No flat denial here, for the reason the Tool set's comment records: this
 	// string is used whenever nothing is pinned *for editing*, which includes a
 	// session whose only pin is a read-only reference whose contents are in the

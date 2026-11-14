@@ -63,7 +63,7 @@ func TestSampleTranscriptLeavesShortOnesAlone(t *testing.T) {
 }
 
 // The notes chunk's position is load-bearing. Breakpoints sit on
-// examples-or-system and on read-only files, so anything between them rides
+// the system prompt and on read-only files, so anything between them rides
 // inside the cached prefix — and a mid-session /read-only, which rewrites the
 // read-only block, does not invalidate the notes with it.
 func TestNotesChunkSitsInsideTheCachedPrefix(t *testing.T) {

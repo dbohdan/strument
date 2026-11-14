@@ -124,19 +124,6 @@ func TestReplaceAllDoesNotFuzzyMatch(t *testing.T) {
 	}
 }
 
-// An anchor already names one range by identity, so "all of them" cannot mean
-// anything; saying so beats silently honouring one of the two.
-func TestReplaceAllWithAnchorIsRefused(t *testing.T) {
-	_, msg := parseEditArgs(editToolCall("c1",
-		`{"path":"a.txt","anchor":"a1","new_string":"x","replace_all":true}`))
-	if msg == "" {
-		t.Fatal("anchor plus replace_all was accepted")
-	}
-	if !strings.Contains(msg, "anchor") || !strings.Contains(msg, "replace_all") {
-		t.Errorf("the refusal does not name both: %q", msg)
-	}
-}
-
 // Default off, which the whole panel agrees on and our own trial cannot
 // contradict, since its hazard never fired.
 func TestReplaceAllDefaultsOff(t *testing.T) {

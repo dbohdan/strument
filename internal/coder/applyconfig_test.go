@@ -7,23 +7,16 @@ import (
 	"dbohdan.com/strument/internal/config"
 )
 
-// ApplyConfig is idempotent, and the prompt layer is where that matters: the
-// old reload appended example_messages to the live set every time it ran, so
-// reloading twice showed the model its examples twice.
+// ApplyConfig is idempotent, and the prompt layer is where that matters: a
+// reload rebuilds the active set from the built-in before layering overrides.
 func TestApplyConfigIsIdempotent(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{EditFormat: "tool"})
 	cfg := &config.Config{
-		ExampleMessages: []config.ExampleMessage{{Role: "user", Content: "ping"}},
-		PromptCode:      "REPLACED {platform} {language} {final_reminders} {code_tools} {observation_tools}",
+		PromptCode: "REPLACED {platform} {language} {final_reminders} {code_tools} {observation_tools}",
 	}
 
 	ApplyConfig(c, cfg)
-	once := len(c.Prompts.ExampleMessages)
 	ApplyConfig(c, cfg)
-	ApplyConfig(c, cfg)
-	if got := len(c.Prompts.ExampleMessages); got != once {
-		t.Errorf("examples grew across reloads: %d after one, %d after three", once, got)
-	}
 	if !strings.HasPrefix(c.Prompts.MainSystem, "REPLACED") {
 		t.Errorf("prompt_code override did not reach the active prompt:\n%.60s", c.Prompts.MainSystem)
 	}

@@ -16,7 +16,10 @@ import (
 )
 
 // chatChunks mirrors aider's ChatChunks: the canonical slot order is
-// system + examples + readonly_files + done + cur.
+// system + readonly_files + done + cur, without aider's examples slot:
+// Strument's prompt sets carry no few-shot examples, and the experimental
+// example_messages setting that could fill it was removed with the other
+// trial switches.
 //
 // aider's chat_files slot is gone. It carried the /add files' contents as a
 // fabricated user turn with a fabricated assistant reply; the names now ride in
@@ -30,7 +33,6 @@ import (
 // "where is this defined" is the question a reader actually has.
 type chatChunks struct {
 	system        []llm.Message
-	examples      []llm.Message
 	notes         []llm.Message
 	done          []llm.Message
 	readonlyFiles []llm.Message
@@ -39,12 +41,11 @@ type chatChunks struct {
 
 func (ch *chatChunks) allMessages() []llm.Message {
 	out := make([]llm.Message, 0,
-		len(ch.system)+len(ch.examples)+len(ch.notes)+len(ch.readonlyFiles)+
+		len(ch.system)+len(ch.notes)+len(ch.readonlyFiles)+
 			len(ch.done)+len(ch.cur))
 	out = append(out, ch.system...)
-	out = append(out, ch.examples...)
 	// Notes sit *before* the read-only files, deliberately. Breakpoints go on
-	// examples-or-system and on read-only files, so anything between them rides
+	// the system prompt and on read-only files, so anything between them rides
 	// inside the cached prefix — and a mid-session /read-only, which rewrites
 	// that block, does not invalidate the notes with it.
 	out = append(out, ch.notes...)
@@ -100,7 +101,7 @@ func withBreakpoint(m llm.Message) llm.Message {
 }
 
 // addCacheControlHeaders places up to four breakpoints, Anthropic's limit:
-// examples-else-system, read-only files, and two that roll with the
+// the system prompt, read-only files, and two that roll with the
 // conversation.
 //
 // There used to be a third, on the chat-files block. That block changed every
@@ -119,11 +120,7 @@ func withBreakpoint(m llm.Message) llm.Message {
 // once per step. With these two breakpoints, every token of a five-step turn
 // was either a cache read or a cache write.
 func (ch *chatChunks) addCacheControlHeaders(lastOnly bool) {
-	if len(ch.examples) > 0 {
-		addCacheControl(ch.examples)
-	} else {
-		addCacheControl(ch.system)
-	}
+	addCacheControl(ch.system)
 	addCacheControl(ch.readonlyFiles)
 	ch.addConversationBreakpoints(lastOnly)
 }
@@ -305,18 +302,7 @@ func (c *Coder) platformText() string {
 // tool is in this session's tool set, "" when it is not. The condition is the
 // same one toolDefs uses, so the prose tracks the schema by construction
 // rather than by a second copy of the condition drifting away from it.
-//
-// ObservationViaRunCode replaces the bullet with the force arm's paragraph: the
-// bullet's "reach for it when one answer needs several lookups" presupposes a
-// direct-call alternative that no longer exists, and would read as optional.
-// The replacement states the arrangement as fact, in the same register —
-// calm, specific — and carries the two facts the mode's description leans on:
-// that results come back to the program, and that the last value is what
-// returns to the model.
 func (c *Coder) codeToolsText() string {
-	if c.ObservationViaRunCode {
-		return fmt.Sprintf(prompts.ObservationViaRunCodeParagraph, andList(c.codeCallableTools()))
-	}
 	if !c.OfferCode {
 		return ""
 	}
@@ -370,31 +356,18 @@ func (c *Coder) fmtSystemPrompt(prompt string) string {
 	})
 }
 
-// observationToolsText renders the {observation_tools} slot: the standard
-// read/grep/glob/ls paragraph normally, "" under the force arm — where the
-// ObservationViaRunCodeParagraph in {code_tools} has already said how observation
-// works and naming the tools as directly callable would contradict the schema.
-// The slot's condition is the same one toolDefs uses.
+// observationToolsText renders the {observation_tools} slot: the
+// read/grep/glob/ls paragraph for the session's mode.
 func (c *Coder) observationToolsText() string {
-	if c.ObservationViaRunCode {
-		return ""
-	}
 	if c.editFormat == "ask" {
 		return prompts.AskObservationBullet
 	}
 	return prompts.ObservationBullet
 }
 
-// filesNoFullFilesText picks the nothing-pinned note: the standard one, or the
-// force arm's variant, which must not tell the model to use tools the schema
-// withholds. The swap follows the same flag the tool set does.
+// filesNoFullFilesText picks the nothing-pinned note, which must not tell the
+// model to use a tool the schema withholds.
 func (c *Coder) filesNoFullFilesText() string {
-	if c.ObservationViaRunCode {
-		if c.editFormat == "ask" {
-			return prompts.AskFilesNoFullFilesViaCode
-		}
-		return prompts.FilesNoFullFilesViaCode
-	}
 	// The withheld case, which this function used to miss: the note offers a
 	// run_code call as an alternative to a run of lookups, and with the tool
 	// out of the schema that is prose promising a tool the model does not
@@ -413,23 +386,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	mainSys := c.fmtSystemPrompt(c.Prompts.MainSystem)
 	if c.SystemPromptPrefix != "" {
 		mainSys = c.SystemPromptPrefix + "\n" + mainSys
-	}
-
-	// Examples ride as real messages, never folded into the system prompt.
-	// aider chooses between the two per model; Strument does not, because the
-	// choice was never wired to anything a user or a config could set, and an
-	// always-false branch is a claim about behaviour nobody can check.
-	var exampleMessages []llm.Message
-	for _, msg := range c.Prompts.ExampleMessages {
-		exampleMessages = append(exampleMessages, llm.TextMessage(msg.Role, c.fmtSystemPrompt(msg.Content)))
-	}
-	if len(c.Prompts.ExampleMessages) > 0 {
-		// The bridge from illustration to the real conversation. It used to
-		// be a fabricated user turn answered by a fabricated "Ok.", which
-		// is two lies to draw one line; the harness can just say it.
-		exampleMessages = append(exampleMessages, llm.HarnessNote(
-			"The exchange above is an example, not part of this conversation. "+
-				"The files and history that follow are the real ones."))
 	}
 
 	// The reminder rides in the system prompt and nowhere else.
@@ -471,7 +427,6 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	// Gemma 4 added native support for one in April 2026.
 	chunks.system = []llm.Message{llm.TextMessage(llm.RoleSystem, mainSys)}
 
-	chunks.examples = exampleMessages
 	chunks.done = c.doneMessages
 
 	// Read-only files keep their injection, and this is not an oversight. glob,

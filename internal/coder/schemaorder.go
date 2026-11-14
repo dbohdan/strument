@@ -58,18 +58,6 @@ func (p orderedProps) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// lookup returns the named property's schema, for tests and callers that want
-// to read one back out. A map indexes; this has to search, which is the price
-// of the order and is paid nowhere hot.
-func (p orderedProps) lookup(name string) (map[string]any, bool) {
-	for _, prop := range p {
-		if prop.name == name {
-			return prop.schema, true
-		}
-	}
-	return nil, false
-}
-
 // names lists the properties in declared order.
 func (p orderedProps) names() []string {
 	out := make([]string, len(p))
