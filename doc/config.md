@@ -558,7 +558,7 @@ both default ports. Nothing here writes to `config.star`; use
 `webfetch_allow` for a persistent approval.
 
 `/clear` starts a fresh conversation in the current session, preserving
-session grants. See [sessions](sessions.md#the-notes-lifecycle).
+session grants. See [sessions](sessions.md#clearing-resetting-and-rewinding).
 
 Automatically approved fetches still print their purpose and URL.
 

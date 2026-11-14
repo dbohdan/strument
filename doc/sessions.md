@@ -1,405 +1,153 @@
 # Sessions, compaction, and resuming work
 
-> **November 2026.** Compaction no longer summarizes, and session notes and
-> `/session fork` are gone, with the side model that wrote all three: a long
-> history now drops its oldest turns and keeps what the user said in them, and
-> the `recall` tool finds the rest in the session record. What follows is the
-> design history as it was argued; the turn-boundary reasoning and the
-> resume design still hold, and the summary and notes sections describe what
-> was removed and why it was built. Pinned files went in the same pass, so
-> `AGENTS.md` is no longer pinned: the system prompt names it and asks the
-> model to read it.
+How Strument keeps a conversation, shrinks it when it grows, and picks it back
+up, and why each part is the way it is. `doc/history.md` describes what is on
+disk; this is the behavior built on it.
 
-Why picking a project back up works the way it does here, what was borrowed,
-and what was rejected. Written down because most of this reasoning existed
-nowhere but a conversation, and the alternatives are the ones a reasonable
-person re-proposes.
+## Sessions and runs
 
-## The one-paragraph version
+A project holds named **sessions**, each with its own conversation, model
+choice and undo history. One invocation of Strument is a **run**; a session
+outlives its runs. Every run appends a segment to the session's record, a JSON
+Lines file of every message, tool call and result, with large tool output kept
+once in a content-addressed blob store.
 
-Strument restores a session's conversation from its durable JSON Lines record:
-`--continue` rebuilds it, compacts it if it is already too big to send, and
-puts a seam in it when the model has changed. Within a session, it compacts
-older messages at turn boundaries. Session notes are still here, for the job
-they were always the answer to — carrying context from one conversation to a
-*different* one — and they go into the request as a **system** message ahead of
-the conversation, under a header saying they may be incomplete, that the
-project may have changed since, and that **where they disagree with the files,
-the files are right**.
+A run starts with an empty conversation. `--continue` (`-c`) rebuilds it from
+the record. Restoring is opt-in for a reason the experiments keep confirming:
+a conversation is context the user pays for on every request, and much of an
+old one is abandoned approaches and settled questions.
 
-**This reverses the position the rest of this document was written to
-defend.** The section below that argued against restoring a conversation is
-kept, with what changed, because the arguments in it are the ones any
-replacement has to answer and the answers are the design.
+## Restoring a conversation
 
-## Compaction fires at a turn boundary
+`--continue` replays the session's record into the conversation, applying the
+tombstones `/rewind` left, so it rebuilds the conversation the user was left
+with rather than every turn ever recorded.
 
-`maybeSummarize` runs from `moveBackCurMessages`, at the end of a turn, once the
-model has stopped, the edits have landed, the automatic checks have run, and the
-commit exists.
+- **A different model gets a seam.** When the restored turns were made by
+  another model, Strument appends a marked harness note saying so: the turns
+  above are from earlier in the session, made by a different model, a record
+  rather than its own decisions, and disagreeing with them is allowed. Without
+  it nothing tells the model that those assistant turns are not its own, and a
+  model shown another's replies under its role tends to continue or defend
+  them. The note names no model.
+- **An oversized restore is compacted first**, by the same rule as below,
+  because the turn that would otherwise trigger compaction is the turn that
+  would fail (aider #2979). `CheckRestoredContext` warns about what remains.
 
-Several of the surveyed tools compact when context usage reaches a limit, which
-can happen during a task. Such a summary may need to preserve partial plans,
-unresolved errors, and hypotheses that have not yet been tested.
+## Compaction
 
-Compacting after a turn usually gives the summarizer a more settled account of
-the work than compacting during it. Strument uses the same boundary for review
-and compaction.
+Compaction runs at the end of a turn, once the model has stopped, the edits
+have landed and the automatic checks have run. It does not run in the middle
+of one: a summary or a cut made mid-task has to preserve half-finished plans,
+and the turn boundary is already the point where the user reviews.
 
-Three related decisions:
+The history gets half the model's context window (at least 2,048 tokens).
+Past that:
 
-- **Compaction summaries are marked as harness-generated context.** They use a
-  marked user message, not an assistant reply or a system message. The marker
-  distinguishes the summary from something the user actually said. The
-  summarizer is no longer instructed to write in the user's voice, and Strument
-  no longer appends a fabricated assistant acknowledgment. aider's prompt once
-  asked the side model to begin with `"I asked you..."`; the result was injected
-  as a user turn and the coder appended an assistant `"Ok."` agreeing to it. The
-  exchange survived in the ported algorithm until both the injection and the
-  impersonating prompt were changed.
-- **Summaries avoid first-person narration.** The `side_model` may write a
-  summary that a different model later reads. Describing requests, changes, and
-  results directly avoids attributing the summary's wording to either model or
-  to the user. Impersonal wording avoids an authorship claim; it does not
-  guarantee truth.
-- **The summarizer includes tool calls and results, not just conversational
-  prose.** Previously, a turn with twelve tool calls and a one-sentence closing
-  reply could be reduced to that closing sentence.
+1. **Old tool output is cleared first** (`pruneHistory`), with a note saying
+   so. The output is still in the record.
+2. **Then the oldest whole turns are dropped** (`rollHistory`) until the rest
+   fits in half the budget. In their place goes one harness note that quotes
+   the user's own messages from those turns, word for word, oldest first, and
+   says the rest of those turns is in the session record, where the `recall`
+   tool searches it.
 
-Read-only turns are also eligible for compaction. Previously, only turns that
-edited files were eligible, so stretches of `/ask` could grow without being
-compacted. Four read-only turns produced 8484 tokens of history against a
-1024-token budget, with zero compactions.
+Nothing in the note is written by a model. That is the point of the design:
+summaries paraphrased, invented rationales and continued the transcript instead
+of summarizing it (`experiments/2026-10-compaction-prompt`), and a summary of
+a summary carries an invention forward as source material. Codex and Kimi keep
+the user's messages verbatim beside their summaries
+(`experiments/2026-10-compaction-survey`); Strument keeps only those, and
+recovers the rest on demand. The note says where to look because without it,
+in `experiments/2026-10-recall`, a model with the answer one search away
+reasoned that it would have to re-read the files and stopped at "I don't
+know".
 
-## Why notes, and not a replayed conversation — and what changed
+A request the provider refuses as too long is folded and retried
+(`foldForOverflow`): the history is cut to half its size, by the same two
+steps, whether or not it had reached the budget. Five of the six surveyed
+harnesses do the same; with compaction late in the window, this is the
+backstop.
 
-**Superseded.** Strument restores a conversation now. What follows is the
-argument it used to make, kept because each of its three reasons is a real
-failure mode and the current design is best read as three answers to them.
+## Clearing, resetting and rewinding
 
-The survey used for this design found the following storage and restoration
-approaches:
+- **`/clear`** empties the conversation and stays in the session: the same as
+  starting again without `--continue`. Grants stay.
+- **`/reset`** does the same and also withdraws this run's webfetch approvals.
+- Neither writes to the record, so `--continue` restores the conversation
+  whole, cleared stretch and all. With `--no-history` there is no record, and
+  they only empty memory.
+- **`/rewind [n]`** takes the last `n` turns out of the conversation. It
+  appends a tombstone row rather than deleting anything, so the record keeps
+  the turns and a restore applies the tombstone. Whole turns from the end, so
+  a tool call and its result are never separated. Files are left alone: the
+  rewind names the files the turns changed, and `/undo` reverts them. Turns
+  that compaction has already rolled away cannot be rewound.
 
-| tool | store | replayed? |
+## Standing instructions: `AGENTS.md` and `AGENTS.local.md`
+
+What should outlive a session belongs in a file the user reviews, not in a
+store the model writes unseen.
+
+| | `AGENTS.md` | `AGENTS.local.md` |
 | --- | --- | --- |
-| Claude Code | append-only JSONL per session | yes, in full |
-| Codex CLI | `rollout-*.jsonl` | yes, in full |
-| Gemini CLI | `session-*.json` + shadow git repo | yes |
-| OpenCode | per-session store, manual load | yes, plus tool-output pruning |
-| Amp | threads | **no — refuses compaction on principle** |
-| Cline | markdown in the repo | **no — context resets by design** |
-| aider | `.aider.chat.history.md` | opt-in, default off |
-| **Strument** (then) | durable transcript; session notes in memory | **no** |
-| **Strument** (now) | durable JSONL record + blob store | on `--continue` |
+| holds | the project's standing instructions | the user's private instructions for this checkout |
+| shared | committed, like any file | never committed |
+| precedence | — | wins where the two disagree |
 
-Three reasons, in increasing order of how long they took to see:
+When either exists at the project root, the system prompt names it and asks
+the model to read it. It does not inject the contents: the file arrives
+through `read`, the one channel project files use, and shows in the
+transcript like any other read. The naming is the part measured to matter:
+compliance with a rule contrary to habit was 0/8 with no `AGENTS.md`, 2/8 with
+it merely pinned into the context, and 6/8 once the prompt named it as the
+project's standing instructions (`experiments/2026-08-agents-md`).
 
-**Cost.** Restoring a long conversation can increase the input sent with
-subsequent requests. Notes reduce that context to about 300 words.
-
-**Attention.** Old context can preserve abandoned approaches and outdated
-assumptions alongside useful decisions. Short notes aim to retain the latter
-without carrying the entire discussion forward.
-
-**Attribution.** Replaying another model's replies under the `assistant` role
-does not distinguish them from replies generated by the current model. That can
-encourage the current model to continue or defend earlier choices without
-reconsidering them.
-
-This matters in Strument because users can switch between vendors and models.
-Notes provide background without presenting another model's exact words as the
-current model's prior replies.
-
-### The three answers
-
-**Cost and attention** are answered by compaction, which a restored
-conversation goes through like any other — except that it runs at restore time
-rather than at the end of the first turn. The turn that would trigger it is the
-turn that would fail; that is aider #2979, and `CheckRestoredContext` warns
-about the remainder.
-
-**Attribution** is answered by saying so. The objection was precisely that
-there is *no seam* — nothing tells the model those assistant turns are not its
-own. When the restored conversation was made by a different model, Strument
-appends a marked harness turn that says it was, that the turns are a record
-rather than the model's own decisions, and that disagreeing with them is
-allowed. It names no model, for the same reason the notes header names none.
-
-What none of the three arguments ever applied to is crossing from one
-conversation to a *different* one. There is no history to restore there,
-because the point is that it is a different thread. That is the job notes keep.
-
-## The two artifacts, split by lifetime
-
-| | session notes | `AGENTS.md` |
-| --- | --- | --- |
-| lives | in memory | project root |
-| written by | the harness, via the side model | the user, and the model as an ordinary edit |
-| generated by | `/notes generate` mid-session; `/session fork` carries them into the new one | — |
-| lifetime | one session, regenerated from the record | durable |
-| reviewed by | reading it; `/notes` | the diff, `/undo`, the commit |
-| discarded by | `/notes drop` | deleting the file |
-
-Temporary session context belongs in notes; instructions intended to survive
-future sessions belong in a reviewed project file such as `AGENTS.md`.
-
-Changes to `AGENTS.md` use the existing file-editing workflow: a visible diff, a
-snapshot, `/undo`, and a commit when Git is available.
-
-### `AGENTS.local.md`, the private one
-
-`AGENTS.local.md` beside it holds instructions for this checkout only: a
-machine's paths, your own preferences, anything not meant for the team. The
-system prompt names it as the user's private instructions, which win where the
-two disagree, and asks the model to read it. Edits to it are
-ordinary edits too, with the same diff and `/undo`, but it is never
-committed: the first time Strument sees it untracked and not ignored, it adds
+Edits to either are ordinary edits, with a diff, a snapshot and `/undo`. The
+first time Strument sees `AGENTS.local.md` untracked and not ignored, it adds
 it to `.git/info/exclude` and says so, and a commit that would include it
-leaves it out. If you track it on purpose, it is committed like any other
-file.
+leaves it out. A tracked one is committed like any other file.
 
-This is Strument's answer to a memory tool. A note meant to outlive the
-session is a line in one of these two files, reviewed as it is written,
-rather than an entry in a store the model fills unseen.
+No standard names the private file. DeepSeek Harness reads `AGENTS.local.md`
+after the shared file, as Claude Code does `CLAUDE.local.md`; Codex and Pi
+read `AGENTS.override.md` in place of `AGENTS.md`.
 
-No standard names this file. The [AGENTS.md spec](https://agents.md/)
-defines no per-user or local file. DeepSeek Harness reads `AGENTS.local.md`
-after the shared file, as Claude Code does `CLAUDE.local.md`; Codex and Pi read
-`AGENTS.override.md` in place of `AGENTS.md`.
+## `--no-git`
 
-Having the file in front of the model is not enough on its own, and that is
-measured (`experiments/2026-08-agents-md/README.md`): compliance with a rule
-contrary to habit was 0/8 with no `AGENTS.md`, 2/8 with it merely pinned, and
-6/8 once the prompt named it as the project's standing instructions. The naming
-is what survived when pinning went; the contents now arrive through `read`,
-like any other file, rather than being injected.
+Outside Git there are no commits to record the work, and nothing else is
+missing. The session record holds each turn's changed files, the snapshot
+holds their prior contents for `/undo`, and Git, where it exists, sits on top
+of that rather than underneath it.
 
-## `--no-git` is not a degraded case
+## Rejected
 
-Outside Git, commits cannot provide a record of the work. Notes therefore refer
-to turns, identified by their index, time, and edited files. A commit hash is
-additional information when available, not a requirement.
-
-The transcript records each turn's changed files, so it remains the account of
-what a session did to the tree when Git is absent. This matches the existing
-layering, where the snapshot substrate is primary and Git sits on top.
-
-## The notes lifecycle
-
-Notes live in memory for one session. They are never persisted to disk; the
-transcript is the durable artifact, and notes are derived from it.
-
-Two paths create notes, and both are the user's explicit request:
-
-- **`/session fork <name>`.** Generates notes from the current session's record
-  and carries them into the new session, with the parent named. This is the
-  job notes are for: context from one conversation, taken into a different one.
-- **`/notes generate` mid-session.** Available in any session, including one
-  that started clean. It reads the record that exists at that point, which may
-  include the current session's turns because the history writer appends them
-  after each turn.
-
-`--continue` used to be a third path, regenerating notes at startup. It now
-restores the conversation itself (see the top of this document), so a session
-starts with no notes in context, no side-model call, and no delay, whether or
-not it is resumed. The user who wants notes asks for them; the user who does
-not is never charged for them.
-
-`/clear` keeps the notes. After clearing the conversation, the notes from the
-session's opening turns are still in context, which is usually what the user
-wants because the intent and constraints survive the cleared stretch. `/notes
-drop` removes them, and `/notes generate` replaces them with a newly generated
-summary.
-
-`/clear` empties the conversation without leaving the session: a soft
-restart, the same as starting the process again without `--continue`. Grants
-stay. `/reset` does the same and also gives back this run's webfetch
-approvals.
-
-- **The record keeps every turn.** Neither command writes to the session log;
-  they clear memory, not the record. `--continue` restores the conversation
-  whole, cleared stretch and all.
-- **Without saved state** (`--no-history`), there is no record for a
-  conversation to come back from, and `/clear` only empties memory.
-
-`/rewind [n]` takes the last `n` turns out of the conversation without
-leaving the session.
-- **A tombstone, not a deletion.** It appends a `rewind` row naming how many
-  turns it removed. The record keeps the turns, and restore applies the
-  tombstones in order, so `--continue` rebuilds the conversation the user was
-  left with.
-- **Whole turns, from the end.** A turn is the rows since the previous turn
-  row, which is how the live history groups them too, so a tool call and its
-  result are never separated and the cached prefix of the next request
-  survives.
-- **Files are left alone.** The model's picture of the tree goes stale in
-  every session. The rewind says which files the rewound turns changed, and
-  `/undo` is the command that reverts them.
-- **A compaction summary is a boundary.** A rewind that would reach turns a
-  summary absorbed is refused, and says so.
-
-Regeneration can use turns recorded since the previous notes were generated,
-though the resulting summary may still omit useful details. Compaction and note
-generation use different inputs: compaction operates on the coder's in-memory
-message list (`doneMessages`), while notes are regenerated from the on-disk
-transcript. By the time notes are regenerated, the transcript already includes
-everything, whether compaction has occurred or not.
-
-## Where a compaction summary's input comes from
-
-Compaction folds `doneMessages`, which already holds the previous summary, so
-summary *n+1* is built from summary *n*. That is the self-reinforcing pattern
-the section below rejects for notes, and it was never changed to match because
-until the session record existed there was nothing else to read.
-
-[2026-09-compaction-source](experiments/2026-09-compaction-source/) tested the
-change. Reading the record instead recalled a turn-1 reason in 10/12 MiMo
-sessions against 0/12 for folding, and the predicted harm to a
-mid-conversation fact did not appear — but the confabulation counter-metric
-turned out to be measuring the wrong thing, so the check its ship rule depends
-on did not run. [2026-10-compaction-roll](experiments/2026-10-compaction-roll/)
-re-ran it against the reworked summarizer, which keeps what the user said and
-is framed against continuing the transcript. Folding kept all 10 planted facts
-per session on Ling 3.1 Flash and reading the record kept 9: the record is
-sampled to fit the summarizer's input, its middle is what goes, and the model
-then said, correctly, that those turns were omitted. The flag was removed;
-compaction folds the messages.
-
-## Notes are regenerated, never folded
-
-Notes are regenerated from the session record — rendered as the markdown the
-transcript used to hold — not from the previous notes. Regenerating from the
-record avoids carrying errors forward merely because they appeared in earlier
-notes. If a summary invents a rationale, the next
-generation does not receive that invention as source material.
-
-The compaction trial produced one invented rationale — `"to balance between
-frequent updates and system load"` — that nobody had given. Repeatedly
-summarizing summaries can compound omissions and errors, so Strument regenerates
-from the durable record instead.
-
-When the rendered record exceeds the input budget, Strument keeps material from both
-the beginning and the end. Opening turns often contain the original intent and
-constraints; recent turns describe the current work. A tail-only window dropped
-the reason for a decision while keeping the last hour's step-by-step. The honest
-limit is that a constraint stated in the middle of a long session can still fall
-out, and the answer there is a line in `AGENTS.md`, not a fold.
-
-## Presenting the notes
-
-Session notes occupy their own chunk between the examples and the read-only
-files. Breakpoints sit on the examples-or-system boundary and on the read-only
-files, so the notes remain inside the cached prefix. A mid-session `/read-only`,
-which rewrites that block, does not invalidate them. This placement was borrowed
-from connectome-host's KV-stable folding.
-
-Session notes appear in the system-prompt prefix, clearly labeled as a generated
-summary rather than quoted conversation. They are the harness's artifact, not
-something the user said or this model said.
-
-The header gives a conflict rule:
-
-> They are a summary, not a record: they may be incomplete, and the project may
-> have changed since. Where they disagree with what you find in the files, the
-> files are right.
-
-The header tells the model to prefer current file contents when they conflict
-with the notes. The experiments below show the limitation: that instruction
-does not help if the model never checks the files.
-
-## Rejected, and why
-
-- **Verbatim replay.** See the sections on cost, attention, and attribution.
-- **Named or branchable sessions** (connectome-host's Chronicle, Gemini CLI's
-  shadow git repo). They add a separate unit of state for the user to manage.
-  `/undo` and Git already provide ways to explore an alternative, without
-  implying that they provide every capability of session branching.
-- **A model-managed memory store** with `remember()` / `forget()`. It would let
-  the model change its future prompt outside the ordinary file-review workflow,
-  including for sessions the user has not started. Persisted assertions still
-  require a confirmation surface and a way to inspect their changes.
-- **Presenting generated summaries as quoted conversation.** Injecting a
-  summary as though it were the conversation fabricates a turn. It is less
-  honest than replay, whose messages were at least really said.
-- **Folding the previous notes into regeneration.** Repeated summaries can
-  compound omissions and errors; the transcript remains the source instead.
-- **Voicing the notes as the agent** (connectome-host's `summaryParticipant`
-  defaults to `agent.name`). A different model writes the notes and another
-  model may read them, so agentless wording avoids assigning either one the
-  summary's voice.
+- **A model-managed memory store** (`remember()` / `forget()`). It would let
+  the model change its future prompt outside the review workflow, for sessions
+  the user has not started yet. A note meant to last is a line in
+  `AGENTS.md` or `AGENTS.local.md`.
+- **Summaries of any kind in the conversation.** See Compaction. A summary
+  presented as conversation also fabricates a turn nobody said.
+- **Branchable sessions** (Gemini CLI's shadow repository, connectome-host's
+  Chronicle). A second unit of state for the user to manage, beside `/undo`
+  and Git, which already explore an alternative.
+- **Restoring by default.** See Sessions and runs.
 
 ## What the panel persists
 
-Read 2026-09-20 at the commits named, for the design that became the session
-record and the blob store. Kept here because a claim about a fast-moving
-repository is a dated observation, and this is where it can be re-checked.
+The record and the blob store were designed after reading these, on
+2026-09-20. A dated observation, kept where it can be re-checked.
 
 | harness | commit | what it persists |
 | --- | --- | --- |
 | Codex CLI | `e29eceb` | `ResponseItem` including `FunctionCallOutput` |
 | OpenCode | `d870e22` | full JSON in SQLite `PartTable.data`; truncates in `compaction.ts` |
-| Hermes Agent | `8c2f9ca` | full content; caps only its FTS index, with a `LIKE` fallback over the full text "so no search capability is lost" |
+| Hermes Agent | `8c2f9ca` | full content; caps only its full-text index, with a `LIKE` fallback over the full text |
 | Pi | `3390bd9` | throws `SessionInvariantError` when a tool call is missing persisted arguments |
-| Chronicle (connectome-host) | `013f138` | never deletes a record; `compact_state` *appends* a snapshot, and heavy payloads live in a content-addressed store with an individual delete |
+| Chronicle (connectome-host) | `013f138` | never deletes a record; heavy payloads live in a content-addressed store with an individual delete |
 
-Two things the survey settled. **Nobody redacts tool content on the durable
-path** — the redaction in all of them is auth, keys in headers and tokens in
-logs — and the clip is consistently at the *context* boundary, never at the
-*storage* one. And Hermes's comment on why its index is capped is the
-footprint argument in one line: *"Tool results are often multi-megabyte
-machine payloads."*
-
-Chronicle is the shape Strument took: a permanent cheap timeline beside
-deletable heavy payloads. Strument adds the one-line description Chronicle
-does not keep, so a stripped record still reads as a conversation and can
-still be replayed.
-
-**Hermes is the only one of them with time-based expiry**, which is why
-`strument history strip` has a default age at all and why that number is a
-choice rather than a consensus.
-
-## Influences
-
-- **aider** — the `ChatSummary` this overhauls, and its `--restore-chat-history`
-  default-off position, which was right.
-- **Cline** — the Memory Bank's lifetime split. Strument keeps the durable state
-  in a reviewed project file instead of adopting Cline's storage arrangement.
-- **Amp** — the attention argument and the decision to refuse compaction
-  outright.
-- **Codex CLI** — third-person framing of a summary ("Another language model
-  started to solve this problem…"). Strument goes further to agentless.
-- **connectome-host** — KV-stable folding (cache-prefix placement, adopted) and
-  compression coverage as an observable (adopted as the `/tokens` row). Its
-  first-person voicing is the deliberate opposite choice, discussed above.
-
-## Where the evidence is
-
-- `experiments/2026-08-compaction/README.md` — a prompt rewrite that performed
-  worse than the baseline, and the scorer that nearly hid it.
-- `experiments/2026-08-agents-md/README.md` — naming `AGENTS.md` in the prompt.
-- `experiments/2026-08-session-notes/README.md` — notes across sessions: 8/8 vs 0/8 on
-  recovering a stated reason (p=0.0002), and 3/8 stale assertions when the tree
-  moved behind them. The conflict rule in the header does not prevent that,
-  because the failure is upstream of a conflict: the model never looked.
-- `experiments/2026-08-notes-header/README.md` — the follow-up that tried to fix that
-  with a stronger instruction, and could not: 8/24 vs 6/24, p=0.75. Its real
-  finding is that reading is decisive — in those 48 sessions, no model that
-  opened the file asserted the stale name, and no wording reliably causes the
-  opening. It also records that `--continue` can produce no notes and say
-  nothing, in 3 to 5 sessions of 48.
-- `experiments/2026-08-transcript-depth/README.md` — how deep the transcript should
-  go. Tool lines shipped; reasoning did not. The result contradicted the prediction
-  that logging reasoning would be harmful: reasoning recovers what a check wanted
-  19/26 against 2/26, while the rationale that check stated in the same breath was
-  recovered 0/62. Reasoning summarizes what it reads rather than transcribing it,
-  so it improves recall of what the code already carries and not of what only the
-  conversation had. The predicted confabulation did not appear, 0/26.
-- `experiments/2026-08-commit-context/README.md` — widening the commit-message
-  model's view from this turn to a bounded tail of earlier ones. The reason for
-  a change is settled before the change lands, so the narrow context recorded it
-  2 times in 28 and the wide one 12 in 27. The wider view also leaks: models
-  described the *previous* turn's change on this commit, with a BREAKING CHANGE
-  marker for a break the diff did not contain. In that trial, an added clause
-  prevented this leakage without reducing the measured benefit, and both shipped
-  together.
-- `../doc/experimenting.md` — how to run one of these without fooling yourself.
+Nobody redacts tool content on the durable path; redaction in all of them is
+of credentials, and the clip is at the context boundary, never at storage.
+Chronicle is the shape Strument took: a permanent, cheap timeline beside
+deletable heavy payloads. Hermes is the only one with time-based expiry, which
+is why `strument history strip` has a default age at all, and why that age is
+a choice rather than a consensus.
