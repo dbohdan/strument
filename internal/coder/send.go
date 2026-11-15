@@ -210,6 +210,14 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 			}
 		case llm.EventFinish:
 			finishReason = ev.FinishReason
+			// The provider ended the response with an error: what streamed
+			// is a fragment. Accepted as a finish, it became the answer — a
+			// truncated reply, or a consult's, reported as complete. It is
+			// retried like the error object a provider sends mid-stream.
+			if ev.FinishReason == "error" {
+				return resFailed, &llm.StreamError{Class: llm.ErrServer,
+					Message: "the provider ended the response with an error"}
+			}
 		case llm.EventUsage:
 			usage.add(ev.Usage)
 			if call == "turn" && ev.Usage != nil && ev.Usage.PromptTokens > 0 {

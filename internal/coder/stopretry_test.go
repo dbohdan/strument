@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -193,5 +194,24 @@ func TestTheTurnAfterAStopStartsClean(t *testing.T) {
 	}
 	if len(asker.asked) != 0 {
 		t.Errorf("asked %q", asker.asked)
+	}
+}
+
+// A response the provider ended with finish_reason "error" is a fragment. It
+// is retried, and the retry's answer is the turn's, not the fragment.
+func TestAnErrorFinishIsRetriedNotAccepted(t *testing.T) {
+	c := testCoder(t)
+	c.Clock = &fastClock{}
+	stub := &fixture.StreamStub{Turns: []fixture.Turn{
+		{Events: []fixture.Event{{Kind: "Answer", Text: "The answer is cut off mid"}, {Kind: "Finish", FinishReason: "error"}}},
+		answer("The whole answer."),
+	}}
+	c.Client = stub
+	c.Run(context.Background(), "q")
+	if stub.Remaining() != 0 {
+		t.Fatalf("the error finish was not retried: %d sends left", stub.Remaining())
+	}
+	if last := c.doneMessages[len(c.doneMessages)-1]; last.Text() != "The whole answer." {
+		t.Errorf("the turn's answer is %q", last.Text())
 	}
 }
