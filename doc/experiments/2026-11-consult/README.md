@@ -222,3 +222,34 @@ One pilot call came back from MiMo's Xiaomi endpoint as 1,066 tokens of
 reasoning, no answer, and `finish_reason: "error"`. Strument's stream loop
 accepted that finish as complete, so a turn — or a consult — could take a
 fragment as the answer. Fixed in `c5ec76f`: it is retried as a server error.
+
+## Follow-ups, preregistered before running
+
+Two probes, both on this task set, fixed before either ran.
+
+**Terra at its default reasoning.** Two more Terra samples per task with no
+reasoning setting sent, so the provider's default applies (a two-task pilot,
+kept out of the run: 148 and 213 reasoning tokens, against 0 at "low"). The
+single-candidate defect judge then scores all ninety candidates — MiMo's, Terra
+at "low", Terra at default — in one shuffled run, MiMo and DeepSeek judging,
+two reps each. The layer-2 defect counts are not reused: one run, so no
+writer's counts come from a different hour than another's, and Terra at "low"
+gets a replication of its 7-to-1 lean.
+
+- **The gap appears when Terra reasons** if, for the MiMo judge, Terra at
+  default has fewer defects than MiMo in the paired comparison with a sign-test
+  p below 0.05, and MiMo repeats its count on at least 60% of candidates.
+
+**Label swap.** MiMo judges the thirty Terra-against-MiMo pairs (Terra at
+"low") told who wrote each version — "written by GPT-6.1 Terra" or "written by
+you, MiMo-V2.6-Flash" — truthfully in half the calls and swapped in the other
+half, each in both orders: 120 calls, reasoning disabled as before. Under
+swapped labels, the version credited to Terra is MiMo's own.
+
+- **Deference** if, under swapped labels, MiMo's consistent verdicts favour the
+  version *credited* to Terra in at least 70%, with p below 0.05.
+- **Recognition** if, under swapped labels, they favour the version Terra
+  *actually* wrote in at least 70%, with p below 0.05.
+- Otherwise neither, and the per-call label effect — how often MiMo picks
+  Terra's actual text with true labels against swapped ones (Fisher) — is
+  reported as the size of whatever the label does.

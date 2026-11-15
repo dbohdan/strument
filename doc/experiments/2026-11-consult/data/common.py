@@ -19,6 +19,11 @@ import urllib.request
 MODELS = {
     "mimo": {"model": "xiaomi/mimo-v2.6-flash", "provider": "xiaomi"},
     "terra": {"model": "openai/gpt-6.1-terra", "provider": "openai", "extra": {"service_tier": "flex"}},
+    # Terra with no reasoning setting sent, so the provider's default applies.
+    # At "low" Terra used no reasoning in 25 of 30 generations; this is the
+    # model the maintainer's impression was formed on.
+    "terra-default": {"model": "openai/gpt-6.1-terra", "provider": "openai", "extra": {"service_tier": "flex"},
+                      "default_reasoning": True},
     "deepseek": {"model": "deepseek/deepseek-v4.1-flash", "provider": "wafer"},
 }
 
@@ -47,10 +52,13 @@ def chat(name, prompt, max_tokens, timeout=600, reasoning=None):
         "model": m["model"],
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
-        "reasoning": reasoning or {"effort": "low"},
         "provider": {"only": [m["provider"]], "allow_fallbacks": False},
         "usage": {"include": True},
     }
+    if reasoning is not None:
+        body["reasoning"] = reasoning
+    elif not m.get("default_reasoning"):
+        body["reasoning"] = {"effort": "low"}
     body.update(m.get("extra", {}))
     req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions", data=json.dumps(body).encode(),

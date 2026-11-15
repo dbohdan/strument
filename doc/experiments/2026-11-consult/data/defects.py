@@ -27,7 +27,7 @@ import common as C  # noqa: E402
 import judge as J  # noqa: E402
 import tasks as T  # noqa: E402
 
-GEN = [("mimo", 1), ("mimo", 2), ("terra", 1), ("terra", 2)]
+WRITERS = "mimo,terra"
 
 
 def prompt(task, text):
@@ -92,12 +92,14 @@ def main():
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--only", default="")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--writers", default=WRITERS, help="the writers whose two samples are judged")
     a = ap.parse_args()
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("OPENROUTER_API_KEY is not set")
     os.makedirs(os.path.join(a.outdir, "defects"), exist_ok=True)
     only = set(filter(None, a.only.split(",")))
-    js = [(task, g, j, rep) for task in T.TASKS for g in GEN for j in a.judges.split(",")
+    gen = [(w, n) for w in a.writers.split(",") for n in (1, 2)]
+    js = [(task, g, j, rep) for task in T.TASKS for g in gen for j in a.judges.split(",")
           for rep in range(1, a.reps + 1) if not only or task in only]
     random.Random(20261117).shuffle(js)
     print(f"{len(js)} calls", flush=True)

@@ -83,6 +83,7 @@ def main(outdir):
           f"{rt[len(rt) // 2]} |")
 
     defect_tables(load(outdir, "defects"))
+    label_tables(load(outdir, "label"))
     if not judged:
         return
     oc = outcomes(judged)
@@ -140,8 +141,8 @@ def main(outdir):
 
 
 def defect_tables(recs):
-    """The position-free judge: defects per candidate, Terra against MiMo paired
-    by task and sample, and how often a judge repeats its own count."""
+    """The position-free judge: defects per candidate, each writer against MiMo
+    paired by task and sample, and how often a judge repeats its own count."""
     if not recs:
         return
     w = print
@@ -150,36 +151,96 @@ def defect_tables(recs):
         items = D.parse_defects(r.get("text")) if r.get("ok") else None
         counts[(r["task"], r["writer"], r["n"], r["judge"])][r["rep"]] = None if items is None else len(items)
     judges = sorted({r["judge"] for r in recs})
+    writers = sorted({r["writer"] for r in recs}, key=lambda x: (x != "mimo", x))
     w("\n## Defects per candidate (single-candidate judge)\n")
     w("Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** "
-      "compares Terra's sample n with MiMo's sample n on the same task: Terra fewer, tie, or MiMo fewer.\n")
-    w("| judge | MiMo mean | Terra mean | Terra fewer | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |")
-    w("|---|---|---|---|---|---|---|---|---|")
+      "compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo "
+      "fewer.\n")
+    w("| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | "
+      "same count on both reps | unparsed |")
+    w("|---|---|---|---|---|---|---|---|---|---|")
     for j in judges:
         def mean(task, writer, n):
             vs = [v for v in counts.get((task, writer, n, j), {}).values() if v is not None]
             return sum(vs) / len(vs) if vs else None
-        per = {m: [x for x in (mean(t, m, n) for t in T.TASKS for n in (1, 2)) if x is not None] for m in ("mimo", "terra")}
-        fewer = tie = more = 0
-        for t in T.TASKS:
-            for n in (1, 2):
-                a, b = mean(t, "terra", n), mean(t, "mimo", n)
-                if a is None or b is None:
-                    continue
-                if a < b:
-                    fewer += 1
-                elif a > b:
-                    more += 1
-                else:
-                    tie += 1
-        reps = [v for k, v in counts.items() if k[3] == j]
-        both = [v for v in reps if v.get(1) is not None and v.get(2) is not None]
-        same = sum(1 for v in both if v[1] == v[2])
-        unparsed = sum(1 for v in reps for x in v.values() if x is None)
-        mm = f"{sum(per['mimo']) / len(per['mimo']):.2f}" if per["mimo"] else "—"
-        tm = f"{sum(per['terra']) / len(per['terra']):.2f}" if per["terra"] else "—"
-        w(f"| {j} | {mm} | {tm} | {fewer} | {tie} | {more} | {binom_two_sided(fewer, fewer + more):.3f} | "
-          f"{same} of {len(both)} | {unparsed} |")
+        for wr in writers:
+            ms = [x for x in (mean(t, wr, n) for t in T.TASKS for n in (1, 2)) if x is not None]
+            fewer = tie = more = 0
+            if wr != "mimo":
+                for t in T.TASKS:
+                    for n in (1, 2):
+                        a, b = mean(t, wr, n), mean(t, "mimo", n)
+                        if a is None or b is None:
+                            continue
+                        fewer += a < b
+                        more += a > b
+                        tie += a == b
+            reps = [v for k, v in counts.items() if k[3] == j and k[1] == wr]
+            both = [v for v in reps if v.get(1) is not None and v.get(2) is not None]
+            same = sum(1 for v in both if v[1] == v[2])
+            unparsed = sum(1 for v in reps for x in v.values() if x is None)
+            paired = (f"{fewer} | {tie} | {more} | {binom_two_sided(fewer, fewer + more):.3f}"
+                      if wr != "mimo" else "— | — | — | —")
+            w(f"| {j} | {wr} | {sum(ms) / len(ms):.2f} | {sum(1 for x in ms if x > 0)} of {len(ms)} | {paired} | "
+              f"{same} of {len(both)} | {unparsed} |" if ms else f"| {j} | {wr} | — | — | {paired} | — | {unparsed} |")
+
+
+def fisher_two_sided(a, b, c, d):
+    """Exact two-sided Fisher test on [[a, b], [c, d]]."""
+    n1, n2, k = a + b, c + d, a + c
+    def p(x):
+        return math.comb(n1, x) * math.comb(n2, k - x) / math.comb(n1 + n2, k)
+    lo, hi = max(0, k - n2), min(k, n1)
+    obs = p(a)
+    return min(1.0, sum(p(x) for x in range(lo, hi + 1) if p(x) <= obs + 1e-12))
+
+
+def label_tables(recs):
+    """The label-swap probe: does MiMo's choice follow the writer or the label?"""
+    if not recs:
+        return
+    w = print
+    def picked(r):
+        """(actual writer picked, labelled writer picked), or None."""
+        if r.get("verdict") not in ("A", "B"):
+            return None
+        side = "a" if r["verdict"] == "A" else "b"
+        return r["written_" + side], r["labelled_" + side]
+    w("\n## Label swap: MiMo told who wrote each version\n")
+    w("Per call: how often MiMo picked the text Terra actually wrote, and the text it was told Terra wrote. "
+      "Per pair (both orders): a consistent winner by actual writer, or a split.\n")
+    w("| labels | calls parsed | picked actual Terra | picked labelled Terra | picked A | pairs | consistent: actual Terra | "
+      "consistent: actual MiMo | split | labelled Terra of consistent | p (vs ½) |")
+    w("|---|---|---|---|---|---|---|---|---|---|---|")
+    per_call = {}
+    for lab in ("true", "false"):
+        rs = [r for r in recs if r["label"] == lab]
+        got = [(r, picked(r)) for r in rs]
+        ok = [(r, g) for r, g in got if g]
+        actual_t = sum(1 for _, g in ok if g[0] == "terra")
+        lab_t = sum(1 for _, g in ok if g[1] == "terra")
+        pick_a = sum(1 for r, _ in ok if r["verdict"] == "A")
+        per_call[lab] = (actual_t, len(ok) - actual_t)
+        by = collections.defaultdict(dict)
+        for r, g in got:
+            by[(r["task"], r["pair"])][r["order"]] = g
+        cons_t = cons_m = split = 0
+        for v in by.values():
+            gs = [v.get(o) for o in J.ORDERS]
+            if None in gs:
+                continue
+            if gs[0][0] == gs[1][0]:
+                cons_t += gs[0][0] == "terra"
+                cons_m += gs[0][0] == "mimo"
+            else:
+                split += 1
+        cons = cons_t + cons_m
+        lab_terra = cons_t if lab == "true" else cons_m  # consistent wins by the version labelled Terra
+        w(f"| {lab} | {len(ok)} | {actual_t} | {lab_t} | {pick_a} | {len(by)} | {cons_t} | {cons_m} | {split} | "
+          f"{f'{lab_terra / cons:.0%}' if cons else '—'} | {binom_two_sided(lab_terra, cons) if cons else float('nan'):.3f} |")
+    (a, b), (c, d) = per_call["true"], per_call["false"]
+    w(f"\nLabel effect on picking Terra's actual text, per call: {a} of {a + b} with true labels, {c} of {c + d} "
+      f"with swapped labels (Fisher p = {fisher_two_sided(a, b, c, d):.3f}).")
 
 
 if __name__ == "__main__":

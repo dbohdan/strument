@@ -27,6 +27,8 @@ import common as C  # noqa: E402
 import tasks as T  # noqa: E402
 
 GEN_MODELS = ["mimo", "terra"]
+# Room for a writer reasoning at its default, which "low" never needed.
+MAX_TOKENS = 32000
 
 
 def prompt(task):
@@ -41,8 +43,8 @@ def prompt(task):
     return "\n".join(parts)
 
 
-def jobs(samples, only):
-    js = [(task, m, n) for task in T.TASKS for m in GEN_MODELS for n in range(1, samples + 1)
+def jobs(samples, only, models=GEN_MODELS):
+    js = [(task, m, n) for task in T.TASKS for m in models for n in range(1, samples + 1)
           if not only or task in only]
     random.Random(20261115).shuffle(js)
     return js
@@ -53,7 +55,7 @@ def run(outdir, job):
     path = os.path.join(outdir, "gen", f"{task}__{m}__{n}.json")
     if os.path.exists(path):
         return path, "skipped"
-    rec = C.chat(m, prompt(task), max_tokens=8000)
+    rec = C.chat(m, prompt(task), max_tokens=MAX_TOKENS)
     block, how = C.extract_block(rec.get("text", "")) if rec["ok"] else (None, "error")
     rec.update(task=task, n=n, block=block, extracted=how)
     if block is not None:
@@ -71,11 +73,12 @@ def main():
     ap.add_argument("--samples", type=int, default=2)
     ap.add_argument("--only", default="")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--models", default=",".join(GEN_MODELS))
     a = ap.parse_args()
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("OPENROUTER_API_KEY is not set")
     os.makedirs(os.path.join(a.outdir, "gen"), exist_ok=True)
-    js = jobs(a.samples, set(filter(None, a.only.split(","))))
+    js = jobs(a.samples, set(filter(None, a.only.split(","))), a.models.split(","))
     print(f"{len(js)} calls", flush=True)
     failed = 0
     with cf.ThreadPoolExecutor(a.jobs) as ex:
