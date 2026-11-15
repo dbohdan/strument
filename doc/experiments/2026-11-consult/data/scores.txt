@@ -4,15 +4,18 @@
 |---|---|---|---|---|---|
 | mimo | 30 | 30 | 30 | $0.00013 | 124 |
 | terra | 30 | 30 | 30 | $0.00061 | 0 |
+| terra-default | 30 | 30 | 30 | $0.00094 | 113 |
 
 ## Defects per candidate (single-candidate judge)
 
-Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares Terra's sample n with MiMo's sample n on the same task: Terra fewer, tie, or MiMo fewer.
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo fewer.
 
-| judge | MiMo mean | Terra mean | Terra fewer | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
-|---|---|---|---|---|---|---|---|---|
-| deepseek | 0.47 | 0.29 | 8 | 13 | 8 | 1.000 | 40 of 52 | 9 |
-| mimo | 0.27 | 0.05 | 7 | 22 | 1 | 0.070 | 49 of 60 | 0 |
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|---|
+| deepseek | mimo | 0.47 | 11 of 30 | — | — | — | — | 21 of 26 | 4 |
+| deepseek | terra | 0.29 | 10 of 29 | 8 | 13 | 8 | 1.000 | 19 of 26 | 5 |
+| mimo | mimo | 0.27 | 9 of 30 | — | — | — | — | 22 of 30 | 0 |
+| mimo | terra | 0.05 | 3 of 30 | 7 | 22 | 1 | 0.070 | 27 of 30 | 0 |
 
 ## Verdicts per pair kind and judge
 

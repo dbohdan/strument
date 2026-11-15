@@ -1,9 +1,13 @@
 # Consult: can MiMo tell Terra's writing from its own?
 
-**Status:** characterization — layer 2 run. **Result: neither judge passed
-either preregistered design.** Every lean points to Terra, none clears its
-bar, and the likeliest reasons are a task set where both writers already do
-well and a Terra that, at `reasoning = "low"`, did not reason at all.
+**Status:** characterization — layer 2 and two follow-ups run. **Result:
+MiMo's single-candidate defect judge separates Terra from MiMo, and the
+blind pairwise judge does not.** In layer 2 the defect judge leaned Terra 7 to
+1 (p = 0.07), short of its bar; the follow-up's replication, in a fresh run,
+gave 11 to 0 (p = 0.001), and Terra at "low" drew no defects at all from it.
+Terra at its default reasoning did *not* do better: 11 to 7 (p = 0.48), with
+more defects than at "low". Telling MiMo who wrote each version changed
+nothing measurable, and it never mentioned the authors.
 
 The `consult` tool (`c59f806`) lets the model ask another model, configured in
 `consult_models`, and get the answer back. Whether that is worth having for
@@ -253,3 +257,80 @@ swapped labels, the version credited to Terra is MiMo's own.
 - Otherwise neither, and the per-call label effect — how often MiMo picks
   Terra's actual text with true labels against swapped ones (Fisher) — is
   reported as the size of whatever the label does.
+
+## Follow-up results
+
+Run after the amendment (`62e27e0`): 30 Terra generations at default
+reasoning, then 360 defect-judge calls over all ninety candidates and 120
+label-swap calls, none failed. About $0.44. Tables in
+`data/follow-up-scores.txt`, records in `data/follow-up-runs.tar.xz`, the new
+candidates in `data/candidates.jsonl`.
+
+### Terra at its default reasoning
+
+At default, Terra reasoned 44–504 tokens per task (median 113), against 0 in
+25 of 30 at "low". All thirty candidates pass every fact check.
+
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p |
+|---|---|---|---|---|---|---|---|
+| MiMo | MiMo | 0.35 | 11 of 30 | — | — | — | — |
+| MiMo | Terra, low | 0.00 | 0 of 30 | 11 | 19 | 0 | 0.001 |
+| MiMo | Terra, default | 0.17 | 8 of 30 | 11 | 12 | 7 | 0.48 |
+| DeepSeek | MiMo | 0.45 | 14 of 30 | — | — | — | — |
+| DeepSeek | Terra, low | 0.38 | 10 of 30 | 8 | 16 | 6 | 0.79 |
+| DeepSeek | Terra, default | 0.42 | 9 of 30 | 11 | 11 | 8 | 0.65 |
+
+**Against the criterion:** Terra at default does not have fewer defects than
+MiMo by MiMo's judge (p = 0.48). The gap does not appear when Terra reasons;
+if anything it narrows. The defects MiMo found in the reasoned candidates are
+mostly real and small, and mostly in material Terra *added*: a config page
+naming the implementation ("parsed with Python's `int()`"), a hedge ("This
+multiplication can overflow."), an error message giving the remedy before the
+event, "Print each number, then the total" without "by default". Reasoning
+here bought elaboration, and elaboration is where defects live. MiMo repeated
+its own count on 22 of 30 MiMo candidates, 27 of 27 Terra-low and 22 of 28
+Terra-default.
+
+The hypothesis this follow-up was built on — that "low" removed the gap by
+stopping Terra from reasoning — is wrong. The gap is there at "low".
+
+**Terra at "low", replicated.** Not a criterion of the amendment, which tested
+only Terra at default; reported as preregistered. In a fresh run under the same
+judge and settings, Terra at "low" had fewer defects than MiMo in 11 pairs and
+more in none (layer 2: 7 and 1). Pooled over both runs, 18 to 1. DeepSeek's
+defect judge sees no difference in either run.
+
+### Label swap
+
+| labels | calls parsed | picked Terra's actual text | picked the text labelled Terra | picked A | consistent pairs: Terra / MiMo / split |
+|---|---|---|---|---|---|
+| true | 60 | 25 | 25 | 41 | 5 / 10 / 15 |
+| swapped | 60 | 33 | 27 | 45 | 8 / 5 / 17 |
+
+**Against the criteria:** neither deference nor recognition. Under swapped
+labels the version credited to Terra won 5 of 13 consistent pairs (38%,
+p = 0.58), the version Terra actually wrote 8 of 13 (62%). Per call, MiMo
+picked Terra's actual text 25 of 60 times with true labels and 33 of 60 with
+swapped ones (Fisher p = 0.20). The direction, if anything, is toward the
+version labelled "you": 18 of 28 consistent pairs across both conditions —
+self-preference, not deference, and not significant. Position still decides
+most of it: A in 86 of 120. In none of the 120 verdicts did MiMo mention
+Terra, itself, or a stronger model.
+
+So the label does not explain the maintainer's impression either. In this
+setting MiMo reads past who wrote a version, and its pairwise verdicts are
+mostly position.
+
+## Decisions
+
+- **The judge for layer 4 is MiMo's single-candidate defect judge.** This
+  departs from layer 2's preregistered rule, which on its own numbers said
+  both judges failed. It is made after seeing the follow-up and is labelled as
+  such: the replication (11 to 0, p = 0.001; 18 to 1 pooled) is what moved it.
+  The pairwise judge is dropped, for both judges. DeepSeek's defect judge does
+  not separate the writers in either run and is not used.
+- **Consult Terra at `reasoning = "low"`.** On this task set it was better by
+  the only judge that separates the writers, and cheaper: $0.00061 a candidate
+  against $0.00094 at default, on flex.
+- **Still open:** whether any of this holds on longer documents, where the
+  maintainer's impression was formed. Layer 4 should include some.

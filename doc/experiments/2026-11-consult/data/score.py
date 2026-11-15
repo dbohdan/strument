@@ -72,7 +72,7 @@ def main(outdir):
     w("## Candidates\n")
     w("| model | candidates | fenced block | facts ok | mean cost | reasoning tokens (median) |")
     w("|---|---|---|---|---|---|")
-    for m in ("mimo", "terra"):
+    for m in ("mimo", "terra", "terra-default"):
         rs = [r for r in gens if r["model"] == m]
         if not rs:
             continue

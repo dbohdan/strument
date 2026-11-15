@@ -1,0 +1,31 @@
+## Candidates
+
+| model | candidates | fenced block | facts ok | mean cost | reasoning tokens (median) |
+|---|---|---|---|---|---|
+| mimo | 30 | 30 | 30 | $0.00013 | 124 |
+| terra | 30 | 30 | 30 | $0.00061 | 0 |
+| terra-default | 30 | 30 | 30 | $0.00094 | 113 |
+
+## Defects per candidate (single-candidate judge)
+
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo fewer.
+
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|---|
+| deepseek | mimo | 0.45 | 14 of 30 | — | — | — | — | 17 of 27 | 3 |
+| deepseek | terra | 0.38 | 10 of 30 | 8 | 16 | 6 | 0.791 | 21 of 26 | 4 |
+| deepseek | terra-default | 0.42 | 9 of 30 | 11 | 11 | 8 | 0.648 | 20 of 26 | 4 |
+| mimo | mimo | 0.35 | 11 of 30 | — | — | — | — | 22 of 30 | 0 |
+| mimo | terra | 0.00 | 0 of 30 | 11 | 19 | 0 | 0.001 | 27 of 27 | 3 |
+| mimo | terra-default | 0.17 | 8 of 30 | 11 | 12 | 7 | 0.481 | 22 of 28 | 2 |
+
+## Label swap: MiMo told who wrote each version
+
+Per call: how often MiMo picked the text Terra actually wrote, and the text it was told Terra wrote. Per pair (both orders): a consistent winner by actual writer, or a split.
+
+| labels | calls parsed | picked actual Terra | picked labelled Terra | picked A | pairs | consistent: actual Terra | consistent: actual MiMo | split | labelled Terra of consistent | p (vs ½) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| true | 60 | 25 | 25 | 41 | 30 | 5 | 10 | 15 | 33% | 0.302 |
+| false | 60 | 33 | 27 | 45 | 30 | 8 | 5 | 17 | 38% | 0.581 |
+
+Label effect on picking Terra's actual text, per call: 25 of 60 with true labels, 33 of 60 with swapped labels (Fisher p = 0.201).
