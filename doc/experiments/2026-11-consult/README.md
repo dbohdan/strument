@@ -355,3 +355,51 @@ effort, but this run does not verify that.
 - Terra at "low" against Terra at default, which the last run's data put at 8
   to 0 (p = 0.008, computed after the fact), is reported again as a
   replication.
+
+### Results
+
+Run after `4bebf90`: 30 Sol generations, 480 defect-judge calls over all
+four writers, none failed, $0.62. Tables in `data/sol-scores.txt`, records in
+`data/sol-runs.tar.xz`.
+
+| MiMo's judge | mean defects | candidates with any | fewer than MiMo / tie / more | p |
+|---|---|---|---|---|
+| MiMo | 0.32 | 8 of 30 | — | — |
+| Terra, low | 0.08 | 4 of 30 | 8 / 19 / 3 | 0.23 |
+| Terra, default | 0.05 | 3 of 30 | 8 / 20 / 2 | 0.11 |
+| Sol, low | 0.05 | 3 of 30 | 8 / 19 / 3 | 0.23 |
+
+Sol against Terra, by MiMo's judge: 2 / 27 / 1 against Terra at "low", 3 / 24 / 3
+against Terra at default. DeepSeek's judge, likewise: no pair of writers it
+separates (all p > 0.25), though it too ranks all three OpenAI writers below
+MiMo in defects (0.20–0.29 against 0.55).
+
+**Against the criteria:** Sol does not have significantly fewer defects than
+MiMo in this run (8 to 3, p = 0.23), and neither does either Terra. Sol and
+Terra cannot be told apart: 27 of 30 pairs tie against Terra at "low". With
+the ceiling stated beforehand, that is not evidence that they write alike —
+only that on short tasks this judge cannot see past "both nearly flawless".
+Sol costs about twice what Terra at "low" does ($0.00135 a candidate against
+$0.00061, on flex) for no measured gain.
+
+**Terra at "low" against default did not replicate:** 3 to 4 here, after 8 to
+0 last run. Pooled, 11 to 4 (p = 0.12). The last run's finding that reasoning
+made Terra worse is withdrawn as noise at this sample.
+
+**Pooled over the three runs**, Terra at "low" had fewer defects than MiMo
+26 times and more 4 times (sign p = 0.00006). That the OpenAI writers beat
+MiMo on this task set is the one result that holds across runs; each run on
+its own sits near or below the significance bar, so a single run of this size
+is not enough to rank writers. The defects MiMo lists for the OpenAI writers
+are real and small: a remedy placed before the event, "Numbers can span
+multiple lines", "400 ms after the second" for a randomized delay.
+
+### Decisions, revised
+
+- **For model choice:** on short documentation tasks, Terra at "low", Terra
+  at default and Sol at "low" are indistinguishable by the only judge that
+  separates writers at all, and all three beat MiMo. Terra at "low" is the
+  cheapest of the three.
+- **For the trial:** one run of 30 pairs cannot rank writers here, so layer 4
+  needs either more samples per task or longer documents, where defects have
+  room to differ. Both, preferably.

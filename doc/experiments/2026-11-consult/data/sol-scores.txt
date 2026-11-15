@@ -1,0 +1,34 @@
+## Candidates
+
+| model | candidates | fenced block | facts ok | mean cost | reasoning tokens (median) |
+|---|---|---|---|---|---|
+| mimo | 30 | 30 | 30 | $0.00013 | 124 |
+| terra | 30 | 30 | 30 | $0.00061 | 0 |
+| terra-default | 30 | 30 | 30 | $0.00094 | 113 |
+| sol | 30 | 30 | 30 | $0.00135 | 0 |
+
+## Defects per candidate (single-candidate judge)
+
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo fewer.
+
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|---|
+| deepseek | mimo | 0.55 | 13 of 29 | — | — | — | — | 13 of 23 | 8 |
+| deepseek | sol | 0.20 | 6 of 28 | 9 | 14 | 4 | 0.267 | 18 of 21 | 11 |
+| deepseek | terra | 0.20 | 9 of 30 | 10 | 13 | 6 | 0.454 | 17 of 24 | 6 |
+| deepseek | terra-default | 0.29 | 10 of 28 | 8 | 15 | 5 | 0.581 | 17 of 24 | 8 |
+| mimo | mimo | 0.32 | 8 of 30 | — | — | — | — | 23 of 28 | 2 |
+| mimo | sol | 0.05 | 3 of 30 | 8 | 19 | 3 | 0.227 | 24 of 27 | 3 |
+| mimo | terra | 0.08 | 4 of 30 | 8 | 19 | 3 | 0.227 | 24 of 28 | 2 |
+| mimo | terra-default | 0.05 | 3 of 30 | 8 | 20 | 2 | 0.109 | 24 of 27 | 3 |
+
+### Writer against writer (same judge, paired by task and sample)
+
+| judge | writer | against | first fewer | tie | second fewer | p (sign, vs ½) |
+|---|---|---|---|---|---|---|
+| deepseek | sol | terra | 7 | 17 | 4 | 0.549 |
+| deepseek | sol | terra-default | 7 | 16 | 4 | 0.549 |
+| deepseek | terra | terra-default | 9 | 13 | 6 | 0.607 |
+| mimo | sol | terra | 2 | 27 | 1 | 1.000 |
+| mimo | sol | terra-default | 3 | 24 | 3 | 1.000 |
+| mimo | terra | terra-default | 3 | 23 | 4 | 1.000 |

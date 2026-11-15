@@ -5,6 +5,7 @@
 | mimo | 30 | 30 | 30 | $0.00013 | 124 |
 | terra | 30 | 30 | 30 | $0.00061 | 0 |
 | terra-default | 30 | 30 | 30 | $0.00094 | 113 |
+| sol | 30 | 30 | 30 | $0.00135 | 0 |
 
 ## Defects per candidate (single-candidate judge)
 
@@ -18,6 +19,13 @@ Each candidate is judged alone, twice. A candidate's count is the mean of its pa
 | mimo | mimo | 0.35 | 11 of 30 | — | — | — | — | 22 of 30 | 0 |
 | mimo | terra | 0.00 | 0 of 30 | 11 | 19 | 0 | 0.001 | 27 of 27 | 3 |
 | mimo | terra-default | 0.17 | 8 of 30 | 11 | 12 | 7 | 0.481 | 22 of 28 | 2 |
+
+### Writer against writer (same judge, paired by task and sample)
+
+| judge | writer | against | first fewer | tie | second fewer | p (sign, vs ½) |
+|---|---|---|---|---|---|---|
+| deepseek | terra | terra-default | 8 | 16 | 6 | 0.791 |
+| mimo | terra | terra-default | 8 | 22 | 0 | 0.008 |
 
 ## Label swap: MiMo told who wrote each version
 
