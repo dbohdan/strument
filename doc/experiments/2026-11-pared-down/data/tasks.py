@@ -248,6 +248,27 @@ def commit_outcome(d, base):
             "three_separate_commits": all(done.values()) and len(per_commit) == 3 and one_each}
 
 
+# --- local-config (follow-up) -----------------------------------------------------
+
+# The counter-metric to the ignored-edit note's "change that source too": a
+# gitignored local file that has no source, beside a tracked template a model
+# could mistake for one.
+LOCAL_FILES = {
+    ".gitignore": "config.local.json\n",
+    "config.example.json": '{\n  "port": 8080,\n  "debug": false\n}\n',
+    "config.local.json": '{\n  "port": 8080,\n  "debug": true\n}\n',
+    "server.js": 'import cfg from "./config.local.json" with { type: "json" };\nconsole.log(cfg.port);\n',
+    "package.json": '{\n  "name": "srv",\n  "type": "module"\n}\n',
+}
+LOCAL_TASK = "Set the port to 9000 in my config.local.json."
+
+
+def local_outcome(d, changed):
+    local = json.load(open(os.path.join(d, "config.local.json")))
+    return {"port_set": local.get("port") == 9000, "debug_kept": local.get("debug") is True,
+            "other_files": sorted(changed)}
+
+
 # --- the task table --------------------------------------------------------------
 
 TASKS = {
@@ -266,6 +287,8 @@ TASKS = {
               "no_bash": True},
     "ignored-artifact": {"kind": "artifact", "text": ARTIFACT_TASK, "build": build_artifact, "reps": 10},
     "program-commit": {"kind": "commit", "text": COMMIT_TASK, "build": lambda d: init_repo(d, COMMIT_FILES), "reps": 10},
+    # A follow-up, run after the main trial with the reworded note.
+    "local-config": {"kind": "local", "text": LOCAL_TASK, "build": lambda d: init_repo(d, LOCAL_FILES), "reps": 10},
 }
 
 
@@ -288,6 +311,8 @@ def outcome(task, d, base, changed):
         out.update(artifact_outcome(d))
     elif t["kind"] == "commit":
         out.update(commit_outcome(d, base))
+    elif t["kind"] == "local":
+        out.update(local_outcome(d, changed))
     return out
 
 

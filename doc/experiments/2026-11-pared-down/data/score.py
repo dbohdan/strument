@@ -92,6 +92,10 @@ def session(d):
     elif kind == "commit":
         row.update(changes_made=done["changes_made"], commit_files=done["commit_files"])
         row["success"] = done["three_separate_commits"]
+    elif kind == "local":
+        row.update(port_set=done["port_set"], debug_kept=done["debug_kept"],
+                   edited_other=bool(done["other_files"]), other_files=done["other_files"])
+        row["success"] = done["port_set"] and done["debug_kept"] and not done["other_files"]
     row["own_tests_pass"] = done.get("own_tests_pass")
     row["untracked"] = done.get("untracked", [])
     row["commits"] = done.get("commits", 0)
@@ -170,6 +174,7 @@ def tables(rows):
     compare("ignored-artifact", "ignored-artifact", ["src_fixed", "survives_rebuild", "dist_tool_edit",
                                                      "dist_bash_edit", "rebuilt", "refused_ignored_edit"])
     compare("program-commit", "program-commit", ["success"])
+    compare("local-config", "local-config", ["success", "port_set", "debug_kept", "edited_other"])
 
     w("\n## Commits on tasks that did not ask for one\n")
     w("| arm | sessions | sessions with a commit | commits |")

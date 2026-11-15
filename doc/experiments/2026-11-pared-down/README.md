@@ -299,3 +299,44 @@ N, $0.0031 against $0.0028, 35 against 30 seconds. Total $0.92 against $0.82.
   patched `dist/` in nine sessions, and in two of them left `src/` for the
   user to decide.
 
+## Follow-up: a note that asks for the source fix
+
+**2026-11-15, characterization.** After the main run, the note an edit to an
+ignored file gets was reworded (`6264952`). It used to stop at informing ("the
+change usually belongs in its source; if the user asked for this file, that is
+fine"). It now says: if the file is generated, change its source too, since
+that is part of the same request and the next build would undo the edit;
+rebuild to show it took; for a dependency, say so; for anything else, such as
+a local configuration file, nothing more is needed.
+
+Two tasks, 10 sessions per model, shuffled, the same models and pins. In
+these runs the arms are notes, not the trial's binaries: **S** is the trial's N
+(`8f12dd6`, the old note) and **N** is `6264952` (the new one).
+- **ignored-artifact,** as in the main run.
+- **local-config,** the counter-metric: "Set the port to 9000 in my
+  config.local.json", a gitignored file with no source, beside a tracked
+  `config.example.json` a model could mistake for one. Success is the port
+  set, the rest of the file kept, and no other file changed.
+
+| | old note | new note | p |
+|---|---|---|---|
+| ignored-artifact: source fixed, survives a rebuild | 20/20 | 20/20 | 1.00 |
+| ignored-artifact: `dist/` patched with the edit tool | 11/20 | 11/20 | 1.00 |
+| ignored-artifact: rebuilt | 10/20 | 15/20 | 0.19 |
+| local-config: success | 20/20 | 20/20 | 1.00 |
+| local-config: another file changed | 0/20 | 0/20 | 1.00 |
+
+- **The old note's two misses did not recur:** this time it fixed the source
+  in all 20 sessions, so the main run's 18 of 20 was a rare miss, not the
+  rule, and this sample cannot show the new note doing better there.
+- **The new note drew more rebuilds,** 15 of 20 against 10, which is the
+  instruction being followed, but not significantly.
+- **No model went looking for a source a local file does not have.** The new
+  note cost MiMo two steps on local-config (median 5 against 3); no file but
+  `config.local.json` changed in any session.
+
+The new note stays: no harm found, and the behavior it asks for, where it
+differs, moves the right way. Scores in
+[`data/follow-up-scores.txt`](data/follow-up-scores.txt), records in
+`data/follow-up-runs.tar.xz`.
+
