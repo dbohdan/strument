@@ -1,0 +1,139 @@
+# Consult: can MiMo tell Terra's writing from its own?
+
+**Status:** design — layer 2 preregistered, not yet run.
+
+The `consult` tool (`c59f806`) lets the model ask another model, configured in
+`consult_models`, and get the answer back. Whether that is worth having for
+the use it was built for — MiMo handing documentation work to a stronger
+writer — is a question for a later trial (layer 4 below). That trial needs a
+judge, and the plan was MiMo: the maintainer's impression is that GPT-6.1 Terra
+writes documentation in a key close to GPT-6 Astra's and ahead of MiMo's, in a
+way MiMo itself recognizes. This layer checks that premise before anything
+rests on it.
+
+The four layers, cheapest first:
+
+1. Offline tests of the tool (in `internal/coder/consult_test.go`): done.
+2. **This one.** Is MiMo a usable judge of Terra's writing against its own?
+3. A live mechanics pass: does MiMo call `consult`, and send the files the
+   question needs?
+4. The trial: MiMo with and without a consultable Terra, on these tasks.
+
+## The task set
+
+Fifteen documentation tasks over four small fictional projects (`data/tasks.py`):
+a Go CLI (`tally`), a Python log rotator (`rotor`), a TypeScript retry library
+(`pinwheel`) and a Go library behind a model-facing search tool (`grepkit`).
+Each task rewrites, or writes, one file — help text, error messages, a README
+section, a config reference, a changelog entry, a JSDoc block, a deprecation
+warning, an upgrade note, a tool description, a confirmation prompt, a commit
+message, a doc comment — under a shared `STYLE.md`.
+
+Six tasks carry a **plant**: the current text states something the code
+contradicts (tally's precision default, rotor's `keep` default and its missing
+`compress` option, pinwheel's attempt count and its `maxMs` cap). Plants were
+verified by running the code — `go test` reading the flag defaults, Python
+importing `DEFAULTS`, Node importing the TypeScript — not by matching its text,
+and a sabotaged value in each was caught (experimenting.md §26, §17). In this
+layer both writers are shown the code, so the plants test little here; they
+exist for layer 4, where MiMo decides what a consult gets to see.
+
+Each task has **fact checks**, counted rather than judged: patterns that must
+and must not appear, flags that do not exist, format verbs a string must keep,
+and whether a Go, Python or TypeScript file still parses. `tasks.py --check`
+builds every fixture and runs each task's checks both ways — a reference
+answer passes, the file as shipped fails — and the syntax checks were each
+shown to fail on broken input.
+
+## Layer 2 design
+
+**Candidates** (`generate.py`): for each task, two versions from MiMo-V2.6-Flash
+and two from GPT-6.1 Terra, each from one call with the same prompt — the
+instruction, the task's files, and a request for the target's full contents in
+one fenced block. Sixty candidates, already generated: all 60 produced a block
+and all 60 pass their fact checks, so on this layer the checks do not separate
+the writers and the judge's verdict is the measurement.
+
+**Pairwise judge** (`judge.py`): per task, four pairs — Terra against MiMo for
+sample 1 and sample 2 (**tm**), and two null pairs, MiMo 1 against MiMo 2
+(**mm**) and Terra 1 against Terra 2 (**tt**). Each pair is shown in both orders
+to each judge, blind, with the task and the project's files; the judge ends
+with `Winner: A` or `Winner: B`. A pair is **consistent** when the same member
+wins in both orders, a **split** when each order picks the version in one
+position, and **missing** when a call failed or did not parse (§3).
+
+**Single-candidate judge** (`defects.py`): each candidate is shown alone, with
+the task and the files, and the judge lists its concrete defects. Judged twice
+per candidate. The measure is the count. No judge ever sees two versions, so
+this design cannot have a position bias, at the price of being a noisier scale.
+
+**Judges:** MiMo-V2.6-Flash and DeepSeek-V4.1-Flash, so that a failure of MiMo
+can be told from a failure of the method.
+
+**Settings:** every model pinned to one provider with fallbacks off (MiMo to
+Xiaomi, Terra to OpenAI, DeepSeek to Wafer). Writers at `reasoning = "low"`.
+Terra on OpenAI's flex tier, which OpenRouter passes through — measured: the
+response echoes `service_tier: "flex"` and the cost of the same request halves
+exactly. **Judges with reasoning disabled**, because at "low" both judges spent
+their whole budget deliberating over the judging prompts (6,000 tokens for
+MiMo, 16,000 for DeepSeek) and wrote nothing parsable, and a reasoning-token
+cap was ignored by both providers. Calls run in a seeded shuffled order.
+
+## What the pilots found
+
+Two pilots, on `tally-help` and `pin-readme` only, are kept out of the main
+run's directory and its numbers.
+
+- **Pilot 1**, judges at reasoning "low": MiMo picked the version shown first
+  in **15 of 16** verdicts. The transcripts show the mechanism: in one order
+  MiMo praised Terra's line about empty fields as coverage a user needs, in
+  the other it called the same line surplus the task did not ask for. Two of
+  DeepSeek's sixteen ran out of tokens with no verdict.
+- **Pilot 2**, reasoning disabled: MiMo picked A in 11 of 16 and DeepSeek in
+  12 of 16. On two tasks neither judge separated the writers, and defect
+  counts were 0–1 for most candidates from either. DeepSeek sometimes loops
+  ("Final: none." 84 times) to the token limit; the scorer counts what it
+  can parse and reports the rest as missing.
+- Equipment faults fixed along the way, each before any main-run call: a
+  fixture flag added for plant verification that both writers documented as
+  real (now read by a test file written only in the check's build directory);
+  an OpenRouter 200 response carrying an error and no choices, first read as
+  an empty answer; a mid-stream `finish_reason: "error"` and dropped
+  connections, now retried; a TypeScript syntax check that could not fail; a
+  fact check that rejected "two digits" for "2".
+
+## Preregistered criteria
+
+Fixed before the main run, on all fifteen tasks, 30 Terra-against-MiMo pairs
+per judge.
+
+**MiMo is a usable pairwise discriminator** if both hold:
+
+1. Of its consistent verdicts on tm pairs, Terra wins at least 70%, with a
+   two-sided exact binomial p below 0.05 against ½.
+2. Its consistency rate on tm pairs exceeds its rate on the null pairs (mm and
+   tt pooled) by at least 15 points. A judge whose verdicts are as stable on
+   two samples of one writer as on two writers is reading something other
+   than the difference in writers.
+
+**MiMo is a usable single-candidate discriminator** if Terra's candidates have
+fewer defects than MiMo's in the paired comparison with a sign-test p below
+0.05, and MiMo gives the same count on both reps for at least 60% of
+candidates.
+
+The same criteria are reported for DeepSeek.
+
+**What follows from each outcome:**
+
+- MiMo passes either design: it judges layer 4, in that design.
+- MiMo fails and DeepSeek passes: DeepSeek judges layer 4, and the premise
+  that MiMo recognizes Terra's writing does not hold on these tasks.
+- Both fail: on this task set a judge cannot see a Terra–MiMo difference.
+  Either the difference is small here — the tasks may be too easy, since every
+  candidate already passes its fact checks — or it is not what these judges
+  measure. Layer 4 would then rest on its counted metrics (the plants,
+  integration fidelity, cost), and a harder task set would come before it.
+
+**Reported whatever the outcome:** each judge's first-position rate, its
+consistency on null pairs, unparsed and missing calls, the two judges'
+agreement on tm pairs both judged consistently, and cost.
