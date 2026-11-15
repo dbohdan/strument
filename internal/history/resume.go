@@ -13,12 +13,9 @@ const resumeVersion = 1
 // Resume is the cheap half of a session: what you would otherwise retype after
 // a restart.
 //
-// Deliberately not the conversation, and still not — but for a narrower reason
-// than when this was written. The conversation is durable now: it is in the
-// session record, which `--continue` rebuilds it from. What would be wrong is
-// keeping a *second* copy here, where it could disagree with the record and
-// where nothing could prune it. This file stays the cheap half, written after
-// every command; the record is the expensive half, written as it happens.
+// Not the conversation: that is in the session record, which `--continue`
+// rebuilds it from. A second copy here could disagree with the record, and
+// nothing would prune it.
 type Resume struct {
 	Version int    `json:"version"`
 	Updated string `json:"updated"`

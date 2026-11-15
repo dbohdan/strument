@@ -343,11 +343,9 @@ func ReadSessionRecords(projectRoot, session string) ([]coder.Record, int, error
 	return out, missing, nil
 }
 
-// Markdown renders turns in the transcript's format, header and all.
-//
-// Byte-for-byte what Writer produced, including its skip rule: a turn with no
-// answer, no tool lines and no changed files was never written, and a derived
-// transcript that showed those turns would not be the same document.
+// Markdown renders turns in the transcript's format, header and all. The
+// format is the one the legacy transcript.md was written in, so an old file
+// and a rendering of the record read the same.
 func Markdown(turns []Turn) string {
 	var b strings.Builder
 	b.WriteString(transcriptTitle)

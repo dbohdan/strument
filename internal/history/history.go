@@ -229,9 +229,8 @@ type Turn struct {
 	Files []string
 	// Crashed marks a turn that died with a panic mid-flight and was recorded
 	// by the crash path rather than by the normal post-run append. It renders
-	// so the notes regenerated from this file — and any human reading it —
-	// know the turn's response is a fragment cut off by a crash, not the
-	// model's final word.
+	// so a reader knows the turn's response is a fragment cut off by a crash,
+	// not the model's final word.
 	Crashed bool
 	// Tools is what the harness reported doing during the turn, in order: the
 	// one-line summaries it printed to the screen ("Read poll/poll.go (5
@@ -239,20 +238,16 @@ type Turn struct {
 	//
 	// Files says what a turn ended up changing; this says what it did on the
 	// way, including the parts that changed nothing — the search that came back
-	// empty, the check that failed and was fixed. Session notes regenerate from
-	// this record, and before it existed they were derived from the model's
-	// prose alone, so a turn that made a dozen tool calls and closed with one
-	// sentence was, to the next session, that sentence.
+	// empty, the check that failed and was fixed. Without it, a turn that made
+	// a dozen tool calls and closed with one sentence reads as that sentence.
 	Tools []string
 }
 
-// transcriptTitle opens the file, once. Shared with the renderer that derives
-// the same document from the record, so the two cannot drift apart.
+// transcriptTitle opens a rendered transcript, once.
 const transcriptTitle = "# Strument chat history\n\n"
 
-// skipTurn reports a turn with nothing in it: no answer, no work. Writer
-// dropped those and the derived transcript must drop the same ones, or the
-// two documents differ over a turn neither has anything to say about.
+// skipTurn reports a turn with nothing in it: no answer, no work. A transcript
+// leaves those out; they have nothing to say.
 func skipTurn(t Turn) bool {
 	return strings.TrimSpace(t.Assistant) == "" && len(t.Tools) == 0 && len(t.Files) == 0
 }

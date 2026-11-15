@@ -25,9 +25,9 @@ type artifact struct {
 	// directory returns EISDIR — not os.ErrNotExist, so the missing-source
 	// escape hatches in adopt.go do not fire and a merge aborts partway
 	// through a map-ordered loop, having already rewritten an arbitrary
-	// subset. A directory artifact must therefore carry mergeUnion, which
-	// mergeArtifact checks rather than trusting the table to be written
-	// carefully.
+	// subset. A directory artifact must therefore carry one of dirPolicies,
+	// which TestArtifactKindMatchesItsPolicy checks rather than trusting the
+	// table to be written carefully.
 	dir bool
 	// legacy marks an artifact Strument no longer writes but still merges.
 	// Nothing here is ever deleted, so a state directory that predates a
@@ -74,9 +74,9 @@ const (
 	// Not mergeUnion, which would resolve a name collision by keeping the
 	// destination's copy. That rule is sound only for names that identify
 	// their own contents, and a session's name identifies a conversation, not
-	// a state of one — two `default/resume.json` files are two different pin
-	// sets, and picking by directory order rather than by timestamp would
-	// silently discard the newer.
+	// a state of one — two `default/resume.json` files are two different
+	// saved states, and picking by directory order rather than by timestamp
+	// would silently discard the newer.
 	mergeSessions
 )
 

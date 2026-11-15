@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"dbohdan.com/strument/internal/shlex"
@@ -50,7 +49,7 @@ func fallbackEditors(goos string) []string {
 	return []string{"vi"}
 }
 
-// Argv is the command that opens path.
+// ArgvFor is the command that opens path.
 //
 // $VISUAL and $EDITOR are commands, not program names — `code --wait`,
 // `emacsclient -nw`, `"/opt/My Editor/bin/ed" --wait` — so the value is split
@@ -60,14 +59,9 @@ func fallbackEditors(goos string) []string {
 //
 // Whitespace-only is treated as unset. An editor variable set to " " is
 // somebody's stray quoting, not a request to run a program with no name.
-func Argv(path string, lookup func(string) string) []string {
-	return ArgvFor(path, lookup, exec.LookPath, runtime.GOOS)
-}
-
-// ArgvFor is Argv with the environment, the PATH search and the
-// platform all named rather than taken from the host.
 //
-// The seam exists for the same reason shlex.SplitWith's does: the branch that
+// The environment, the PATH search and the platform are all parameters rather
+// than taken from the host. The seam exists for the same reason shlex.SplitWith's does: the branch that
 // is easiest to get wrong is the one CI is least likely to exercise the way a
 // user meets it, so both platforms' answers have to be reachable from a test on
 // either host.

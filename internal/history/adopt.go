@@ -122,32 +122,7 @@ func Candidates() ([]Candidate, error) {
 // one row per turn, so counting is counting lines; the transcript would need
 // parsing to say the same thing.
 func describe(dir string) (turns int, last time.Time, bytes int64) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, time.Time{}, 0
-	}
-	for _, e := range entries {
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		if e.IsDir() {
-			// A directory's own inode size says nothing about what is under
-			// it, and a blob store is the largest thing in here. Reporting
-			// that number would make `strument project list` quietly wrong
-			// about exactly the artifact worth knowing the size of.
-			subBytes, subLast := subtree(filepath.Join(dir, e.Name()))
-			bytes += subBytes
-			if subLast.After(last) {
-				last = subLast
-			}
-			continue
-		}
-		bytes += info.Size()
-		if info.ModTime().After(last) {
-			last = info.ModTime()
-		}
-	}
+	bytes, last = subtree(dir)
 	if data, err := os.ReadFile(filepath.Join(dir, artifacts[artCost].name)); err == nil {
 		for line := range strings.SplitSeq(string(data), "\n") {
 			if strings.TrimSpace(line) != "" {
@@ -158,10 +133,14 @@ func describe(dir string) (turns int, last time.Time, bytes int64) {
 	return turns, last, bytes
 }
 
-// subtree sums a directory artifact's size and newest modification time.
-// Errors are swallowed the way describe's are: this feeds a listing, and a
-// directory that cannot be read is better reported as nothing than as a
-// failure to list the project at all.
+// subtree sums a directory's size and newest modification time, recursively.
+//
+// Recursive because a directory's own inode size says nothing about what is
+// under it, and a blob store is the largest thing in a state directory:
+// counting only the top level would make `strument project list` quietly wrong
+// about exactly the artifact worth knowing the size of. Errors are swallowed:
+// this feeds a listing, and a directory that cannot be read is better reported
+// as nothing than as a failure to list the project at all.
 func subtree(dir string) (bytes int64, last time.Time) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -266,12 +245,12 @@ func IsDismissed(projectRoot, dir string) bool {
 // anything moves.
 type MergeStep struct {
 	Name   string
-	Action string // "merge", "keep newest", "skip", "rewrite"
+	Action string // "merge", "union", "keep newest", "skip", "rewrite"
 	Why    string
 }
 
-// PlanAdopt describes what adopting srcDir into the project at projectRoot
-// would do, without doing any of it.
+// PlanAdopt describes what an adopt does to each artifact, without doing any
+// of it. The plan is the same for every source: policies are per artifact.
 func PlanAdopt() []MergeStep {
 	steps := make([]MergeStep, 0, len(artifacts))
 	for _, a := range artifacts {
@@ -286,8 +265,10 @@ func PlanAdopt() []MergeStep {
 
 func actionName(p mergePolicy) string {
 	switch p {
-	case mergeAppend, mergeJSONLByTime:
+	case mergeAppend, mergeJSONLByTime, mergeSessions:
 		return "merge"
+	case mergeUnion:
+		return "union"
 	case keepNewest:
 		return "keep newest"
 	case skipTransient:

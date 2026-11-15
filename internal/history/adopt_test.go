@@ -345,7 +345,7 @@ func TestAdoptDoesNotAbortOnADirectoryArtifact(t *testing.T) {
 // This is why mergeSessions exists. A union resolves a name collision by
 // keeping the destination's copy, which is right for a blob — the name is the
 // contents — and wrong for resume.json, where the name identifies a
-// conversation and the contents are a state of one. Keeping the older pin set
+// conversation and the contents are a state of one. Keeping the older state
 // because it happened to be the destination's is a silent loss.
 func TestAdoptMergesASharedSessionByArtifact(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())

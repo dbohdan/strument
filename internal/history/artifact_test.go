@@ -199,3 +199,20 @@ func TestArtifactPathRejectsAnUnknownID(t *testing.T) {
 		t.Errorf("artifactPath(..., %q) = %q, want an error", "notes", filepath.Base(p))
 	}
 }
+
+// TestPlanNamesEveryAction pins the printed plan to the policies. actionName
+// once lacked mergeUnion and mergeSessions, so `strument project adopt` asked
+// the user to approve "unknown" for the blob store and every session — the two
+// largest things an adopt moves.
+func TestPlanNamesEveryAction(t *testing.T) {
+	for _, s := range PlanAdopt() {
+		if s.Action == "unknown" {
+			t.Errorf("the adopt plan has no action name for %s", s.Name)
+		}
+	}
+	for _, a := range sessionArtifacts {
+		if actionName(a.policy) == "unknown" {
+			t.Errorf("no action name for session artifact %s", a.name)
+		}
+	}
+}
