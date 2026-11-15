@@ -146,7 +146,7 @@ type Coder struct {
 	ShellTimeout time.Duration
 
 	// RetryTimeout bounds how long a turn waits between retries of one failed
-	// request, summed over the waits. Zero takes retryTimeout, aider's minute.
+	// request, summed over the waits. Zero takes retryTimeout, a minute.
 	RetryTimeout time.Duration
 
 	// EnvAllow extends the default environment allowlist (envallow.go) with
@@ -411,7 +411,7 @@ type PlatformInfo struct {
 	InGit    bool
 }
 
-// New builds a Coder with aider-like defaults for script mode.
+// New builds a Coder with the defaults for script mode.
 func New(root string, model *config.Model) *Coder {
 	c := &Coder{
 		Root:                 root,
@@ -432,10 +432,9 @@ func New(root string, model *config.Model) *Coder {
 		sessionAutoApprove:   map[string]bool{},
 	}
 	c.Platform = defaultPlatformInfo(c)
-	// The observation tools are contained to the project root, with the same
-	// exemption edits get: a file the user pinned is sanctioned wherever it
-	// lives. A predicate rather than a snapshot, so /add and /drop need no
-	// bookkeeping and the two lists cannot go stale.
+	// The observation tools are contained to the project root, except for
+	// what the user approved reading outside it. A predicate rather than a
+	// snapshot, so a new grant needs no bookkeeping and cannot go stale.
 	c.Files.OutsideGranted = c.outsideGranted
 	return c
 }
@@ -486,30 +485,15 @@ func (c *Coder) absRootPath(path string) string {
 // ../spec.md and ../sibling-repo/include/api.h say something an absolute path
 // does not: that the file sits next to the work. Absolute beyond that.
 //
-// The relative-inside, absolute-outside half is not a new rule; toProjectPaths
-// has written the resume file that way all along, on the grounds that a
-// reference reached outside the project has no project-relative form worth
-// keeping. The one-level exception is display's own, and storage deliberately
-// does not take it: a stored ../sibling breaks the moment the project moves,
-// while a name on screen only has to be right now. Two jobs, two rules, and the
-// divergence is in a file nobody reads.
-//
-// What it replaces named an out-of-tree pin by counting back to it, so
-// /usr/include/foo.h from a project three levels down read as
-// ../../../usr/include/foo.h — correct, and reading as though the file were
-// part of the project when the whole point of /read-only is that it is not.
-//
-// The prompt gets this form too (readOnlyFilesContent), so the user and the
-// model call the file the same thing. That works because Workspace.contain
-// admits an absolute path for a pinned file, the same exemption unsafePath
-// makes — which it did not until this rule needed it.
+// Absolute rather than counted back to: /usr/include/foo.h from a project
+// three levels down would read as ../../../usr/include/foo.h — correct, and
+// reading as though the file were part of the project.
 func (c *Coder) DisplayPath(path string) string {
 	return c.displayName(c.absRootPath(path))
 }
 
 // displayName is DisplayPath for a caller that already holds a resolved
-// absolute path, skipping the re-resolve. Everything that names a pinned file
-// goes through one of the two.
+// absolute path, skipping the re-resolve.
 func (c *Coder) displayName(abs string) string {
 	rel := c.relFname(abs)
 	up, rest := 0, rel
@@ -525,8 +509,8 @@ func (c *Coder) displayName(abs string) string {
 		up++
 		rest = rest[len("../"):]
 	}
-	// rest == "" is the project's parent directory itself, which is not a file
-	// anyone pins; it falls through to the absolute form rather than being
+	// rest == "" is the project's parent directory itself, which is not a file;
+	// it falls through to the absolute form rather than being
 	// named "..".
 	if up == 0 || (up == 1 && rest != "") {
 		return rel

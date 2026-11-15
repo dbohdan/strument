@@ -8,8 +8,7 @@ import (
 
 // ANSI is a Renderer that streams markdown to a terminal with ANSI styling.
 // It is the live-render half of the port: smd.js's default renderer targets
-// the DOM, so the terminal texture here is Strument's own (hand-validated
-// against aider's REPL feel in phase 7, per the guide's oracle table).
+// the DOM, so the terminal texture here is Strument's own.
 //
 // Layout choices: block elements are separated by one blank line (a single
 // newline once inside a list), blockquotes get a "│ " prefix on every

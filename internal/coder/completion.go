@@ -12,12 +12,9 @@ import (
 
 // Tab-completion words drawn from the conversation.
 //
-// File paths were the only thing the main prompt completed. aider fills the
-// gap by tokenizing every file in the chat, which suits a harness that sends
-// whole files; this one sends names, and the model reads what it needs, so
-// there is nothing comparable to tokenize. What there is instead is the
-// conversation itself, and two parts of it say what is being worked on right
-// now: the spans put in backticks, and the names the model went looking for.
+// Besides file paths, the main prompt completes words from the conversation:
+// there are no files in the chat to tokenize, since the model reads what it
+// needs. Two parts of the conversation say what is being worked on right now: the spans put in backticks, and the names the model went looking for.
 //
 // Recency is the relevance filter. Only the last few turns contribute, so a
 // word drops out once nobody has mentioned it for a while; nothing has to rank

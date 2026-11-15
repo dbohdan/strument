@@ -94,7 +94,7 @@ func ParseGrants(values []string) (map[string]bool, error) {
 	return config.ParseGrants("--yes", values)
 }
 
-// ConfirmRequest mirrors aider's confirm_ask surface.
+// ConfirmRequest is one question put to the user.
 //
 // Command is a shell command awaiting approval, and Purpose is the model's own
 // claim about what running it is for. They are separate from Subject rather

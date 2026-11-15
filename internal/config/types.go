@@ -160,8 +160,7 @@ func (m *Model) ReadableName() string {
 // QualifiedSlug is the provider-qualified model slug: the provider's name (its
 // adapter when unnamed) joined to the slug, e.g. "openrouter/xiaomi/mimo-v2.5"
 // or "local/qwen/qwen3.6-27b". Shown wherever the user sees a slug, it makes an
-// endpoint diagnosable at a glance — which provider is this model on? — and
-// converges on aider's provider-prefixed model names.
+// endpoint diagnosable at a glance: which provider is this model on?
 func (m *Model) QualifiedSlug() string {
 	return ProviderName(m) + "/" + m.Slug
 }
@@ -294,7 +293,7 @@ type Config struct {
 	ShellTimeout int
 	// RetryTimeout is how many seconds a turn may spend waiting between
 	// retries of one failed request before giving up. 0 is unset (the coder's
-	// default, aider's 60).
+	// default, 60).
 	RetryTimeout int
 	// GitSign is the commit-signing flag passed to `git commit`: "-S" to sign
 	// with the default key, "-S<keyid>" to pick one, "" for unsigned. It comes

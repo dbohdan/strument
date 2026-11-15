@@ -17,7 +17,7 @@ import (
 // auto_approve legible -- a grant nothing announces is the "did that apply?"
 // ambiguity this codebase keeps legislating against.
 //
-// Bare reports, the house pattern (/commits, /model, /env, /notes, /context),
+// Bare reports, the house pattern (/commits, /model, /env, /context),
 // and the report names each grant's source because that is what tells you
 // whether editing the config will change it.
 func cmdYes(_ context.Context, r *REPL, args string) string {

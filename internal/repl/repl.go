@@ -235,8 +235,8 @@ func New(opts Options) (*REPL, error) {
 		// the pure session-enders that recalling would never help with.
 		DisableAutoSaveHistory: true,
 	}
-	// Paint the typed line in the user-input color, like aider (the "> "
-	// prompt is already colored). The escapes are zero-width and cursor math
+	// Paint the typed line in the user-input color (the "> " prompt is
+	// already colored). The escapes are zero-width and cursor math
 	// is computed from the buffer, so end-of-line typing stays aligned. A
 	// fresh slice is returned so the buffer readline passes in is never
 	// mutated.
@@ -318,8 +318,8 @@ func (r *REPL) termWidth() int {
 	return 80
 }
 
-// interactive reports whether we are driving a real terminal (the banner,
-// rules, and file listing are shown only then, like aider's pretty mode).
+// interactive reports whether we are driving a real terminal (the banner and
+// rules are shown only then).
 func (r *REPL) interactive() bool {
 	return r.opts.IsTerminal == nil || r.opts.IsTerminal()
 }
@@ -354,9 +354,7 @@ func (r *REPL) noAskReason() string {
 	return "this prompt requires an interactive terminal"
 }
 
-// announce prints the opening banner once at session start, mirroring
-// aider's get_announcements: version, model, git repo, repo
-// map, and the initially-added files.
+// announce prints the opening banner once at session start.
 func (r *REPL) announce() {
 	if !r.interactive() {
 		return
@@ -431,8 +429,7 @@ func (r *REPL) announce() {
 	r.coder.CheckRestoredContext()
 }
 
-// renderPromptHeader draws the full-width rule above each prompt (aider's
-// io.rule; its in-chat file listing went with pinning).
+// renderPromptHeader draws the full-width rule above each prompt.
 func (r *REPL) renderPromptHeader() {
 	if !r.interactive() {
 		return
@@ -448,8 +445,7 @@ func (r *REPL) printf(format string, args ...any) {
 }
 
 // chord records a Ctrl-C and reports whether it is the second one within
-// the window (=> exit). Shared between the prompt and in-turn paths, like
-// aider's io.last_keyboard_interrupt.
+// the window (=> exit). Shared between the prompt and in-turn paths.
 func (r *REPL) chord() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -592,7 +588,7 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 				}
 				if r.chord() {
 					// os.Exit skips the defer above, so restore the cursor
-					// here before the hard exit (aider's on-exit guard).
+					// here before the hard exit.
 					if r.opts.Color {
 						fmt.Fprint(r.opts.Stderr, "\x1b[?25h")
 					}
@@ -616,7 +612,7 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 	}()
 
 	// Show "Waiting for <model>" until the first streamed byte, so a
-	// slow-to-wake model doesn't look hung (aider's WaitingSpinner). Only
+	// slow-to-wake model doesn't look hung. Only
 	// interactively; the first stream event erases it.
 	if r.interactive() {
 		r.out.hideCursor()
@@ -652,9 +648,8 @@ func (r *REPL) showUndoHint() {
 
 // confirmSuffix is the answer hint appended to a confirmation prompt.
 //
-// Every prompt defaults to yes, the shell gate included. aider defaulted that
-// one to no and Strument followed; the reason to diverge is that the cost falls
-// on a human reaching for a key, where Enter is easier than Y even for a touch
+// Every prompt defaults to yes, the shell gate included. The cost of a default
+// falls on a human reaching for a key, where Enter is easier than Y even for a touch
 // typist, and friction in the common case is precisely what erodes a prompt
 // into reflex. What buys the yes is the purpose line above it: a prompt worth
 // reading can afford a cheap answer, one that is not cannot. Which flag covers

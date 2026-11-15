@@ -24,7 +24,7 @@ const (
 
 // termOutput implements coder.Output for a terminal: reasoning and answer
 // deltas both stream through the markdown renderer as they arrive, separated
-// by the THINKING/ANSWER headers, like aider.
+// by the THINKING/ANSWER headers.
 type termOutput struct {
 	w     io.Writer
 	color bool
@@ -146,8 +146,7 @@ func (o *termOutput) guard() {
 }
 
 // startWaiting shows a "Waiting for <model> " line (no newline) while the
-// request is in flight — aider's cue so a slow-to-wake model doesn't look
-// hung. clearWaiting erases it before the first output.
+// request is in flight, so a slow-to-wake model doesn't look hung. clearWaiting erases it before the first output.
 func (o *termOutput) startWaiting(name string) {
 	o.guard()
 	o.waiting = true
@@ -164,8 +163,7 @@ func (o *termOutput) clearWaiting() {
 }
 
 // hideCursor blanks the terminal cursor for the duration of a streaming
-// render — aider's touch: the blinking caret chasing the text is
-// distracting. Emitted once per stream (gated on color, like the styling).
+// render: the blinking caret chasing the text is distracting. Emitted once per stream (gated on color, like the styling).
 func (o *termOutput) hideCursor() {
 	if o.color && !o.cursorHidden {
 		fmt.Fprint(o.w, "\x1b[?25l")

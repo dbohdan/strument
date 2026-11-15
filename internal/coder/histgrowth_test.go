@@ -7,15 +7,11 @@ import (
 	"dbohdan.com/strument/internal/llm"
 )
 
-// Settled history is what gets compacted, and only a turn that edited a file
-// used to produce any. A session of questions — or any stretch of /ask — kept
+// Settled history is what gets compacted, so every turn must settle it, not
+// only a turn that edited a file. Under that gate a session of questions kept
 // everything in curMessages, which goes on the wire in full and which
-// maybeSummarize never looks at. The budget existed and nothing was ever
-// measured against it.
-//
-// The gate is a vestige of aider, where move_back_cur_messages carried the
-// synthetic "I applied and committed your changes" pair and so only made sense
-// after an edit. Strument removed the pair; the edit gate stayed.
+// compaction never looks at: the budget existed and nothing was measured
+// against it.
 func TestReadOnlyTurnsStillSettleHistory(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	c.curMessages = []llm.Message{

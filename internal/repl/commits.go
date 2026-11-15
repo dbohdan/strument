@@ -15,7 +15,7 @@ import (
 //
 // Bare reports rather than toggles, which is the one place this parts company
 // with /raw in Codex CLI and /yolo in Kimi Code. The house pattern is the
-// stronger precedent — /model, /env, /notes and /context all report when given
+// stronger precedent — /model, /env and /context all report when given
 // nothing — and a command that silently changes behaviour when you typed it to
 // ask about behaviour is the "did that apply?" ambiguity this codebase keeps
 // legislating against. `/commits off` is three characters more and says what it

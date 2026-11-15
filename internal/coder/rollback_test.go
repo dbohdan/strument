@@ -1,9 +1,8 @@
 // Pins the `edited`-vs-rollback invariant at the atomic-apply seam.
 // When a multi-file batch write fails, writeAtomically rolls the whole batch
-// back and the apply returns an empty `edited`, so the turn neither
-// auto-commits nor rotates history. This is the safety-critical divergence
-// from aider, whose pre-write `edited` can name files a mid-batch throw never
-// touched.
+// back and the apply returns an empty `edited`. A list built before the write
+// would name files a mid-batch throw never touched, and the turn would report
+// and snapshot edits that did not happen.
 //
 // Note the write failure is forced by making a target's parent a regular file.
 // Reached by calling applyToolEdits directly: the full Run path's chooseFence

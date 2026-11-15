@@ -1,5 +1,4 @@
-// Command strument is an AI pair-programming tool for the terminal — a Go
-// port of aider trimmed to the essentials.
+// Command strument is an AI pair-programming tool for the terminal.
 package main
 
 import (
@@ -81,7 +80,7 @@ func (c *chatCmd) Run() error {
 	root := cwd
 
 	// Git is on by default inside a repository; the worktree root becomes
-	// the project root, like aider (--no-git opts out).
+	// the project root (--no-git opts out).
 	// Before the config is read, and so before env_set can touch PATH: see
 	// gitrepo.gitBinary. Strument's own git is the one subprocess that still
 	// inherits the API key, so which binary that name resolves to is settled
@@ -643,10 +642,8 @@ func restoreSession(cdr *coder.Coder, projectRoot, session string) string {
 	}
 
 	// AGENTS.local.md, the user's private counterpart to AGENTS.md, is kept
-	// out of git's view on first sight if nothing ignores it yet. It used to be
-	// pinned along with AGENTS.md, and this ran then; pinning went, and the
-	// file still has to stay out of commits. A write to the user's repository
-	// is said, however small.
+	// out of git's view on first sight if nothing ignores it yet, so it stays
+	// out of commits. A write to the user's repository is said, however small.
 	if _, err := os.Stat(filepath.Join(projectRoot, coder.AgentsLocalFileName)); err == nil &&
 		cdr.KeepAgentsLocalUncommitted() {
 		return fmt.Sprintf("Added %s to .git/info/exclude, so it stays out of commits.", coder.AgentsLocalFileName)
@@ -724,7 +721,7 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 }
 
 // paletteTheme picks the color palette from the --dark-mode/--light-mode
-// flags (mutually exclusive), defaulting to aider's default palette.
+// flags (mutually exclusive), defaulting to the default palette.
 func (c *chatCmd) paletteTheme() render.Theme {
 	switch {
 	case c.DarkMode:
@@ -1997,7 +1994,7 @@ func main() {
 	var c cli
 	ctx := kong.Parse(&c,
 		kong.Name("strument"),
-		kong.Description("AI pair programming in your terminal. A Go port of aider."),
+		kong.Description("AI pair programming in your terminal."),
 		kong.Vars{"version": version},
 		kong.UsageOnError(),
 	)

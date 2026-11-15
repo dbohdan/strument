@@ -36,10 +36,8 @@ func cmdConsult(ctx context.Context, r *REPL, args string) string {
 	// `scope` as a subcommand word rather than a --scope flag, because the
 	// question is rest-of-line prose: a flag parser here would have to decide
 	// whether `--scope` inside a question is a flag or part of what the user is
-	// asking, and every answer to that is wrong some of the time. The precedent
-	// is one-sided anyway — aider, Codex CLI, OpenCode and Kimi Code parse no
-	// flags in any command, and Strument's own /env and /notes already switch on
-	// a first word.
+	// asking, and every answer to that is wrong some of the time. /env, /web
+	// and /yes switch on a first word the same way.
 	//
 	// An alias literally named "scope" would be shadowed. Accepted: the cost is
 	// renaming an alias, and the alternative is a flag syntax for one setting.

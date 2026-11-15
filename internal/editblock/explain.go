@@ -9,8 +9,8 @@ import (
 // ExplainLoose says how a search the line matcher accepted differed from the
 // file, in a sentence addressed to the model that sent it. It is called only
 // after DoReplace reported MatchLines, and works out afterwards which rung of
-// the ladder took the edit rather than threading a verdict through it: the
-// ladder is a port kept close to aider's, and this is commentary on it.
+// the ladder took the edit rather than threading a verdict through it, which
+// keeps the matcher itself simple.
 //
 // The point is the next edit. A loose match that reports plain success teaches
 // nothing, and the same miscount comes back: in a GPT-6 Luna run, four of six

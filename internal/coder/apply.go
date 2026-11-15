@@ -170,18 +170,14 @@ func (c *Coder) normalizeToolPath(p string) string {
 	return filepath.ToSlash(relBack)
 }
 
-// allowedToEdit decides whether an edit may touch rel. It does not add the
-// file to the chat: chat membership is what the user pinned (/add), and the
-// prompt would otherwise name a model-edited file as one "the user has pinned"
-// and resume would restore it as a pin next session. The second return is a
-// model-facing reason on refusal,
-// "" otherwise: a call that is skipped answers with why, so the model can act on
-// it within the turn instead of re-trying the same thing.
+// allowedToEdit decides whether an edit may touch rel. The second return is a
+// model-facing reason on refusal, "" otherwise: a call that is skipped answers
+// with why, so the model can act on it within the turn instead of re-trying
+// the same thing.
 //
-// aider asked before creating a file or editing one the user had not added
-// (allowed_to_edit, base_coder.py:2191). Strument no longer does, because the
-// model now finds files itself: those prompts moved from the exceptional path to
-// the common one, and a confirmation that always appears is not a safety
+// It does not ask before creating a file or editing one. The model finds files
+// itself, so such a prompt would sit on the common path, and a confirmation
+// that always appears is not a safety
 // feature — it teaches the user to answer yes without reading it. Scoping it to
 // once per file or once per turn only slows that training down.
 //

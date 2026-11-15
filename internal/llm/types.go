@@ -87,8 +87,7 @@ const HarnessMarker = "[strument]"
 // and the role is a wire constraint rather than a preference.
 //
 // The honest role would be system, and system is what this package uses for the
-// harness's voice in the prefix — session notes, a history summary. It cannot
-// be used mid-conversation. Anthropic rejects a system message that follows an
+// harness's voice in the prefix. It cannot be used mid-conversation. Anthropic rejects a system message that follows an
 // assistant turn outright:
 //
 //	messages.2: role 'system' must follow a 'user' message or an 'assistant'

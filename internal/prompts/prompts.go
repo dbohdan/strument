@@ -71,8 +71,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // where /add put file contents in the prompt. Nothing is supplied now — the
 // model reads what it needs — and the categorical "will request changes" biased
 // a question ("why is startup slow?") toward being treated as a prelude to
-// editing. The how-to-look note already patched that for the nothing-pinned case;
-// the opening now says it for every case.
+// editing. The opening now says otherwise.
 //
 // The tool list said "three groups" and named four. Restoring the count would
 // only be right until the next tool: the list is already not exhaustive —
@@ -82,8 +81,7 @@ const overeagerPrompt = "Pay careful attention to the scope of the user's reques
 // reached for most, distinguished by cost.
 //
 // "Finish by saying what you did" is the same fossil a third time: it
-// presupposes a deed, and the nothing-pinned case this prompt also serves ends
-// in an answer. A reviewer predicted the shape it produces — "I ran grep and
+// presupposes a deed, and a question ends in an answer. A reviewer predicted the shape it produces — "I ran grep and
 // read main.go; startup is slow because …", the narration ahead of the answer.
 // "or what you found" is four words against that.
 
@@ -183,8 +181,8 @@ const HarnessNoteLine = "Messages that begin with [strument] are written by Stru
 // editingRules is the exact-match rule for edit and the one-change-per-call
 // discipline.
 //
-// It once went out twice per request: aider also appends it to the last user
-// turn, rules at the top and at the bottom. Claude Haiku reported the
+// It once went out twice per request, also appended to the last user turn:
+// rules at the top and at the bottom. Claude Haiku reported the
 // duplicate when asked what looked odd about the harness. The end copy went:
 // the system prompt is a cacheable prefix, the copy in the user turn was
 // regenerated every send, and putting it there edited words into the user's
@@ -208,14 +206,10 @@ const editingRules = "# Editing rules\n\n" +
 // them inventing a whole subsystem. This says the same thing for thirty
 // tokens instead of a thousand. It is spelled out for questions because
 // everything else the model is told is about making changes, and a question
-// falls outside that contract. It says "the user asks" rather than aider's "I
-// ask" because this text lands in the system prompt, where a first-person "I"
+// falls outside that contract. It says "the user asks" rather than "I ask"
+// because this text lands in the system prompt, where a first-person "I"
 // is the harness wearing the user's voice.
-//
-// It began "Nothing is pinned for editing.", from when /add could pin files
-// and this note was what a session with none got. Pinning went, and with it
-// the sentence; the rest is unchanged.
-const howToLook = toolNoPinsHead + runCodeClause + toolNoPinsTail
+const howToLook = howToLookHead + runCodeClause + howToLookTail
 
 // System is the built-in system prompt, used unless the config's
 // system_prompt replaces it. The coder appends the session's facts after it.
@@ -230,9 +224,9 @@ const runCodeClause = " — or one run_code call that calls them, when you " +
 
 // The how-to-look note, either side of the clause.
 const (
-	toolNoPinsHead = "Use read, grep, glob, and ls to find " +
+	howToLookHead = "Use read, grep, glob, and ls to find " +
 		"what you need"
-	toolNoPinsTail = ". You can edit any file in " +
+	howToLookTail = ". You can edit any file in " +
 		"the project. If the user asks how something here works, read the code " +
 		"that implements it: what you remember about a project is not evidence " +
 		"about this one."

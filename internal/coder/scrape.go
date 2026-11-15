@@ -37,7 +37,7 @@ var (
 )
 
 // SimpleScraper fetches a URL and reduces HTML to markdown, with no proxy and a
-// default user-agent — the standalone stand-in for aider's scraper.
+// default user-agent.
 var SimpleScraper = NewSimpleScraper(nil, "")
 
 // NewSimpleScraper returns a Scraper that fetches over the given transport
@@ -972,7 +972,7 @@ func outlineOf(md, pageURL string) string {
 }
 
 // htmlToMarkdown slims the page and converts it to markdown. It drops media
-// (img/svg, which bloat with data: URIs — aider's slimdown_html does the same)
+// (img/svg, which bloat with data: URIs)
 // and the two unambiguous chrome landmarks, nav and footer, which held the
 // noise (Wikipedia's sidebar, page footers) in live tests. header stays: a
 // blog/news article's <h1> title lives in an article <header>, and the chrome a

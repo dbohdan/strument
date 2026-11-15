@@ -229,7 +229,11 @@ Past trials live one directory each under
 - **Commits**: conventional-commit style (`feat:`, `fix:`, `refactor:`,
   `docs:`, `test:`, …), imperative mood, one logical change per commit.
 - **Comments**: match the surrounding density and idiom; explain *why*, not
-  *what*. Describe divergences from aider and the reasons for them.
+  *what*. Describe the code as it is. History belongs in a comment only when
+  it stops a past mistake from being repeated — a measured result, a bug a
+  plausible change would bring back — and then as the lesson, not the
+  narrative. That a choice differs from aider is not by itself a reason to
+  say so; the commit log keeps the rest.
 - **Verify before you commit**: `task check` green, in one run. For anything with a runtime surface, exercise it, don't just test it.
 - **Keys: never in the repository, and never in more places than needed.**
   The line is the project directory and its history, which are committed,

@@ -27,8 +27,8 @@ import (
 // theirs.
 //
 // Uncommitted changes a file had before the model first touched it are
-// committed on their own, ahead of the model's commit, as aider does. Strument
-// briefly put them in the model's commit instead, named in a trailer, and a
+// committed on their own, ahead of the model's commit. Strument briefly put
+// them in the model's commit instead, named in a trailer, and a
 // trial (doc/experiments/2026-10-commit-whole-file) showed what that costs:
 // in 5 of 96 runs a model deleted the user's uncommitted line to keep it out
 // of its commit, four of them right after being told the line was in. With

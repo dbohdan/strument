@@ -9,23 +9,19 @@ import (
 
 // cmdAttach stages images to ride on the next message.
 //
-// Attaching is not pinning, and the difference is the whole reason this is its
-// own command rather than a widening of /add. Pinning names files the model
-// should go and read, and a measured experiment
-// (doc/experiments/2026-08-add-instruct/README.md) is why their contents no
-// longer ride in a fabricated user turn. An image has no such route: there is
-// no text for the model to read instead, and the user attaching a screenshot
+// An image is the one file content that rides in a user message. A text file
+// the model reads itself, as a tool result — a measured experiment
+// (doc/experiments/2026-08-add-instruct/README.md) is why file contents do not
+// ride in a fabricated user turn — but an image has no such route: there is no
+// text for the model to read instead, and the user attaching a screenshot
 // really did attach it, so a user-role image block is the honest encoding
 // rather than something the harness made up in their voice.
 //
 // Bare reports rather than staging or sending, the house pattern /commits,
-// /model, /env, /notes and /context all follow.
+// /model, /env and /context all follow.
 //
-// The inverse is `/attach drop`, not `/detach`. A top-level verb symmetric with
-// /drop would advertise durable state that attachments do not have — pins
-// survive turns and sit in the resume file, while an attachment is consumed by
-// the next message — and `detach` is a session verb in a terminal, where screen
-// and tmux have owned the word for decades.
+// The inverse is `/attach drop`, not `/detach`: `detach` is a session verb in
+// a terminal, where screen and tmux have owned the word for decades.
 func cmdAttach(_ context.Context, r *REPL, args string) string {
 	fields := splitArgs(args)
 	if len(fields) > 0 && fields[0] == "drop" {

@@ -1,8 +1,7 @@
 package render
 
-// Theme is the REPL's color palette, mirroring aider's scheme so a
-// returning aider user feels no seam (args.py + the --dark-mode/--light-mode
-// blocks in main.py). Each field is an SGR parameter string (no CSI/"m"
+// Theme is the REPL's color palette, aider's scheme (its args.py and the
+// --dark-mode/--light-mode blocks in main.py). Each field is an SGR parameter string (no CSI/"m"
 // wrapper); the render and repl packages share one Theme so their colors
 // never drift. An empty field means "terminal default".
 type Theme struct {

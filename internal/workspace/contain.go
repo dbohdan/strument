@@ -46,7 +46,7 @@ import (
 // because path() trims leading slashes: checked afterwards, "/etc/hostname"
 // would arrive as "etc/hostname" and be answered with "no such file" instead of
 // the reason. It stayed contained either way, but a refusal that names the
-// wrong problem is the failure the /read-only work spent a session removing.
+// wrong problem sends the model after the wrong fix.
 //
 // The returns are the absolute path, the normalized relative one, and a
 // caller-facing reason that is "" when the path is fine — the same shape the
@@ -196,8 +196,8 @@ func UnderTempDir(abs string) bool {
 // PathInRoot reports whether a root-relative path names a file inside the
 // named repository root. It is the containment test the commit path needs:
 // the turn snapshot keys on the path as the model spelled it, and a path that
-// does not live under the repo (a temp-dir scratch file, an out-of-tree pin, or
-// a symlink target outside it) cannot be handed to git.
+// does not live under the repo (a temp-dir scratch file, an approved read
+// outside it, or a symlink target outside it) cannot be handed to git.
 func PathInRoot(root, rel string) bool {
 	if root == "" || filepath.IsAbs(rel) {
 		return false

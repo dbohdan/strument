@@ -357,10 +357,9 @@ func trimToFirstUserTurn(msgs []llm.Message, stats *RestoreStats) []llm.Message 
 //
 // Compaction runs here rather than at the end of the first turn because the
 // first turn is the one that would fail. That is aider #2979 — an 80k-token
-// restored history that fails on the wire, where configuring a summarizer
-// does not help because compaction fires at a turn boundary and there has not
-// been one yet. CheckRestoredContext warns about the same trap and used to be
-// able to say Strument restored less than a conversation; it no longer can.
+// restored history that fails on the wire, because compaction fires at a turn
+// boundary and there has not been one yet. CheckRestoredContext is the
+// backstop for the same trap.
 func (c *Coder) RestoreHistory(msgs []llm.Message, turns []TurnSpan) {
 	if len(msgs) == 0 {
 		return

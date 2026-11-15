@@ -12,7 +12,7 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 )
 
-// RepoMap generates the ranked repository map. Tags are cached across calls
+// RepoMap is the tag layer over one project root. Tags are cached across calls
 // (tagCache below); compiled queries are process-lifetime; parse trees, sources,
 // and TreeContexts are memoized only within one call, because they are the large
 // objects and the tags are what gets asked for again.
@@ -84,9 +84,8 @@ func (rm *RepoMap) storeTags(fname string, stamp fileStamp, tags []Tag) {
 	rm.tagCache[fname] = tagCacheEntry{stamp: stamp, tags: tags}
 }
 
-// New builds a RepoMap over root. What it is now is a tag layer: Tags for
-// symbol and /symbol, ParseStatus for the after-an-edit check. The ranked map
-// it is named for is gone — see the commit that removed it.
+// New builds a RepoMap over root: Tags for symbol and /symbol, ParseStatus for
+// the after-an-edit check.
 func New(root string) *RepoMap {
 	return &RepoMap{
 		Root:        root,

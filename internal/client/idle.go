@@ -96,10 +96,9 @@ func (ir *idleReader) Close() error {
 // contextError turns a cancelled or expired request context into a typed
 // StreamError.
 //
-// It used to be yielded bare, and that is the defect behind a side call that
-// died in a way nobody could read. Two things went wrong at once. The text was
-// Go's — a user waiting for session notes was told "context deadline
-// exceeded", which names an implementation detail and no remedy. And because a
+// Yielded bare, it made a call that died unreadable. Two things went wrong at
+// once. The text was Go's — "context deadline exceeded", which names an
+// implementation detail and no remedy. And because a
 // bare context error is not a *llm.StreamError, errors.As failed on it in
 // retryBackoff.retry, so the call took the non-retryable branch by accident
 // rather than by decision.

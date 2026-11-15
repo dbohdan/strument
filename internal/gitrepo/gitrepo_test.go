@@ -254,7 +254,7 @@ func TestCommitSignFlag(t *testing.T) {
 	}
 }
 
-// An empty message still makes a commit, under aider's placeholder, rather
+// An empty message still makes a commit, under a placeholder, rather
 // than failing: the commit tool refuses an empty subject before this is
 // reached, so this is the backstop, not the path.
 func TestEmptyMessageFallsBack(t *testing.T) {

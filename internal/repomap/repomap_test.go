@@ -1,13 +1,5 @@
-// What survives of aider's tests/basic/test_repomap.py @ 5dc9490 now that the
-// ranked map is gone: the language matrix, asked through Tags rather than
-// through a rendered map, and the query self-test.
-//
-// The rest went with the map it tested. The four TestGetRepoMap* cases and the
-// sample-code-base golden all pinned rendered output, and the golden's value
-// was agreeing with aider's — meaningless once nothing renders. aider's
-// refresh-mode tests were already N/A: they decide when a stale rendered map
-// may be reused, and Strument caches only tag extraction, keyed on the file's
-// stamp (tagcache_test.go).
+// The language matrix and the query self-test, from aider's
+// tests/basic/test_repomap.py @ 5dc9490, asked through Tags.
 //
 // Asking through Tags turned out to be the stricter question. The old
 // assertion searched the rendered map, which carried source lines as well as

@@ -1,6 +1,6 @@
-// Package repomap builds aider's ranked tag map: extract def/ref tags with
-// tree-sitter, build a reference graph, run personalized PageRank, and render
-// a token-budgeted skeleton of the repository.
+// Package repomap extracts definition and reference tags with tree-sitter,
+// for the symbol tool and /symbol, and checks that a file still parses after
+// an edit. The name is from the ranked repository map it once rendered.
 package repomap
 
 // Kind distinguishes definition tags from reference tags.

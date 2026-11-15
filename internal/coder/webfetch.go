@@ -18,8 +18,8 @@ import (
 // Fetching a page, as a tool the model calls rather than a guess about what the
 // user meant by typing a URL.
 //
-// What this replaces was aider's: a regex over the input, prompting once per
-// URL found, before the turn began. It could not work. The prompts arrived
+// What this replaced was a regex over the input, prompting once per URL found,
+// before the turn began. It could not work. The prompts arrived
 // while the model had not yet seen the message, so nothing in the loop knew
 // whether a URL was reading material or an example — and only the user did,
 // which is the one party the design never asked. Pasting three URLs into a

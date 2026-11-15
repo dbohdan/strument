@@ -1,15 +1,10 @@
-// Package history writes a human-readable markdown transcript of a chat
-// session. It is the chat-history half of Strument's on-disk state: one
-// file per project root under $XDG_STATE_HOME/strument/history, so the
-// tool never scatters dotfiles into the working tree (unlike aider's
-// .aider.chat.history.md, which every user ends up gitignoring). Input
-// (readline) history lives separately and globally; see
-// InputHistoryPath.
+// Package history is Strument's on-disk project state: one directory per
+// project under $XDG_STATE_HOME/strument/projects, holding the sessions and
+// their records, the blob store, the cost ledger and the input history.
 //
-// The transcript answers "what did I ask, what did I get, and what did it
-// cost" — each turn carries a header with the model, token counts, and
-// message cost. Growth is unbounded in v1 (the same lifecycle as the
-// coder's doneMessages); rotation is a v2 concern.
+// It lives outside the working tree so the tool never scatters dotfiles into
+// a project, which every user would then have to gitignore. artifact.go names
+// every file a state directory can hold.
 package history
 
 import (
@@ -196,15 +191,13 @@ func LockPath(projectRoot string) (string, error) {
 	return artifactPath(projectRoot, artLock)
 }
 
-// InputHistoryPath is the readline input-history file for a project root,
-// beside that project's transcript.
+// InputHistoryPath is the readline input-history file for a project root.
 //
-// This was global, on the reasoning that every other REPL — bash, python, psql —
-// keeps input history global, and that recalling a prompt across projects is
-// exactly when you want it. Real use reversed it: prompts are about the project
-// you are in, and one shared file fills with lines that mean nothing where you
-// are now. Scoping costs the cross-project recall, which turned out to be the
-// rarer want by a wide margin.
+// Per project, not global as bash, python and psql keep theirs. It was global
+// once, and real use reversed that: prompts are about the project you are in,
+// and one shared file fills with lines that mean nothing where you are now.
+// Scoping costs the cross-project recall, which turned out to be the rarer
+// want by a wide margin.
 func InputHistoryPath(projectRoot string) (string, error) {
 	return artifactPath(projectRoot, artInput)
 }

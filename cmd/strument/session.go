@@ -17,7 +17,7 @@ import (
 // sessionCmd groups the commands for a project's conversations.
 //
 // A project holds several. Each is a conversation with its own record, its own
-// pins and its own undo stack, under sessions/<name>/ in the project's state
+// resume state and its own undo stack, under sessions/<name>/ in the project's state
 // directory; `current` says which one a bare `strument` picks up. Inside a
 // session the same operations are `/session`, which can also switch between
 // them — something a command that exits cannot do.
@@ -351,8 +351,7 @@ func (s *sessionSwitcher) rename(from, to string) error {
 // remove deletes a session that is not the one in use.
 //
 // Refusing to delete the current one is not timidity: the process holds an
-// open record inside that directory, and the pins, undo stack and
-// conversation in memory would have nowhere to be written at the end of the
+// open record inside that directory, and the undo stack and conversation in memory would have nowhere to be written at the end of the
 // next turn.
 func (s *sessionSwitcher) remove(name string) error {
 	if name == s.cdr.Session {

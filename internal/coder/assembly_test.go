@@ -29,8 +29,8 @@ func testCoder(t *testing.T) *Coder {
 
 // The editing rules go out exactly once, in the system prompt.
 //
-// They used to go out twice: aider appends the reminder again at the end, and
-// Strument carried that. Claude Haiku reported the duplication when asked what
+// They used to go out twice, with a second copy appended at the end. Claude
+// Haiku reported the duplication when asked what
 // looked odd about the harness, and a probe confirmed two copies per send. This
 // pins the count rather than the mechanism, so a future re-introduction of a
 // second copy fails here whatever shape it takes.

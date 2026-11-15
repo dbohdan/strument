@@ -8,13 +8,11 @@ import (
 // cmdUndo undoes the last turn: the files come back from the turn's snapshot,
 // and the commits made during it come off the branch (Coder.UndoLastTurn).
 //
-// It used to mean one commit, with a repository, because a turn was one
-// commit: aider's raw_cmd_undo, which restores the files of the last commit
-// from its parent and moves HEAD back. Committing is the model's now, so a
-// turn can end with no commit, or two, and the snapshot is the only record
-// that knows which turn did what. The gates aider's version had stay, in the
-// coder: the commits must be the newest on the branch, made in this session,
-// unpushed, not merges, and the files they touch clean.
+// The snapshot, not the commit log, is what it undoes by: committing is the
+// model's, so a turn can end with no commit, or two, and the snapshot is the
+// only record that knows which turn did what. The coder gates the commits:
+// they must be the newest on the branch, made in this session, unpushed, not
+// merges, and the files they touch clean.
 func cmdUndo(_ context.Context, r *REPL, _ string) string {
 	res, err := r.coder.UndoLastTurn()
 	if err != nil {
@@ -40,8 +38,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 }
 
 // cmdDiff shows the working tree against the HEAD captured before the last
-// message (aider's raw_cmd_diff, with the base taken from the coder's
-// commit-before-message stack).
+// message, taken from the coder's commit-before-message stack.
 func cmdDiff(_ context.Context, r *REPL, _ string) string {
 	g := r.opts.Git
 	if g == nil {

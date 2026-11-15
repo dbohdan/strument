@@ -326,7 +326,7 @@ func TestBannerAndPromptHeader(t *testing.T) {
 			"Session: review", // the conversation this run writes to
 			"Git repo: none",
 			"Language parser: off",
-			strings.Repeat("─", 24), // solid rule (aider's console.rule), honors GetSize width
+			strings.Repeat("─", 24), // solid rule, honors GetSize width
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("color=%v: output missing %q:\n%q", color, want, got)

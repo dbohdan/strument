@@ -19,9 +19,8 @@ import (
 // on resize and scrolls it off the top when it grows. An editor already does
 // that. The text comes back to the prompt rather than being sent, with its line
 // breaks drawn as ↵, so it is read before it goes: the same review every other
-// message gets. The command name is aider's; its argument is not. aider's
-// /editor takes the text to start from, which Ctrl-X Ctrl-E covers here, and
-// this one takes the editor command to use instead of $VISUAL or $EDITOR.
+// message gets. The argument is the editor command to use instead of $VISUAL
+// or $EDITOR, not text to start from.
 
 // cmdEditor opens the editor on an empty message, or with the command given.
 func cmdEditor(_ context.Context, r *REPL, args string) string {

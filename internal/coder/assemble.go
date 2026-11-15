@@ -13,22 +13,13 @@ import (
 	"dbohdan.com/strument/internal/prompts"
 )
 
-// chatChunks mirrors aider's ChatChunks: the canonical slot order is
-// system + readonly_files + done + cur, without aider's examples slot:
-// Strument's prompt sets carry no few-shot examples, and the experimental
-// example_messages setting that could fill it was removed with the other
-// trial switches.
+// chatChunks is a request's messages in their slots: the system prompt, the
+// settled conversation, and the turn in progress.
 //
-// aider's chat_files slot is gone. It carried the /add files' contents as a
-// fabricated user turn with a fabricated assistant reply; the names now ride in
-// the system prompt and the model reads the files itself.
-//
-// aider has a repo slot between readonly_files and done, carrying the ranked
-// repository map. Strument no longer fills it. The map answered "how does the
-// model find code when it cannot look", and the model can look now — it greps —
-// so the map was a per-turn tax on every send for a digest it did not read.
-// The ranked rendering has since gone entirely: /map became /symbol, because
-// "where is this defined" is the question a reader actually has.
+// Nothing else rides in the prefix. File contents arrive as tool results when
+// the model reads them, and there is no repository map: the model can look —
+// it greps — so a map would be a per-turn tax on every send for a digest it
+// does not read.
 type chatChunks struct {
 	system []llm.Message
 	done   []llm.Message
@@ -90,22 +81,14 @@ func withBreakpoint(m llm.Message) llm.Message {
 	return m
 }
 
-// addCacheControlHeaders places up to four breakpoints, Anthropic's limit:
-// the system prompt, read-only files, and two that roll with the
-// conversation.
+// addCacheControlHeaders places breakpoints within Anthropic's limit of four:
+// the system prompt, and two that roll with the conversation.
 //
-// There used to be a third, on the chat-files block. That block changed every
-// time the model edited a file, so it invalidated its own breakpoint on most
-// editing turns. Pinned files are named in the system prompt now and their
-// contents arrive as tool results, so the prefix moves only when the pin list
-// does — on /add and /drop, not on every edit.
-//
-// The conversation had none, by a rule inherited from aider ("never on
-// done/cur"), where a turn was one request. In a tool loop every step resends
-// the whole conversation, and a provider that caches only up to an explicit
-// breakpoint — Anthropic — then bills all of it at full price on every step.
-// Providers that cache prefixes on their own hid that. Claude Haiku 5.5 did
-// not: a 20-step Larkspur turn restored with 480 messages sent 4.1 million
+// The conversation needs its own. In a tool loop every step resends the whole
+// conversation, and a provider that caches only up to an explicit breakpoint —
+// Anthropic — bills all of it at full price on every step without one.
+// Providers that cache prefixes on their own hide that. Claude Haiku 5.5 did
+// not, when the conversation had none: a 20-step Larkspur turn restored with 480 messages sent 4.1 million
 // tokens and read 135k of them from the cache, the ~7.5k-token system prompt
 // once per step. With these two breakpoints, every token of a five-step turn
 // was either a cache read or a cache write.
@@ -181,8 +164,8 @@ func (c *Coder) factsText() string {
 	b.WriteString("Keep in mind these details about the user's platform and environment:\n")
 	b.WriteString("- Platform: " + c.Platform.Platform + "\n")
 	b.WriteString("- Shell: " + c.Platform.ShellVar + "=" + c.Platform.ShellVal + "\n")
-	// Not "Current date", which is aider's label: the date is taken once, when
-	// Strument starts, so after midnight the label was the false part. The
+	// Not "Current date": the date is taken once, when Strument starts, so
+	// after midnight that label would be the false part. The
 	// date stays because a model without one assumes the year its training
 	// ended, which is the costlier mistake; the about tool has the live clock.
 	b.WriteString("- Date Strument started: " + c.Platform.Date +
@@ -226,14 +209,8 @@ func (c *Coder) formatChatChunks() *chatChunks {
 
 	chunks := &chatChunks{}
 
-	// The system prompt goes in a system message, full stop.
-	//
-	// There used to be a UseSystemPrompt == false branch that sent it as a user
-	// turn answered by a fabricated "Ok." — aider's shape for models with no
-	// system role. It was unreachable: the field was set true in New and never
-	// set false anywhere, by any flag or config. It is also no longer needed by
-	// anything. Gemma was the last major family without a system role, and
-	// Gemma 4 added native support for one in April 2026.
+	// The system prompt goes in a system message, full stop. No current model
+	// family lacks a system role; Gemma, the last, gained one in April 2026.
 	chunks.system = []llm.Message{llm.TextMessage(llm.RoleSystem, mainSys)}
 
 	chunks.done = c.doneMessages

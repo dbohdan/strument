@@ -165,7 +165,7 @@ func TestWaitingClearedOnFirstOutput(t *testing.T) {
 }
 
 // TestAnswerOnlyNoHeaders confirms a response with no reasoning shows neither
-// header — aider only frames reasoning.
+// header: only reasoning is framed.
 func TestAnswerOnlyNoHeaders(t *testing.T) {
 	var buf bytes.Buffer
 	o := &termOutput{w: &buf, color: false, theme: render.DefaultTheme(), width: 40}
@@ -357,7 +357,7 @@ func TestNoDoubledBlankLines(t *testing.T) {
 		{"answer then the usage line", func(o *termOutput) {
 			o.StreamText("Here is the summary.")
 			o.FlushStream()
-			o.Printf("") // the usage line opens with a blank, as aider's did
+			o.Printf("") // the usage line opens with a blank
 			o.Printf("Tokens: 1.0k sent, 20 received.")
 		}},
 		{"thinking block then the usage line", func(o *termOutput) {

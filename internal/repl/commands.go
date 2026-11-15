@@ -192,14 +192,14 @@ func (r *REPL) dispatch(ctx context.Context, line string) (msg string, quit bool
 }
 
 // resumeState is everything the resume file takes from live session state, in
-// one comparable value: the model alias, now that nothing is pinned.
+// one comparable value: the model alias.
 func (r *REPL) resumeState() string {
 	return r.opts.ModelAlias
 }
 
 // completer offers command names and, under the commands that take a path,
 // file paths; a bare (non-command) line completes file paths in the
-// message itself, aider-style. See promptCompleter in completion.go.
+// message itself. See promptCompleter in completion.go.
 func (r *REPL) completer() readline.AutoCompleter {
 	items := make([]*readline.PrefixCompleter, 0, len(commands))
 	for _, c := range commands {
@@ -867,7 +867,7 @@ var execCommandContext = exec.CommandContext
 // revoke it in plain sight — so a way to forget the grants without a way to
 // see them would replace a permission you cannot revoke with one you can only
 // revoke blind. Neither word can collide with a URL: both lack a scheme and a
-// dot, so unlike /notes there is no plausible real argument to shadow.
+// dot, so there is no plausible real argument to shadow.
 func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	url := strings.TrimSpace(args)
 	switch verb, rest, _ := strings.Cut(url, " "); verb {
