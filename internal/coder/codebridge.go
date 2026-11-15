@@ -21,8 +21,10 @@ import (
 // codeExcluded are the tools a program cannot call. run_code would be a
 // program starting a program. interrupt ends the turn, which a program
 // cannot do; it returns. ask_user_question's answer is for the model to read
-// and think about, not for a program to compute over.
-var codeExcluded = []string{toolRunCode, toolInterrupt, toolAskUser}
+// and think about, not for a program to compute over. consult spends money at
+// another model's price on each call, and a loop in a program would make that
+// one approval away from fifty.
+var codeExcluded = []string{toolRunCode, toolInterrupt, toolAskUser, toolConsult}
 
 // codeCallableTools is the one list behind the run_code description, the
 // registration, and the bridge's allow check: every tool otherToolDefs offers,

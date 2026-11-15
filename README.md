@@ -33,6 +33,7 @@ See [`doc/`](doc/README.md) for the developer overview.
 - Web fetch: `/web <url>` and the model's `webfetch` tool fetch a page as Markdown.
   The tool asks before the model fetches from an unfamiliar origin.
 - Optional [web search](doc/config.md#websearch) through your own [SearXNG](https://docs.searxng.org/) instance or a hosted backend ([AnySearch](https://anysearch.com/), [Exa](https://exa.ai/)).
+- Optional [consulting](doc/config.md#consult_models): the model can ask another model you configured, such as a stronger writer for documentation, sending a question and the files it names. Each consult asks first and shows the answer.
 - You can [interrupt and steer](#interrupting-and-steering) a turn.
 
 The terminal interface has stayed deliberately close to aider's, including the green/blue palette (with `--dark-mode` and `--light-mode`).
@@ -135,7 +136,7 @@ The model works until it finishes or reaches the step limit.
 At the limit (25 steps by default) Strument reports the number of edits and the cost so far, then asks whether to continue.
 
 Strument prints a status line for each tool call.
-Shell commands ask for permission first, which you can grant for that command or for all commands in the turn; `webfetch` and `websearch` ask too.
+Shell commands ask for permission first, which you can grant for that command or for all commands in the turn; `webfetch`, `websearch` and `consult` ask too.
 Reading, searching, and editing do not ask.
 
 In a Git repository, the model commits its work with a `commit` tool, writing the message itself; nothing commits for it at the end of a turn.
@@ -198,7 +199,6 @@ A `SIGKILL`, a crash, or a power loss still ends the run with no `/undo` saved a
 - `/yes [add <name> ... | drop <name> ... | reset]`&thinsp;&mdash;&thinsp;show or change which prompts are approved automatically. On its own it lists each approval and where it came from: `--yes`, the config's `auto_approve`, or this run. Dropping one makes Strument ask again mid-run, which is useful when a turn starts going somewhere unexpected.
 - `/attach <file> ...`&thinsp;&mdash;&thinsp;attach images (PNG, JPEG, GIF, WebP) to your next message, from anywhere on disk. On its own it lists what is attached; `/attach drop` removes attachments. Attachments go with one message only. A model that does not accept images is told an image was there and that it could not see it, rather than the request failing; declare `input_modalities` for one that can.
 - `/check [<name>]`&thinsp;&mdash;&thinsp;run a project check by name, or all checks if no name is given. Checks run in the order the config lists them and stop at the first failure. On failure or non-empty output, Strument offers to add the transcript to the chat. A successful check with no output is not offered to the chat.
-- `/consult <alias> <question>`, `/consult scope [<name>]`&thinsp;&mdash;&thinsp;ask another model without switching the active model, then optionally add its answer to the conversation, labeled with the advisor's name. `/consult scope` shows or sets how much the advisor sees: `none` (the question alone, the default) or `chat` (the conversation too); `--consult-scope` sets the starting value. The consultation is billed at the advisor's rates and appears in the cost ledger under its slug.
 - `/session`, `/session new|switch|rename|delete <name>`&thinsp;&mdash;&thinsp;list this project's sessions, or create, switch to, rename, or delete one. See [Sessions](#sessions).
 - `/commits [on | off]`&thinsp;&mdash;&thinsp;show or change whether the model may commit its edits. With no argument, it shows the current setting. `--no-commits` starts a session with commits off, and `commits = False` in the config makes that the default. With commits off, edits are still written to the working tree, and `/undo` and `/diff` still work.
 - `/undo`&thinsp;&mdash;&thinsp;revert the last turn. Restores files changed through Strument's file tools and removes the commits the turn made, if they are still the newest on the branch and unpushed.
@@ -282,7 +282,7 @@ strument shell fish | source
 ```
 
 With the completions loaded, the `-M`/`--model` option completes model aliases from the effective config (it runs `strument config models`), and `-s`/`--session` completes session names.
-Subcommands, their flags, and enumerable option values (`--yes`, `--mode`, `--consult-scope`) are completed, too.
+Subcommands, their flags, and enumerable option values (`--yes`, `--mode`) are completed, too.
 Paths are completed where a command takes one.
 
 To load completions automatically, add the command to your shell configuration.

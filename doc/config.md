@@ -39,6 +39,7 @@ The loader reads these module-level variables after running your file:
 | `max_undo_turns` | positive integer | Optional. How many turns of file contents are kept for `/undo`. Default 20. See below. |
 | `webfetch_allow` | list of strings | Optional. Host or host:port entries the `webfetch` tool may fetch without asking. See below. |
 | `websearch` | `search()` | Optional. The search backend for the `websearch` tool. Unset means no search tool. See below. |
+| `consult_models` | dict of string to string | Optional. Model aliases the `consult` tool may ask, each with what to consult it for. Unset means no consult tool. See below. |
 | `loop_detection` | boolean | Optional. Stop a reply that has begun repeating itself. Default `True`. See below. |
 | `language_parser` | boolean | Optional. The tree-sitter parser behind `symbol`, `/symbol`, and the after-edit parse check. Default `True`. See below. |
 | `shell` | boolean | Optional. Offer the model the `bash` tool. Default `True`. See below. |
@@ -655,6 +656,41 @@ with a query for which nothing was found.
 goes through `webfetch`'s own per-origin prompt. What ranks for a query is
 something a stranger can influence, so the two permissions stay separate.
 
+### `consult_models`
+
+The models the `consult` tool may ask, each with what it is for. Unset by
+default, and the tool is not offered without it.
+
+```python
+models = {
+    "mimo": model(openrouter, "xiaomi/mimo-v2.6-flash"),
+    "terra": flex(model(openrouter, "openai/gpt-6.1-terra")),
+}
+consult_models = {"terra": "documentation and user-facing prose"}
+```
+
+Each key must be an alias in `models`, so the provider, reasoning level and
+pricing are set once, where the model is defined. Each value is required: it is
+written into the tool's description, and it is the only thing the asking model
+has to decide by. An alias says which model; the purpose says when to reach
+for it.
+
+The tool sends the consulted model one message: a fixed introduction, the
+files the asking model named, read by Strument and included whole, and the
+question last. Nothing else goes with it: no system prompt, no tools, none of
+the conversation. A file goes through the same rules as `read`, so a
+secret-shaped file is refused and a file outside the project asks first.
+One unreadable file refuses the whole call before you are asked, and so does
+a request that would fill more than three quarters of the consulted model's
+`context`.
+
+Every call asks first, under the `consult` grant, showing the model, the
+question in full, and the file list. `a` approves that model for the rest of
+the turn. The answer streams to the screen as it arrives and goes back to the
+asking model as the tool result, attributed. It is billed at the consulted
+model's rates and appears in the cost ledger as its own row, under its slug.
+A `run_code` program cannot consult.
+
 ### `shell`
 
 Whether the model is offered the `bash` tool at all.
@@ -1264,10 +1300,11 @@ permissions themselves:
 | `bash` | Run a shell command the model wrote |
 | `webfetch` | Fetch a URL the model chose |
 | `websearch` | Send the model's query to the configured backend |
+| `consult` | Send the model's question and files to a model in `consult_models` |
 | `read-outside` | Read a file or list a directory outside the project |
 | `steps` | "Keep going?" at the step budget |
 | `context` | "Send it anyway?" over the model's input limit |
-| `add-output` | "Add … to the chat?" after `/run`, `/check`, or `/consult` |
+| `add-output` | "Add … to the chat?" after `/run` or `/check` |
 | `all` | All of the above |
 
 It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
@@ -1275,8 +1312,8 @@ It repeats and takes lists, so `--yes bash --yes webfetch,websearch` and
 at startup, naming the ones that would have worked — a permission that silently
 was not granted is one you find out about at the prompt it was meant to answer.
 
-The permissions fall into three categories: `bash`, `webfetch`, `websearch`, and
-`read-outside` approve capabilities; `steps` and `context` answer continuation prompts; and
+The permissions fall into three categories: `bash`, `webfetch`, `websearch`,
+`consult`, and `read-outside` approve capabilities; `steps` and `context` answer continuation prompts; and
 `add-output` approves adding command output to the chat. In noninteractive use,
 these names identify which prompts are answered without granting unrelated
 capabilities.
@@ -1297,8 +1334,8 @@ measured on shell commands only.
 resets each time the prompt is answered, so granting it makes `max_steps` an
 interval between checkpoints that no longer stop.
 
-The `add-output` prompt asks whether output from `/run`, `/check`, or `/consult`
-should be added to the chat. These prompts ask every time and do not offer `a`;
+The `add-output` prompt asks whether output from `/run` or `/check` should be
+added to the chat. These prompts ask every time and do not offer `a`;
 use `--yes add-output` to answer them automatically.
 
 ### What `/reload` applies
@@ -1306,7 +1343,7 @@ use `--yes add-output` to answer them automatically.
 `/reload` re-reads `config.star` (or the `--config` file) into the running session. It applies the
 models and the active alias, `max_steps`, `max_error_reflections`,
 `shell_timeout`, `retry_timeout`, `loop_detection`, `language_parser`, `env_allow`, `check` and `check_auto`,
-`webfetch_allow`, and — rebuilding them, not just copying a value — the
+`webfetch_allow`, `consult_models`, and — rebuilding them, not just copying a value — the
 `scraper` and `websearch` backends along with the proxies they use.
 
 It also re-runs [skill](#skills) discovery, reopening the trust store, which is

@@ -22,14 +22,15 @@ func (c *Coder) RunAside(ctx context.Context, question string) string {
 	if strings.TrimSpace(question) == "" {
 		return ""
 	}
-	return c.runSide(ctx, question)
+	return c.runSide(ctx, "aside", question)
 }
 
-// runSide is the side call itself, shared with RunConsult. It sends exactly the
-// prompt it is given as a single user message against whatever Client and Model
-// are in place, so a caller that wants a different advisor swaps those two and
-// this stays ignorant of the difference.
-func (c *Coder) runSide(ctx context.Context, prompt string) string {
+// runSide is the side call itself, shared with the consult tool. It sends
+// exactly the prompt it is given as a single user message against whatever
+// Client and Model are in place, so a caller that wants a different model swaps
+// those two and this stays ignorant of the difference. call names the request
+// in the session record.
+func (c *Coder) runSide(ctx context.Context, call, prompt string) string {
 	messages := []llm.Message{llm.TextMessage("user", prompt)}
 	req := llm.Request{
 		Model:           c.Model.Slug,
@@ -56,7 +57,7 @@ func (c *Coder) runSide(ctx context.Context, prompt string) string {
 		// No loop detection on a side call: these are short, structured, and
 		// bounded by their own prompts, and a false stop here would silently
 		// cost a summary rather than visibly stop a reply.
-		res, streamErr := c.streamOnce(ctx, "aside", req, usage, nil)
+		res, streamErr := c.streamOnce(ctx, call, req, usage, nil)
 		if res == resFailed {
 			if backoff.retry(ctx, c.Out, c.Clock, streamErr) {
 				continue // transient error: retry with the same backoff as a turn

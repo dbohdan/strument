@@ -273,9 +273,7 @@ func TestWithinTurnUsesTheRequestedModelName(t *testing.T) {
 	defer r.Close()
 	r.opts.IsTerminal = func() bool { return true }
 
-	r.withinTurn(context.Background(), "openrouter/advisor-model", func(context.Context) string {
-		return ""
-	})
+	r.withinTurn(context.Background(), "openrouter/advisor-model", func(context.Context) {})
 
 	if !strings.Contains(out.String(), "Waiting for openrouter/advisor-model") {
 		t.Errorf("waiting status used the active model instead of the requested model:\n%s", out.String())

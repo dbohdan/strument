@@ -111,6 +111,9 @@ func (c *Coder) otherToolDefs() []llm.ToolDef {
 	if c.Search != nil {
 		defs = append(defs, websearchTool())
 	}
+	if len(c.Consult) > 0 {
+		defs = append(defs, consultTool(c.Consult))
+	}
 	// Offered only when there is something to name, because the enum
 	// would otherwise be empty and the description would list nothing.
 	if len(skill.Usable(c.Skills)) > 0 {
@@ -756,6 +759,14 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 				continue
 			}
 			results.setText(tc.ID, c.runWebsearch(ctx, q))
+		case toolConsult:
+			cc, msg := parseConsultArgs(tc)
+			if msg != "" {
+				results.setText(tc.ID, msg)
+				needsReflection = true
+				continue
+			}
+			results.setText(tc.ID, c.runConsult(ctx, cc))
 		case toolSkill:
 			s, msg := parseSkillArgs(tc)
 			if msg != "" {

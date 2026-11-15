@@ -229,6 +229,7 @@ var projectKeyOrder = []string{
 	"hasApproveModel",
 	"hasEnvSet",
 	"hasSystemPrompt",
+	"hasConsultModels",
 }
 
 var projectKeys = map[string]projectKey{
@@ -468,6 +469,17 @@ var projectKeys = map[string]projectKey{
 
 	"hasSystemPrompt": promptKey("system_prompt", "replaces the system prompt",
 		func(g *fileGlobals) (bool, string) { return g.hasSystemPrompt, g.systemPromptVal }),
+
+	"hasConsultModels": {
+		name: "consult_models",
+		set:  func(g *fileGlobals) bool { return g.hasConsultModels },
+		detail: func(g *fileGlobals, _ func(string) string) string {
+			if len(g.consultModelsVal) == 0 {
+				return "offers no model to consult"
+			}
+			return "lets the model consult: " + strings.Join(slices.Sorted(maps.Keys(g.consultModelsVal)), ", ")
+		},
+	},
 }
 
 // promptKey builds the entry for one prompt_* key. The text itself is not

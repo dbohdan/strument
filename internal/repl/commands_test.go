@@ -114,7 +114,7 @@ func TestRestOfLineArgsComeLast(t *testing.T) {
 	for _, c := range commands {
 		// Per alternative, not per line. `a | b` is two forms of the same
 		// command, and "nothing can follow it" is a claim about the form the
-		// user types, so /consult's `<alias> <question> | scope [<name>]` is
+		// user types, so `<alias> <question> | scope [<name>]` would be
 		// sound: nothing follows <question> in the alternative that has it.
 		// Checking the whole string instead would forbid a rest-of-line
 		// argument in any command that has a second form, which is a rule about

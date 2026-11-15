@@ -98,6 +98,13 @@ type Coder struct {
 	// Search is nil unless the user configured a backend, and that nil is what
 	// decides whether the tool is offered at all.
 	Search Searcher
+	// Consult is consult_models, resolved: alias -> model and purpose. Empty
+	// means the consult tool is not offered.
+	Consult map[string]ConsultModel
+	// ConsultClient builds a client for a consulted model's provider. Nil uses
+	// Client, which is right when both models share a provider and is what a
+	// test's stub relies on.
+	ConsultClient func(*config.Model) llm.ModelClient
 	// Approve is nil unless approve_model is configured (approve.go).
 	Approve *ApproveModel
 	// approvalNote is approve_model's line for the command about to run,

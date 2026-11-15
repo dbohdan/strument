@@ -16,6 +16,11 @@ const (
 	GrantBash      = "bash"      // run a shell command the model wrote
 	GrantWebfetch  = "webfetch"  // fetch a URL the model chose
 	GrantWebsearch = "websearch" // send the model's query to the configured backend
+	// GrantConsult answers "Consult terra?": send the model's question, and the
+	// files it named, to a model in `consult_models`. A capability that spends
+	// money at another model's price, which is why it has a name of its own
+	// rather than riding on another.
+	GrantConsult = "consult"
 	// GrantReadOutside answers "Read this file outside the project?" and its
 	// ls twin. Secret-shaped files stay refused whatever it says.
 	GrantReadOutside = "read-outside"
@@ -30,12 +35,11 @@ const (
 	// sent and the provider decides, which is what the prompt's own text says
 	// is probably fine.
 	GrantContext = "context"
-	// GrantAddOutput answers "Add … to the chat?" — /run's command output,
-	// /check's transcript, /consult's answer. The third kind: not a capability
-	// and not pacing, but a question about what the *user* is putting in front
-	// of the model.
+	// GrantAddOutput answers "Add … to the chat?" — /run's command output and
+	// /check's transcript. The third kind: not a capability and not pacing, but
+	// a question about what the *user* is putting in front of the model.
 	//
-	// It exists because these three had no name at all, so a piped session
+	// It exists because these prompts had no name at all, so a piped session
 	// answered them with "there is no terminal to ask on, and no --yes name
 	// covers this prompt" no matter what was passed — and the typed "y" then
 	// went to the model as a chat message. Found by running the real binary;
@@ -47,7 +51,9 @@ const (
 )
 
 // GrantNames are the individual permissions, in the order help text lists them.
-var GrantNames = []string{GrantBash, GrantWebfetch, GrantWebsearch, GrantReadOutside, GrantSteps, GrantContext, GrantAddOutput}
+var GrantNames = []string{
+	GrantBash, GrantWebfetch, GrantWebsearch, GrantConsult, GrantReadOutside, GrantSteps, GrantContext, GrantAddOutput,
+}
 
 // ParseGrants turns values into the set AutoConfirmer reads. Each value
 // may be a comma-separated list, and the flag may repeat, so

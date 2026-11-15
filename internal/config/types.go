@@ -328,6 +328,11 @@ type Config struct {
 	// written in a config file from being handed to the model by accident.
 	EnvSet map[string]string
 
+	// ConsultModels maps the model aliases the consult tool may ask to what
+	// each is for, from `consult_models`. The purposes go into the tool's
+	// description; with none configured the tool is not offered.
+	ConsultModels map[string]string
+
 	// SystemPrompt replaces the built-in system prompt's instructions,
 	// verbatim: there are no placeholders. The harness's facts about the
 	// session — platform, model, AGENTS.md — follow it either way. Empty means

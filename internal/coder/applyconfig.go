@@ -102,6 +102,17 @@ func ApplyConfig(c *Coder, cfg *config.Config) {
 	c.Grants.SetConfig(granted)
 
 	c.SystemPrompt = cfg.SystemPrompt
+
+	// Load has checked that every alias is a model.
+	c.Consult = nil
+	for alias, purpose := range cfg.ConsultModels {
+		if m := cfg.Models[alias]; m != nil {
+			if c.Consult == nil {
+				c.Consult = map[string]ConsultModel{}
+			}
+			c.Consult[alias] = ConsultModel{Model: m, Purpose: purpose}
+		}
+	}
 }
 
 // applySecretFiles rebuilds the secret-file matcher from the config. Load has

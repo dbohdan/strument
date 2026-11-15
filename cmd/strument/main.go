@@ -47,21 +47,20 @@ var version = devVersion
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message      string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"  short:"m"`
-	Session      string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"  short:"s"`
-	Continue     bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"       short:"c"`
-	Model        string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>" short:"M"`
-	NoGit        bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
-	NoColor      bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode     bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"      xor:"palette"`
-	LightMode    bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"     xor:"palette"`
-	NoCommits    bool     `help:"Keep git integration but never commit edits."                                                                                                               name:"no-commits"`
-	NoHistory    bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
-	DryRun       bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
-	NoShell      bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
-	Yes          []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
-	Unattended   bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
-	ConsultScope string   `default:"none"                                                                                                                                                    enum:"none,chat"      help:"Session context to include in /consult requests." name:"consult-scope"`
+	Message    string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"  short:"m"`
+	Session    string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"  short:"s"`
+	Continue   bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"       short:"c"`
+	Model      string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>" short:"M"`
+	NoGit      bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
+	NoColor    bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
+	DarkMode   bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"      xor:"palette"`
+	LightMode  bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"     xor:"palette"`
+	NoCommits  bool     `help:"Keep git integration but never commit edits."                                                                                                               name:"no-commits"`
+	NoHistory  bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
+	DryRun     bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
+	NoShell    bool     `help:"Disable the model's bash tool."                                                                                                                             name:"no-shell"`
+	Yes        []string `help:"Automatically approve prompts of these types: bash, webfetch, websearch, steps, context, add-output, all. Repeat the option or use a comma-separated list." placeholder:"<name>"`
+	Unattended bool     `help:"Answer every prompt --yes does not approve with its safe answer: decline, or stop the turn. For scripts driving a terminal."`
 }
 
 func (c *chatCmd) Run() error {
@@ -163,6 +162,7 @@ func (c *chatCmd) Run() error {
 	cdr.Session = session
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.ForProvider(model.Provider)
+	cdr.ConsultClient = func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) }
 	// Every config-to-coder assignment lives in ApplyConfig, which /reload also
 	// calls. Adding one here instead is the bug that made three reloads look
 	// like they had worked; internal/repl's reload test guards against it.
@@ -733,15 +733,6 @@ func (c *chatCmd) paletteTheme() render.Theme {
 	}
 }
 
-// consultScope maps the --consult-scope name onto the coder's ladder. An
-// unrecognized name cannot reach here — kong's enum has already refused it — so
-// it falls back to the bottom of the ladder rather than failing the session over
-// a flag that was validated a moment ago.
-func consultScope(name string) coder.ConsultScope {
-	scope, _ := coder.ParseConsultScope(name)
-	return scope
-}
-
 // terminalSize reports stdout's width and height for the horizontal rules,
 // falling back to 80x24 when stdout is not a terminal.
 func terminalSize() (int, int) {
@@ -775,9 +766,6 @@ func (c *chatCmd) runREPL(cfg *config.Config, cdr *coder.Coder, repo *gitrepo.Re
 		SaveResume:  saveResumeFunc(cdr, currentDefault, projectRoot, keepState),
 		ApplyEgress: applyEgressConfig,
 		MakeClient:  func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) },
-		// Kong's enum has already refused anything else, so the ok is never
-		// false here; the parse is where the name-to-scope mapping lives.
-		ConsultScope: consultScope(c.ConsultScope),
 		ReloadConfig: func() (*config.Config, error) {
 			return config.Load(loadOptions(config.Options{ProjectRoot: cdr.Root, Warn: warnNoticef}))
 		},
@@ -881,6 +869,12 @@ func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult
 			fmt.Fprintln(t.w(), "‹webfetch› (no purpose given)")
 		}
 		fmt.Fprintln(t.w(), render.Sanitize(req.URL))
+	case req.ConsultModel != "":
+		fmt.Fprintln(t.w(), "‹consult›", render.Sanitize(req.ConsultModel))
+		fmt.Fprintln(t.w(), render.Sanitize(req.ConsultQuestion))
+		for _, f := range req.ConsultFiles {
+			fmt.Fprintln(t.w(), "+", render.Sanitize(f))
+		}
 	case req.Path != "":
 		fmt.Fprintln(t.w(), "‹read›")
 		fmt.Fprintln(t.w(), render.Sanitize(req.Path))

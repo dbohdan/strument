@@ -57,13 +57,6 @@ type Options struct {
 	// MakeClient builds a client when /model switches providers.
 	MakeClient func(*config.Model) llm.ModelClient
 
-	// ConsultScope is how much of the session /consult shows the advisor. The
-	// zero value is coder.ConsultNothing — the binary sets this from
-	// --consult-scope, whose default is where the shipped behaviour lives,
-	// because the ladder's order is what makes `scope >= ConsultChat` read
-	// correctly and "none" is the bottom of it.
-	ConsultScope coder.ConsultScope
-
 	// ReloadConfig re-reads config.star for /reload, using the same options as
 	// the initial load. nil disables /reload.
 	ReloadConfig func() (*config.Config, error)
@@ -550,11 +543,10 @@ func (r *REPL) showInterruptHint() {
 }
 
 // withinTurn runs fn with the in-turn scaffolding shared by a normal turn,
-// /btw, and /consult: a cancelable context, cursor restore, the double-Ctrl-C chord
+// and /btw: a cancelable context, cursor restore, the double-Ctrl-C chord
 // (first cancels the send, the second within 2s exits), SIGUSR1 as the same
-// interrupt without the chord, and the "Waiting for <model>" cue. It returns
-// fn's result.
-func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context.Context) string) string {
+// interrupt without the chord, and the "Waiting for <model>" cue.
+func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context.Context)) {
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -618,22 +610,22 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 		r.out.hideCursor()
 		r.out.startWaiting(modelName)
 	}
-	return fn(tctx)
+	fn(tctx)
 }
 
 // runAside runs a /btw one-off question with the same in-turn scaffolding as a
 // normal turn, but records no history — the exchange is not part of the chat.
 func (r *REPL) runAside(ctx context.Context, question string) {
-	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
-		return r.coder.RunAside(tctx, question)
+	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) {
+		r.coder.RunAside(tctx, question)
 	})
 }
 
 // runTurn runs one user message through the coder with in-turn Ctrl-C
 // handling: the first cancels the send, the second within 2s exits.
 func (r *REPL) runTurn(ctx context.Context, message string) {
-	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) string {
-		return r.coder.Run(tctx, message)
+	r.withinTurn(ctx, r.coder.Model.QualifiedSlug(), func(tctx context.Context) {
+		r.coder.Run(tctx, message)
 	})
 }
 func (r *REPL) showUndoHint() {
@@ -717,6 +709,16 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// about to leave for it, and nothing else competes for the line.
 		r.out.Toolf("\u2039websearch\u203a")
 		r.out.Printf("%s", req.Query)
+	case req.ConsultModel != "":
+		// Everything that leaves for the other provider, and nothing else:
+		// the model, the question as the asking model wrote it, and the files.
+		// The question in full, never shortened, because it is the text being
+		// approved.
+		r.out.Toolf("\u2039consult\u203a %s", req.ConsultModel)
+		r.out.Printf("%s", req.ConsultQuestion)
+		for _, f := range req.ConsultFiles {
+			r.out.Toolf("+ %s", f)
+		}
 	case req.Path != "":
 		// The read tool takes no purpose, so the path alone: it is the whole
 		// of what is being decided, and the arrow to a symlink's target is

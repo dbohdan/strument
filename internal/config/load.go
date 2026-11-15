@@ -240,6 +240,9 @@ type fileGlobals struct {
 
 	hasSystemPrompt bool
 	systemPromptVal string
+
+	hasConsultModels bool
+	consultModelsVal map[string]string
 }
 
 // defaultSandbox is what `sandbox` means when a config does not say.
@@ -562,6 +565,9 @@ func Load(opts Options) (*Config, error) {
 	if user.hasSystemPrompt {
 		cfg.SystemPrompt = user.systemPromptVal
 	}
+	if user.hasConsultModels {
+		cfg.ConsultModels = user.consultModelsVal
+	}
 	if project != nil {
 		maps.Copy(cfg.Models, project.models)
 		if project.hasDefault {
@@ -695,6 +701,13 @@ func Load(opts Options) (*Config, error) {
 		if project.hasSystemPrompt {
 			cfg.SystemPrompt = project.systemPromptVal
 		}
+		// Whole-value: which models the session may consult is one decision,
+		// and a project must be able to offer none. The trust gate makes a
+		// project's entry the user's own; the aliases it names are models the
+		// merged config already defines, and each consult is still confirmed.
+		if project.hasConsultModels {
+			cfg.ConsultModels = project.consultModelsVal
+		}
 	}
 
 	// 5b. Resolve each provider's proxy against the global fallback, once per
@@ -780,6 +793,15 @@ func Load(opts Options) (*Config, error) {
 				known = "configured checks: " + strings.Join(cfg.CheckNames(), ", ")
 			}
 			return nil, fmt.Errorf("`check_auto` names %q, which is not a `check` entry (%s)", name, known)
+		}
+	}
+	// After the merge too: a project may define the alias a user's
+	// consult_models names. An alias that is not a model would be offered to
+	// the model and then fail at every call.
+	for _, alias := range slices.Sorted(maps.Keys(cfg.ConsultModels)) {
+		if _, ok := cfg.Models[alias]; !ok {
+			return nil, fmt.Errorf("`consult_models` names %q, which is not a key of `models` (aliases: %s)",
+				alias, strings.Join(slices.Sorted(maps.Keys(cfg.Models)), ", "))
 		}
 	}
 	// Adapter, edit_format, and extra_params were validated at
@@ -1289,7 +1311,47 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 		out.systemPromptVal = s
 	}
 
+	if v, ok := globals["consult_models"]; ok {
+		vals, err := parseConsultModels(path, v)
+		if err != nil {
+			return nil, err
+		}
+		out.hasConsultModels = true
+		out.consultModelsVal = vals
+	}
+
 	return out, nil
+}
+
+// parseConsultModels decodes `consult_models`: model alias -> what to consult
+// it for. The purpose is required, because it is the only thing the model
+// choosing a consult has to go on; an alias alone says which model, not when.
+func parseConsultModels(path string, v starlark.Value) (map[string]string, error) {
+	dict, ok := v.(*starlark.Dict)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `consult_models` must be a dict of model aliases to what to consult them for, got %s",
+			path, v.Type())
+	}
+	vals := make(map[string]string, dict.Len())
+	for _, item := range dict.Items() {
+		alias, ok := starlark.AsString(item[0])
+		if !ok {
+			return nil, fmt.Errorf("%s: `consult_models` keys must be model aliases, got %s", path, item[0].Type())
+		}
+		purpose, ok := starlark.AsString(item[1])
+		if !ok {
+			return nil, fmt.Errorf("%s: `consult_models[%q]` must be a string saying what to consult it for, got %s",
+				path, alias, item[1].Type())
+		}
+		purpose = strings.TrimSpace(purpose)
+		if purpose == "" {
+			return nil, fmt.Errorf("%s: `consult_models[%q]` is empty: say what to consult it for, "+
+				"such as \"documentation and user-facing prose\"", path, alias)
+		}
+		vals[alias] = purpose
+	}
+	return vals, nil
 }
 
 // parseChecks decodes the top-level `check` dict: check name -> argv. Starlark

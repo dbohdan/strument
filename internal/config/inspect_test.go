@@ -56,6 +56,7 @@ auto_approve = ["websearch"]
 approve_model = decision_model("systemone", "laya", url = "http://localhost:11435/v1/systemone")
 env_set = {"TZ": "UTC", "CORP_TOKEN": env("CORP_TOKEN")}
 system_prompt = "Be terse."
+consult_models = {"big": "second opinions on design"}
 `
 
 func inspect(t *testing.T, body string, env map[string]string) *ProjectInspection {

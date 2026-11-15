@@ -76,7 +76,6 @@ func init() {
 		{"check", "[<name>]", "Run a configured check, or all of them in order. Optionally add the output to the chat.", cmdCheck},
 		{"clear", "", "Start a fresh conversation in this session, keeping grants.", cmdClear},
 		{"commits", "[on | off]", "Show or change whether the model may commit its edits.", cmdCommits},
-		{"consult", "<alias> <question> | scope [<name>]", "Ask another model and optionally add its answer to the chat. scope shows or sets how much of the session it sees.", cmdConsult},
 		{"context", "", "Show the chat history as the model receives it.", cmdContext},
 		{"diff", "", "Show the diff of changes since the last message.", cmdDiff},
 		{"editor", "[<command>]", "Write your message in an editor, $VISUAL or $EDITOR unless a command is given. It comes back to the prompt to send.", cmdEditor},
@@ -266,15 +265,6 @@ func (r *REPL) completer() readline.AutoCompleter {
 			)
 		case "model":
 			sub = append(sub, readline.PcItemDynamic(r.completeAliases))
-		case "consult":
-			// The advisor is named from the same closed set /model switches
-			// between, so it completes the same way; "scope" is the one word
-			// beside the aliases, and it takes a scope name.
-			scopes := make([]*readline.PrefixCompleter, 0, len(coder.ConsultScopeNames))
-			for _, n := range coder.ConsultScopeNames {
-				scopes = append(scopes, readline.PcItem(n))
-			}
-			sub = append(sub, readline.PcItem("scope", scopes...), readline.PcItemDynamic(r.completeAliases))
 		case "session":
 			// The subcommands first, then a name where an existing one is
 			// meant. new takes a name that does not exist yet, which nothing

@@ -79,6 +79,7 @@ const (
 	GrantBash        = config.GrantBash
 	GrantWebfetch    = config.GrantWebfetch
 	GrantWebsearch   = config.GrantWebsearch
+	GrantConsult     = config.GrantConsult
 	GrantReadOutside = config.GrantReadOutside
 	GrantSteps       = config.GrantSteps
 	GrantContext     = config.GrantContext
@@ -112,6 +113,13 @@ type ConfirmRequest struct {
 	// answer to something it never printed is asking blind.
 	URL    string
 	Origin string
+	// ConsultModel, ConsultQuestion and ConsultFiles are the consult tool's:
+	// which model, with its slug, the question as the model wrote it, and the
+	// files that go with it. All three are shown, because they are the whole
+	// of what leaves for the other provider.
+	ConsultModel    string
+	ConsultQuestion string
+	ConsultFiles    []string
 	// Query is websearch's: the text the model is about to send to the user's
 	// search instance. Separate from Command and URL because it is neither —
 	// there is no destination to weigh here, the user already pinned that in
@@ -144,11 +152,11 @@ type ConfirmRequest struct {
 	// prompt the model caused: bash, websearch, webfetch. A turn is the unit the
 	// answer is scoped to, and initBeforeMessage is what ends it, so a prompt
 	// raised between turns is granting something with no end in sight. The
-	// add-output prompts after /run, /check and /consult learned this the
-	// expensive way — they carried a Group copied from the gates next door, and
-	// an "a" at one of them ran until the user's next *message* and covered all
-	// three commands, so an "a" at /consult silently added the following /run's
-	// output. They ask every time now.
+	// add-output prompts after /run and /check learned this the expensive way —
+	// they carried a Group copied from the gates next door, and an "a" at one
+	// of them ran until the user's next *message* and covered the others, so
+	// one "a" silently added the next command's output too. They ask every time
+	// now.
 	Group string
 	// GroupSession makes an "a" answer last for the session rather than the
 	// turn. Only webfetch sets it, and the asymmetry with the shell gate is the

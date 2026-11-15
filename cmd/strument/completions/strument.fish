@@ -78,9 +78,8 @@ complete -c strument -n $chat_cmd -l no-shell -d "Disable the model's bash tool"
 # adopt. It repeats and accepts comma-separated lists, which no completion can
 # usefully offer past the first name.
 complete -c strument -n $chat_cmd -l yes -d "Approve prompts of this type automatically" -x \
-    -a "bash webfetch websearch steps context add-output all"
+    -a "bash webfetch websearch consult read-outside steps context add-output all"
 complete -c strument -n $chat_cmd -l unattended -d "Decline every prompt --yes does not approve"
-complete -c strument -n $chat_cmd -l consult-scope -d "Session context to include in /consult requests" -x -a "none files chat"
 complete -c strument -n $chat_cmd -l version -d "Print version and exit"
 
 # trust: a project directory, and the flag that skips its question.

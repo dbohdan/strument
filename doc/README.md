@@ -312,35 +312,34 @@ The REPL has the same philosophy: `repl.Options` exposes seams
 `GetSize`) so the whole interactive loop runs under tests over pipes and a
 real pty.
 
-## Side calls: `/btw` and `/consult`
+## Side calls: `/btw` and the `consult` tool
 
-Two commands send a request that is not a turn. `RunAside` (`aside.go`) sends
-one user message with no chat context, no file context, no system prompt and no
-tools; it streams like a turn, reports usage like a turn, and adds nothing to
-the conversation. `RunConsult` (`consult.go`) is the same call with two
-additions: the advisor may be a different model, and it may be shown some of the
-session.
+Two paths send a request that is not a turn. `RunAside` (`aside.go`), behind
+`/btw`, sends one user message with no chat context, no file context, no system
+prompt and no tools; it streams like a turn, reports usage like a turn, and
+adds nothing to the conversation.
 
-`ConsultScope` is `none` or `chat`, set by `--consult-scope`. `chat` adds
-`ViewContext`'s render of the fold, so there is one renderer for "what is in
-this conversation" rather than two that drift. A `files` scope sent the pinned
-files' contents and went with them.
+The `consult` tool (`consult.go`) is the same call made by the model, mid-turn,
+to a model in `consult_models`. The asking model names the files, and Strument
+reads them through the workspace and sends them verbatim, so they cannot be
+paraphrased on the way. The answer comes back as the tool result, attributed
+to the model that wrote it. The consulted model gets no tools: what it can get
+wrong is what the asking model left out, and its description says so.
 
-The advisor's client and model are swapped in for the call and restored after,
-which is what puts the cost row under the advisor's own slug and price. That is
-deliberate rather than incidental: a second opinion the ledger cannot see is
-what a server-side advisor tool would give you, and being able to read what the
-habit costs is most of the argument for having it in the harness at all.
+Mid-turn is what makes it delicate. The side call streams through the fields
+the turn's step is using — `partialToolCalls` above all, which
+`appendToolResults` walks after the tools run — and adds to the message-scoped
+usage. `sideCallWithin` saves both, swaps in the consulted model's client and
+model, and restores everything after, so the other calls in the step keep
+their results, the consult's cost is its own ledger row under the consulted
+model's slug and price, and the turn's row is the turn's.
 
-What reaches the chat is decided by the user, not by the command. `/consult`
-offers, the way `/run` and `/check` offer their output, and on yes the answer
-goes in through `AppendContext` with a provenance header naming the advisor.
-Not `llm.HarnessNote`: the `[strument]` marker means the harness is speaking,
-and this is material the user brought in. The label is the whole point of the
-command — `/model` puts a second model's reply in as an *assistant* turn, which
-the session then reads as its own memory — and whether it survives to the next
-turn is measured, not assumed:
-[`experiments/2026-09-consult/README.md`](experiments/2026-09-consult/README.md).
+It replaced `/consult`, where the user typed the question and decided whether
+the answer became context. The user stays the gate a different way: each call
+is confirmed with the question and the file list on screen, under the
+`consult` grant, and the answer is printed as it arrives. A `run_code` program
+cannot call it. `approve_model` does not answer its prompt: whether a consult
+is worth its price depends on the task, which a decision model does not see.
 
 ## The tool loop
 
@@ -573,11 +572,11 @@ Ten tools, in three natures:
 - **Only a prompt raised inside a turn may offer `a`.** The record expires at
   `initBeforeMessage`, so a turn is the unit it is scoped to, and a prompt
   raised *between* turns grants until something unrelated happens to end it.
-  That is why bash, websearch and webfetch carry a `Group` and the add-output
-  prompts after `/run`, `/check` and `/consult` do not. They did, briefly, with
+  That is why bash, websearch, webfetch and consult carry a `Group` and the
+  add-output prompts after `/run` and `/check` do not. They did, briefly, with
   a group copied from the gates next door: measured, an `a` at one of them ran
-  until the user's next message and covered all three commands, so approving a
-  consult's answer silently added the following `/run`'s output. `--yes
+  until the user's next message and covered the others too, so approving one
+  output silently added the next command's. `--yes
   add-output` is how you stop being asked, which puts the scope in a flag
   instead of in an answer whose reach was invisible.
 
@@ -1227,7 +1226,7 @@ from rows that named one.
 other scope: one file per provider, global across projects, answering "what is
 this provider costing me". The same `RecordUsage` callback writes both — a
 usage row is the turn accounting a turn already records, minus the fields that
-only make sense per project — so `/consult`'s advisor spend and a `/model`
+only make sense per project — so a consult's spend and a `/model`
 switch land under the right provider the same way the ledger catches them.
 `strument usage` and `/usage` read it; the windows are rolling (last 24 hours,
 7 days, 30 days) so no calendar or timezone question reaches the sum, and the

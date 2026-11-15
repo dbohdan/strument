@@ -11,7 +11,7 @@ import (
 
 // TestSubcommandCompletion: commands with subcommands complete the subcommand,
 // and then keep completing at the next stage — a session name after
-// /session switch, a scope after /consult scope, a grant after /yes add.
+// /session switch, a grant after /yes add.
 func TestSubcommandCompletion(t *testing.T) {
 	r, cdr, _ := newTestREPL(t, &fixture.StreamStub{}, strings.NewReader("/exit\n"))
 	defer r.Close()
@@ -33,10 +33,9 @@ func TestSubcommandCompletion(t *testing.T) {
 		{"/session rename ", []string{"main", "spike", "spike-2"}},
 		{"/session new ", nil},
 		{"/commits o", []string{"n", "ff"}},
-		{"/consult scope ", []string{"none", "chat"}},
 		{"/yes ", []string{"add", "drop", "reset"}},
 		{"/yes add b", []string{"ash"}},
-		{"/yes add bash ", []string{"bash", "webfetch", "websearch", "read-outside", "steps", "context", "add-output", "all"}},
+		{"/yes add bash ", []string{"bash", "webfetch", "websearch", "consult", "read-outside", "steps", "context", "add-output", "all"}},
 	} {
 		got := completionsFor(r.completer(), tc.line)
 		if !slices.Equal(got, tc.want) {

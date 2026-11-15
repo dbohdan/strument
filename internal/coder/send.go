@@ -1208,7 +1208,7 @@ func (c *Coder) turnOutcome() string {
 // reportUsage hands the message-scoped accounting to RecordUsage, when there is
 // one.
 //
-// Shared by a turn and by a side call — /btw and /consult — because a side call
+// Shared by a turn and by a side call — /btw and a consult — because a side call
 // spends money and a ledger that cannot see it is not a ledger. It used to be
 // inline in flushTurnUsage, which asides never reach: an aside printed its usage
 // line and left no row, so a session's spend on screen and its spend on disk
