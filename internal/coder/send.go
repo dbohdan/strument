@@ -73,9 +73,8 @@ func (o SendOutcome) String() string {
 	}
 }
 
-// Retry/continuation constants. The default retry timeout matches aider's
-// RETRY_TIMEOUT; the continuation cap is a declared divergence (aider is
-// unbounded).
+// Retry/continuation constants. The default retry timeout is a minute, and
+// continuations are capped.
 //
 // maxRetryDelay is the longest single wait. It only binds once retry_timeout is
 // raised past the default: under the default the ladder stops at 32s anyway,
@@ -232,26 +231,19 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 // send's retry loop.
 //
 // cap bounds the total time spent waiting; once the waits reach it, the next
-// failure gives up. Zero means retryTimeout, the turn's own bound. The turn
-// passes the configured retry_timeout, and a side call a smaller one — see
-// sideRetryCap.
+// failure gives up. Zero means retryTimeout. The turn and /btw pass the
+// configured retry_timeout.
 //
-// Aider compares the cap with the next delay rather than with the waiting done
-// so far. For a doubling ladder from 0.25s the two agree — the waits before a
-// delay d sum to d-0.25s — so the default ladder is aider's to the retry. They
-// part once a delay is clamped to maxRetryDelay, which is the case the total is
-// for: with a ceiling on the delay, the delay alone would never reach the cap.
-//
-// what names the call in the messages, for a side call that the user did not
-// ask for directly and cannot otherwise place: "Retrying in 4.0 seconds..."
-// during a wait for your own prompt says nothing about which of the session
-// notes, the commit message or a compaction is the thing retrying. Empty is the
-// turn itself, which needs no naming because it is what the user is watching.
+// The cap is compared with the waiting done so far, not with the next delay.
+// For a doubling ladder from 0.25s the two agree — the waits before a delay d
+// sum to d-0.25s — so the default ladder is eight waits, 0.25s to 32s, either
+// way. They part once a delay is clamped to maxRetryDelay, which is the case
+// the total is for: with a ceiling on the delay, the delay alone would never
+// reach the cap.
 type retryBackoff struct {
 	delay  time.Duration
 	cap    time.Duration
 	waited time.Duration
-	what   string
 }
 
 func (rb *retryBackoff) limit() time.Duration {
@@ -264,54 +256,34 @@ func (rb *retryBackoff) limit() time.Duration {
 // retry reports whether to retry a failed stream. A retryable error backs off —
 // doubling the delay (capped) and sleeping — then returns true; a non-retryable
 // error, one past the cap, or a context that ended during the wait reports the
-// failure and returns false. It takes Output and Clock rather than the Coder so
-// the side-model calls (side.go) share it without owning one; sendMessage,
-// RunAside, and those side calls all retry identically, and now report
-// identically too.
+// failure and returns false. It takes Output and Clock rather than the Coder,
+// so sendMessage and RunAside retry, and report, identically.
 func (rb *retryBackoff) retry(ctx context.Context, out Output, clock Clock, streamErr error) bool {
 	var se *llm.StreamError
 	if !errors.As(streamErr, &se) || !se.Retryable() {
-		out.Errorf("%s%v", rb.prefix(), streamErr)
+		out.Errorf("%v", streamErr)
 		return false
 	}
 	if rb.waited >= rb.limit() {
-		out.Errorf("%s%s", rb.prefix(), se.Error())
+		out.Errorf("%s", se.Error())
 		return false
 	}
 	rb.delay = min(rb.delay*2, maxRetryDelay)
 	rb.waited += rb.delay
-	out.Warningf("%s%s", rb.prefix(), se.Error())
-	out.Printf("Retrying%s in %.1f seconds...", rb.suffix(), rb.delay.Seconds())
+	out.Warningf("%s", se.Error())
+	out.Printf("Retrying in %.1f seconds...", rb.delay.Seconds())
 	if !clock.Sleep(ctx, rb.delay) {
-		// Ctrl-C during the turn's own wait is the user stopping the retries,
-		// and the caller says so; "gave up: context canceled" would read as a
-		// failure.
-		if rb.what == "" && errors.Is(ctx.Err(), context.Canceled) {
+		// Ctrl-C during the wait is the user stopping the retries, and the
+		// caller says so; "gave up: context canceled" would read as a failure.
+		if errors.Is(ctx.Err(), context.Canceled) {
 			return false
 		}
 		// The wait outlived the call's own deadline. Said rather than returned
-		// quietly: this is the path that made a failed side call look like a
-		// model that had decided there was nothing to say.
-		out.Errorf("%sgave up: %v", rb.prefix(), ctx.Err())
+		// quietly, or a failed call looks like a model with nothing to say.
+		out.Errorf("gave up: %v", ctx.Err())
 		return false
 	}
 	return true
-}
-
-// prefix names the call at the start of a message, or nothing for the turn.
-func (rb *retryBackoff) prefix() string {
-	if rb.what == "" {
-		return ""
-	}
-	return rb.what + ": "
-}
-
-// suffix names the call inside the countdown line.
-func (rb *retryBackoff) suffix() string {
-	if rb.what == "" {
-		return ""
-	}
-	return " " + rb.what
 }
 
 // sendMessage is the phase machine. It returns the outcome and, for
@@ -723,19 +695,14 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 //
 // Restored context is invisible until the first request, and by then the request
 // has failed. aider #2979 is the shape: an 80k-token restored history fails on
-// the wire, and compaction does not help, because it runs at the end of a turn and there has not been one yet.
-//
-// This comment used to add that Strument restored less — pins, notes, and the
-// read-only block rather than a conversation. With `--continue` it restores a
-// conversation too, which is aider's own shape, so the trap is no longer
-// merely available. RestoreHistory answers the mechanism by compacting at
-// restore time instead of waiting for a turn boundary that has not arrived;
-// this stays as the backstop for everything compaction does not bound — the
-// pins, the read-only block, a window smaller than the summary itself.
+// the wire, and compaction does not help, because it runs at the end of a turn
+// and there has not been one yet. RestoreHistory answers that by compacting at
+// restore time; this is the backstop for what compaction does not bound, such
+// as a window smaller than the system prompt and tool schemas.
 //
 // It warns rather than asking. A confirmation before the user has typed
 // anything is a toll on every start, and there is nothing to decide yet: the
-// remedy is /drop, /notes drop or /clear, which they can reach either way.
+// remedy is /clear, which they can reach either way.
 func (c *Coder) CheckRestoredContext() {
 	if c.Model == nil || c.Model.Context <= 0 {
 		return
@@ -746,8 +713,7 @@ func (c *Coder) CheckRestoredContext() {
 	}
 	c.Out.Warningf("This session starts with about %d tokens of context, which already reaches "+
 		"the %d-token limit for %s.", n, c.Model.Context, c.Model.QualifiedSlug())
-	c.Out.Printf("Use /drop to unpin files, /notes drop to discard the session notes, /clear to forget the " +
-		"restored conversation, or /tokens to see the split.")
+	c.Out.Printf("Use /clear to forget the restored conversation, or /tokens to see the split.")
 }
 
 // checkTokens warns when the estimate reaches the input window and asks to
@@ -760,12 +726,10 @@ func (c *Coder) checkTokens(messages []llm.Message) bool {
 	inputTokens := c.scaledTokens(c.requestTokens(messages))
 	c.Out.Errorf("This request is about %d tokens; the context limit for %s is %d.",
 		inputTokens, c.Model.QualifiedSlug(), maxInput)
-	// The advice is what helps here, not aider's: pinned files go by name, so
-	// "break your code into smaller files" changed nothing, and the history is
-	// what fills the window. The closing claim about what providers charge
-	// for an over-limit request went too; it was a guess stated as reassurance.
-	c.Out.Printf("To make room, use /clear to clear the history, /drop to unpin files, " +
-		"or /tokens to see what takes the space.")
+	// The history is what fills the window, so that is the advice. Say nothing
+	// about what providers charge for an over-limit request: a guess stated as
+	// reassurance.
+	c.Out.Printf("To make room, use /clear to clear the history, or /tokens to see what takes the space.")
 	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Send it anyway?", Grant: GrantContext})
 	return res.Yes
 }
@@ -843,14 +807,10 @@ func (c *Coder) historyBudget() int {
 
 // moveBackCurMessages rotates cur into done on edited turns.
 //
-// aider appended a synthetic "I applied and committed your changes" user turn
-// here, plus an "Ok." from the assistant, because with SEARCH/REPLACE there was
-// no other channel: a text edit format has nothing to answer the model with.
-// The tool loop has one. Every edit call already gets a tool result saying what
-// it did to which file, so the pair would only repeat it — two fabricated
-// messages per turn, in a loop whose whole correction was to stop inventing
-// turns the model never took. The commit is reported to the user instead, where
-// the hash is worth something.
+// No synthetic "I applied your changes" exchange is added, as a text edit
+// format would need: every edit call already gets a tool result saying what it
+// did to which file, so the pair would only repeat it with two messages the
+// model never sent.
 func (c *Coder) moveBackCurMessages() {
 	// The turn's range, for /rewind. The files are the turn's own, still
 	// valid here: turnEditedFiles resets when the next turn starts.
@@ -865,24 +825,16 @@ func (c *Coder) moveBackCurMessages() {
 // endTurnHistory settles the finished turn and compacts if it has outgrown the
 // budget. Called once from runOne's defer, after the commit and the snapshot.
 //
-// It used to be gated on `editFormat == "tool" && len(turnEditedFiles) > 0`, so
-// only a turn that changed a file produced any settled history at all. A live
-// pass found what that costs: a session of questions, or any stretch of the old /ask,
-// kept everything in curMessages — which goes on the wire in full and which
-// maybeSummarize never examines — so the history budget existed and nothing was
-// ever measured against it.
+// Every turn rotates, whatever it did. Gating rotation on a turn having edited
+// a file once left a session of questions entirely in curMessages, which goes
+// on the wire in full and which compaction never examines, so the history
+// budget existed and nothing was measured against it. What must not happen is
+// rotating *mid-loop*, where compaction would eat the tool results the next
+// send reacts to; running in the turn-end defer is what prevents that.
 //
-// The gate is a vestige. In aider the rotation carried a synthetic "I applied
-// and committed your changes" pair, which only made sense after an edit;
-// moveBackCurMessages's own comment records removing the pair, and the gate
-// stayed behind. What genuinely must not happen is rotating *mid-loop*, where
-// compaction would eat the tool results the next send reacts to — and that is
-// enforced by this running in the turn-end defer, not by asking what the turn
-// did.
-//
-// Rotation does not move anything on the wire: done and cur are adjacent and
-// both sit after the read-only block, so the split is bookkeeping. What changes
-// is that compaction can now see the conversation.
+// Rotation does not move anything on the wire: done and cur are adjacent, so
+// the split is bookkeeping. What changes is that compaction can see the
+// conversation.
 func (c *Coder) endTurnHistory() {
 	if len(c.curMessages) == 0 {
 		return
@@ -891,13 +843,11 @@ func (c *Coder) endTurnHistory() {
 }
 
 // historyShare is the fraction of the main model's window the settled chat
-// history may fill before it is folded: one half. The divisor is named because
-// it is a share of a *contended* window — history sits there beside pinned
-// files, the repo map, the tool schemas and the exchange in progress — which is
-// what distinguishes it from sideInputBound, where the call owns the window and
-// takes nearly all of it. Two numbers, one idea, applied at two scopes.
+// history may fill before it is folded: one half. It is a share of a
+// *contended* window: history sits there beside the system prompt, the tool
+// schemas and the exchange in progress.
 //
-// It was one eighth (aider's was one sixteenth), and two trials moved it.
+// It was one eighth, and two trials moved it.
 // doc/experiments/2026-10-compaction-threshold found that on MiMo folding early
 // cost more than not folding: each fold rewrites the cached prefix, and a 98%
 // cache hit on a long history is cheaper than the misses a fold causes. Folding
@@ -1343,7 +1293,7 @@ func formatCost(v float64) string {
 }
 
 func (c *Coder) showExhaustedError() {
-	c.Out.Errorf("The conversation no longer fits the model's context window. Use /clear or /drop to make room.")
+	c.Out.Errorf("The conversation no longer fits the model's context window. Use /clear to make room.")
 }
 
 // stripReasoning removes an inline reasoning tag from the answer before the
