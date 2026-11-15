@@ -24,6 +24,9 @@ MODELS = {
     # model the maintainer's impression was formed on.
     "terra-default": {"model": "openai/gpt-6.1-terra", "provider": "openai", "extra": {"service_tier": "flex"},
                       "default_reasoning": True},
+    # GPT-6.1 Sol at "low", the maintainer's comparison: the Artificial Analysis
+    # index puts it beside Terra at medium for performance and price.
+    "sol": {"model": "openai/gpt-6.1-sol", "provider": "openai", "extra": {"service_tier": "flex"}},
     "deepseek": {"model": "deepseek/deepseek-v4.1-flash", "provider": "wafer"},
 }
 

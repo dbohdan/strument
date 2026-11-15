@@ -184,6 +184,29 @@ def defect_tables(recs):
             w(f"| {j} | {wr} | {sum(ms) / len(ms):.2f} | {sum(1 for x in ms if x > 0)} of {len(ms)} | {paired} | "
               f"{same} of {len(both)} | {unparsed} |" if ms else f"| {j} | {wr} | — | — | {paired} | — | {unparsed} |")
 
+    others = [x for x in writers if x != "mimo"]
+    if len(others) < 2:
+        return
+    w("\n### Writer against writer (same judge, paired by task and sample)\n")
+    w("| judge | writer | against | first fewer | tie | second fewer | p (sign, vs ½) |")
+    w("|---|---|---|---|---|---|---|")
+    for j in judges:
+        def mean2(task, writer, n):
+            vs = [v for v in counts.get((task, writer, n, j), {}).values() if v is not None]
+            return sum(vs) / len(vs) if vs else None
+        for i, x in enumerate(others):
+            for y in others[i + 1:]:
+                f = t_ = m = 0
+                for task in T.TASKS:
+                    for n in (1, 2):
+                        a, b = mean2(task, x, n), mean2(task, y, n)
+                        if a is None or b is None:
+                            continue
+                        f += a < b
+                        m += a > b
+                        t_ += a == b
+                w(f"| {j} | {x} | {y} | {f} | {t_} | {m} | {binom_two_sided(f, f + m):.3f} |")
+
 
 def fisher_two_sided(a, b, c, d):
     """Exact two-sided Fisher test on [[a, b], [c, d]]."""

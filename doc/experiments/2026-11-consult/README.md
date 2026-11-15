@@ -334,3 +334,24 @@ mostly position.
   against $0.00094 at default, on flex.
 - **Still open:** whether any of this holds on longer documents, where the
   maintainer's impression was formed. Layer 4 should include some.
+
+## Second follow-up: GPT-6.1 Sol at "low", preregistered before running
+
+Asked for model choice beyond this trial: the Artificial Analysis index puts
+GPT-6.1 Sol at "low" beside Terra at medium for performance and price. Two Sol
+samples per task at `reasoning = "low"`, on flex (a two-task pilot, kept out:
+both candidates pass their checks, 0 reasoning tokens, $0.0013 and $0.0019).
+Then the defect judge scores all four writers — MiMo, Terra at "low", Terra at
+default, Sol at "low" — in one fresh shuffled run, MiMo and DeepSeek, two reps.
+Terra's default is the provider's; OpenAI documents medium as its default
+effort, but this run does not verify that.
+
+- **Sol writes better than MiMo** if, by MiMo's judge, Sol has fewer defects in
+  the paired comparison with sign p below 0.05.
+- **Sol against Terra** (each setting): reported, paired the same way. A
+  ceiling limits it: Terra at "low" drew no defects last run, so this judge
+  can show Sol worse than Terra but has little room to show it better. A tie
+  here is not evidence that the two write alike.
+- Terra at "low" against Terra at default, which the last run's data put at 8
+  to 0 (p = 0.008, computed after the fact), is reported again as a
+  replication.
