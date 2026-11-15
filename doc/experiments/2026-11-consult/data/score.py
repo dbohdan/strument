@@ -151,6 +151,7 @@ def defect_tables(recs):
         items = D.parse_defects(r.get("text")) if r.get("ok") else None
         counts[(r["task"], r["writer"], r["n"], r["judge"])][r["rep"]] = None if items is None else len(items)
     judges = sorted({r["judge"] for r in recs})
+    ns = sorted({r["n"] for r in recs})
     writers = sorted({r["writer"] for r in recs}, key=lambda x: (x != "mimo", x))
     w("\n## Defects per candidate (single-candidate judge)\n")
     w("Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** "
@@ -164,11 +165,11 @@ def defect_tables(recs):
             vs = [v for v in counts.get((task, writer, n, j), {}).values() if v is not None]
             return sum(vs) / len(vs) if vs else None
         for wr in writers:
-            ms = [x for x in (mean(t, wr, n) for t in T.TASKS for n in (1, 2)) if x is not None]
+            ms = [x for x in (mean(t, wr, n) for t in T.TASKS for n in ns) if x is not None]
             fewer = tie = more = 0
             if wr != "mimo":
                 for t in T.TASKS:
-                    for n in (1, 2):
+                    for n in ns:
                         a, b = mean(t, wr, n), mean(t, "mimo", n)
                         if a is None or b is None:
                             continue
@@ -198,7 +199,7 @@ def defect_tables(recs):
             for y in others[i + 1:]:
                 f = t_ = m = 0
                 for task in T.TASKS:
-                    for n in (1, 2):
+                    for n in ns:
                         a, b = mean2(task, x, n), mean2(task, y, n)
                         if a is None or b is None:
                             continue
@@ -267,4 +268,6 @@ def label_tables(recs):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 2:
+        T.use(sys.argv[2])
     main(sys.argv[1])

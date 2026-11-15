@@ -403,3 +403,32 @@ multiple lines", "400 ms after the second" for a randomized delay.
 - **For the trial:** one run of 30 pairs cannot rank writers here, so layer 4
   needs either more samples per task or longer documents, where defects have
   room to differ. Both, preferably.
+
+## Third follow-up: long documents, preregistered before running
+
+Short tasks left no room: most pairs tied, and three runs were needed to rank
+even MiMo against Terra. The maintainer's impression was formed on long
+documents. Six tasks (`LONG_TASKS` in `data/tasks.py`), each a whole
+user-facing page about one Strument feature, written from Strument's own source
+at `45f0f00` and from nothing else: the consult tool, approving prompts
+(`--yes`, `auto_approve`, `/yes`), moving a project (`strument project adopt`),
+reading outside the project, `webfetch`, and skills. Neither writer nor judge
+sees the existing docs. Each task's fact checks pass on Strument's existing
+documentation and fail on an empty page; one check was dropped after the pilot,
+because the fact it required (`run_code` cannot consult) is in a file the task
+does not send, and all three pilot pages missed it.
+
+**Writers:** MiMo, Terra at "low", Sol at "low", four samples each per task: 72
+pages, 24 pairs per comparison. **Judge:** the single-candidate defect judge,
+MiMo and DeepSeek, two reps, reasoning disabled. One shuffled run. A pilot on
+one task, kept out: pages of 320–550 words, every judge call parsed and
+finished well under its limit.
+
+- **Sol against Terra (the question asked):** by MiMo's judge, whichever has
+  fewer defects in the paired comparison with sign p below 0.05 is the better
+  writer here; otherwise they are indistinguishable at this sample.
+- **Each against MiMo:** the same test, each OpenAI writer against MiMo.
+- **Secondary, fixed now:** defects per 100 words, because a longer page has
+  more places for a defect; fact-check passes per writer; page length.
+  Reported beside the primary, never instead of it.
+- DeepSeek's judge reported the same way.

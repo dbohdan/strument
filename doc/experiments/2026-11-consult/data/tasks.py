@@ -751,3 +751,98 @@ if __name__ == "__main__":
         print(f"{len(TASKS)} tasks, {len(ps)} problems")
         sys.exit(1 if ps else 0)
     print(__doc__)
+
+
+# --- The long set: whole documentation pages, written from Strument's own code ---
+#
+# Short tasks left a good writer no room to be better: every candidate passed
+# its fact checks and most pairs tied. These ask for a user-facing page about
+# one feature, from the source alone, frozen at LONG_COMMIT so the input cannot
+# drift with the branch. Neither writer nor judge is shown the existing docs.
+
+LONG_COMMIT = "45f0f00"
+
+LONG_STYLE = STYLE + """
+For a documentation page:
+
+- Open with what the feature is for and when a reader would use it.
+- Show configuration and commands as examples the reader can copy.
+- Say what the defaults are and what each setting changes.
+- Write for a user of the tool, not a maintainer: describe behavior, not
+  implementation, unless the reader needs it to use the feature well.
+- Markdown, with a single top-level heading.
+"""
+
+LONG_TASKS = {
+    "long-consult": {
+        "files": ["internal/coder/consult.go", "internal/config/grants.go"],
+        "target": "docs/consult.md", "subject": "the consult tool and the `consult_models` setting",
+        # Not run_code's exclusion: that is in codebridge.go, which this task
+        # does not send, and a check on a fact the writer cannot see scores
+        # every writer down alike (the pilot: 3 of 3).
+        "must": [r"consult_models", r"(?i)three.quarters|75 ?%|0\.75", r"--yes consult|\bconsult\b[^\n]{0,40}grant",
+                 r"(?i)purpose|what (it|each|the model) is for"],
+    },
+    "long-yes": {
+        "files": ["internal/config/grants.go", "internal/coder/grants.go", "internal/repl/yes.go"],
+        "target": "docs/approvals.md", "subject": "approving prompts automatically: `--yes`, `auto_approve` and `/yes`",
+        "must": [r"auto_approve", r"/yes", r"\bbash\b", r"\bwebfetch\b", r"\bwebsearch\b", r"\bconsult\b",
+                 r"read-outside", r"\bsteps\b", r"\bcontext\b", r"add-output", r"\ball\b"],
+    },
+    "long-adopt": {
+        "files": ["internal/history/adopt.go", "internal/history/artifact.go", "cmd/strument/project.go"],
+        "target": "docs/moving-projects.md", "subject": "what happens to Strument's saved state when a project "
+                                                       "is moved or renamed, and `strument project adopt`",
+        "must": [r"strument project adopt", r"\.adopted-", r"(?i)nothing is deleted|not deleted|never deleted|is kept",
+                 r"strument project list"],
+    },
+    "long-outside": {
+        "files": ["internal/coder/outside.go", "internal/secretfile/secretfile.go"],
+        "target": "docs/outside-reads.md", "subject": "how the model reads files outside the project, and which "
+                                                     "files it may never read",
+        "must": [r"(?i)secret", r"(?i)home directory", r"read-outside", r"(?i)symlink", r"\.env\b"],
+    },
+    "long-webfetch": {
+        "files": ["internal/coder/webfetch.go"],
+        "target": "docs/webfetch.md", "subject": "the webfetch tool: fetching pages, sections and outlines, and "
+                                                 "when Strument asks first",
+        "must": [r"webfetch_allow", r"#[a-z]", r"(?i)outline", r"(?i)origin", r"(?i)\b(this|the) run\b|rest of the run"],
+    },
+    "long-skills": {
+        "files": ["internal/coder/skills.go", "internal/skill/discover.go"],
+        "target": "docs/skills.md", "subject": "skills: where Strument looks for them, which ones are used, and how "
+                                               "the model loads one",
+        "must": [r"\.strument/skills", r"\.agents/skills", r"strument trust", r"SKILL\.md"],
+    },
+}
+
+
+def _git_show(path):
+    root = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE_DIR, capture_output=True,
+                          text=True, check=True).stdout.strip()
+    return subprocess.run(["git", "show", f"{LONG_COMMIT}:{path}"], cwd=root, capture_output=True,
+                          text=True, check=True).stdout
+
+
+HERE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def use(which):
+    """Switch TASKS and PROJECTS to the long set. The scripts call this for
+    --set long; everything else reads TASKS, files_of and facts as before."""
+    if which != "long":
+        return
+    proj = {"STYLE.md": LONG_STYLE}
+    for t in LONG_TASKS.values():
+        for rel in t["files"]:
+            proj[rel] = _git_show(rel)
+    PROJECTS.clear()
+    PROJECTS["strument"] = proj
+    TASKS.clear()
+    for name, t in LONG_TASKS.items():
+        TASKS[name] = {
+            "project": "strument", "target": t["target"], "files": ["STYLE.md"] + t["files"],
+            "instruction": f"Write {t['target']}, a user-facing documentation page about {t['subject']}, "
+                           "from the source files below.",
+            "must": t["must"], "must_not": [r"!"],
+        }

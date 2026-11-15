@@ -73,8 +73,10 @@ def main():
     ap.add_argument("--samples", type=int, default=2)
     ap.add_argument("--only", default="")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--set", default="short", choices=["short", "long"], help="which task set")
     ap.add_argument("--models", default=",".join(GEN_MODELS))
     a = ap.parse_args()
+    T.use(a.set)
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("OPENROUTER_API_KEY is not set")
     os.makedirs(os.path.join(a.outdir, "gen"), exist_ok=True)

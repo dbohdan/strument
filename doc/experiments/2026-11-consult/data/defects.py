@@ -75,7 +75,7 @@ def run(outdir, job):
     text = J.candidate(outdir, task, model, n)
     if text is None:
         return path, "missing candidate"
-    rec = C.chat(judge, prompt(task, text), max_tokens=12000, reasoning=C.NO_REASONING)
+    rec = C.chat(judge, prompt(task, text), max_tokens=24000, reasoning=C.NO_REASONING)
     items = parse_defects(rec.get("text")) if rec["ok"] else None
     rec.update(task=task, writer=model, n=n, judge=judge, rep=rep, defects=items)
     tmp = path + ".tmp"
@@ -90,15 +90,18 @@ def main():
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--judges", default="mimo,deepseek")
     ap.add_argument("--reps", type=int, default=2)
+    ap.add_argument("--samples", type=int, default=2, help="samples per writer to judge")
     ap.add_argument("--only", default="")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--set", default="short", choices=["short", "long"], help="which task set")
     ap.add_argument("--writers", default=WRITERS, help="the writers whose two samples are judged")
     a = ap.parse_args()
+    T.use(a.set)
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("OPENROUTER_API_KEY is not set")
     os.makedirs(os.path.join(a.outdir, "defects"), exist_ok=True)
     only = set(filter(None, a.only.split(",")))
-    gen = [(w, n) for w in a.writers.split(",") for n in (1, 2)]
+    gen = [(w, n) for w in a.writers.split(",") for n in range(1, a.samples + 1)]
     js = [(task, g, j, rep) for task in T.TASKS for g in gen for j in a.judges.split(",")
           for rep in range(1, a.reps + 1) if not only or task in only]
     random.Random(20261117).shuffle(js)
