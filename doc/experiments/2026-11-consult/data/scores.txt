@@ -1,0 +1,62 @@
+## Candidates
+
+| model | candidates | fenced block | facts ok | mean cost | reasoning tokens (median) |
+|---|---|---|---|---|---|
+| mimo | 30 | 30 | 30 | $0.00013 | 124 |
+| terra | 30 | 30 | 30 | $0.00061 | 0 |
+
+## Defects per candidate (single-candidate judge)
+
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares Terra's sample n with MiMo's sample n on the same task: Terra fewer, tie, or MiMo fewer.
+
+| judge | MiMo mean | Terra mean | Terra fewer | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|
+| deepseek | 0.47 | 0.29 | 8 | 13 | 8 | 1.000 | 40 of 52 | 9 |
+| mimo | 0.27 | 0.05 | 7 | 22 | 1 | 0.070 | 49 of 60 | 0 |
+
+## Verdicts per pair kind and judge
+
+Pair kinds: **tm** is Terra against MiMo (tm1 and tm2 pooled), first member Terra; **mm** and **tt** are null pairs of one writer's two samples.
+
+| judge | pair kind | pairs | consistent | first won | second won | split | missing | first won of consistent | p (vs ½) |
+|---|---|---|---|---|---|---|---|---|---|
+| deepseek | tm | 30 | 15 (50%) | 11 | 4 | 15 | 0 | 73% | 0.118 |
+| deepseek | mm | 15 | 6 (40%) | 2 | 4 | 9 | 0 | 33% | 0.688 |
+| deepseek | tt | 15 | 5 (33%) | 0 | 5 | 10 | 0 | 0% | 0.062 |
+| mimo | tm | 30 | 15 (50%) | 6 | 9 | 15 | 0 | 40% | 0.607 |
+| mimo | mm | 15 | 7 (47%) | 2 | 5 | 8 | 0 | 29% | 0.453 |
+| mimo | tt | 15 | 5 (33%) | 3 | 2 | 10 | 0 | 60% | 1.000 |
+
+## Position: share of parsed verdicts that picked A
+
+| judge | parsed | picked A | unparsed or failed |
+|---|---|---|---|
+| deepseek | 120 | 82 (68%) | 0 |
+| mimo | 120 | 91 (76%) | 0 |
+
+## Agreement between judges on Terra-against-MiMo pairs both judged consistently
+
+4 of 9 pairs (44%).
+
+## Terra-against-MiMo verdicts per task (consistent verdicts; T = Terra, M = MiMo, s = split)
+
+| task | deepseek | mimo |
+|---|---|---|
+| tally-help | T s | s s |
+| tally-error | s T | s s |
+| tally-readme | s s | s s |
+| rotor-config | T T | M s |
+| rotor-missing | M T | M M |
+| rotor-readme | T s | s s |
+| rotor-changelog | M T | M T |
+| pin-readme | T T | s M |
+| pin-jsdoc | s s | s T |
+| pin-deprecation | s T | s s |
+| pin-upgrade | s s | M s |
+| grep-tool | T s | T M |
+| grep-confirm | M s | T M |
+| grep-commit | s M | T T |
+| grep-doc | s s | M s |
+
+Judge calls: deepseek 120 ($0.036), mimo 120 ($0.023).
+Providers: {('deepseek', 'Wafer'): 120, ('mimo', 'Xiaomi'): 120}.

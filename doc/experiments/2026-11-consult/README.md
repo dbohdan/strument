@@ -1,6 +1,9 @@
 # Consult: can MiMo tell Terra's writing from its own?
 
-**Status:** design — layer 2 preregistered, not yet run.
+**Status:** characterization — layer 2 run. **Result: neither judge passed
+either preregistered design.** Every lean points to Terra, none clears its
+bar, and the likeliest reasons are a task set where both writers already do
+well and a Terra that, at `reasoning = "low"`, did not reason at all.
 
 The `consult` tool (`c59f806`) lets the model ask another model, configured in
 `consult_models`, and get the answer back. Whether that is worth having for
@@ -137,3 +140,85 @@ The same criteria are reported for DeepSeek.
 **Reported whatever the outcome:** each judge's first-position rate, its
 consistency on null pairs, unparsed and missing calls, the two judges'
 agreement on tm pairs both judged consistently, and cost.
+
+## Results
+
+Run on all fifteen tasks after the preregistration (`cf8581f`): 240 pairwise
+and 240 single-candidate judge calls, none failed, every pairwise verdict
+parsed. Judges cost $0.06; the whole layer, with candidates and both pilots,
+about $0.35. Full tables in `data/scores.txt`; raw records in
+`data/runs.tar.xz` (main run and pilots), candidates in
+`data/candidates.jsonl`.
+
+### Against the criteria
+
+| judge | design | criterion | measured | passes |
+|---|---|---|---|---|
+| MiMo | pairwise | Terra ≥ 70% of consistent tm verdicts, p < 0.05 | 6 of 15 (40%), p = 0.61 | no |
+| MiMo | pairwise | tm consistency ≥ null + 15 points | 50% against 40% (+10) | no |
+| MiMo | single | Terra fewer defects, sign p < 0.05 | 7 Terra fewer, 1 MiMo fewer, 22 ties; p = 0.070 | no |
+| MiMo | single | same count on both reps ≥ 60% | 49 of 60 (82%) | yes |
+| DeepSeek | pairwise | Terra ≥ 70%, p < 0.05 | 11 of 15 (73%), p = 0.118 | no |
+| DeepSeek | pairwise | tm consistency ≥ null + 15 points | 50% against 37% (+13) | no |
+| DeepSeek | single | Terra fewer defects, sign p < 0.05 | 8 and 8, 13 ties; p = 1.0 | no |
+| DeepSeek | single | same count on both reps ≥ 60% | 40 of 52 (77%), 9 unparsed | yes |
+
+By the preregistered rule this is the **both-fail** outcome: on this task set
+neither judge sees a Terra–MiMo difference it can stand behind.
+
+### What else the numbers say
+
+- **Position bias, reasoning off:** MiMo picked A in 91 of 120 parsed
+  verdicts (76%), DeepSeek in 82 of 120 (68%). Half of all Terra-against-MiMo
+  pairs were splits for both judges. Pairwise judging spends most of its
+  calls measuring the order.
+- **The judges do not agree.** Of the nine tm pairs both judged consistently,
+  they picked the same winner in four.
+- **The single-candidate judge is the better instrument, even here.** It
+  cannot have a position bias, MiMo repeated its own count 82% of the time,
+  and its defects are concrete and checkable. Read in full, they are mostly
+  right: MiMo's own `grep-tool` description left out the required `pattern`
+  parameter and `ignore_case`, and broke gofmt alignment on the line it was
+  told not to touch; a pinwheel README said a delay follows every failed
+  attempt, which the code skips after the last; a rotor config page said
+  "any other value turns it off" where the code accepts exactly three. Its
+  lean, 7 against 1, is the strongest signal in the layer and still misses
+  p < 0.05.
+- **Both writers are good at these tasks.** All 60 candidates pass every fact
+  check, and MiMo's judge found a mean 0.27 defects in MiMo's candidates and
+  0.05 in Terra's. With 22 of 30 pairs tied, there is little left for any
+  judge to find.
+
+### Why, and what it changes
+
+- **Terra was not reasoning.** At `reasoning = "low"`, 25 of Terra's 30
+  generations used zero reasoning tokens (the other five, 32–173). The
+  maintainer's impression of Terra and Astra comes from their defaults. Pinning
+  reasoning low is the right rule for a harness trial, where reasoning is a
+  cost to control; here the writer's quality is the thing measured, and the
+  pin may have removed most of the gap the layer was looking for.
+- **The tasks are short.** A help text or one error message leaves little
+  room for a better writer to be better, and the fact checks — the counted
+  half — were all passed by both. Documentation where the maintainer felt the
+  difference is longer: whole pages, user-facing explanation.
+- **A fixture fault:** `rotor-readme` asks what rotor does, but `rotor/cli.py`
+  only prints its settings, so both judges rightly flagged both writers for
+  claiming it rotates logs. It biases neither writer and is noted rather than
+  fixed after the run.
+- **A check gap:** the Go syntax check is `gofmt -e`, which parses but does
+  not compare formatting, so the alignment MiMo broke passed it.
+
+### Next
+
+Before layer 4, a second judge check that changes one thing at a time:
+Terra at its default reasoning on this task set (does the gap appear when
+Terra thinks?), then a harder set of longer documents. The single-candidate
+defect judge is the instrument for both, with three samples per writer; the
+pairwise judge is dropped. Whichever passes decides layer 4's judge.
+
+### A Strument bug found on the way
+
+One pilot call came back from MiMo's Xiaomi endpoint as 1,066 tokens of
+reasoning, no answer, and `finish_reason: "error"`. Strument's stream loop
+accepted that finish as complete, so a turn — or a consult — could take a
+fragment as the answer. Fixed in `c5ec76f`: it is retried as a server error.
