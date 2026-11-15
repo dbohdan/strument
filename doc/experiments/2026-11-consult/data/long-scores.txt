@@ -1,0 +1,53 @@
+## Candidates
+
+| model | candidates | fenced block | facts ok | mean cost | reasoning tokens (median) |
+|---|---|---|---|---|---|
+| mimo | 24 | 24 | 17 | $0.00084 | 569 |
+| terra | 24 | 24 | 19 | $0.00215 | 0 |
+| sol | 24 | 24 | 18 | $0.00585 | 0 |
+
+## Defects per candidate (single-candidate judge)
+
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo fewer.
+
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|---|
+| deepseek | mimo | 2.00 | 23 of 23 | — | — | — | — | 10 of 19 | 6 |
+| deepseek | sol | 1.62 | 16 of 16 | 7 | 3 | 6 | 1.000 | 4 of 7 | 25 |
+| deepseek | terra | 1.79 | 21 of 21 | 9 | 6 | 5 | 0.424 | 9 of 12 | 15 |
+| mimo | mimo | 1.90 | 18 of 21 | — | — | — | — | 2 of 12 | 15 |
+| mimo | sol | 0.45 | 7 of 20 | 11 | 4 | 2 | 0.022 | 8 of 10 | 18 |
+| mimo | terra | 1.00 | 14 of 22 | 15 | 1 | 4 | 0.019 | 7 of 15 | 11 |
+
+### Writer against writer (same judge, paired by task and sample)
+
+| judge | writer | against | first fewer | tie | second fewer | p (sign, vs ½) |
+|---|---|---|---|---|---|---|
+| deepseek | sol | terra | 8 | 3 | 4 | 0.388 |
+| mimo | sol | terra | 7 | 8 | 3 | 0.344 |
+
+### Unparsed judgments by writer
+
+| judge | mimo | sol | terra |
+|---|---|---|---|
+| deepseek | 6 of 48 | 25 of 48 | 15 of 48 |
+| mimo | 15 of 48 | 18 of 48 | 11 of 48 |
+
+### Bounds: every missing pair credited to one side
+
+| judge | first | second | first fewer / tie / second fewer | missing pairs | p | all to first | all to second |
+|---|---|---|---|---|---|---|---|
+| deepseek | terra | sol | 4 / 3 / 8 | 9 | 0.388 | 0.383 | 0.007 |
+| deepseek | terra | mimo | 9 / 6 / 5 | 4 | 0.424 | 0.096 | 1.000 |
+| deepseek | sol | mimo | 7 / 3 / 6 | 8 | 1.000 | 0.078 | 0.189 |
+| mimo | terra | sol | 3 / 8 / 7 | 6 | 0.344 | 0.804 | 0.021 |
+| mimo | terra | mimo | 15 / 1 / 4 | 4 | 0.019 | 0.003 | 0.210 |
+| mimo | sol | mimo | 11 / 4 / 2 | 7 | 0.022 | 0.000 | 0.824 |
+
+### Length and density (parsed candidates)
+
+| writer | median words | defects per 100 words (deepseek) | defects per 100 words (mimo) |
+|---|---|---|---|
+| mimo | 590.5 | 0.44 (n=23) | 0.40 (n=21) |
+| sol | 532 | 0.29 (n=16) | 0.09 (n=20) |
+| terra | 355.5 | 0.52 (n=21) | 0.30 (n=22) |

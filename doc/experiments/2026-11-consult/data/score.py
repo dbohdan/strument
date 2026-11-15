@@ -83,6 +83,7 @@ def main(outdir):
           f"{rt[len(rt) // 2]} |")
 
     defect_tables(load(outdir, "defects"))
+    censoring_tables(load(outdir, "defects"), gens)
     label_tables(load(outdir, "label"))
     if not judged:
         return
@@ -207,6 +208,75 @@ def defect_tables(recs):
                         m += a > b
                         t_ += a == b
                 w(f"| {j} | {x} | {y} | {f} | {t_} | {m} | {binom_two_sided(f, f + m):.3f} |")
+
+
+def censoring_tables(recs, gens):
+    """What the unparsed judgments could do, and the secondary measures.
+
+    A candidate with no parsed rep drops its pair out of the sign test. The
+    bounds credit every such pair to one side, then the other: if the result
+    holds both ways the misses cannot overturn it. Defects per 100 words,
+    because a longer page has more places for a defect.
+    """
+    if not recs:
+        return
+    w = print
+    counts = collections.defaultdict(list)  # (task, writer, n, judge) -> parsed counts
+    for r in recs:
+        items = D.parse_defects(r.get("text")) if r.get("ok") else None
+        if items is not None:
+            counts[(r["task"], r["writer"], r["n"], r["judge"])].append(len(items))
+    mean = {k: sum(v) / len(v) for k, v in counts.items()}
+    words = {(g["task"], g["model"], g["n"]): len((g.get("block") or "").split()) for g in gens}
+    judges = sorted({r["judge"] for r in recs})
+    ns = sorted({r["n"] for r in recs})
+    writers = sorted({r["writer"] for r in recs}, key=lambda x: (x != "mimo", x))
+
+    w("\n### Unparsed judgments by writer\n")
+    w("| judge | " + " | ".join(writers) + " |")
+    w("|---|" + "---|" * len(writers))
+    for j in judges:
+        cells = []
+        for wr in writers:
+            rs = [r for r in recs if r["judge"] == j and r["writer"] == wr]
+            bad = sum(1 for r in rs if not r.get("ok") or D.parse_defects(r.get("text")) is None)
+            cells.append(f"{bad} of {len(rs)}")
+        w(f"| {j} | " + " | ".join(cells) + " |")
+
+    w("\n### Bounds: every missing pair credited to one side\n")
+    w("| judge | first | second | first fewer / tie / second fewer | missing pairs | p | all to first | "
+      "all to second |")
+    w("|---|---|---|---|---|---|---|---|")
+    pairs = [(a, b) for i, a in enumerate(writers[::-1]) for b in writers[::-1][i + 1:]]
+    for j in judges:
+        for a, b in pairs:
+            f = t_ = m = miss = 0
+            for task in T.TASKS:
+                for n in ns:
+                    x, y = mean.get((task, a, n, j)), mean.get((task, b, n, j))
+                    if x is None or y is None:
+                        miss += 1
+                        continue
+                    f += x < y
+                    m += x > y
+                    t_ += x == y
+            w(f"| {j} | {a} | {b} | {f} / {t_} / {m} | {miss} | {binom_two_sided(f, f + m):.3f} | "
+              f"{binom_two_sided(f + miss, f + m + miss):.3f} | {binom_two_sided(f, f + m + miss):.3f} |")
+
+    w("\n### Length and density (parsed candidates)\n")
+    w("| writer | median words | " + " | ".join(f"defects per 100 words ({j})" for j in judges) + " |")
+    w("|---|---|" + "---|" * len(judges))
+    for wr in writers:
+        ws = sorted(v for k, v in words.items() if k[1] == wr)
+        if not ws:
+            continue
+        cells = []
+        for j in judges:
+            rs = [c / words[(t, wr, n)] * 100 for (t, ww, n, jj), c in mean.items()
+                  if jj == j and ww == wr and words.get((t, wr, n))]
+            cells.append(f"{sum(rs) / len(rs):.2f} (n={len(rs)})" if rs else "—")
+        med = (ws[(len(ws) - 1) // 2] + ws[len(ws) // 2]) / 2
+        w(f"| {wr} | {med:g} | " + " | ".join(cells) + " |")
 
 
 def fisher_two_sided(a, b, c, d):

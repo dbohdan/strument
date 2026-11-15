@@ -432,3 +432,93 @@ finished well under its limit.
   more places for a defect; fact-check passes per writer; page length.
   Reported beside the primary, never instead of it.
 - DeepSeek's judge reported the same way.
+
+### Results
+
+72 pages, 288 judgments, $1.79. The scores are in
+[`data/long-scores.txt`](data/long-scores.txt) and the records in
+`data/long-runs.tar.xz`.
+
+**Against the criteria, by MiMo's judge:**
+
+| comparison | first fewer / tie / second fewer | p | missing pairs |
+|---|---|---|---|
+| Sol vs Terra | 7 / 8 / 3 | 0.34 | 6 |
+| Sol vs MiMo | 11 / 4 / 2 | 0.022 | 7 |
+| Terra vs MiMo | 15 / 1 / 4 | 0.019 | 4 |
+
+Sol and Terra are indistinguishable at this sample. Each beats MiMo, on the
+pairs that parsed. DeepSeek's judge separates none of the three (Sol vs Terra
+8 / 3 / 4, p = 0.39; neither beats MiMo).
+
+**The judge did not hold up on long pages.** 90 of 288 judgments wrote no
+defect list. These are not loops. With reasoning disabled, MiMo reasons in its
+visible text (as it did on short tasks), and on a 600-word page it keeps
+searching ("Hmm. Let me reconsider…") until the 24,000-token cap, with about
+100,000 characters and no verdict. The pilot, on one task with a single
+sample, never came near the cap. The misses are not random:
+
+| judge | MiMo's pages | Terra's | Sol's |
+|---|---|---|---|
+| MiMo | 15 of 48 | 11 of 48 | 18 of 48 |
+| DeepSeek | 6 of 48 | 15 of 48 | 25 of 48 |
+
+The likely mechanism is that a judge keeps looking longest at a page where it
+finds nothing quickly, so the misses lean toward the cleaner pages, which would
+bias every comparison toward MiMo. That mechanism is a guess. The bounds are
+not:
+
+- Credit every missing pair to the first writer, and all three of MiMo's
+  judge's comparisons pass: Sol vs Terra p = 0.021, Sol vs MiMo p < 0.001,
+  Terra vs MiMo p = 0.003.
+- Credit them to the second writer, and none pass (p = 0.80, 0.82, 0.21).
+- So the preregistered result stands on the data that parsed, and the missing
+  data could move it either way.
+
+**Secondary:**
+
+| writer | median words | defects per 100 words (MiMo's judge) | (DeepSeek's) | fact checks passed |
+|---|---|---|---|---|
+| MiMo | 591 | 0.40 | 0.44 | 17 of 20 |
+| Terra | 356 | 0.30 | 0.52 | 19 of 20 |
+| Sol | 532 | 0.09 | 0.29 | 18 of 20 |
+
+- Terra writes the shortest pages by far. Its win over MiMo by count is partly
+  length: per 100 words the gap is smaller (0.30 vs 0.40), and DeepSeek ranks
+  it last.
+- Sol writes nearly as much as MiMo, with less than a quarter of its defect
+  rate by MiMo's judge. That is the clearest signal in the run, and it is
+  consistent with the maintainer's guess that Sol is the better writer. But it
+  is a secondary measure, read from the pages that parsed. Sol's are the ones
+  most often missing.
+
+**Fact checks:** one task's checks were broken. The fact-check counts above
+leave out `long-outside`, where all 12 pages failed the same two checks.
+
+- The blanket ban on exclamation marks fires on a quoted `!`. A correct page
+  about `secret_files` must show one, because a leading `!` is what the page
+  tells the reader not to write.
+- The grant's name `read-outside` is defined in `grants.go`, which the task
+  does not send. It is the same mistake the pilot caught for `run_code`, and
+  checking "every remaining pattern against what each task sends" missed it,
+  because `outside.go` does contain the string `read-outside:`, as a group
+  prefix.
+
+The defect judgments on that task are unaffected. They don't use the fact
+checks.
+
+### What it changes
+
+- **Sol vs Terra:** not settled. If anything leans, it leans Sol (fewer defects
+  per word, more of the pairs). The censoring could account for that lean or
+  hide a larger one.
+- **The trial's judge needs to finish on long pages before it can carry the
+  trial.** The fix to try is the order of the answer: the defect list first,
+  each item one line, then the reasoning, if any. A judge that runs out of
+  budget then leaves a list rather than nothing. A cap is no fix: a raised cap
+  buys more deliberation, not a verdict. That is a protocol change, so it gets
+  its own preregistration and a rerun on these 72 pages, not a patch to this
+  run.
+- **Consulting Terra at "low" stays the default** for now, being cheapest. The
+  case for Sol is a secondary measure, read from censored data, against about
+  2.7 times the cost per page ($0.0059 vs $0.0022).
