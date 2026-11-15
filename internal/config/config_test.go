@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/multiformats/go-multihash"
 )
 
 const userConfig = `
@@ -480,7 +478,7 @@ func TestMultihashSelfDescription(t *testing.T) {
 	content := []byte("models = {}\n")
 	// A record written under a non-default function (simulating an old
 	// default) must keep verifying under its own algorithm.
-	if err := ts.TrustWithCode("/proj/.strument.star", content, multihash.SHA2_512); err != nil {
+	if err := ts.TrustWithCode("/proj/.strument.star", content, multihashSHA2512); err != nil {
 		t.Fatal(err)
 	}
 	ts2, err := OpenTrustStore(filepath.Join(dir, "trust"))

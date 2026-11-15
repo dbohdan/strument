@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-
-	"github.com/multiformats/go-multihash"
 )
 
 // The trust store records (abspath, multihash) pairs for project configs the
@@ -52,7 +50,7 @@ func TrustAdviceFor(n int, inSession bool) string {
 }
 
 // DefaultTrustHash is the multihash code used for new records.
-const DefaultTrustHash = multihash.SHA2_256
+const DefaultTrustHash = multihashSHA2256
 
 // trustRecord is one JSONL row of the store.
 type trustRecord struct {
@@ -119,11 +117,11 @@ func (ts *TrustStore) IsTrusted(absPath string, content []byte) bool {
 	if err != nil {
 		return false
 	}
-	decoded, err := multihash.Decode(recorded)
+	code, err := multihashCode(recorded)
 	if err != nil {
 		return false
 	}
-	current, err := multihash.Sum(content, decoded.Code, -1)
+	current, err := multihashSum(content, code)
 	if err != nil {
 		return false
 	}
@@ -142,7 +140,7 @@ func (ts *TrustStore) Recorded(absPath string) bool {
 // Trust records (absPath, multihash(content)) under the current default
 // hash and persists the store.
 func (ts *TrustStore) Trust(absPath string, content []byte) error {
-	mh, err := multihash.Sum(content, DefaultTrustHash, -1)
+	mh, err := multihashSum(content, DefaultTrustHash)
 	if err != nil {
 		return err
 	}
@@ -153,7 +151,7 @@ func (ts *TrustStore) Trust(absPath string, content []byte) error {
 // TrustWithCode records under an explicit multihash code; used by tests to
 // simulate records from an older/newer default function.
 func (ts *TrustStore) TrustWithCode(absPath string, content []byte, code uint64) error {
-	mh, err := multihash.Sum(content, code, -1)
+	mh, err := multihashSum(content, code)
 	if err != nil {
 		return err
 	}
