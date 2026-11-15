@@ -54,7 +54,7 @@ func TestIgnoredEditNote(t *testing.T) {
 		t.Errorf("AGENTS.local.md drew a note: %s", note)
 	}
 	if note := c.ignoredEditNote("build/out.txt"); !strings.Contains(note, "will not be committed") ||
-		!strings.Contains(note, "generated") {
+		!strings.Contains(note, "change that source too") || !strings.Contains(note, "nothing more is needed") {
 		t.Errorf("an ignored file's note = %q", note)
 	}
 }

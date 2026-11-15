@@ -199,16 +199,26 @@ func (c *Coder) normalizeToolPath(p string) string {
 // for `printf >>`. And git's ignore rules also cover the user's own local
 // files — the global excludes, .git/info/exclude, a config.local.json —
 // which they may well ask to have changed. So the edit lands, with its
-// snapshot and diff, and the note says what a refusal used to imply: it will
-// not be committed, and a generated file is the wrong place for a fix.
+// snapshot and diff, and the note says what a refusal used to imply.
+//
+// The note used to stop at informing: the change "usually belongs in its
+// source; if the user asked for this file, that is fine". Asked to fix a typo
+// in a gitignored dist/greet.js, MiMo patched it, passed the warning on, and
+// offered to fix the source, in 2 of 10 sessions leaving the source unfixed
+// (doc/experiments/2026-11-pared-down). It now borrows the reach clause's
+// framing, which is measured: the source is part of the same request, not
+// extra work. The last sentence keeps a local file, which has no source,
+// from sending the model looking for one.
 func (c *Coder) ignoredEditNote(rel string) string {
 	if c.Repo == nil || !c.Repo.GitIgnored(rel) || filepath.ToSlash(rel) == AgentsLocalFileName {
 		return ""
 	}
 	c.Out.Warningf("%s is ignored by git: this edit will not be committed.", rel)
 	return "Note: git ignores this file, so the change will not be committed. If the file is generated " +
-		"(build output, a dependency, a cache), the next build or install may overwrite it, and the " +
-		"change usually belongs in its source; if the user asked for this file, that is fine."
+		"from another one, change that source too: it is part of the same request, since the next build " +
+		"would undo this edit. Rebuild if you can, to show the change took. If the file belongs to a " +
+		"dependency, say so rather than only patching it here. If it is neither, such as a local " +
+		"configuration file, nothing more is needed."
 }
 
 // newFileMode is what a file Strument creates gets. It matches what git
