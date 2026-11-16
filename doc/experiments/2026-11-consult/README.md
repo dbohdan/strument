@@ -587,3 +587,80 @@ the same bounds, and neither run settles the question.
 - DeepSeek's judge, reported the same way. Its reasoning at "low" may run
   long, as the handbook warns. If it does, that is reported, not worked around
   mid-run.
+
+### Results
+
+288 judgments, $4.31. 137 calls failed partway through when the key ran out
+of funds (HTTP 402 and 403). They were deleted and made again, along with five
+lost in flight at a session's time limit. Every judgment in the final set is a
+completed call. The scores are in
+[`data/long-rerun-scores.txt`](data/long-rerun-scores.txt) and the records in
+`data/long-rerun-runs.tar.xz`.
+
+**The preregistered rule fails.** MiMo's judge left 11 of Sol's 48 judgments
+unparsed (23%), all of them stopped at the 64,000-token cap. That is over the
+10% bar, so this run is reported with bounds, as the rule says. The bounds
+turn out to be tight. An unparsed judgment is usually one rep of two, and a
+page's count is the mean of its parsed reps, so only 0–2 pairs per comparison
+go missing (6–9 in the third follow-up):
+
+| judge | comparison | first fewer / tie / second fewer | p | all missing to first | all to second |
+|---|---|---|---|---|---|
+| MiMo | Sol vs Terra | 7 / 8 / 8 | 1.00 | 1.00 | 0.80 |
+| MiMo | Sol vs MiMo | 18 / 3 / 2 | < 0.001 | < 0.001 | 0.001 |
+| MiMo | Terra vs MiMo | 18 / 2 / 4 | 0.004 | 0.004 | 0.004 |
+| DeepSeek | Sol vs Terra | 14 / 2 / 6 | 0.12 | 0.05 | 0.29 |
+| DeepSeek | Sol vs MiMo | 19 / 1 / 3 | 0.001 | < 0.001 | 0.003 |
+| DeepSeek | Terra vs MiMo | 16 / 4 / 3 | 0.004 | 0.003 | 0.012 |
+
+- **Sol vs Terra: indistinguishable,** by both judges and under both bounds.
+  The question asked has its answer at this sample: by MiMo's judgment, Sol at
+  "low" does not write better long pages than Terra at "low".
+- **Each beats MiMo, by both judges, whichever way the missing pairs fall.**
+  The third follow-up's result, which its missing data could have overturned,
+  holds.
+
+**Secondary:**
+
+| writer | median words | defects per 100 words (MiMo's judge) | (DeepSeek's) | fact checks passed |
+|---|---|---|---|---|
+| MiMo | 591 | 0.49 | 0.63 | 18 of 20 |
+| Terra | 361 | 0.45 | 0.67 | 19 of 20 |
+| Sol | 532 | 0.26 | 0.34 | 18 of 20 |
+
+- Sol has about half the defect rate of the other two by both judges. Terra's
+  page-count win over MiMo is mostly length: per 100 words the two are level.
+- The fact checks leave out `long-outside`, as in the third follow-up. MiMo's
+  re-extracted skills page now passes.
+
+**Also reported:**
+
+- **How hard each writer's pages were to judge,** in median reasoning tokens
+  per judgment. MiMo's judge spent 21,406 on MiMo's pages, 26,544 on Terra's
+  and 40,195 on Sol's. DeepSeek's spent 28,707, 34,663 and 34,594. It is the
+  same ordering as the missing verdicts in the third follow-up, and it is what
+  censors Sol most.
+- **Agreement with the third follow-up's counts,** per page (Spearman, the two
+  re-extracted pages left out): 0.49 for MiMo's judge, 0.32 for DeepSeek's.
+  With reasoning on, both find about twice as many defects (MiMo's mean 1.04 →
+  2.07). The two judges agree with each other at 0.58.
+- **Reps disagree often:** the same count on both reps for 3 of Sol's 14 pages
+  by MiMo's judge. A single judgment of a long page is a noisy measure. The
+  pairing and the sample are what carry the result.
+
+### What it changes
+
+- **Consult Terra at "low".** It writes as well as Sol by count, at about a
+  third of the cost per page ($0.0022 vs $0.0059). Sol's lower defect rate per
+  word is consistent across both judges and both runs, but it is a secondary
+  measure. It is the place to look again if consult answers turn out wordy,
+  not a reason to pay 2.7 times as much now.
+- **The trial's judge:** MiMo with reasoning "low" and a 64,000-token cap, two
+  reps or more, scored as a paired count with these bounds beside it.
+  Reasoning off failed on long pages, and asking for the list first moved the
+  deliberation into the list. A judge reads clean pages longest, so the cap
+  censors the best writer first. Report the unparsed rate by writer every
+  time.
+- **Time is the cost, not money:** a judgment of a clean OpenAI page took up
+  to 25 minutes at MiMo's speed. 288 judgments needed two and a half session
+  time limits.
