@@ -361,7 +361,7 @@ func (c *ResponsesClient) parseStream(body io.Reader, yield func(llm.StreamEvent
 	toolIndex := map[int]int{}
 	nextTool := 0
 
-	for data, err := range scanSSEData(body) {
+	for data, err := range scanSSEData(body, nil) {
 		if err != nil {
 			yield(llm.StreamEvent{}, err)
 			return false

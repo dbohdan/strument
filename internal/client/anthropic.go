@@ -450,7 +450,7 @@ func (c *AnthropicClient) parseStream(body io.Reader, yield func(llm.StreamEvent
 	var last llm.Usage
 	sawUsage := false
 
-	for data, err := range scanSSEData(body) {
+	for data, err := range scanSSEData(body, nil) {
 		if err != nil {
 			yield(llm.StreamEvent{}, err)
 			return false

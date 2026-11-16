@@ -53,8 +53,9 @@ type sseChunk struct {
 // stops at the "[DONE]" sentinel. Both dialects share it: the framing is
 // server-sent events either way, and only what the payloads mean differs.
 // Anthropic's stream also carries "event:" lines, which are redundant with the
-// "type" field inside each payload and are skipped here.
-func scanSSEData(r io.Reader) iter.Seq2[string, error] {
+// "type" field inside each payload and are skipped here. done, when not nil,
+// is set if the stream ended at the sentinel rather than at EOF.
+func scanSSEData(r io.Reader, done *bool) iter.Seq2[string, error] {
 	return func(yield func(string, error) bool) {
 		scan := bufio.NewScanner(r)
 		scan.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -65,6 +66,9 @@ func scanSSEData(r io.Reader) iter.Seq2[string, error] {
 			}
 			payload := strings.TrimSpace(line[len("data: "):])
 			if payload == "[DONE]" {
+				if done != nil {
+					*done = true
+				}
 				return
 			}
 			if !yield(payload, nil) {
@@ -86,7 +90,8 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 	return func(yield func(llm.StreamEvent, error) bool) {
 		// Kept across chunks: the usage chunk is not guaranteed to carry it.
 		var provider string
-		for payload, err := range scanSSEData(r) {
+		var done, finished bool
+		for payload, err := range scanSSEData(r, &done) {
 			if err != nil {
 				yield(llm.StreamEvent{}, err)
 				return
@@ -131,6 +136,7 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 					}
 				}
 				if choice.FinishReason != nil && *choice.FinishReason != "" {
+					finished = true
 					if !yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: *choice.FinishReason}, nil) {
 						return
 					}
@@ -154,6 +160,16 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 					return
 				}
 			}
+		}
+		// A stream that closed with neither a finish reason nor the [DONE]
+		// sentinel was cut off upstream. Read as finished, it became an answer:
+		// in the consult trial, 17 of 72 sessions ended mid-reasoning this way,
+		// each reported as "reasoning but no answer" and none retried. Either
+		// marker alone is still taken as the end, for providers that send only
+		// one.
+		if !done && !finished {
+			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrNetwork,
+				Message: "the stream ended before the response finished"})
 		}
 	}
 }

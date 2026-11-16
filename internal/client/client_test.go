@@ -729,3 +729,35 @@ func sendOnce(t *testing.T, p config.Provider) *http.Request {
 	}
 	return got
 }
+
+// A stream cut off upstream ends with neither a finish reason nor [DONE]. It
+// is an error to retry, not an answer: read as finished, a reply cut off
+// mid-reasoning became "reasoning but no answer" and ended the turn. Either
+// marker alone still ends a stream cleanly, for providers that send only one.
+func TestParseSSEStreamCutOffIsRetryable(t *testing.T) {
+	reasoning := "data: {\"choices\":[{\"delta\":{\"reasoning\":\"Let me check\"}}]}\n\n"
+	finish := "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"
+	for _, tc := range []struct {
+		name, sse string
+		cut       bool
+	}{
+		{"neither marker", reasoning, true},
+		{"finish and DONE", reasoning + finish + "data: [DONE]\n", false},
+		{"finish only", reasoning + finish, false},
+		{"DONE only", reasoning + "data: [DONE]\n", false},
+	} {
+		var got error
+		for _, err := range ParseSSE(strings.NewReader(tc.sse)) {
+			if err != nil {
+				got = err
+			}
+		}
+		var se *llm.StreamError
+		switch {
+		case tc.cut && (!errors.As(got, &se) || !se.Retryable()):
+			t.Errorf("%s: err = %v, want a retryable stream error", tc.name, got)
+		case !tc.cut && got != nil:
+			t.Errorf("%s: err = %v, want none", tc.name, got)
+		}
+	}
+}
