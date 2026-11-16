@@ -775,7 +775,7 @@ session finished and wrote its target. The scores are in
 ## Layer 3, second pass: the revised description, preregistered before running
 
 The maintainer chose to fix the tool before the trial, so the trial measures
-the tool as it will ship. The commit after `21314b4` rewrites the consult
+the tool as it will ship. `139c9c9` rewrites the consult
 tool's description:
 
 - **Files by name:** name files rather than quoting them, because a file sent
@@ -797,3 +797,93 @@ Nothing in the change invites a consult the user did not ask for.
 
 If it fails, the trial waits for another revision rather than running on one
 known not to work.
+
+### Results
+
+30 sessions, $0.07, Strument at `139c9c9`. The scores are in
+[`data/mechanics-desc-scores.txt`](data/mechanics-desc-scores.txt) and the
+records in `data/mechanics-desc-runs.tar.xz`.
+
+| measure | before (`21314b4`) | after | bar |
+|---|---|---|---|
+| consults naming no file | 18 of 30 | 3 of 30 | at most 8 |
+| sent `STYLE.md` | 3 of 30 | 15 of 30 | at least 15 |
+| sent the target | 12 of 30 | 26 of 30 | — |
+| sent every source file the facts come from | 10 of 20 | 12 of 20 | — |
+| fact checks passed | 26 of 30 | 29 of 30 | at least 28 |
+
+**The revision passes all three, `STYLE.md` exactly at its bar.** The one
+failure (`rotor-readme`, sent only `README.md`) dropped the word "rotate"
+from the page. MiMo made 31 consults. One omitted the required `question`,
+got the error back, and was made again correctly. That is a malformed call,
+not a refusal.
+
+What is still missing is the second source. In 8 of the 20 sessions on tasks
+with one, the consult lacked a file the facts come from:
+
+- the code behind a change, where MiMo sent the diff alone (`grep-commit`,
+  `rotor-changelog`) or nothing;
+- `main.go`, which holds the format verbs, for `tally-error`;
+- `CHANGELOG.md`, which says what replaces the deprecated call, for
+  `pin-deprecation`;
+- the code, for `rotor-readme`.
+
+The description asks for "what it has to agree with" and leaves the choice to
+MiMo. Its choice was the file nearest the target.
+
+## Layer 4: the trial, preregistered before running
+
+Does asking MiMo to consult Terra produce better documentation pages than
+MiMo alone?
+
+**Sessions** (`data/trial.py`): one unattended Strument turn per session, at
+`139c9c9` or later (the loop fix and the revised description). Each session
+gets a fresh copy of Strument's source at `45f0f00`, with three things
+removed:
+
+- `doc/`;
+- every Markdown file;
+- the project's `.strument.star`.
+
+`STYLE.md` holds the long set's house style. The user asks for one of the six
+long pages "from the source", so MiMo finds the files itself.
+
+- **Arms:** both arms have Terra (standard tier, reasoning "low") in
+  `consult_models` under the documented purpose, and the consult grant.
+  - `alone`: the request as it is.
+  - `consult`: the request plus "Ask terra for a draft first."
+- **Sample:** 6 tasks × 6 reps × 2 arms = 72 sessions, shuffled; 36 pairs,
+  each a task and a rep.
+- **Pilot, kept out:** one `long-skills` session per arm.
+  - Alone: 502 s, $0.01, 922 words.
+  - Consult: 332 s, $0.03, 785 words. The consult sent `STYLE.md` and four
+    source files.
+  - Both passed their fact checks.
+
+**Judging:** the long set's judge exactly as in the rerun. That is MiMo, the
+list-last prompt with the task's source files, reasoning "low", a
+64,000-token cap, and two reps. A missing page counts as a page with no
+defect list, so it is unparsed; it is not dropped.
+
+**Primary:** by MiMo's judge, the `consult` page against the `alone` page of
+the same task and rep, with a paired sign test on the mean defect count.
+`consult` is better if it has fewer defects with p below 0.05 **and** the
+bound that credits every missing pair to `alone` still gives p below 0.05.
+The same rule decides the other direction. Otherwise the arms are
+indistinguishable at this sample.
+
+**Counter-metric, reported beside the primary:** fact checks passed per arm
+(all six tasks; the `!` check now bans only an exclamation mark after a word,
+and every task passes on Strument's own docs at `45f0f00` and fails on an
+empty page). Layer 3's one warning was that a consult can cost accuracy.
+
+**Secondary:**
+
+- defects per 100 words, and page length;
+- unparsed judgments by arm, and median judge reasoning tokens by arm;
+- per consult, the files sent: `STYLE.md`, and how many of the task's source
+  files;
+- cost and time per session.
+
+**Budget:** about $1.50 for sessions and $1.30 for judging. Time: about an
+hour of sessions, then 1.5–2.5 hours of judging.

@@ -844,5 +844,8 @@ def use(which):
             "project": "strument", "target": t["target"], "files": ["STYLE.md"] + t["files"],
             "instruction": f"Write {t['target']}, a user-facing documentation page about {t['subject']}, "
                            "from the source files below.",
-            "must": t["must"], "must_not": [r"!"],
+            # An exclamation mark in prose follows a word. A quoted `!` follows
+            # a backtick or a space, and a page about secret files has to show
+            # one: a leading `!` is what it tells the reader not to write.
+            "must": t["must"], "must_not": [r"\w!(?=[\s\"')]|$)"],
         }
