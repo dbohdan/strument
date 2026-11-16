@@ -50,8 +50,14 @@ func consultTool(models map[string]ConsultModel) llm.ToolDef {
 		"The other model sees only what you send: the question, and the files you list in " +
 		"\"files\", which Strument reads and includes whole. It cannot see the project, this " +
 		"conversation or anything else, and it cannot use tools or ask you anything back. " +
-		"Each call starts fresh. So put everything it needs in the question and the files: " +
-		"what the work is, what you want from it, and the code or text it is about.\n\n" +
+		"Each call starts fresh.\n\n" +
+		"Name files in \"files\" rather than quoting them in the question: a file sent whole " +
+		"is exact and complete, and a quotation holds only what you thought mattered. Send " +
+		"the file the work is on, the code or text it has to agree with, and the project's " +
+		"conventions for that kind of file, such as a style guide, when there are any. In the " +
+		"question, say what the work is and what you want back.\n\n" +
+		"The answer is a draft. Check it against the code before you use it, as you would " +
+		"your own.\n\n" +
 		"The user is shown the question and the file list and asked before each call, and " +
 		"sees the answer as it arrives. Each call costs money at the other model's price.\n\n" +
 		"Models:\n")
@@ -75,9 +81,10 @@ func consultTool(models map[string]ConsultModel) llm.ToolDef {
 				"question": strProp("The question or request, complete in itself: the other model " +
 					"has no other context."),
 				"files": map[string]any{
-					"type":        "array",
-					"items":       map[string]any{"type": "string"},
-					"description": "Paths of files to include whole, as the read tool takes them.",
+					"type":  "array",
+					"items": map[string]any{"type": "string"},
+					"description": "Paths of files to include whole, as the read tool takes them: " +
+						"the file the work is on, what it has to agree with, and any style guide.",
 				},
 			},
 			"required":             []string{"model", "question"},

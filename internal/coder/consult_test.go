@@ -70,7 +70,11 @@ func TestConsultOfferedOnlyWhenConfigured(t *testing.T) {
 	}
 	desc := c.toolDefs()[i].Description
 	for _, want := range []string{"terra (openrouter/openai/gpt-6.1-terra): documentation and user-facing prose",
-		"cannot see the project"} {
+		"cannot see the project",
+		// Measured: told only to send "the code or text it is about", MiMo
+		// named no file in 18 of 30 consults and the style guide in 3, and
+		// took the drafts that failed their fact checks as they came.
+		"rather than quoting them", "style guide", "Check it against the code"} {
 		if !strings.Contains(desc, want) {
 			t.Errorf("the description lacks %q:\n%s", want, desc)
 		}
