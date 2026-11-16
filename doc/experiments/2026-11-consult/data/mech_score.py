@@ -53,6 +53,21 @@ def consults(wire):
     return [(args, results.get(i, "")) for i, args in calls], terra
 
 
+def answer_text(res):
+    """A tool result's text, whether it was sent as a string or as parts."""
+    try:
+        parts = json.loads(res)
+    except (json.JSONDecodeError, TypeError):
+        return res or ""
+    if isinstance(parts, list):
+        return "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+    return res or ""
+
+
+def no_files(calls):
+    return sum(1 for a, _ in calls if not a.get("files"))
+
+
 def norm(p):
     return os.path.normpath(p.lstrip("./")) if p else p
 
@@ -74,16 +89,20 @@ def main(outdir):
             "target": any(t["target"] in s for s in sent),
             "style": any("STYLE.md" in s for s in sent),
             "source": any(all(f in s for f in source) for s in sent) if source else None,
+            "no_files": no_files(calls),
             "question_chars": max((len(a.get("question") or "") for a, _ in calls), default=0),
-            "refused": sum(1 for _, res in calls if re.search(r"(?i)refus|declin|not approved|error", res[:300])),
+            # An answered consult's result opens with "<alias> (<slug>) answered";
+            # anything else is a refusal or a failure. Matching words like
+            # "error" instead counted answers about error handling.
+            "refused": sum(1 for _, res in calls if not re.search(r"^\W*\w+ \([^)]*\) answered", answer_text(res))),
             "facts_ok": T.facts(d["task"], d["target_text"])["ok"] if d.get("target_text") is not None else None,
             "changed_target": t["target"] in d["changed"] or t["target"] in d["untracked"],
             "cost": float(cost[-1]) if cost else None,
         })
     w = print
-    w("| purpose | sessions | consulted | calls | sent target | sent STYLE.md | sent the source | refused | "
+    w("| purpose | sessions | consulted | calls | sent no files | sent target | sent STYLE.md | sent the source | refused | "
       "facts ok | target written | median s | mean cost |")
-    w("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    w("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     by = collections.defaultdict(list)
     for r in rows:
         by[r["purpose"]].append(r)
@@ -92,7 +111,7 @@ def main(outdir):
         secs = sorted(r["seconds"] for r in rs)
         costs = [r["cost"] for r in rs if r["cost"] is not None]
         w(f"| {p} | {len(rs)} | {len(con)} | {sum(r['calls'] for r in rs)} | "
-          f"{sum(r['target'] for r in con)} of {len(con)} | {sum(r['style'] for r in con)} of {len(con)} | "
+          f"{sum(r['no_files'] for r in rs)} | {sum(r['target'] for r in con)} of {len(con)} | {sum(r['style'] for r in con)} of {len(con)} | "
           f"{sum(1 for r in con if r['source'])} of {sum(1 for r in con if r['source'] is not None)} | "
           f"{sum(r['refused'] for r in rs)} | {sum(1 for r in rs if r['facts_ok'])} of {len(rs)} | "
           f"{sum(r['changed_target'] for r in rs)} of {len(rs)} | {secs[len(secs) // 2]:.0f} | "

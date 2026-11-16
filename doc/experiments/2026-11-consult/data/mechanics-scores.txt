@@ -1,0 +1,67 @@
+| purpose | sessions | consulted | calls | sent no files | sent target | sent STYLE.md | sent the source | refused | facts ok | target written | median s | mean cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| directed | 30 | 30 | 30 | 18 | 12 of 30 | 3 of 30 | 10 of 20 | 0 | 26 of 30 | 30 of 30 | 37 | $0.0023 |
+| plain | 30 | 0 | 0 | 0 | 0 of 0 | 0 of 0 | 0 of 0 | 0 | 30 of 30 | 30 of 30 | 28 | $0.0009 |
+
+| session | calls | target | STYLE | source | question chars | facts ok | s |
+|---|---|---|---|---|---|---|---|
+| directed grep-commit | 1 | False | False | False | 1063 | True | 28 |
+| directed grep-commit | 1 | False | False | False | 1075 | True | 30 |
+| directed grep-confirm | 1 | False | False | None | 1219 | False | 32 |
+| directed grep-confirm | 1 | False | False | None | 1128 | True | 37 |
+| directed grep-doc | 1 | False | False | None | 1261 | True | 72 |
+| directed grep-doc | 1 | False | False | None | 1281 | True | 42 |
+| directed grep-tool | 1 | False | False | None | 1363 | True | 65 |
+| directed grep-tool | 1 | False | False | None | 1324 | True | 25 |
+| directed pin-deprecation | 1 | True | True | False | 804 | True | 23 |
+| directed pin-deprecation | 1 | False | False | False | 869 | True | 35 |
+| directed pin-jsdoc | 1 | False | False | None | 1607 | True | 37 |
+| directed pin-jsdoc | 1 | True | False | None | 869 | True | 40 |
+| directed pin-readme | 1 | True | False | True | 1047 | True | 37 |
+| directed pin-readme | 1 | True | False | True | 1053 | True | 73 |
+| directed pin-upgrade | 1 | True | False | True | 1460 | True | 70 |
+| directed pin-upgrade | 1 | True | True | True | 1505 | True | 82 |
+| directed rotor-changelog | 1 | False | False | False | 881 | False | 20 |
+| directed rotor-changelog | 1 | True | False | True | 609 | False | 30 |
+| directed rotor-config | 1 | True | False | True | 1013 | True | 23 |
+| directed rotor-config | 1 | True | False | True | 801 | True | 62 |
+| directed rotor-missing | 1 | False | False | None | 998 | True | 75 |
+| directed rotor-missing | 1 | False | False | None | 1151 | True | 33 |
+| directed rotor-readme | 1 | False | False | False | 1480 | True | 84 |
+| directed rotor-readme | 1 | True | True | True | 900 | True | 96 |
+| directed tally-error | 1 | False | False | False | 932 | True | 44 |
+| directed tally-error | 1 | False | False | False | 1448 | True | 24 |
+| directed tally-help | 1 | True | False | True | 920 | False | 104 |
+| directed tally-help | 1 | False | False | False | 2407 | True | 30 |
+| directed tally-readme | 1 | True | False | True | 1126 | True | 77 |
+| directed tally-readme | 1 | False | False | False | 1507 | True | 27 |
+| plain grep-commit | 0 | False | False | False | 0 | True | 69 |
+| plain grep-commit | 0 | False | False | False | 0 | True | 23 |
+| plain grep-confirm | 0 | False | False | None | 0 | True | 23 |
+| plain grep-confirm | 0 | False | False | None | 0 | True | 53 |
+| plain grep-doc | 0 | False | False | None | 0 | True | 27 |
+| plain grep-doc | 0 | False | False | None | 0 | True | 26 |
+| plain grep-tool | 0 | False | False | None | 0 | True | 23 |
+| plain grep-tool | 0 | False | False | None | 0 | True | 41 |
+| plain pin-deprecation | 0 | False | False | False | 0 | True | 22 |
+| plain pin-deprecation | 0 | False | False | False | 0 | True | 23 |
+| plain pin-jsdoc | 0 | False | False | None | 0 | True | 27 |
+| plain pin-jsdoc | 0 | False | False | None | 0 | True | 15 |
+| plain pin-readme | 0 | False | False | False | 0 | True | 28 |
+| plain pin-readme | 0 | False | False | False | 0 | True | 46 |
+| plain pin-upgrade | 0 | False | False | False | 0 | True | 65 |
+| plain pin-upgrade | 0 | False | False | False | 0 | True | 56 |
+| plain rotor-changelog | 0 | False | False | False | 0 | True | 53 |
+| plain rotor-changelog | 0 | False | False | False | 0 | True | 50 |
+| plain rotor-config | 0 | False | False | False | 0 | True | 24 |
+| plain rotor-config | 0 | False | False | False | 0 | True | 36 |
+| plain rotor-missing | 0 | False | False | None | 0 | True | 20 |
+| plain rotor-missing | 0 | False | False | None | 0 | True | 12 |
+| plain rotor-readme | 0 | False | False | False | 0 | True | 52 |
+| plain rotor-readme | 0 | False | False | False | 0 | True | 72 |
+| plain tally-error | 0 | False | False | False | 0 | True | 28 |
+| plain tally-error | 0 | False | False | False | 0 | True | 29 |
+| plain tally-help | 0 | False | False | False | 0 | True | 109 |
+| plain tally-help | 0 | False | False | False | 0 | True | 60 |
+| plain tally-readme | 0 | False | False | False | 0 | True | 12 |
+| plain tally-readme | 0 | False | False | False | 0 | True | 18 |

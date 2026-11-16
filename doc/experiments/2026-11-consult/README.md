@@ -722,3 +722,52 @@ grant given up front. The user's message is the task's instruction.
   reported as a finding about the tool's description, which says to include
   "the code or text it is about" but not the conventions it must follow. It
   is not fixed before the trial: the trial measures the tool as it is.
+
+### Results
+
+60 sessions, $0.10, Strument at `e2a2860`, Terra on the standard tier. Every
+session finished and wrote its target. The scores are in
+[`data/mechanics-scores.txt`](data/mechanics-scores.txt) and the records in
+`data/mechanics-runs.tar.xz`.
+
+| arm | consulted | sent no files | sent the target | sent `STYLE.md` | sent the source | facts ok | median s | mean cost |
+|---|---|---|---|---|---|---|---|---|
+| plain | 0 of 30 | — | — | — | — | 30 of 30 | 28 | $0.0009 |
+| directed | 30 of 30 | 18 of 30 | 12 of 30 | 3 of 30 | 10 of 20 | 26 of 30 | 37 | $0.0023 |
+
+- **MiMo does not consult unprompted:** 0 of 30, and 0 of 49 with the
+  pilots. By the preregistered reading, the trial's treatment arm is
+  `directed`.
+- **Asked to, it always does, but mostly without files.** 18 of 30 consults
+  named no file at all. MiMo pasted what it judged relevant into the question
+  instead (600–2,400 characters). The tool's description says to send "the
+  code or text it is about", and MiMo read that as "quote it". `STYLE.md` went
+  with 3 of 30 consults, under the half the preregistration set, so this is
+  reported as a finding about the tool's description. The source the facts
+  come from went with 10 of the 20 consults on tasks that have one.
+- **Consulting cost accuracy here:** 26 of 30 directed sessions passed their
+  fact checks against 30 of 30 alone (Fisher p = 0.11, not significant at
+  this sample). The four failures:
+  - `grep-confirm`, no files: dropped the `%d` the code fills in.
+  - `rotor-changelog`, twice, once with no files and once with the diff: an
+    entry ("Fix off-by-one error in rotation pruning") that does not name the
+    `keep` option it fixes.
+  - `tally-help`, with the source: an invented `--flag`.
+
+  In each, MiMo took Terra's draft largely as it came. On these short tasks
+  MiMo alone passes every check, so a consult has only room to lose.
+- **No consult was refused,** and none failed: Terra on the standard tier
+  answered every one.
+
+### What it changes for the trial
+
+- **The treatment is the user asking:** MiMo alone, against MiMo told "Ask
+  terra for a draft first." on the long tasks, where layer 2 found room for
+  Terra to be better.
+- **The trial measures the tool as it is,** file-less consults included.
+  Whether the description should ask for files by name, and for the project's
+  conventions, is the next change to the tool. Making it before the trial
+  would measure a different tool.
+- **The fact checks are the counter-metric,** reported beside the defect
+  judge, because this layer's one signal is that a consult can make a page
+  less accurate.
