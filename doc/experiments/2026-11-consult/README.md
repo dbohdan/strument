@@ -771,3 +771,29 @@ session finished and wrote its target. The scores are in
 - **The fact checks are the counter-metric,** reported beside the defect
   judge, because this layer's one signal is that a consult can make a page
   less accurate.
+
+## Layer 3, second pass: the revised description, preregistered before running
+
+The maintainer chose to fix the tool before the trial, so the trial measures
+the tool as it will ship. The commit after `21314b4` rewrites the consult
+tool's description:
+
+- **Files by name:** name files rather than quoting them, because a file sent
+  whole is exact and complete.
+- **Which files:** the file the work is on, the code or text it has to agree
+  with, and the project's conventions, such as a style guide.
+- **The answer is a draft,** to check against the code before using it.
+
+**Design:** the `directed` arm again, 15 tasks × 2 reps = 30 sessions, on the
+new binary, scored by the same `mech_score.py`. The `plain` arm is not rerun.
+Nothing in the change invites a consult the user did not ask for.
+
+**The revision works if all three hold:**
+
+- At most 8 of 30 consults name no file (was 18).
+- At least 15 of 30 send `STYLE.md` (was 3).
+- At least 28 of 30 pages pass their fact checks (was 26). This is the
+  counter-metric: naming files should not cost accuracy.
+
+If it fails, the trial waits for another revision rather than running on one
+known not to work.
