@@ -149,7 +149,7 @@ def defect_tables(recs):
     w = print
     counts = collections.defaultdict(dict)  # (task, writer, n, judge) -> rep -> count or None
     for r in recs:
-        items = D.parse_defects(r.get("text")) if r.get("ok") else None
+        items = D.parse(r)
         counts[(r["task"], r["writer"], r["n"], r["judge"])][r["rep"]] = None if items is None else len(items)
     judges = sorted({r["judge"] for r in recs})
     ns = sorted({r["n"] for r in recs})
@@ -223,7 +223,7 @@ def censoring_tables(recs, gens):
     w = print
     counts = collections.defaultdict(list)  # (task, writer, n, judge) -> parsed counts
     for r in recs:
-        items = D.parse_defects(r.get("text")) if r.get("ok") else None
+        items = D.parse(r)
         if items is not None:
             counts[(r["task"], r["writer"], r["n"], r["judge"])].append(len(items))
     mean = {k: sum(v) / len(v) for k, v in counts.items()}
@@ -239,7 +239,7 @@ def censoring_tables(recs, gens):
         cells = []
         for wr in writers:
             rs = [r for r in recs if r["judge"] == j and r["writer"] == wr]
-            bad = sum(1 for r in rs if not r.get("ok") or D.parse_defects(r.get("text")) is None)
+            bad = sum(1 for r in rs if D.parse(r) is None)
             cells.append(f"{bad} of {len(rs)}")
         w(f"| {j} | " + " | ".join(cells) + " |")
 

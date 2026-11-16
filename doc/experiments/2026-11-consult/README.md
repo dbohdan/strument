@@ -522,3 +522,68 @@ checks.
 - **Consulting Terra at "low" stays the default** for now, being cheapest. The
   case for Sol is a secondary measure, read from censored data, against about
   2.7 times the cost per page ($0.0059 vs $0.0022).
+
+## Fourth follow-up: the judge rerun, preregistered before running
+
+The third follow-up's judge left 90 of 288 judgments without a verdict, more
+often on the OpenAI writers' pages. This reruns the judging on the same 72
+pages with a judge configured to finish.
+
+**Two pages were cut off before judging.** In two answers (MiMo's
+`long-skills` 1, Terra's `long-yes` 2) the writer never closed the outer
+fence, and the extractor ended the page at the first bare fence of a code
+sample inside it. The judges saw 28% and 56% of those pages, and said so ("the
+page is cut off mid-sentence inside a fenced code block"). `extract_block` now
+reads an answer that opens with a fence by the parity of the fences inside
+it. Re-extracted with `generate.py --reextract`, those two pages are read
+whole and no other page changes, long or short, in any run. The third
+follow-up's records keep the blocks they were judged on. The rerun judges the
+re-extracted copy.
+
+**Two pilots, on two tasks with one sample per writer, kept out:**
+
+- **List first** (`defects.py --order first`, reasoning still off): ask for the
+  defect list before anything else. The pilot failed it. The deliberation
+  moved into the list. MiMo listed 25 items on Sol's skills page, 13 of which
+  end by calling the claim correct ("correct per `runSkill`"). DeepSeek listed
+  66 on one page, ending in a run of "Real defect: … Consistent." A count of
+  those lines does not measure defects.
+- **Reasoning "low", list last, 64,000-token cap**
+  (`--reasoning low --max-tokens 64000`): the original prompt, with the
+  deliberation sent where reasoning goes. Five of six MiMo judgments finished
+  on their own with a clean list. The sixth (Sol's webfetch page) was still
+  running at 30 minutes. Reasoning tokens by page were MiMo's 1,005 and 8,266,
+  Sol's 22,803, and Terra's 22,243 and 35,879. That is the third follow-up's
+  guessed mechanism, measured: the judge works far longer on the OpenAI
+  writers' pages. With reasoning visible, that showed up as a missing verdict.
+  Here it shows up as time.
+
+**Design:**
+
+- **Pages:** the third follow-up's 72, as re-extracted.
+- **Judges:** MiMo and DeepSeek, two reps each (288 calls), reasoning "low",
+  the list-last prompt unchanged, `max_tokens` 64,000.
+- **Order:** one shuffled run, resumed in chunks if it outlives a session's
+  time limit. Resuming changes nothing about which calls are made.
+- **Unparsed:** a judgment with no `Defects:` section, or one stopped at the
+  cap, is unparsed, as before.
+
+**Criteria:** the third follow-up's, unchanged.
+
+- **Sol vs Terra by MiMo's judge:** a paired sign test at p below 0.05.
+- **Each against MiMo:** the same test.
+- **Secondary:** defects per 100 words, fact checks, page length.
+
+This rerun's answer replaces the third follow-up's if no writer has more than
+10% of its judgments unparsed by MiMo's judge. Otherwise it is reported with
+the same bounds, and neither run settles the question.
+
+**Also reported:**
+
+- Reasoning tokens per judgment, by writer, as a measure of how hard each
+  writer's pages were to judge.
+- How well each judgment agrees with the third follow-up's count for the same
+  page.
+- DeepSeek's judge, reported the same way. Its reasoning at "low" may run
+  long, as the handbook warns. If it does, that is reported, not worked around
+  mid-run.

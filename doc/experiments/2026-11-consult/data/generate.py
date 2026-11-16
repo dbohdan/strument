@@ -16,6 +16,7 @@ model or a task.
 
 import argparse
 import concurrent.futures as cf
+import glob
 import json
 import os
 import random
@@ -67,6 +68,27 @@ def run(outdir, job):
     return path, f"{how} ok={rec.get('facts', {}).get('ok')} ${rec.get('cost')}"
 
 
+def reextract(outdir):
+    """Read each saved answer's block again with the current extractor, and
+    recheck its facts. Changes only records whose block changes; run it on a
+    copy when the old blocks were already judged."""
+    for path in sorted(glob.glob(os.path.join(outdir, "gen", "*.json"))):
+        with open(path) as f:
+            rec = json.load(f)
+        if not rec.get("ok"):
+            continue
+        block, how = C.extract_block(rec.get("text", ""))
+        if block == rec.get("block"):
+            continue
+        print(os.path.basename(path), rec.get("extracted"), "->", how,
+              len(rec.get("block") or ""), "->", len(block or ""), "chars", flush=True)
+        rec.update(block=block, extracted=how)
+        rec["facts"] = T.facts(rec["task"], block) if block is not None else None
+        with open(path + ".tmp", "w") as f:
+            json.dump(rec, f, indent=1)
+        os.replace(path + ".tmp", path)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outdir", required=True)
@@ -75,8 +97,12 @@ def main():
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--set", default="short", choices=["short", "long"], help="which task set")
     ap.add_argument("--models", default=",".join(GEN_MODELS))
+    ap.add_argument("--reextract", action="store_true", help="re-read saved answers' blocks; no calls")
     a = ap.parse_args()
     T.use(a.set)
+    if a.reextract:
+        reextract(a.outdir)
+        return
     if not os.environ.get("OPENROUTER_API_KEY"):
         sys.exit("OPENROUTER_API_KEY is not set")
     os.makedirs(os.path.join(a.outdir, "gen"), exist_ok=True)

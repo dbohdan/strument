@@ -129,20 +129,41 @@ def extract_block(answer):
     Whole-answer first: an answer that opens with a fence and closes with the
     same one is that block, whatever fences sit inside it — a README with a
     code sample is the common case, and a first-block regex would cut it at
-    the sample. Otherwise the first block that closes with its own fence.
+    the sample. An answer that opens with a fence but ends without one either
+    left the block unclosed or added a line after it, and the samples inside
+    tell which: they come in pairs, so an even number of fences after the
+    opening one means the block runs to the end ("unclosed"), and an odd number
+    means the last one closes it ("last"). Inner fences are often bare, so the
+    pairing cannot be read from info strings: two long pages left their outer
+    fence unclosed, and stopping at the first bare fence cut them at their
+    first sample. Otherwise, after a preamble, the first block, read with its
+    nesting: a fence with an info string opens a sample and a bare fence closes
+    the innermost one open.
     """
     lines = answer.strip("\n").split("\n")
     if len(lines) >= 2 and FENCE_LINE.match(lines[0]):
         f = re.match(r"^(`{3,}|~{3,})", lines[0]).group(1)
         if lines[-1].strip() == f:
             return "\n".join(lines[1:-1]) + "\n", "whole"
+        at = [j for j in range(1, len(lines)) if lines[j].strip().startswith(f) and FENCE_LINE.match(lines[j].strip())
+              and lines[j].strip()[len(f):len(f) + 1] != f[0]]
+        if len(at) % 2 == 0:
+            return "\n".join(lines[1:]) + "\n", "unclosed"
+        return "\n".join(lines[1:at[-1]]) + "\n", "last"
     for i, line in enumerate(lines):
-        m = FENCE_LINE.match(line)
-        if not m:
+        if not FENCE_LINE.match(line):
             continue
         f = re.match(r"^(`{3,}|~{3,})", line).group(1)
+        depth = 0
         for j in range(i + 1, len(lines)):
-            if lines[j].strip() == f:
-                return "\n".join(lines[i + 1:j]) + "\n", "first"
+            s = lines[j].strip()
+            if s == f:
+                if depth == 0:
+                    return "\n".join(lines[i + 1:j]) + "\n", "first"
+                depth -= 1
+            elif s.startswith(f) and FENCE_LINE.match(s) and s[len(f):].strip() and s[len(f)] != f[0]:
+                depth += 1
+        if i + 1 < len(lines):
+            return "\n".join(lines[i + 1:]) + "\n", "unclosed"
         break
     return None, "none"
