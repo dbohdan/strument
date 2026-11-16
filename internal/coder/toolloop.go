@@ -40,11 +40,14 @@ const (
 	// identical reads with nothing having changed in between is the orbit the
 	// episode showed.
 	toolLoopMaxIdentical = 3
-	// toolLoopMaxReads is the since-last-mutation cap that catches the loop
-	// that varies its arguments — the "read lines 1-10, 2-11, 3-12" slide —
-	// where no single call repeats but the reads still pile up over a world
-	// that never changes. High enough that a hard working turn, whose streaks
-	// between edits are short, never meets it.
+	// toolLoopMaxReads is the since-last-mutation count that earns a note
+	// about the loop that varies its arguments — the "read lines 1-10, 2-11,
+	// 3-12" slide — where no single call repeats but the reads still pile up
+	// over a world that never changes. It only advises: work that researches
+	// before it writes has a long streak by nature. Writing a documentation
+	// page from Strument's own source, MiMo made forty distinct, well-aimed
+	// reads before its first write, and a stop at twice this cap ended the
+	// turn with nothing written (doc/experiments/2026-11-consult).
 	toolLoopMaxReads = 20
 )
 
@@ -54,13 +57,16 @@ type toolLoopWatcher struct {
 	counts map[string]int
 	// reads is the count since the last mutation.
 	reads int
-	// fired notes once: the reflection is injected once per streak, on the
-	// send after a threshold trips, and repeating it every step would itself
-	// be noise.
-	fired bool
-	// stop is set when a streak trips its threshold a second time — the same
-	// call three more times after the note, or as many reads again — and asks
-	// the dispatcher to end the turn. The note used to be the last word, with
+	// firedSame and firedReads note once each: a note is injected once per
+	// streak, on the send after its threshold trips, and repeating it every
+	// step would itself be noise. Separate, so that the read note does not
+	// silence the repeat note that may follow it.
+	firedSame, firedReads bool
+	// stop is set when an exact repeat outlives its note — the same call
+	// three more times after it — and asks the dispatcher to end the turn.
+	// Only the exact repeat stops: three more identical calls over an
+	// unchanged world cannot be research, and a long run of distinct reads
+	// can. The note used to be the last word, with
 	// the step budget as the backstop, and --yes steps removes the budget: in
 	// the run_code arms trial a model that had been told went on making the
 	// same read for ten minutes. A loop the model keeps up after being told is
@@ -115,16 +121,16 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
 	if countsAsRead(name) {
 		w.reads++
 	}
-	if w.fired {
-		// Said once; counting goes on, so the streak that earned the note can
-		// earn the stop.
-		if w.counts[key] >= 2*toolLoopMaxIdentical || w.reads >= 2*toolLoopMaxReads {
-			w.stop = true
-		}
-		return ""
-	}
 	if w.counts[key] >= toolLoopMaxIdentical {
-		w.fired = true
+		if w.firedSame {
+			// Said once; counting goes on, so the repeat that earned the note
+			// can earn the stop.
+			if w.counts[key] >= 2*toolLoopMaxIdentical {
+				w.stop = true
+			}
+			return ""
+		}
+		w.firedSame = true
 		return "You have made the same " + name + " call with the same arguments " +
 			"several times since anything last changed. The earlier results are " +
 			"already in the conversation above — including why the call did not " +
@@ -132,8 +138,8 @@ func (w *toolLoopWatcher) observeCall(name, argsJSON string) string {
 			"the same way. Take a different approach, and if there is nothing " +
 			"useful left to do, call the interrupt tool to end the turn."
 	}
-	if w.reads >= toolLoopMaxReads {
-		w.fired = true
+	if w.reads >= toolLoopMaxReads && !w.firedReads {
+		w.firedReads = true
 		return "This turn has made " + strconv.Itoa(w.reads) + " read-only tool calls since " +
 			"anything last changed. If you are gathering more than that without " +
 			"acting on what you have, take a different approach — and if there is " +
@@ -153,7 +159,7 @@ func (w *toolLoopWatcher) observeMutation() {
 	}
 	// A new streak earns its own note: the loop that follows progress is not
 	// the one the earlier note was about.
-	w.fired = false
+	w.firedSame, w.firedReads = false, false
 	w.stop = false
 	w.reads = 0
 	w.counts = map[string]int{}

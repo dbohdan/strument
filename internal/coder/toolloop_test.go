@@ -228,9 +228,9 @@ func TestDeclinedCommandsDoNotResetTheLoopWatcher(t *testing.T) {
 	}
 }
 
-// The note is the first word, not the last. A streak that trips its threshold
-// again after the note — three more identical calls, or as many reads again —
-// asks for the turn to end; a real change starts the count over, note first.
+// The note is the first word, not the last. An exact repeat kept up after its
+// note — three more identical calls — asks for the turn to end; a real change
+// starts the count over, note first.
 func TestToolLoopWatcherStopsALoopThatOutlivesTheNote(t *testing.T) {
 	w := newToolLoopWatcher()
 	args := `{"path":"a.go"}`
@@ -253,13 +253,33 @@ func TestToolLoopWatcherStopsALoopThatOutlivesTheNote(t *testing.T) {
 		t.Fatal("the stop was reported twice; takeStop must start the watcher over")
 	}
 
-	// The read-streak path stops the same way, at twice its cap.
+	// The read streak only advises. Research before writing reads long, and
+	// forty distinct reads ended a documentation turn with nothing written.
 	w = newToolLoopWatcher()
-	for i := range 2 * toolLoopMaxReads {
-		w.observeCall(toolGrep, `{"pattern":"p`+strconv.Itoa(i)+`"}`)
+	var readNotes int
+	for i := range 4 * toolLoopMaxReads {
+		if w.observeCall(toolGrep, `{"pattern":"p`+strconv.Itoa(i)+`"}`) != "" {
+			readNotes++
+		}
 	}
-	if !w.takeStop() {
-		t.Error("twice the read cap with nothing changing did not stop")
+	if readNotes != 1 || w.takeStop() {
+		t.Errorf("distinct reads, four times the cap: %d notes, stopped = %v; want one note and no stop", readNotes, w.stop)
+	}
+
+	// The read note does not use up the repeat note: an exact repeat after a
+	// long streak of reads is still warned before it is stopped.
+	w = newToolLoopWatcher()
+	for i := range toolLoopMaxReads {
+		w.observeCall(toolGrep, `{"pattern":"q`+strconv.Itoa(i)+`"}`)
+	}
+	var repeatNote string
+	for range toolLoopMaxIdentical {
+		if n := w.observeCall(toolRead, args); n != "" {
+			repeatNote = n
+		}
+	}
+	if !strings.Contains(repeatNote, "same read call") || w.stop {
+		t.Errorf("a repeat after the read note: note %q, stop = %v; want the repeat note and no stop", repeatNote, w.stop)
 	}
 
 	// Progress resets the note: the loop after an edit is a new one, and it is
