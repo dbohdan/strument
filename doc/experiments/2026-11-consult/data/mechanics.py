@@ -61,6 +61,8 @@ def build_repo(project, d):
     git(d, "commit", "-q", "-m", "Initial commit")
 
 
+# Terra on the standard tier: in the pilot, flex answered 429 to every attempt
+# for minutes at a time, and one session spent twelve minutes retrying.
 def config(path, port, purpose):
     with open(path, "w") as f:
         f.write(f'''orr = provider("openrouter", base_url = "http://127.0.0.1:{port}/api/v1", api_key = env("OPENROUTER_API_KEY"))
@@ -70,7 +72,7 @@ models = {{
     "mimo": model(orr, "xiaomi/mimo-v2.6-flash", context = 131072, reasoning = "low", cache = True,
                   extra_params = {{"provider": {{"only": ["xiaomi"], "allow_fallbacks": False}}}}),
     "terra": model(orr, "openai/gpt-6.1-terra", context = 272000, reasoning = "low",
-                   extra_params = {{"service_tier": "flex", "provider": {{"only": ["openai"], "allow_fallbacks": False}}}}),
+                   extra_params = {{"provider": {{"only": ["openai"], "allow_fallbacks": False}}}}),
 }}
 consult_models = {{"terra": "{PURPOSES[purpose]}"}}
 ''')

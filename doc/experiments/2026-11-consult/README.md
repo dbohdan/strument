@@ -664,3 +664,61 @@ go missing (6–9 in the third follow-up):
 - **Time is the cost, not money:** a judgment of a clean OpenAI page took up
   to 25 minutes at MiMo's speed. 288 judgments needed two and a half session
   time limits.
+
+## Layer 3: the mechanics pass, preregistered before running
+
+Does MiMo call `consult`, and does it send the files the question needs?
+`data/mechanics.py` runs one unattended Strument turn per task in a fresh git
+copy of the task's project, with Terra in `consult_models` and the `consult`
+grant given up front. The user's message is the task's instruction.
+`data/mech_score.py` reads every consult call from the recorded wire.
+
+**Pilots, kept out** (21 sessions on the short tasks):
+
+- **MiMo never consulted unprompted:** 0 of 19 sessions. Two were under the
+  purpose from `doc/config.md` ("documentation and user-facing prose"), and
+  17 under one that says why to hand the work over ("it writes them better
+  than you do, so have it draft or review any you write"). Its reasoning and
+  replies never mention the tool. All 17 under the second wording passed
+  their fact checks without help.
+- **Asked to ("Ask terra for a draft first."), it consulted in 4 of 4,**
+  checked the draft against the code, and passed every fact check. It sent
+  the source the facts come from in 2 of 2 tasks that have one, the target in
+  3 of 4, and `STYLE.md` in 1 of 4.
+- **Flex was rate-limited:** OpenAI's flex tier answered 429 to Terra for
+  minutes at a time, and one session spent twelve minutes retrying. Terra
+  runs on the standard tier from here.
+- **A Strument bug found on the way (`e2a2860`):** a long pilot for layer 4
+  made forty distinct reads of Strument's source to write a page, and the
+  read-only streak detector ended its turn before it wrote anything, telling
+  it that it had been repeating the same calls. The streak now only advises.
+  An exact repeat kept up after its note still ends a turn.
+
+**Design:**
+
+- **Arms:**
+  - `plain`: the documented purpose, with nothing asked.
+  - `directed`: the same purpose, plus "Ask terra for a draft first." at the
+    end of the user's message.
+- **Sample:** 15 tasks × 2 reps × 2 arms = 60 sessions, shuffled.
+- **Binary:** Strument at `e2a2860` or later.
+
+**Reported:**
+
+- Sessions that consulted, per arm.
+- Per directed session, whether its consult carried:
+  - the target;
+  - `STYLE.md`;
+  - every source file the task's facts come from (for the tasks that have
+    one).
+- Refused consults, fact checks passed, the target written, cost and time.
+
+**Read as:**
+
+- If `plain` consults in fewer than 3 of 30, the trial's treatment arm is
+  `directed`. Whether MiMo reaches for the tool unprompted is a separate
+  question, about the tool's description, for later.
+- If `directed` sends `STYLE.md` in fewer than half its consults, that is
+  reported as a finding about the tool's description, which says to include
+  "the code or text it is about" but not the conventions it must follow. It
+  is not fixed before the trial: the trial measures the tool as it is.
