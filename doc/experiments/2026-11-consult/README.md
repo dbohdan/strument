@@ -887,3 +887,125 @@ empty page). Layer 3's one warning was that a consult can cost accuracy.
 
 **Budget:** about $1.50 for sessions and $1.30 for judging. Time: about an
 hour of sessions, then 1.5–2.5 hours of judging.
+
+### Results
+
+**The arms are indistinguishable.** By MiMo's judge, the `consult` page had
+fewer defects than the `alone` page in 12 pairs, tied in 6 and had more in 8
+(p = 0.50). Ten pairs are missing. Credited all to `alone`, they give p = 0.36;
+credited all to `consult`, p = 0.016. Neither direction meets the
+preregistered rule. The scores are in
+[`data/trial-scores.txt`](data/trial-scores.txt) and the records in
+`data/trial-runs.tar.xz`.
+
+| measure | `alone` | `consult` |
+|---|---|---|
+| pages written | 31 of 36 | 35 of 36 |
+| fact checks passed | 31 of 31 | 35 of 35 |
+| no page: timeout (1,800 s) | 2 | 1 |
+| no page: context full | 3 | 0 |
+| mean defects (parsed pages) | 3.48 (n = 29) | 3.14 (n = 33) |
+| defects per 100 words | 0.37 | 0.42 |
+| median words | 982 | 766 |
+| unparsed judgments | 15 of 62 | 15 of 70 |
+| judge reasoning tokens (median) | 46,313 | 40,211 |
+| median session time | 615 s | 639 s |
+| mean session cost | $0.023 | $0.041 |
+
+**The counter-metric held.** Every page that was written passed its fact
+checks, in both arms. The accuracy cost layer 3 warned about (4 failures in
+30) did not appear here.
+
+**Pages written leans to `consult`, not significantly.** `alone` lost five
+pages and `consult` one (Fisher p = 0.20). All three context failures were
+`alone` sessions that read until a request crossed MiMo's 131,072-token
+window; see the open question below. Seven of the ten missing pairs are
+missing on the `alone` side: five missing pages and two pages whose
+judgments were both unparsed. That is why crediting the missing pairs to
+`consult` reaches p = 0.016. That bound says what the misses *could* do, not
+what they did, and the preregistered rule reads it only in the other
+direction.
+
+**Consults, from the wire:** 37 calls in 36 sessions. Every one named files:
+
+- `STYLE.md` in 36 of 36 sessions;
+- at least one source file in 35 of 36.
+
+Layer 3 on the old description had 18 of 30 naming no file. The one
+unanswered call omitted `model`, got the error back and was made again.
+
+**Shorter pages, same density.** Consult pages ran about 22% shorter by
+median word count, at about the same density of defects. Fewer words with
+the same defect count per word would be fewer defects per page, which is the
+direction of the 12–8 split, but too small to tell from noise at 26 pairs.
+
+**Judge censoring was even this time.** 30 of 132 judgments hit the
+64,000-token cap, 15 in each arm. The fourth follow-up's pattern, the
+cleanest writer censored first, needed a gap in quality between the writers
+to show, and these two arms showed none.
+
+**Cost and time.**
+
+| item | cost |
+|---|---|
+| the 72 kept sessions | $3.30 |
+| the 17 superseded sessions | $0.59 |
+| two discarded reruns (amendment 2) | $0.08 |
+| judging | $1.66 |
+
+The sessions ran more than twice the estimate: the pilot's two sessions were
+short ones (`long-skills`), and the median session took ten minutes, not
+five. Session time across all 89 sessions was 18.7 hours, run 8 at a time.
+
+#### Amendments
+
+1. **A cut stream ended 17 sessions; they were re-run on a fixed binary.**
+   The first pass ran Strument at `139c9c9`. In 17 of its 72 sessions, the
+   provider cut MiMo's stream mid-response, with no `finish_reason` and no
+   `[DONE]`:
+   - 15 were cut mid-reasoning;
+   - 2 were cut after only `: OPENROUTER PROCESSING` keep-alives.
+
+   Strument took the cut stream for a finished response, reported "reasoning
+   but no answer" or "an empty response", and ended the turn. The cuts came
+   in bursts (16:28–16:30, 17:07, 17:20–17:24), which points to the
+   provider. `8b8f675` makes such a stream a retryable network error. Those
+   17 sessions were moved to `superseded/` and run again on `8b8f675`; the
+   other 55 were kept. The fix changes nothing in a session whose stream was
+   not cut, so this is the result a full run on `8b8f675` would give, with
+   the reruns at a later hour. In the kept sessions, the retry fired 8
+   times.
+2. **Two sessions were re-run by mistake, and their originals restored.**
+   The selection moved every session whose turn failed without a page. That
+   also caught two `alone` sessions that had ended on a full context,
+   unrelated to the bug. Their reruns (one wrote a page, one hit the context
+   limit again) were set aside before scoring, along with the page's one
+   judgment, and the original failures are what is counted.
+3. **One judgment was re-made after a network failure** (`IncompleteRead`
+   from the provider).
+
+#### An open question: context-full in an unattended turn
+
+In each of the three context failures, Strument first cleared 40–54 old tool
+results (about 36,000–48,000 tokens). The next request was still about
+133,000 tokens, and freeing more needs the user's approval. Unattended, with
+only `--yes consult,steps`, that approval was declined and the turn ended
+with no page. Both arms had the same grants, so the comparison is fair. But
+three turns in 36 doing an ordinary documentation task this way is worth a
+look, both at how much clearing frees and at what an unattended turn should
+do when it is not enough.
+
+### What it changes
+
+For MiMo writing a long page from source, asking it to consult Terra first
+gives pages as good as it writes alone by this judge. They are shorter, cost
+about 1.8 times as much and take the same time. The trial does not support
+recommending the consult for this task, and it does not rule out an effect
+smaller than 36 pairs can see.
+
+What the experiment produced that does hold is in Strument:
+
+- the loop stop that no longer ends research turns (`e2a2860`);
+- the consult description that gets the style guide and the source sent
+  (`139c9c9`; 36 of 36 here);
+- the retry on a cut stream (`8b8f675`).
