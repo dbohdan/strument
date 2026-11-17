@@ -1034,20 +1034,6 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	c.lastUsageReport = report
 }
 
-// flushSendUsage prints one send's own line.
-//
-// Only an aside calls it. A /btw is not a turn — no tool calls to wait for, no
-// later sends to sum with — so its accounting is complete the moment the stream
-// ends.
-func (c *Coder) flushSendUsage() {
-	if c.lastUsageReport == "" {
-		return
-	}
-	c.Out.Printf("")
-	c.Out.Printf("%s", c.lastUsageReport)
-	c.lastUsageReport = ""
-}
-
 // messageUsageReport builds the accounting line from the message-scoped totals
 // — the token breakdown, the cost, and the estimated marker — for a whole turn.
 func (c *Coder) messageUsageReport(label, prefix string) string {

@@ -326,7 +326,7 @@ type Coder struct {
 	// each time, so the total can be several times the largest prompt in it.
 	// Only the peak says how close the window came to full.
 	peakTokensSent  int
-	lastUsageReport string // the last send's line; printed only by an aside
+	lastUsageReport string // the last send's line, as finalizeUsage built it
 
 	// turnSnap accumulates what this turn has written; pushed onto undoStack at
 	// turn end. The stack is the undo substrate that works without git.

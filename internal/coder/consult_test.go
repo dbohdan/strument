@@ -265,3 +265,81 @@ func TestConsultAsksBeforeIncludingAnOutsideFile(t *testing.T) {
 		t.Error("a consult whose outside file was declined reached the model")
 	}
 }
+
+// streamCapture is captureOutput with the streamed answer kept in its place,
+// so a test can see what the frame encloses.
+type streamCapture struct{ captureOutput }
+
+func (o *streamCapture) StreamText(s string) { o.b.WriteString(s) }
+
+// The answer on screen is framed: an opening tag carrying the question, since
+// a granted consult never shows the confirmation that would, and a named
+// closer carrying the model and the cost. The usage line that used to follow
+// was the only boundary, and the session model's replies end with the same.
+func TestConsultAnswerIsFramedOnScreen(t *testing.T) {
+	c, _ := consultCoder(t, &fixture.StreamStub{Turns: []fixture.Turn{answer("# Draft\n\nSay what --sum does.")}})
+	out := &streamCapture{}
+	c.Out = out
+	q := "Draft help text for tally.   Keep it to one screen.\nThe second line stays in the record only."
+	c.runConsult(context.Background(), consultArgs(t, q, "help.txt"))
+
+	got := out.String()
+	open := "‹consult terra› Draft help text for tally. Keep it to one screen.\n"
+	closer := "‹/consult› terra, openrouter/openai/gpt-6.1-terra: "
+	i, j, k := strings.Index(got, open), strings.Index(got, "# Draft"), strings.Index(got, closer)
+	if i < 0 || j < 0 || k < 0 || i >= j || j >= k {
+		t.Fatalf("want the opening line, the answer, then the closer, in order:\n%s", got)
+	}
+	if strings.Contains(got, "second line") {
+		t.Errorf("the opening line carried more than the question's first line:\n%s", got)
+	}
+	if strings.Contains(got[k:], "Tokens:") || !strings.Contains(got[k:], "received") {
+		t.Errorf("the closer does not carry the usage in its own form:\n%s", got[k:])
+	}
+}
+
+func TestConsultHeadlineCutsALongQuestion(t *testing.T) {
+	h := consultHeadline(strings.Repeat("word ", 60))
+	if r := []rune(h); len(r) != consultHeadlineRunes || !strings.HasSuffix(h, "…") {
+		t.Errorf("headline is %d runes: %q", len(r), h)
+	}
+}
+
+// /btw gets the same frame, with the session model's slug in the closer.
+func TestAsideAnswerIsFramedOnScreen(t *testing.T) {
+	c := testCoder(t)
+	out := &streamCapture{}
+	c.Out = out
+	c.Client = &fixture.StreamStub{Turns: []fixture.Turn{answer("Forty-two.")}}
+	c.RunAside(context.Background(), "What is the answer?")
+	got := out.String()
+	if !strings.HasPrefix(got, "‹btw›\n") ||
+		!strings.Contains(got, "Forty-two.‹/btw› openrouter/test-model: ") {
+		t.Errorf("the aside is not framed:\n%s", got)
+	}
+}
+
+// A /btw runs between turns, on top of the message totals the last turn left.
+// Its closer counts its own sends only: read as they stood, the totals put
+// the turn's tokens and cost under the aside's name (seen live: 34.2k sent
+// for a five-word answer).
+func TestAsideCloserCountsOnlyTheAside(t *testing.T) {
+	c := testCoder(t)
+	out := &streamCapture{}
+	c.Out = out
+	c.Client = &fixture.StreamStub{Turns: []fixture.Turn{
+		answer(strings.Repeat("word ", 4000)),
+		answer("Forty-two."),
+	}}
+	c.Run(context.Background(), "Say many words.")
+	out.reset()
+	c.RunAside(context.Background(), "What is the answer?")
+	got := out.String()
+	i := strings.Index(got, "‹/btw›")
+	if i < 0 {
+		t.Fatalf("no closer:\n%s", got)
+	}
+	if line := got[i:]; strings.Contains(line, "k received") {
+		t.Errorf("the closer counted the turn before it: %s", line)
+	}
+}

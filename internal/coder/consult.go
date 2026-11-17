@@ -226,12 +226,15 @@ func (c *Coder) runConsult(ctx context.Context, cc consultCall) string {
 		return declined(res, "consult "+cc.alias, GrantConsult)
 	}
 
-	c.Out.Toolf("Consulting %s (%s)", cc.alias, cm.Model.QualifiedSlug())
 	client := c.Client
 	if c.ConsultClient != nil {
 		client = c.ConsultClient(cm.Model)
 	}
-	answer := c.sideCallWithin(ctx, client, cm.Model, prompt)
+	answer := c.sideCallWithin(ctx, client, cm.Model, prompt, sideFrame{
+		open: fmt.Sprintf("\u2039consult %s\u203a %s", cc.alias, consultHeadline(cc.question)),
+		tag:  toolConsult,
+		who:  cc.alias + ", " + cm.Model.QualifiedSlug(),
+	})
 	if ctx.Err() != nil {
 		if strings.TrimSpace(answer) == "" {
 			return "The user stopped the consult before " + cc.alias + " answered."
@@ -304,7 +307,9 @@ func (c *Coder) restoreSideState(s sideState) {
 // reported as their own row, under the consulted model, and the turn's
 // message totals come back untouched for the turn's own row; the run total
 // keeps both.
-func (c *Coder) sideCallWithin(ctx context.Context, client llm.ModelClient, model *config.Model, prompt string) string {
+func (c *Coder) sideCallWithin(ctx context.Context, client llm.ModelClient, model *config.Model, prompt string,
+	frame sideFrame,
+) string {
 	saved := c.saveSideState()
 	defer c.restoreSideState(saved)
 
@@ -315,5 +320,21 @@ func (c *Coder) sideCallWithin(ctx context.Context, client llm.ModelClient, mode
 	c.messageCacheRead, c.messageCacheWrite = 0, 0
 	c.messageEstimated, c.messageSends, c.messageModelTime = false, 0, 0
 	c.lastUsageReport = ""
-	return c.runSide(ctx, toolConsult, prompt)
+	return c.runSide(ctx, toolConsult, prompt, frame)
 }
+
+// consultHeadline is the question as the consult's opening line shows it: the
+// first line, its whitespace collapsed, cut at consultHeadlineRunes. Once the
+// consult grant is given the confirmation never shows, and this line is then
+// the only place the user sees what was asked. The whole question is in the
+// session record. The cut is fixed rather than fitted to the terminal, which
+// the coder does not know; a line that runs past the edge wraps.
+func consultHeadline(q string) string {
+	line := strings.Join(strings.Fields(firstLine(strings.TrimSpace(q))), " ")
+	if r := []rune(line); len(r) > consultHeadlineRunes {
+		return strings.TrimRight(string(r[:consultHeadlineRunes-1]), " ") + "\u2026"
+	}
+	return line
+}
+
+const consultHeadlineRunes = 100

@@ -341,6 +341,17 @@ is confirmed with the question and the file list on screen, under the
 cannot call it. `approve_model` does not answer its prompt: whether a consult
 is worth its price depends on the task, which a decision model does not see.
 
+On screen, a side call is framed in the harness's tag grammar:
+`‹consult terra›` with the question's first line, or `‹btw›`, then the
+answer, then a named closer that carries the model and the side call's own
+cost — `‹/consult› terra, openrouter/openai/gpt-6.1-terra: 201 sent, 15
+received.…`. A consulted model's answer renders like a reply, so a page of its
+Markdown was indistinguishable from the session model's, and the usage line
+that ended it is the line every reply ends with. The closer is named, not
+thinking's bare `‹/›`, because the answer may hold a thinking block of its
+own. The question goes in the opening line because, once the grant is given,
+the confirmation that shows it never appears.
+
 ## The tool loop
 
 Everything the model does, it does through a native function call. The API

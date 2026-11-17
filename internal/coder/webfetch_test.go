@@ -39,7 +39,7 @@ func fetchCall(url, purpose string) llm.ToolCall {
 }
 
 func jsonString(s string) string {
-	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(s) + `"`
 }
 
 func runFetch(t *testing.T, c *Coder, tc llm.ToolCall) string {
