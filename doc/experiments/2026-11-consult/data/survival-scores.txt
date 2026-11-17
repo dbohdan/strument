@@ -1,0 +1,79 @@
+long-adopt__consult__2       page   644 draft   551 page-in-draft 0.33 lines 0.29 draft-in-page 0.39 alone-baseline 0.00
+long-adopt__consult__3       page  1162 draft   681 page-in-draft 0.01 lines 0.04 draft-in-page 0.02 alone-baseline 0.00
+long-adopt__consult__4       page   930 draft   578 page-in-draft 0.00 lines 0.03 draft-in-page 0.01 alone-baseline 0.00
+long-adopt__consult__5       page  1197 draft   943 page-in-draft 0.06 lines 0.09 draft-in-page 0.08 alone-baseline 0.01
+long-adopt__consult__6       page  1107 draft   642 page-in-draft 0.04 lines 0.02 draft-in-page 0.06 alone-baseline 0.00
+long-consult__consult__1     page   529 draft   365 page-in-draft 0.04 lines 0.12 draft-in-page 0.06 alone-baseline 0.00
+long-consult__consult__2     page   742 draft   639 page-in-draft 0.04 lines 0.12 draft-in-page 0.04 alone-baseline 0.00
+long-consult__consult__3     page   500 draft   430 page-in-draft 0.04 lines 0.05 draft-in-page 0.04 alone-baseline 0.00
+long-consult__consult__4     page   696 draft   623 page-in-draft 0.22 lines 0.16 draft-in-page 0.25 alone-baseline 0.01
+long-consult__consult__5     page   677 draft   569 page-in-draft 0.08 lines 0.27 draft-in-page 0.09 alone-baseline 0.01
+long-consult__consult__6     page   914 draft   611 page-in-draft 0.07 lines 0.06 draft-in-page 0.10 alone-baseline 0.01
+long-outside__consult__1     page   944 draft   832 page-in-draft 0.13 lines 0.14 draft-in-page 0.15 alone-baseline 0.05
+long-outside__consult__2     page   871 draft   713 page-in-draft 0.14 lines 0.22 draft-in-page 0.17 alone-baseline 0.03
+long-outside__consult__3     page   859 draft   586 page-in-draft 0.11 lines 0.15 draft-in-page 0.17 alone-baseline 0.03
+long-outside__consult__4     page   706 draft   635 page-in-draft 0.21 lines 0.14 draft-in-page 0.24 alone-baseline 0.04
+long-outside__consult__5     page  1015 draft   671 page-in-draft 0.07 lines 0.14 draft-in-page 0.10 alone-baseline 0.04
+long-outside__consult__6     page   894 draft   789 page-in-draft 0.08 lines 0.11 draft-in-page 0.09 alone-baseline 0.04
+long-skills__consult__1      page   932 draft   658 page-in-draft 0.07 lines 0.08 draft-in-page 0.10 alone-baseline 0.01
+long-skills__consult__2      page   536 draft   484 page-in-draft 0.67 lines 0.71 draft-in-page 0.74 alone-baseline 0.00
+long-skills__consult__3      page   801 draft   533 page-in-draft 0.04 lines 0.06 draft-in-page 0.06 alone-baseline 0.01
+long-skills__consult__4      page   900 draft   550 page-in-draft 0.04 lines 0.05 draft-in-page 0.07 alone-baseline 0.00
+long-skills__consult__5      page   648 draft   394 page-in-draft 0.06 lines 0.09 draft-in-page 0.11 alone-baseline 0.00
+long-skills__consult__6      page   806 draft   721 page-in-draft 0.47 lines 0.40 draft-in-page 0.53 alone-baseline 0.00
+long-webfetch__consult__1    page   655 draft   577 page-in-draft 0.07 lines 0.12 draft-in-page 0.07 alone-baseline 0.00
+long-webfetch__consult__2    page   744 draft   641 page-in-draft 0.11 lines 0.31 draft-in-page 0.12 alone-baseline 0.00
+long-webfetch__consult__3    page  1044 draft   953 page-in-draft 0.07 lines 0.10 draft-in-page 0.08 alone-baseline 0.00
+long-webfetch__consult__4    page   758 draft   561 page-in-draft 0.02 lines 0.06 draft-in-page 0.03 alone-baseline 0.00
+long-webfetch__consult__5    page  1181 draft   843 page-in-draft 0.03 lines 0.06 draft-in-page 0.04 alone-baseline 0.01
+long-webfetch__consult__6    page   883 draft   683 page-in-draft 0.04 lines 0.06 draft-in-page 0.05 alone-baseline 0.00
+long-yes__consult__1         page   746 draft   611 page-in-draft 0.18 lines 0.33 draft-in-page 0.22 alone-baseline 0.01
+long-yes__consult__2         page   538 draft   482 page-in-draft 0.27 lines 0.38 draft-in-page 0.31 alone-baseline 0.01
+long-yes__consult__3         page   777 draft   586 page-in-draft 0.04 lines 0.09 draft-in-page 0.06 alone-baseline 0.01
+long-yes__consult__4         page   580 draft   592 page-in-draft 0.87 lines 0.72 draft-in-page 0.85 alone-baseline 0.01
+long-yes__consult__5         page   597 draft   569 page-in-draft 0.42 lines 0.51 draft-in-page 0.44 alone-baseline 0.01
+long-yes__consult__6         page   615 draft   516 page-in-draft 0.12 lines 0.15 draft-in-page 0.15 alone-baseline 0.01
+g median 0.07
+l median 0.12
+rev median 0.1
+base median 0.01
+median page/draft words 777 611
+
+long-adopt__consult__2       consult at step 10/20 target writes before 0 after 1 kept 0.33 defects 1.5 alone 2.0
+long-adopt__consult__3       consult at step 21/38 target writes before 0 after 3 kept 0.01 defects 2.0 alone 2.0
+long-adopt__consult__4       consult at step 20/44 target writes before 0 after 7 kept 0.00 defects 1.0 alone None
+long-adopt__consult__5       consult at step 19/26 target writes before 0 after 0 kept 0.06 defects None alone 3.0
+long-adopt__consult__6       consult at step 22/35 target writes before 0 after 1 kept 0.04 defects 2.0 alone 5.0
+long-consult__consult__1     consult at step 23/31 target writes before 0 after 0 kept 0.04 defects 2.0 alone 1.5
+long-consult__consult__2     consult at step 20/34 target writes before 0 after 4 kept 0.04 defects 1.0 alone 3.0
+long-consult__consult__3     consult at step 22/30 target writes before 0 after 2 kept 0.04 defects 2.5 alone None
+long-consult__consult__4     consult at step 36/49 target writes before 0 after 2 kept 0.22 defects 5.5 alone None
+long-consult__consult__5     consult at step 36/55 target writes before 0 after 1 kept 0.08 defects None alone 3.5
+long-consult__consult__6     consult at step 38/78 target writes before 0 after 2 kept 0.07 defects 0.0 alone 0.0
+long-outside__consult__1     consult at step 48/66 target writes before 0 after 3 kept 0.13 defects 3.0 alone None
+long-outside__consult__2     consult at step 29/39 target writes before 0 after 1 kept 0.14 defects 3.5 alone 3.0
+long-outside__consult__3     consult at step 49/64 target writes before 0 after 2 kept 0.11 defects 6.5 alone 8.0
+long-outside__consult__4     consult at step 30/38 target writes before 0 after 1 kept 0.21 defects 2.0 alone 5.5
+long-outside__consult__5     consult at step 29/49 target writes before 0 after 2 kept 0.07 defects 4.0 alone 3.0
+long-outside__consult__6     consult at step 21/30 target writes before 0 after 1 kept 0.08 defects 6.0 alone None
+long-skills__consult__1      consult at step 18/23 target writes before 0 after 1 kept 0.07 defects 4.0 alone 6.0
+long-skills__consult__2      consult at step 11/13 target writes before 0 after 1 kept 0.67 defects 4.0 alone 3.5
+long-skills__consult__3      consult at step 29/38 target writes before 0 after 1 kept 0.04 defects 4.0 alone None
+long-skills__consult__4      consult at step 21/32 target writes before 0 after 2 kept 0.04 defects 2.0 alone 2.0
+long-skills__consult__5      consult at step 20/26 target writes before 0 after 1 kept 0.06 defects 5.0 alone 1.0
+long-skills__consult__6      consult at step 21/28 target writes before 0 after 1 kept 0.47 defects 6.0 alone 3.0
+long-webfetch__consult__1    consult at step 21/26 target writes before 0 after 1 kept 0.07 defects 4.0 alone 2.0
+long-webfetch__consult__2    consult at step 20/53 target writes before 0 after 2 kept 0.11 defects 3.0 alone 3.0
+long-webfetch__consult__3    consult at step 23/40 target writes before 0 after 3 kept 0.07 defects 4.0 alone 4.0
+long-webfetch__consult__4    consult at step 19/34 target writes before 0 after 4 kept 0.02 defects 4.0 alone 4.0
+long-webfetch__consult__5    consult at step 23/42 target writes before 0 after 3 kept 0.03 defects 6.0 alone None
+long-webfetch__consult__6    consult at step 24/33 target writes before 0 after 1 kept 0.04 defects 0.0 alone 4.0
+long-yes__consult__1         consult at step 24/31 target writes before 0 after 1 kept 0.18 defects 3.0 alone 2.0
+long-yes__consult__2         consult at step 18/22 target writes before 0 after 1 kept 0.27 defects 2.5 alone 3.5
+long-yes__consult__3         consult at step 21/29 target writes before 0 after 1 kept 0.04 defects 2.0 alone 3.5
+long-yes__consult__4         consult at step 31/44 target writes before 0 after 1 kept 0.87 defects 2.5 alone 4.0
+long-yes__consult__5         consult at step 20/29 target writes before 0 after 1 kept 0.42 defects 1.5 alone 8.0
+long-yes__consult__6         consult at step 20/41 target writes before 0 after 1 kept 0.12 defects 3.5 alone 6.0
+spearman kept vs defects 0.2 n 33
+kept>=0.3 n 5 mean defects 3.1 paired alone [2.0, 3.5, 3.0, 4.0, 8.0]
+kept<0.3 n 28 mean defects 3.14

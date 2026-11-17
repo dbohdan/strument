@@ -1009,3 +1009,50 @@ What the experiment produced that does hold is in Strument:
 - the consult description that gets the style guide and the source sent
   (`139c9c9`; 36 of 36 here);
 - the retry on a cut stream (`8b8f675`).
+
+### Post hoc: does Terra's draft survive?
+
+Not preregistered. This asks why the trial found nothing when Terra's own
+pages had beaten MiMo's 18–4 in the long-document rerun:
+
+- did MiMo pass the draft on unchanged, so that the consult itself doesn't help;
+- or did it rewrite the draft, so that the help was lost?
+
+[`data/survival.py`](data/survival.py) compares each consult page with the
+answer Terra sent back, read from the wire. The output is in
+[`data/survival-scores.txt`](data/survival-scores.txt).
+
+| measure (35 consult pages) | median |
+|---|---|
+| page's 8-word sequences found in Terra's draft | 7% |
+| page's lines found verbatim in the draft | 12% |
+| same 8-word measure, `alone` pages of the same task (baseline) | 1% |
+| page's 4-word sequences in the draft / baseline | 19% / 4% |
+| words: page / draft | 777 / 611 |
+
+**MiMo rewrote the draft.** Terra answered with a full page each time, and
+MiMo wrote its own:
+
+- 30 of 35 pages kept under 30% of the draft's 8-word sequences;
+- 5 kept 40% or more (one, `long-yes` rep 4, kept 87%).
+
+Overlap well above the baseline shows that MiMo read the draft, but it used
+the draft as a reference, not as the text.
+
+**The sequence explains why.** MiMo consulted at the median step 21 of its
+turn, after reading the source itself. It never wrote the target before
+consulting, and wrote it once or more after. "Ask terra for a draft first"
+came out as research, then the draft, then MiMo's own page. By the time the
+draft arrived, MiMo knew the source well enough to write without it, and it
+did.
+
+**But keeping more of the draft did not mean fewer defects.** The rank
+correlation between draft kept and defects is +0.2 (n = 33, the wrong
+direction for "Terra's text is better"). The five pages that kept 40% or
+more averaged 3.1 defects, against 3.14 for the rest. At n = 5 this cannot
+separate the two explanations. It does fail to support the simple one, that
+more Terra in the page would have given a better page here. The drafts may
+also be worse than the long-document rerun's Terra pages: there Terra got
+the task's curated source files, and here it got what MiMo chose to send.
+Judging the drafts on their own would settle that: about 70 judge calls,
+roughly $0.85.
