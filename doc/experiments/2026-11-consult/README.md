@@ -1054,5 +1054,45 @@ separate the two explanations. It does fail to support the simple one, that
 more Terra in the page would have given a better page here. The drafts may
 also be worse than the long-document rerun's Terra pages: there Terra got
 the task's curated source files, and here it got what MiMo chose to send.
-Judging the drafts on their own would settle that: about 70 judge calls,
-roughly $0.85.
+Judging the drafts on their own settles which.
+
+### Post hoc: the drafts, judged as pages
+
+Not preregistered. [`data/drafts.py`](data/drafts.py) extracts Terra's 36
+drafts from the wire. The same judge reads them as pages, with the same
+prompt, cap and reps. The scores are in
+[`data/draft-scores.txt`](data/draft-scores.txt), and the judgments in
+[`experimental-data/strument/2026-11-consult/draft-judgments.tar.xz`](https://github.com/dbohdan/experimental-data/blob/0a29715/strument/2026-11-consult/draft-judgments.tar.xz).
+
+| writer | mean defects | defects per 100 words | median words | fact checks passed |
+|---|---|---|---|---|
+| `alone` (MiMo's page) | 3.48 | 0.37 | 982 | 31 of 31 |
+| `draft` (Terra's answer) | 3.24 | 0.57 | 593 | 34 of 36 |
+| `consult` (MiMo's page after the draft) | 3.14 | 0.42 | 766 | 35 of 35 |
+
+| pair | first fewer / tie / second fewer | p | missing pairs |
+|---|---|---|---|
+| draft against consult | 13 / 2 / 14 | 1.0 | 7 |
+| draft against alone | 14 / 3 / 9 | 0.41 | 10 |
+
+**The drafts were no better than MiMo's pages.** They tie the pages MiMo
+wrote from them, and they don't beat the pages MiMo wrote alone. They are the
+shortest of the three and the densest in defects. Two failed a fact check
+that MiMo's rewrite of the same draft passed:
+
+- `long-adopt` rep 4 missed that nothing is deleted;
+- `long-consult` rep 4 missed the three-quarters threshold.
+
+**So MiMo's rewrite lost nothing, and the bottleneck is what Terra was
+given.** In the long-document rerun, Terra beat MiMo 18–4 writing from the
+task's curated source files. Here it wrote from what MiMo chose to send:
+`STYLE.md` and one or two source files, after MiMo had read far more. Terra
+had less of the source than the model asking it, and its drafts show that.
+
+This is the second answer, of the two the previous section left open. It
+points at the consult's input, not its use. The next change worth testing is
+one that gets the source to the consulted model: a description that asks for
+every file the asking model read for the facts, or a consult made before the
+asking model's own research instead of after it. Either costs more input
+tokens at Terra's price. In this trial a consult session cost $0.018 more
+than one alone, on average.

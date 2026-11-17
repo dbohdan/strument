@@ -1,0 +1,43 @@
+# Layer 4, post hoc: Terra's drafts judged as pages
+
+Produced by `score.py DIR long` over the trial's pages and the drafts (writer `draft`).
+
+## Defects per candidate (single-candidate judge)
+
+Each candidate is judged alone, twice. A candidate's count is the mean of its parsed reps. **Paired** compares a writer's sample n with MiMo's sample n on the same task: the writer fewer, tie, or MiMo fewer.
+
+| judge | writer | mean defects | candidates with any | fewer than MiMo | tie | MiMo fewer | p (sign, vs ½) | same count on both reps | unparsed |
+|---|---|---|---|---|---|---|---|---|---|
+| mimo | alone | 3.48 | 28 of 29 | 0 | 0 | 0 | nan | 4 of 18 | 15 |
+| mimo | consult | 3.14 | 31 of 33 | 0 | 0 | 0 | nan | 5 of 22 | 15 |
+| mimo | draft | 3.24 | 30 of 31 | 0 | 0 | 0 | nan | 4 of 23 | 18 |
+
+### Writer against writer (same judge, paired by task and sample)
+
+| judge | writer | against | first fewer | tie | second fewer | p (sign, vs ½) |
+|---|---|---|---|---|---|---|
+| mimo | alone | consult | 8 | 6 | 12 | 0.503 |
+| mimo | alone | draft | 9 | 3 | 14 | 0.405 |
+| mimo | consult | draft | 14 | 2 | 13 | 1.000 |
+
+### Unparsed judgments by writer
+
+| judge | alone | consult | draft |
+|---|---|---|---|
+| mimo | 15 of 62 | 15 of 70 | 18 of 72 |
+
+### Bounds: every missing pair credited to one side
+
+| judge | first | second | first fewer / tie / second fewer | missing pairs | p | all to first | all to second |
+|---|---|---|---|---|---|---|---|
+| mimo | draft | consult | 13 / 2 / 14 | 7 | 1.000 | 0.392 | 0.229 |
+| mimo | draft | alone | 14 / 3 / 9 | 10 | 0.405 | 0.014 | 0.487 |
+| mimo | consult | alone | 12 / 6 / 8 | 10 | 0.503 | 0.016 | 0.362 |
+
+### Length and density (parsed candidates)
+
+| writer | median words | defects per 100 words (mimo) |
+|---|---|---|
+| alone | 981.5 | 0.37 (n=29) |
+| consult | 766 | 0.42 (n=33) |
+| draft | 592.5 | 0.57 (n=31) |
