@@ -229,18 +229,25 @@ func wrapOutline(url, text string) string {
 // rather than asking the server.
 func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap func(url, text string) string) {
 	kind := classifyBody(pageURL, body)
-	// A range applies before anything else, but not to every kind: lines of
-	// raw HTML mean nothing to a reader who has never seen the markup, so a
-	// range on an HTML page is said rather than silently misapplied. The
-	// model's next move there is a URL fragment, which the tool description
-	// already covers.
+	// A range on an HTML page counts lines of the text it converts to, never
+	// of the markup: that text is what the model reads, and it is what the
+	// oversized-page outline numbers, because truncateFetch sees the page
+	// only after conversion. Refusing the range instead left that outline
+	// recommending a fetch that could not work, and the refusal itself was
+	// lost when the whole page that came with it was cut back to the same
+	// outline: a model asked three times and got one map.
 	if kind == kindHTML {
-		if lo, _ := opts.lineRange(); lo > 0 {
-			note := "(range applies to plain-text pages; on HTML, fetch a section by its URL " +
-				"fragment instead)\n\n"
-			return note + htmlToMarkdown(body, pageURL, opts), wrapContent
+		lo, hi := opts.lineRange()
+		if lo == 0 {
+			return htmlToMarkdown(body, pageURL, opts), wrapContent
 		}
-		return htmlToMarkdown(body, pageURL, opts), wrapContent
+		whole := opts
+		whole.Outline, whole.Range = false, ""
+		part := sliceLines(htmlToMarkdown(body, pageURL, whole), lo, hi)
+		if opts.Outline {
+			return markdownOutlineOffset(part, lo-1), wrapOutline
+		}
+		return part, wrapContent
 	}
 	// The range slices the body, so any line numbers an outline reports must
 	// be shifted back to the file's coordinate system: the model asked for
@@ -286,7 +293,11 @@ func shiftLineNumbers(out string, base int) string {
 	return lineRefRe.ReplaceAllStringFunc(out, func(m string) string {
 		nums := lineNumRe.FindAllString(m, -1)
 		var b strings.Builder
-		b.WriteString("(lines ")
+		if len(nums) == 1 {
+			b.WriteString("(line ")
+		} else {
+			b.WriteString("(lines ")
+		}
 		for i, n := range nums {
 			if i > 0 {
 				b.WriteString("-")

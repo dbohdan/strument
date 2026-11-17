@@ -6,6 +6,8 @@ package coder
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -208,17 +210,38 @@ func TestOutlineOverARangeSliceKeepsFileLineNumbers(t *testing.T) {
 	}
 }
 
-// A range on an HTML page is said rather than silently misapplied: lines of
-// raw markup are not a thing the model has seen, and the right move there is
-// a URL fragment.
-func TestRangeOnHTMLPageIsRefusedWithDirections(t *testing.T) {
-	page := "<html><body><h1 id=\"a\">T</h1><p>body</p></body></html>"
-	text, _ := renderFetched("https://example.com/p", page, ScrapeOptions{Range: "1-5"})
-	if !strings.Contains(text, "range applies to plain-text pages") {
-		t.Errorf("the range on HTML was applied or dropped silently:\n%s", text)
+// An HTML page too large to return is answered with an outline of its
+// converted text, and that outline numbers lines. The range it recommends has
+// to fetch those lines: refused, the advice sent a model round the same map
+// three times (live, on OpenRouter's 613 KB provider-routing page).
+func TestOversizedHTMLOutlineRangeFetchesItsSection(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<html><body><h1 id=\"top\">Guide</h1>")
+	for i := range 400 {
+		fmt.Fprintf(&b, "<h2 id=\"s%d\">Section %d</h2><p>%s marker-%d</p>", i, i, strings.Repeat("filler ", 120), i)
 	}
-	if !strings.Contains(text, "body") {
-		t.Errorf("the page content did not come along:\n%s", text)
+	b.WriteString("</body></html>")
+	page := b.String()
+	const u = "https://example.com/guide"
+
+	text, wrap := renderFetched(u, page, ScrapeOptions{})
+	content := wrap(u, text)
+	res := truncateFetch(content, u, classifyBody(u, unwrapContent(content)))
+	m := regexp.MustCompile(`Section 250 \{#s250\}\s+\(lines? (\d+)(?:-(\d+))?\)`).FindStringSubmatch(res)
+	if m == nil {
+		t.Fatalf("the oversized page's outline does not number section 250:\n%.2000s", res)
+	}
+	lo, _ := strconv.Atoi(m[1])
+
+	part, _ := renderFetched(u, page, ScrapeOptions{Range: fmt.Sprintf("%d-%d", lo, lo+3)})
+	if !strings.HasPrefix(part, "## Section 250") || !strings.Contains(part, "marker-250") {
+		t.Errorf("the range the outline gives did not fetch its section:\n%s", part)
+	}
+
+	// An outline over a range of the converted text keeps the page's numbers.
+	out, _ := renderFetched(u, page, ScrapeOptions{Outline: true, Range: fmt.Sprintf("%d-%d", lo, lo+20)})
+	if !strings.Contains(out, fmt.Sprintf("(line %d)", lo)) {
+		t.Errorf("an outline over a range lost the page's line numbers (want line %d):\n%s", lo, out)
 	}
 }
 

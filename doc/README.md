@@ -811,6 +811,17 @@ ATX headings, no ReST directives) or falls back to an honest "plain text, N
 lines, fetch a range." The outline's footer names the fetch that uses its
 numbers: `range: "107-187"`.
 
+**On an HTML page, a range counts lines of the converted text.** That text is
+what the model reads, and it is what an oversized page's outline numbers:
+`truncateFetch` only sees a page after conversion, so it classifies the
+result as Markdown and offers line numbers next to the anchors. A range on
+HTML used to be refused with a note. The note went out with a whole page
+over the size cap, the cap swapped that page for the same outline, and the
+outline recommended the range again. On OpenRouter's 613 KB provider-routing
+page, MiMo fetched the map three times before trying an anchor. Both now
+work: the anchor for a section, and the range for anything the outline
+numbers.
+
 `internal/origin` owns what an origin is, because two packages need the
 identical answer and neither can import the other — the config loader validates
 an entry at load, the coder matches a fetch at run time.
