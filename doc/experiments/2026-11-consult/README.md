@@ -151,7 +151,7 @@ Run on all fifteen tasks after the preregistration (`cf8581f`): 240 pairwise
 and 240 single-candidate judge calls, none failed, every pairwise verdict
 parsed. Judges cost $0.06; the whole layer, with candidates and both pilots,
 about $0.35. Full tables in `data/scores.txt`; raw records in
-`data/runs.tar.xz` (main run and pilots), candidates in
+[`experimental-data/strument/2026-11-consult/runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/runs.tar.xz) (main run and pilots), candidates in
 `data/candidates.jsonl`.
 
 ### Against the criteria
@@ -263,7 +263,7 @@ swapped labels, the version credited to Terra is MiMo's own.
 Run after the amendment (`62e27e0`): 30 Terra generations at default
 reasoning, then 360 defect-judge calls over all ninety candidates and 120
 label-swap calls, none failed. About $0.44. Tables in
-`data/follow-up-scores.txt`, records in `data/follow-up-runs.tar.xz`, the new
+`data/follow-up-scores.txt`, records in [`experimental-data/strument/2026-11-consult/follow-up-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/follow-up-runs.tar.xz), the new
 candidates in `data/candidates.jsonl`.
 
 ### Terra at its default reasoning
@@ -360,7 +360,7 @@ effort, but this run does not verify that.
 
 Run after `4bebf90`: 30 Sol generations, 480 defect-judge calls over all
 four writers, none failed, $0.62. Tables in `data/sol-scores.txt`, records in
-`data/sol-runs.tar.xz`.
+[`experimental-data/strument/2026-11-consult/sol-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/sol-runs.tar.xz).
 
 | MiMo's judge | mean defects | candidates with any | fewer than MiMo / tie / more | p |
 |---|---|---|---|---|
@@ -437,7 +437,7 @@ finished well under its limit.
 
 72 pages, 288 judgments, $1.79. The scores are in
 [`data/long-scores.txt`](data/long-scores.txt) and the records in
-`data/long-runs.tar.xz`.
+[`experimental-data/strument/2026-11-consult/long-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/long-runs.tar.xz).
 
 **Against the criteria, by MiMo's judge:**
 
@@ -595,7 +595,7 @@ of funds (HTTP 402 and 403). They were deleted and made again, along with five
 lost in flight at a session's time limit. Every judgment in the final set is a
 completed call. The scores are in
 [`data/long-rerun-scores.txt`](data/long-rerun-scores.txt) and the records in
-`data/long-rerun-runs.tar.xz`.
+[`experimental-data/strument/2026-11-consult/long-rerun-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/long-rerun-runs.tar.xz).
 
 **The preregistered rule fails.** MiMo's judge left 11 of Sol's 48 judgments
 unparsed (23%), all of them stopped at the 64,000-token cap. That is over the
@@ -728,7 +728,7 @@ grant given up front. The user's message is the task's instruction.
 60 sessions, $0.10, Strument at `e2a2860`, Terra on the standard tier. Every
 session finished and wrote its target. The scores are in
 [`data/mechanics-scores.txt`](data/mechanics-scores.txt) and the records in
-`data/mechanics-runs.tar.xz`.
+[`experimental-data/strument/2026-11-consult/mechanics-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/mechanics-runs.tar.xz).
 
 | arm | consulted | sent no files | sent the target | sent `STYLE.md` | sent the source | facts ok | median s | mean cost |
 |---|---|---|---|---|---|---|---|---|
@@ -802,7 +802,7 @@ known not to work.
 
 30 sessions, $0.07, Strument at `139c9c9`. The scores are in
 [`data/mechanics-desc-scores.txt`](data/mechanics-desc-scores.txt) and the
-records in `data/mechanics-desc-runs.tar.xz`.
+records in [`experimental-data/strument/2026-11-consult/mechanics-desc-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/mechanics-desc-runs.tar.xz).
 
 | measure | before (`21314b4`) | after | bar |
 |---|---|---|---|
@@ -896,7 +896,7 @@ fewer defects than the `alone` page in 12 pairs, tied in 6 and had more in 8
 credited all to `consult`, p = 0.016. Neither direction meets the
 preregistered rule. The scores are in
 [`data/trial-scores.txt`](data/trial-scores.txt) and the records in
-`data/trial-runs.tar.xz`.
+[`experimental-data/strument/2026-11-consult/trial-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/trial-runs.tar.xz).
 
 | measure | `alone` | `consult` |
 |---|---|---|

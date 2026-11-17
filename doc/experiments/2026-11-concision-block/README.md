@@ -269,8 +269,8 @@ finished; there were 7 "no answer" turns in all, all MiMo ending a turn with rea
 cost was about $6, the follow-up's about $0.40. Data:
 - the scorer's output, in [`data/scores-main.txt`](data/scores-main.txt) and
   [`data/scores-pinned.txt`](data/scores-pinned.txt);
-- every session's log, compressed, in `data/runs-main.tar.xz` and
-  `data/runs-pinned.tar.xz`.
+- every session's log, compressed, in [`experimental-data/strument/2026-11-concision-block/runs-main.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-concision-block/runs-main.tar.xz) and
+  [`experimental-data/strument/2026-11-concision-block/runs-pinned.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-concision-block/runs-pinned.tar.xz).
 
 ### Rule 1: does the block cost work and accuracy?
 

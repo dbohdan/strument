@@ -160,7 +160,7 @@ Neither pilot's sessions are counted.
 560 sessions, all finished; 8 ended without an answer, all MiMo's (4 in each arm), two of them after a fix that passed every hidden check. Every
 response came from its pinned provider. Total cost $1.85. Data:
 - the scorer's rows and tables, in [`data/scores.txt`](data/scores.txt);
-- each session's record, compressed, in `data/runs.tar.xz`: Strument's
+- each session's record, compressed, in [`experimental-data/strument/2026-11-pared-down/runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-pared-down/runs.tar.xz): Strument's
   session log, stdout and stderr, and the runner's `done.json`.
 
 The wire captures are not kept; the costs in the scores come from the session
@@ -338,5 +338,5 @@ these runs the arms are notes, not the trial's binaries: **S** is the trial's N
 The new note stays: no harm found, and the behavior it asks for, where it
 differs, moves the right way. Scores in
 [`data/follow-up-scores.txt`](data/follow-up-scores.txt), records in
-`data/follow-up-runs.tar.xz`.
+[`experimental-data/strument/2026-11-pared-down/follow-up-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-pared-down/follow-up-runs.tar.xz).
 

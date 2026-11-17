@@ -256,8 +256,13 @@ Past trials live one directory each under
   temporary data anywhere tracked — project checkouts, one-off binaries,
   pty captures, scratch runs. Use the environment's scratch space
   (`/tmp/` where there is no dedicated one) and keep only the distilled
-  report in `doc/experiments/`. JSONL transcripts are fine when they
-  are intended for preservation.
+  report in `doc/experiments/`: the write-up, the scripts and the scores.
+  Raw records worth preserving (session transcripts, wire captures, judge
+  outputs) go to
+  [`dbohdan/experimental-data`](https://github.com/dbohdan/experimental-data)
+  under `strument/<experiment>/`, compressed and checked for keys, and the
+  write-up links to them at that repository's commit. Archives are ignored
+  here: they once reached 47 MB of an unmerged branch's history.
 - **Model-run commands get a filtered environment.** The rule is about *who
   caused the command*, not which command it is: anything the model caused —
   the `bash` tool, the `check` tool, the `scraper` command — runs under the

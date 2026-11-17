@@ -188,7 +188,7 @@ both models: n = 80 per arm. Every task is also reported on its own.
 from its pinned provider. Total cost $1.85. Data:
 - the scorer's rows and tables, in [`data/scores.txt`](data/scores.txt);
 - side effects, in [`data/sidefx.txt`](data/sidefx.txt);
-- each session's own record, compressed, in `data/runs.tar.xz`: Strument's
+- each session's own record, compressed, in [`experimental-data/strument/2026-11-featherweight/runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-featherweight/runs.tar.xz): Strument's
   session log or Featherweight's session file, plus stdout and the result.
 
 The wire captures (388 MB) are not kept; the costs in the scores come from
