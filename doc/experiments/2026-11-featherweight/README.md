@@ -36,7 +36,7 @@ here argues for less prompt, not for less sandbox.
 
 | arm | what runs |
 | --- | --- |
-| S | Strument at `4b941d2`, as it is |
+| S | Strument at `a42af21`, as it is |
 | S-fw | the same binary, with `prompt_code` set to Featherweight's prompt |
 | FW | Featherweight, the trial fork [`data/featherweight-trial.tcl`](data/featherweight-trial.tcl) |
 

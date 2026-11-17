@@ -760,7 +760,7 @@ if __name__ == "__main__":
 # one feature, from the source alone, frozen at LONG_COMMIT so the input cannot
 # drift with the branch. Neither writer nor judge is shown the existing docs.
 
-LONG_COMMIT = "45f0f00"
+LONG_COMMIT = "6e3059b"
 
 LONG_STYLE = STYLE + """
 For a documentation page:

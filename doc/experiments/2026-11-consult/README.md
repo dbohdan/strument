@@ -9,7 +9,7 @@ Terra at its default reasoning did *not* do better: 11 to 7 (p = 0.48), with
 more defects than at "low". Telling MiMo who wrote each version changed
 nothing measurable, and it never mentioned the authors.
 
-The `consult` tool (`c59f806`) lets the model ask another model, configured in
+The `consult` tool (`9cd9b6f`) lets the model ask another model, configured in
 `consult_models`, and get the answer back. Whether that is worth having for
 the use it was built for — MiMo handing documentation work to a stronger
 writer — is a question for a later trial (layer 4 below). That trial needs a
@@ -147,7 +147,7 @@ agreement on tm pairs both judged consistently, and cost.
 
 ## Results
 
-Run on all fifteen tasks after the preregistration (`cf8581f`): 240 pairwise
+Run on all fifteen tasks after the preregistration (`ae0e298`): 240 pairwise
 and 240 single-candidate judge calls, none failed, every pairwise verdict
 parsed. Judges cost $0.06; the whole layer, with candidates and both pilots,
 about $0.35. Full tables in `data/scores.txt`; raw records in
@@ -225,7 +225,7 @@ pairwise judge is dropped. Whichever passes decides layer 4's judge.
 One pilot call came back from MiMo's Xiaomi endpoint as 1,066 tokens of
 reasoning, no answer, and `finish_reason: "error"`. Strument's stream loop
 accepted that finish as complete, so a turn — or a consult — could take a
-fragment as the answer. Fixed in `c5ec76f`: it is retried as a server error.
+fragment as the answer. Fixed in `70c7a34`: it is retried as a server error.
 
 ## Follow-ups, preregistered before running
 
@@ -260,7 +260,7 @@ swapped labels, the version credited to Terra is MiMo's own.
 
 ## Follow-up results
 
-Run after the amendment (`62e27e0`): 30 Terra generations at default
+Run after the amendment (`0a60c2c`): 30 Terra generations at default
 reasoning, then 360 defect-judge calls over all ninety candidates and 120
 label-swap calls, none failed. About $0.44. Tables in
 `data/follow-up-scores.txt`, records in [`experimental-data/strument/2026-11-consult/follow-up-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/follow-up-runs.tar.xz), the new
@@ -358,7 +358,7 @@ effort, but this run does not verify that.
 
 ### Results
 
-Run after `4bebf90`: 30 Sol generations, 480 defect-judge calls over all
+Run after `f5a658d`: 30 Sol generations, 480 defect-judge calls over all
 four writers, none failed, $0.62. Tables in `data/sol-scores.txt`, records in
 [`experimental-data/strument/2026-11-consult/sol-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/sol-runs.tar.xz).
 
@@ -410,7 +410,7 @@ Short tasks left no room: most pairs tied, and three runs were needed to rank
 even MiMo against Terra. The maintainer's impression was formed on long
 documents. Six tasks (`LONG_TASKS` in `data/tasks.py`), each a whole
 user-facing page about one Strument feature, written from Strument's own source
-at `45f0f00` and from nothing else: the consult tool, approving prompts
+at `6e3059b` and from nothing else: the consult tool, approving prompts
 (`--yes`, `auto_approve`, `/yes`), moving a project (`strument project adopt`),
 reading outside the project, `webfetch`, and skills. Neither writer nor judge
 sees the existing docs. Each task's fact checks pass on Strument's existing
@@ -688,7 +688,7 @@ grant given up front. The user's message is the task's instruction.
 - **Flex was rate-limited:** OpenAI's flex tier answered 429 to Terra for
   minutes at a time, and one session spent twelve minutes retrying. Terra
   runs on the standard tier from here.
-- **A Strument bug found on the way (`e2a2860`):** a long pilot for layer 4
+- **A Strument bug found on the way (`8b0eaaf`):** a long pilot for layer 4
   made forty distinct reads of Strument's source to write a page, and the
   read-only streak detector ended its turn before it wrote anything, telling
   it that it had been repeating the same calls. The streak now only advises.
@@ -701,7 +701,7 @@ grant given up front. The user's message is the task's instruction.
   - `directed`: the same purpose, plus "Ask terra for a draft first." at the
     end of the user's message.
 - **Sample:** 15 tasks × 2 reps × 2 arms = 60 sessions, shuffled.
-- **Binary:** Strument at `e2a2860` or later.
+- **Binary:** Strument at `8b0eaaf` or later.
 
 **Reported:**
 
@@ -725,7 +725,7 @@ grant given up front. The user's message is the task's instruction.
 
 ### Results
 
-60 sessions, $0.10, Strument at `e2a2860`, Terra on the standard tier. Every
+60 sessions, $0.10, Strument at `8b0eaaf`, Terra on the standard tier. Every
 session finished and wrote its target. The scores are in
 [`data/mechanics-scores.txt`](data/mechanics-scores.txt) and the records in
 [`experimental-data/strument/2026-11-consult/mechanics-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/mechanics-runs.tar.xz).
@@ -775,7 +775,7 @@ session finished and wrote its target. The scores are in
 ## Layer 3, second pass: the revised description, preregistered before running
 
 The maintainer chose to fix the tool before the trial, so the trial measures
-the tool as it will ship. `139c9c9` rewrites the consult
+the tool as it will ship. `43bc200` rewrites the consult
 tool's description:
 
 - **Files by name:** name files rather than quoting them, because a file sent
@@ -800,11 +800,11 @@ known not to work.
 
 ### Results
 
-30 sessions, $0.07, Strument at `139c9c9`. The scores are in
+30 sessions, $0.07, Strument at `43bc200`. The scores are in
 [`data/mechanics-desc-scores.txt`](data/mechanics-desc-scores.txt) and the
 records in [`experimental-data/strument/2026-11-consult/mechanics-desc-runs.tar.xz`](https://github.com/dbohdan/experimental-data/blob/425c636/strument/2026-11-consult/mechanics-desc-runs.tar.xz).
 
-| measure | before (`21314b4`) | after | bar |
+| measure | before (`108d614`) | after | bar |
 |---|---|---|---|
 | consults naming no file | 18 of 30 | 3 of 30 | at most 8 |
 | sent `STYLE.md` | 3 of 30 | 15 of 30 | at least 15 |
@@ -837,8 +837,8 @@ Does asking MiMo to consult Terra produce better documentation pages than
 MiMo alone?
 
 **Sessions** (`data/trial.py`): one unattended Strument turn per session, at
-`139c9c9` or later (the loop fix and the revised description). Each session
-gets a fresh copy of Strument's source at `45f0f00`, with three things
+`43bc200` or later (the loop fix and the revised description). Each session
+gets a fresh copy of Strument's source at `6e3059b`, with three things
 removed:
 
 - `doc/`;
@@ -874,7 +874,7 @@ indistinguishable at this sample.
 
 **Counter-metric, reported beside the primary:** fact checks passed per arm
 (all six tasks; the `!` check now bans only an exclamation mark after a word,
-and every task passes on Strument's own docs at `45f0f00` and fails on an
+and every task passes on Strument's own docs at `6e3059b` and fails on an
 empty page). Layer 3's one warning was that a consult can cost accuracy.
 
 **Secondary:**
@@ -960,7 +960,7 @@ five. Session time across all 89 sessions was 18.7 hours, run 8 at a time.
 #### Amendments
 
 1. **A cut stream ended 17 sessions; they were re-run on a fixed binary.**
-   The first pass ran Strument at `139c9c9`. In 17 of its 72 sessions, the
+   The first pass ran Strument at `43bc200`. In 17 of its 72 sessions, the
    provider cut MiMo's stream mid-response, with no `finish_reason` and no
    `[DONE]`:
    - 15 were cut mid-reasoning;
@@ -969,10 +969,10 @@ five. Session time across all 89 sessions was 18.7 hours, run 8 at a time.
    Strument took the cut stream for a finished response, reported "reasoning
    but no answer" or "an empty response", and ended the turn. The cuts came
    in bursts (16:28–16:30, 17:07, 17:20–17:24), which points to the
-   provider. `8b8f675` makes such a stream a retryable network error. Those
-   17 sessions were moved to `superseded/` and run again on `8b8f675`; the
+   provider. `a439a11` makes such a stream a retryable network error. Those
+   17 sessions were moved to `superseded/` and run again on `a439a11`; the
    other 55 were kept. The fix changes nothing in a session whose stream was
-   not cut, so this is the result a full run on `8b8f675` would give, with
+   not cut, so this is the result a full run on `a439a11` would give, with
    the reruns at a later hour. In the kept sessions, the retry fired 8
    times.
 2. **Two sessions were re-run by mistake, and their originals restored.**
@@ -1005,10 +1005,10 @@ smaller than 36 pairs can see.
 
 What the experiment produced that does hold is in Strument:
 
-- the loop stop that no longer ends research turns (`e2a2860`);
+- the loop stop that no longer ends research turns (`8b0eaaf`);
 - the consult description that gets the style guide and the source sent
-  (`139c9c9`; 36 of 36 here);
-- the retry on a cut stream (`8b8f675`).
+  (`43bc200`; 36 of 36 here);
+- the retry on a cut stream (`a439a11`).
 
 ### Post hoc: does Terra's draft survive?
 

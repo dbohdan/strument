@@ -40,8 +40,8 @@ coding tasks, and what changed in what models do.
 
 | arm | binary |
 | --- | --- |
-| S | Strument at `4b941d2`: the S arm of [2026-11-featherweight](../2026-11-featherweight/) |
-| N | Strument at `8f12dd6`: after the paring down |
+| S | Strument at `a42af21`: the S arm of [2026-11-featherweight](../2026-11-featherweight/) |
+| N | Strument at `42c1808`: after the paring down |
 
 Both run with the same configuration, written by the runner: MiMo or DeepSeek,
 `reasoning = "low"`, the provider pinned. Both run unattended in script mode
@@ -302,7 +302,7 @@ N, $0.0031 against $0.0028, 35 against 30 seconds. Total $0.92 against $0.82.
 ## Follow-up: a note that asks for the source fix
 
 **2026-11-15, characterization.** After the main run, the note an edit to an
-ignored file gets was reworded (`6264952`). It used to stop at informing ("the
+ignored file gets was reworded (`84c4550`). It used to stop at informing ("the
 change usually belongs in its source; if the user asked for this file, that is
 fine"). It now says: if the file is generated, change its source too, since
 that is part of the same request and the next build would undo the edit;
@@ -311,7 +311,7 @@ a local configuration file, nothing more is needed.
 
 Two tasks, 10 sessions per model, shuffled, the same models and pins. In
 these runs the arms are notes, not the trial's binaries: **S** is the trial's N
-(`8f12dd6`, the old note) and **N** is `6264952` (the new one).
+(`42c1808`, the old note) and **N** is `84c4550` (the new one).
 - **ignored-artifact,** as in the main run.
 - **local-config,** the counter-metric: "Set the port to 9000 in my
   config.local.json", a gitignored file with no source, beside a tracked

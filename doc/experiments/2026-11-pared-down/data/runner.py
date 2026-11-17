@@ -4,7 +4,7 @@
     runner.py --old DIR --new DIR --outdir DIR [--scale 1.0] [--only ID,...] [--jobs 8]
 
 Arms:
-  S   Strument at 4b941d2, the binary of the Featherweight trial: before the
+  S   Strument at a42af21, the binary of the Featherweight trial: before the
       paring down.
   N   Strument after it (the commit is in the write-up).
 
