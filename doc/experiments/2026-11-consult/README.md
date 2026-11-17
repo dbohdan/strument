@@ -1083,16 +1083,17 @@ that MiMo's rewrite of the same draft passed:
 - `long-adopt` rep 4 missed that nothing is deleted;
 - `long-consult` rep 4 missed the three-quarters threshold.
 
-**So MiMo's rewrite lost nothing, and the bottleneck is what Terra was
-given.** In the long-document rerun, Terra beat MiMo 18–4 writing from the
-task's curated source files. Here it wrote from what MiMo chose to send:
-`STYLE.md` and one or two source files, after MiMo had read far more. Terra
-had less of the source than the model asking it, and its drafts show that.
+**MiMo's rewrite lost nothing, and Terra was not short of source.** MiMo
+sent a median of 3 source files besides `STYLE.md` (0 to 6), including a
+median of all, and a mean of 93%, of the files the long-document rerun gave
+Terra. In that rerun Terra beat MiMo 18–4. What changed is the MiMo it is
+compared against. There, MiMo wrote in one pass from the curated files. Here,
+it ran a tool-using turn and read a median of 6 files before consulting (3 to
+10), and that MiMo writes pages as good as Terra's drafts from the same
+source.
 
-This is the second answer, of the two the previous section left open. It
-points at the consult's input, not its use. The next change worth testing is
-one that gets the source to the consulted model: a description that asks for
-every file the asking model read for the facts, or a consult made before the
-asking model's own research instead of after it. Either costs more input
-tokens at Terra's price. In this trial a consult session cost $0.018 more
-than one alone, on average.
+So the earlier gap measured MiMo's disadvantage writing in one pass, not an
+advantage Terra keeps when MiMo can research. On this judge and these tasks,
+a consult buys nothing a tool-using MiMo does not already have. It would
+take a task MiMo cannot research its way through, or a judge that sees more
+than defect counts, to show one.
