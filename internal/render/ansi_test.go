@@ -189,3 +189,48 @@ func TestANSIAsteriskEmphasisStillWorks(t *testing.T) {
 		}
 	}
 }
+
+// TestANSIBareBracketsAreText: a "[" opens a link only once "](" follows the
+// label. "[WIP]", "[1]" and arr[i] are what models write; none is a link, and
+// the brackets stay.
+func TestANSIBareBracketsAreText(t *testing.T) {
+	for _, doc := range []string{
+		"[WIP] parser\n",
+		"see [1] and [2]\n",
+		"arr[i] = arr[j]\n",
+		"a [b] (c)\n",
+		"unclosed [label\n",
+		"unclosed at end [lab",
+		"[" + strings.Repeat("x", maxLinkLabel+10) + "](u)\n",
+		"[split\nlines](u)\n",
+	} {
+		want := strings.TrimRight(doc, "\n")
+		for _, byChar := range []bool{false, true} {
+			got := renderANSI(doc, false, byChar)
+			for line := range strings.SplitSeq(want, "\n") {
+				if !strings.Contains(got, line) {
+					t.Errorf("byChar=%v: %q rendered %q, missing %q", byChar, doc, got, line)
+				}
+			}
+		}
+	}
+}
+
+// TestANSILinksStillRender: "[t](u)" is still a link, drawn as the label and
+// the target after it, and markup inside the label still applies.
+func TestANSILinksStillRender(t *testing.T) {
+	cases := map[string]string{
+		"[title](https://example.com)\n":       "title (https://example.com)",
+		"see [the docs](https://x.y/z) here\n": "see the docs (https://x.y/z) here",
+		"[a] then [b](u)\n":                    "[a] then b (u)",
+		"[**bold** label](u)\n":                "bold label (u)",
+		"- [x] done\n- [ ] todo [ref](u)\n":    "todo ref (u)",
+	}
+	for doc, want := range cases {
+		for _, byChar := range []bool{false, true} {
+			if got := renderANSI(doc, false, byChar); !strings.Contains(got, want) {
+				t.Errorf("byChar=%v: %q rendered %q, want %q", byChar, doc, got, want)
+			}
+		}
+	}
+}

@@ -33,6 +33,7 @@ type Parser struct {
 	hrChar        byte
 	hrChars       int
 	tableState    int
+	linkLabel     string // the text after a "[" while it may or may not be a link
 }
 
 const tokenArrayCap = 24
@@ -61,7 +62,7 @@ func (p *Parser) Write(chunk string) {
 // End finishes rendering: any pending characters are flushed as if the
 // stream ended with a newline.
 func (p *Parser) End() {
-	if len(p.pending) > 0 {
+	if len(p.pending) > 0 || p.token == tokMaybeLink {
 		p.Write("\n")
 	}
 }
@@ -634,6 +635,32 @@ func (p *Parser) tokenChecks(char rune, pendingWithChar string) bool {
 			p.Write(string(char))
 		}
 		return true
+	case tokMaybeLink:
+		switch {
+		case p.pending == "]" && char == '(':
+			//	[Link](url)
+			//	      ^
+			// A link: open it and replay the label into it, so emphasis and
+			// code inside the label are parsed as they would have been.
+			label := p.linkLabel
+			p.linkLabel, p.pending = "", ""
+			p.token = p.tokens[p.depth]
+			p.addToken(Link)
+			p.Write(label + "](")
+		case p.pending == "]":
+			//	[WIP] next
+			//	     ^
+			p.rejectLink("]" + string(char))
+		case char == ']':
+			p.pending = "]"
+		case char == '\n' || len(p.linkLabel) >= maxLinkLabel:
+			// A label does not run past a line, and an unclosed "[" must not
+			// hold the stream back.
+			p.rejectLink(string(char))
+		default:
+			p.linkLabel += string(char)
+		}
+		return true
 	case Link, Image:
 		if p.pending == "]" {
 			//	[Link](url)
@@ -1073,9 +1100,15 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 		if p.token != Image && p.token != Link &&
 			p.token != EquationBlock && p.token != EquationInline &&
 			char != ']' {
+			// Not a link yet. Most "[...]" in a model's answer is not one —
+			// [WIP], [1], arr[i] outside backticks — and opening a link here
+			// drew it in link color with its brackets gone. The label is held
+			// until the character after its "]" says which it is.
 			p.addText()
-			p.addToken(Link)
-			p.pending = string(char)
+			p.token = tokMaybeLink
+			p.linkLabel = ""
+			p.pending = ""
+			p.Write(string(char))
 			return true
 		}
 		return false
@@ -1092,4 +1125,17 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 	default:
 		return false
 	}
+}
+
+// maxLinkLabel bounds how much text after a "[" is held back waiting for the
+// "]" that decides whether it is a link.
+const maxLinkLabel = 200
+
+// rejectLink writes a held "[label" as the text it was, followed by rest.
+func (p *Parser) rejectLink(rest string) {
+	label := p.linkLabel
+	p.linkLabel, p.pending = "", ""
+	p.token = p.tokens[p.depth]
+	p.text += "["
+	p.Write(label + rest)
 }

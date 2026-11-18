@@ -59,6 +59,8 @@ const (
 	tokMaybeTask  Token = 103
 	tokMaybeBR    Token = 104
 	tokMaybeEqBlk Token = 105
+	// tokMaybeLink holds the text after a "[" until it is known to be a link.
+	tokMaybeLink Token = 106
 )
 
 // String returns the smd.js token_to_string name (used in test diffs).
