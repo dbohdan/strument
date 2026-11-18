@@ -147,40 +147,41 @@ func TestANSICheckbox(t *testing.T) {
 	}
 }
 
-// TestANSIUnderscoreInWord confirms an intraword underscore (common in
-// filenames and identifiers) is literal, not emphasis — CommonMark forbids
-// intraword "_" emphasis. byChar exercises the fix across chunk boundaries.
-func TestANSIUnderscoreInWord(t *testing.T) {
-	// Note: __init__ is deliberately absent — its underscores are at word
-	// boundaries, so CommonMark renders it as bold "init" (a known gotcha).
-	// The rule only blocks underscores *between* word characters.
+// TestANSIUnderscoreIsNeverEmphasis pins that "_" renders as itself wherever it
+// is. In a model's answer an underscore at a word's edge belongs to an
+// identifier — __init__, _private, snake_case — and as emphasis it mangled the
+// name: __init__ came out as a bold "init". Models emphasise with "*". byChar
+// exercises it across chunk boundaries.
+func TestANSIUnderscoreIsNeverEmphasis(t *testing.T) {
 	for _, doc := range []string{
 		"ansi_text.go\n",
 		"a_b_c\n",
 		"snake_case_name\n",
 		"path/to/my_file_v2.py\n",
 		"var_1 x_2\n",
+		"__init__\n",
+		"call __init__ and _private_helper_ here\n",
+		"_em_\n",
 	} {
 		want := strings.TrimRight(doc, "\n")
-		if got := renderANSI(doc, false, false); !strings.Contains(got, want) {
-			t.Errorf("whole: %q rendered %q, want the underscores kept literal", doc, got)
-		}
-		if got := renderANSI(doc, false, true); !strings.Contains(got, want) {
-			t.Errorf("by char: %q rendered %q, want the underscores kept literal", doc, got)
+		for _, byChar := range []bool{false, true} {
+			got := renderANSI(doc, true, byChar)
+			if !strings.Contains(got, want) || strings.Contains(got, "\x1b[3m") || strings.Contains(got, "\x1b[1m") {
+				t.Errorf("byChar=%v: %q rendered %q, want the underscores literal and no emphasis", byChar, doc, got)
+			}
 		}
 	}
 }
 
-// TestANSIEmphasisStillWorks confirms boundary underscores and all asterisk
-// emphasis (including intraword "*", which CommonMark allows) still render.
-// color is on so the italic ("3") / bold ("1") SGR is observable.
-func TestANSIEmphasisStillWorks(t *testing.T) {
+// TestANSIAsteriskEmphasisStillWorks: "*" is how models emphasise, including
+// intraword, which CommonMark allows. color is on so the italic ("3") / bold
+// ("1") SGR is observable.
+func TestANSIAsteriskEmphasisStillWorks(t *testing.T) {
 	cases := map[string]string{
-		"_em_\n":      "\x1b[3m", // underscore italic at a word boundary
-		"foo _bar_\n": "\x1b[3m", // underscore italic after a space
-		"a *b* c\n":   "\x1b[3m", // asterisk italic
-		"x*y*z\n":     "\x1b[3m", // intraword asterisk IS emphasis
-		"__b__\n":     "\x1b[1m", // underscore bold at a boundary
+		"a *b* c\n":   "\x1b[3m",
+		"x*y*z\n":     "\x1b[3m",
+		"a **b** c\n": "\x1b[1m",
+		"_x_ **b**\n": "\x1b[1m",
 	}
 	for doc, want := range cases {
 		if got := renderANSI(doc, true, false); !strings.Contains(got, want) {

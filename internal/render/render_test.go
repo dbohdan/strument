@@ -207,8 +207,29 @@ func runCase(t *testing.T, tc smdCase, byChar bool) {
 	}
 }
 
+// departures are the smd.js cases Strument renders differently on purpose.
+// An underscore is never emphasis: in a model's answer it is an identifier's
+// (TestANSIUnderscoreIsNeverEmphasis has why).
+var departures = map[string]bool{
+	"Italic & Bold \"__bold_bold>em___'": true,
+	"Italic & Bold \"___bold>em_bold__'": true,
+	"Italic & Bold \"_em__em>bold___'":   true,
+	"Italic & Bold \"___bold>em__em_'":   true,
+	"Italic_Und":                         true,
+	"Italic_Und with Code":               true,
+	"Italic_Und new Paragraph":           true,
+	"Escape Italic_Und End":              true,
+	"Strong_Und":                         true,
+	"Strong_Und with Code":               true,
+	"Strong_Und new Paragraph":           true,
+	"Escape Strong_Und End":              true,
+}
+
 func TestSMDSuite(t *testing.T) {
 	for _, tc := range loadCases(t) {
+		if departures[tc.Title] {
+			continue
+		}
 		t.Run(tc.Title, func(t *testing.T) {
 			runCase(t, tc, false)
 		})

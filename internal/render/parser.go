@@ -33,7 +33,6 @@ type Parser struct {
 	hrChar        byte
 	hrChars       int
 	tableState    int
-	underBefore   rune // the character just before the current "_" run (0 = line/token boundary)
 }
 
 const tokenArrayCap = 24
@@ -291,23 +290,8 @@ func (p *Parser) writeChar(char rune) {
 	}
 
 	// No check hit.
-	if char == '_' {
-		// Capture the character before a "_" run so emphasis parsing can apply
-		// CommonMark's intraword rule. Captured here (as the "_" enters
-		// pending) it survives chunk splits like "ansi" | "_text".
-		p.underBefore = lastRune(p.pending)
-	}
 	p.text += p.pending
 	p.pending = string(char)
-}
-
-// lastRune returns the final rune of s, or 0 if s is empty.
-func lastRune(s string) rune {
-	last := rune(0)
-	for _, r := range s {
-		last = r
-	}
-	return last
 }
 
 // tokenChecks runs the token-specific arm of the state machine and reports
@@ -996,32 +980,29 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			return false
 		}
 
-		italic, strong := ItalicAst, StrongAst
-		symbol := rune(p.pending[0])
-		if symbol == '_' {
-			italic, strong = ItalicUnd, StrongUnd
+		// "_" is never emphasis here, only "*" is. In a model's answer an
+		// underscore at a word's edge is an identifier — __init__, _private,
+		// a snake_case name split across a line — and rendering it as italics
+		// or bold mangled the name every time. Models emphasise with "*".
+		// This departs from CommonMark and from aider, whose Rich renderer
+		// makes __init__ bold "init".
+		if p.pending[0] == '_' {
+			p.text += p.pending
+			p.pending = string(char)
+			return true
 		}
-
-		// An intraword "_" is not emphasis (CommonMark: "_" needs a
-		// non-word char before it to open). "*" has no such restriction, so
-		// this gates "_" only. `ansi_text.go` stays literal.
-		underword := symbol == '_' && isAlnum(p.underBefore)
+		italic, strong := ItalicAst, StrongAst
 
 		if len(p.pending) == 1 {
 			//	**Strong**
 			//	 ^
-			if symbol == char {
+			if char == '*' {
 				p.pending = pendingWithChar
 				return true
 			}
 			//	*Em*
 			//	 ^
 			if char != ' ' && char != '\n' {
-				if underword {
-					p.text += p.pending // the "_" is literal text
-					p.pending = string(char)
-					return true
-				}
 				p.addText()
 				p.addToken(italic)
 				p.pending = string(char)
@@ -1030,12 +1011,7 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 		} else {
 			//	***Strong->Em***
 			//	  ^
-			if symbol == char {
-				if underword {
-					p.text += pendingWithChar // "___" literal
-					p.pending = ""
-					return true
-				}
+			if char == '*' {
 				p.addText()
 				p.addToken(strong)
 				p.addToken(italic)
@@ -1045,11 +1021,6 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			//	**Strong**
 			//	  ^
 			if char != ' ' && char != '\n' {
-				if underword {
-					p.text += p.pending // "__" literal
-					p.pending = string(char)
-					return true
-				}
 				p.addText()
 				p.addToken(strong)
 				p.pending = string(char)
