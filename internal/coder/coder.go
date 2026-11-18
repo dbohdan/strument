@@ -333,7 +333,6 @@ type Coder struct {
 	turnSnap  *turnSnapshot
 	undoStack []*turnSnapshot
 
-	fence               fence
 	commitBeforeMessage []string
 	lastCommitHash      string
 	turnAutoApprove     map[string]bool // groups auto-approved for this turn
@@ -391,8 +390,6 @@ type Coder struct {
 	// outside are the run's grants for reading outside the project root.
 	outside outsideGrants
 }
-
-type fence struct{ open, close string }
 
 // Defaults for settings a config may omit. Named because ApplyConfig restores
 // them when a reloaded config stops saying, and a constructor that disagreed

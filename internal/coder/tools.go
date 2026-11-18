@@ -1287,7 +1287,6 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		return nil
 	}
 
-	fen := editblock.AllFences[0]
 	reader := diskReader{root: c.Root}
 	pending := map[string]string{}
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
@@ -1407,7 +1406,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 
 			ambiguous := occurrences > 1
 			if !ambiguous {
-				newContent, how, ok = editblock.DoReplace(e.path, content, exists, e.search, e.replace, fen)
+				newContent, how, ok = editblock.DoReplace(content, exists, e.search, e.replace)
 			}
 			if how == editblock.MatchAmbiguous {
 				// The line matcher found the run in several places. The raw
@@ -1417,7 +1416,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 				ambiguous = true
 			}
 			if ambiguous || !ok || newContent == "" {
-				results.setText(e.callID, toolMatchFailure(e, content, fen, ambiguous))
+				results.setText(e.callID, toolMatchFailure(e, content, ambiguous))
 				if ambiguous {
 					recordEdit(e, "ambiguous", "")
 				} else {
@@ -1553,7 +1552,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 
 // toolMatchFailure builds the tool result for an edit whose search didn't
 // match, including a did-you-mean when a near match exists.
-func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambiguous bool) string {
+func toolMatchFailure(e plannedEdit, content string, ambiguous bool) string {
 	var b strings.Builder
 
 	// Ambiguity and absence are different problems with different fixes, and
@@ -1596,8 +1595,8 @@ func toolMatchFailure(e plannedEdit, content string, fen editblock.Fence, ambigu
 	b.WriteString("It must match the current file contents exactly, character for character, " +
 		"including all whitespace, comments, and docstrings.\n")
 	if didYouMean := editblock.FindSimilarLines(e.search, content, 0.6); didYouMean != "" {
-		fmt.Fprintf(&b, "\nDid you mean to match these lines from %s?\n\n%s\n%s\n%s\n",
-			quoteToolArg(e.path), fen.Open, didYouMean, fen.Close)
+		fmt.Fprintf(&b, "\nDid you mean to match these lines from %s?\n\n%s",
+			quoteToolArg(e.path), fenced(didYouMean))
 	}
 	if e.replace != "" && strings.Contains(content, e.replace) {
 		fmt.Fprintf(&b, "\nThe replacement text is already present in %s; this edit may not be needed.\n", quoteToolArg(e.path))

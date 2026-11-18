@@ -14,26 +14,25 @@ import (
 	"testing"
 )
 
-func TestStripQuotedWrapping(t *testing.T) {
-	input := "filename.ext\n```\nWe just want this content\nNot the filename and triple quotes\n```"
-	want := "We just want this content\nNot the filename and triple quotes\n"
-	if got := StripQuotedWrapping(input, "filename.ext", DefaultFence); got != want {
-		t.Errorf("got %q", got)
+// The text is used as the model sent it. aider stripped a fence around the
+// whole text and a first line ending in the file's name, which suited
+// SEARCH/REPLACE blocks parsed out of prose and dropped real content from a
+// tool call: here, both fences of an appended Markdown block, and the first
+// line of a replacement found by the line matcher.
+func TestDoReplaceKeepsFencesAndFilenameLines(t *testing.T) {
+	block := "```sh\nmake\n```\n"
+	if got, how, ok := DoReplace("intro\n", true, "", block); !ok || how != MatchAppend || got != "intro\n"+block {
+		t.Errorf("append: got %q (%v, %v)", got, how, ok)
 	}
-}
-
-func TestStripQuotedWrappingNoFilename(t *testing.T) {
-	input := "```\nWe just want this content\nNot the triple quotes\n```"
-	want := "We just want this content\nNot the triple quotes\n"
-	if got := StripQuotedWrapping(input, "", DefaultFence); got != want {
-		t.Errorf("got %q", got)
+	// Indented differently from the file, so only the line matcher finds it.
+	content := "# Notes\n\n    old line\n    next line\n"
+	got, how, ok := DoReplace(content, true, "  old line\n  next line\n", "see notes.md\n```\nx\n```\n")
+	if !ok || how != MatchLines {
+		t.Fatalf("the line matcher did not apply the edit: %v, %v", how, ok)
 	}
-}
-
-func TestStripQuotedWrappingNoWrapping(t *testing.T) {
-	input := "We just want this content\nNot the triple quotes\n"
-	if got := StripQuotedWrapping(input, "", DefaultFence); got != input {
-		t.Errorf("got %q", got)
+	// Re-indented to fit the file, which is the matcher's job; nothing dropped.
+	if !strings.Contains(got, "see notes.md\n") || strings.Count(got, "```") != 2 {
+		t.Errorf("the replacement lost a line: %q", got)
 	}
 }
 
@@ -157,11 +156,10 @@ func TestDotDotDots(t *testing.T) {
 // told the text was not in a file that plainly contained it. Found live with
 // MiMo-V2.5, which lost three edits of four that way.
 func TestDoReplaceMatchesASubstring(t *testing.T) {
-	fence := Fence{Open: "```", Close: "```"}
 	const content = "Version 3B kept the script but asked the agent to add two seconds\n" +
 		"to every shot with dialogue as a crude fix for dialog clipping.\n"
 
-	got, how, ok := DoReplace("notes.md", content, true, "dialog clipping", "dialogue clipping", fence)
+	got, how, ok := DoReplace(content, true, "dialog clipping", "dialogue clipping")
 	if !ok {
 		t.Fatal("a substring inside a line must match")
 	}
@@ -181,13 +179,12 @@ func TestDoReplaceMatchesASubstring(t *testing.T) {
 // matches is a coin flip on the model's behalf. Declining is the stricter
 // choice, and CountOccurrences lets the caller say why.
 func TestDoReplaceDeclinesAnAmbiguousSubstring(t *testing.T) {
-	fence := Fence{Open: "```", Close: "```"}
 	const content = "alpha here\nbeta there\nalpha again\n"
 
 	if n := CountOccurrences(content, "alpha"); n != 2 {
 		t.Errorf("CountOccurrences = %d, want 2", n)
 	}
-	if got, how, ok := DoReplace("f.txt", content, true, "alpha", "ALPHA", fence); ok {
+	if got, how, ok := DoReplace(content, true, "alpha", "ALPHA"); ok {
 		t.Errorf("an ambiguous substring must not be replaced, got %q (%v)", got, how)
 	}
 }
@@ -196,10 +193,9 @@ func TestDoReplaceDeclinesAnAmbiguousSubstring(t *testing.T) {
 // when whitespace drifted — the substring path is an addition, not a
 // replacement.
 func TestDoReplaceStillMatchesWholeLines(t *testing.T) {
-	fence := Fence{Open: "```", Close: "```"}
 	const content = "func main() {\n    println(\"hi\")\n}\n"
 
-	got, how, ok := DoReplace("m.go", content, true, "    println(\"hi\")\n", "    println(\"bye\")\n", fence)
+	got, how, ok := DoReplace(content, true, "    println(\"hi\")\n", "    println(\"bye\")\n")
 	if !ok {
 		t.Fatal("a whole-line search must still match")
 	}
@@ -217,11 +213,10 @@ func TestDoReplaceStillMatchesWholeLines(t *testing.T) {
 // indentation — four spaces where the file has a tab — so it occurs nowhere
 // verbatim and only the line matcher can place it.
 func TestDoReplaceReportsTheFuzzyTier(t *testing.T) {
-	fence := Fence{Open: "```", Close: "```"}
 	const content = "func main() {\n\tprintln(\"hi\")\n}\n"
 
-	got, how, ok := DoReplace("m.go", content, true,
-		"    println(\"hi\")\n", "    println(\"bye\")\n", fence)
+	got, how, ok := DoReplace(content, true,
+		"    println(\"hi\")\n", "    println(\"bye\")\n")
 	if !ok {
 		t.Fatal("the whitespace-tolerant matcher must still place this line")
 	}

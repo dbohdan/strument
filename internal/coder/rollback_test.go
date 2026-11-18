@@ -5,11 +5,10 @@
 // and snapshot edits that did not happen.
 //
 // Note the write failure is forced by making a target's parent a regular file.
-// Reached by calling applyToolEdits directly: the full Run path's chooseFence
-// drops unreadable chat files first, and this container runs as root so
-// permission tricks are no-ops — writeAtomically is the last-resort net for
-// failures the upstream guards can't foresee (a create/rename race, a full
-// disk).
+// Reached by calling applyToolEdits directly, and with a regular file rather
+// than permissions because tests may run as root, where permission tricks are
+// no-ops. writeAtomically is the last-resort net for failures the upstream
+// guards can't foresee (a create/rename race, a full disk).
 //
 // The batch used to arrive as whole-file text listings; it now arrives as write
 // tool calls. The invariant is unchanged, and so is the rule the third
@@ -37,7 +36,6 @@ func toolCoder(t *testing.T, dir string) *Coder {
 	c := New(dir, model)
 	c.Confirm = yesConfirmer{}
 	c.Out = testOutput{t}
-	c.fence = fence{open: "```", close: "```"} // set directly; Run's chooseFence is skipped
 	return c
 }
 

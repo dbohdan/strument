@@ -1136,3 +1136,29 @@ func TestRenewedBudgetKeepsTheTurnsStepCount(t *testing.T) {
 		t.Errorf("the turn record says %d steps, want %d", steps, 2*env.coder.MaxSteps)
 	}
 }
+
+// An edit's text goes into the file as the model sent it. aider's
+// normalization for SEARCH/REPLACE blocks parsed out of prose stripped a fence
+// around the whole text, and an edit appending a fenced block to a Markdown
+// file wrote the block's one line, dropped both fences, and reported success.
+func TestAnAppendedFencedBlockKeepsItsFences(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "log.md"), []byte("intro\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	block := "```sh\nmake\n```\n"
+	c.Client = &fixture.StreamStub{Turns: []fixture.Turn{
+		{Events: []fixture.Event{{Kind: "ToolCall", ToolIndex: 0, ToolID: "e1", ToolName: toolEdit,
+			ToolArgs: `{"path":"log.md","old_string":"","new_string":` + jsonString(block) + `}`}}},
+		answer("Done."),
+	}}
+	c.Run(context.Background(), "append the build command")
+	got, err := os.ReadFile(filepath.Join(dir, "log.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "intro\n"+block {
+		t.Errorf("log.md is %q, want the block appended whole", got)
+	}
+}

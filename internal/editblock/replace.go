@@ -1,7 +1,6 @@
 package editblock
 
 import (
-	"path"
 	"regexp"
 	"strings"
 	"unicode"
@@ -307,34 +306,6 @@ type strError string
 
 func (e strError) Error() string { return string(e) }
 
-// StripQuotedWrapping removes a redundant filename line and fence pair the
-// model sometimes wraps around a section.
-func StripQuotedWrapping(res, fname string, fence Fence) string {
-	if res == "" {
-		return res
-	}
-
-	lines := splitLinesNoEnds(res)
-
-	if fname != "" && len(lines) > 0 && strings.HasSuffix(strings.TrimSpace(lines[0]), pathBase(fname)) {
-		lines = lines[1:]
-	}
-
-	if len(lines) > 0 && strings.HasPrefix(lines[0], fence.Open) && strings.HasPrefix(lines[len(lines)-1], fence.Close) {
-		if len(lines) <= 2 {
-			lines = nil
-		} else {
-			lines = lines[1 : len(lines)-1]
-		}
-	}
-
-	out := strings.Join(lines, "\n")
-	if out != "" && !strings.HasSuffix(out, "\n") {
-		out += "\n"
-	}
-	return out
-}
-
 // splitLinesNoEnds is Python str.splitlines() without keepends: each line
 // loses exactly its one trailing separator.
 func splitLinesNoEnds(s string) []string {
@@ -356,21 +327,19 @@ func splitLinesNoEnds(s string) []string {
 	return out
 }
 
-// DoReplace ports do_replace: strip wrapping, then create/append/replace.
-// exists says whether the target file already exists;
-// content is its current text ("" for a new file).
-func DoReplace(fname string, content string, exists bool, beforeText, afterText string, fence Fence) (string, Match, bool) {
-	// The arguments as the model wrote them. StripQuotedWrapping below is
-	// aider's normalization for prose-parsed blocks: it drops a filename line
-	// and a fence, and — the part that matters here — appends a trailing
-	// newline to anything without one, because every line of a SEARCH block has
-	// one. That coercion is what a substring match cannot survive, so the exact
-	// path below uses the text untouched.
-	rawBefore, rawAfter := beforeText, afterText
-
-	beforeText = StripQuotedWrapping(beforeText, fname, fence)
-	afterText = StripQuotedWrapping(afterText, fname, fence)
-
+// DoReplace replaces beforeText with afterText in content: as an exact unique
+// substring if it is one, else by aider's line matcher. An empty beforeText
+// creates the file, when it does not exist, or appends to it. exists says
+// whether the file exists; content is its current text ("" for a new file).
+//
+// The text is used as the model sent it. aider ran both sides through
+// strip_quoted_wrapping, which drops a fence around the whole text and a
+// first line ending in the file's name: it was written for SEARCH/REPLACE
+// blocks parsed out of prose, where those were wrapping. A tool call's
+// arguments are never wrapped, so what it dropped was content — a fenced
+// block appended to a Markdown file lost both fences, and the edit reported
+// success.
+func DoReplace(content string, exists bool, beforeText, afterText string) (string, Match, bool) {
 	if !exists && strings.TrimSpace(beforeText) == "" {
 		// New file.
 		content = ""
@@ -400,8 +369,8 @@ func DoReplace(fname string, content string, exists bool, beforeText, afterText 
 	// than looser: the line matcher takes the first run that matches, while an
 	// ambiguous substring here declines and asks for more context. A caller can
 	// tell the two failures apart with CountOccurrences.
-	if rawBefore != "" && strings.Count(content, rawBefore) == 1 {
-		return strings.Replace(content, rawBefore, rawAfter, 1), MatchExact, true
+	if strings.Count(content, beforeText) == 1 {
+		return strings.Replace(content, beforeText, afterText, 1), MatchExact, true
 	}
 
 	newContent, ambiguous, ok := ReplaceMostSimilarChunk(content, beforeText, afterText)
@@ -468,13 +437,6 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
-}
-
-// pathBase is Python's Path(p).name: the final component, treating both
-// separators (pathlib on POSIX only splits on "/", but valid_fnames are
-// repo-relative forward-slashed paths, so path.Base fits).
-func pathBase(p string) string {
-	return path.Base(strings.ReplaceAll(p, "\\", "/"))
 }
 
 // Match names how DoReplace found the text it replaced. The distinction is
