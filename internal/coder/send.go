@@ -168,7 +168,7 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 	defer func() {
 		elapsed := c.Clock.Now().Sub(started)
 		usage.modelTime += elapsed
-		c.messageModelTime += elapsed
+		c.usage.modelTime += elapsed
 		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed, estimated)
 	}()
 
@@ -192,13 +192,13 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 		}
 		switch ev.Kind {
 		case llm.EventAnswer:
-			c.partialResponseContent += ev.Text
+			c.stream.response += ev.Text
 			c.Out.StreamText(ev.Text)
 			if loops.feed(loopAnswer, ev.Text) != nil {
 				return resLooping, nil
 			}
 		case llm.EventReasoning:
-			c.partialReasoningContent += ev.Text
+			c.stream.reasoning += ev.Text
 			c.Out.StreamReasoning(ev.Text)
 			if loops.feed(loopReasoning, ev.Text) != nil {
 				return resLooping, nil
@@ -335,7 +335,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	}
 
 	// --- Stream ---
-	c.multiResponseContent = "" // per-send reset (H1)
+	c.stream.multi = "" // per-send reset (H1)
 
 	usage := &sendUsage{estSent: c.countMessages(messages) + c.countTools()}
 	defer c.finalizeUsage(usage)
@@ -360,10 +360,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	foldedForOverflow := false
 
 	for {
-		c.partialResponseContent = ""
-		c.partialReasoningContent = ""
-		c.partialToolCalls = nil
-		c.toolCallIndex = map[int]int{}
+		c.stream.response = ""
+		c.stream.reasoning = ""
+		c.stream.toolCalls = nil
+		c.stream.toolCallIndex = map[int]int{}
 
 		res, streamErr := c.streamOnce(ctx, "turn", c.buildRequest(messages), usage, loops)
 		// Per stream, not sticky: a continuation that completes normally leaves
@@ -373,7 +373,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 		if res == resFailed {
 			// A retryable error backs off and retries (the partial is discarded
-			// at the loop top; accumulated multiResponseContent is untouched);
+			// at the loop top; accumulated stream.multi is untouched);
 			// anything else is a hard failure.
 			if backoff.retry(ctx, c.Out, c.Clock, streamErr) {
 				continue
@@ -403,11 +403,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 				break
 			}
 			// Stitch: accumulated + current partial becomes the prefill.
-			c.multiResponseContent += c.partialResponseContent
+			c.stream.multi += c.stream.response
 			if n := len(messages); n > 0 && messages[n-1].Role == "assistant" {
-				messages[n-1] = llm.TextMessage("assistant", c.multiResponseContent)
+				messages[n-1] = llm.TextMessage("assistant", c.stream.multi)
 			} else {
-				messages = append(messages, llm.TextMessage("assistant", c.multiResponseContent))
+				messages = append(messages, llm.TextMessage("assistant", c.stream.multi))
 			}
 			continue
 		}
@@ -431,26 +431,26 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// the retries, and the user wants them to stop, not a "what now?" about a
 	// reply that never began, nor a note about one in the conversation.
 	stoppedBeforeReply := interrupted && c.turnSends == 1 &&
-		c.multiResponseContent == "" && c.partialResponseContent == "" &&
-		len(c.partialToolCalls) == 0 && strings.TrimSpace(c.partialReasoningContent) == ""
+		c.stream.multi == "" && c.stream.response == "" &&
+		len(c.stream.toolCalls) == 0 && strings.TrimSpace(c.stream.reasoning) == ""
 	usage.stopped = stoppedBeforeReply
 
 	// --- Finally (always runs) ---
 	c.Out.FlushStream()
-	answer := c.multiResponseContent + c.partialResponseContent
+	answer := c.stream.multi + c.stream.response
 	answer = stripReasoning(answer, c.Model.ReasoningTag)
-	c.partialResponseContent = answer
-	c.multiResponseContent = ""
+	c.stream.response = answer
+	c.stream.multi = ""
 
 	// --- Post-stream dispatch ---
 	c.finalizeUsage(usage)
 
-	if answer != "" || len(c.partialToolCalls) > 0 {
+	if answer != "" || len(c.stream.toolCalls) > 0 {
 		msg := llm.TextMessage("assistant", answer)
 		msg.Model = c.Model.Slug
-		if len(c.partialToolCalls) > 0 {
-			fillToolCalls(c.partialToolCalls, len(c.doneMessages)+len(c.curMessages))
-			msg.ToolCalls = c.partialToolCalls
+		if len(c.stream.toolCalls) > 0 {
+			fillToolCalls(c.stream.toolCalls, len(c.doneMessages)+len(c.curMessages))
+			msg.ToolCalls = c.stream.toolCalls
 		}
 		c.curMessages = append(c.curMessages, msg)
 	}
@@ -531,11 +531,11 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 		return OutcomeLooping, ""
 	}
 
-	if !interrupted && answer == "" && len(c.partialToolCalls) == 0 {
+	if !interrupted && answer == "" && len(c.stream.toolCalls) == 0 {
 		dropUserTurn()
 		// "Empty" is the wrong word when the model filled its whole budget and
 		// the reply went out through the wrong channel; see reasoningLeak.
-		switch marker, leaked := reasoningLeak(answer, c.partialReasoningContent, len(c.partialToolCalls)); {
+		switch marker, leaked := reasoningLeak(answer, c.stream.reasoning, len(c.stream.toolCalls)); {
 		case leaked:
 			// Neither half of this is the harness's to adjudicate, and an
 			// earlier version tried: it told the user the parser was at fault
@@ -549,7 +549,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			c.Out.Warningf("  A chat template that opens `<think>` for the model leaves it to close " +
 				"the block before acting, and smaller models close it late more often. With " +
 				"llama.cpp, check the template's thinking option.")
-		case strings.TrimSpace(c.partialReasoningContent) != "":
+		case strings.TrimSpace(c.stream.reasoning) != "":
 			c.Out.Warningf("The model returned reasoning but no answer and no tool call.")
 		default:
 			c.Out.Warningf("The model returned an empty response.")
@@ -639,7 +639,7 @@ func (c *Coder) noteLoop(f *loopFinding) {
 // stopped part-way. Telling the model the other story would have it repeat work
 // that already happened, or distrust a result that is real.
 func (c *Coder) noteToolInterrupt() {
-	c.partialToolCalls = nil
+	c.stream.toolCalls = nil
 	c.curMessages = append(c.curMessages, llm.HarnessNote(
 		"The user pressed Ctrl-C while your tool calls were running. Their results "+
 			"above are real as far as they got, and a command that was stopped says so "+
@@ -659,7 +659,7 @@ func (c *Coder) noteToolInterrupt() {
 // The message's text survives. Only an assistant message can carry tool calls,
 // so this looks at one message and only when it is the last.
 func (c *Coder) dropPartialToolCalls() {
-	c.partialToolCalls = nil
+	c.stream.toolCalls = nil
 	n := len(c.curMessages)
 	if n == 0 {
 		return
@@ -960,7 +960,7 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	//	Tokens: 735 sent, 0 received. (estimated)
 	//
 	// under a 401, which reads as a charge for the failure. Returning before
-	// the counters means messageSends stays 0 and flushTurnUsage says nothing
+	// the counters means usage.sends stays 0 and flushTurnUsage says nothing
 	// at all, which is the honest report.
 	//
 	// A stream that produced text before it broke is a different case: those
@@ -982,12 +982,12 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 
 	// Accumulate into the turn rather than assign: a turn is many sends, and the
 	// line that reports it is printed once, at the end.
-	c.messageSends++
-	c.messageTokensSent += sent
-	c.messageTokensReceived += received
-	c.messageCacheRead += u.cacheRead
-	c.messageCacheWrite += u.cacheWrite
-	c.messageEstimated = c.messageEstimated || estimated
+	c.usage.sends++
+	c.usage.sent += sent
+	c.usage.received += received
+	c.usage.cacheRead += u.cacheRead
+	c.usage.cacheWrite += u.cacheWrite
+	c.usage.estimated = c.usage.estimated || estimated
 	c.totalTokensSent += sent
 	c.totalTokensReceived += received
 	c.peakTokensSent = max(c.peakTokensSent, sent)
@@ -1022,9 +1022,9 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 	}
 
 	if known {
-		c.messageCost += cost
+		c.usage.cost += cost
 		c.totalCost += cost
-		c.costKnown = true
+		c.usage.costKnown = true
 		c.runKnown = true
 		report += fmt.Sprintf(" Cost: $%s message, $%s run.", formatCost(cost), formatCost(c.totalCost))
 	}
@@ -1032,15 +1032,15 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 		report += " (estimated)"
 	}
 
-	c.lastUsageReport = report
+	c.usage.lastReport = report
 }
 
 // messageUsageReport builds the accounting line from the message-scoped totals
 // — the token breakdown, the cost, and the estimated marker — for a whole turn.
 func (c *Coder) messageUsageReport(label, prefix string) string {
-	return usageReport(label, prefix, c.messageTokensSent, c.messageCacheWrite,
-		c.messageCacheRead, c.messageTokensReceived, c.messageModelTime, c.messageCost,
-		c.costKnown, c.totalCost, c.messageEstimated)
+	return usageReport(label, prefix, c.usage.sent, c.usage.cacheWrite,
+		c.usage.cacheRead, c.usage.received, c.usage.modelTime, c.usage.cost,
+		c.usage.costKnown, c.totalCost, c.usage.estimated)
 }
 
 func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int,
@@ -1144,10 +1144,10 @@ func tokenRate(received int, modelTime time.Duration) string {
 // turnProgress is the step count, which is worth saying once it is not being
 // said on every step.
 func (c *Coder) flushTurnUsage() {
-	if c.messageSends == 0 {
+	if c.usage.sends == 0 {
 		return // an empty turn has no accounting
 	}
-	c.messageSends = 0 // idempotent: never report the same turn twice
+	c.usage.sends = 0 // idempotent: never report the same turn twice
 
 	report := c.messageUsageReport("turn", "") + c.turnSummary()
 
@@ -1172,13 +1172,13 @@ func (c *Coder) flushTurnUsage() {
 		Slug:      c.Model.Slug,
 		Outcome:   c.turnOutcome(),
 		Steps:     c.turnSteps,
-		Sent:      c.messageTokensSent,
-		Received:  c.messageTokensReceived,
-		Cost:      c.messageCost,
-		CostKnown: c.costKnown,
+		Sent:      c.usage.sent,
+		Received:  c.usage.received,
+		Cost:      c.usage.cost,
+		CostKnown: c.usage.costKnown,
 		// From the same two numbers the usage line above divides, so the row
 		// and the screen cannot disagree.
-		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),
+		TokensPerSecond: tokenRateValue(c.usage.received, c.usage.modelTime),
 		EditsExact:      c.editsExact,
 		EditsFuzzy:      c.editsFuzzy,
 		Files:           c.TurnEditedFiles(),
@@ -1221,17 +1221,17 @@ func (c *Coder) reportUsage(steps, filesChanged int) {
 	u := TurnUsage{
 		Model:           c.Model.QualifiedSlug(),
 		Provider:        config.ProviderName(c.Model),
-		TokensSent:      c.messageTokensSent,
-		TokensRecv:      c.messageTokensReceived,
-		CacheRead:       c.messageCacheRead,
-		CacheWrite:      c.messageCacheWrite,
-		Estimated:       c.messageEstimated,
+		TokensSent:      c.usage.sent,
+		TokensRecv:      c.usage.received,
+		CacheRead:       c.usage.cacheRead,
+		CacheWrite:      c.usage.cacheWrite,
+		Estimated:       c.usage.estimated,
 		Steps:           steps,
 		FilesChanged:    filesChanged,
-		TokensPerSecond: tokenRateValue(c.messageTokensReceived, c.messageModelTime),
+		TokensPerSecond: tokenRateValue(c.usage.received, c.usage.modelTime),
 	}
-	if c.costKnown {
-		cost := c.messageCost
+	if c.usage.costKnown {
+		cost := c.usage.cost
 		u.Cost = &cost
 	}
 	c.RecordUsage(u)
@@ -1265,7 +1265,7 @@ type TurnUsage struct {
 // the current partial answer and reasoning — used to estimate received tokens
 // when the provider's usage never arrived.
 func (c *Coder) streamedText() string {
-	return c.multiResponseContent + c.partialResponseContent + c.partialReasoningContent
+	return c.stream.multi + c.stream.response + c.stream.reasoning
 }
 
 func formatTokens(n int) string {

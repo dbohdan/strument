@@ -9,7 +9,6 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -249,77 +248,28 @@ func (c *Coder) runConsult(ctx context.Context, cc consultCall) string {
 		cc.alias, cm.Model.QualifiedSlug(), fenced(answer))
 }
 
-// sideState is what a side call overwrites: the stream's transient fields and
-// the message-scoped usage, which a turn in progress still needs.
-type sideState struct {
-	client        llm.ModelClient
-	model         *config.Model
-	response      string
-	reasoning     string
-	toolCalls     []llm.ToolCall
-	toolCallIndex map[int]int
-	multi         string
-
-	cost       float64
-	costKnown  bool
-	sent       int
-	received   int
-	cacheRead  int
-	cacheWrite int
-	estimated  bool
-	sends      int
-	modelTime  time.Duration
-	report     string
-}
-
-func (c *Coder) saveSideState() sideState {
-	return sideState{
-		client: c.Client, model: c.Model,
-		response: c.partialResponseContent, reasoning: c.partialReasoningContent,
-		toolCalls: c.partialToolCalls, toolCallIndex: c.toolCallIndex, multi: c.multiResponseContent,
-		cost: c.messageCost, costKnown: c.costKnown,
-		sent: c.messageTokensSent, received: c.messageTokensReceived,
-		cacheRead: c.messageCacheRead, cacheWrite: c.messageCacheWrite,
-		estimated: c.messageEstimated, sends: c.messageSends, modelTime: c.messageModelTime,
-		report: c.lastUsageReport,
-	}
-}
-
-func (c *Coder) restoreSideState(s sideState) {
-	c.Client, c.Model = s.client, s.model
-	c.partialResponseContent, c.partialReasoningContent = s.response, s.reasoning
-	c.partialToolCalls, c.toolCallIndex, c.multiResponseContent = s.toolCalls, s.toolCallIndex, s.multi
-	c.messageCost, c.costKnown = s.cost, s.costKnown
-	c.messageTokensSent, c.messageTokensReceived = s.sent, s.received
-	c.messageCacheRead, c.messageCacheWrite = s.cacheRead, s.cacheWrite
-	c.messageEstimated, c.messageSends, c.messageModelTime = s.estimated, s.sends, s.modelTime
-	c.lastUsageReport = s.report
-}
-
 // sideCallWithin runs a side call in the middle of a turn, under another
 // model, and leaves the turn as it found it.
 //
-// runSide streams through the same fields a turn's step does, and the tool
-// calls being answered are among them: appendToolResults walks
-// partialToolCalls after this returns, so a side call that cleared it would
-// leave every call in the step without a result. The usage is saved for the
-// same reason from the other side. The consult's own tokens and cost are
+// runSide streams through the same state a turn's step does, and the tool
+// calls being answered are part of it: appendToolResults walks
+// stream.toolCalls after this returns, so a side call that cleared them would
+// leave every call in the step without a result. The usage is set aside for
+// the same reason from the other side. The consult's own tokens and cost are
 // reported as their own row, under the consulted model, and the turn's
 // message totals come back untouched for the turn's own row; the run total
 // keeps both.
 func (c *Coder) sideCallWithin(ctx context.Context, client llm.ModelClient, model *config.Model, prompt string,
 	frame sideFrame,
 ) string {
-	saved := c.saveSideState()
-	defer c.restoreSideState(saved)
+	savedClient, savedModel, savedStream, savedUsage := c.Client, c.Model, c.stream, c.usage
+	defer func() {
+		c.Client, c.Model, c.stream, c.usage = savedClient, savedModel, savedStream, savedUsage
+	}()
 
 	c.Client, c.Model = client, model
-	c.partialToolCalls, c.toolCallIndex = nil, map[int]int{}
-	c.messageCost, c.costKnown = 0, false
-	c.messageTokensSent, c.messageTokensReceived = 0, 0
-	c.messageCacheRead, c.messageCacheWrite = 0, 0
-	c.messageEstimated, c.messageSends, c.messageModelTime = false, 0, 0
-	c.lastUsageReport = ""
+	c.stream = streamState{toolCallIndex: map[int]int{}}
+	c.usage = messageUsage{}
 	return c.runSide(ctx, toolConsult, prompt, frame)
 }
 

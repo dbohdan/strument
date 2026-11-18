@@ -216,11 +216,11 @@ func TestNativeReasoningNeverReachesAnswer(t *testing.T) {
 `)
 	env := setupScenario(t, sc, func(c *Coder) { c.Model.ReasoningTag = "think" })
 	env.run(t)
-	if env.coder.partialResponseContent != "public" {
-		t.Errorf("answer = %q", env.coder.partialResponseContent)
+	if env.coder.stream.response != "public" {
+		t.Errorf("answer = %q", env.coder.stream.response)
 	}
-	if env.coder.partialReasoningContent != "private" {
-		t.Errorf("reasoning buffer = %q", env.coder.partialReasoningContent)
+	if env.coder.stream.reasoning != "private" {
+		t.Errorf("reasoning buffer = %q", env.coder.stream.reasoning)
 	}
 	hist := history(env.coder)
 	if len(hist) != 2 || hist[1].Text() != "public" {

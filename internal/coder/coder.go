@@ -263,10 +263,10 @@ type Coder struct {
 	sendMu     sync.Mutex
 	cancelSend context.CancelFunc
 
-	// Send-scoped buffers.
-	partialResponseContent  string
-	partialReasoningContent string
-	multiResponseContent    string
+	// stream is what the send in flight has received so far. A side call
+	// streams through the same fields, so it swaps in its own and puts this
+	// one back after (sideCallWithin).
+	stream streamState
 
 	// turnHistory accumulates content from interrupted sends so the
 	// transcript records the full arc of a steered turn — what the model
@@ -275,15 +275,12 @@ type Coder struct {
 	// each turn; accumulated in runOne between sends.
 	turnHistory string
 
-	// Send-scoped tool-call accumulation, in first-seen index order.
-	partialToolCalls []llm.ToolCall
 	// hitOutputLimit records that the last stream of this send ended on
 	// finish_reason=length. It is read only when a tool call's arguments also
 	// fail to parse, which together mean the call was cut off mid-argument —
 	// a different thing to tell the model than "your JSON was malformed", and
 	// the one that suggests the fix.
 	hitOutputLimit bool
-	toolCallIndex  map[int]int
 
 	// resumeInPlace makes the next send re-enter on what is already in
 	// curMessages, without adding a user turn for it.
@@ -296,28 +293,17 @@ type Coder struct {
 	// on the wire and cost a turn's worth of confusion.
 	resumeInPlace bool
 
-	// The message* fields are the *turn's* running totals, accumulated across
-	// every send in it and reset by initBeforeMessage. They used to be assigned
-	// per send, which made "Cost so far" at the step checkpoint report only the
-	// last one — a turn of twelve sends showed the cost of the twelfth.
-	messageCost float64
+	// usage is the *message's* running totals: a turn's, accumulated across
+	// every send in it and reset by initBeforeMessage, or a side call's while
+	// it runs. They used to be assigned per send, which made "Cost so far" at
+	// the step checkpoint report only the last one — a turn of twelve sends
+	// showed the cost of the twelfth.
+	usage messageUsage
 	// totalCost is the run's: this process's, not the session's. The usage
 	// line labels it "run" for that reason, since a session continued across
 	// processes starts it from zero each time.
-	totalCost             float64
-	costKnown             bool // in-band or priced cost seen this turn
-	runKnown              bool
-	messageTokensSent     int
-	messageTokensReceived int
-	messageCacheRead      int
-	messageCacheWrite     int
-	messageEstimated      bool // any send in this turn fell back to an estimate
-	messageSends          int
-	// messageModelTime is how long this turn spent waiting on the model:
-	// the sum of each send's request-to-last-byte, and nothing else. Tool
-	// execution, edits, confirmation prompts and the user's own thinking all
-	// happen between sends and are excluded by construction.
-	messageModelTime    time.Duration
+	totalCost           float64
+	runKnown            bool
 	totalTokensSent     int
 	totalTokensReceived int
 	// peakTokensSent is the largest single request this session. The session
@@ -325,8 +311,7 @@ type Coder struct {
 	// what fills the window: a five-step turn re-sends its whole conversation
 	// each time, so the total can be several times the largest prompt in it.
 	// Only the peak says how close the window came to full.
-	peakTokensSent  int
-	lastUsageReport string // the last send's line, as finalizeUsage built it
+	peakTokensSent int
 
 	// turnSnap accumulates what this turn has written; pushed onto undoStack at
 	// turn end. The stack is the undo substrate that works without git.
@@ -561,15 +546,7 @@ func (c *Coder) initBeforeMessage() {
 	}
 	c.editedSinceCheck = false
 	c.turnSnap = nil
-	c.messageCost = 0
-	c.costKnown = false
-	c.messageTokensSent = 0
-	c.messageTokensReceived = 0
-	c.messageCacheRead = 0
-	c.messageCacheWrite = 0
-	c.messageEstimated = false
-	c.messageSends = 0
-	c.messageModelTime = 0
+	c.usage = messageUsage{}
 	if c.Repo != nil {
 		c.commitBeforeMessage = append(c.commitBeforeMessage, c.Repo.HeadSHA())
 	}
@@ -674,7 +651,7 @@ func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
 // must agree. It is what a reader of the record compares against what was on
 // the screen.
 func (c *Coder) turnAnswer() string {
-	return c.turnHistory + c.multiResponseContent + c.partialResponseContent
+	return c.turnHistory + c.stream.multi + c.stream.response
 }
 
 // runOne is the turn loop. It keeps sending while the model has something to
@@ -805,8 +782,8 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 // choosing "Continue" (which carries no user text). A blockquote prefix makes
 // the authorship unambiguous in the markdown transcript.
 func (c *Coder) accumulateInterrupt(steer string) {
-	if c.partialResponseContent != "" {
-		c.turnHistory += c.partialResponseContent + "\n\n"
+	if c.stream.response != "" {
+		c.turnHistory += c.stream.response + "\n\n"
 	}
 	if steer != "" {
 		c.turnHistory += "> " + strings.ReplaceAll(steer, "\n", "\n> ") + "\n\n"
@@ -1062,8 +1039,8 @@ func (c *Coder) confirmMoreSteps() bool {
 		noun = "file"
 	}
 	c.Out.Printf("This turn has run %s and edited %d %s.", render.Plural(c.turnSteps, "step", "steps"), files, noun)
-	if c.costKnown {
-		c.Out.Printf("Cost so far: $%s.", formatCost(c.messageCost))
+	if c.usage.costKnown {
+		c.Out.Printf("Cost so far: $%s.", formatCost(c.usage.cost))
 	}
 
 	res := c.Confirm.Confirm(ConfirmRequest{Prompt: "Keep going?", Grant: GrantSteps})

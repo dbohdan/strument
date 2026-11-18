@@ -29,7 +29,7 @@ func TestInterruptDropsPartialToolCalls(t *testing.T) {
 			ToolCalls: []llm.ToolCall{{ID: "call_1", Name: "edit", Arguments: `{"path":"a.go","old`}},
 		},
 	}
-	c.partialToolCalls = []llm.ToolCall{{ID: "call_1", Name: "edit"}}
+	c.stream.toolCalls = []llm.ToolCall{{ID: "call_1", Name: "edit"}}
 
 	c.noteInterrupt()
 
@@ -38,8 +38,8 @@ func TestInterruptDropsPartialToolCalls(t *testing.T) {
 			t.Fatalf("message %d (%s) still carries %d tool call(s)", i, m.Role, len(m.ToolCalls))
 		}
 	}
-	if c.partialToolCalls != nil {
-		t.Error("partialToolCalls survived the interrupt")
+	if c.stream.toolCalls != nil {
+		t.Error("stream.toolCalls survived the interrupt")
 	}
 	// The words the model did produce are its own and stay.
 	if got := c.curMessages[1].Text(); got != "I'll start by" {

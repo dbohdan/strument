@@ -77,8 +77,8 @@ func TestContinuationStitch(t *testing.T) {
 		return nil
 	}
 	env.run(t)
-	if env.coder.partialResponseContent != "part1 part2" {
-		t.Errorf("stitched answer = %q", env.coder.partialResponseContent)
+	if env.coder.stream.response != "part1 part2" {
+		t.Errorf("stitched answer = %q", env.coder.stream.response)
 	}
 	if len(prefills) != 1 || prefills[0] != "part1" {
 		t.Errorf("prefills = %q", prefills)
@@ -115,8 +115,8 @@ func TestSecondContinuationReplacesPrefill(t *testing.T) {
 	if assistantCounts[2] != 1 {
 		t.Errorf("turn 3 has %d prefill messages, want 1", assistantCounts[2])
 	}
-	if env.coder.partialResponseContent != "ABC" {
-		t.Errorf("answer = %q", env.coder.partialResponseContent)
+	if env.coder.stream.response != "ABC" {
+		t.Errorf("answer = %q", env.coder.stream.response)
 	}
 }
 
@@ -201,9 +201,9 @@ func TestPrefillFollowsModelSwitch(t *testing.T) {
 			c.SetModel(&continues)
 		})
 		env.run(t)
-		if env.coder.partialResponseContent != "partial rest" {
+		if env.coder.stream.response != "partial rest" {
 			t.Errorf("stitched answer = %q; `prefill = True` on the switched-to model did not reach the send",
-				env.coder.partialResponseContent)
+				env.coder.stream.response)
 		}
 	})
 }
@@ -219,8 +219,8 @@ func TestRetryDiscardsPartialAndSumsUsage(t *testing.T) {
 	clock := &fastClock{}
 	env := setupScenario(t, sc, func(c *Coder) { c.Clock = clock })
 	env.run(t)
-	if env.coder.partialResponseContent != "clean" {
-		t.Errorf("answer = %q (retry must discard the partial)", env.coder.partialResponseContent)
+	if env.coder.stream.response != "clean" {
+		t.Errorf("answer = %q (retry must discard the partial)", env.coder.stream.response)
 	}
 	// First real sleep is 0.25s (delay doubles before sleeping).
 	if len(clock.slept) != 1 || clock.slept[0] != 250*time.Millisecond {
@@ -337,11 +337,11 @@ func TestStaleAccumulatorRegression(t *testing.T) {
 	// continuation to happen at all before it can check what it leaves behind.
 	env := setupScenario(t, sc, func(c *Coder) { c.Model.Prefill = true })
 	env.run(t)
-	if env.coder.partialResponseContent != "understood, no edit" {
-		t.Errorf("final answer = %q (stale accumulator?)", env.coder.partialResponseContent)
+	if env.coder.stream.response != "understood, no edit" {
+		t.Errorf("final answer = %q (stale accumulator?)", env.coder.stream.response)
 	}
-	if env.coder.multiResponseContent != "" {
-		t.Errorf("multiResponseContent = %q, want empty", env.coder.multiResponseContent)
+	if env.coder.stream.multi != "" {
+		t.Errorf("stream.multi = %q, want empty", env.coder.stream.multi)
 	}
 }
 

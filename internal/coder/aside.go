@@ -3,7 +3,6 @@ package coder
 import (
 	"context"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -47,7 +46,7 @@ type sideFrame struct {
 // in the session record.
 func (c *Coder) runSide(ctx context.Context, call, prompt string, frame sideFrame) string {
 	c.Out.Toolf("%s", frame.open)
-	before := c.messageTally()
+	before := c.usage
 	messages := []llm.Message{llm.TextMessage("user", prompt)}
 	req := llm.Request{
 		Model:           c.Model.Slug,
@@ -61,15 +60,15 @@ func (c *Coder) runSide(ctx context.Context, call, prompt string, frame sideFram
 	// The stream writes through the same transient fields finalizeUsage reads
 	// for its aborted-turn estimate; clear them here and again at the end so a
 	// /btw never leaks state into the next real turn.
-	c.multiResponseContent = ""
+	c.stream.multi = ""
 
 	usage := &sendUsage{estSent: c.countMessages(messages)}
 	backoff := retryBackoff{delay: initialRetryDelay, cap: c.RetryTimeout}
 	for {
-		c.partialResponseContent = ""
-		c.partialReasoningContent = ""
-		c.partialToolCalls = nil
-		c.toolCallIndex = map[int]int{}
+		c.stream.response = ""
+		c.stream.reasoning = ""
+		c.stream.toolCalls = nil
+		c.stream.toolCallIndex = map[int]int{}
 
 		// No loop detection on a side call: these are short, structured, and
 		// bounded by their own prompts, and a false stop here would silently
@@ -85,15 +84,15 @@ func (c *Coder) runSide(ctx context.Context, call, prompt string, frame sideFram
 	}
 	c.Out.FlushStream()
 
-	answer := stripReasoning(c.partialResponseContent, c.Model.ReasoningTag)
-	c.partialResponseContent = answer // for finalizeUsage's estimate fallback
+	answer := stripReasoning(c.stream.response, c.Model.ReasoningTag)
+	c.stream.response = answer // for finalizeUsage's estimate fallback
 	c.finalizeUsage(usage)
 	c.closeSide(frame, before)
 	c.reportUsage(1, 0)
 
-	c.multiResponseContent = ""
-	c.partialResponseContent = ""
-	c.partialReasoningContent = ""
+	c.stream.multi = ""
+	c.stream.response = ""
+	c.stream.reasoning = ""
 	return answer
 }
 
@@ -103,36 +102,13 @@ func (c *Coder) runSide(ctx context.Context, call, prompt string, frame sideFram
 // message totals: a consult starts them at zero, but a /btw runs between turns
 // on top of the last turn's, and reading the totals as they stood printed that
 // turn's tokens and cost under the aside's name.
-func (c *Coder) closeSide(frame sideFrame, before messageTally) {
+func (c *Coder) closeSide(frame sideFrame, before messageUsage) {
 	who := frame.who
 	if who == "" {
 		who = c.Model.QualifiedSlug()
 	}
-	d := c.messageTally().minus(before)
+	d := c.usage.minus(before)
 	report := strings.TrimPrefix(usageReport(frame.tag, "", d.sent, d.cacheWrite, d.cacheRead, d.received,
-		d.modelTime, d.cost, c.costKnown, c.totalCost, c.messageEstimated), "Tokens: ")
+		d.modelTime, d.cost, d.costKnown, c.totalCost, d.estimated), "Tokens: ")
 	c.Out.Toolf("\u2039/%s\u203a %s: %s", frame.tag, who, report)
-}
-
-// messageTally is the message-scoped usage at one moment.
-type messageTally struct {
-	sent, received, cacheRead, cacheWrite int
-	cost                                  float64
-	modelTime                             time.Duration
-}
-
-func (c *Coder) messageTally() messageTally {
-	return messageTally{
-		sent: c.messageTokensSent, received: c.messageTokensReceived,
-		cacheRead: c.messageCacheRead, cacheWrite: c.messageCacheWrite,
-		cost: c.messageCost, modelTime: c.messageModelTime,
-	}
-}
-
-func (t messageTally) minus(o messageTally) messageTally {
-	return messageTally{
-		sent: t.sent - o.sent, received: t.received - o.received,
-		cacheRead: t.cacheRead - o.cacheRead, cacheWrite: t.cacheWrite - o.cacheWrite,
-		cost: t.cost - o.cost, modelTime: t.modelTime - o.modelTime,
-	}
 }

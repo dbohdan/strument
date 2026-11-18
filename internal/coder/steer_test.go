@@ -317,7 +317,7 @@ func TestInterruptDuringAToolReachesTheMenu(t *testing.T) {
 	defer cancel()
 	runner := &cancellingRunner{cancel: cancel}
 	c.Runner = runner
-	c.partialToolCalls = []llm.ToolCall{
+	c.stream.toolCalls = []llm.ToolCall{
 		{ID: "call_1", Name: toolBash, Arguments: `{"command":"go test ./...","purpose":"run the tests"}`},
 	}
 
@@ -341,7 +341,7 @@ func TestInterruptDuringAToolTellsTheModel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c.Runner = &cancellingRunner{cancel: cancel}
-	c.partialToolCalls = []llm.ToolCall{
+	c.stream.toolCalls = []llm.ToolCall{
 		{ID: "call_1", Name: toolBash, Arguments: `{"command":"go test ./...","purpose":"run the tests"}`},
 	}
 

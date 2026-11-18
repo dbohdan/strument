@@ -474,7 +474,7 @@ func (c *Coder) recordNewMessages() {
 	// reasoning first would put it ahead of the user message that prompted it,
 	// and emitting it last would put it after tool results it never saw. The
 	// log is a timeline or it is a pile.
-	pending := c.partialReasoningContent
+	pending := c.stream.reasoning
 	emitReasoning := func() {
 		if pending != "" {
 			c.record(Record{Type: "reasoning", Text: pending})

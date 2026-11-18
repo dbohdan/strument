@@ -123,7 +123,7 @@ func TestToolLoopWatcherDisabledWithLoopDetection(t *testing.T) {
 func TestInterruptToolEndsTheTurn(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	ctx := context.Background()
-	c.partialToolCalls = []llm.ToolCall{
+	c.stream.toolCalls = []llm.ToolCall{
 		{ID: "call_1", Name: toolRead, Arguments: `{"path":"a.go"}`},
 		{ID: "call_2", Name: toolInterrupt, Arguments: `{}`},
 	}
@@ -152,7 +152,7 @@ func TestToolLoopNoteRidesToolResults(t *testing.T) {
 	ctx := context.Background()
 	before := len(c.curMessages)
 	args := `{"path":"a.go"}`
-	c.partialToolCalls = []llm.ToolCall{
+	c.stream.toolCalls = []llm.ToolCall{
 		{ID: "c1", Name: toolRead, Arguments: args},
 		{ID: "c2", Name: toolRead, Arguments: args},
 		{ID: "c3", Name: toolRead, Arguments: args},
@@ -188,11 +188,11 @@ func TestDeclinedCommandsDoNotResetTheLoopWatcher(t *testing.T) {
 
 	noted := false
 	for step := range toolLoopMaxIdentical {
-		c.partialToolCalls = []llm.ToolCall{
+		c.stream.toolCalls = []llm.ToolCall{
 			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
 			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
 		}
-		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.partialToolCalls})
+		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.stream.toolCalls})
 		c.applyToolCalls(context.Background())
 		for _, m := range c.curMessages {
 			if m.Role == llm.RoleUser && strings.Contains(m.Text(), "same read call") {
@@ -214,11 +214,11 @@ func TestDeclinedCommandsDoNotResetTheLoopWatcher(t *testing.T) {
 	c2.Confirm = &recordingConfirmer{answer: true}
 	c2.SuggestShellCommands = true
 	for step := range toolLoopMaxIdentical {
-		c2.partialToolCalls = []llm.ToolCall{
+		c2.stream.toolCalls = []llm.ToolCall{
 			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
 			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
 		}
-		c2.curMessages = append(c2.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c2.partialToolCalls})
+		c2.curMessages = append(c2.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c2.stream.toolCalls})
 		c2.applyToolCalls(context.Background())
 	}
 	for _, m := range c2.curMessages {
@@ -315,11 +315,11 @@ func TestAToolLoopAfterTheNoteEndsTheTurn(t *testing.T) {
 
 	var outcome SendOutcome
 	for step := range 2 * toolLoopMaxIdentical {
-		c.partialToolCalls = []llm.ToolCall{
+		c.stream.toolCalls = []llm.ToolCall{
 			{ID: "r" + strconv.Itoa(step), Name: toolRead, Arguments: `{"path":"a.txt"}`},
 			{ID: "b" + strconv.Itoa(step), Name: toolBash, Arguments: `{"command":"sort a.txt","purpose":"sort"}`},
 		}
-		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.partialToolCalls})
+		c.curMessages = append(c.curMessages, llm.Message{Role: llm.RoleAssistant, ToolCalls: c.stream.toolCalls})
 		outcome = c.applyToolCalls(context.Background())
 		if outcome == OutcomeLooping && step < 2*toolLoopMaxIdentical-1 {
 			t.Fatalf("stopped at step %d, before the loop outlived the note", step+1)

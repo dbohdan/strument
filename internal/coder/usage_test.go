@@ -19,7 +19,7 @@ func TestFinalizeUsageEstimatesWhenAborted(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
 	c.Model.InputCost = &llm.Money{Known: true, USD: 0.000001}
 	c.Model.OutputCost = &llm.Money{Known: true, USD: 0.000002}
-	c.partialResponseContent = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
+	c.stream.response = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
 
 	c.finalizeUsage(&sendUsage{estSent: 1234}) // all-zero usage => estimate path
 
@@ -33,8 +33,8 @@ func TestFinalizeUsageEstimatesWhenAborted(t *testing.T) {
 	if cost, known := c.RunCost(); !known || cost <= 0 {
 		t.Errorf("estimated cost should be known and > 0, got %v (known=%v)", cost, known)
 	}
-	if !strings.Contains(c.lastUsageReport, "(estimated)") {
-		t.Errorf("report must be marked estimated: %q", c.lastUsageReport)
+	if !strings.Contains(c.usage.lastReport, "(estimated)") {
+		t.Errorf("report must be marked estimated: %q", c.usage.lastReport)
 	}
 }
 
@@ -46,8 +46,8 @@ func TestFinalizeUsageRealUsageNotMarked(t *testing.T) {
 	if sent, received := c.RunTokens(); sent != 100 || received != 50 {
 		t.Errorf("session tokens = (%d, %d), want (100, 50) from real usage", sent, received)
 	}
-	if strings.Contains(c.lastUsageReport, "(estimated)") {
-		t.Errorf("real usage must not be marked estimated: %q", c.lastUsageReport)
+	if strings.Contains(c.usage.lastReport, "(estimated)") {
+		t.Errorf("real usage must not be marked estimated: %q", c.usage.lastReport)
 	}
 }
 
@@ -72,13 +72,13 @@ func TestRefusedRequestReportsNothing(t *testing.T) {
 	if _, known := c.RunCost(); known {
 		t.Error("a refused request must not put a cost on the session")
 	}
-	if c.lastUsageReport != "" {
-		t.Errorf("report = %q, want none", c.lastUsageReport)
+	if c.usage.lastReport != "" {
+		t.Errorf("report = %q, want none", c.usage.lastReport)
 	}
 	// Zero sends is what makes flushTurnUsage say nothing at all rather than
 	// print a line of zeroes.
-	if c.messageSends != 0 {
-		t.Errorf("messageSends = %d, want 0", c.messageSends)
+	if c.usage.sends != 0 {
+		t.Errorf("usage.sends = %d, want 0", c.usage.sends)
 	}
 }
 
@@ -86,15 +86,15 @@ func TestRefusedRequestReportsNothing(t *testing.T) {
 // case: those tokens were generated and will be billed, so the estimate stands.
 func TestStreamBrokenMidReplyStillEstimates(t *testing.T) {
 	c := toolCoder(t, t.TempDir())
-	c.partialResponseContent = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
+	c.stream.response = strings.Repeat("x", 40) // RuneCounter: ~10 tokens
 
 	c.finalizeUsage(&sendUsage{estSent: 735, rejected: true})
 
 	if sent, recv := c.RunTokens(); sent != 735 || recv == 0 {
 		t.Errorf("session tokens = (%d, %d), want (735, >0)", sent, recv)
 	}
-	if !strings.Contains(c.lastUsageReport, "(estimated)") {
-		t.Errorf("report must be marked estimated: %q", c.lastUsageReport)
+	if !strings.Contains(c.usage.lastReport, "(estimated)") {
+		t.Errorf("report must be marked estimated: %q", c.usage.lastReport)
 	}
 }
 
@@ -121,8 +121,8 @@ func TestFailedSendAccountsForNothing(t *testing.T) {
 	if sent, recv := c.RunTokens(); sent != 0 || recv != 0 {
 		t.Errorf("session tokens = (%d, %d), want (0, 0)", sent, recv)
 	}
-	if c.messageSends != 0 {
-		t.Errorf("messageSends = %d, want 0 — a failed turn prints no usage line", c.messageSends)
+	if c.usage.sends != 0 {
+		t.Errorf("usage.sends = %d, want 0 — a failed turn prints no usage line", c.usage.sends)
 	}
 }
 

@@ -511,19 +511,19 @@ func (c *Coder) runAskUser(tc llm.ToolCall, needsReflection *bool) string {
 }
 
 // accumulateToolCall folds a streamed tool-call fragment into
-// partialToolCalls. ID and Name arrive on the first fragment for an index;
+// stream.toolCalls. ID and Name arrive on the first fragment for an index;
 // later fragments append Args chunks.
 func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	if d == nil {
 		return
 	}
-	pos, ok := c.toolCallIndex[d.Index]
+	pos, ok := c.stream.toolCallIndex[d.Index]
 	if !ok {
-		pos = len(c.partialToolCalls)
-		c.toolCallIndex[d.Index] = pos
-		c.partialToolCalls = append(c.partialToolCalls, llm.ToolCall{})
+		pos = len(c.stream.toolCalls)
+		c.stream.toolCallIndex[d.Index] = pos
+		c.stream.toolCalls = append(c.stream.toolCalls, llm.ToolCall{})
 	}
-	tc := &c.partialToolCalls[pos]
+	tc := &c.stream.toolCalls[pos]
 	if d.ID != "" {
 		tc.ID = d.ID
 	}
@@ -656,7 +656,7 @@ func (c *Coder) malformedArgs(tc llm.ToolCall) string {
 }
 
 func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
-	if len(c.partialToolCalls) == 0 {
+	if len(c.stream.toolCalls) == 0 {
 		return OutcomeSuccess
 	}
 
@@ -675,7 +675,7 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 	for _, d := range c.toolDefs() {
 		offered[d.Name] = true
 	}
-	for _, tc := range c.partialToolCalls {
+	for _, tc := range c.stream.toolCalls {
 		if note := c.toolLoops.observeCall(tc.Name, tc.Arguments); note != "" {
 			loopNote = note
 		}
@@ -1253,7 +1253,7 @@ func (r toolResults) appendText(id, text string) {
 // clients re-home the images into a following user message rather than dropping
 // them — see toolResultMessages in the client package.
 func (c *Coder) appendToolResults(results toolResults) {
-	for _, tc := range c.partialToolCalls {
+	for _, tc := range c.stream.toolCalls {
 		got, ok := results[tc.ID]
 		if !ok {
 			got.Text = "The call produced no result." // defensive; every branch above sets one
