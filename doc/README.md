@@ -388,7 +388,17 @@ There is one tool set for every turn. An ask mode (`/ask`, `/code`) used to
 withhold the mutating tools; it was removed because a tool set that changes
 under the model confuses it, and a user who wants a discussion can say so.
 
-Ten tools, in three natures:
+Every tool is one entry in the table in `tooltable.go`: its definition, when
+it is offered, whether a `run_code` program may call it, whether it only
+observes, and, for a tool whose result is its answer, the function that answers
+it. That function serves a direct call and a program's call alike. Edit,
+write, bash and commit are answered by the step instead, in phases: the edits
+as one batch, then the commands, then the commit. Adding a tool is adding an
+entry. The entries' order is the order the tools are offered, which is the
+cached prefix of every request, and `testdata/model-facing.golden` shows any
+change to it.
+
+The tools come in three natures:
 
 - **Observation is free**, because the cost of looking is what makes a model
   guess. `read(path, offset, limit)` returns a numbered window (`12→line`,

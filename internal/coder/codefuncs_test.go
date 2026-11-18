@@ -103,8 +103,8 @@ func TestCodeFuncNotADirectTool(t *testing.T) {
 	if got := c.inspector().Run("read_bin", `{"path":"x"}`); !strings.Contains(got, "Unknown tool") {
 		t.Errorf("read_bin must not be a direct tool, got: %q", got)
 	}
-	if got, _ := c.runObservationCall(call("read_bin", `{"path":"x"}`)); !strings.Contains(got, "Unknown tool") {
-		t.Errorf("the direct dispatch must not recognize read_bin either, got: %q", got)
+	if toolByName["read_bin"] != nil {
+		t.Error("read_bin must not be in the tool table, which is what a direct call is dispatched by")
 	}
 }
 

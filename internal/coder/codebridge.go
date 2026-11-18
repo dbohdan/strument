@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -17,31 +16,6 @@ import (
 // first. This file is the part of the bridge that reaches past the
 // observation tools, and the refusal a program meets when a call is not run.
 // doc/experiments/2026-11-bridge-all has the design and the options weighed.
-
-// codeExcluded are the tools a program cannot call. run_code would be a
-// program starting a program. interrupt ends the turn, which a program
-// cannot do; it returns. ask_user_question's answer is for the model to read
-// and think about, not for a program to compute over. consult spends money at
-// another model's price on each call, and a loop in a program would make that
-// one approval away from fifty.
-var codeExcluded = []string{toolRunCode, toolInterrupt, toolAskUser, toolConsult}
-
-// codeCallableTools is the one list behind the run_code description, the
-// registration, and the bridge's allow check: every tool otherToolDefs offers,
-// in its order, but the excluded ones. It follows the schema by construction,
-// so symbol is callable exactly where the parser is, bash exactly where the
-// shell is, and so on; a program can never call a tool the session does not
-// offer, and never miss one it does.
-func (c *Coder) codeCallableTools() []string {
-	var out []string
-	for _, d := range c.otherToolDefs() {
-		if slices.Contains(codeExcluded, d.Name) {
-			continue
-		}
-		out = append(out, d.Name)
-	}
-	return out
-}
 
 // refusal is who declined a gated call and why. It is recorded at the one
 // place every permission prompt passes through, confirmGrouped, so that a
@@ -264,44 +238,36 @@ func (c *Coder) runBridgedAction(ctx context.Context, call *bridgedCall, n int) 
 		}
 		c.toolLoops.observeMutation()
 		return text, true, nil
-
-	case toolWebfetch:
-		f, msg := parseFetchArgs(tc)
-		if msg != "" {
-			return nil, true, errors.New(msg)
-		}
-		return c.refusedOr(call.Name, c.runWebfetch(ctx, f))
-
-	case toolWebsearch:
-		q, msg := parseSearchArgs(tc)
-		if msg != "" {
-			return nil, true, errors.New(msg)
-		}
-		return c.refusedOr(call.Name, c.runWebsearch(ctx, q))
-
-	case toolCheck:
-		return c.refusedOr(call.Name, c.runCheckTool(ctx, tc))
-
-	case toolSkill:
-		s, msg := parseSkillArgs(tc)
-		if msg != "" {
-			return nil, true, errors.New(msg)
-		}
-		return c.refusedOr(call.Name, c.runSkill(ctx, s))
-
-	case toolAbout:
-		c.Out.Toolf("About Strument")
-		return c.About(time.Now()), true, nil
 	}
-	return nil, false, nil
-}
 
-// refusedOr is a tool's text, or the NotRun for the refusal it met.
-func (c *Coder) refusedOr(tool, text string) (any, bool, error) {
+	// Everything else is answered from the table, through the function a
+	// direct call goes through, so the outcome line and the answer are
+	// byte-for-byte what a direct call produces.
+	spec := toolByName[call.Name]
+	if spec == nil || spec.answer == nil {
+		return nil, false, nil
+	}
+	a := spec.answer(c, ctx, tc)
+	if a.badArgs {
+		return nil, true, errors.New(a.text)
+	}
+	// A tool that asks can be refused — a webfetch, a check, a read outside
+	// the project — and a refusal used to come back as the sentence saying
+	// so, an ordinary string the program went on computing over.
 	if r := c.takeRefusal(); r != nil {
-		return nil, true, &notRunError{tool: tool, refusal: *r}
+		return nil, true, &notRunError{tool: call.Name, refusal: *r}
 	}
-	return text, true, nil
+	// An observation tool's failure throws instead of returning, at the line
+	// that made the call, where a try/catch can catch it like any other
+	// exception. An *empty result* is not a failure: "No matches" and a
+	// symbol miss are answers a program may legitimately filter on, so those
+	// stay values.
+	if spec.observes {
+		if msg, bad := bridgeToolFailure(a.text); bad {
+			return nil, true, fmt.Errorf("%s failed: %s", call.Name, msg)
+		}
+	}
+	return a.text, true, nil
 }
 
 // noteEdited is the bookkeeping for edits that landed, from a step's batch or

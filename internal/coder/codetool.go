@@ -700,38 +700,23 @@ func (c *Coder) bridgeCall(allowed []string, log *bridgeLog) bridgeFunc {
 			return v, err
 		}
 
-		// The call is answered by the same Inspector.Run a direct call goes
-		// through, so the outcome line and the model's answer are byte-for-byte
-		// what a direct call would produce — for the tools whose result *is*
-		// prose. The data-shaped ones (glob, ls) answered above, because a
-		// program that computes over a result needs the result, not the report
-		// about it: glob's prose names the pattern and explains syntax, and
-		// sorting that prose sorts its characters.
-		if v, ok, err := c.runBridgedAction(ctx, call, log.calls); ok {
-			if err == nil {
-				log.last = v
-			}
-			return v, err
+		// Every other tool is answered by runBridgedAction, through the same
+		// function a direct call goes through, so the outcome line and the
+		// answer are byte-for-byte what a direct call would produce — for the
+		// tools whose result *is* prose. The data-shaped ones (glob, ls)
+		// answered above, because a program that computes over a result needs
+		// the result, not the report about it: glob's prose names the pattern
+		// and explains syntax, and sorting that prose sorts its characters.
+		v, ok, err := c.runBridgedAction(ctx, call, log.calls)
+		if !ok {
+			// Unreachable while the allow check above holds: every callable
+			// tool has a way to be answered.
+			return nil, fmt.Errorf("%s cannot be called from a program", call.Name)
 		}
-		c.lastRefusal = nil
-		out := c.inspector().Run(call.Name, call.ArgsJSON())
-		// An observation tool can ask too: a read outside the project. Its
-		// refusal used to come back as the sentence saying so, an ordinary
-		// string the program went on computing over as file contents.
-		if r := c.takeRefusal(); r != nil {
-			return nil, &notRunError{tool: call.Name, refusal: *r}
+		if err == nil {
+			log.last = v
 		}
-
-		// A tool failure throws instead of returning, at the line that made
-		// the call, where a try/catch can catch it like any other exception.
-		// An *empty result* is not a failure: "No matches" and a symbol miss
-		// are answers a program may legitimately filter on, so those stay
-		// values.
-		if msg, bad := bridgeToolFailure(out); bad {
-			return nil, fmt.Errorf("%s failed: %s", call.Name, msg)
-		}
-		log.last = out
-		return out, nil
+		return v, err
 	}
 }
 

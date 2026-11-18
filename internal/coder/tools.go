@@ -18,7 +18,6 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/editblock"
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/skill"
 )
 
 // Tool names. These are the conventional names across coding harnesses, on
@@ -64,77 +63,6 @@ func strProp(desc string) map[string]any {
 // intProp is a JSON-Schema integer property with a description.
 func intProp(desc string) map[string]any {
 	return map[string]any{"type": "integer", "description": desc}
-}
-
-// toolDefs is the tool set offered to the model this turn.
-//
-// One tool set for every turn. There used to be an ask mode that withheld the
-// mutating tools; it went because a tool set that changes under the model
-// confuses it, and a user who wants discussion can say so in the message.
-// What is still conditional is what depends on configuration: bash, check,
-// the parser, a scraper, search, skills.
-func (c *Coder) toolDefs() []llm.ToolDef {
-	// run_code goes ahead of edit, where it has always been: the order is the
-	// cached prefix, and moving a tool moves every tool after it.
-	others := c.otherToolDefs()
-	at := slices.IndexFunc(others, func(d llm.ToolDef) bool { return d.Name == toolEdit })
-	code := codeTool(c.codeCallableTools(), c.offersShell(), c.dataFuncs())
-	return slices.Insert(others, at, code)
-}
-
-// otherToolDefs is toolDefs without run_code, which is what a program can
-// reach (codeCallableTools), less the excluded few.
-func (c *Coder) otherToolDefs() []llm.ToolDef {
-	var defs []llm.ToolDef
-	defs = readOnlyTools()
-	defs = append(defs, askTool())
-	defs = append(defs, interruptTool())
-	// about answers what the model cannot find out by looking.
-	defs = append(defs, aboutTool())
-	if c.offersRecall() {
-		// recall reads the session record, which mutates nothing; offered
-		// from the first turn rather than from the first compaction, because
-		// a tool list that changes mid-session confuses models and breaks
-		// the cached prefix.
-		defs = append(defs, recallTool())
-	}
-	if c.RepoMap != nil {
-		// symbol reads the same tree-sitter layer the repo map is built from,
-		// so it is offered exactly when that layer is available.
-		defs = append(defs, symbolTool())
-	}
-	// The port is always set in the binary, so this is a guard for a directly built
-	// Coder, not a setting a user can be on the wrong side of.
-	if c.Scrape != nil {
-		defs = append(defs, webfetchTool())
-	}
-	// Genuinely conditional, unlike webfetch — with no configured instance
-	// there is no search to offer.
-	if c.Search != nil {
-		defs = append(defs, websearchTool())
-	}
-	if len(c.Consult) > 0 {
-		defs = append(defs, consultTool(c.Consult))
-	}
-	// Offered only when there is something to name, because the enum
-	// would otherwise be empty and the description would list nothing.
-	if len(skill.Usable(c.Skills)) > 0 {
-		defs = append(defs, skillTool(c.Skills))
-	}
-	defs = append(defs, editTools()...)
-	if c.offersShell() {
-		defs = append(defs, bashTool())
-	}
-	if len(c.Check) > 0 {
-		defs = append(defs, checkTool(c.Check))
-	}
-	// Offered whenever editing is, including where it will decline: a session
-	// without git, or with commits off, answers the call with the reason
-	// rather than hiding the tool. Withholding it would leave a model that
-	// wanted a commit boundary with no way to find out why it could not have
-	// one, which is how the plan it wrote silently became one commit.
-	defs = append(defs, commitTool())
-	return defs
 }
 
 // readOnlyTools are the four ways to look at the project. They never mutate
@@ -699,6 +627,22 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			results.setText(tc.ID, c.notOfferedText(tc.Name))
 			continue
 		}
+		// A tool whose result is its answer is answered from the table, the
+		// same way a program's call to it is (runBridgedAction).
+		if spec := toolByName[tc.Name]; spec != nil && spec.answer != nil {
+			a := spec.answer(c, ctx, tc)
+			results.setImages(tc.ID, a.text, a.images)
+			if a.badArgs {
+				needsReflection = true
+			}
+			if spec.endsTurn {
+				// The turn ends after the results are appended.
+				interrupted = true
+			}
+			continue
+		}
+		// The rest are a step's phases: the edits as one batch, then the
+		// commands, then the commit.
 		switch tc.Name {
 		case toolEdit, toolWrite:
 			e, msg := parseEditArgs(tc)
@@ -740,72 +684,6 @@ func (c *Coder) applyToolCalls(ctx context.Context) SendOutcome {
 			parsed := ca
 			commit = &parsed
 			c.toolLoops.observeMutation()
-		case toolRead, toolGrep, toolGlob, toolLS, toolSymbol:
-			text, images := c.runObservationCall(tc)
-			results.setImages(tc.ID, text, images)
-		case toolCheck:
-			results.setText(tc.ID, c.runCheckTool(ctx, tc))
-		case toolWebfetch:
-			f, msg := parseFetchArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			results.setText(tc.ID, c.runWebfetch(ctx, f))
-		case toolWebsearch:
-			q, msg := parseSearchArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			results.setText(tc.ID, c.runWebsearch(ctx, q))
-		case toolConsult:
-			cc, msg := parseConsultArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			results.setText(tc.ID, c.runConsult(ctx, cc))
-		case toolSkill:
-			s, msg := parseSkillArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			results.setText(tc.ID, c.runSkill(ctx, s))
-		case toolRunCode:
-			cc, msg := parseCodeArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			results.setText(tc.ID, c.runCode(ctx, cc))
-		case toolAskUser:
-			// Not routed through ConfirmGrouped: a question is not a permission
-			// prompt, and --yes must not answer it.
-			results.setText(tc.ID, c.runAskUser(tc, &needsReflection))
-		case toolRecall:
-			a, msg := parseRecallArgs(tc)
-			if msg != "" {
-				results.setText(tc.ID, msg)
-				needsReflection = true
-				continue
-			}
-			c.Out.Toolf("%s", recallAnnouncement(a))
-			results.setText(tc.ID, c.runRecall(a))
-		case toolAbout:
-			c.Out.Toolf("About Strument")
-			results.setText(tc.ID, c.About(time.Now()))
-		case toolInterrupt:
-			// Answer every call so the wire stays well-formed, but record the
-			// interrupt: the turn ends after the results are appended.
-			results.setText(tc.ID, "The turn has ended.")
-			interrupted = true
 		default:
 			results.setText(tc.ID, fmt.Sprintf("Unknown tool %q.", tc.Name))
 		}
@@ -929,16 +807,6 @@ func (c *Coder) notOfferedText(name string) string {
 		return "Not run: this call arrived without a tool name. Call the tool again, by name."
 	}
 	return fmt.Sprintf("Not run: %s is not one of the tools offered in this session.", quoteToolArg(name))
-}
-
-// runObservationCall answers a direct read-only call. read is the one observation
-// tool whose answer can carry something that is not text, so it does not go
-// through the text-shaped Run.
-func (c *Coder) runObservationCall(tc llm.ToolCall) (string, []llm.ImageSource) {
-	if tc.Name == toolRead {
-		return c.runRead(tc)
-	}
-	return c.inspector().Run(tc.Name, tc.Arguments), nil
 }
 
 // parseCommandArgs decodes a bash call. The second return is a model-facing

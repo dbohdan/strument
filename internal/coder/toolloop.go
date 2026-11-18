@@ -90,18 +90,16 @@ func newToolLoopWatcher() *toolLoopWatcher {
 // being told it was ambiguous -- with nothing to notice it, because the tool
 // that could was excused from looking.
 func toolLoopExempt(name string) bool {
-	switch name {
-	case toolBash, toolCheck, toolCommit:
-		return true
-	}
-	return false
+	s := toolByName[name]
+	return s != nil && s.loopExempt
 }
 
 // countsAsRead separates the two detectors. A failed edit is worth counting as
 // a repeat, but it is not an observation, so it must not push the read cap or
 // the note would tell a model it had made read-only calls it did not make.
 func countsAsRead(name string) bool {
-	return name != toolEdit && name != toolWrite
+	s := toolByName[name]
+	return s == nil || !s.edits
 }
 
 // observeCall records a dispatched call and returns the loop note to inject
