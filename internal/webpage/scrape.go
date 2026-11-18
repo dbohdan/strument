@@ -16,7 +16,10 @@ import (
 	"strings"
 	"time"
 
-	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/base"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/commonmark"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/table"
 	"github.com/PuerkitoBio/goquery"
 
 	"dbohdan.com/strument/internal/envallow"
@@ -1032,7 +1035,7 @@ func htmlToMarkdown(htmlStr, pageURL string, opts Options) string {
 			}
 		}
 	}
-	md, err := htmltomarkdown.ConvertString(htmlStr)
+	md, err := toMarkdown(htmlStr)
 	if err != nil {
 		return htmlStr
 	}
@@ -1075,3 +1078,69 @@ func fragmentOf(pageURL string) string {
 	}
 	return u.Fragment
 }
+
+// toMarkdown converts a page for a model to read, which differs from
+// converting it for a Markdown renderer in two ways.
+//
+// Tables are tables. Without the table plugin every row of a table ran
+// together on one line: a model asked for the SRS kick tables on tetris.wiki
+// got each eight-row table as one line of 600 characters, and spent four
+// run_code programs finding out where one row ended.
+//
+// "<" and ">" in text arrive as themselves. The base plugin writes them as
+// "&lt;" and "&gt;" so a renderer cannot take them for HTML, but nothing
+// renders this, and in documentation they are arrows, comparisons and type
+// parameters: "0->R" reached the model as "0-&gt;R", and a program matching
+// "->" found nothing. They are swapped for noncharacters before the base
+// plugin's transform and back after, rather than unescaped afterwards,
+// because the base plugin leaves "&" alone: a page whose text says "&lt;"
+// would come out "<".
+func toMarkdown(htmlStr string) (string, error) {
+	conv := converter.NewConverter(converter.WithPlugins(
+		base.NewBasePlugin(),
+		commonmark.NewCommonmarkPlugin(),
+		// A table with a line break in a cell is left as text, which is what
+		// keeps a layout table from becoming one enormous row. Padding cells
+		// to a common width spends tokens on spaces.
+		table.NewTablePlugin(table.WithCellPaddingBehavior(table.CellPaddingBehaviorMinimal)),
+	))
+	conv.Register.TextTransformer(func(_ converter.Context, content string) string {
+		return angleHider.Replace(content)
+	}, converter.PriorityEarly)
+	md, err := conv.ConvertString(captionsFirst(htmlStr))
+	if err != nil {
+		return "", err
+	}
+	return angleRestorer.Replace(md), nil
+}
+
+// captionsFirst moves each table's caption out in front of it, as a
+// paragraph. The table plugin writes a caption after its table, where it
+// reads as the heading of whatever follows: on tetris.wiki the J, L, S, T, Z
+// kick table came out under no caption and the I table under theirs.
+func captionsFirst(htmlStr string) string {
+	if !strings.Contains(htmlStr, "<caption") {
+		return htmlStr
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+	if err != nil {
+		return htmlStr
+	}
+	doc.Find("table > caption").Each(func(_ int, c *goquery.Selection) {
+		inner, err := c.Html()
+		if err == nil && strings.TrimSpace(c.Text()) != "" {
+			c.Parent().BeforeHtml("<p>" + inner + "</p>")
+		}
+		c.Remove()
+	})
+	out, err := doc.Html()
+	if err != nil {
+		return htmlStr
+	}
+	return out
+}
+
+var (
+	angleHider    = strings.NewReplacer("\uFDD0", "", "\uFDD1", "", "<", "\uFDD0", ">", "\uFDD1")
+	angleRestorer = strings.NewReplacer("\uFDD0", "<", "\uFDD1", ">")
+)
