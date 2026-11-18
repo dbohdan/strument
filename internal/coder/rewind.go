@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/render"
 )
 
 // /rewind takes the last turns out of the conversation, for when a turn went
@@ -68,7 +69,7 @@ func (c *Coder) Rewind(n int) (RewindResult, error) {
 			why = "; the ones before them were compacted into a summary"
 		}
 		return RewindResult{}, fmt.Errorf("only %s can be rewound%s",
-			plural(len(c.turns), "turn", "turns"), why)
+			render.Plural(len(c.turns), "turn", "turns"), why)
 	}
 	gone := c.turns[len(c.turns)-n:]
 	from, to := gone[0].Start, gone[len(gone)-1].End

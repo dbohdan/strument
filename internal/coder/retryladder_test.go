@@ -18,7 +18,7 @@ func TestRetryLadder(t *testing.T) {
 		rb := retryBackoff{delay: initialRetryDelay, cap: budget}
 		clock := &fastClock{}
 		transient := &llm.StreamError{Class: llm.ErrRateLimit, Message: "429"}
-		for rb.retry(context.Background(), &summaryOutput{}, clock, transient) {
+		for rb.retry(context.Background(), &captureOut{}, clock, transient) {
 			if len(clock.slept) > 100 {
 				t.Fatal("the ladder does not terminate")
 			}

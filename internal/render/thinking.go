@@ -212,7 +212,7 @@ func (t *Thinking) progress() {
 	} else {
 		return
 	}
-	t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines")) + clearToEOL)
+	t.Progress("\r" + fmt.Sprintf(ThinkingMoreLines, t.elided, PluralWord(t.elided, "line", "lines")) + clearToEOL)
 }
 
 // End closes the block and reports whether there was one. A one-liner needs no
@@ -237,7 +237,7 @@ func (t *Thinking) End() bool {
 	if rendered && t.elided > 0 {
 		// The diff renderer's idiom, so an elision reads as native rather than
 		// invented.
-		msg := fmt.Sprintf(ThinkingMoreLines, t.elided, plural(t.elided, "line", "lines"))
+		msg := fmt.Sprintf(ThinkingMoreLines, t.elided, PluralWord(t.elided, "line", "lines"))
 		if t.Progress != nil {
 			// "\r" overwrites the last real-time progress update and the
 			// newline commits the line so the closing marker starts clean.
@@ -258,13 +258,6 @@ func (t *Thinking) reset() {
 	t.opened, t.block, t.stopped = false, false, false
 	t.lines, t.elided = 0, 0
 	t.progressAt = time.Time{}
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 // PlainThinking builds a Thinking that writes markers and body straight to w,

@@ -266,11 +266,11 @@ func TestConsultAsksBeforeIncludingAnOutsideFile(t *testing.T) {
 	}
 }
 
-// streamCapture is captureOutput with the streamed answer kept in its place,
+// streamCapture is captureOut with the streamed answer kept in its place,
 // so a test can see what the frame encloses.
-type streamCapture struct{ captureOutput }
+type streamCapture struct{ captureOut }
 
-func (o *streamCapture) StreamText(s string) { o.b.WriteString(s) }
+func (o *streamCapture) StreamText(s string) { o.lines = append(o.lines, s) }
 
 // The answer on screen is framed: an opening tag carrying the question, since
 // a granted consult never shows the confirmation that would, and a named
@@ -314,7 +314,7 @@ func TestAsideAnswerIsFramedOnScreen(t *testing.T) {
 	c.RunAside(context.Background(), "What is the answer?")
 	got := out.String()
 	if !strings.HasPrefix(got, "‹btw›\n") ||
-		!strings.Contains(got, "Forty-two.‹/btw› openrouter/test-model: ") {
+		!strings.Contains(got, "Forty-two.\n‹/btw› openrouter/test-model: ") {
 		t.Errorf("the aside is not framed:\n%s", got)
 	}
 }

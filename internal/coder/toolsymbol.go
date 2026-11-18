@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
 )
 
@@ -72,7 +73,7 @@ func (i *Inspector) runSymbol(tc llm.ToolCall) string {
 		return problem
 	}
 	i.Out.Toolf("Looked up %s: %s %s", quoteToolArg(strings.TrimSpace(a.Name)),
-		plural(count, "site", "sites"), lookupNoun(a.Kind))
+		render.Plural(count, "site", "sites"), lookupNoun(a.Kind))
 	return truncateResult(text)
 }
 
@@ -142,7 +143,7 @@ func missMessage(name, kind, noun string, otherKind int, nearMiss string) string
 			other = "definition"
 		}
 		fmt.Fprintf(&b, "It does appear as a %s in %s — call symbol again with \"kind\": %q.\n",
-			other, plural(otherKind, "place", "places"), other)
+			other, render.Plural(otherKind, "place", "places"), other)
 		return b.String()
 	}
 	if nearMiss != "" {
@@ -261,7 +262,7 @@ func (i *Inspector) SymbolLookup(rawName, kind string) (text string, count int, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s is %s in %s:\n\n", name, noun, plural(len(sites), "place", "places"))
+	fmt.Fprintf(&b, "%s is %s in %s:\n\n", name, noun, render.Plural(len(sites), "place", "places"))
 	for i, s := range sites {
 		if i >= maxSymbolSites {
 			fmt.Fprintf(&b, "\n(%d more, not listed.)\n", len(sites)-maxSymbolSites)
@@ -284,7 +285,7 @@ func (i *Inspector) SymbolLookup(rawName, kind string) (text string, count int, 
 	if want == repomap.Def && otherKind > 0 {
 		fmt.Fprintf(&b, "\nIt is used in %s. To see them, with the function each use sits in, "+
 			"call symbol again with \"kind\": \"reference\".\n",
-			plural(otherKind, "place", "places"))
+			render.Plural(otherKind, "place", "places"))
 	}
 	if trunc.Any() {
 		b.WriteString("\n(The file walk hit a limit, so some of the project was not searched.)\n")

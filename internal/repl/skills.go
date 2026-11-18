@@ -42,7 +42,7 @@ func listSkills(r *REPL) string {
 			// untrusted one is written by whoever wrote the repository. It
 			// reaches a terminal here, so it is sanitized the way a fetched
 			// page's text is: a description is not allowed to move the cursor.
-			r.printf("  %s (%s): %s", s.Name, s.Root.Scope, render.Sanitize(oneLine(s.Description)))
+			r.printf("  %s (%s): %s", s.Name, s.Root.Scope, render.Sanitize(render.OneLine(s.Description)))
 		}
 	}
 	for _, s := range untrusted {
@@ -90,9 +90,4 @@ func (r *REPL) completeSkills(string) []string {
 		out = append(out, s.Name)
 	}
 	return out
-}
-
-// oneLine flattens a description onto the single line the listing gives it.
-func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
 }

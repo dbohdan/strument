@@ -16,7 +16,6 @@ import (
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/gitrepo"
 	"dbohdan.com/strument/internal/llm"
-	"dbohdan.com/strument/internal/render"
 )
 
 // lastToolResult returns the final tool-result message in the coder's history.
@@ -866,30 +865,6 @@ func TestToolLoopBudgetStops(t *testing.T) {
 		t.Errorf("a.txt = %q, want the last applied edit to stand", got)
 	}
 }
-
-// captureOut records the user-facing lines so a test can assert on them; the
-// streaming Output methods are no-ops. ToolBlock records through the same
-// renderer the real outputs use, so a test asserts on the production shape.
-type captureOut struct{ lines []string }
-
-func (o *captureOut) ToolBlock(title, body string) {
-	var b strings.Builder
-	render.ToolBlock(&b, title, body)
-	o.lines = append(o.lines, b.String())
-}
-
-func (o *captureOut) Printf(format string, args ...any) {
-	o.lines = append(o.lines, fmt.Sprintf(format, args...))
-}
-func (o *captureOut) Toolf(format string, args ...any)    { o.Printf(format, args...) }
-func (o *captureOut) CommandOutput(text string)           { o.Printf("%s", text) }
-func (o *captureOut) Warningf(format string, args ...any) { o.Printf(format, args...) }
-func (o *captureOut) Errorf(format string, args ...any)   { o.Printf(format, args...) }
-func (o *captureOut) Link(target string)                  { o.Printf("%s", target) }
-func (o *captureOut) StreamText(string)                   {}
-func (o *captureOut) StreamReasoning(string)              {}
-func (o *captureOut) StreamToolCall(int, string, string)  {}
-func (o *captureOut) FlushStream()                        {}
 
 // echoRunner returns fixed output for any command.
 type echoRunner struct {

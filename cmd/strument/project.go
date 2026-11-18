@@ -94,7 +94,7 @@ func printProject(p history.Candidate) {
 		// that in advance is worth a few characters.
 		witness = ", no git witness"
 	}
-	fmt.Printf("  %s\n      %s, %s, %s%s\n", p.Root.Path, turns, last, humanBytes(p.Bytes), witness)
+	fmt.Printf("  %s\n      %s, %s, %s%s\n", p.Root.Path, turns, last, render.Bytes(p.Bytes), witness)
 	fmt.Printf("      %s\n", p.Dir)
 }
 
@@ -110,17 +110,6 @@ func humanAge(d time.Duration) string {
 		return "yesterday"
 	default:
 		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
-	}
-}
-
-func humanBytes(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.0f KiB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
 	}
 }
 

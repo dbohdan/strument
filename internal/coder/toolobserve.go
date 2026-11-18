@@ -13,6 +13,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/envallow"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -266,7 +267,7 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 		// "49 long 49 lines were shortened". Found by the first real use of
 		// `strument tool grep`, which is the argument for the command.
 		fmt.Fprintf(&b, "\n(%s shortened, marked with \"…\". Read the file for the whole line.)\n",
-			plural(res.Shortened, "long line was", "long lines were"))
+			render.Plural(res.Shortened, "long line was", "long lines were"))
 	}
 	return truncateResult(b.String())
 }
@@ -307,16 +308,16 @@ func grepNothing(query string, res workspace.GrepResult) string {
 			"so the pattern was never tested.\n\n" + globSyntaxNote
 	case res.Scanned == 0 && res.Secret == res.InScope:
 		return fmt.Sprintf("No files were searched for %s: %s in that scope, but every one of "+
-			"them matches a secret-file pattern, and those are not searched.", query, plural(res.InScope, "file is", "files are"))
+			"them matches a secret-file pattern, and those are not searched.", query, render.Plural(res.InScope, "file is", "files are"))
 	case res.Scanned == 0:
 		return fmt.Sprintf("No files were searched for %s: %s in that scope, but every one of "+
-			"them is binary, over the size limit, or secret-shaped.", query, plural(res.InScope, "file is", "files are"))
+			"them is binary, over the size limit, or secret-shaped.", query, render.Plural(res.InScope, "file is", "files are"))
 	case res.Secret > 0:
 		return fmt.Sprintf("No matches for %s. %s searched; %s secret-shaped and not searched.", query,
-			plural(res.Scanned, "file", "files"), plural(res.Secret, "file was", "files were"))
+			render.Plural(res.Scanned, "file", "files"), render.Plural(res.Secret, "file was", "files were"))
 	default:
 		return fmt.Sprintf("No matches for %s. %s searched.", query,
-			plural(res.Scanned, "file", "files"))
+			render.Plural(res.Scanned, "file", "files"))
 	}
 }
 
@@ -341,14 +342,7 @@ func matchSummary(res workspace.GrepResult) string {
 	if len(res.Files) == 0 {
 		return "no matches"
 	}
-	return fmt.Sprintf("%s in %s", plural(res.Total, "match", "matches"), plural(len(res.Files), "file", "files"))
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %s", n, many)
+	return fmt.Sprintf("%s in %s", render.Plural(res.Total, "match", "matches"), render.Plural(len(res.Files), "file", "files"))
 }
 
 // runGlob answers a glob call.
@@ -367,7 +361,7 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 	if err != nil {
 		return fmt.Sprintf("Could not match %s: %v", quoteToolArg(a.Pattern), err)
 	}
-	i.Out.Toolf("Matched %s against %s", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
+	i.Out.Toolf("Matched %s against %s", render.Plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 
 	if len(paths) == 0 {
 		// A walk that stopped short has not shown the files are absent, and
@@ -388,7 +382,7 @@ func (i *Inspector) runGlob(tc llm.ToolCall) string {
 		return fmt.Sprintf("No files match %s.\n\n%s", quoteToolArg(a.Pattern), globSyntaxNote)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s matching %s:\n\n", plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
+	fmt.Fprintf(&b, "%s matching %s:\n\n", render.Plural(len(paths), "file", "files"), quoteToolArg(a.Pattern))
 	b.WriteString(strings.Join(paths, "\n"))
 	b.WriteString("\n")
 	switch {
@@ -466,9 +460,9 @@ func (i *Inspector) runLS(tc llm.ToolCall) string {
 	if strings.TrimSpace(a.Path) != "" {
 		dir = quoteToolArg(dir)
 	}
-	count := plural(len(entries), "entry", "entries")
+	count := render.Plural(len(entries), "entry", "entries")
 	if total > len(entries) {
-		count = fmt.Sprintf("%d of %s", len(entries), plural(total, "entry", "entries"))
+		count = fmt.Sprintf("%d of %s", len(entries), render.Plural(total, "entry", "entries"))
 	}
 	if l.Ignored > 0 {
 		count += fmt.Sprintf(", %d ignored", l.Ignored)

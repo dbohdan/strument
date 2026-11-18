@@ -160,7 +160,7 @@ func TestEveryApprovalPathStillShowsTheSearch(t *testing.T) {
 				Results: []websearch.Result{{Title: "T", URL: "https://example.org/a"}},
 			})
 			c.Confirm = tc.confirm
-			out := &captureOutput{}
+			out := &captureOut{}
 			c.Out = out
 
 			runSearch(t, c, searchCall("the first one"))
@@ -190,7 +190,7 @@ func TestSearchLineNamesUnresponsiveEngines(t *testing.T) {
 		Results:      []websearch.Result{{Title: "T", URL: "https://example.org/a"}},
 		Unresponsive: []websearch.UnresponsiveEngine{{Engine: "brave"}, {Engine: "startpage"}},
 	})
-	out := &captureOutput{}
+	out := &captureOut{}
 	c.Out = out
 	runSearch(t, c, searchCall("q"))
 	if !strings.Contains(out.String(), "2 engines did not answer") {
@@ -206,7 +206,7 @@ func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
 	c.Search = func(context.Context, string) (websearch.Results, error) {
 		return websearch.Results{}, errors.New("instance down")
 	}
-	out := &captureOutput{}
+	out := &captureOut{}
 	c.Out = out
 	runSearch(t, c, searchCall("broken one"))
 	if !strings.Contains(out.String(), "broken one") {
@@ -215,7 +215,7 @@ func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
 
 	c2 := searchCoder(t, websearch.Results{Query: "q"})
 	c2.Confirm = &recordingConfirmer{answer: false}
-	out2 := &captureOutput{}
+	out2 := &captureOut{}
 	c2.Out = out2
 	runSearch(t, c2, searchCall("declined one"))
 	if !strings.Contains(out2.String(), "declined one") {

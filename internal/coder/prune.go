@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 )
 
 // Clearing old tool output, before any summary is written.
@@ -95,6 +96,6 @@ func (c *Coder) pruneHistory(budget int) bool {
 	}
 	c.doneMessages = msgs
 	c.Out.Printf("Cleared %s from the chat history (about %d tokens); the calls are kept.",
-		plural(n, "old tool result", "old tool results"), freed)
+		render.Plural(n, "old tool result", "old tool results"), freed)
 	return c.historyTokens(c.doneMessages) <= budget
 }

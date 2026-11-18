@@ -5,7 +5,6 @@ package coder
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -337,24 +336,6 @@ func TestAllowOriginExpandsLikeTheConfig(t *testing.T) {
 	}
 }
 
-// captureOutput keeps what the user would have seen, so a test can assert on
-// an absence as well as on a line.
-type captureOutput struct{ b strings.Builder }
-
-func (o *captureOutput) Printf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
-func (o *captureOutput) CommandOutput(text string)           { o.Printf("%s", text) }
-func (o *captureOutput) Toolf(format string, args ...any)    { fmt.Fprintf(&o.b, format+"\n", args...) }
-func (o *captureOutput) ToolBlock(title, body string)        { fmt.Fprintf(&o.b, "%s %s\n", title, body) }
-func (o *captureOutput) Warningf(format string, args ...any) { fmt.Fprintf(&o.b, format+"\n", args...) }
-func (o *captureOutput) Errorf(format string, args ...any)   { fmt.Fprintf(&o.b, format+"\n", args...) }
-func (o *captureOutput) Link(target string)                  { o.Printf("%s", target) }
-func (o *captureOutput) StreamText(string)                   {}
-func (o *captureOutput) StreamReasoning(string)              {}
-func (o *captureOutput) StreamToolCall(int, string, string)  {}
-func (o *captureOutput) FlushStream()                        {}
-func (o *captureOutput) String() string                      { return o.b.String() }
-func (o *captureOutput) reset()                              { o.b.Reset() }
-
 // Every fetch is announced, whoever approved it and however.
 //
 // This test used to assert the opposite of its last case: that a *prompted*
@@ -396,7 +377,7 @@ func TestWebfetchAnnouncesEveryFetch(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _, _ := fetchCoder(t, true)
-			out := &captureOutput{}
+			out := &captureOut{}
 			c.Out = out
 			tc.setup(c)
 

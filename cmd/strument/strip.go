@@ -61,14 +61,14 @@ func (c *historyStripCmd) Run() error {
 		fmt.Printf("Nothing to remove: no stored tool output is older than %s.\n", humanSpan(age))
 		if plan.Keep > 0 {
 			fmt.Printf("%s in use (%s).\n",
-				render.Plural(plan.Keep, "stored output", "stored outputs"), humanBytes(plan.KeepBytes))
+				render.Plural(plan.Keep, "stored output", "stored outputs"), render.Bytes(plan.KeepBytes))
 		}
 		return nil
 	}
 
 	fmt.Printf("This removes %s (%s) not referenced in the last %s.\n",
 		render.Plural(len(plan.Remove), "stored tool output", "stored tool outputs"),
-		humanBytes(plan.Bytes), humanSpan(age))
+		render.Bytes(plan.Bytes), humanSpan(age))
 	if plan.Orphans > 0 {
 		// Named separately because they are removed whatever the cutoff, and
 		// somebody reading a number that did not match their --older-than
@@ -81,7 +81,7 @@ func (c *historyStripCmd) Run() error {
 		// Phrased as "keeping N" rather than "N stays", because Plural fixes
 		// the noun and nothing fixes the verb.
 		fmt.Printf("Keeping %s still in use (%s).\n",
-			render.Plural(plan.Keep, "stored output", "stored outputs"), humanBytes(plan.KeepBytes))
+			render.Plural(plan.Keep, "stored output", "stored outputs"), render.Bytes(plan.KeepBytes))
 	}
 	fmt.Println("\nEvery record is kept. Each removed output keeps its hash, size, and first line,")
 	fmt.Println("so conversations still read and replay; only the stored output is deleted.")
@@ -94,7 +94,7 @@ func (c *historyStripCmd) Run() error {
 		return err
 	}
 	fmt.Printf("Removed %s, freeing %s.\n",
-		render.Plural(removed, "stored output", "stored outputs"), humanBytes(freed))
+		render.Plural(removed, "stored output", "stored outputs"), render.Bytes(freed))
 	return nil
 }
 

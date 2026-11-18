@@ -26,3 +26,16 @@ func PluralWord(n int, one, many string) string {
 	}
 	return many
 }
+
+// Bytes renders a size the way a person would say it: "1.5 MiB", "12.3 KiB",
+// and plain bytes under a KiB.
+func Bytes(n int64) string {
+	switch b := float64(n); {
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", b/(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", b/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}

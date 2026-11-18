@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/websearch"
 )
 
@@ -107,9 +108,9 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 // is told the same thing in the result body (degradedNote); this is the user's
 // copy of it.
 func searchSummary(res websearch.Results) string {
-	out := plural(len(res.Results), "result", "results")
+	out := render.Plural(len(res.Results), "result", "results")
 	if n := len(res.Unresponsive); n > 0 {
-		out += fmt.Sprintf(", %s did not answer", plural(n, "engine", "engines"))
+		out += fmt.Sprintf(", %s did not answer", render.Plural(n, "engine", "engines"))
 	}
 	return out
 }

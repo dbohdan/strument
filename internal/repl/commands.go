@@ -1023,7 +1023,7 @@ func cmdSubmit(_ context.Context, r *REPL, args string) string {
 	if st.Size() > submitLimit {
 		// Refuse rather than truncate: a silently shortened prompt is worse
 		// than one the user has to split themselves.
-		r.out.Errorf("%s is %s; the /submit size limit is %s.", paths[0], humanBytes(st.Size()), humanBytes(submitLimit))
+		r.out.Errorf("%s is %s; the /submit size limit is %s.", paths[0], render.Bytes(st.Size()), render.Bytes(submitLimit))
 		return ""
 	}
 
@@ -1045,19 +1045,6 @@ func cmdSubmit(_ context.Context, r *REPL, args string) string {
 	// sent, with no framing whitespace to make the two disagree.
 	r.printf("%s", msg)
 	return msg
-}
-
-// humanBytes renders a size for the /submit error the way a person would say
-// it ("1.5 MiB"), falling back to plain bytes under a KiB.
-func humanBytes(n int64) string {
-	switch b := float64(n); {
-	case b >= 1024*1024:
-		return fmt.Sprintf("%.1f MiB", b/(1024*1024))
-	case b >= 1024:
-		return fmt.Sprintf("%.1f KiB", b/1024)
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
 }
 
 // cmdSession shows a project's conversations and moves between them.

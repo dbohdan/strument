@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/skill"
 )
 
@@ -50,7 +51,7 @@ func skillTool(skills []skill.Skill) llm.ToolDef {
 	names := make([]any, 0, len(usable))
 	omitted := 0
 	for _, s := range usable {
-		line := fmt.Sprintf("- %s: %s\n", s.Name, oneLine(s.Description))
+		line := fmt.Sprintf("- %s: %s\n", s.Name, render.OneLine(s.Description))
 		// Cut and say so, rather than sending a truncated last entry that
 		// reads like a complete one.
 		if desc.Len()+len(line) > maxSkillCatalogBytes {
@@ -80,12 +81,6 @@ func skillTool(skills []skill.Skill) llm.ToolDef {
 			"required": []any{"name"},
 		},
 	}
-}
-
-// oneLine flattens a description for the catalog. A skill may use a block
-// scalar, and a newline inside a list entry would break the list's shape.
-func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
 }
 
 type toolSkillCall struct{ callID, name string }

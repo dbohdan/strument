@@ -126,7 +126,7 @@ func TestGrepSaysWhenItShortenedLines(t *testing.T) {
 	})
 
 	got := c.runGrep(call("grep", `{"pattern":"Target","mode":"content"}`))
-	// The whole sentence, not just the word: plural() carries the count itself,
+	// The whole sentence, not just the word: render.Plural() carries the count itself,
 	// and passing it a second time printed "1 long 1 line was shortened". A
 	// Contains check on "shortened" is exactly what missed that.
 	if want := `(1 long line was shortened, marked with "…".`; !strings.Contains(got, want) {

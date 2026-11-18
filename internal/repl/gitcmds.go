@@ -3,6 +3,8 @@ package repl
 import (
 	"context"
 	"strings"
+
+	"dbohdan.com/strument/internal/render"
 )
 
 // cmdUndo undoes the last turn: the files come back from the turn's snapshot,
@@ -27,7 +29,7 @@ func cmdUndo(_ context.Context, r *REPL, _ string) string {
 		}
 	}
 	if len(res.Removed) > 0 {
-		r.printf("Removed %s: %s", plural(len(res.Removed), "commit", "commits"), strings.Join(res.Removed, ", "))
+		r.printf("Removed %s: %s", render.Plural(len(res.Removed), "commit", "commits"), strings.Join(res.Removed, ", "))
 		if g := r.opts.Git; g != nil {
 			if _, short, subject, _, err := g.HeadInfo(); err == nil {
 				r.printf("Now at:  %s %s", short, subject)

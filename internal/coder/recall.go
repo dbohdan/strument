@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/render"
 
 	"dbohdan.com/strument/internal/llm"
 )
@@ -296,7 +297,7 @@ func recallSearch(entries []recallEntry, turns int, re *regexp.Regexp, a recallA
 	if len(hits) == 0 {
 		b.WriteString("No matches outside this conversation")
 	} else {
-		fmt.Fprintf(&b, "%s outside this conversation matched, newest first", plural(len(hits), "message", "messages"))
+		fmt.Fprintf(&b, "%s outside this conversation matched, newest first", render.Plural(len(hits), "message", "messages"))
 		if shown < len(hits) {
 			fmt.Fprintf(&b, "; showing %d (raise newest, or narrow the pattern, for more)", shown)
 		}

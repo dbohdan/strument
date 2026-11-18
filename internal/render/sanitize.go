@@ -99,3 +99,10 @@ func escapeLen(s string) int {
 		return 2 // a two-byte escape
 	}
 }
+
+// OneLine collapses every run of whitespace, newlines included, to one space:
+// for text a person wrote across lines, such as a skill's description, shown
+// where a list gives it one line.
+func OneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}

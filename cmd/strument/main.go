@@ -1762,7 +1762,7 @@ func (c *historyZipCmd) Run(parent *historyCmd) error {
 	}
 	fmt.Printf("Wrote %s: %s and %s, %s packed into %s.\n", c.Output, filepath.Base(seg),
 		render.Plural(stats.Blobs, "stored tool result", "stored tool results"),
-		humanBytes(stats.Bytes), humanBytes(info.Size()))
+		render.Bytes(stats.Bytes), render.Bytes(info.Size()))
 	if stats.Missing > 0 {
 		fmt.Printf("%d of the run's tool results %s no longer stored (stripped); the record keeps a one-line summary of each.\n",
 			stats.Missing, render.PluralWord(stats.Missing, "is", "are"))

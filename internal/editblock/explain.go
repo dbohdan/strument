@@ -87,6 +87,8 @@ func describeIndent(s string) string {
 	return fmt.Sprintf("%q", s)
 }
 
+// plural is render.Plural, which this package cannot import: render imports
+// editblock for its diffs.
 func plural(n int, one, many string) string {
 	if n == 1 {
 		return "1 " + one

@@ -2,9 +2,9 @@ package repl
 
 import (
 	"context"
-	"fmt"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 )
 
 // cmdAttach stages images to ride on the next message.
@@ -49,7 +49,7 @@ func attachDrop(r *REPL, names []string) string {
 		if n := r.coder.DropAttachments(); n == 0 {
 			r.printf("Nothing was attached.")
 		} else {
-			r.printf("Removed %s from your next message.", plural(n, "image", "images"))
+			r.printf("Removed %s from your next message.", render.Plural(n, "image", "images"))
 		}
 		return ""
 	}
@@ -101,12 +101,4 @@ func (r *REPL) warnIfModelCannotSee() {
 	}
 	r.out.Warningf("%s does not accept images, so it will be told the image is there but unavailable.", name)
 	r.printf("  Switch with /model, or set input_modalities = [\"text\", \"image\"] if it does accept them.")
-}
-
-// plural picks the singular or plural noun for a count.
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
-	}
-	return fmt.Sprintf("%d %s", n, many)
 }

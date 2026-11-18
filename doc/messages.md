@@ -121,6 +121,7 @@ form:
 ```go
 render.Plural(n, "turn", "turns")       // "1 turn", "12 turns"
 render.PluralWord(n, "origin", "origins") // when the count goes elsewhere
+render.Bytes(size)                        // "812 B", "12.3 KiB", "1.5 MiB"
 ```
 
 In prose, prefer “no turns” to “0 turns”. Keep the numeral when reporting a

@@ -80,7 +80,7 @@ func sessionLine(s history.Session) string {
 		last = "last used " + humanAge(time.Since(s.LastUsed))
 	}
 	return fmt.Sprintf("%s%s\n      %s over %s, %s, %s", mark, s.Name, turns,
-		render.Plural(s.Runs, "run", "runs"), last, humanBytes(s.Bytes))
+		render.Plural(s.Runs, "run", "runs"), last, render.Bytes(s.Bytes))
 }
 
 type sessionRenameCmd struct {

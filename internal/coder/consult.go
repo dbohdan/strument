@@ -12,6 +12,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/workspace"
 )
 
@@ -63,7 +64,7 @@ func consultTool(models map[string]ConsultModel) llm.ToolDef {
 	enum := make([]any, 0, len(aliases))
 	for _, a := range aliases {
 		m := models[a]
-		fmt.Fprintf(&desc, "- %s (%s): %s\n", a, m.Model.QualifiedSlug(), oneLine(m.Purpose))
+		fmt.Fprintf(&desc, "- %s (%s): %s\n", a, m.Model.QualifiedSlug(), render.OneLine(m.Purpose))
 		enum = append(enum, a)
 	}
 	return llm.ToolDef{
@@ -211,7 +212,7 @@ func (c *Coder) runConsult(ctx context.Context, cc consultCall) string {
 
 	shown := make([]string, 0, len(files))
 	for _, f := range files {
-		shown = append(shown, fmt.Sprintf("%s (%s)", f.path, plural(f.lines, "line", "lines")))
+		shown = append(shown, fmt.Sprintf("%s (%s)", f.path, render.Plural(f.lines, "line", "lines")))
 	}
 	if res := c.confirmGrouped(ConfirmRequest{
 		Prompt:          fmt.Sprintf("Consult %s?", cc.alias),

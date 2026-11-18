@@ -11,6 +11,7 @@ import (
 
 	"dbohdan.com/strument/internal/loopdetect"
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/render"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -1317,10 +1318,10 @@ func stripReasoning(answer, tag string) string {
 func (c *Coder) turnSummary() string {
 	var parts []string
 	if c.turnSteps > 0 {
-		parts = append(parts, plural(c.turnSteps+1, "step", "steps"))
+		parts = append(parts, render.Plural(c.turnSteps+1, "step", "steps"))
 	}
 	if n := len(c.turnEditedFiles); n > 0 {
-		parts = append(parts, plural(n, "file", "files")+" changed")
+		parts = append(parts, render.Plural(n, "file", "files")+" changed")
 	}
 	if len(parts) == 0 {
 		return ""
