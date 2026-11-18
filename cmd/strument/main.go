@@ -18,6 +18,7 @@ import (
 
 	"dbohdan.com/strument/internal/decide"
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/webpage"
 	"dbohdan.com/strument/internal/websearch"
 
 	"github.com/alecthomas/kong"
@@ -1929,7 +1930,7 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 	// path for JavaScript-rendered pages — and does its own networking (no
 	// proxy).
 	if len(cfg.Scraper) > 0 {
-		cdr.Scrape = coder.NewCommandScraper(cfg.Scraper, 60*time.Second, func() []string {
+		cdr.Scrape = webpage.NewCommand(cfg.Scraper, 60*time.Second, func() []string {
 			return cdr.EnvAllow
 		})
 		// A subprocess the model can cause, so webfetch is gated by the sandbox
@@ -1937,7 +1938,7 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 		cdr.ScrapeRunsCommand = true
 	} else {
 		scrapeTransport, _ := httpx.ProxyTransport(cfg.Proxy)
-		cdr.Scrape = coder.NewSimpleScraper(scrapeTransport, "Strument/"+version)
+		cdr.Scrape = webpage.NewSimple(scrapeTransport, "Strument/"+version)
 		cdr.ScrapeRunsCommand = false
 	}
 	// Search is another non-provider egress path, so it honors the global proxy

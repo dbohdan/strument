@@ -1,4 +1,4 @@
-package coder
+package webpage
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func TestScraperHTMLToMarkdown(t *testing.T) {
 			`<footer>Copyright NavCorp</footer></body></html>`), nil
 	})
 
-	out, err := NewSimpleScraper(rt, "Strument/9.9.9")(context.Background(), "https://example.com/page", ScrapeOptions{})
+	out, err := NewSimple(rt, "Strument/9.9.9")(context.Background(), "https://example.com/page", Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestScraperNonHTMLVerbatim(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("plain <b>not-html</b> text")),
 		}, nil
 	})
-	out, err := NewSimpleScraper(rt, "")(context.Background(), "https://example.com/raw.txt", ScrapeOptions{})
+	out, err := NewSimple(rt, "")(context.Background(), "https://example.com/raw.txt", Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestCommandScraper(t *testing.T) {
 	// effect on the next fetch.
 	t.Setenv("GO_WANT_HELPER_PROCESS", "1")
 	scrapeEnv := func() []string { return []string{"GO_WANT_HELPER_PROCESS"} }
-	out, err := NewCommandScraper(helper("ok"), 10*time.Second, scrapeEnv)(context.Background(), "https://example.com/page", ScrapeOptions{})
+	out, err := NewCommand(helper("ok"), 10*time.Second, scrapeEnv)(context.Background(), "https://example.com/page", Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestCommandScraper(t *testing.T) {
 	}
 
 	// A non-zero exit surfaces as an error carrying the stderr tail.
-	_, err = NewCommandScraper(helper("fail"), 10*time.Second, scrapeEnv)(context.Background(), "https://x", ScrapeOptions{})
+	_, err = NewCommand(helper("fail"), 10*time.Second, scrapeEnv)(context.Background(), "https://x", Options{})
 	if err == nil {
 		t.Fatal("expected error from failing command")
 	}
@@ -188,10 +188,10 @@ func TestCommandScraperFiltersEvenWithNoAllowlist(t *testing.T) {
 	t.Setenv("STRUMENT_SCRAPE_SECRET", "do-not-leak")
 
 	// nil envAllow: the shape a future caller gets by passing nothing.
-	out, err := NewCommandScraper(
+	out, err := NewCommand(
 		[]string{os.Args[0], "-test.run=TestScrapeEnvHelperProcess", "--", "%s"},
 		10*time.Second, nil,
-	)(context.Background(), "https://example.com/", ScrapeOptions{})
+	)(context.Background(), "https://example.com/", Options{})
 	// The helper cannot run without its gate variable, so the fetch fails —
 	// which is the point: a filtered environment breaks the command loudly
 	// rather than leaking quietly.
@@ -201,11 +201,11 @@ func TestCommandScraperFiltersEvenWithNoAllowlist(t *testing.T) {
 
 	// And with the secret named in env_allow it does arrive, so the check above
 	// is about filtering rather than about the variable never being passable.
-	out, err = NewCommandScraper(
+	out, err = NewCommand(
 		[]string{os.Args[0], "-test.run=TestScrapeEnvHelperProcess", "--", "%s"},
 		10*time.Second,
 		func() []string { return []string{"GO_WANT_HELPER_PROCESS", "STRUMENT_SCRAPE_SECRET"} },
-	)(context.Background(), "https://example.com/", ScrapeOptions{})
+	)(context.Background(), "https://example.com/", Options{})
 	if err != nil {
 		t.Fatalf("allowed variable did not reach the command: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/webpage"
 )
 
 // recordingConfirmer (tools_test.go) is reused rather than reimplemented: it
@@ -23,7 +24,7 @@ func fetchCoder(t *testing.T, yes bool) (*Coder, *recordingConfirmer, *int) {
 	cf := &recordingConfirmer{answer: yes}
 	c.Confirm = cf
 	fetches := 0
-	c.Scrape = func(_ context.Context, url string, _ ScrapeOptions) (string, error) {
+	c.Scrape = func(_ context.Context, url string, _ webpage.Options) (string, error) {
 		fetches++
 		return "Here is the content of " + url + ":\n\nthe page", nil
 	}
@@ -100,7 +101,7 @@ func TestWebfetchDeclinedSaysSo(t *testing.T) {
 
 func TestWebfetchFailureSaysWhy(t *testing.T) {
 	c, _, _ := fetchCoder(t, true)
-	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) {
+	c.Scrape = func(context.Context, string, webpage.Options) (string, error) {
 		return "", errors.New("HTTP 404")
 	}
 
@@ -185,7 +186,7 @@ func TestWebfetchSandboxGateFollowsTheScraper(t *testing.T) {
 // a one-line revert to hide.
 func TestWebfetchLongPageCarriesTheFetchNote(t *testing.T) {
 	c, _, _ := fetchCoder(t, true)
-	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) {
+	c.Scrape = func(context.Context, string, webpage.Options) (string, error) {
 		var b strings.Builder
 		for i := range 40 {
 			b.WriteString("## Section " + strconv.Itoa(i) + " {#sec-" + strconv.Itoa(i) + "}\n\n" +
@@ -207,7 +208,7 @@ func TestWebfetchToolOffering(t *testing.T) {
 	if hasTool(c.toolDefs(), toolWebfetch) {
 		t.Error("webfetch offered with no scraper configured")
 	}
-	c.Scrape = func(context.Context, string, ScrapeOptions) (string, error) { return "", nil }
+	c.Scrape = func(context.Context, string, webpage.Options) (string, error) { return "", nil }
 	if !hasTool(c.toolDefs(), toolWebfetch) {
 		t.Error("webfetch not offered with a scraper configured")
 	}

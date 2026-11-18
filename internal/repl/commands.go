@@ -21,6 +21,7 @@ import (
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/readline"
 	"dbohdan.com/strument/internal/render"
+	"dbohdan.com/strument/internal/webpage"
 )
 
 // command is one slash command. run returns a message to send to the model
@@ -889,7 +890,7 @@ func cmdWeb(ctx context.Context, r *REPL, args string) string {
 	// No outline from /web: the user typed a URL and wants the page. A fragment
 	// in what they typed still narrows it, which is what a fragment means
 	// everywhere else they paste one.
-	content, err := r.coder.Scrape(ctx, url, coder.ScrapeOptions{})
+	content, err := r.coder.Scrape(ctx, url, webpage.Options{})
 	if err != nil {
 		r.out.Errorf("Could not fetch %s: %v", url, err)
 		return ""

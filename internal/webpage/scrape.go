@@ -1,4 +1,4 @@
-package coder
+package webpage
 
 import (
 	"bytes"
@@ -37,21 +37,17 @@ var (
 	emptyLinkRe = regexp.MustCompile(`\[\s*\]\([^)]*\)`)
 )
 
-// SimpleScraper fetches a URL and reduces HTML to markdown, with no proxy and a
-// default user-agent.
-var SimpleScraper = NewSimpleScraper(nil, "")
-
-// NewSimpleScraper returns a Scraper that fetches over the given transport
+// NewSimple returns a Scraper that fetches over the given transport
 // (nil => the default) and identifies itself with userAgent ("" => "Strument").
 // The global proxy is threaded via the transport so scraping honors it like
 // every other outbound HTTPS action. HTML becomes markdown (html-to-markdown,
 // after slimming media); other content types are returned as text.
-func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
+func NewSimple(transport http.RoundTripper, userAgent string) Scraper {
 	if userAgent == "" {
 		userAgent = httpx.DefaultUserAgent
 	}
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
-	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {
+	return func(ctx context.Context, url string, opts Options) (string, error) {
 		client := client
 		if opts.Follow != nil || opts.LocalOK != nil {
 			c := *client
@@ -83,7 +79,7 @@ func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 			if errors.As(err, &refused) {
 				return "", refused
 			}
-			var local *localAddressError
+			var local *LocalAddressError
 			if errors.As(err, &local) {
 				return "", local
 			}
@@ -154,19 +150,19 @@ func redirectPolicy(follow func(string) bool) func(*http.Request, []*http.Reques
 	}
 }
 
-// contentKind is what a fetched body turned out to be, decided by sniffing
+// Kind is what a fetched body turned out to be, decided by sniffing
 // rather than by trusting the server: a `scraper` command supplies no headers
 // at all, and a text/plain label has described Go source before.
-type contentKind int
+type Kind int
 
 const (
-	kindHTML     contentKind = iota // markup; the htmlToMarkdown pipeline
-	kindMarkdown                    // a Markdown document; heading outline
-	kindCode                        // a language tree-sitter knows; def outline
-	kindText                        // everything else; line ranges only
+	KindHTML     Kind = iota // markup; the htmlToMarkdown pipeline
+	KindMarkdown             // a Markdown document; heading outline
+	KindCode                 // a language tree-sitter knows; def outline
+	KindText                 // everything else; line ranges only
 )
 
-// classifyBody decides how a fetched body should be outlined.
+// Classify decides how a fetched body should be outlined.
 //
 // The order is the order of trust. HTML wins on the byte sniff
 // (http.DetectContentType reads the actual markup, which a text/plain label
@@ -177,9 +173,9 @@ const (
 // range; a false Markdown outline hands the model a wrong map of a ReST
 // file, which it will then trust — so the sniff exists to catch Markdown,
 // never to *make* something Markdown.
-func classifyBody(pageURL, body string) contentKind {
+func Classify(pageURL, body string) Kind {
 	if ct := http.DetectContentType([]byte(body)); strings.Contains(ct, "html") {
-		return kindHTML
+		return KindHTML
 	}
 	ext := strings.ToLower(path.Ext(pageURL))
 	// A query or fragment rides on the extension and would break every table
@@ -190,29 +186,29 @@ func classifyBody(pageURL, body string) contentKind {
 	}
 	switch {
 	case markdownExts[ext]:
-		return kindMarkdown
+		return KindMarkdown
 	case excludedDocExts[ext], ext == ".txt":
-		return kindText
+		return KindText
 	case ext != "":
 		// A known code extension: DefOutlines owns the grammar list, and
 		// whether the file parses decides known there. Classified as code
 		// here, so an unparsable .go file gets the plain-text answer with its
 		// line ranges rather than a second-class no-outline answer.
-		return kindCode
+		return KindCode
 	default:
 		// An extensionless body could be anything; the sniff's one job is to
 		// catch Markdown, never to make something Markdown. Anything that
 		// does not clear the bar stays plain text.
 		if looksLikeMarkdown(body) {
-			return kindMarkdown
+			return KindMarkdown
 		}
-		return kindText
+		return KindText
 	}
 }
 
-// wrapContent frames a scraped page the way every scraper presents it to the
+// Wrap frames a scraped page the way every scraper presents it to the
 // model, so the phrasing stays identical across the HTTP and command paths.
-func wrapContent(url, text string) string {
+func Wrap(url, text string) string {
 	return fmt.Sprintf("Here is the content of %s:\n\n%s", url, text)
 }
 
@@ -228,8 +224,8 @@ func wrapOutline(url, text string) string {
 // that the HTTP path and the `scraper` command path answer identically: the
 // command path has no headers, which is why classification sniffs the body
 // rather than asking the server.
-func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap func(url, text string) string) {
-	kind := classifyBody(pageURL, body)
+func renderFetched(pageURL, body string, opts Options) (text string, wrap func(url, text string) string) {
+	kind := Classify(pageURL, body)
 	// A range on an HTML page counts lines of the text it converts to, never
 	// of the markup: that text is what the model reads, and it is what the
 	// oversized-page outline numbers, because truncateFetch sees the page
@@ -237,10 +233,10 @@ func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap 
 	// recommending a fetch that could not work, and the refusal itself was
 	// lost when the whole page that came with it was cut back to the same
 	// outline: a model asked three times and got one map.
-	if kind == kindHTML {
+	if kind == KindHTML {
 		lo, hi := opts.lineRange()
 		if lo == 0 {
-			return htmlToMarkdown(body, pageURL, opts), wrapContent
+			return htmlToMarkdown(body, pageURL, opts), Wrap
 		}
 		whole := opts
 		whole.Outline, whole.Range = false, ""
@@ -248,7 +244,7 @@ func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap 
 		if opts.Outline {
 			return markdownOutlineOffset(part, lo-1), wrapOutline
 		}
-		return part, wrapContent
+		return part, Wrap
 	}
 	// The range slices the body, so any line numbers an outline reports must
 	// be shifted back to the file's coordinate system: the model asked for
@@ -261,21 +257,21 @@ func renderFetched(pageURL, body string, opts ScrapeOptions) (text string, wrap 
 		base = lo - 1
 	}
 	switch kind {
-	case kindMarkdown:
+	case KindMarkdown:
 		if opts.Outline {
 			return markdownOutlineOffset(body, base), wrapOutline
 		}
-		return body, wrapContent
-	case kindCode:
+		return body, Wrap
+	case KindCode:
 		if opts.Outline {
 			return defOutlineOf(pageURL, body, base), wrapOutline
 		}
-		return body, wrapContent
-	default: // kindText
+		return body, Wrap
+	default: // KindText
 		if opts.Outline {
 			return plainTextOutline(body, base), wrapOutline
 		}
-		return body, wrapContent
+		return body, Wrap
 	}
 }
 
@@ -422,7 +418,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// NewCommandScraper returns a Scraper that fetches a URL by running an external
+// NewCommand returns a Scraper that fetches a URL by running an external
 // command — typically a headless browser dumping the rendered DOM — and reduces
 // its stdout, treated as HTML, to markdown through the same pipeline as the HTTP
 // scraper. This is the opt-in path for JavaScript-rendered pages: it keeps
@@ -442,8 +438,8 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 // guards against it by never returning nil; the caller-side nil check opted
 // back out of that guarantee one level up. Every caller happened to be correct,
 // which is the kind of safety that lasts until someone adds a caller.
-func NewCommandScraper(argv []string, timeout time.Duration, envAllow func() []string) Scraper {
-	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {
+func NewCommand(argv []string, timeout time.Duration, envAllow func() []string) Scraper {
+	return func(ctx context.Context, url string, opts Options) (string, error) {
 		if len(argv) == 0 {
 			return "", errors.New("scraper command is empty")
 		}
@@ -484,7 +480,7 @@ func NewCommandScraper(argv []string, timeout time.Duration, envAllow func() []s
 		if strings.TrimSpace(stdout.buf.String()) == "" {
 			return "", errors.New("scraper command produced no output")
 		}
-		wrap := wrapContent
+		wrap := Wrap
 		if opts.Outline {
 			wrap = wrapOutline
 		}
@@ -685,7 +681,7 @@ func lineCount(s string) int {
 // defOutlineOf renders a source file's top-level definitions as the outline
 // the model fetches ranges by. base shifts every reported line number — set
 // when the outline is computed over a range slice, so the numbers stay the
-// file's. kindText's fallback awaits it when the extension names no grammar.
+// file's. KindText's fallback awaits it when the extension names no grammar.
 func defOutlineOf(pageURL, body string, base int) string {
 	defs, known := repomap.DefOutlines(pageURL, []byte(body))
 	if !known {
@@ -993,7 +989,7 @@ func outlineOf(md, pageURL string) string {
 // <aside>, but Sphinx puts footnotes in <aside class="footnote">, so dropping it
 // would lose real content. On a parse or conversion error it falls back to the
 // (possibly slimmed) HTML.
-func htmlToMarkdown(htmlStr, pageURL string, opts ScrapeOptions) string {
+func htmlToMarkdown(htmlStr, pageURL string, opts Options) string {
 	fragMissing := ""
 	fragEmpty := ""
 	if doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr)); err == nil {

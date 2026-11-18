@@ -13,6 +13,7 @@ import (
 
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/origin"
+	"dbohdan.com/strument/internal/webpage"
 )
 
 // Fetching a page, as a tool the model calls rather than a guess about what the
@@ -114,39 +115,13 @@ func parseFetchArgs(tc llm.ToolCall) (toolFetch, string) {
 	if _, err := origin.Of(raw); err != nil {
 		return toolFetch{}, "That URL cannot be fetched: " + err.Error() + "."
 	}
-	lo, hi, err := parseLineRange(a.Range)
+	lo, hi, err := webpage.ParseLineRange(a.Range)
 	if err != nil {
 		return toolFetch{}, "The range argument was not usable: " + err.Error() +
 			" Give it as two line numbers, first and last, as in \"80-120\"."
 	}
 	return toolFetch{callID: tc.ID, url: raw, purpose: strings.TrimSpace(a.Purpose),
 		outline: a.Outline, lineLo: lo, lineHi: hi}, ""
-}
-
-// parseLineRange reads "80-120" (1-based, inclusive) or a single "80".
-func parseLineRange(s string) (lo, hi int, err error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, 0, nil
-	}
-	first, second, _ := strings.Cut(s, "-")
-	lo, err = strconv.Atoi(strings.TrimSpace(first))
-	if err != nil || lo < 1 {
-		return 0, 0, fmt.Errorf("%q is not a line number", first)
-	}
-	hi = lo
-	if second != "" {
-		hi, err = strconv.Atoi(strings.TrimSpace(second))
-		if err != nil {
-			return 0, 0, fmt.Errorf("%q is not a line number", second)
-		}
-	} else if strings.HasSuffix(s, "-") {
-		return 0, 0, fmt.Errorf("the range %s has no end", s)
-	}
-	if hi < lo {
-		return 0, 0, fmt.Errorf("the range %s ends before it starts", s)
-	}
-	return lo, hi, nil
 }
 
 // runWebfetch confirms and fetches, returning the page as the tool result.
@@ -169,7 +144,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	}
 	// Where this fetch may connect without a second question: the origins a
 	// person has seen as local, plus this one when a person approved this
-	// very fetch. See localaddr.go.
+	// very fetch. See internal/webpage/localaddr.go.
 	localOK := c.localSeen
 	// An allowlisted origin skips the prompt entirely — which is also why it
 	// needs no --yes flag. The flag question only ever arises for an origin the
@@ -229,11 +204,11 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	}
 	c.Out.Link(f.url)
 
-	opts := ScrapeOptions{
+	opts := webpage.Options{
 		Outline: f.outline, Range: rangeArg(f), Follow: c.fetchesWithoutAsking, LocalOK: localOK,
 	}
 	content, err := c.Scrape(ctx, f.url, opts)
-	var local *localAddressError
+	var local *webpage.LocalAddressError
 	if errors.As(err, &local) {
 		// Asked rather than refused, and asked without a Grant, so no --yes
 		// answers it: the point is that someone sees the address.
@@ -251,7 +226,7 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 		opts.LocalOK = func(o string) bool { return o == seen || localOK(o) }
 		content, err = c.Scrape(ctx, f.url, opts)
 	}
-	var refused *RedirectRefusedError
+	var refused *webpage.RedirectRefusedError
 	if errors.As(err, &refused) {
 		// Not a failure to report as one: the page exists, it lives somewhere
 		// else. The model gets the target, and fetching it goes through the
@@ -273,16 +248,16 @@ func (c *Coder) runWebfetch(ctx context.Context, f toolFetch) string {
 	if f.outline {
 		return truncateResult(content) // an outline that overruns has no map of its own
 	}
-	// The kind is re-derived here rather than threaded through the Scraper
+	// The kind is re-derived here rather than threaded through the webpage.Scraper
 	// port, whose other implementer (a user's `scraper` command) has no
-	// reason to know it exists. classifyBody is deterministic over the body,
-	// and the framing line wrapContent added is stripped first so the
+	// reason to know it exists. webpage.Classify is deterministic over the body,
+	// and the framing line webpage.Wrap added is stripped first so the
 	// classification and the outline both see the file the server sent.
-	kind := classifyBody(f.url, unwrapContent(content))
+	kind := webpage.Classify(f.url, webpage.Unwrap(content))
 	return truncateFetch(content, f.url, kind)
 }
 
-// rangeArg is the fetch's range as the ScrapeOptions field, "" for none.
+// rangeArg is the fetch's range as the webpage.Options field, "" for none.
 func rangeArg(f toolFetch) string {
 	if f.lineLo == 0 {
 		return ""
@@ -291,45 +266,6 @@ func rangeArg(f toolFetch) string {
 		return strconv.Itoa(f.lineLo)
 	}
 	return fmt.Sprintf("%d-%d", f.lineLo, f.lineHi)
-}
-
-// fetchOutline is the map handed back with an oversized page, built by the
-// outline builder the page's own kind has: heading anchors for HTML and
-// Markdown, definition spans for code, a line count for anything else.
-//
-// It runs on the body the scraper fetched — before wrapContent's framing line
-// — because the builders answer in line numbers and anchors of the *file*, and
-// a framing line added two lines to the top would shift every one of them. A
-// body can only be classified where the kind is still known, so the kind
-// travels from renderFetched as the third return value.
-func fetchOutline(pageURL, body string, kind contentKind) string {
-	switch kind {
-	case kindHTML, kindMarkdown:
-		// The HTML outline answers in URL fragments, which are how an HTML or
-		// Markdown page is fetched; the Markdown builders answer in line
-		// ranges, which is how a text page is fetched.
-		if kind == kindHTML {
-			return outlineOf(body, pageURL)
-		}
-		return markdownOutline(body)
-	case kindCode:
-		return defOutlineOf(pageURL, body, 0)
-	default:
-		return plainTextOutline(body, 0)
-	}
-}
-
-// unwrapContent reverses wrapContent's framing line, so an outline computed
-// over the returned text answers in the file's own line numbers. The framing
-// is deterministic (a fixed prefix and a trailing newline), so exact reversal
-// is a Cut, not a parse.
-func unwrapContent(wrapped string) string {
-	if rest, ok := strings.CutPrefix(wrapped, "Here is the content of "); ok {
-		if _, body, ok := strings.Cut(rest, ":\n\n"); ok {
-			return body
-		}
-	}
-	return wrapped
 }
 
 // truncateFetch cuts an oversized page and hands back its map.
@@ -364,15 +300,15 @@ const outlineSwitchRatio = 4
 
 // truncateFetch cuts an oversized page and hands back its map.
 //
-// The map is built by the page's own kind (fetchOutline), over the unwrapped
+// The map is built by the page's own kind (webpage.Outline), over the unwrapped
 // body, so a text page's line numbers are the file's — which is what makes
 // the "fetch a range" advice true rather than aspirational.
-func truncateFetch(content, pageURL string, kind contentKind) string {
+func truncateFetch(content, pageURL string, kind webpage.Kind) string {
 	if len(content) <= maxToolOutputBytes {
 		return content
 	}
-	body := unwrapContent(content)
-	outline := fetchOutline(pageURL, body, kind)
+	body := webpage.Unwrap(content)
+	outline := webpage.Outline(pageURL, body, kind)
 	if len(content) > outlineSwitchRatio*maxToolOutputBytes {
 		// Far more page than one result can carry, so send the map. Four of
 		// six models with an order-independent preference chose this over a
@@ -419,8 +355,8 @@ func truncateFetch(content, pageURL string, kind contentKind) string {
 // navigationHint is the sentence each kind's truncation note ends with: the
 // one action that actually navigates this kind of page. An anchor on a text
 // page fetches nothing, so the advice has to change with the kind.
-func navigationHint(kind contentKind) string {
-	if kind == kindHTML {
+func navigationHint(kind webpage.Kind) string {
+	if kind == webpage.KindHTML {
 		return "Outline of the whole of it follows; fetch a section by adding its anchor to " +
 			"the URL rather than fetching this page again, which returns this same prefix"
 	}
@@ -437,12 +373,12 @@ func (c *Coder) localSeen(org string) bool {
 		return true
 	}
 	host, _, err := net.SplitHostPort(org)
-	return err == nil && c.sessionAutoApprove["webfetch:"+org] && namesLocalHost(host)
+	return err == nil && c.sessionAutoApprove["webfetch:"+org] && webpage.NamesLocalHost(host)
 }
 
 // localDeclined is the model's text for a fetch that reached a local address
 // and was then declined, or could not be asked about.
-func localDeclined(res ConfirmResult, url string, local *localAddressError) string {
+func localDeclined(res ConfirmResult, url string, local *webpage.LocalAddressError) string {
 	if res.Unattended {
 		return fmt.Sprintf("Strument did not fetch %s: %s connects to %s, a local address, and no one "+
 			"is at a terminal to approve that. A fetch reaches a local address only when someone "+

@@ -240,7 +240,7 @@ const AgentsFileName = "AGENTS.md"
 // standing instructions exist when none do.
 func (c *Coder) agentsNote() string {
 	has := func(name string) bool {
-		_, err := os.Stat(filepath.Join(c.Root, name)) //nolint:gosec // the project root and a constant name, never a model-supplied path.
+		_, err := os.Stat(filepath.Join(c.Root, name))
 		return err == nil
 	}
 	shared, local := has(AgentsFileName), has(AgentsLocalFileName)

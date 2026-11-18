@@ -1,4 +1,4 @@
-package coder
+package webpage
 
 import (
 	"context"
@@ -26,13 +26,13 @@ import (
 // TTL-0 answer can change in between. Go needs no pin: the check sits in the
 // dialer's Control hook, which sees the address actually being connected to.
 
-// localAddressError is a connection to a local address that was not approved.
-type localAddressError struct {
+// LocalAddressError is a connection to a local address that was not approved.
+type LocalAddressError struct {
 	Origin string // host:port as the URL named it
 	Addr   string // the address it resolved to
 }
 
-func (e *localAddressError) Error() string {
+func (e *LocalAddressError) Error() string {
 	return fmt.Sprintf("%s connects to %s, a local address", e.Origin, e.Addr)
 }
 
@@ -50,11 +50,11 @@ func isLocalAddr(a netip.Addr) bool {
 
 var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 
-// namesLocalHost reports whether a URL's host is itself local as written: an
+// NamesLocalHost reports whether a URL's host is itself local as written: an
 // address literal in the local ranges, or localhost. An origin like that was
 // seen as local by whoever approved it, which a name that resolves locally
 // was not.
-func namesLocalHost(host string) bool {
+func NamesLocalHost(host string) bool {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
@@ -100,7 +100,7 @@ func guardedTransport(base http.RoundTripper, localOK func(origin string) bool) 
 				return fmt.Errorf("cannot tell where %s connects: %w", origin, err)
 			}
 			if isLocalAddr(ap.Addr()) && !localOK(origin) {
-				return &localAddressError{Origin: origin, Addr: ap.Addr().Unmap().String()}
+				return &LocalAddressError{Origin: origin, Addr: ap.Addr().Unmap().String()}
 			}
 			return nil
 		}
@@ -138,14 +138,14 @@ func (p *precheckTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		host := req.URL.Hostname()
 		if a, err := netip.ParseAddr(host); err == nil {
 			if isLocalAddr(a) {
-				return nil, &localAddressError{Origin: origin, Addr: a.Unmap().String()}
+				return nil, &LocalAddressError{Origin: origin, Addr: a.Unmap().String()}
 			}
 		} else if addrs, err := net.DefaultResolver.LookupNetIP(req.Context(), "ip", host); err == nil {
 			// A failed lookup is not a verdict: behind a proxy the name may
 			// only resolve on the far side. The dial check still stands.
 			for _, a := range addrs {
 				if isLocalAddr(a) {
-					return nil, &localAddressError{Origin: origin, Addr: a.Unmap().String()}
+					return nil, &LocalAddressError{Origin: origin, Addr: a.Unmap().String()}
 				}
 			}
 		}

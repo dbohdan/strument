@@ -265,6 +265,10 @@ inherited from aider.
   - `envallow/` — the environment of a command the model caused: the
     allowlist every such subprocess runs under, and the one `Filter` that
     applies it. Shared by the coder's tools, the scraper command, and `/env`.
+  - `webpage/` — fetching a page for a model: the built-in fetcher and the
+    scraper command, HTML to Markdown, fragments, ranges and outlines, and the
+    refusals of local addresses and unapproved redirects. The `webfetch`
+    tool in the coder decides what to fetch and how much fits a result.
   - `httpx/` — what the HTTP clients share: proxy transports, app
     attribution, and `Post` for the JSON services.
   - `record/` — the session record's schema: one flat `Record` per JSON line,
@@ -307,7 +311,7 @@ reaching around it.
 Checks are **not** a `CommandRunner` client, which is easy to assume and wrong:
 `runCheck` (`toolobserve.go`) runs a configured argv with `exec.CommandContext`
 directly, deliberately without a shell, because the argv comes from the user's
-config and never from the model. The scraper command (`scrape.go`) does the
+config and never from the model. The scraper command (`internal/webpage`) does the
 same, for the same reason. What they share with the port is not the port — it
 is the two policies below.
 

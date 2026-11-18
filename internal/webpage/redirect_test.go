@@ -2,7 +2,7 @@
 // not carry the fetch to one they did not. Two loopback servers on different
 // ports are two origins, which is all the test needs; nothing leaves the host.
 
-package coder
+package webpage
 
 import (
 	"context"
@@ -42,10 +42,10 @@ func redirectPair(t *testing.T) (from, to *httptest.Server, hits *atomic.Int32) 
 
 func TestScraperStopsAtARedirectFollowRefuses(t *testing.T) {
 	from, to, hits := redirectPair(t)
-	scrape := NewSimpleScraper(nil, "")
+	scrape := NewSimple(nil, "")
 	never := func(string) bool { return false }
 
-	_, err := scrape(context.Background(), from.URL+"/go", ScrapeOptions{Follow: never})
+	_, err := scrape(context.Background(), from.URL+"/go", Options{Follow: never})
 	var refused *RedirectRefusedError
 	if !errors.As(err, &refused) {
 		t.Fatalf("err = %v, want a RedirectRefusedError", err)
@@ -59,7 +59,7 @@ func TestScraperStopsAtARedirectFollowRefuses(t *testing.T) {
 
 	// Within one origin a redirect is followed whatever Follow says: the user
 	// approved the origin, and /moved -> /here is still it.
-	out, err := scrape(context.Background(), from.URL+"/moved", ScrapeOptions{Follow: never})
+	out, err := scrape(context.Background(), from.URL+"/moved", Options{Follow: never})
 	if err != nil || !strings.Contains(out, "same origin page") {
 		t.Errorf("a same-origin redirect was not followed: %q, %v", out, err)
 	}
@@ -69,35 +69,8 @@ func TestScraperStopsAtARedirectFollowRefuses(t *testing.T) {
 // redirects are followed the way a browser follows them.
 func TestScraperFollowsEveryRedirectWithoutAPolicy(t *testing.T) {
 	from, _, hits := redirectPair(t)
-	out, err := NewSimpleScraper(nil, "")(context.Background(), from.URL+"/go", ScrapeOptions{})
+	out, err := NewSimple(nil, "")(context.Background(), from.URL+"/go", Options{})
 	if err != nil || !strings.Contains(out, "the other origin's page") || hits.Load() != 1 {
 		t.Errorf("out = %q, err = %v, hits = %d; want the redirect followed", out, err, hits.Load())
-	}
-}
-
-// The case the rule exists for, end to end through the tool. The approved
-// origin redirects elsewhere; the other page must not be fetched, and the model
-// must be told where it went so that fetching it is its own, asked-about call.
-func TestWebfetchDoesNotFollowARedirectToAnUnapprovedOrigin(t *testing.T) {
-	from, to, hits := redirectPair(t)
-	c, cf, _ := fetchCoder(t, false)
-	c.Scrape = NewSimpleScraper(nil, "")
-	c.WebfetchAllow = []string{strings.TrimPrefix(from.URL, "http://")}
-
-	out := runFetch(t, c, fetchCall(from.URL+"/go", "read it"))
-	if hits.Load() != 0 {
-		t.Fatalf("an approved origin's redirect fetched an unapproved one: %q", out)
-	}
-	if !strings.Contains(out, to.URL+"/page") || !strings.Contains(out, "not followed") {
-		t.Errorf("result = %q, want the redirect target named and the refusal stated", out)
-	}
-	if len(cf.got) != 0 {
-		t.Errorf("asked %d times; the redirect is refused, not prompted about mid-fetch", len(cf.got))
-	}
-
-	// Once the target's origin is approved too, the same redirect goes through.
-	c.WebfetchAllow = append(c.WebfetchAllow, strings.TrimPrefix(to.URL, "http://"))
-	if out := runFetch(t, c, fetchCall(from.URL+"/go", "read it")); !strings.Contains(out, "the other origin's page") {
-		t.Errorf("a redirect between two approved origins was not followed: %q", out)
 	}
 }

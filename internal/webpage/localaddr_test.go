@@ -1,4 +1,4 @@
-package coder
+package webpage
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -42,8 +41,8 @@ func TestNamesLocalHost(t *testing.T) {
 		"localhost": true, "app.localhost": true, "127.0.0.1": true, "[::1]": true,
 		"10.0.0.5": true, "example.com": false, "localhost.example.com": false,
 	} {
-		if got := namesLocalHost(host); got != want {
-			t.Errorf("namesLocalHost(%q) = %v, want %v", host, got, want)
+		if got := NamesLocalHost(host); got != want {
+			t.Errorf("NamesLocalHost(%q) = %v, want %v", host, got, want)
 		}
 	}
 }
@@ -63,12 +62,12 @@ func localServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 
 func TestScraperRefusesALocalAddressItWasNotCleared(t *testing.T) {
 	srv, hits := localServer(t)
-	scrape := NewSimpleScraper(nil, "")
+	scrape := NewSimple(nil, "")
 
-	_, err := scrape(context.Background(), srv.URL, ScrapeOptions{LocalOK: func(string) bool { return false }})
-	var local *localAddressError
+	_, err := scrape(context.Background(), srv.URL, Options{LocalOK: func(string) bool { return false }})
+	var local *LocalAddressError
 	if !errors.As(err, &local) || local.Addr != "127.0.0.1" {
-		t.Fatalf("err = %v, want a localAddressError for 127.0.0.1", err)
+		t.Fatalf("err = %v, want a LocalAddressError for 127.0.0.1", err)
 	}
 	if hits.Load() != 0 {
 		t.Error("the refused request reached the server")
@@ -77,7 +76,7 @@ func TestScraperRefusesALocalAddressItWasNotCleared(t *testing.T) {
 		"cleared": func(string) bool { return true },
 		"no rule": nil,
 	} {
-		if _, err := scrape(context.Background(), srv.URL, ScrapeOptions{LocalOK: ok}); err != nil {
+		if _, err := scrape(context.Background(), srv.URL, Options{LocalOK: ok}); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -101,9 +100,9 @@ func TestTheDialerRefusesWhatThePrecheckPassed(t *testing.T) {
 	if err == nil {
 		_ = resp.Body.Close()
 	}
-	var local *localAddressError
+	var local *LocalAddressError
 	if !errors.As(err, &local) {
-		t.Fatalf("err = %v, want the dialer's localAddressError", err)
+		t.Fatalf("err = %v, want the dialer's LocalAddressError", err)
 	}
 	if hits.Load() != 0 {
 		t.Error("the refused connection reached the server")
@@ -134,82 +133,4 @@ func TestAProxyOnLocalhostIsNotRefused(t *testing.T) {
 		t.Fatalf("a request through a local proxy was refused: %v", err)
 	}
 	_ = resp.Body.Close()
-}
-
-func localFetchCoder(t *testing.T, confirm Confirmer) *Coder {
-	t.Helper()
-	c := testCoder(t)
-	c.Scrape = NewSimpleScraper(nil, "")
-	c.Confirm = confirm
-	return c
-}
-
-func webfetchGranted(t *testing.T, fallback Confirmer) Confirmer {
-	t.Helper()
-	granted, err := ParseGrants([]string{"webfetch"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return AutoConfirmer{Granted: StaticGrants(granted), Fallback: fallback}
-}
-
-// --yes webfetch approves fetches no one sees, so it does not reach a local
-// address: it asks, and with no one to ask it says how to allow it.
-func TestWebfetchGrantDoesNotReachALocalAddress(t *testing.T) {
-	srv, hits := localServer(t)
-	c := localFetchCoder(t, webfetchGranted(t, unattendedConfirmer{}))
-
-	out := runFetch(t, c, fetchCall(srv.URL+"/admin", "read it"))
-	if hits.Load() != 0 {
-		t.Fatalf("the granted fetch reached the local server:\n%s", out)
-	}
-	if !strings.Contains(out, "127.0.0.1, a local address") || !strings.Contains(out, "webfetch_allow") {
-		t.Errorf("the model should hear why and how to allow it:\n%s", out)
-	}
-}
-
-// Asked the second time, with the address in the question, and no --yes
-// can answer that question.
-func TestWebfetchGrantAsksAboutALocalAddress(t *testing.T) {
-	srv, hits := localServer(t)
-	person := &recordingConfirmer{answer: true}
-	c := localFetchCoder(t, webfetchGranted(t, person))
-
-	out := runFetch(t, c, fetchCall(srv.URL+"/", "read it"))
-	if hits.Load() != 1 || !strings.Contains(out, "the local page") {
-		t.Fatalf("approved at the second prompt, the fetch should go ahead:\n%s", out)
-	}
-	if len(person.got) != 1 || !strings.Contains(person.got[0].Prompt, "127.0.0.1") || person.got[0].Grant != "" {
-		t.Errorf("the one prompt should name the address and carry no grant: %+v", person.got)
-	}
-}
-
-func TestWebfetchLocalAddressAllowedWhenSeen(t *testing.T) {
-	srv, _ := localServer(t)
-	org, _ := origin.Of(srv.URL)
-
-	t.Run("listed in webfetch_allow", func(t *testing.T) {
-		c := localFetchCoder(t, webfetchGranted(t, unattendedConfirmer{}))
-		c.WebfetchAllow = []string{org}
-		if out := runFetch(t, c, fetchCall(srv.URL+"/", "read it")); !strings.Contains(out, "the local page") {
-			t.Errorf("an allowlisted local origin was not fetched:\n%s", out)
-		}
-	})
-	t.Run("approved at a prompt", func(t *testing.T) {
-		person := &recordingConfirmer{answer: true}
-		c := localFetchCoder(t, person)
-		if out := runFetch(t, c, fetchCall(srv.URL+"/", "read it")); !strings.Contains(out, "the local page") {
-			t.Errorf("a fetch a person approved was not made:\n%s", out)
-		}
-		if len(person.got) != 1 {
-			t.Errorf("%d prompts, want the one", len(person.got))
-		}
-	})
-	t.Run("session grant for an origin written as local", func(t *testing.T) {
-		c := localFetchCoder(t, unattendedConfirmer{})
-		c.sessionAutoApprove["webfetch:"+org] = true
-		if out := runFetch(t, c, fetchCall(srv.URL+"/", "read it")); !strings.Contains(out, "the local page") {
-			t.Errorf("an origin approved as 127.0.0.1 is local as seen:\n%s", out)
-		}
-	})
 }

@@ -1,7 +1,7 @@
 // Reading part of a page: the fragment a URL already carries, and the outline
 // that says which fragments there are.
 
-package coder
+package webpage
 
 import (
 	"strings"
@@ -39,7 +39,7 @@ const (
 )
 
 func TestFragmentTakesTheSectionPastAHeadingWrapper(t *testing.T) {
-	md := htmlToMarkdown(wikiPage, "https://en.wikipedia.org/wiki/ENIAC#Programming", ScrapeOptions{})
+	md := htmlToMarkdown(wikiPage, "https://en.wikipedia.org/wiki/ENIAC#Programming", Options{})
 
 	if !strings.Contains(md, "complex sequences") || !strings.Contains(md, "Several language systems") {
 		t.Errorf("the section's prose was not returned:\n%s", md)
@@ -53,7 +53,7 @@ func TestFragmentTakesTheSectionPastAHeadingWrapper(t *testing.T) {
 }
 
 func TestFragmentOnAContainerTakesItsSubtree(t *testing.T) {
-	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#string-methods", ScrapeOptions{})
+	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#string-methods", Options{})
 
 	if !strings.Contains(md, "common sequence operations") {
 		t.Errorf("the section body was not returned:\n%s", md)
@@ -66,7 +66,7 @@ func TestFragmentOnAContainerTakesItsSubtree(t *testing.T) {
 // A definition term brings its definition. Without this, #str.join returns the
 // name of the method and not what it does.
 func TestFragmentOnADefinitionTermTakesItsDefinition(t *testing.T) {
-	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#str.join", ScrapeOptions{})
+	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#str.join", Options{})
 
 	if !strings.Contains(md, "concatenation") {
 		t.Errorf("the definition did not come with the term:\n%s", md)
@@ -84,7 +84,7 @@ func TestFragmentOnADefinitionTermTakesItsDefinition(t *testing.T) {
 // asked, one calling it "the least helpful thing possible". The anchors that do
 // exist are smaller and are the only answer the model can act on.
 func TestMissingFragmentReturnsTheOutline(t *testing.T) {
-	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#nope", ScrapeOptions{})
+	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html#nope", Options{})
 
 	if !strings.Contains(md, "no \"#nope\" section") {
 		t.Errorf("a missing fragment was not reported:\n%s", md)
@@ -106,7 +106,7 @@ func TestOutlineReportsSectionSizes(t *testing.T) {
 	b.WriteString("<h2 id=\"big\">Big</h2><p>" + strings.Repeat("word ", 2000) + "</p>")
 	b.WriteString("<h2 id=\"small\">Small</h2><p>tiny</p></body></html>")
 
-	outline := htmlToMarkdown(b.String(), "https://example.com/p", ScrapeOptions{Outline: true})
+	outline := htmlToMarkdown(b.String(), "https://example.com/p", Options{Outline: true})
 
 	if !strings.Contains(outline, "#small  (<1 KB)") {
 		t.Errorf("a small section was not marked as small:\n%s", outline)
@@ -117,7 +117,7 @@ func TestOutlineReportsSectionSizes(t *testing.T) {
 }
 
 func TestOutlineListsSectionsWithTheirAnchors(t *testing.T) {
-	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html", ScrapeOptions{Outline: true})
+	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html", Options{Outline: true})
 
 	for _, want := range []string{
 		"- Built-in Types  #built-in-types",
@@ -141,7 +141,7 @@ func TestOutlineListsSectionsWithTheirAnchors(t *testing.T) {
 // listing sections nobody can fetch.
 func TestOutlineSaysWhenNothingCanBeFetched(t *testing.T) {
 	page := `<html><body><h1>Title</h1><p>x</p><h2>Part</h2><p>y</p></body></html>`
-	md := htmlToMarkdown(page, "https://example.com/p", ScrapeOptions{Outline: true})
+	md := htmlToMarkdown(page, "https://example.com/p", Options{Outline: true})
 
 	if !strings.Contains(md, "no section of this page can be fetched") {
 		t.Errorf("the outline promised navigation it cannot deliver:\n%s", md)
@@ -152,7 +152,7 @@ func TestOutlineSaysWhenNothingCanBeFetched(t *testing.T) {
 }
 
 func TestOutlineOfAPageWithNoHeadings(t *testing.T) {
-	md := htmlToMarkdown(`<html><body><p>Just prose.</p></body></html>`, "https://example.com/p", ScrapeOptions{Outline: true})
+	md := htmlToMarkdown(`<html><body><p>Just prose.</p></body></html>`, "https://example.com/p", Options{Outline: true})
 	if !strings.Contains(md, "no headings") {
 		t.Errorf("got %q", md)
 	}
@@ -161,7 +161,7 @@ func TestOutlineOfAPageWithNoHeadings(t *testing.T) {
 // Fragments survive into the body text as Pandoc heading attributes, which is
 // what lets a truncated page carry its own map without the HTML in hand.
 func TestHeadingsCarryTheirAnchors(t *testing.T) {
-	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html", ScrapeOptions{})
+	md := htmlToMarkdown(sphinxPage, "https://docs.python.org/3/library/stdtypes.html", Options{})
 	if !strings.Contains(md, "{#string-methods}") {
 		t.Errorf("headings lost their anchors:\n%s", md)
 	}
@@ -225,7 +225,7 @@ func TestFragmentShapesFromRealGenerators(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			md := htmlToMarkdown("<html><body>"+tc.html+"</body></html>", "https://example.com/p#"+tc.frag, ScrapeOptions{})
+			md := htmlToMarkdown("<html><body>"+tc.html+"</body></html>", "https://example.com/p#"+tc.frag, Options{})
 			if !strings.Contains(md, tc.want) {
 				t.Errorf("section did not contain %q:\n%s", tc.want, md)
 			}
@@ -252,7 +252,7 @@ func TestAnchorThatNamesNothingReturnsTheOutline(t *testing.T) {
 	// and no text of its own.
 	page := `<html><body><h2 id="one">One</h2><p>First section.</p>
 <p><span id="marker"></span></p><h2 id="two">Two</h2><p>Second section.</p></body></html>`
-	md := htmlToMarkdown(page, "https://example.com/p#marker", ScrapeOptions{})
+	md := htmlToMarkdown(page, "https://example.com/p#marker", Options{})
 
 	if strings.TrimSpace(md) == "" {
 		t.Fatal("an anchor that names nothing returned an empty string")
@@ -265,7 +265,7 @@ func TestAnchorThatNamesNothingReturnsTheOutline(t *testing.T) {
 		t.Errorf("no usable anchors offered:\n%s", md)
 	}
 	// And it is distinguishable from an anchor that is not on the page at all.
-	missing := htmlToMarkdown(page, "https://example.com/p#nope", ScrapeOptions{})
+	missing := htmlToMarkdown(page, "https://example.com/p#nope", Options{})
 	if !strings.Contains(missing, "has no") {
 		t.Errorf("a missing anchor got the wrong message:\n%s", missing)
 	}
@@ -279,7 +279,7 @@ func TestOutlineFindsAnchorsWrittenAsNames(t *testing.T) {
 	page := `<html><body><h2><a name="2.1">2.1</a> – Values and Types</h2><p>x</p>
 <h3><a name="pdf-print">print</a></h3><p>y</p></body></html>`
 
-	outline := htmlToMarkdown(page, "https://www.lua.org/manual/5.4/manual.html", ScrapeOptions{Outline: true})
+	outline := htmlToMarkdown(page, "https://www.lua.org/manual/5.4/manual.html", Options{Outline: true})
 
 	for _, want := range []string{"#2.1", "#pdf-print"} {
 		if !strings.Contains(outline, want) {
@@ -300,8 +300,8 @@ func TestOutlineAnchorsAreNotEscaped(t *testing.T) {
 	page := `<html><body><h2 id="Operator_precedence">Operator precedence</h2><p>x</p>
 <ul class="member-list"><li><section><h3 id="add(int,E)">add</h3><p>y</p></section></li></ul></body></html>`
 
-	outline := htmlToMarkdown(page, "https://go.dev/ref/spec", ScrapeOptions{Outline: true})
-	body := htmlToMarkdown(page, "https://go.dev/ref/spec", ScrapeOptions{})
+	outline := htmlToMarkdown(page, "https://go.dev/ref/spec", Options{Outline: true})
+	body := htmlToMarkdown(page, "https://go.dev/ref/spec", Options{})
 
 	for _, s := range []string{outline, body} {
 		if strings.Contains(s, `\_`) || strings.Contains(s, `\(`) {
@@ -315,7 +315,7 @@ func TestOutlineAnchorsAreNotEscaped(t *testing.T) {
 	}
 	// And the anchors it advertises actually resolve.
 	for _, frag := range []string{"Operator_precedence", "add(int,E)"} {
-		sec := htmlToMarkdown(page, "https://go.dev/ref/spec#"+frag, ScrapeOptions{})
+		sec := htmlToMarkdown(page, "https://go.dev/ref/spec#"+frag, Options{})
 		if strings.Contains(sec, "so the whole page follows") {
 			t.Errorf("the outline advertised #%s, which does not resolve", frag)
 		}

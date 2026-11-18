@@ -2,12 +2,11 @@
 // source behind a raw.githubusercontent URL, the Markdown README, and the
 // ReST file that must not be mistaken for Markdown.
 
-package coder
+package webpage
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -34,20 +33,20 @@ func TestClassifyByExtension(t *testing.T) {
 		{"https://example.com/manual", "Title\n=====\n\nSection\n-------\n\n.. code-block:: python\n\n   x = 1\n", "text"},
 	}
 	for _, c := range cases {
-		got := classifyBody(c.url, c.body).String()
+		got := Classify(c.url, c.body).String()
 		if got != c.want {
 			t.Errorf("%s: got %s, want %s", c.url, got, c.want)
 		}
 	}
 }
 
-func (k contentKind) String() string {
+func (k Kind) String() string {
 	switch k {
-	case kindHTML:
+	case KindHTML:
 		return "html"
-	case kindMarkdown:
+	case KindMarkdown:
 		return "markdown"
-	case kindCode:
+	case KindCode:
 		return "code"
 	}
 	return "text"
@@ -136,53 +135,19 @@ func TestParseLineRangeForms(t *testing.T) {
 		{" 412 - 470 ", 412, 470},
 	}
 	for _, c := range ok {
-		lo, hi, err := parseLineRange(c.in)
+		lo, hi, err := ParseLineRange(c.in)
 		if err != nil || lo != c.lo || hi != c.hi {
-			t.Errorf("parseLineRange(%q) = %d,%d,%v", c.in, lo, hi, err)
+			t.Errorf("ParseLineRange(%q) = %d,%d,%v", c.in, lo, hi, err)
 		}
 	}
 	for _, bad := range []string{"0-5", "120-80", "a-b", "80-"} {
-		if lo, _, err := parseLineRange(bad); err == nil {
-			t.Errorf("parseLineRange(%q) accepted as %d", bad, lo)
+		if lo, _, err := ParseLineRange(bad); err == nil {
+			t.Errorf("ParseLineRange(%q) accepted as %d", bad, lo)
 		}
 	}
 	// The empty string is "no range", not an error.
-	if lo, _, err := parseLineRange(""); err != nil || lo != 0 {
+	if lo, _, err := ParseLineRange(""); err != nil || lo != 0 {
 		t.Error("an absent range must parse as none")
-	}
-}
-
-// P1: an oversized text page that arrives without outline:true must still get
-// a kind-aware map — the old path ran the HTML heading scanner over it and
-// answered "This page has no headings", with navigation advice (URL anchors)
-// that a text page cannot act on.
-func TestTruncatedCodePageCarriesADefOutline(t *testing.T) {
-	var b strings.Builder
-	b.WriteString("package interp\n\n")
-	// Enough bulk to cross the 4x outline-switch threshold, but few enough
-	// definitions for the outline to fit its own budget: wide functions, not
-	// many of them. This walks the map-only path — the one a model is most
-	// likely to meet without outline:true.
-	for i := range 40 {
-		fmt.Fprintf(&b, "func handler%d(w *Writer) {\n", i)
-		b.WriteString(strings.Repeat("\twork(step)\n", 400))
-		fmt.Fprintf(&b, "\t_ = w\n}\n\n")
-	}
-	wrapped := wrapContent("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
-	kind := classifyBody("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
-	got := truncateFetch(wrapped, "https://raw.githubusercontent.com/x/y/v1/interp.go", kind)
-
-	if strings.Contains(got, "no headings") {
-		t.Errorf("the text page got the HTML scanner's no-headings answer:\n%s", got[:300])
-	}
-	// The line numbers must be the file's, not the wrapped text's: the
-	// framing line added two lines, and a range computed over the wrapped
-	// text would fetch the wrong lines.
-	if !strings.Contains(got, "lines 1-1") && !strings.Contains(got, "lines 5-7") {
-		t.Errorf("the def outline's line numbers are not the file's:\n%s", got[len(got)-600:])
-	}
-	if !strings.Contains(got, "function handler0") || !strings.Contains(got, "function handler39") {
-		t.Errorf("the map does not cover the whole file:\n%s", got[len(got)-600:])
 	}
 }
 
@@ -204,44 +169,9 @@ func TestOutlineOverARangeSliceKeepsFileLineNumbers(t *testing.T) {
 
 	// Through the full render path, with the range in the options.
 	text, _ := renderFetched("https://example.com/p.go", body,
-		ScrapeOptions{Outline: true, Range: "100-122"})
+		Options{Outline: true, Range: "100-122"})
 	if !strings.Contains(text, "lines 101-101") {
 		t.Errorf("the rendered outline lost the offset:\n%s", text)
-	}
-}
-
-// An HTML page too large to return is answered with an outline of its
-// converted text, and that outline numbers lines. The range it recommends has
-// to fetch those lines: refused, the advice sent a model round the same map
-// three times (live, on OpenRouter's 613 KB provider-routing page).
-func TestOversizedHTMLOutlineRangeFetchesItsSection(t *testing.T) {
-	var b strings.Builder
-	b.WriteString("<html><body><h1 id=\"top\">Guide</h1>")
-	for i := range 400 {
-		fmt.Fprintf(&b, "<h2 id=\"s%d\">Section %d</h2><p>%s marker-%d</p>", i, i, strings.Repeat("filler ", 120), i)
-	}
-	b.WriteString("</body></html>")
-	page := b.String()
-	const u = "https://example.com/guide"
-
-	text, wrap := renderFetched(u, page, ScrapeOptions{})
-	content := wrap(u, text)
-	res := truncateFetch(content, u, classifyBody(u, unwrapContent(content)))
-	m := regexp.MustCompile(`Section 250 \{#s250\}\s+\(lines? (\d+)(?:-(\d+))?\)`).FindStringSubmatch(res)
-	if m == nil {
-		t.Fatalf("the oversized page's outline does not number section 250:\n%.2000s", res)
-	}
-	lo, _ := strconv.Atoi(m[1])
-
-	part, _ := renderFetched(u, page, ScrapeOptions{Range: fmt.Sprintf("%d-%d", lo, lo+3)})
-	if !strings.HasPrefix(part, "## Section 250") || !strings.Contains(part, "marker-250") {
-		t.Errorf("the range the outline gives did not fetch its section:\n%s", part)
-	}
-
-	// An outline over a range of the converted text keeps the page's numbers.
-	out, _ := renderFetched(u, page, ScrapeOptions{Outline: true, Range: fmt.Sprintf("%d-%d", lo, lo+20)})
-	if !strings.Contains(out, fmt.Sprintf("(line %d)", lo)) {
-		t.Errorf("an outline over a range lost the page's line numbers (want line %d):\n%s", lo, out)
 	}
 }
 
@@ -254,7 +184,7 @@ func TestShebangBeatsTheMarkdownSniff(t *testing.T) {
 		"# Then run the tests.\n" +
 		"# Finally, package the result.\n" +
 		"mkdir -p build && go test ./...\n"
-	if got := classifyBody("https://example.com/setup", script); got != kindText {
+	if got := Classify("https://example.com/setup", script); got != KindText {
 		t.Errorf("a shebang script classified as %v; the sniff must not read its comments as headings", got)
 	}
 
@@ -262,7 +192,36 @@ func TestShebangBeatsTheMarkdownSniff(t *testing.T) {
 	// three headings either way; the shebang is the extra evidence, not the
 	// only one.
 	noShebang := strings.TrimPrefix(script, "#!/usr/bin/env bash\n")
-	if got := classifyBody("https://example.com/setup", noShebang); got != kindMarkdown {
+	if got := Classify("https://example.com/setup", noShebang); got != KindMarkdown {
 		t.Errorf("the same comments without a shebang classified as %v", got)
+	}
+}
+
+// A range on an HTML page counts lines of the text it converts to, which is
+// what an outline of that text numbers (the coder's
+// TestOversizedHTMLOutlineRangeFetchesItsSection takes the whole trip).
+func TestARangeOnHTMLSlicesItsConvertedText(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<html><body><h1 id=\"top\">Guide</h1>")
+	for i := range 40 {
+		fmt.Fprintf(&b, "<h2 id=\"s%d\">Section %d</h2><p>marker-%d</p>", i, i, i)
+	}
+	b.WriteString("</body></html>")
+	page := b.String()
+	const u = "https://example.com/guide"
+
+	md := htmlToMarkdown(page, u, Options{})
+	lo := slices.IndexFunc(strings.Split(md, "\n"), func(l string) bool { return strings.HasPrefix(l, "## Section 25 ") }) + 1
+	if lo == 0 {
+		t.Fatalf("no section 25 in the conversion:\n%s", md)
+	}
+	part, _ := renderFetched(u, page, Options{Range: fmt.Sprintf("%d-%d", lo, lo+3)})
+	if !strings.HasPrefix(part, "## Section 25 ") || !strings.Contains(part, "marker-25") {
+		t.Errorf("the range did not fetch its section:\n%s", part)
+	}
+	// An outline over a range of the converted text keeps the page's numbers.
+	out, _ := renderFetched(u, page, Options{Outline: true, Range: fmt.Sprintf("%d-%d", lo, lo+20)})
+	if !strings.Contains(out, fmt.Sprintf("(line %d)", lo)) {
+		t.Errorf("an outline over a range lost the page's line numbers (want line %d):\n%s", lo, out)
 	}
 }

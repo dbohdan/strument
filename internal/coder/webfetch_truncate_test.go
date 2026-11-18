@@ -1,95 +1,18 @@
-// Link handling in a fetched page: what the model can act on, and what it
-// cannot and so should not be handed.
-
 package coder
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/webpage"
 )
-
-const linkPage = `<html><body>
-<div class="related" role="navigation"><a href="../genindex.html">index</a> | <a href="constants.html">previous</a></div>
-<h1>Built-in Types<a class="headerlink" href="#built-in-types" title="Link to this heading">¶</a></h1>
-<p>See <a href="exceptions.html" title="Built-in Exceptions">exceptions</a> and
-<a href="../tutorial/index.html">the tutorial</a> and
-<a href="https://peps.python.org/pep-0008/">PEP 8</a>.</p>
-<p>Jump to <a href="#id12">note 1</a> or <a href="stdtypes.html#str">str</a>.</p>
-<p>Mail <a href="mailto:x@example.com">us</a> or <a href="javascript:void(0)">click</a>.</p>
-<footer role="contentinfo">Copyright 2026.</footer>
-</body></html>`
-
-const pageURL = "https://docs.python.org/3/library/stdtypes.html"
-
-func TestFetchedLinksBecomeAbsolute(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
-
-	// A relative href is a link the model will try and fail on — against
-	// Strument's own "the URL needs a scheme" refusal, which is a confusing
-	// thing to hit on a link the harness handed over.
-	for _, want := range []string{
-		"https://docs.python.org/3/library/exceptions.html",
-		"https://docs.python.org/3/tutorial/index.html",
-		"https://peps.python.org/pep-0008/", // already absolute, left alone
-	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing resolved link %s in:\n%s", want, md)
-		}
-	}
-	if strings.Contains(md, "](exceptions.html") || strings.Contains(md, "](../tutorial") {
-		t.Errorf("a relative link survived:\n%s", md)
-	}
-}
-
-// A link to this very page keeps its words and loses its destination: there is
-// nothing to fetch at "#id12", and re-fetching the page you are reading is the
-// one thing the link cannot be for.
-func TestSamePageAnchorsKeepTheirText(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
-
-	if !strings.Contains(md, "note 1") || !strings.Contains(md, "str") {
-		t.Errorf("anchor text was dropped along with the anchor:\n%s", md)
-	}
-	if strings.Contains(md, "](#id12)") || strings.Contains(md, "#str)") {
-		t.Errorf("a same-page anchor kept a destination:\n%s", md)
-	}
-}
-
-func TestUnfetchableSchemesLoseTheirHref(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
-	for _, bad := range []string{"mailto:", "javascript:"} {
-		if strings.Contains(md, bad) {
-			t.Errorf("%s survived as a link:\n%s", bad, md)
-		}
-	}
-}
-
-// The ¶ beside every heading is chrome three generators emit, and the
-// navigation bars are chrome Sphinx marks with a role rather than a <nav>.
-func TestPermalinksAndAriaChromeAreDropped(t *testing.T) {
-	md := htmlToMarkdown(linkPage, pageURL, ScrapeOptions{})
-
-	if strings.Contains(md, "¶") {
-		t.Errorf("a permalink anchor survived:\n%s", md)
-	}
-	for _, chrome := range []string{"genindex", "previous", "Copyright 2026"} {
-		if strings.Contains(md, chrome) {
-			t.Errorf("ARIA-marked chrome %q survived:\n%s", chrome, md)
-		}
-	}
-	// The counter-half: the heading and the prose it labels are still there.
-	if !strings.Contains(md, "Built-in Types") || !strings.Contains(md, "PEP 8") {
-		t.Errorf("real content was removed with the chrome:\n%s", md)
-	}
-}
-
-// A page with no usable base URL must still convert rather than fail.
-func TestConversionSurvivesABadPageURL(t *testing.T) {
-	if md := htmlToMarkdown(linkPage, "::not a url::", ScrapeOptions{}); !strings.Contains(md, "Built-in Types") {
-		t.Errorf("a bad page URL lost the content:\n%s", md)
-	}
-}
 
 // A cut page carries its own map. The note it replaces said to "fetch a more
 // specific page", which assumes a page that may not exist and asks the model to
@@ -97,7 +20,7 @@ func TestConversionSurvivesABadPageURL(t *testing.T) {
 // is to abandon the tool for curl.
 func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	short := "a short page"
-	if got := truncateFetch(short, "https://example.com/p", kindHTML); got != short {
+	if got := truncateFetch(short, "https://example.com/p", webpage.KindHTML); got != short {
 		t.Errorf("a page under the cap was altered: %q", got)
 	}
 
@@ -105,7 +28,7 @@ func TestFetchTruncationCarriesTheOutline(t *testing.T) {
 	for i := range 40 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 4000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
+	got := truncateFetch(b.String(), "https://example.com/p", webpage.KindHTML)
 
 	// The result respects the cap it exists to enforce. An earlier version
 	// appended the note past it, which is the bug this pins.
@@ -144,7 +67,7 @@ func TestVeryLargePageAnswersWithItsOutline(t *testing.T) {
 	for i := range 60 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
+	got := truncateFetch(b.String(), "https://example.com/p", webpage.KindHTML)
 
 	if !strings.Contains(got, "times what one tool result carries") {
 		t.Errorf("a page far over the cap did not answer with its outline:\n%s", got[:200])
@@ -168,7 +91,7 @@ func TestBarelyOversizedPageKeepsItsContent(t *testing.T) {
 	for i := range 12 {
 		fmt.Fprintf(&b, "## Section %d {#sec-%d}\n\n%s\n\n", i, i, strings.Repeat("x", 5000))
 	}
-	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
+	got := truncateFetch(b.String(), "https://example.com/p", webpage.KindHTML)
 
 	if !strings.Contains(got, "Partial page") {
 		t.Errorf("a page just over the cap did not return a partial page:\n%s", got[:200])
@@ -188,12 +111,86 @@ func TestFetchTruncationKeepsTheMapOnAHeadingHeavyPage(t *testing.T) {
 	for i := range 4000 {
 		fmt.Fprintf(&b, "### Item %d {#item-%d}\n\ntext\n\n", i, i)
 	}
-	got := truncateFetch(b.String(), "https://example.com/p", kindHTML)
+	got := truncateFetch(b.String(), "https://example.com/p", webpage.KindHTML)
 
 	if len(got) > maxToolOutputBytes {
 		t.Errorf("result is %d bytes, over the %d cap", len(got), maxToolOutputBytes)
 	}
 	if !strings.Contains(got, "Partial page") {
 		t.Error("no note on a page that was cut")
+	}
+}
+
+// P1: an oversized text page that arrives without outline:true must still get
+// a kind-aware map — the old path ran the HTML heading scanner over it and
+// answered "This page has no headings", with navigation advice (URL anchors)
+// that a text page cannot act on.
+func TestTruncatedCodePageCarriesADefOutline(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package interp\n\n")
+	// Enough bulk to cross the 4x outline-switch threshold, but few enough
+	// definitions for the outline to fit its own budget: wide functions, not
+	// many of them. This walks the map-only path — the one a model is most
+	// likely to meet without outline:true.
+	for i := range 40 {
+		fmt.Fprintf(&b, "func handler%d(w *Writer) {\n", i)
+		b.WriteString(strings.Repeat("\twork(step)\n", 400))
+		fmt.Fprintf(&b, "\t_ = w\n}\n\n")
+	}
+	wrapped := webpage.Wrap("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
+	kind := webpage.Classify("https://raw.githubusercontent.com/x/y/v1/interp.go", b.String())
+	got := truncateFetch(wrapped, "https://raw.githubusercontent.com/x/y/v1/interp.go", kind)
+
+	if strings.Contains(got, "no headings") {
+		t.Errorf("the text page got the HTML scanner's no-headings answer:\n%s", got[:300])
+	}
+	// The line numbers must be the file's, not the wrapped text's: the
+	// framing line added two lines, and a range computed over the wrapped
+	// text would fetch the wrong lines.
+	if !strings.Contains(got, "lines 1-1") && !strings.Contains(got, "lines 5-7") {
+		t.Errorf("the def outline's line numbers are not the file's:\n%s", got[len(got)-600:])
+	}
+	if !strings.Contains(got, "function handler0") || !strings.Contains(got, "function handler39") {
+		t.Errorf("the map does not cover the whole file:\n%s", got[len(got)-600:])
+	}
+}
+
+// An HTML page too large to return is answered with an outline of its
+// converted text, and that outline numbers lines. The range it recommends has
+// to fetch those lines: refused, the advice sent a model round the same map
+// three times (live, on OpenRouter's 613 KB provider-routing page).
+func TestOversizedHTMLOutlineRangeFetchesItsSection(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<html><body><h1 id=\"top\">Guide</h1>")
+	for i := range 400 {
+		fmt.Fprintf(&b, "<h2 id=\"s%d\">Section %d</h2><p>%s marker-%d</p>", i, i, strings.Repeat("filler ", 120), i)
+	}
+	b.WriteString("</body></html>")
+	page := b.String()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, page)
+	}))
+	t.Cleanup(srv.Close)
+	u := srv.URL + "/guide"
+	fetch := webpage.NewSimple(nil, "")
+
+	content, err := fetch(context.Background(), u, webpage.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := truncateFetch(content, u, webpage.Classify(u, webpage.Unwrap(content)))
+	m := regexp.MustCompile(`Section 250 \{#s250\}\s+\(lines? (\d+)(?:-(\d+))?\)`).FindStringSubmatch(res)
+	if m == nil {
+		t.Fatalf("the oversized page's outline does not number section 250:\n%.2000s", res)
+	}
+	lo, _ := strconv.Atoi(m[1])
+
+	part, err := fetch(context.Background(), u, webpage.Options{Range: fmt.Sprintf("%d-%d", lo, lo+3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := webpage.Unwrap(part); !strings.HasPrefix(body, "## Section 250") || !strings.Contains(body, "marker-250") {
+		t.Errorf("the range the outline gives did not fetch its section:\n%s", body)
 	}
 }

@@ -67,7 +67,7 @@ type ConfirmResult struct {
 	// Auto says no one was shown this prompt: a --yes grant or an earlier "a"
 	// answered it. What was approved unseen is held to a narrower rule where
 	// it matters — a webfetch approved that way does not reach a local
-	// address (localaddr.go).
+	// address (internal/webpage/localaddr.go).
 	Auto bool
 }
 
@@ -378,50 +378,3 @@ type Output interface {
 	// FlushStream marks the end of a send's live rendering.
 	FlushStream()
 }
-
-// ScrapeOptions are the ways a caller can ask for less than a whole page.
-//
-// The fragment is not here: it rides in the URL, where the model writes it and
-// where every link on the page already carries one. Only the outline needs
-// saying separately.
-type ScrapeOptions struct {
-	// Outline returns the page's headings and their anchors instead of its
-	// content — the map you read before deciding which section to fetch.
-	Outline bool
-
-	// Range narrows a plain-text page to the given 1-based lines, inclusive —
-	// "80-120". It is how a model navigates a fetched file that has no
-	// anchors: the outline of a text page advertises line numbers, so the
-	// fetch that follows them takes this.
-	Range string
-
-	// Follow decides whether a redirect to another origin is followed. nil
-	// follows every redirect, which is right for /web: the user typed that URL
-	// and reads what comes back. webfetch sets it, because the model picked
-	// the URL and the user approved one origin — an open redirect on it must
-	// not carry the fetch to an origin nobody approved. A redirect within the
-	// same origin is always followed; this is asked only about the others.
-	Follow func(url string) bool
-
-	// LocalOK decides whether a connection to a local address may go ahead,
-	// given the origin (host:port) the URL named. nil allows every one, which
-	// is right for /web and for a fetch the user approved at a prompt. See
-	// localaddr.go. A `scraper` command does its own networking, so this
-	// binds the built-in fetcher only.
-	LocalOK func(origin string) bool
-}
-
-// lineRange is the parsed Range field: (0, 0) when unset.
-func (o ScrapeOptions) lineRange() (lo, hi int) {
-	if o.Range == "" {
-		return 0, 0
-	}
-	lo, hi, err := parseLineRange(o.Range)
-	if err != nil {
-		return 0, 0
-	}
-	return lo, hi
-}
-
-// Scraper fetches URL content; injectable for tests.
-type Scraper func(ctx context.Context, url string, opts ScrapeOptions) (string, error)

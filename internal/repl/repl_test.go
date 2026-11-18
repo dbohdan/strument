@@ -24,6 +24,7 @@ import (
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/repomap"
+	"dbohdan.com/strument/internal/webpage"
 )
 
 // syncBuffer collects REPL output; the in-turn signal goroutine may write
@@ -1142,7 +1143,7 @@ func TestWebCommandScrapesAndStages(t *testing.T) {
 	r, cdr, out := newTestREPL(t, stub, input)
 	defer r.Close()
 	var scraped []string
-	cdr.Scrape = func(_ context.Context, url string, _ coder.ScrapeOptions) (string, error) {
+	cdr.Scrape = func(_ context.Context, url string, _ webpage.Options) (string, error) {
 		scraped = append(scraped, url)
 		return "SCRAPED PAGE BODY", nil
 	}

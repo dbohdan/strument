@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/webpage"
 	"dbohdan.com/strument/internal/websearch"
 
 	"dbohdan.com/strument/internal/config"
@@ -97,7 +98,7 @@ type Coder struct {
 	Clock   Clock
 	Out     Output
 	RepoMap *repomap.RepoMap
-	Scrape  Scraper
+	Scrape  webpage.Scraper
 	// Search is nil unless the user configured a backend, and that nil is what
 	// decides whether the tool is offered at all.
 	Search websearch.Searcher

@@ -565,7 +565,7 @@ type bridgeLog struct {
 
 // codeLines counts the program's lines, discounting the leading and trailing
 // blank lines the model's formatting may have added. Named apart from
-// scrape.go's lineCount, which counts newline-terminated lines of a body.
+// internal/webpage's lineCount, which counts newline-terminated lines of a body.
 func codeLines(code string) int {
 	lines := strings.Split(strings.TrimSpace(code), "\n")
 	return len(lines)
