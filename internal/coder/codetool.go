@@ -864,6 +864,10 @@ func compileProgram(code string) (*goja.Program, error) {
 	return goja.Compile("program.js", "(function () {"+code+"\n})()", true)
 }
 
+// jsEscapeError matches goja's refusals of an escape in a string or template
+// literal.
+var jsEscapeError = regexp.MustCompile(`Octal escape sequences are not allowed|invalid escape: |are not allowed in template strings`)
+
 func jsErrorText(err error, code string, shell bool) string {
 	var interrupted *goja.InterruptedError
 	if errors.As(err, &interrupted) {
@@ -915,6 +919,15 @@ func jsErrorText(err error, code string, shell bool) string {
 			full += ", and the bash tool runs wc -l or du"
 		}
 		full += "."
+	}
+	// Source text pasted into a literal: Hy4 flash put C++ with "\033" into
+	// the template literals of an edit program, and goja refused the octal.
+	// The same paste does worse where it does not fail — "\n" becomes a
+	// newline and "\e" an "e" — so the hint names those too.
+	if jsEscapeError.MatchString(msg) {
+		full += "\n\nA backslash in a string or template literal starts an escape, so source text pasted " +
+			"into one changes on the way in: \"\\033\" is refused, \"\\n\" becomes a newline and \"\\e\" an \"e\". " +
+			"Put text that contains backslashes in String.raw`...` to pass it as written."
 	}
 	if strings.Contains(msg, "print is not defined") {
 		full += "\n\nconsole.log() is how a program prints here."

@@ -780,3 +780,25 @@ func TestRunCodeNamesBashOnlyWhenOffered(t *testing.T) {
 		}
 	}
 }
+
+// Source text pasted into a literal, with its escapes, gets String.raw; a
+// program that already uses it, and an unrelated syntax error, get nothing.
+func TestCodeEscapeHintRidesAnEscapeError(t *testing.T) {
+	c, _ := observeEnv(t, nil)
+	const hint = "String.raw`...`"
+	for _, code := range []string{
+		"const s = `std::fputs(\"\\033[?25l\", stdout);`",
+		"const s = 'a\\033b'",
+		"const s = `\\x1`",
+		"const s = `\\8`",
+	} {
+		if got := run(c, code); !strings.Contains(got, hint) {
+			t.Errorf("%s: an escape error must carry the hint:\n%s", code, got)
+		}
+	}
+	for _, code := range []string{"const s = String.raw`\\033`; s", "const = 1"} {
+		if got := run(c, code); strings.Contains(got, hint) {
+			t.Errorf("%s: no escape error, no hint:\n%s", code, got)
+		}
+	}
+}
