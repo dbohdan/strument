@@ -306,7 +306,7 @@ type Config struct {
 	NoCommits bool
 	// EnvAllow names environment variables to pass to model-run commands
 	// (the bash tool, checks, the scraper command) on top of the built-in
-	// default allowlist. See coder/envallow.go. Empty means defaults only.
+	// default allowlist. See internal/envallow. Empty means defaults only.
 	// Matching is exact; prefixes are not expanded.
 	EnvAllow []string
 	// SecretFilesAdd and SecretFilesExempt extend and trim the built-in

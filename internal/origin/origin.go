@@ -59,7 +59,7 @@ func Of(raw string) (string, error) {
 // Allowed reports whether an origin needs no confirmation.
 //
 // Exact matching, no prefix or wildcard expansion, which is the rule
-// envallow.go already argues for: a config that writes half a name almost
+// internal/envallow already argues for: a config that writes half a name almost
 // certainly means one specific whole one, and a silent prefix match would widen
 // permissions past what was written. Subdomains are not covered for a sharper
 // version of the same reason — on `*.github.io`, `*.pages.dev`, and

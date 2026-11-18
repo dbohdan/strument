@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"dbohdan.com/strument/internal/envallow"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/interp"
 	"mvdan.cc/sh/v3/syntax"
@@ -121,7 +122,7 @@ func (c *Coder) runShellCommand(ctx context.Context, command string, requestedTi
 		// Model-run, so the allowlist applies: the block came from the model,
 		// and its output goes back to the model as a tool result. /run builds
 		// its own PipeRunner without an Env, keeping the full environment.
-		runner = PipeRunner{Env: FilterEnv(nil, c.EnvAllow)}
+		runner = PipeRunner{Env: envallow.Filter(nil, c.EnvAllow)}
 	}
 	c.shown.commandRan()
 	exitCode, output, err := runner.Run(ctx, command, c.Root)
@@ -458,12 +459,12 @@ func exportedEnv(env expand.Environ) []string {
 // the kernel, but not every reader does. The comparison folds only on
 // Windows, where environment names are case-insensitive at the API and
 // os.Environ may spell the name "pwd" — the same rule envAllowed
-// applies, through envNamesFold.
+// applies, through envallow.NamesFold.
 func withPWD(env []string, dir string) []string {
 	out := make([]string, 0, len(env)+1)
 	for _, kv := range env {
 		name, _, _ := strings.Cut(kv, "=")
-		if name == "PWD" || (envNamesFold && strings.EqualFold(name, "PWD")) {
+		if name == "PWD" || (envallow.NamesFold && strings.EqualFold(name, "PWD")) {
 			continue
 		}
 		out = append(out, kv)

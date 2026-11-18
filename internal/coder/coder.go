@@ -159,7 +159,7 @@ type Coder struct {
 	// request, summed over the waits. Zero takes retryTimeout, a minute.
 	RetryTimeout time.Duration
 
-	// EnvAllow extends the default environment allowlist (envallow.go) with
+	// EnvAllow extends the default environment allowlist (internal/envallow) with
 	// names from the config's `env_allow`. It applies to every command the
 	// model caused to run — bash, checks, the scraper — never to /run.
 	EnvAllow []string

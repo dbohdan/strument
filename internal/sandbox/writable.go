@@ -63,7 +63,7 @@ func DefaultWritable(projectRoot, stateDir, stateRoot string, extra []string) []
 //
 // os.TempDir applies the TMPDIR-else-/tmp rule, which keeps the sandbox
 // agreeing with every Go program that asks the same question — and with
-// envallow.go, which passes TMPDIR through to model-run commands, so the
+// internal/envallow, which passes TMPDIR through to model-run commands, so the
 // directory a command picks is the directory the sandbox granted.
 //
 // /tmp is granted even when TMPDIR points elsewhere, because a great many
@@ -230,7 +230,7 @@ func writableSubdirs(root string) []string {
 //
 // Each entry reads its own toolchain's environment variable before falling
 // back, so a relocated cache is respected. Those variable names are largely
-// the ones envallow.go already passes through to model-run commands: if a
+// the ones internal/envallow already passes through to model-run commands: if a
 // variable is worth telling a command about, the directory it names is worth
 // letting the command write.
 //

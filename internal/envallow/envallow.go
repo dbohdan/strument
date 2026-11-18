@@ -1,4 +1,7 @@
-package coder
+// Package envallow decides the environment of a command the model caused:
+// the bash tool, named checks, and the scraper command. Anything the user
+// typed inherits everything, because they typed it; see AGENTS.md.
+package envallow
 
 import (
 	"os"
@@ -7,7 +10,7 @@ import (
 	"strings"
 )
 
-// defaultEnvAllowNames defines the environment the
+// defaultNames defines the environment the
 // harness passes to commands it runs on the model's behalf — the bash tool,
 // named checks, and the scraper command. Everything else in the session's
 // environment is withheld, so a model-run `env` (or a build tool that echoes
@@ -25,7 +28,7 @@ import (
 //
 // /run is not model-run: the user typed the command, so it keeps the full
 // environment.
-var defaultEnvAllowNames = []string{
+var defaultNames = []string{
 	// Identity, shell, terminal.
 	"PATH", "HOME", "SHELL", "USER", "LOGNAME", "TERM", "TERMINFO",
 	"COLUMNS", "LINES", "TMPDIR",
@@ -77,7 +80,7 @@ var defaultEnvAllowNames = []string{
 	"JAVA_HOME", "GRADLE_USER_HOME",
 }
 
-// envNamesFold reports whether variable names are compared without regard to
+// NamesFold reports whether variable names are compared without regard to
 // case. Windows treats them that way at the API, and os.Environ hands back the
 // OS's own spelling — "Path", "ComSpec", "SystemRoot" — so an exact-match
 // allowlist there withholds PATH from every model-run command and the tool
@@ -87,23 +90,23 @@ var defaultEnvAllowNames = []string{
 // A variable rather than a runtime.GOOS test at the point of use, so the
 // Windows comparison can be exercised from a test on any host: the platform
 // this is wrong on is the one CI is least likely to catch it on.
-var envNamesFold = runtime.GOOS == "windows"
+var NamesFold = runtime.GOOS == "windows"
 
-// envAllowed reports whether name passes the allowlist. Extra names come from
+// Allowed reports whether name passes the allowlist. Extra names come from
 // `env_allow` and match exactly, like the defaults: there is no prefix or
 // wildcard expansion anywhere — a config that says "FOO_" almost certainly
 // means FOO_BAR, and a silent prefix match would widen permissions past what
 // was written.
-func envAllowed(name string, extra []string) bool {
-	return containsEnvName(extra, name) || containsEnvName(defaultEnvAllowNames, name)
+func Allowed(name string, extra []string) bool {
+	return containsName(extra, name) || containsName(defaultNames, name)
 }
 
-// containsEnvName is slices.Contains under the platform's name comparison.
-func containsEnvName(list []string, name string) bool {
+// containsName is slices.Contains under the platform's name comparison.
+func containsName(list []string, name string) bool {
 	if slices.Contains(list, name) {
 		return true
 	}
-	if !envNamesFold {
+	if !NamesFold {
 		return false
 	}
 	for _, n := range list {
@@ -114,15 +117,11 @@ func containsEnvName(list []string, name string) bool {
 	return false
 }
 
-// EnvAllowed is envAllowed for callers outside the package: the REPL's /env
-// command uses it to say which set variables a model-run command would see.
-func EnvAllowed(name string, extra []string) bool { return envAllowed(name, extra) }
+// DefaultNames is the default list, for display (/env). A copy, so a caller
+// cannot widen the defaults.
+func DefaultNames() []string { return slices.Clone(defaultNames) }
 
-// DefaultEnvAllowNames exposes the default list for display (/env). A copy, so
-// a caller cannot widen the defaults.
-func DefaultEnvAllowNames() []string { return slices.Clone(defaultEnvAllowNames) }
-
-// FilterEnv builds the environment passed to model-run commands: every
+// Filter builds the environment passed to model-run commands: every
 // allowed variable from environ, as NAME=VALUE pairs. environ nil means
 // os.Environ. extra is the user's `env_allow` list, on top of the defaults.
 //
@@ -132,14 +131,14 @@ func DefaultEnvAllowNames() []string { return slices.Clone(defaultEnvAllowNames)
 // environment — so a nil return would turn the filter's strictest possible
 // outcome into no filter at all. An empty environment is the correct answer to
 // "nothing was allowed"; failing that way is a broken build, not a leaked key.
-func FilterEnv(environ func() []string, extra []string) []string {
+func Filter(environ func() []string, extra []string) []string {
 	if environ == nil {
 		environ = os.Environ
 	}
 	out := []string{}
 	for _, kv := range environ() {
 		name, _, _ := strings.Cut(kv, "=")
-		if envAllowed(name, extra) {
+		if Allowed(name, extra) {
 			out = append(out, kv)
 		}
 	}

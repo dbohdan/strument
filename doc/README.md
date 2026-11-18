@@ -262,6 +262,9 @@ inherited from aider.
   - `decide/` — the client for the decision model `approve_model` configures,
     with the rubric it was measured on; the coder decides what an answer
     approves.
+  - `envallow/` — the environment of a command the model caused: the
+    allowlist every such subprocess runs under, and the one `Filter` that
+    applies it. Shared by the coder's tools, the scraper command, and `/env`.
   - `httpx/` — what the HTTP clients share: proxy transports, app
     attribution, and `Post` for the JSON services.
   - `record/` — the session record's schema: one flat `Record` per JSON line,
@@ -311,7 +314,7 @@ is the two policies below.
 Where a command runs, its environment follows who caused it: `/run` (the user
 typed it) inherits the whole session environment, while the `bash` tool,
 checks, and the scraper command (the model caused them) run under the env
-allowlist in `internal/coder/envallow.go` — see the security notes below.
+allowlist in `internal/envallow` — see the security notes below.
 
 Confinement does not follow who caused it, because it cannot. The Landlock
 policy in `internal/sandbox` is applied to the whole process at startup and is
@@ -537,7 +540,7 @@ Ten tools, in three natures:
   configured.
 
   A check runs under the environment allowlist, not the full session
-  environment (`internal/coder/envallow.go`) — the same filtered set the
+  environment (`internal/envallow`) — the same filtered set the
   `bash` tool gets. The argv is trusted, but the *output* is not selected by
   it: a failing test suite happily prints its environment, and that output
   goes to the model as a tool result. The allowlist passes `PATH`, `HOME`,

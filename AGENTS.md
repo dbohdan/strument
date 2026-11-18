@@ -266,10 +266,10 @@ Past trials live one directory each under
 - **Model-run commands get a filtered environment.** The rule is about *who
   caused the command*, not which command it is: anything the model caused —
   the `bash` tool, the `check` tool, the `scraper` command — runs under the
-  allowlist in `internal/coder/envallow.go` (see `doc/config.md`, `env_allow`),
+  allowlist in `internal/envallow` (see `doc/config.md`, `env_allow`),
   and anything the user typed inherits everything, because they typed it.
   Today that second set is `/run` and `/check`; state the rule rather than the
   list when you add to it. When adding a
-  subprocess path the model can cause, pass `FilterEnv(nil, c.EnvAllow)`
+  subprocess path the model can cause, pass `envallow.Filter(nil, c.EnvAllow)`
   output. Watch the mvdan.cc/sh trap: `interp.Env(ListEnviron(nil...))` means
   an *empty* environment, not inherit — omit the option to inherit.

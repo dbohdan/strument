@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/envallow"
 )
 
 // rebuildEnvAllow recomputes coder.EnvAllow from the config's list plus this
@@ -102,12 +102,12 @@ func (r *REPL) envDisplay() string {
 // the defaults are an enumeration), with " ..." when any are hidden.
 func setDefaults() string {
 	var set []string
-	for _, name := range coder.DefaultEnvAllowNames() {
+	for _, name := range envallow.DefaultNames() {
 		if os.Getenv(name) != "" {
 			set = append(set, name)
 		}
 	}
-	if len(set) < len(coder.DefaultEnvAllowNames()) && len(set) > 0 {
+	if len(set) < len(envallow.DefaultNames()) && len(set) > 0 {
 		set = append(set, "...")
 	}
 	return strings.Join(set, " ")

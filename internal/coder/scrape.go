@@ -19,6 +19,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
 
+	"dbohdan.com/strument/internal/envallow"
 	"dbohdan.com/strument/internal/httpx"
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/repomap"
@@ -463,7 +464,7 @@ func NewCommandScraper(argv []string, timeout time.Duration, envAllow func() []s
 		if envAllow != nil {
 			extra = envAllow()
 		}
-		cmd.Env = FilterEnv(nil, extra)
+		cmd.Env = envallow.Filter(nil, extra)
 
 		stdout := &boundedBuffer{max: scrapeMaxBytes}
 		stderr := &boundedBuffer{max: 4096}

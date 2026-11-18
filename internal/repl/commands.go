@@ -16,6 +16,7 @@ import (
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/envallow"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/readline"
@@ -236,7 +237,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 				var out []string
 				for _, kv := range os.Environ() {
 					name, _, _ := strings.Cut(kv, "=")
-					if !coder.EnvAllowed(name, r.coder.EnvAllow) {
+					if !envallow.Allowed(name, r.coder.EnvAllow) {
 						out = append(out, name)
 					}
 				}
@@ -247,7 +248,7 @@ func (r *REPL) completer() readline.AutoCompleter {
 				var out []string
 				for _, kv := range os.Environ() {
 					name, _, _ := strings.Cut(kv, "=")
-					if coder.EnvAllowed(name, r.coder.EnvAllow) && !seen[name] {
+					if envallow.Allowed(name, r.coder.EnvAllow) && !seen[name] {
 						seen[name] = true
 						out = append(out, name)
 					}

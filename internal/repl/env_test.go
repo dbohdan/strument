@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/envallow"
 )
 
 // runEnv drives /env lines through a scripted session and returns the output.
@@ -49,7 +50,7 @@ func TestEnvShowAddDropReset(t *testing.T) {
 	}
 
 	// add: set names land on the coder's effective list (the thing every
-	// FilterEnv call site reads), a credential-shaped one draws a notice, and
+	// envallow.Filter call site reads), a credential-shaped one draws a notice, and
 	// an unset one is rejected with an error.
 	if !strings.Contains(addOut, "MY_SERVICE_TOKEN looks like a credential") {
 		t.Errorf("credential notice missing:\n%s", addOut)
@@ -196,7 +197,7 @@ func TestEnvAllowTakesEffectAtTheRunnerSeam(t *testing.T) {
 	_, cdr, _ := runEnv(t, "/env add STRUMENT_TEST_ADDED\n/exit\n")
 	cdr.Runner = nil
 
-	_, out, err := coder.PipeRunner{Env: coder.FilterEnv(nil, cdr.EnvAllow)}.
+	_, out, err := coder.PipeRunner{Env: envallow.Filter(nil, cdr.EnvAllow)}.
 		Run(context.Background(), "env", t.TempDir())
 	if err != nil {
 		t.Fatal(err)

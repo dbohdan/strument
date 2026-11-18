@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/config"
+	"dbohdan.com/strument/internal/envallow"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/workspace"
 )
@@ -651,7 +652,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// test suite happily prints its environment, and that output goes to the
 	// model as a tool result. So checks run under the same allowlist as the
 	// bash tool, rather than inheriting the session's credentials.
-	cmd.Env = FilterEnv(nil, c.EnvAllow)
+	cmd.Env = envallow.Filter(nil, c.EnvAllow)
 	out, err := cmd.CombinedOutput()
 	exit := 0
 	var ee *exec.ExitError

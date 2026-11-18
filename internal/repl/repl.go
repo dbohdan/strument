@@ -169,7 +169,7 @@ type REPL struct {
 	// envAdded / envDropped are the /env session changes: names added to or
 	// withheld from the config's env_allow for this session only. coder.EnvAllow
 	// always holds the merged result (config ∪ added − dropped), so every
-	// FilterEnv call site picks changes up without bookkeeping; these two sets
+	// envallow.Filter call site picks changes up without bookkeeping; these two sets
 	// exist for the /env display and for rebuilding the merge on /env reset
 	// and /reload.
 	envAdded   map[string]bool
