@@ -860,7 +860,7 @@ func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult
 		} else {
 			fmt.Fprintln(t.w(), "‹shell› (no purpose given)")
 		}
-		fmt.Fprintf(t.w(), "$ %s\n", render.Sanitize(req.Command))
+		fmt.Fprintln(t.w(), render.ShellCommand(req.Command, true))
 	case req.URL != "":
 		// The second confirmer, and it has to show what the first one shows.
 		// It did not, and the prompt read "Fetch this page? (Y/n)" with no page

@@ -16,13 +16,14 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/envallow"
+	"dbohdan.com/strument/internal/render"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/interp"
 	"mvdan.cc/sh/v3/syntax"
 )
 
 // runAndShow runs a confirmed command through the configured runner, echoing
-// "Running <cmd>" and then the captured output to the user — the output
+// the command and then the captured output to the user — the output
 // otherwise only reaches the model (as a tool result or chat addition), never
 // the terminal. requestedTimeout is what the model asked for on this call,
 // zero when it gave none; it can only narrow the configured deadline, never
@@ -44,7 +45,7 @@ func (c *Coder) runAndShow(ctx context.Context, command string, requestedTimeout
 // after the tail rather than inside it, so asking for 20 lines never costs
 // the line that says why the command stopped.
 func (c *Coder) runAndShowTail(ctx context.Context, command string, requestedTimeout time.Duration, tail int) (int, string) {
-	r := c.runShellCommand(ctx, command, requestedTimeout, tail)
+	r := c.runShellCommand(ctx, command, shellShown{}, requestedTimeout, tail)
 	return r.exit, r.joined()
 }
 
@@ -72,10 +73,31 @@ func (r shellRun) joined() string {
 	return head + r.output + r.notice
 }
 
+// shellShown is what the user has already been shown of a command about to
+// run.
+type shellShown struct {
+	// seen is a prompt answered by the user, who read the command whole
+	// above. Anything approved unseen — "a", --yes, approve_model, a removal
+	// of the turn's own files — has no such prompt.
+	seen    bool
+	purpose string
+}
+
 // runShellCommand is runAndShowTail with the outcome kept in its parts.
-func (c *Coder) runShellCommand(ctx context.Context, command string, requestedTimeout time.Duration, tail int) shellRun {
+//
+// The command is shown whole unless the user has just read it at the
+// prompt: then its first line stands in for it, so every output still has a
+// line above it naming what printed it without a long program printed twice.
+// Approved unseen, it is shown as the prompt would have shown it, purpose
+// first, and the note on who approved it after.
+func (c *Coder) runShellCommand(ctx context.Context, command string, show shellShown,
+	requestedTimeout time.Duration, tail int,
+) shellRun {
 	c.Out.Printf("")
-	c.Out.Toolf("Running %s", quoteToolArg(command))
+	if !show.seen && show.purpose != "" {
+		c.Out.Toolf("‹shell› %s", show.purpose)
+	}
+	c.Out.Toolf("%s", render.ShellCommand(command, !show.seen))
 	if c.approvalNote != "" {
 		c.Out.Toolf("%s", c.approvalNote)
 		c.approvalNote = ""

@@ -44,8 +44,9 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 		note       string // carried to the prompt, shown after the command
 	}{
 		// The verdict follows the command it is about: an approval under the
-		// Running line, a refusal under the command in the prompt.
-		{"approved", 0.95, nil, true, false, 1, false, "approved", "Running \"echo hi\"\nApproved by laya:en, p(safe) = 0.95.", ""},
+		// command shown as the prompt would have shown it, purpose first, a
+		// refusal under the command in the prompt.
+		{"approved", 0.95, nil, true, false, 1, false, "approved", "‹shell› test\n$ echo hi\nApproved by laya:en, p(safe) = 0.95.", ""},
 		{"at the threshold", 0.9, nil, true, false, 1, false, "approved", "p(safe) = 0.90", ""},
 		{"below", 0.5, nil, true, false, 1, true, "asked", "", "Not approved by laya:en, p(safe) = 0.50 < 0.90."},
 		{"failed", 0, errors.New("connection refused"), true, false, 1, true, "failed", "did not answer", ""},
@@ -215,5 +216,47 @@ func TestDeclinedCommandIsNotAskedAgain(t *testing.T) {
 	run("rm scratch_test.go")
 	if fd.calls != 3 {
 		t.Errorf("a new turn did not ask again (calls %d)", fd.calls)
+	}
+}
+
+// TestShellCommandShownOnceInFull: a command is printed whole where the user
+// first sees it. After a prompt they answered, which showed it whole, its
+// first line stands in for it above the output; approved unseen, it is shown
+// whole, purpose first, as the prompt would have shown it.
+func TestShellCommandShownOnceInFull(t *testing.T) {
+	const command = "cat <<'EOF'\nline one\nline two\nEOF"
+	for _, tc := range []struct {
+		name    string
+		answer  Confirmer
+		grant   bool
+		want    string
+		notWant string
+	}{
+		{"answered at the prompt", &recordingConfirmer{answer: true}, false,
+			"$ cat <<'EOF'  (+3 more lines)", "‹shell›"},
+		{"--yes bash", nil, true,
+			"‹shell› show it\n$ " + command + "\n\nline one", "more lines"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testCoder(t)
+			out := &captureOut{}
+			c.Out = out
+			c.SuggestShellCommands = true
+			c.Confirm = tc.answer
+			if tc.grant {
+				c.Grants = NewGrants(map[string]bool{GrantBash: true})
+				c.Confirm = AutoConfirmer{Granted: c.Grants.Effective}
+			}
+			if _, ran := c.runShell(context.Background(), toolCommand{command: command, purpose: "show it"}); !ran {
+				t.Fatal("the command did not run")
+			}
+			joined := strings.Join(out.lines, "\n")
+			if !strings.Contains(joined, tc.want) {
+				t.Errorf("output lacks %q:\n%s", tc.want, joined)
+			}
+			if strings.Contains(joined, tc.notWant) {
+				t.Errorf("output has %q:\n%s", tc.notWant, joined)
+			}
+		})
 	}
 }

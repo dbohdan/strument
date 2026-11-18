@@ -691,7 +691,7 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		// "$ " is the shape runChecks prints an argv in, so the two shell
 		// surfaces read alike. The color deliberately is not: there the check is
 		// routine, here it is the decision.
-		r.out.Printf("$ %s", req.Command)
+		r.out.Printf("%s", render.ShellCommand(req.Command, true))
 	case req.URL != "":
 		// Same shape as the shell gate: the model's claim above, recessive, and
 		// the thing that has to be read below it. What has to be read here is

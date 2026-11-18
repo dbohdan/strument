@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/render"
+
 	"dbohdan.com/strument/internal/record"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -929,7 +931,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if keys, ok := c.removesOnlyOwnFiles(command); ok {
 		c.approvalNote = "Ran without asking: it only removes files this turn created."
 		requested := time.Duration(cmd.timeout) * time.Second
-		r := c.runShellCommand(ctx, command, requested, cmd.tail)
+		r := c.runShellCommand(ctx, command, shellShown{purpose: cmd.purpose}, requested, cmd.tail)
 		c.forgetRemoved(keys)
 		c.lastShell = &r
 		return shellResultText(command, r, ""), true
@@ -939,7 +941,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	// `rm` twelve times in one turn, alone and chained to its checks: nothing
 	// it could change would change the answer, and nothing said so.
 	if why, ok := c.turnDeclined[command]; ok {
-		c.Out.Toolf("Declined again: %s", quoteToolArg(command))
+		c.Out.Toolf("Declined again: %s", render.ShellCommand(command, false))
 		r := refusal{by: refusedByNobody, reason: "it was declined earlier in this turn with no one at a terminal"}
 		if why != "" {
 			r = refusal{by: refusedByApproveModel, reason: why + ", earlier in this turn, and no one is at a terminal to overrule it"}
@@ -991,15 +993,17 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 			c.approvalNote += " Its removal of files this turn created was not put to it."
 		}
 	}
+	shown := shellShown{purpose: cmd.purpose}
 	if !approved {
-		if res := c.confirmGrouped(ConfirmRequest{
+		res := c.confirmGrouped(ConfirmRequest{
 			Prompt:  "Run shell command?",
 			Command: command,
 			Purpose: cmd.purpose,
 			Note:    note,
 			Group:   group,
 			Grant:   GrantBash,
-		}); !res.Yes && !res.Always {
+		})
+		if !res.Yes && !res.Always {
 			if res.Unattended {
 				verdict := c.approveVerdict
 				if c.turnDeclined == nil {
@@ -1016,6 +1020,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 			}
 			return declined(res, "run the command", GrantBash), false
 		}
+		shown.seen = !res.Auto
 	}
 
 	// A model-caused shell command is the one way a model can commit without
@@ -1044,14 +1049,14 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 	if ceiling := c.shellTimeout(requested); cmd.timeout > 0 && ceiling < requested {
 		notice := fmt.Sprintf("The requested timeout of %d seconds was clamped to the configured limit of %s.",
 			cmd.timeout, ceiling)
-		r := c.runShellCommand(ctx, command, requested, cmd.tail)
+		r := c.runShellCommand(ctx, command, shown, requested, cmd.tail)
 		c.attributeShellCommits(before)
 		c.noteStaged(index)
 		c.lastShell = &r
 		return shellResultText(command, r, notice), true
 	}
 
-	r := c.runShellCommand(ctx, command, requested, cmd.tail)
+	r := c.runShellCommand(ctx, command, shown, requested, cmd.tail)
 	c.attributeShellCommits(before)
 	c.noteStaged(index)
 	c.lastShell = &r
