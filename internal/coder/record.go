@@ -49,6 +49,10 @@ type Record struct {
 	Version int    `json:"version,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Root    string `json:"root,omitempty"`
+	// Slug is a turn row's model without its provider: see Model.Slug in
+	// markModelSeams for why that is the comparison. Rows written before it
+	// existed carry only Model.
+	Slug string `json:"slug,omitempty"`
 
 	// message
 	Role string `json:"role,omitempty"`

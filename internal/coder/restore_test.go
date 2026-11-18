@@ -71,8 +71,12 @@ func TestMessagesFromRecordsRebuildsAnOrdinaryConversation(t *testing.T) {
 			t.Error("reasoning was folded back into the conversation")
 		}
 	}
-	if len(stats.Models) != 1 || stats.Models[0] != "openrouter/flash" {
-		t.Errorf("models = %v, want the one the turn row named", stats.Models)
+	// Attribution from the turn row: a row written before the slug was
+	// recorded on its own names the qualified model.
+	for _, i := range []int{1, 3} {
+		if got[i].Model != "openrouter/flash" {
+			t.Errorf("message %d is attributed to %q, want the model the turn row named", i, got[i].Model)
+		}
 	}
 }
 
@@ -222,29 +226,6 @@ func assertSendable(t *testing.T, msgs []llm.Message) {
 	}
 }
 
-// The seam. A conversation made by another model gets one; a conversation made
-// by this one does not, which is the half that keeps the check honest.
-func TestTheSeamNoteFiresOnlyForAnotherModel(t *testing.T) {
-	c := testCoder(t)
-	now := c.Model.QualifiedSlug()
-
-	if c.RestoredFromAnotherModel(RestoreStats{Models: []string{now}}) {
-		t.Error("a conversation this model made was reported as another model's")
-	}
-	if !c.RestoredFromAnotherModel(RestoreStats{Models: []string{"some/other-model"}}) {
-		t.Error("a conversation another model made was not noticed")
-	}
-	// A session whose model was switched mid-way has several, and one of them
-	// differing is enough: some of those assistant turns are not this model's.
-	if !c.RestoredFromAnotherModel(RestoreStats{Models: []string{now, "some/other-model"}}) {
-		t.Error("a session that switched models mid-way was not noticed")
-	}
-	// Nothing recorded, nothing to claim.
-	if c.RestoredFromAnotherModel(RestoreStats{}) {
-		t.Error("a restore with no recorded model asserted one anyway")
-	}
-}
-
 // An interrupted turn's row still names its model, but the turn left no
 // assistant message to attribute — the reply was cut off before the model
 // recorded anything, and the restore carries nothing of it. A seam note about
@@ -261,33 +242,15 @@ func TestAnInterruptedTurnWithNoAnswerLeavesNoSeam(t *testing.T) {
 		{Type: "turn", Model: "openrouter/xiaomi/mimo-v2.5", Outcome: "Interrupted", Prompt: "diagnose the run_code failure"},
 	}
 
-	got, stats := MessagesFromRecords(records)
+	got, _ := MessagesFromRecords(records)
 
 	if want := strings.Join([]string{llm.RoleUser, llm.RoleUser}, " "); shape(got) != want {
 		t.Errorf("shape = %q, want %q: the interrupted turn restored with nothing to show for it", shape(got), want)
 	}
-	if len(stats.Models) != 0 {
-		t.Errorf("models = %v; a turn with no surviving assistant message attributes none", stats.Models)
-	}
-}
-
-func TestTheSeamNoteIsAMarkedUserTurn(t *testing.T) {
-	c := testCoder(t)
-	c.RestoreHistory([]llm.Message{llm.TextMessage(llm.RoleUser, "hi")}, nil)
-	c.NoteRestoredFromAnotherModel()
-
-	last := c.doneMessages[len(c.doneMessages)-1]
-	// Never an assistant turn: putting words in the model's mouth is the one
-	// thing no provider will catch for us. Never system: this lands after an
-	// assistant turn, which is where Anthropic rejects one.
-	if last.Role != llm.RoleUser {
-		t.Errorf("the seam note is a %s message, want a marked user turn", last.Role)
-	}
-	if !strings.HasPrefix(last.Text(), llm.HarnessMarker) {
-		t.Errorf("the seam note is not marked as the harness speaking: %q", last.Text())
-	}
-	if !strings.Contains(last.Text(), "a different model") {
-		t.Errorf("the seam note does not say what it is for: %q", last.Text())
+	for _, m := range markModelSeams(got, "another/model") {
+		if strings.Contains(m.Text(), "different model") {
+			t.Errorf("a seam marks a turn the conversation does not contain: %q", m.Text())
+		}
 	}
 }
 

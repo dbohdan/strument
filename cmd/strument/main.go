@@ -703,9 +703,6 @@ func restoreConversation(cdr *coder.Coder, projectRoot, session string) string {
 	}
 	cdr.SeedTokenScale(stats)
 	cdr.RestoreHistory(msgs, stats.Turns)
-	if cdr.RestoredFromAnotherModel(stats) {
-		cdr.NoteRestoredFromAnotherModel()
-	}
 	note := stats.RestoreNote()
 	if missing > 0 {
 		// The pruning this is the other half of: a payload that was deleted

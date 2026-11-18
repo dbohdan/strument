@@ -28,9 +28,9 @@ import (
 // would trigger it is the one that would fail.
 //
 // Attribution is answered by saying so. The objection is precisely that there
-// is no seam; when the conversation was made by a different model, this puts
-// one there. It is a harness note, in the voice the harness already uses to
-// say that a reply was interrupted or a tool call was not run.
+// is no seam; each restored assistant message keeps the model that wrote it,
+// and every request marks where the conversation changed hands
+// (markModelSeams), the same way for a restored session as for a live one.
 
 // RestoreStats is what a restore did, for the line the user is shown and for
 // the tests that would otherwise have to infer it.
@@ -42,14 +42,6 @@ type RestoreStats struct {
 	// provider would accept one. A number worth surfacing, because it is the
 	// difference between the record and what the model will see.
 	Dropped int
-	// Models is every distinct model that produced an assistant turn in the
-	// restored conversation, in first-seen order, as the turn rows recorded it.
-	// A turn row names its model only when the conversation it accounts for
-	// still holds an assistant message: an interrupted turn that was cut off
-	// before anything of the model's was recorded names a model the restored
-	// conversation never shows, and attributing the seam note to it would
-	// claim turns that are not there.
-	Models []string
 	// Turns are the surviving turns' ranges in the returned messages, oldest
 	// first, so a restored session can be rewound like a live one.
 	Turns []TurnSpan
@@ -75,7 +67,6 @@ type RestoreStats struct {
 func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 	var out []llm.Message
 	var stats RestoreStats
-	seenModel := map[string]bool{}
 
 	// Which calls of the assistant message currently being answered are still
 	// open. Scoped to that message, not to the record, and the difference is
@@ -154,17 +145,11 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 			if len(msg.ToolCalls) < len(r.ToolCalls) {
 				stats.Dropped += len(r.ToolCalls) - len(msg.ToolCalls)
 			}
+			// The model that wrote it, from the turn row that accounts for it,
+			// so a request can mark where the conversation changed hands
+			// (markModelSeams). Older rows name only the qualified model.
+			msg.Model = nextTurnModel(records, i)
 			out = append(out, msg)
-			// Attribution at the point of survival, not from the turn row:
-			// a turn row follows the messages it accounts for, so this is
-			// where "this model said something the conversation still holds"
-			// is actually known. The turn that names the model could be
-			// interrupted with nothing recorded, and a seam note pointing at
-			// turns that are not there would be worse than none.
-			if model := nextTurnModel(records, i); model != "" && !seenModel[model] {
-				seenModel[model] = true
-				stats.Models = append(stats.Models, model)
-			}
 
 		case llm.RoleTool:
 			// A result whose call did not make it back is an orphan, and a
@@ -309,14 +294,15 @@ func answeredAfter(records []Record, i int) map[string]int {
 // middle of a tool-run would attribute to the wrong turn, which is a shape
 // nothing writes today and the note would misfire on.
 //
-// A model is only ever attributed once the assistant message it produced has
-// survived into the restored conversation — the caller checks that — because
-// the alternative is a seam note about turns the conversation does not
-// contain: the exactly-backwards failure of a note whose whole job is
-// attribution.
+// It prefers the row's slug, which is what the seam compares; rows written
+// before the slug was recorded give the qualified model, which sameModel
+// accepts too.
 func nextTurnModel(records []Record, i int) string {
 	for _, r := range records[i+1:] {
 		if r.Type == "turn" {
+			if r.Slug != "" {
+				return r.Slug
+			}
 			return r.Model
 		}
 		if r.Type == "message" && r.Role == llm.RoleUser {
@@ -367,47 +353,6 @@ func (c *Coder) RestoreHistory(msgs []llm.Message, turns []TurnSpan) {
 	c.doneMessages = msgs
 	c.turns = turns
 	c.maybeCompact()
-}
-
-// NoteRestoredFromAnotherModel puts a seam in a conversation the current model
-// did not have.
-//
-// This is the answer to the attribution objection in notes.go, which is the
-// strongest argument against restoring a conversation at all: an assistant
-// turn is read by the next model as its own past self, and it will defend
-// choices it would never have made because nothing tells it they were not its
-// own. Saying so is cheap and is the whole of what was missing.
-//
-// It names no model, for the reason the notes header names none: the fact that
-// matters is "not you", and a name invites the reader to weigh what it finds
-// by whose it was rather than by what it says. The record keeps the model on
-// every turn, so a person can always see which.
-//
-// A user-role harness note, not a system message: the system role belongs to
-// the prefix, and this lands after an assistant turn, which is exactly where
-// Anthropic rejects one.
-func (c *Coder) NoteRestoredFromAnotherModel() {
-	c.doneMessages = append(c.doneMessages, llm.HarnessNote(
-		"The turns above are from earlier in this session, made by a different model. "+
-			"They are a record of what happened, not decisions you made — where you have "+
-			"reason to disagree with them, say so rather than defending them."))
-}
-
-// RestoredFromAnotherModel reports whether a restored conversation was made by
-// any model other than the one now running.
-//
-// Compares the qualified slug, which is what the turn rows record. A session
-// whose model was switched mid-way has several, and one of them differing is
-// enough: the seam is about the assistant turns not being this model's, and
-// some of them are not.
-func (c *Coder) RestoredFromAnotherModel(stats RestoreStats) bool {
-	now := c.Model.QualifiedSlug()
-	for _, m := range stats.Models {
-		if m != now {
-			return true
-		}
-	}
-	return false
 }
 
 // RestoreNote is the line the user is shown, or "" when there is nothing to

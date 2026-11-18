@@ -87,8 +87,8 @@ func TestRewindKeepsToolCallsPaired(t *testing.T) {
 	if len(got[1].ToolCalls) != 1 {
 		t.Errorf("the surviving call lost its pairing: %+v", got[1])
 	}
-	if !slices.Equal(stats.Models, []string{"mimo"}) {
-		t.Errorf("models %q; a rewound turn's model must not be attributed", stats.Models)
+	if got[1].Model != "mimo" || got[3].Model != "mimo" {
+		t.Errorf("attributed to %q and %q; the surviving turn is mimo's", got[1].Model, got[3].Model)
 	}
 	if stats.Rewound != 1 || len(stats.Turns) != 1 || stats.Turns[0].Start != 0 || stats.Turns[0].End != 4 {
 		t.Errorf("rewound %d, turns %+v", stats.Rewound, stats.Turns)

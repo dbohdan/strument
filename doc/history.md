@@ -25,9 +25,12 @@ had it, whether that ended in a crash, a closed laptop, or a power loss.
 - If the restored conversation is already too big to send, Strument compacts
   it first, rather than letting the first turn fail. It says how many messages
   it restored.
-- If the conversation was made by a different model than the one now running,
-  Strument adds a line saying so. Otherwise the new model would read an earlier
-  assistant turn as its own.
+- Where a different model than the one now running wrote some of the replies,
+  Strument marks where each such stretch starts and ends, in every request.
+  Otherwise the model would read another model's turns as its own. The same
+  marks appear in a live session after `/model`, and switching back before
+  another turn leaves nothing to mark. Models are compared by slug, so renaming
+  a provider in your configuration does not count as a different model.
 - Without `--continue`, a session starts with an empty conversation.
 
 Inside Strument, `/session` lists the sessions and switches between them

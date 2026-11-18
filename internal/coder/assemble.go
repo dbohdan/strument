@@ -213,9 +213,11 @@ func (c *Coder) formatChatChunks() *chatChunks {
 	// family lacks a system role; Gemma, the last, gained one in April 2026.
 	chunks.system = []llm.Message{llm.TextMessage(llm.RoleSystem, mainSys)}
 
-	chunks.done = c.doneMessages
-
-	chunks.cur = append([]llm.Message(nil), c.curMessages...)
+	// The seams span both: the turn in progress may be the first of the
+	// current model's after another's.
+	all := markModelSeams(append(append([]llm.Message(nil), c.doneMessages...), c.curMessages...), c.Model.Slug)
+	chunks.done = all[:len(c.doneMessages):len(c.doneMessages)]
+	chunks.cur = all[len(c.doneMessages):]
 	return chunks
 }
 

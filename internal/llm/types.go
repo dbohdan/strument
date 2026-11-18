@@ -25,6 +25,10 @@ type Message struct {
 	Content    Content
 	ToolCalls  []ToolCall // assistant tool calls
 	ToolCallID string     // set on RoleTool result messages
+	// Model is the slug of the model that wrote an assistant message, "" when
+	// unknown. For the harness only: no client sends it. It is how a request
+	// can say where the conversation passed from one model to another.
+	Model string `json:"-"`
 }
 
 // ToolCall is one function call the model requested. Arguments is the raw

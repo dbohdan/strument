@@ -447,6 +447,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	if answer != "" || len(c.partialToolCalls) > 0 {
 		msg := llm.TextMessage("assistant", answer)
+		msg.Model = c.Model.Slug
 		if len(c.partialToolCalls) > 0 {
 			fillToolCalls(c.partialToolCalls, len(c.doneMessages)+len(c.curMessages))
 			msg.ToolCalls = c.partialToolCalls
@@ -1164,7 +1165,11 @@ func (c *Coder) flushTurnUsage() {
 		// transcript's header showed the slug, and once a project holds
 		// several sessions the model is a property of the turn rather than of
 		// the process.
-		Model:     c.Model.QualifiedSlug(),
+		Model: c.Model.QualifiedSlug(),
+		// The slug on its own, which is what decides whether a later model is
+		// the same one: the qualified form carries the provider's configured
+		// name, and renaming a provider is not changing models.
+		Slug:      c.Model.Slug,
 		Outcome:   c.turnOutcome(),
 		Steps:     c.turnSteps,
 		Sent:      c.messageTokensSent,
