@@ -6,15 +6,21 @@ import (
 	"time"
 )
 
-// Staleness detection: refuse an edit to a file that changed on disk since the
-// model last saw it.
+// Staleness detection: knowing that a file changed on disk since the model
+// last saw it, and saying so.
 //
-// Without this, a file the user saves in their own editor mid-turn either still
-// matches the model's old_string — and the edit lands on content that has moved
-// — or it does not, and the model is told "the search text was not found" with
-// nothing to distinguish a typo it made from ground that shifted under it. The
-// second is confusing; the first is a silent wrong write, which is the worse
-// outcome a harness can produce.
+// A changed file takes an edit whose old_string matches it exactly once, with
+// a note that it changed; anything else is refused with a request to read it
+// again, never "not found" and never the line matcher's fuzzy fallback. An
+// exact match proves the span is there. What a moved file rules out is a "the
+// search text was not found" that sends the model hunting for a typo it did
+// not make, and a fuzzy match that can land on text that has shifted.
+//
+// This used to refuse every edit to a changed file, matching or not. Most of
+// the harnesses surveyed on 2026-11-18 check nothing and let exact matching be
+// the guard; DeepSeek Harness built a strict check and shipped it off after
+// benchmarking. The refusal cost a live session two steps re-reading files a
+// formatter had changed far from the lines being edited.
 //
 // Only `read` records a stamp. Pinned file contents are re-read from disk at
 // every send (assemble.go), so the model's copy of a pinned file cannot go
@@ -138,22 +144,35 @@ func (s *shownFiles) forget() {
 }
 
 // toolStaleFailure is the tool result for an edit refused because the file
-// moved. It names the cause, because the model's next move depends on which
-// one it is: a mismatch it can fix by looking harder, or a file it must read
-// again because what it is holding is out of date.
+// moved and the text no longer matches it exactly once. It names the cause,
+// because the model's next move depends on which one it is: a mismatch it can
+// fix by looking harder, or a file it must read again because what it is
+// holding is out of date. It names the read tool, because "read it again"
+// was taken to be met by a grep, which shows lines but is not a read.
 //
 // afterCommand says a command ran between the read and this edit. Then the
 // cause is not known — the model's own command is as likely as the user's
 // editor — and the result says so rather than asserting the one that sends a
 // model looking for someone else in the room.
 func toolStaleFailure(path string, afterCommand bool) string {
-	head := "Nothing was changed: " + quoteToolArg(path) + " has changed on disk " +
-		"since you read it, so the text you matched may have moved or be gone.\n"
+	head := "Nothing was changed: " + quoteToolArg(path) + " has changed on disk since you read it, " +
+		"and the text to replace does not appear in it exactly once now.\n"
 	if afterCommand {
-		return head + "Read it again before editing. A command run since you read it " +
-			"may have changed it — a formatter, sed -i, a build step — or it was " +
-			"edited outside this conversation.\n"
+		return head + "Call read on it again before editing. A command run since you read it may have " +
+			"changed it — a formatter, sed -i, a build step — or it was edited outside this conversation.\n"
 	}
-	return head + "Read it again before editing. This is not a mistake in your edit — " +
+	return head + "Call read on it again before editing. This is not a mistake in your edit — " +
 		"the file was modified outside this conversation.\n"
+}
+
+// staleEditNote rides an edit that landed on a file that had changed since it
+// was read: the edit matched the current text, and the rest of the file may
+// not be what the model remembers.
+func staleEditNote(path string, afterCommand bool) string {
+	cause := "It was modified outside this conversation."
+	if afterCommand {
+		cause = "A command run since then may have changed it."
+	}
+	return quoteToolArg(path) + " had changed on disk since you read it; your text matched it exactly. " +
+		cause + " Read it if you need the rest of the file as it is now."
 }

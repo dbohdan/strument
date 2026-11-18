@@ -1162,6 +1162,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	writeVerb := map[string]string{} // path -> "Created"/"Overwrote"/"Applied edit to"
 	callVerb := map[string]string{}  // call id -> the same, for that one call
 	applied := map[string]bool{}     // call ids whose edit made it into the batch
+	movedFiles := map[string]bool{}  // files that had changed since the model read them
 	orig := map[string]string{}      // path -> contents before the batch's first write
 	lastCall := map[string]string{}  // path -> the call that produced its final contents
 	callNote := map[string]string{}  // call id -> what a loose match changed, told to the model
@@ -1196,18 +1197,20 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			continue
 		}
 
-		// Staleness before matching. The two failures need different answers —
-		// a mismatch means look harder, a moved file means read again — and
-		// telling a model its text "was not found" when the ground shifted
-		// under it sends it hunting for a mistake it did not make. write is
-		// exempt: it puts down a whole file and claims nothing about what was
-		// there before.
-		if moved, afterCommand := c.shown.changed(e.path, c.fullPath(e.path)); !e.create && moved {
-			results.setText(e.callID, toolStaleFailure(e.path, afterCommand))
-			recordEdit(e, "stale", "")
-			*matchFailure = true
-			c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
-			continue
+		// A file that changed since the model read it — a formatter it ran, an
+		// editor the user saved from — is not grounds for refusing the edit by
+		// itself. An old_string that matches the current text exactly is
+		// proof the span is there, and refusing it cost a re-read for nothing:
+		// a live session lost two steps to ruff reformatting imports two
+		// hundred lines away. What the change does rule out is the line
+		// matcher's fuzzy fallback, the one path that can land on text that
+		// has moved, and a "not found" that would send the model hunting for
+		// a mistake it did not make. So a changed file takes exact matches,
+		// says it changed, and otherwise asks for a read. write is exempt: it
+		// puts down a whole file and claims nothing about what was there.
+		moved, afterCommand := false, false
+		if !e.create {
+			moved, afterCommand = c.shown.changed(e.path, c.fullPath(e.path))
 		}
 
 		content, exists := read(e.path)
@@ -1250,6 +1253,18 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 			var ok bool
 			var how editblock.Match
 			occurrences := editblock.CountOccurrences(content, e.search)
+
+			if moved {
+				if occurrences != 1 && (!e.replaceAll || occurrences == 0) {
+					results.setText(e.callID, toolStaleFailure(e.path, afterCommand))
+					recordEdit(e, "stale", "")
+					*matchFailure = true
+					c.Out.Warningf("Could not edit %s: it changed on disk since it was read.", e.path)
+					continue
+				}
+				callNote[e.callID] = staleEditNote(e.path, afterCommand)
+				movedFiles[e.path] = true
+			}
 
 			// replace_all is the model saying "all of them are the one I
 			// mean", so ambiguity stops being a failure for this call.
@@ -1380,9 +1395,16 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 		// The batch is on disk. Re-stamp what it wrote: the model's next edit
 		// builds on the version Strument just produced, and leaving the old
 		// stamp in place would make the harness's own write look like somebody
-		// else's.
+		// else's. Except a file that had changed before the edit: the edit
+		// matched one span of it, and the rest is still what the model has not
+		// seen. Stamped, the file would look read, and the next edit would get
+		// the fuzzy matcher on text that moved; unstamped, it stays changed
+		// until the model reads it. A live run showed exactly that, an edit
+		// after an edit to a gofmt'd file falling through to "not found".
 		for _, rel := range writeOrder {
-			c.shown.note(rel, c.fullPath(rel))
+			if !movedFiles[rel] {
+				c.shown.note(rel, c.fullPath(rel))
+			}
 		}
 	}
 	if c.DryRun {

@@ -58,43 +58,62 @@ func TestUnreadFileIsStillEditable(t *testing.T) {
 	}
 }
 
-// The hole this closes. The model reads a file, the user saves a different
-// version from their own editor, and the model's edit still matches text that
-// has moved. Before this, the write landed silently on content the model never
-// saw.
-func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
+// A file that moved since it was read still takes an edit whose text matches
+// it exactly once: the match proves the span is there. A live session lost two
+// steps to the old refusal, re-reading files ruff had reformatted elsewhere.
+// The result says the file changed, so the model knows the rest of what it
+// remembers may not hold.
+func TestAnExactEditLandsOnAMovedFileAndSaysSo(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
 	if err := os.WriteFile(path, []byte("hello world\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
 	c := toolCoder(t, dir)
 	c.shown.note("a.txt", path)
-
-	// Somebody else writes the file. "world" is still in it, so the edit would
-	// have applied cleanly and told the model it succeeded.
-	touchLater(t, path, "a totally different hello world, rewritten\n")
+	touchLater(t, path, "a rewritten first line\nhello world\n")
 
 	results := toolResults{}
 	matchFailure := false
-	edited := c.applyToolEdits(
-		[]plannedEdit{editCall("call_1", "world", "mars")},
-		results, &matchFailure)
-
-	if len(edited) != 0 {
-		t.Errorf("edited = %v, want the edit refused", edited)
+	edited := c.applyToolEdits([]plannedEdit{editCall("call_1", "world", "mars")}, results, &matchFailure)
+	if len(edited) != 1 || matchFailure {
+		t.Fatalf("edited = %v, reflect = %v; want the exact match applied", edited, matchFailure)
 	}
-	if got, _ := os.ReadFile(path); strings.Contains(string(got), "mars") {
-		t.Error("the edit was written to a file that had moved under the model")
+	if got, _ := os.ReadFile(path); string(got) != "a rewritten first line\nhello mars\n" {
+		t.Errorf("file = %q, want the edit applied and the outside change kept", got)
 	}
-	if !matchFailure {
-		t.Error("a stale edit must reflect: the model should read again and retry")
-	}
-	// The message must name the cause. "Not found" would send the model
-	// hunting for a typo it did not make — and here the text *was* found.
 	got := results["call_1"].Text
-	for _, want := range []string{"changed on disk", "Read it again"} {
+	for _, want := range []string{"Applied", "changed on disk since you read it", "outside this conversation"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("result = %q, want it to mention %q", got, want)
+		}
+	}
+}
+
+// What a moved file does rule out is the line matcher's fallback, which can
+// land on text that has shifted, and a "not found" that sends the model looking
+// for a typo it did not make. The text below is not in the file verbatim — its
+// indentation differs — so on a file the model had seen as it is, the matcher
+// would apply it. On a moved file, the model is asked to read again.
+func TestAMovedFileGetsNoFuzzyMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte("func f() {\n\treturn 1\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	c.shown.note("a.go", path)
+	touchLater(t, path, "// moved\nfunc f() {\n\treturn 1\n}\n")
+
+	results := toolResults{}
+	matchFailure := false
+	edited := c.applyToolEdits([]plannedEdit{{callID: "call_1", path: "a.go", search: "    return 1\n", replace: "    return 2\n"}},
+		results, &matchFailure)
+	if len(edited) != 0 || !matchFailure {
+		t.Fatalf("edited = %v, reflect = %v; want the edit refused", edited, matchFailure)
+	}
+	got := results["call_1"].Text
+	for _, want := range []string{"changed on disk since you read it", "Call read on it again"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("result = %q, want it to mention %q", got, want)
 		}
@@ -102,43 +121,75 @@ func TestEditIsRefusedAfterTheFileMovedUnderneath(t *testing.T) {
 	if strings.Contains(got, "not found") {
 		t.Errorf("result = %q, must not report this as a failed match", got)
 	}
-	// No command ran between the read and the edit, so the change came from
-	// outside, and the result may say so.
-	if !strings.Contains(got, "outside this conversation") {
-		t.Errorf("result = %q, want it to name an outside edit", got)
+}
+
+// An edit that lands on a changed file does not make the file read. It
+// matched one span; the rest is still what the model has not seen, so the next
+// edit is held to the same rule. Seen live: the harness re-stamped the file
+// after its own write, and the next edit, written against the pre-gofmt text,
+// fell through to the matcher and came back "not found".
+func TestAnEditToAMovedFileDoesNotMarkItRead(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte("func f() {\n\treturn 1\n}\n\nvar x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := toolCoder(t, dir)
+	c.shown.note("a.go", path)
+	touchLater(t, path, "// moved\nfunc f() {\n\treturn 1\n}\n\nvar x = 1\n")
+
+	edit := func(id, search, replace string) (toolResults, bool) {
+		results := toolResults{}
+		failed := false
+		c.applyToolEdits([]plannedEdit{{callID: id, path: "a.go", search: search, replace: replace}}, results, &failed)
+		return results, failed
+	}
+	if r, failed := edit("e1", "var x = 1", "var x = 2"); failed {
+		t.Fatalf("the exact edit was refused: %q", r["e1"].Text)
+	}
+	// Only the line matcher could place this: the indentation differs.
+	r, failed := edit("e2", "    return 1\n", "    return 2\n")
+	if !failed || !strings.Contains(r["e2"].Text, "Call read on it again") {
+		t.Errorf("after an edit to a moved file, a fuzzy edit got %q; want the file still treated as changed", r["e2"].Text)
+	}
+	// A read is what makes it seen.
+	c.shown.note("a.go", path)
+	if r, failed := edit("e3", "    return 1\n", "    return 2\n"); failed {
+		t.Errorf("after a read, the edit was refused: %q", r["e3"].Text)
 	}
 }
 
 // The model's own command is the other way a read file moves: gofmt -w, sed -i,
-// a formatter behind a check. The edit is still refused — the text it matched
-// may have moved — but the result must not tell the model someone else did it,
-// which is what it said while the stamps knew only about reads and writes.
-func TestStaleAfterACommandDoesNotBlameAnOutsideEdit(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.txt")
-	if err := os.WriteFile(path, []byte("hello world\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := toolCoder(t, dir)
-	c.shown.note("a.txt", path)
+// a formatter behind a check. The result must not tell the model someone else
+// did it, which is what it said while the stamps knew only about reads and
+// writes.
+func TestAMoveAfterACommandDoesNotBlameAnOutsideEdit(t *testing.T) {
+	for _, tc := range []struct{ search, want string }{
+		{"world", "A command run since then may have changed it"},
+		{"planet", "A command run since you read it may have changed it"},
+	} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "a.txt")
+		if err := os.WriteFile(path, []byte("hello world\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c := toolCoder(t, dir)
+		c.shown.note("a.txt", path)
+		c.runAndShow(context.Background(), "echo 'hello world, reformatted' > a.txt", 0)
+		if got, _ := os.ReadFile(path); !strings.Contains(string(got), "reformatted") {
+			t.Fatalf("the command did not change the file, so this test proves nothing: %q", got)
+		}
 
-	c.runAndShow(context.Background(), "echo 'hello world, reformatted' > a.txt", 0)
-	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "reformatted") {
-		t.Fatalf("the command did not change the file, so this test proves nothing: %q", got)
-	}
-
-	results := toolResults{}
-	matchFailure := false
-	edited := c.applyToolEdits([]plannedEdit{editCall("call_1", "world", "mars")}, results, &matchFailure)
-	if len(edited) != 0 {
-		t.Errorf("edited = %v, want the edit refused: the file moved after it was read", edited)
-	}
-	got := results["call_1"].Text
-	if strings.Contains(got, "This is not a mistake in your edit") {
-		t.Errorf("result = %q, asserts an outside edit when a command may have made the change", got)
-	}
-	if !strings.Contains(got, "A command run since you read it") {
-		t.Errorf("result = %q, want it to name the command as a possible cause", got)
+		results := toolResults{}
+		matchFailure := false
+		c.applyToolEdits([]plannedEdit{editCall("call_1", tc.search, "mars")}, results, &matchFailure)
+		got := results["call_1"].Text
+		if strings.Contains(got, "This is not a mistake in your edit") || strings.Contains(got, "It was modified outside") {
+			t.Errorf("search %q: result = %q, asserts an outside edit when a command may have made the change", tc.search, got)
+		}
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("search %q: result = %q, want %q", tc.search, got, tc.want)
+		}
 	}
 }
 
