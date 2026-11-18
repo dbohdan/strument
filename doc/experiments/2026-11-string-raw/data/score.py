@@ -8,7 +8,8 @@ Per session, from done.json and the session log: the target file's outcome
 edit() or write() (the mechanism fired), whether any used String.raw, how many
 programs failed and how many of those on an escape. Then the table per arm,
 model and task, and Fisher's exact test on correct sessions, pooled over the
-three backslash tasks and, separately, on the counter-metric task.
+three block tasks (the primary), the three line tasks of pilot 1, and the
+counter-metric task.
 """
 
 import glob
@@ -20,8 +21,16 @@ import sys
 
 ESCAPE = re.compile(r"Octal escape sequences are not allowed|invalid escape: |are not allowed in template strings")
 PROVIDER_ERROR = re.compile(r"HTTP [45]\d\d|Empty response received|rate_limit|stream ended|connection reset")
-BACKSLASH_TASKS = ["c", "py", "sh"]
+LINE_TASKS = ["c", "py", "sh"]
+BLOCK_TASKS = ["cb", "pyb", "shb"]
 COUNTER = "csv"
+
+
+def blob(d, digest):
+    hits = glob.glob(os.path.join(d, "state", "**", "blobs", digest), recursive=True)
+    if not hits:
+        raise FileNotFoundError(f"{d}: blob {digest} is missing")
+    return open(hits[0], errors="replace").read()
 
 
 def session(d):
@@ -40,12 +49,14 @@ def session(d):
                     if tc.get("name") != "run_code":
                         continue
                     try:
-                        args = json.loads(tc.get("arguments") or "{}")
+                        # Large arguments are stored as a blob; the log keeps
+                        # only its hash and a cut summary.
+                        args = json.loads(blob(d, tc["blob"]) if tc.get("blob") else tc.get("arguments") or "{}")
                     except ValueError:
                         args = {}
                     programs.append(args.get("code", "") if isinstance(args, dict) else "")
             elif r["type"] == "message" and r.get("role") == "tool":
-                text = r.get("text") or ""
+                text = r.get("text") or (blob(d, r["blob"]) if r.get("blob") else "")
                 if text.startswith("The program failed"):
                     failed += 1
                     escape += bool(ESCAPE.search(text))
@@ -86,7 +97,7 @@ def main():
     w("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for arm in ("B", "R"):
         for model in sorted({r["model"] for r in rows}):
-            for task in BACKSLASH_TASKS + [COUNTER]:
+            for task in LINE_TASKS + BLOCK_TASKS + [COUNTER]:
                 rs = [r for r in rows if (r["arm"], r["model"], r["task"]) == (arm, model, task)]
                 if not rs:
                     continue
@@ -95,7 +106,8 @@ def main():
                   f"{c('outcome', 'unchanged')} | {c('fired')} | {c('raw')} | {sum(r['escape'] for r in rs)} | "
                   f"{sum(r['failed'] for r in rs)} |")
     w("")
-    for label, tasks in (("backslash tasks (primary)", BACKSLASH_TASKS), ("csv (counter-metric)", [COUNTER])):
+    for label, tasks in (("block tasks (primary)", BLOCK_TASKS), ("line tasks (pilot 1)", LINE_TASKS),
+                         ("csv (counter-metric)", [COUNTER])):
         for model in sorted({r["model"] for r in rows}) + ["all"]:
             sel = lambda arm: [r for r in rows if r["arm"] == arm and r["task"] in tasks and model in ("all", r["model"])]  # noqa: E731
             b, rr = sel("B"), sel("R")

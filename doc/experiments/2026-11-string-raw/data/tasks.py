@@ -132,6 +132,67 @@ printf '%s\n' "wrote $1.norm"
 with
 printf '%s\n' "wrote $1.norm" >&2'''
 
+# Pilot 1 asked for single-line changes, and both models wrote them as
+# double-quoted strings with every backslash escaped correctly: the fixture
+# could not contain the failure. In the session that prompted the trial the
+# model was moving whole blocks, which invite template literals. These tasks
+# replace whole functions and command blocks.
+
+CB_BANNER_USAGE = r"""static void banner(const char *name, int major, int minor) {
+    printf("\033[1;4m%s\033[0m\n", name);
+    printf("\tversion %d.%d\n", major, minor);
+    printf("\t%s\n", "\\ separated paths are accepted");
+}
+
+static void usage(void) {
+    fputs("usage: term [-h] [-v]\n", stderr);
+    fputs("  -h\tshow help\n", stderr);
+    fputs("  -v\tshow version\n", stderr);
+}
+"""
+
+CB_AFTER = (C_BEFORE[:C_BEFORE.index("static void banner")] + CB_BANNER_USAGE
+            + C_BEFORE[C_BEFORE.index("\nstatic int is_sep"):].replace('banner("term");', 'banner("term", 1, 5);'))
+
+CB_TEXT = ("In term.c, replace the functions banner and usage with the versions below, and change the call "
+           "banner(\"term\"); in main to banner(\"term\", 1, 5);. Do it in one run_code program that calls edit(). "
+           "Change nothing else.\n\n```c\n" + CB_BANNER_USAGE + "```")
+
+PYB_RENDER = r"""def render(rows, sep="\t"):
+    '''Join rows into lines; a field that holds sep is escaped with "\\".'''
+    out = []
+    for r in rows:
+        out.append(sep.join(f.replace(sep, "\\" + sep) for f in r))
+    return "\n".join(out) + "\n"
+"""
+
+PYB_PARSE_RANGE = r"""def parse_range(s):
+    m = RANGE.fullmatch(s.strip())
+    if not m:
+        raise ValueError(f"not a range: {s!r} (want \"N-M\")")
+    return int(m[1]), int(m[2])
+"""
+
+PYB_AFTER = PY_BEFORE[:PY_BEFORE.index("def render")] + PYB_PARSE_RANGE + "\n\n" + PYB_RENDER
+
+PYB_TEXT = ("In parse.py, replace the function render with the first version below, and add the function "
+            "parse_range between split_path and render, with two blank lines around it as the file has. Do it in "
+            "one run_code program that calls edit(). Change nothing else.\n\n```python\n" + PYB_RENDER + "```\n\n"
+            "```python\n" + PYB_PARSE_RANGE + "```")
+
+SHB_BLOCK = r"""sed -e 's/\(ERROR\|WARN\|INFO\):/[\1]/' \
+    -e 's/\t/  /g' \
+    -e 's/[[:space:]]*$//' \
+    "$1" | grep -v '^\s*$' > "$1.norm"
+printf '%s\n' "wrote $1.norm" >&2
+"""
+
+SHB_AFTER = SH_BEFORE[:SH_BEFORE.index("sed -e")] + SHB_BLOCK
+
+SHB_TEXT = ("In fix.sh, replace everything after the comment line, the sed command and the printf, with the "
+            "block below. Do it in one run_code program that calls edit(). Change nothing else.\n\n```sh\n"
+            + SHB_BLOCK + "```")
+
 CSV = "name,a,b\nada,1,2\nbob,3,4\ncy,10,-1\n"
 REPORT = "ada\t3\nbob\t7\ncy\t9\n"
 
@@ -144,6 +205,9 @@ TASKS = {
     "py": {"files": {"parse.py": PY_BEFORE}, "target": "parse.py", "want": PY_AFTER, "text": PY_TEXT, "reps": 1},
     "sh": {"files": {"fix.sh": SH_BEFORE}, "target": "fix.sh", "want": SH_AFTER, "text": SH_TEXT, "reps": 1},
     "csv": {"files": {"data.csv": CSV}, "target": "report.txt", "want": REPORT, "text": CSV_TEXT, "reps": 1},
+    "cb": {"files": {"term.c": C_BEFORE}, "target": "term.c", "want": CB_AFTER, "text": CB_TEXT, "reps": 1},
+    "pyb": {"files": {"parse.py": PY_BEFORE}, "target": "parse.py", "want": PYB_AFTER, "text": PYB_TEXT, "reps": 1},
+    "shb": {"files": {"fix.sh": SH_BEFORE}, "target": "fix.sh", "want": SHB_AFTER, "text": SHB_TEXT, "reps": 1},
 }
 
 
