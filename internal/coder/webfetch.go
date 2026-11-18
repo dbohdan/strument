@@ -56,9 +56,9 @@ func webfetchTool() llm.ToolDef {
 			"https://docs.python.org/3/library/stdtypes.html#string-methods returns the " +
 			"string methods rather than the whole page. On a page too large to return " +
 			"whole, ask for its outline first and fetch a section by the anchor it lists. " +
-			"An outline also lists line numbers, and range (\"412-470\") fetches those " +
-			"lines; on a plain-text page — source code, Markdown — which has no " +
-			"anchors, that is the way to fetch a part.",
+			"A plain-text page — source code, Markdown — has no anchors; its outline " +
+			"lists line numbers instead, and range (\"412-470\") fetches those lines. " +
+			"Where an outline lists both, either works.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
