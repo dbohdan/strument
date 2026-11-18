@@ -1,4 +1,4 @@
-package coder
+package websearch
 
 import (
 	"context"
@@ -143,8 +143,8 @@ func TestSearxNGCapsAndSkipsUnusableResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Results) != searchMaxResults {
-		t.Errorf("got %d results, want the cap of %d", len(res.Results), searchMaxResults)
+	if len(res.Results) != maxResults {
+		t.Errorf("got %d results, want the cap of %d", len(res.Results), maxResults)
 	}
 	for _, r := range res.Results {
 		if r.URL == "" {
@@ -157,7 +157,7 @@ func TestSearxNGCapsAndSkipsUnusableResults(t *testing.T) {
 // the instance's decision. Unbounded, one result could push the other nine —
 // and the note about unresponsive engines — past the tool-result cap, which
 // trims from the tail. The bound is per field so the total stays small enough
-// that nothing is ever cut.
+// that nothing is ever cut (the coder's TestSearchResultsAtTheBoundsFitOneResult).
 func TestSearxNGBoundsHostileSnippets(t *testing.T) {
 	huge := strings.Repeat("A", 200_000)
 	body := `{"query":"q","results":[{"url":"https://x.example/1","title":"` + huge +
@@ -168,16 +168,12 @@ func TestSearxNGBoundsHostileSnippets(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, got := range []string{res.Results[0].Title, res.Results[0].Content} {
-		if n := len([]rune(got)); n > searchMaxSnippet+1 {
-			t.Errorf("field kept %d runes, want at most %d", n, searchMaxSnippet+1)
+		if n := len([]rune(got)); n > maxSnippet+1 {
+			t.Errorf("field kept %d runes, want at most %d", n, maxSnippet+1)
 		}
 	}
-	// And the whole rendered result stays well inside what one tool result
-	// carries, so the trailing note cannot be trimmed away.
-	if out := formatSearchResults("q", res); len(out) > maxToolOutputBytes {
-		t.Errorf("rendered result is %d bytes, past the %d cap", len(out), maxToolOutputBytes)
-	} else if !strings.Contains(out, "brave") {
-		t.Errorf("the engine note did not survive:\n%s", out[max(0, len(out)-200):])
+	if len(res.Unresponsive) != 1 {
+		t.Errorf("the engine note was lost: %+v", res.Unresponsive)
 	}
 
 	// A multi-byte snippet is cut on a rune boundary, not mid-character. The

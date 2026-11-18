@@ -3,10 +3,12 @@ package coder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/websearch"
 )
 
 func searchCall(query string) llm.ToolCall {
@@ -22,11 +24,11 @@ func runSearch(t *testing.T, c *Coder, tc llm.ToolCall) string {
 	return c.runWebsearch(context.Background(), q)
 }
 
-func searchCoder(t *testing.T, res SearchResults) *Coder {
+func searchCoder(t *testing.T, res websearch.Results) *Coder {
 	t.Helper()
 	c := testCoder(t)
 	c.Confirm = &recordingConfirmer{answer: true}
-	c.Search = func(context.Context, string) (SearchResults, error) { return res, nil }
+	c.Search = func(context.Context, string) (websearch.Results, error) { return res, nil }
 	return c
 }
 
@@ -36,10 +38,10 @@ func searchCoder(t *testing.T, res SearchResults) *Coder {
 // unless the failures are reported. A model reading only "No results" will
 // tell the user the web is empty while holding a broken search.
 func TestSearchWithNoResultsSaysTheEnginesFailed(t *testing.T) {
-	c := searchCoder(t, SearchResults{
+	c := searchCoder(t, websearch.Results{
 		Query: "obscure thing",
-		Unresponsive: []UnresponsiveEngine{
-			{"brave", "too many requests"}, {"duckduckgo", "CAPTCHA"}, {"startpage", "timeout"},
+		Unresponsive: []websearch.UnresponsiveEngine{
+			{Engine: "brave", Reason: "too many requests"}, {Engine: "duckduckgo", Reason: "CAPTCHA"}, {Engine: "startpage", Reason: "timeout"},
 		},
 	})
 	out := runSearch(t, c, searchCall("obscure thing"))
@@ -73,10 +75,10 @@ func TestSearchWithNoResultsSaysTheEnginesFailed(t *testing.T) {
 // alarm, so it is reported and framed differently: the results are thin, not
 // absent.
 func TestSearchWithResultsCallsFailuresThinRatherThanFailed(t *testing.T) {
-	c := searchCoder(t, SearchResults{
+	c := searchCoder(t, websearch.Results{
 		Query:        "q",
-		Results:      []SearchResult{{Title: "net/http", URL: "https://pkg.go.dev/net/http", Content: "Package http."}},
-		Unresponsive: []UnresponsiveEngine{{"brave", "too many requests"}},
+		Results:      []websearch.Result{{Title: "net/http", URL: "https://pkg.go.dev/net/http", Content: "Package http."}},
+		Unresponsive: []websearch.UnresponsiveEngine{{Engine: "brave", Reason: "too many requests"}},
 	})
 	out := runSearch(t, c, searchCall("q"))
 
@@ -93,7 +95,7 @@ func TestSearchWithResultsCallsFailuresThinRatherThanFailed(t *testing.T) {
 // scope per origin, and a turn holds many searches so the turn is the unit
 // that pays. If this ever needs a second prompt in one turn, the group broke.
 func TestSearchAlwaysCoversTheTurnAndDiesWithIt(t *testing.T) {
-	c := searchCoder(t, SearchResults{Query: "q"})
+	c := searchCoder(t, websearch.Results{Query: "q"})
 	ac := &alwaysConfirmer{}
 	c.Confirm = ac
 
@@ -153,9 +155,9 @@ func TestEveryApprovalPathStillShowsTheSearch(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := searchCoder(t, SearchResults{
+			c := searchCoder(t, websearch.Results{
 				Query:   "q",
-				Results: []SearchResult{{Title: "T", URL: "https://example.org/a"}},
+				Results: []websearch.Result{{Title: "T", URL: "https://example.org/a"}},
 			})
 			c.Confirm = tc.confirm
 			out := &captureOutput{}
@@ -183,10 +185,10 @@ func TestEveryApprovalPathStillShowsTheSearch(t *testing.T) {
 // results" alone reads as a thin web when what happened was three engines
 // failing.
 func TestSearchLineNamesUnresponsiveEngines(t *testing.T) {
-	c := searchCoder(t, SearchResults{
+	c := searchCoder(t, websearch.Results{
 		Query:        "q",
-		Results:      []SearchResult{{Title: "T", URL: "https://example.org/a"}},
-		Unresponsive: []UnresponsiveEngine{{Engine: "brave"}, {Engine: "startpage"}},
+		Results:      []websearch.Result{{Title: "T", URL: "https://example.org/a"}},
+		Unresponsive: []websearch.UnresponsiveEngine{{Engine: "brave"}, {Engine: "startpage"}},
 	})
 	out := &captureOutput{}
 	c.Out = out
@@ -200,9 +202,9 @@ func TestSearchLineNamesUnresponsiveEngines(t *testing.T) {
 // session that quietly stopped searching otherwise looks like one that decided
 // not to.
 func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
-	c := searchCoder(t, SearchResults{})
-	c.Search = func(context.Context, string) (SearchResults, error) {
-		return SearchResults{}, errors.New("instance down")
+	c := searchCoder(t, websearch.Results{})
+	c.Search = func(context.Context, string) (websearch.Results, error) {
+		return websearch.Results{}, errors.New("instance down")
 	}
 	out := &captureOutput{}
 	c.Out = out
@@ -211,7 +213,7 @@ func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
 		t.Errorf("a failed search left no trace:\n%s", out.String())
 	}
 
-	c2 := searchCoder(t, SearchResults{Query: "q"})
+	c2 := searchCoder(t, websearch.Results{Query: "q"})
 	c2.Confirm = &recordingConfirmer{answer: false}
 	out2 := &captureOutput{}
 	c2.Out = out2
@@ -224,7 +226,7 @@ func TestFailedAndDeclinedSearchesAreVisible(t *testing.T) {
 // A declined search is a sentence, and a missing query is a reflection rather
 // than a prompt for a string that was never going to search for anything.
 func TestSearchDeclinedAndEmptyQuery(t *testing.T) {
-	c := searchCoder(t, SearchResults{Query: "q"})
+	c := searchCoder(t, websearch.Results{Query: "q"})
 	c.Confirm = &recordingConfirmer{answer: false}
 	if out := runSearch(t, c, searchCall("q")); !strings.Contains(out, "chose not to") {
 		t.Errorf("declined search said %q", out)
@@ -241,7 +243,7 @@ func TestWebsearchToolOfferedOnlyWhenConfigured(t *testing.T) {
 	if slices2Contains(c.toolDefs(), toolWebsearch) {
 		t.Error("websearch was offered with no instance configured")
 	}
-	c.Search = func(context.Context, string) (SearchResults, error) { return SearchResults{}, nil }
+	c.Search = func(context.Context, string) (websearch.Results, error) { return websearch.Results{}, nil }
 	if !slices2Contains(c.toolDefs(), toolWebsearch) {
 		t.Error("websearch was not offered with an instance configured")
 	}
@@ -254,4 +256,21 @@ func slices2Contains(defs []llm.ToolDef, name string) bool {
 		}
 	}
 	return false
+}
+
+// Results at every bound websearch keeps — ten hits, each field cut to the
+// snippet limit — render inside one tool result, so the note about engines
+// that did not answer, which comes last, is never trimmed away.
+func TestSearchResultsAtTheBoundsFitOneResult(t *testing.T) {
+	field := strings.Repeat("A", 401)
+	res := websearch.Results{Query: "q", Unresponsive: []websearch.UnresponsiveEngine{{Engine: "brave", Reason: "timeout"}}}
+	for i := range 10 {
+		res.Results = append(res.Results, websearch.Result{Title: field, URL: fmt.Sprintf("https://x.example/%d", i), Content: field})
+	}
+	out := formatSearchResults("q", res)
+	if len(out) > maxToolOutputBytes {
+		t.Errorf("rendered result is %d bytes, past the %d cap", len(out), maxToolOutputBytes)
+	} else if !strings.Contains(out, "brave") {
+		t.Errorf("the engine note did not survive:\n%s", out[max(0, len(out)-200):])
+	}
 }

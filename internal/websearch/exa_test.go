@@ -1,4 +1,4 @@
-package coder
+package websearch
 
 import (
 	"context"
@@ -70,8 +70,8 @@ func TestExaRequestAndResults(t *testing.T) {
 	if (*body)["query"] != "wazero WebAssembly runtime Go" {
 		t.Errorf("query = %v", (*body)["query"])
 	}
-	if (*body)["numResults"] != float64(searchMaxResults) {
-		t.Errorf("numResults = %v, want %d", (*body)["numResults"], searchMaxResults)
+	if (*body)["numResults"] != float64(maxResults) {
+		t.Errorf("numResults = %v, want %d", (*body)["numResults"], maxResults)
 	}
 
 	// Three results, the url-less one dropped.
@@ -127,8 +127,8 @@ func TestExaRequestsPageText(t *testing.T) {
 		t.Fatalf("contents = %v, want an object requesting text", (*body)["contents"])
 	}
 	text, ok := contents["text"].(map[string]any)
-	if !ok || text["maxCharacters"] != float64(searchMaxSnippet) {
-		t.Errorf("contents.text = %v, want maxCharacters %d", contents["text"], searchMaxSnippet)
+	if !ok || text["maxCharacters"] != float64(maxSnippet) {
+		t.Errorf("contents.text = %v, want maxCharacters %d", contents["text"], maxSnippet)
 	}
 }
 

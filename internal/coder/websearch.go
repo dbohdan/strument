@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/websearch"
 )
 
 // websearchTool is offered only when a backend is configured. Unlike webfetch,
@@ -105,7 +106,7 @@ func (c *Coder) runWebsearch(ctx context.Context, s toolSearch) string {
 // results" then reads as a thin web rather than as a broken search. The model
 // is told the same thing in the result body (degradedNote); this is the user's
 // copy of it.
-func searchSummary(res SearchResults) string {
+func searchSummary(res websearch.Results) string {
 	out := plural(len(res.Results), "result", "results")
 	if n := len(res.Unresponsive); n > 0 {
 		out += fmt.Sprintf(", %s did not answer", plural(n, "engine", "engines"))
@@ -121,7 +122,7 @@ func searchSummary(res SearchResults) string {
 // no hits at all came back exactly the same way. Reporting only the hits makes
 // those two indistinguishable, and a model reading "no results" will tell the
 // user the web has nothing when what it is holding is a broken search.
-func formatSearchResults(query string, res SearchResults) string {
+func formatSearchResults(query string, res websearch.Results) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Results for %q:\n", query)
 
@@ -178,7 +179,7 @@ func formatSearchResults(query string, res SearchResults) string {
 // not an alarm, so with results in hand it is phrased as a caveat; with none it
 // is phrased as the likely explanation, because that is the case where a reader
 // would otherwise conclude the subject has nothing written about it.
-func degradedNote(unresponsive []UnresponsiveEngine, results int) string {
+func degradedNote(unresponsive []websearch.UnresponsiveEngine, results int) string {
 	parts := make([]string, 0, len(unresponsive))
 	for _, u := range unresponsive {
 		if u.Reason == "" {

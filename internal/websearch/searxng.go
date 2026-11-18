@@ -1,23 +1,22 @@
-package coder
+package websearch
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/httpx"
 )
 
-// Searching the web, through the user's own SearXNG instance and nothing else.
-//
-// The scope is deliberate. SearXNG is self-hosted, so the instance belongs to
-// the user, inherits the engines and policy they already chose, needs no API
-// key, and puts no third party in a position Strument would have to speak for.
-// A hosted search API would need all four decided on the user's behalf.
+// SearXNG, the user's own instance. Self-hosted, it inherits the engines and
+// policy the user already chose, needs no API key, and puts no third party
+// between them and the search: what the hosted services trade for not having
+// to run one.
 //
 // It also means the instance has to have opted in. SearXNG ships
 // `formats: [html]`, so JSON is off until an admin adds it, and eleven public
@@ -25,52 +24,8 @@ import (
 // below was seen for real, and each looks like something else, which is why
 // they are translated rather than passed through.
 
-// Shared by every backend, because they are limits on what a tool result can
-// usefully carry rather than facts about any one service.
-const (
-	searxTimeout = 30 * time.Second
-	// Twenty per page is what a SearXNG instance returns and ten is AnySearch's
-	// own cap; ten is also what a model can read without the tail crowding out
-	// the answer. A query that needs the eleventh result needs a better query.
-	searchMaxResults = 10
-	searchMaxBytes   = 4 * 1024 * 1024
-	// A snippet is text from whatever page ranked, so its length is not the
-	// instance's decision and not ours — a live instance returned about ninety
-	// characters, and nothing stops a page returning a megabyte. Unbounded, one
-	// result could push the other nine and the note about unresponsive engines
-	// past the tool-result cap, which trims from the tail. Bounding each
-	// snippet keeps the whole result small enough that nothing is ever cut.
-	searchMaxSnippet = 400
-)
-
-// SearchResults is one answered query, already reduced to the fields worth
-// carrying. A real result arrives with twenty-three of them — positions,
-// parsed_url, open_group, thumbnail, score — and all but three are noise to a
-// reader.
-type SearchResults struct {
-	Query   string
-	Results []SearchResult
-	Answers []string
-	// Unresponsive pairs an engine with why it did not answer. It is the whole
-	// reason this type is not just []SearchResult: on a real instance, a
-	// perfectly good query came back with brave rate-limited, duckduckgo
-	// showing a CAPTCHA and startpage timing out — and a query with no results
-	// came back the same way. Without this, "the web has nothing" and "three
-	// engines were broken" are the same answer, and a model will report the
-	// first when it is looking at the second.
-	Unresponsive []UnresponsiveEngine
-}
-
-// SearchResult is one hit.
-type SearchResult struct {
-	Title, URL, Content, Published string
-}
-
-// UnresponsiveEngine is one engine that did not answer, and why.
-type UnresponsiveEngine struct{ Engine, Reason string }
-
-// Searcher runs one query; injectable for tests.
-type Searcher func(ctx context.Context, query string) (SearchResults, error)
+// searxTimeout bounds one query to the instance.
+const searxTimeout = 30 * time.Second
 
 // searxResponse mirrors SearXNG's JSON, decoding only what is used. Read off
 // webutils.get_json_response rather than guessed: there is no
@@ -92,40 +47,25 @@ type searxResponse struct {
 
 // NewSearxNG returns a Searcher backed by a SearXNG instance.
 func NewSearxNG(baseURL string, transport http.RoundTripper, userAgent string) Searcher {
-	if userAgent == "" {
-		userAgent = scrapeUserAgentDefault
-	}
 	client := &http.Client{Transport: transport, Timeout: searxTimeout}
-	return func(ctx context.Context, query string) (SearchResults, error) {
+	return func(ctx context.Context, query string) (Results, error) {
 		form := url.Values{"q": {query}, "format": {"json"}}
 		// POST, so a long query never meets a URL length limit in a reverse
 		// proxy, and so the query stays out of the instance's access log the
 		// way a GET's query string would not. SearXNG documents both.
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/search",
-			strings.NewReader(form.Encode()))
+		reply, err := httpx.Post(ctx, client, baseURL+"/search", "application/x-www-form-urlencoded",
+			[]byte(form.Encode()), userAgent, nil, maxBytes)
 		if err != nil {
-			return SearchResults{}, err
+			return Results{}, err
 		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Accept", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return SearchResults{}, err
-		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(io.LimitReader(resp.Body, searchMaxBytes))
-		if err != nil {
-			return SearchResults{}, err
-		}
-		if err := searxHTTPError(resp, body); err != nil {
-			return SearchResults{}, err
+		body := reply.Body
+		if err := searxHTTPError(reply); err != nil {
+			return Results{}, err
 		}
 
 		var raw searxResponse
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return SearchResults{}, fmt.Errorf("the instance did not return valid JSON: %w", err)
+			return Results{}, fmt.Errorf("the instance did not return valid JSON: %w", err)
 		}
 		return searxToResults(raw), nil
 	}
@@ -133,20 +73,21 @@ func NewSearxNG(baseURL string, transport http.RoundTripper, userAgent string) S
 
 // searxHTTPError turns the three failures a real instance produces into
 // something a reader can act on. Each was observed, and each is opaque raw.
-func searxHTTPError(resp *http.Response, body []byte) error {
-	ctype := resp.Header.Get("Content-Type")
+func searxHTTPError(reply httpx.Reply) error {
+	body := reply.Body
+	ctype := reply.Header.Get("Content-Type")
 	switch {
-	case resp.StatusCode == http.StatusForbidden:
+	case reply.Status == http.StatusForbidden:
 		// SearXNG's shipped default is `formats: [html]`, and requesting a
 		// format that is not enabled is a 403. This is the first thing every
 		// new instance does, so the message is the fix rather than the symptom.
 		return errors.New("the instance refused a JSON search (HTTP 403). Add json under " +
 			"search.formats in its settings.yml:\n  search:\n    formats:\n      - html\n      - json")
-	case resp.StatusCode == http.StatusTooManyRequests:
+	case reply.Status == http.StatusTooManyRequests:
 		return errors.New("the instance is rate-limiting this client (HTTP 429). Its limiter " +
 			"plugin usually does this to non-browser clients; a self-hosted instance can turn it off")
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("HTTP %d from the instance", resp.StatusCode)
+	case reply.Status != http.StatusOK:
+		return fmt.Errorf("HTTP %d from the instance", reply.Status)
 	case !strings.Contains(ctype, "json"):
 		// The one that looks like success. Two public instances answered 200
 		// with "Verifying your browser…", which a status-only check accepts and
@@ -172,19 +113,19 @@ func contentTypeName(ctype string) string {
 
 // searxToResults reduces a decoded response, dropping results with no URL —
 // which a reader cannot act on — and capping the rest.
-func searxToResults(raw searxResponse) SearchResults {
-	out := SearchResults{Query: raw.Query}
+func searxToResults(raw searxResponse) Results {
+	out := Results{Query: raw.Query}
 	for _, r := range raw.Results {
 		if strings.TrimSpace(r.URL) == "" {
 			continue
 		}
-		if len(out.Results) == searchMaxResults {
+		if len(out.Results) == maxResults {
 			break
 		}
-		out.Results = append(out.Results, SearchResult{
-			Title:     clipRunes(strings.TrimSpace(r.Title), searchMaxSnippet),
+		out.Results = append(out.Results, Result{
+			Title:     clipRunes(strings.TrimSpace(r.Title), maxSnippet),
 			URL:       strings.TrimSpace(r.URL),
-			Content:   clipRunes(strings.TrimSpace(r.Content), searchMaxSnippet),
+			Content:   clipRunes(strings.TrimSpace(r.Content), maxSnippet),
 			Published: clipRunes(strings.TrimSpace(r.PublishedDate), 64),
 		})
 	}

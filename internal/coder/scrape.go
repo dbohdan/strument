@@ -19,14 +19,14 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
 
+	"dbohdan.com/strument/internal/httpx"
 	"dbohdan.com/strument/internal/origin"
 	"dbohdan.com/strument/internal/repomap"
 )
 
 const (
-	scrapeUserAgentDefault = "Strument"
-	scrapeAccept           = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-	scrapeMaxBytes         = 2 * 1024 * 1024
+	scrapeAccept   = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+	scrapeMaxBytes = 2 * 1024 * 1024
 )
 
 var (
@@ -47,7 +47,7 @@ var SimpleScraper = NewSimpleScraper(nil, "")
 // after slimming media); other content types are returned as text.
 func NewSimpleScraper(transport http.RoundTripper, userAgent string) Scraper {
 	if userAgent == "" {
-		userAgent = scrapeUserAgentDefault
+		userAgent = httpx.DefaultUserAgent
 	}
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
 	return func(ctx context.Context, url string, opts ScrapeOptions) (string, error) {

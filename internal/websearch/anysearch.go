@@ -1,15 +1,15 @@
-package coder
+package websearch
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/httpx"
 )
 
 // Searching through AnySearch, the hosted backend beside SearXNG.
@@ -58,55 +58,41 @@ type anySearchResponse struct {
 // worth keeping usable — a search tool that demands a signup before it does
 // anything is one most people never turn on.
 func NewAnySearch(baseURL, apiKey string, transport http.RoundTripper, userAgent string) Searcher {
-	if userAgent == "" {
-		userAgent = scrapeUserAgentDefault
-	}
 	client := &http.Client{Transport: transport, Timeout: anySearchTimeout}
-	return func(ctx context.Context, query string) (SearchResults, error) {
+	return func(ctx context.Context, query string) (Results, error) {
 		body, err := json.Marshal(map[string]any{
 			"query":       query,
 			"max_results": anySearchMaxResults,
 		})
 		if err != nil {
-			return SearchResults{}, err
+			return Results{}, err
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/search",
-			bytes.NewReader(body))
-		if err != nil {
-			return SearchResults{}, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
 		// Strument identifies as itself. The vendor's CLI sends a client header
 		// of its own; sending that would be claiming to be their client, which
 		// is not true and is not ours to claim.
-		req.Header.Set("User-Agent", userAgent)
+		header := http.Header{}
 		if apiKey != "" {
-			req.Header.Set("Authorization", "Bearer "+apiKey)
+			header.Set("Authorization", "Bearer "+apiKey)
 		}
-
-		resp, err := client.Do(req)
+		reply, err := httpx.Post(ctx, client, baseURL+"/v1/search", "application/json", body, userAgent,
+			header, maxBytes)
 		if err != nil {
-			return SearchResults{}, err
+			return Results{}, err
 		}
-		defer resp.Body.Close()
-		raw, err := io.ReadAll(io.LimitReader(resp.Body, searchMaxBytes))
-		if err != nil {
-			return SearchResults{}, err
-		}
+		raw := reply.Body
 
 		var out anySearchResponse
 		if jsonErr := json.Unmarshal(raw, &out); jsonErr != nil {
 			// The status first, because a proxy or a captive portal answering
 			// instead of the service is the likelier cause of unparseable bytes
 			// than the service having changed its format.
-			if resp.StatusCode != http.StatusOK {
-				return SearchResults{}, fmt.Errorf("HTTP %d from the service", resp.StatusCode)
+			if reply.Status != http.StatusOK {
+				return Results{}, fmt.Errorf("HTTP %d from the service", reply.Status)
 			}
-			return SearchResults{}, fmt.Errorf("the service did not return valid JSON: %w", jsonErr)
+			return Results{}, fmt.Errorf("the service did not return valid JSON: %w", jsonErr)
 		}
-		if err := anySearchError(resp.StatusCode, out); err != nil {
-			return SearchResults{}, err
+		if err := anySearchError(reply.Status, out); err != nil {
+			return Results{}, err
 		}
 		return anySearchToResults(query, out), nil
 	}
@@ -144,23 +130,23 @@ func anySearchError(status int, out anySearchResponse) error {
 // per-engine health, so Unresponsive stays empty — the degraded-search note is
 // SearXNG's, and inventing one here would claim knowledge the service does not
 // give. An empty result set is simply empty.
-func anySearchToResults(query string, out anySearchResponse) SearchResults {
-	res := SearchResults{Query: query}
+func anySearchToResults(query string, out anySearchResponse) Results {
+	res := Results{Query: query}
 	for _, r := range out.Data.Results {
 		if strings.TrimSpace(r.URL) == "" {
 			continue
 		}
-		if len(res.Results) == searchMaxResults {
+		if len(res.Results) == maxResults {
 			break
 		}
 		content := r.Content
 		if strings.TrimSpace(content) == "" {
 			content = r.Snippet
 		}
-		res.Results = append(res.Results, SearchResult{
-			Title:   clipRunes(strings.TrimSpace(r.Title), searchMaxSnippet),
+		res.Results = append(res.Results, Result{
+			Title:   clipRunes(strings.TrimSpace(r.Title), maxSnippet),
 			URL:     strings.TrimSpace(r.URL),
-			Content: clipRunes(strings.TrimSpace(content), searchMaxSnippet),
+			Content: clipRunes(strings.TrimSpace(content), maxSnippet),
 		})
 	}
 	return res

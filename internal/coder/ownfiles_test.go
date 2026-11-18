@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"dbohdan.com/strument/internal/decide"
 )
 
 // A file this turn created can be removed without asking, however the path is
@@ -66,9 +68,9 @@ type commandDecider struct {
 	shown []string
 }
 
-func (d *commandDecider) decide(_ context.Context, in DecisionInput) (Decision, error) {
+func (d *commandDecider) decide(_ context.Context, in decide.Input) (decide.Decision, error) {
 	d.shown = append(d.shown, in.Command)
-	return Decision{PSafe: d.p, Model: "laya:en"}, nil
+	return decide.Decision{PSafe: d.p, Model: "laya:en"}, nil
 }
 
 // A removal of the turn's own files chained to other work is judged without

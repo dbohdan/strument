@@ -15,6 +15,7 @@ import (
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/repomap"
+	"dbohdan.com/strument/internal/websearch"
 )
 
 // TestCommandArgsNotation holds the help table to one notation. The convention
@@ -376,8 +377,8 @@ func TestReloadRebuildsPortsAndRereadsChecks(t *testing.T) {
 	applied := 0
 	r.opts.ApplyEgress = func(c *coder.Coder, _ *config.Config) {
 		applied++
-		c.Search = func(context.Context, string) (coder.SearchResults, error) {
-			return coder.SearchResults{}, nil
+		c.Search = func(context.Context, string) (websearch.Results, error) {
+			return websearch.Results{}, nil
 		}
 	}
 	r.opts.ReloadConfig = func() (*config.Config, error) {

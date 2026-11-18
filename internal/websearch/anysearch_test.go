@@ -1,4 +1,4 @@
-package coder
+package websearch
 
 import (
 	"context"
@@ -61,8 +61,8 @@ func TestAnySearchDecodesALiveShape(t *testing.T) {
 	if got := (*body)["query"]; got != "go readline library" {
 		t.Errorf("query sent = %v", got)
 	}
-	if got := (*body)["max_results"]; got != float64(searchMaxResults) {
-		t.Errorf("max_results sent = %v, want the service's cap of %d", got, searchMaxResults)
+	if got := (*body)["max_results"]; got != float64(maxResults) {
+		t.Errorf("max_results sent = %v, want the service's cap of %d", got, maxResults)
 	}
 	if got := hdr.Get("Authorization"); got != "Bearer as_sk_test" {
 		t.Errorf("Authorization = %q", got)

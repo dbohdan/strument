@@ -256,6 +256,14 @@ inherited from aider.
     backslash escapes on Unix and is a path separator on Windows, so `SplitWith`
     lets either rule be tested from either host.
   - `gitrepo/` — the git port; always argv, never a shell string.
+  - `websearch/` — the `Searcher` port and its three services: the user's own
+    SearXNG instance, Exa, and AnySearch, each reducing its answer to the same
+    `Results`. The coder's `websearch` tool decides what a model sees of them.
+  - `decide/` — the client for the decision model `approve_model` configures,
+    with the rubric it was measured on; the coder decides what an answer
+    approves.
+  - `httpx/` — what the HTTP clients share: proxy transports, app
+    attribution, and `Post` for the JSON services.
   - `record/` — the session record's schema: one flat `Record` per JSON line,
     its kinds, and the `Recorder` that receives them. A leaf, so `history`
     and `jsonlog` can read and write the record without importing the coder

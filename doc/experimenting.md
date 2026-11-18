@@ -1247,7 +1247,7 @@ is a judgment about a different, shorter input. So:
 - **Where it matters, guard on length in the harness,** below the smallest
   window you rely on.
   - Strument asks about any command plus purpose over 800 characters instead
-    of sending it (`approveMaxInput` in `internal/coder/approve.go`).
+    of sending it (`MaxInput` in `internal/decide/systemone.go`).
   - The cap costs nothing on the natural corpus, where nothing comes near it.
 - **Put a long item in the corpus.** Otherwise a pass says nothing about
   length, whatever it says about everything else.

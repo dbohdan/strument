@@ -1,15 +1,15 @@
-package coder
+package websearch
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"dbohdan.com/strument/internal/httpx"
 )
 
 // Searching through Exa, the third backend beside SearXNG and AnySearch.
@@ -82,60 +82,44 @@ type exaResponse struct {
 // naming this backend without one, so an empty key here means a bug rather than
 // a user choice.
 func NewExa(baseURL, apiKey string, transport http.RoundTripper, userAgent string) Searcher {
-	if userAgent == "" {
-		userAgent = scrapeUserAgentDefault
-	}
 	client := &http.Client{Transport: transport, Timeout: exaTimeout}
-	return func(ctx context.Context, query string) (SearchResults, error) {
+	return func(ctx context.Context, query string) (Results, error) {
 		body, err := json.Marshal(map[string]any{
 			"query":      query,
-			"numResults": searchMaxResults,
+			"numResults": maxResults,
 			"type":       exaSearchType,
 			// Asking for exactly what is kept. The text is clipped to
-			// searchMaxSnippet below either way, and it is the *opening* of the
+			// maxSnippet below either way, and it is the *opening* of the
 			// page, so a larger window would buy nothing a reader sees.
 			"contents": map[string]any{
-				"text": map[string]any{"maxCharacters": searchMaxSnippet},
+				"text": map[string]any{"maxCharacters": maxSnippet},
 			},
 		})
 		if err != nil {
-			return SearchResults{}, err
+			return Results{}, err
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/search",
-			bytes.NewReader(body))
-		if err != nil {
-			return SearchResults{}, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", userAgent)
 		// x-api-key rather than Authorization: the endpoint accepts both, and
-		// this is the one the reference leads with. Spelled canonically because
-		// Set canonicalizes anyway, so the wire is X-Api-Key either way.
-		req.Header.Set("X-Api-Key", apiKey)
-
-		resp, err := client.Do(req)
+		// this is the one the reference leads with. Spelled canonically, since
+		// a header map written out like this is not canonicalized for us.
+		reply, err := httpx.Post(ctx, client, baseURL+"/search", "application/json", body, userAgent,
+			http.Header{"X-Api-Key": {apiKey}}, maxBytes)
 		if err != nil {
-			return SearchResults{}, err
+			return Results{}, err
 		}
-		defer resp.Body.Close()
-		raw, err := io.ReadAll(io.LimitReader(resp.Body, searchMaxBytes))
-		if err != nil {
-			return SearchResults{}, err
-		}
+		raw := reply.Body
 
 		var out exaResponse
 		if jsonErr := json.Unmarshal(raw, &out); jsonErr != nil {
 			// The status first, for the reason the AnySearch client gives: a
 			// proxy answering instead of the service is likelier than the
 			// service having changed its format.
-			if resp.StatusCode != http.StatusOK {
-				return SearchResults{}, fmt.Errorf("HTTP %d from the service", resp.StatusCode)
+			if reply.Status != http.StatusOK {
+				return Results{}, fmt.Errorf("HTTP %d from the service", reply.Status)
 			}
-			return SearchResults{}, fmt.Errorf("the service did not return valid JSON: %w", jsonErr)
+			return Results{}, fmt.Errorf("the service did not return valid JSON: %w", jsonErr)
 		}
-		if err := exaError(resp.StatusCode, out); err != nil {
-			return SearchResults{}, err
+		if err := exaError(reply.Status, out); err != nil {
+			return Results{}, err
 		}
 		return exaToResults(query, out), nil
 	}
@@ -177,19 +161,19 @@ func exaError(status int, out exaResponse) error {
 // same as AnySearch and for the same reason: the degraded-search note is
 // SearXNG's, and inventing one here would claim knowledge the service does not
 // give.
-func exaToResults(query string, out exaResponse) SearchResults {
-	res := SearchResults{Query: query}
+func exaToResults(query string, out exaResponse) Results {
+	res := Results{Query: query}
 	for _, r := range out.Results {
 		if strings.TrimSpace(r.URL) == "" {
 			continue
 		}
-		if len(res.Results) == searchMaxResults {
+		if len(res.Results) == maxResults {
 			break
 		}
-		res.Results = append(res.Results, SearchResult{
-			Title:   clipRunes(strings.TrimSpace(r.Title), searchMaxSnippet),
+		res.Results = append(res.Results, Result{
+			Title:   clipRunes(strings.TrimSpace(r.Title), maxSnippet),
 			URL:     strings.TrimSpace(r.URL),
-			Content: clipRunes(strings.TrimSpace(r.Text), searchMaxSnippet),
+			Content: clipRunes(strings.TrimSpace(r.Text), maxSnippet),
 			// Exa dates results where it knows one, which SearXNG also does and
 			// AnySearch does not. It is an ISO-8601 instant rather than a day,
 			// and passed through unparsed: the renderer prints it as given, and

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/websearch"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -99,7 +100,7 @@ type Coder struct {
 	Scrape  Scraper
 	// Search is nil unless the user configured a backend, and that nil is what
 	// decides whether the tool is offered at all.
-	Search Searcher
+	Search websearch.Searcher
 	// Consult is consult_models, resolved: alias -> model and purpose. Empty
 	// means the consult tool is not offered.
 	Consult map[string]ConsultModel

@@ -16,7 +16,9 @@ import (
 	"syscall"
 	"time"
 
+	"dbohdan.com/strument/internal/decide"
 	"dbohdan.com/strument/internal/record"
+	"dbohdan.com/strument/internal/websearch"
 
 	"github.com/alecthomas/kong"
 	"golang.org/x/term"
@@ -1954,7 +1956,7 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 	if am := cfg.ApproveModel; am != nil {
 		transport, _ := httpx.ProxyTransport(am.Proxy)
 		cdr.Approve = &coder.ApproveModel{
-			Decide:    coder.NewSystemOne(am.URL, am.Slug, am.APIKey, transport, "Strument/"+version),
+			Decide:    decide.NewSystemOne(am.URL, am.Slug, am.APIKey, transport, "Strument/"+version),
 			Slug:      am.Slug,
 			Threshold: am.Threshold,
 			Timeout:   time.Duration(am.Timeout * float64(time.Second)),
@@ -1967,11 +1969,11 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 		searchTransport, _ := httpx.ProxyTransport(ws.Proxy)
 		switch ws.Backend {
 		case config.SearchAnySearch:
-			cdr.Search = coder.NewAnySearch(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
+			cdr.Search = websearch.NewAnySearch(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
 		case config.SearchExa:
-			cdr.Search = coder.NewExa(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
+			cdr.Search = websearch.NewExa(ws.URL, ws.APIKey, searchTransport, "Strument/"+version)
 		default:
-			cdr.Search = coder.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
+			cdr.Search = websearch.NewSearxNG(ws.URL, searchTransport, "Strument/"+version)
 		}
 	}
 }
