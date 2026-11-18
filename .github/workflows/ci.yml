@@ -10,7 +10,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Pinned rather than *-latest. A latest label moves to a new image
+        # with little notice, and in November 2026 macos-latest meant the
+        # macos-26 image, whose jobs were intermittently left queued without
+        # a runner until GitHub cancelled them at 15 minutes. A pinned image
+        # retires on an announced date instead.
+        os: [ubuntu-26.04, windows-2025, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +32,7 @@ jobs:
         shell: bash
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
