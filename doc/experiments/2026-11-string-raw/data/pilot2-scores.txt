@@ -1,0 +1,22 @@
+24 sessions
+
+| arm | model | task | n | correct | wrong | unchanged | fired | String.raw | escape errors | failed programs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B | hy4f | cb | 2 | 2 | 0 | 0 | 2 | 1 | 0 | 0 |
+| B | hy4f | pyb | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| B | hy4f | shb | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 1 |
+| B | mimo | cb | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | mimo | pyb | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | mimo | shb | 2 | 2 | 0 | 0 | 2 | 1 | 0 | 3 |
+| R | hy4f | cb | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| R | hy4f | pyb | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| R | hy4f | shb | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 1 |
+| R | mimo | cb | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | mimo | pyb | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 1 |
+| R | mimo | shb | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+
+block tasks (primary), hy4f: B 6/6, R 6/6, p = 1
+block tasks (primary), mimo: B 6/6, R 6/6, p = 1
+block tasks (primary), all: B 12/12, R 12/12, p = 1
+
+sessions with a timeout or an unretried provider error: 0 []

@@ -1,0 +1,29 @@
+32 sessions
+
+| arm | model | task | n | correct | wrong | unchanged | fired | String.raw | escape errors | failed programs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B | hy4f | c | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | hy4f | py | 2 | 2 | 0 | 0 | 2 | 1 | 0 | 0 |
+| B | hy4f | sh | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | hy4f | csv | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | mimo | c | 2 | 1 | 1 | 0 | 2 | 1 | 0 | 0 |
+| B | mimo | py | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 1 |
+| B | mimo | sh | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| B | mimo | csv | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | hy4f | c | 2 | 2 | 0 | 0 | 2 | 1 | 0 | 0 |
+| R | hy4f | py | 2 | 2 | 0 | 0 | 2 | 2 | 0 | 0 |
+| R | hy4f | sh | 2 | 2 | 0 | 0 | 2 | 1 | 0 | 1 |
+| R | hy4f | csv | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | mimo | c | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | mimo | py | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | mimo | sh | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+| R | mimo | csv | 2 | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
+
+line tasks (pilot 1), hy4f: B 6/6, R 6/6, p = 1
+line tasks (pilot 1), mimo: B 5/6, R 6/6, p = 1
+line tasks (pilot 1), all: B 11/12, R 12/12, p = 1
+csv (counter-metric), hy4f: B 2/2, R 2/2, p = 1
+csv (counter-metric), mimo: B 2/2, R 2/2, p = 1
+csv (counter-metric), all: B 4/4, R 4/4, p = 1
+
+sessions with a timeout or an unretried provider error: 0 []
