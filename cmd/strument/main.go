@@ -853,12 +853,14 @@ func (t terminalConfirmer) w() io.Writer {
 func (t terminalConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	switch {
 	case req.Command != "":
+		// Sanitized like every field below: the command is the text being
+		// approved, and an escape sequence in it could redraw the line read.
 		if req.Purpose != "" {
-			fmt.Fprintln(t.w(), "‹shell›", req.Purpose)
+			fmt.Fprintln(t.w(), "‹shell›", render.Sanitize(req.Purpose))
 		} else {
 			fmt.Fprintln(t.w(), "‹shell› (no purpose given)")
 		}
-		fmt.Fprintf(t.w(), "$ %s\n", req.Command)
+		fmt.Fprintf(t.w(), "$ %s\n", render.Sanitize(req.Command))
 	case req.URL != "":
 		// The second confirmer, and it has to show what the first one shows.
 		// It did not, and the prompt read "Fetch this page? (Y/n)" with no page

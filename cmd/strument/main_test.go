@@ -912,3 +912,24 @@ func TestTerminalConfirmerShowsTheNoteAfterTheCommand(t *testing.T) {
 		t.Errorf("want the command, then the note (at %d, %d):\n%s", command, note, out)
 	}
 }
+
+// The command and its purpose are the text being approved, and are sanitized
+// like every other field this confirmer shows: an escape sequence in either
+// could redraw the line the user is reading.
+func TestTerminalConfirmerSanitizesTheCommand(t *testing.T) {
+	out, _ := captureStdout(t, func() error {
+		terminalConfirmer{unattended: true}.Confirm(coder.ConfirmRequest{
+			Prompt:  "Run shell command?",
+			Command: "rm -rf build\x1b[1A\x1b[2Kecho safe",
+			Purpose: "clean\x1b]0;x\x07 up",
+			Grant:   coder.GrantBash,
+		})
+		return nil
+	})
+	if strings.Contains(out, "\x1b") || strings.Contains(out, "\x07") {
+		t.Errorf("an escape sequence reached the terminal:\n%q", out)
+	}
+	if !strings.Contains(out, "$ rm -rf build") {
+		t.Errorf("the command is missing:\n%q", out)
+	}
+}
