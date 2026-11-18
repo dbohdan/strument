@@ -1,0 +1,16 @@
+new-0 {"run_code": 3, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 32.3k sent (21.8k cache hit), 3.9k received, 162 t/s. Cost: $0.00095 turn, $0.00095 run. 4 steps."}
+new-1 {"run_code": 7, "failed": 2, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 72.9k sent (59.1k cache hit), 4.9k received, 133 t/s. Cost: $0.0013 turn, $0.0013 run. 8 steps."}
+new-2 {"run_code": 3, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 29.2k sent (18.4k cache hit), 2.4k received, 137 t/s. Cost: $0.00073 turn, $0.00073 run. 4 steps."}
+new-3 {"run_code": 4, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 39.3k sent (28.7k cache hit), 4.2k received, 151 t/s. Cost: $0.0010 turn, $0.0010 run. 5 steps."}
+new-4 {"run_code": 7, "failed": 3, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 68.0k sent (56.3k cache hit), 3.4k received, 124 t/s. Cost: $0.00096 turn, $0.00096 run. 8 steps."}
+new-5 {"run_code": 4, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 38.8k sent (26.6k cache hit), 2.8k received, 110 t/s. Cost: $0.00086 turn, $0.00086 run. 5 steps."}
+new-6 {"run_code": 5, "failed": 1, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 50.2k sent (37.9k cache hit), 3.3k received, 74 t/s. Cost: $0.00094 turn, $0.00094 run. 6 steps."}
+new-7 {"run_code": 7, "failed": 2, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 71.2k sent (58.9k cache hit), 6.5k received, 155 t/s. Cost: $0.0014 turn, $0.0014 run. 8 steps."}
+old-0 {"run_code": 2, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 22.5k sent (13.3k cache hit), 2.9k received, 202 t/s. Cost: $0.00075 turn, $0.00075 run. 3 steps."}
+old-1 {"run_code": 21, "failed": 8, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 259.2k sent (238.8k cache hit), 12.1k received, 128 t/s. Cost: $0.0028 turn, $0.0028 run. 22 steps."}
+old-2 {"run_code": 8, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 70.5k sent (59.6k cache hit), 3.6k received, 98 t/s. Cost: $0.00097 turn, $0.00097 run. 10 steps."}
+old-3 {"run_code": 3, "failed": 1, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 28.9k sent (25.3k cache hit), 3.0k received, 154 t/s. Cost: $0.00058 turn, $0.00058 run. 4 steps."}
+old-4 {"run_code": 3, "failed": 1, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 35.6k sent (22.5k cache hit), 3.1k received, 115 t/s. Cost: $0.00092 turn, $0.00092 run. 4 steps."}
+old-5 {"run_code": 3, "failed": 0, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 28.9k sent (19.5k cache hit), 2.5k received, 121 t/s. Cost: $0.00071 turn, $0.00071 run. 4 steps."}
+old-6 {"run_code": 4, "failed": 1, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 35.5k sent (25.9k cache hit), 3.0k received, 136 t/s. Cost: $0.00079 turn, $0.00079 run. 5 steps."}
+old-7 {"run_code": 4, "failed": 2, "jlstz_ok": true, "i_ok": true, "tokens": "Tokens: 38.6k sent (27.9k cache hit), 3.5k received, 167 t/s. Cost: $0.00090 turn, $0.00090 run. 5 steps."}
