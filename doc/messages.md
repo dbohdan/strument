@@ -9,6 +9,13 @@ evaluated through live trials; `internal/coder/tools.go` alone contains about
 150 such strings. Treat changes to those strings as prompt changes, with trials
 documented in `doc/experiments/`.
 
+What a model is told before a turn begins — the system message, every tool's
+definition, and the harness notes that have names — is collected in
+`internal/coder/testdata/model-facing.golden`, so a change to any of it shows
+up in review as a diff of the text. After an intended change, regenerate it
+with `go test ./internal/coder -run TestModelFacingText -update` and read the
+diff before committing it.
+
 An audit found that similar messages followed different conventions across the
 codebase. This guide records the conventions to use consistently.
 
