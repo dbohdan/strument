@@ -1,4 +1,4 @@
-package coder
+package loopdetect
 
 import (
 	"fmt"
@@ -53,14 +53,14 @@ func tableBlock() string {
 
 func fencedHTML(s string) string { return "Here is the file:\n\n```html\n" + s + "```\n" }
 
-func feedAll(t *testing.T, kind, text string) *loopFinding {
+func feedAll(t *testing.T, kind, text string) *Finding {
 	t.Helper()
-	d := newLoopDetector(true)
-	var first *loopFinding
+	d := New(true)
+	var first *Finding
 	// A token at a time, which is how it really arrives: a per-line feed would
 	// hide any bug in the partial-line handling.
 	for _, chunk := range strings.SplitAfter(text, " ") {
-		if f := d.feed(kind, chunk); f != nil && first == nil {
+		if f := d.Feed(kind, chunk); f != nil && first == nil {
 			first = f
 		}
 	}
@@ -99,7 +99,7 @@ func TestLoopDetectorSeparatesLoopsFromQuotedMaterial(t *testing.T) {
 			"I will restyle it.\n\n```\n" + gridBlock() + "```\n\nThat removes the vertical lines.\n", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got := feedAll(t, loopReasoning, test.text)
+			got := feedAll(t, Reasoning, test.text)
 			if test.want && got == nil {
 				t.Errorf("no loop reported; this shape is a real loop")
 			}
@@ -157,7 +157,7 @@ func deliberation() func(int) string {
 func metronome() func(int) string { return func(int) string { return "" } }
 
 func TestLoopDetectorSeparatesQuotedMessagesFromLoops(t *testing.T) {
-	if f := feedAll(t, loopReasoning, quotedMessage(loopMinCount+3, deliberation())); f != nil {
+	if f := feedAll(t, Reasoning, quotedMessage(loopMinCount+3, deliberation())); f != nil {
 		t.Errorf("fired on a message quoted between rounds of deliberation: %q ×%d", f.Sample, f.Count)
 	}
 	// The fixture must be one the old rule fired on, or it is decorative: with
@@ -171,7 +171,7 @@ func TestLoopDetectorSeparatesQuotedMessagesFromLoops(t *testing.T) {
 	// The same message, metronomic: a real loop over the very same words. In
 	// the answer stream, where the detector expected to earn less of its keep
 	// and where the fixture's words are at home.
-	if f := feedAll(t, loopAnswer, quotedMessage(loopMinCount+3, metronome())); f == nil {
+	if f := feedAll(t, Answer, quotedMessage(loopMinCount+3, metronome())); f == nil {
 		t.Error("no loop for a message repeated at its period")
 	}
 }
@@ -181,7 +181,7 @@ func TestLoopDetectorSeparatesQuotedMessagesFromLoops(t *testing.T) {
 // was caught by re-running the corpus rather than by a unit test -- so here is
 // the unit test.
 func TestStripKeepsAOneWordPerLineStutter(t *testing.T) {
-	if f := feedAll(t, loopReasoning, strings.Repeat("Dynamical\n", 84)); f == nil {
+	if f := feedAll(t, Reasoning, strings.Repeat("Dynamical\n", 84)); f == nil {
 		t.Fatal("the strip deleted a real stutter")
 	}
 	// A path, though, is scaffolding and goes.
@@ -202,7 +202,7 @@ func TestStripKeepsAOneWordPerLineStutter(t *testing.T) {
 // -- but nothing after it exists, so what this really pins is that the
 // unterminated tail is held back rather than scanned.
 func TestUnclosedFenceHoldsBackItsContents(t *testing.T) {
-	if f := feedAll(t, loopReasoning, "Here:\n```\n"+gridBlock()); f != nil {
+	if f := feedAll(t, Reasoning, "Here:\n```\n"+gridBlock()); f != nil {
 		t.Errorf("fired inside an unclosed fence: %q", f.Sample)
 	}
 }
@@ -230,7 +230,7 @@ func TestDataFieldRuleDoesNotEatProse(t *testing.T) {
 			t.Errorf("kept data line %q", line)
 		}
 	}
-	if f := feedAll(t, loopReasoning, strings.Repeat("Again: Again\n", loopMinWordRun+2)); f == nil {
+	if f := feedAll(t, Reasoning, strings.Repeat("Again: Again\n", loopMinWordRun+2)); f == nil {
 		t.Error("a one-token prose loop was hidden by the data-field rule")
 	}
 }
@@ -267,7 +267,7 @@ func TestShortPeriodRepetitionNeedsLength(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Token by token, and the border has no newline: the line still
 			// being written is what the detector sees, as it was in the report.
-			got := feedAll(t, loopReasoning, test.text) != nil
+			got := feedAll(t, Reasoning, test.text) != nil
 			if got != test.want {
 				t.Errorf("loop reported = %v, want %v", got, test.want)
 			}

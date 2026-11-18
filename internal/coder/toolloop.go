@@ -2,10 +2,10 @@ package coder
 
 import "strconv"
 
-// Tool-call loop detection: the sibling of loopdetect.go's text detector,
+// Tool-call loop detection: the sibling of internal/loopdetect's text detector,
 // watching the other stream a stuck turn produces.
 //
-// loopdetect.go watches streamed *text* for repeating windows, and it was
+// internal/loopdetect watches streamed *text* for repeating windows, and it was
 // tuned on a corpus of real loops — but a loop can run without ever repeating
 // a sentence. The live episode that motivated this one orbited a file: the
 // same read call with the same arguments, fifteen times, between prose that

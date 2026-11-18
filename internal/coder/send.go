@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/loopdetect"
 	"dbohdan.com/strument/internal/record"
 
 	"dbohdan.com/strument/internal/config"
@@ -153,7 +154,7 @@ const (
 // more than one abandoned stream.
 //
 // call names the request in its log record: "turn" or "aside".
-func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, usage *sendUsage, loops *loopDetector) (res streamResult, err error) {
+func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, usage *sendUsage, loops *loopdetect.Detector) (res streamResult, err error) {
 	finishReason := ""
 	usage.rejected = false
 	// This request's own usage, apart from usage's running sum, for its record.
@@ -196,13 +197,13 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 		case llm.EventAnswer:
 			c.stream.response += ev.Text
 			c.Out.StreamText(ev.Text)
-			if loops.feed(loopAnswer, ev.Text) != nil {
+			if loops.Feed(loopdetect.Answer, ev.Text) != nil {
 				return resLooping, nil
 			}
 		case llm.EventReasoning:
 			c.stream.reasoning += ev.Text
 			c.Out.StreamReasoning(ev.Text)
-			if loops.feed(loopReasoning, ev.Text) != nil {
+			if loops.Feed(loopdetect.Reasoning, ev.Text) != nil {
 				return resLooping, nil
 			}
 		case llm.EventToolCall:
@@ -351,7 +352,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 
 	// One detector per send, not per streamOnce: a continuation is the same
 	// reply resumed, and a loop that spans the stitch is still a loop.
-	loops := newLoopDetector(c.LoopDetection)
+	loops := loopdetect.New(c.LoopDetection)
 
 	// term is how the whole stream phase ended, as opposed to how one
 	// streamOnce ended: retries and continuations loop without setting it.
@@ -599,7 +600,7 @@ func (c *Coder) noteInterrupt() {
 // warnLoop tells the user what the model was doing when it was stopped, in
 // every mode: script runs have no steer menu, and a run that stopped early is
 // the one thing a log must not be silent about.
-func (c *Coder) warnLoop(f *loopFinding) {
+func (c *Coder) warnLoop(f *loopdetect.Finding) {
 	if f == nil {
 		c.Out.Warningf("Stopped the model's reply because it was repeating itself.")
 		return
@@ -617,10 +618,10 @@ func (c *Coder) warnLoop(f *loopFinding) {
 // It quotes the repeating text back. A model given "you were repeating
 // yourself" and nothing else has to guess which part, and the guess is often
 // the whole reply; the sample makes the instruction actionable.
-func (c *Coder) noteLoop(f *loopFinding) {
+func (c *Coder) noteLoop(f *loopdetect.Finding) {
 	c.dropPartialToolCalls()
 	where := "reply"
-	if f != nil && f.Kind == loopReasoning {
+	if f != nil && f.Kind == loopdetect.Reasoning {
 		where = "reasoning"
 	}
 	note := "Strument stopped your " + where + " because it had begun repeating itself"

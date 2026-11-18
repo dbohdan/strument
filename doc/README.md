@@ -269,6 +269,9 @@ inherited from aider.
     scraper command, HTML to Markdown, fragments, ranges and outlines, and the
     refusals of local addresses and unapproved redirects. The `webfetch`
     tool in the coder decides what to fetch and how much fits a result.
+  - `loopdetect/` — the reply-repetition detector: it watches the answer and
+    reasoning streams for a sentence or a word repeated past chance, so the
+    send is stopped before the loop fills the context.
   - `httpx/` — what the HTTP clients share: proxy transports, app
     attribution, and `Post` for the JSON services.
   - `record/` — the session record's schema: one flat `Record` per JSON line,
@@ -859,7 +862,7 @@ an entry at load, the coder matches a fetch at run time.
 **A reply that repeats itself is stopped like an interrupt nobody pressed.**
 Small models get stuck emitting one sentence forever, and unlike a repeated
 tool call it does not resolve on its own — the context fills instead.
-`internal/coder/loopdetect.go` watches the streamed text for a fifty-character
+`internal/loopdetect` watches the streamed text for a fifty-character
 window recurring ten times at close spacing (Gemini CLI's shape and thresholds,
 widened on gap) and for one word repeating thirty times running, which is the
 stutter no window can see. Answer and reasoning are watched separately, because

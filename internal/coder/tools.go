@@ -407,7 +407,7 @@ func askTool() llm.ToolDef {
 }
 
 // interruptTool lets the model end its own turn, the way Ctrl-C ends it when
-// the user does. It exists for the same episode loopdetect.go's notes warn
+// the user does. It exists for the same episode internal/loopdetect's notes warn
 // about: a model that realizes mid-turn it is repeating itself needs an exit
 // that is not "keep going" — the next-best action, announcing it is stuck and
 // carrying on anyway, is how the log of a stuck turn fills with meta-text

@@ -1,4 +1,7 @@
-package coder
+// Package loopdetect watches a reply as it streams for the repetition a model
+// does not stop on its own, so the send can be stopped before it fills the
+// context.
+package loopdetect
 
 import (
 	"strings"
@@ -76,12 +79,12 @@ const (
 // The two streams a reply arrives on, named because the finding reports which
 // one repeated and the wording of the note depends on it.
 const (
-	loopAnswer    = "answer"
-	loopReasoning = "reasoning"
+	Answer    = "answer"
+	Reasoning = "reasoning"
 )
 
-// loopFinding says what repeated, for a message the user can judge.
-type loopFinding struct {
+// Finding says what repeated, for a message the user can judge.
+type Finding struct {
 	// Sample is the repeating text itself, trimmed for display.
 	Sample string
 	// Count is how many times it occurred.
@@ -91,19 +94,19 @@ type loopFinding struct {
 	Kind string
 }
 
-// loopDetector watches one send's streamed text.
+// Detector watches one send's streamed text.
 //
 // Answer and reasoning are tracked separately rather than concatenated. They
 // interleave on the wire, and a window spanning the seam between them is not a
 // repetition of anything the model wrote.
-type loopDetector struct {
+type Detector struct {
 	// MinCount is how many times a window must recur, or 0 to detect nothing.
 	MinCount int
 	// MinRun is the same for an immediately repeated word, or 0 for neither.
 	MinRun int
 	// Found is the first finding, kept so the caller can quote it after the
 	// stream has been abandoned.
-	Found *loopFinding
+	Found *Finding
 
 	answer, reasoning loopStream
 }
@@ -118,14 +121,14 @@ type loopStream struct {
 	inFence bool
 }
 
-// newLoopDetector returns a detector with the tuned thresholds, or one that
+// New returns a detector with the tuned thresholds, or one that
 // never fires. `loop_detection = False` in the config is what turns it off; a
 // model whose ordinary output trips this should not have to wait for a fix.
-func newLoopDetector(on bool) *loopDetector {
+func New(on bool) *Detector {
 	if !on {
-		return &loopDetector{}
+		return &Detector{}
 	}
-	return &loopDetector{MinCount: loopMinCount, MinRun: loopMinWordRun}
+	return &Detector{MinCount: loopMinCount, MinRun: loopMinWordRun}
 }
 
 // add appends streamed text, keeping only what is the model's own prose.
@@ -293,17 +296,17 @@ func isDataScalar(value string) bool {
 	return value != "" && unicode.IsDigit(rune(value[0]))
 }
 
-// feed adds streamed text and reports a loop when one is visible.
+// Feed adds streamed text and reports a loop when one is visible.
 //
 // Called per stream event, which is the right granularity: an event is a token
 // or a few, so a loop is caught within a window of its becoming detectable
 // rather than at the end of the reply.
-func (d *loopDetector) feed(kind, text string) *loopFinding {
+func (d *Detector) Feed(kind, text string) *Finding {
 	if d == nil || text == "" || (d.MinCount <= 0 && d.MinRun <= 0) {
 		return nil
 	}
 	b := &d.answer
-	if kind == loopReasoning {
+	if kind == Reasoning {
 		b = &d.reasoning
 	}
 	b.add(text)
@@ -336,7 +339,7 @@ func (d *loopDetector) feed(kind, text string) *loopFinding {
 
 // findLoop reports a window that recurs often enough, at close enough spacing,
 // to be a loop rather than a habit of phrasing.
-func findLoop(text string, minCount int) *loopFinding {
+func findLoop(text string, minCount int) *Finding {
 	if minCount <= 0 || len(text) < loopWindow*minCount {
 		return nil
 	}
@@ -379,7 +382,7 @@ func findLoop(text string, minCount int) *loopFinding {
 				continue
 			}
 			if smallest >= loopWindow || !singleToken(text[p[start]:p[start]+smallest]) {
-				return &loopFinding{Sample: sampleOf(w), Count: minCount}
+				return &Finding{Sample: sampleOf(w), Count: minCount}
 			}
 			// One short token over and over: follow the run while it keeps
 			// its rhythm, and call it a loop only once it has gone on for
@@ -393,7 +396,7 @@ func findLoop(text string, minCount int) *loopFinding {
 				end++
 			}
 			if p[end-1]-p[start]+loopWindow >= loopShortSpan {
-				return &loopFinding{Sample: sampleOf(w), Count: end - start}
+				return &Finding{Sample: sampleOf(w), Count: end - start}
 			}
 		}
 	}
@@ -421,7 +424,7 @@ func singleToken(unit string) bool {
 // Separate from findLoop because the two see different things: a stutter short
 // enough to fit inside one window is invisible to a window detector unless the
 // window happens to align, and this is cheaper than widening that one.
-func findWordRun(text string, minRun int) *loopFinding {
+func findWordRun(text string, minRun int) *Finding {
 	if minRun <= 0 {
 		return nil
 	}
@@ -439,7 +442,7 @@ func findWordRun(text string, minRun int) *loopFinding {
 		// what printing a sparse matrix looks like. Requiring a letter costs
 		// nothing real — the loops this catches are words.
 		if run >= minRun && strings.ContainsFunc(prev, unicode.IsLetter) {
-			return &loopFinding{Sample: sampleOf(prev), Count: run}
+			return &Finding{Sample: sampleOf(prev), Count: run}
 		}
 	}
 	return nil

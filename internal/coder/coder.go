@@ -78,7 +78,7 @@ type Coder struct {
 	ScrapeRunsCommand bool
 
 	// LoopDetection stops a reply that has degenerated into repeating one
-	// phrase over and over. On by default; see loopdetect.go for what counts.
+	// phrase over and over. On by default; see internal/loopdetect for what counts.
 	LoopDetection bool
 
 	// Ports.
