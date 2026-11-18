@@ -256,6 +256,10 @@ inherited from aider.
     backslash escapes on Unix and is a path separator on Windows, so `SplitWith`
     lets either rule be tested from either host.
   - `gitrepo/` — the git port; always argv, never a shell string.
+  - `record/` — the session record's schema: one flat `Record` per JSON line,
+    its kinds, and the `Recorder` that receives them. A leaf, so `history`
+    and `jsonlog` can read and write the record without importing the coder
+    that produces it.
   - `history/` — per-project state under `$XDG_STATE_HOME/strument`: the
     session record (JSON Lines), the cost ledger, resume and undo, and the
     markdown transcript derived from the record on demand. Beside `projects/`

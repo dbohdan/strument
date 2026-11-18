@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -1154,8 +1156,8 @@ func (c *Coder) flushTurnUsage() {
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)
 
-	c.record(Record{
-		Type: "turn",
+	c.record(record.Record{
+		Type: record.KindTurn,
 		// The instant the turn closed, which is what the transcript's header
 		// showed: Turn.Time was never set by either caller, so render() fell
 		// through to time.Now() at append time — a few microseconds after
@@ -1191,15 +1193,10 @@ func (c *Coder) flushTurnUsage() {
 	c.reportUsage(c.turnSteps+1, len(c.turnEditedFiles))
 }
 
-// OutcomeCrashed is the turn outcome for a turn that died with a panic. It is
-// not a SendOutcome: no send produced it, and by the time it is known the
-// sends are over.
-const OutcomeCrashed = "Crashed"
-
 // turnOutcome is the last send's outcome, unless the turn never got to finish.
 func (c *Coder) turnOutcome() string {
 	if c.turnCrashed {
-		return OutcomeCrashed
+		return record.OutcomeCrashed
 	}
 	return c.lastSendOutcome.String()
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/gitrepo"
@@ -1128,7 +1130,7 @@ func TestRenewedBudgetKeepsTheTurnsStepCount(t *testing.T) {
 	}
 	var steps int
 	for _, r := range rec.recs {
-		if r.Type == "turn" {
+		if r.Type == record.KindTurn {
 			steps = r.Steps
 		}
 	}

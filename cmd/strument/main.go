@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"github.com/alecthomas/kong"
 	"golang.org/x/term"
 
@@ -378,7 +380,7 @@ func (c *chatCmd) Run() error {
 
 		// What the recall tool searches. Gated on keepState with the rest: a
 		// session that leaves no trace has no record.
-		cdr.SessionRecords = func() []coder.Record {
+		cdr.SessionRecords = func() []record.Record {
 			records, _, _ := history.ReadSessionRecords(projectRoot, cdr.Session)
 			return records
 		}
@@ -1696,7 +1698,7 @@ func (c *historyMarkdownCmd) Run(parent *historyCmd) error {
 		// One run instead of the whole session, and -t still counts within it.
 		var seg string
 		if seg, err = historyRun(parent.Session, parent.Back); err == nil {
-			var records []coder.Record
+			var records []record.Record
 			if records, err = history.ReadRecords(seg); err == nil {
 				turns = history.TurnsFromRecords(records)
 			}

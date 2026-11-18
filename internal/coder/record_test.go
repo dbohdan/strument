@@ -9,12 +9,14 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
-type capture struct{ recs []Record }
+type capture struct{ recs []record.Record }
 
-func (c *capture) Record(r Record) { c.recs = append(c.recs, r) }
+func (c *capture) Record(r record.Record) { c.recs = append(c.recs, r) }
 
 func (c *capture) types() []string {
 	var out []string
@@ -90,8 +92,8 @@ func TestRecordCarriesToolArgumentsAndResults(t *testing.T) {
 
 	c.runOne(context.Background(), "do the thing")
 
-	var call *RecordToolCall
-	var result *Record
+	var call *record.ToolCall
+	var result *record.Record
 	for i, r := range rec.recs {
 		if len(r.ToolCalls) > 0 {
 			call = &rec.recs[i].ToolCalls[0]
@@ -132,21 +134,21 @@ func TestRecordKeepsReasoningOutOfTheAnswer(t *testing.T) {
 	c.runOne(context.Background(), "do the thing")
 
 	for _, r := range rec.recs {
-		if r.Type == "message" && strings.Contains(r.Text, "thinking") {
+		if r.Type == record.KindMessage && strings.Contains(r.Text, "thinking") {
 			t.Errorf("reasoning leaked into a %s message: %q", r.Role, r.Text)
 		}
-		if r.Type == "reasoning" && strings.Contains(r.Text, "Done.") {
+		if r.Type == record.KindReasoning && strings.Contains(r.Text, "Done.") {
 			t.Errorf("the answer leaked into a reasoning record: %q", r.Text)
 		}
 	}
 }
 
-// No Recorder, no cost and no crash: the default path must be untouched.
+// No record.Recorder, no cost and no crash: the default path must be untouched.
 func TestRecordIsOffByDefault(t *testing.T) {
 	c := testCoder(t)
 	c.Client = &toolThenAnswer{}
 	if c.Recorder != nil {
-		t.Fatal("a Coder starts with no Recorder")
+		t.Fatal("a Coder starts with no record.Recorder")
 	}
 	c.runOne(context.Background(), "do the thing") // must not panic
 }
@@ -167,7 +169,7 @@ func TestTurnRecordNamesTheOfferedTools(t *testing.T) {
 			c.SuggestShellCommands = tc.shell
 			c.runOne(context.Background(), "look at it")
 
-			var turn *Record
+			var turn *record.Record
 			for i := range rec.recs {
 				if rec.recs[i].Type == "turn" {
 					turn = &rec.recs[i]
@@ -235,9 +237,9 @@ func TestRecordRequests(t *testing.T) {
 
 	c.runOne(context.Background(), "do the thing")
 
-	var reqs []Record
+	var reqs []record.Record
 	for _, r := range rec.recs {
-		if r.Type == "request" {
+		if r.Type == record.KindRequest {
 			reqs = append(reqs, r)
 		}
 	}

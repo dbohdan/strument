@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/record"
 )
 
 // Packing one run for someone else to read.
@@ -43,7 +43,7 @@ const zipLevel = flate.DefaultCompression
 // calls'. Shared with the strip scan, so "what this record refers to" has one
 // answer — an archive that missed a reference strip counts would ship a
 // conversation with a hole in it.
-func recordBlobs(r coder.Record) []string {
+func recordBlobs(r record.Record) []string {
 	var out []string
 	if r.Blob != "" {
 		out = append(out, r.Blob)

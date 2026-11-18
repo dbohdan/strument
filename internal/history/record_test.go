@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/record"
 )
 
 // recordTurns is the fixture: one plain turn, one steered turn whose answer
 // carries the blockquoted arc, one crashed turn, and one empty turn the
 // transcript never wrote.
-func recordTurns() ([]coder.Record, []Turn) {
+func recordTurns() ([]record.Record, []Turn) {
 	at := func(s string) time.Time {
 		ts, err := time.Parse(time.RFC3339, s)
 		if err != nil {
@@ -25,8 +25,8 @@ func recordTurns() ([]coder.Record, []Turn) {
 		return ts
 	}
 	cost := 0.0005
-	records := []coder.Record{
-		{Type: "session", Version: coder.RecordVersion, Model: "flash"},
+	records := []record.Record{
+		{Type: "session", Version: record.Version, Model: "flash"},
 		{Type: "message", Role: "user", Text: "change the greeting"},
 		{
 			Type: "turn", Time: "2026-07-17T14:30:05Z", Model: "openrouter/flash",
@@ -44,7 +44,7 @@ func recordTurns() ([]coder.Record, []Turn) {
 		},
 		{
 			Type: "turn", Time: "2026-07-17T14:32:05Z", Model: "openrouter/flash",
-			Outcome: coder.OutcomeCrashed, Sent: 7, Received: 1,
+			Outcome: record.OutcomeCrashed, Sent: 7, Received: 1,
 			Files:  []string{"greet.go"},
 			Prompt: "again", Answer: "I was in the middle of",
 		},
@@ -135,7 +135,7 @@ func TestReadTurnsConcatenatesSegmentsOldestFirst(t *testing.T) {
 		var b strings.Builder
 		enc := json.NewEncoder(&b)
 		for _, r := range records {
-			if r.Type == "turn" {
+			if r.Type == record.KindTurn {
 				r.Prompt = r.Prompt + " (segment " + string(rune('A'+i)) + ")"
 			}
 			if err := enc.Encode(r); err != nil {

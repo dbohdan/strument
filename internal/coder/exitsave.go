@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -62,7 +64,7 @@ func (c *Coder) SaveOnExit() []string {
 	paths := c.turnSnap.paths()
 	c.exitUncommitted = true
 	c.pushTurnSnapshot()
-	c.record(Record{Type: "turn", Call: "turn", Outcome: "exited", Time: c.Clock.Now().UTC().Format(time.RFC3339), Files: paths})
+	c.record(record.Record{Type: record.KindTurn, Call: "turn", Outcome: "exited", Time: c.Clock.Now().UTC().Format(time.RFC3339), Files: paths})
 	return paths
 }
 

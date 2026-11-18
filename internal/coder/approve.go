@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/httpx"
 )
 
@@ -281,7 +283,7 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bo
 	c.approveVerdict = ""
 	am := c.Approve
 	if n := len(command) + len(purpose); n > approveMaxInput {
-		c.record(Record{Type: "decision", Call: "approve_model", Model: am.Slug, Outcome: "too_long"})
+		c.record(record.Record{Type: record.KindDecision, Call: "approve_model", Model: am.Slug, Outcome: "too_long"})
 		return false, fmt.Sprintf("Not sent to %s: %d characters is more than it may read whole.", am.Slug, n)
 	}
 	timeout := am.Timeout
@@ -294,8 +296,8 @@ func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bo
 	d, err := am.Decide(ctx, DecisionInput{Root: c.Root, Command: command, Purpose: purpose})
 	elapsed := c.Clock.Now().Sub(start)
 
-	r := Record{
-		Type:    "decision",
+	r := record.Record{
+		Type:    record.KindDecision,
 		Call:    "approve_model",
 		Model:   am.Slug,
 		Seconds: elapsed.Round(time.Millisecond).Seconds(),

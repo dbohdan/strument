@@ -34,10 +34,10 @@ import (
 	"os"
 	"sync"
 
-	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/record"
 )
 
-// Writer records a session to a file. It satisfies coder.Recorder.
+// Writer records a session to a file. It satisfies record.Recorder.
 type Writer struct {
 	mu  sync.Mutex
 	w   *bufio.Writer
@@ -66,7 +66,7 @@ func Create(path string) (*Writer, error) {
 
 // Record writes one record. Safe to call from any goroutine, because the send
 // path and the REPL both reach it.
-func (w *Writer) Record(r coder.Record) {
+func (w *Writer) Record(r record.Record) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.err != nil {
@@ -99,5 +99,5 @@ func (w *Writer) Close() error {
 	return w.f.Close()
 }
 
-var _ coder.Recorder = (*Writer)(nil)
+var _ record.Recorder = (*Writer)(nil)
 var _ io.Closer = (*Writer)(nil)

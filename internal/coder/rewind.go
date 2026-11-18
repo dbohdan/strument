@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"dbohdan.com/strument/internal/record"
 )
 
 // /rewind takes the last turns out of the conversation, for when a turn went
@@ -88,7 +90,7 @@ func (c *Coder) Rewind(n int) (RewindResult, error) {
 	tail := slices.Clone(c.doneMessages[to:])
 	c.doneMessages = append(c.doneMessages[:from], tail...)
 	c.turns = c.turns[:len(c.turns)-n]
-	c.record(Record{Type: "rewind", Rewound: n})
+	c.record(record.Record{Type: record.KindRewind, Rewound: n})
 	slices.Sort(files)
 	return RewindResult{Turns: n, Files: files}, nil
 }

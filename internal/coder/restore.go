@@ -3,6 +3,8 @@ package coder
 import (
 	"fmt"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -64,7 +66,7 @@ type RestoreStats struct {
 // deliberately not sent back, which recordNewMessages already says — "it is
 // not part of any message: the assembler strips it, because it is not
 // something to send back".
-func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
+func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) {
 	var out []llm.Message
 	var stats RestoreStats
 
@@ -88,7 +90,7 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 	records = applyRewinds(records, &stats)
 	turnStart := 0
 	for i, r := range records {
-		if r.Type == "turn" {
+		if r.Type == record.KindTurn {
 			// A turn row closes the messages recorded since the previous one:
 			// the same grouping applyRewinds uses, so a turn restored here is
 			// the turn a later /rewind will take out.
@@ -98,13 +100,13 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 			turnStart = len(out)
 			continue
 		}
-		if r.Type == "request" && r.Call == "turn" && r.Sent > 0 && r.Estimated > 0 {
+		if r.Type == record.KindRequest && r.Call == "turn" && r.Sent > 0 && r.Estimated > 0 {
 			if stats.TokenScales == nil {
 				stats.TokenScales = map[string]float64{}
 			}
 			stats.TokenScales[r.Model] = float64(r.Sent) / float64(r.Estimated)
 		}
-		if r.Type != "message" {
+		if r.Type != record.KindMessage {
 			continue
 		}
 		// A tool result answers the calls of the assistant message it
@@ -217,10 +219,10 @@ func MessagesFromRecords(records []Record) ([]llm.Message, RestoreStats) {
 // Working on rows rather than on rebuilt messages leaves everything downstream
 // as it was: the repairs, the model attribution and the trimming see a record
 // in which the rewound turns never happened.
-func applyRewinds(records []Record, stats *RestoreStats) []Record {
+func applyRewinds(records []record.Record, stats *RestoreStats) []record.Record {
 	hasRewind := false
 	for _, r := range records {
-		if r.Type == "rewind" {
+		if r.Type == record.KindRewind {
 			hasRewind = true
 			break
 		}
@@ -234,10 +236,10 @@ func applyRewinds(records []Record, stats *RestoreStats) []Record {
 	open := 0
 	for i, r := range records {
 		switch r.Type {
-		case "turn":
+		case record.KindTurn:
 			closed = append(closed, group{open, i + 1})
 			open = i + 1
-		case "rewind":
+		case record.KindRewind:
 			drop[i] = true
 			n := min(r.Rewound, len(closed))
 			for _, g := range closed[len(closed)-n:] {
@@ -250,7 +252,7 @@ func applyRewinds(records []Record, stats *RestoreStats) []Record {
 			open = i + 1
 		}
 	}
-	out := make([]Record, 0, len(records))
+	out := make([]record.Record, 0, len(records))
 	for i, r := range records {
 		if !drop[i] {
 			out = append(out, r)
@@ -266,10 +268,10 @@ func applyRewinds(records []Record, stats *RestoreStats) []Record {
 // assistant message it answers, and scanning past the next non-tool message
 // would let one send's results vouch for another send's calls — which is how
 // a repeated id turns an unanswered call into a restored one.
-func answeredAfter(records []Record, i int) map[string]int {
+func answeredAfter(records []record.Record, i int) map[string]int {
 	answered := map[string]int{}
 	for _, r := range records[i+1:] {
-		if r.Type != "message" {
+		if r.Type != record.KindMessage {
 			continue // a reasoning or turn row does not end the run
 		}
 		if r.Role != llm.RoleTool {
@@ -297,15 +299,15 @@ func answeredAfter(records []Record, i int) map[string]int {
 // It prefers the row's slug, which is what the seam compares; rows written
 // before the slug was recorded give the qualified model, which sameModel
 // accepts too.
-func nextTurnModel(records []Record, i int) string {
+func nextTurnModel(records []record.Record, i int) string {
 	for _, r := range records[i+1:] {
-		if r.Type == "turn" {
+		if r.Type == record.KindTurn {
 			if r.Slug != "" {
 				return r.Slug
 			}
 			return r.Model
 		}
-		if r.Type == "message" && r.Role == llm.RoleUser {
+		if r.Type == record.KindMessage && r.Role == llm.RoleUser {
 			// The next turn's messages began: this message was never
 			// accounted for.
 			return ""

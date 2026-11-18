@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/history"
 	"dbohdan.com/strument/internal/jsonlog"
@@ -178,7 +180,7 @@ type sessionLog struct {
 	w  *jsonlog.Writer
 }
 
-func (l *sessionLog) Record(r coder.Record) {
+func (l *sessionLog) Record(r record.Record) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.w != nil {

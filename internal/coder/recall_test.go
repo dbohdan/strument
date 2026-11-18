@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
 )
@@ -12,16 +14,16 @@ import (
 // recallRecords is a three-turn session: the model reads a file in turn 1 and
 // states a result; turn 2 searches once (its result must not be found again);
 // turn 3 is in progress.
-func recallRecords() []Record {
-	return []Record{
+func recallRecords() []record.Record {
+	return []record.Record{
 		{Type: "session"},
 		{Type: "message", Role: llm.RoleUser, Text: "Note for later: the codename is Marigold-417. Read big.go."},
-		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []RecordToolCall{{ID: "c1", Name: toolRead}}},
+		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []record.ToolCall{{ID: "c1", Name: toolRead}}},
 		{Type: "message", Role: llm.RoleTool, ToolCallID: "c1", Text: "1\tpackage big\n2\t// 878 lines follow\n3\tfunc Lines() {}"},
 		{Type: "message", Role: llm.RoleAssistant, Text: "big.go is the longest, at 878 lines (the others are shorter)."},
 		{Type: "turn"},
 		{Type: "message", Role: llm.RoleUser, Text: "What was the count?"},
-		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []RecordToolCall{{ID: "c2", Name: toolRecall}}},
+		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []record.ToolCall{{ID: "c2", Name: toolRecall}}},
 		{Type: "message", Role: llm.RoleTool, ToolCallID: "c2", Text: "t1.4 · turn 1 of 2 · assistant\n  1: big.go is the longest, at 878 lines."},
 		{Type: "message", Role: llm.RoleAssistant, Text: "It was 878."},
 		{Type: "turn"},
@@ -62,7 +64,7 @@ func TestRecallEntriesNumberMessagesByTurn(t *testing.T) {
 // two searches in one turn must agree on the number of turns.
 func TestRecallCountsTheTurnInProgress(t *testing.T) {
 	recs := recallRecords()
-	recs = append(recs[:len(recs)-1], Record{Type: "message", Role: llm.RoleAssistant, Text: "x"}, Record{Type: "turn"})
+	recs = append(recs[:len(recs)-1], record.Record{Type: record.KindMessage, Role: llm.RoleAssistant, Text: "x"}, record.Record{Type: record.KindTurn})
 	if _, turns := recallEntries(recs); turns != 4 {
 		t.Errorf("turns = %d, want 4: three finished and one in progress", turns)
 	}

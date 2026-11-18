@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/render"
@@ -171,7 +173,7 @@ type Coder struct {
 	// payloads resolved: what the recall tool searches. A callback for the
 	// reason RecordUsage is one. nil in a session that leaves no trace, which
 	// is then offered no recall tool.
-	SessionRecords func() []Record
+	SessionRecords func() []record.Record
 
 	// PutBlob, when set, stores a tool payload too large to keep inline and
 	// returns the name to find it under. nil keeps every payload inline; see
@@ -185,15 +187,15 @@ type Coder struct {
 	// leaves no trace passes nil.
 	SaveUndo func(stack []UndoTurn, last string, pending Pending)
 
-	// Recorder receives the JSONL log's records when one is wired; nil is the
+	// record.Recorder receives the JSONL log's records when one is wired; nil is the
 	// default and costs nothing. recordedMessages is its watermark into
 	// curMessages — see record.go for why the flush is per-send.
-	Recorder         Recorder
+	Recorder         record.Recorder
 	recordedMessages int
 	// pendingRequests holds the send's request records until the flush that
 	// writes its messages, so each lands after the reply it produced rather
 	// than ahead of the user message that prompted it.
-	pendingRequests []Record
+	pendingRequests []record.Record
 
 	// Session is the name of the conversation this coder is running, as
 	// `strument session list` shows it. "" means the caller did not say,

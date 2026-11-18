@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/coder"
 )
 
@@ -83,7 +85,7 @@ func (*closedLog) Recording() bool { return false }
 // has no recorder and one has a recorder that has stopped writing. Neither can
 // give the conversation back, so neither may say it will.
 func TestClearPromisesOnlyWhatTheRecordHolds(t *testing.T) {
-	for name, rec := range map[string]coder.Recorder{
+	for name, rec := range map[string]record.Recorder{
 		"no recorder":   nil,
 		"closed record": &closedLog{},
 	} {

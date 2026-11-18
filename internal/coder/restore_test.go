@@ -8,20 +8,22 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
 // msg is a message row as the recorder writes one.
-func msg(role, text string) Record {
-	return Record{Type: "message", Role: role, Text: text}
+func msg(role, text string) record.Record {
+	return record.Record{Type: record.KindMessage, Role: role, Text: text}
 }
 
-func callRow(text string, calls ...RecordToolCall) Record {
-	return Record{Type: "message", Role: llm.RoleAssistant, Text: text, ToolCalls: calls}
+func callRow(text string, calls ...record.ToolCall) record.Record {
+	return record.Record{Type: record.KindMessage, Role: llm.RoleAssistant, Text: text, ToolCalls: calls}
 }
 
-func resultRow(id, text string) Record {
-	return Record{Type: "message", Role: llm.RoleTool, ToolCallID: id, Text: text}
+func resultRow(id, text string) record.Record {
+	return record.Record{Type: record.KindMessage, Role: llm.RoleTool, ToolCallID: id, Text: text}
 }
 
 // shape renders a conversation compactly, so a test can say what it wants
@@ -44,11 +46,11 @@ func shape(msgs []llm.Message) string {
 
 // An ordinary session comes back as itself.
 func TestMessagesFromRecordsRebuildsAnOrdinaryConversation(t *testing.T) {
-	records := []Record{
-		{Type: "session", Version: RecordVersion, Model: "flash"},
+	records := []record.Record{
+		{Type: "session", Version: record.Version, Model: "flash"},
 		msg(llm.RoleUser, "what is in main.go?"),
 		{Type: "reasoning", Text: "I should read it first."},
-		callRow("Let me look.", RecordToolCall{ID: "c1", Name: "read", Arguments: `{"path":"main.go"}`}),
+		callRow("Let me look.", record.ToolCall{ID: "c1", Name: "read", Arguments: `{"path":"main.go"}`}),
 		resultRow("c1", "main.go (3 lines)\n1\tpackage main\n"),
 		msg(llm.RoleAssistant, "An empty main function."),
 		{Type: "turn", Model: "openrouter/flash", Outcome: "Success", Prompt: "what is in main.go?"},
@@ -84,11 +86,11 @@ func TestMessagesFromRecordsRebuildsAnOrdinaryConversation(t *testing.T) {
 // result: it makes every subsequent request malformed, so the session ends on
 // its first send rather than degrading.
 func TestAnUnansweredToolCallIsNotRestored(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "read both"),
 		callRow("Reading.",
-			RecordToolCall{ID: "c1", Name: "read", Arguments: `{"path":"a"}`},
-			RecordToolCall{ID: "c2", Name: "read", Arguments: `{"path":"b"}`}),
+			record.ToolCall{ID: "c1", Name: "read", Arguments: `{"path":"a"}`},
+			record.ToolCall{ID: "c2", Name: "read", Arguments: `{"path":"b"}`}),
 		resultRow("c1", "a (1 line)"),
 		// c2 never answered: the process died between the ask and the dispatch.
 	}
@@ -107,9 +109,9 @@ func TestAnUnansweredToolCallIsNotRestored(t *testing.T) {
 // An assistant message whose every call went unanswered, and which said
 // nothing besides, is the shell of a turn rather than a turn.
 func TestAnAssistantMessageWithNothingLeftIsDropped(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "go"),
-		callRow("", RecordToolCall{ID: "c1", Name: "read", Arguments: `{}`}),
+		callRow("", record.ToolCall{ID: "c1", Name: "read", Arguments: `{}`}),
 	}
 	got, stats := MessagesFromRecords(records)
 	if want := "user"; shape(got) != want {
@@ -123,9 +125,9 @@ func TestAnAssistantMessageWithNothingLeftIsDropped(t *testing.T) {
 // Its text survives when it had some: the model said something, and only the
 // call it made is gone.
 func TestAnAssistantMessageKeepsItsTextWhenItsCallsGo(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "go"),
-		callRow("Let me check that.", RecordToolCall{ID: "c1", Name: "read", Arguments: `{}`}),
+		callRow("Let me check that.", record.ToolCall{ID: "c1", Name: "read", Arguments: `{}`}),
 	}
 	got, _ := MessagesFromRecords(records)
 	if want := "user assistant"; shape(got) != want {
@@ -139,7 +141,7 @@ func TestAnAssistantMessageKeepsItsTextWhenItsCallsGo(t *testing.T) {
 // A tool result with no call ahead of it carries a tool_call_id no request
 // contains, which is as malformed as the other direction.
 func TestAnOrphanToolResultIsNotRestored(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "go"),
 		resultRow("c9", "from a call that is not in this record"),
 		msg(llm.RoleAssistant, "Done."),
@@ -158,7 +160,7 @@ func TestAnOrphanToolResultIsNotRestored(t *testing.T) {
 // Anthropic rejects one that follows an assistant turn outright, so restoring
 // it anywhere else would end the session on its first request.
 func TestASystemMessageIsRestoredOnlyAfterAUserTurn(t *testing.T) {
-	legal := []Record{
+	legal := []record.Record{
 		msg(llm.RoleUser, "go"),
 		msg(llm.RoleSystem, "No reply came back: the request exceeded the context limit."),
 	}
@@ -166,7 +168,7 @@ func TestASystemMessageIsRestoredOnlyAfterAUserTurn(t *testing.T) {
 		t.Errorf("a system note after a user turn was dropped: %q", shape(got))
 	}
 
-	illegal := []Record{
+	illegal := []record.Record{
 		msg(llm.RoleUser, "go"),
 		msg(llm.RoleAssistant, "Done."),
 		msg(llm.RoleSystem, "something no provider would take here"),
@@ -184,7 +186,7 @@ func TestASystemMessageIsRestoredOnlyAfterAUserTurn(t *testing.T) {
 // recorded can be taken out. Taking out the first prompt leaves the reply to
 // it at the front, and a conversation does not start there.
 func TestRecordsBeforeTheFirstUserTurnAreDropped(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleAssistant, "a reply whose prompt was edited out"),
 		msg(llm.RoleUser, "the first prompt left in the file"),
 		msg(llm.RoleAssistant, "Done."),
@@ -233,8 +235,8 @@ func assertSendable(t *testing.T, msgs []llm.Message) {
 // on exactly this: a session reopened once under the default model,
 // interrupted, then resumed under its own model for the rest of its life.
 func TestAnInterruptedTurnWithNoAnswerLeavesNoSeam(t *testing.T) {
-	records := []Record{
-		{Type: "session", Version: RecordVersion, Model: "mimo"},
+	records := []record.Record{
+		{Type: "session", Version: record.Version, Model: "mimo"},
 		// The prompt is a blob and the harness note is all that followed:
 		// the model never emitted a message before the interrupt.
 		msg(llm.RoleUser, ""),
@@ -305,13 +307,13 @@ func TestRestoreNoteSaysWhatCameBack(t *testing.T) {
 // bug, found by running a restore against a stub that reuses one id, which is
 // the cheap version of a provider that happens to.
 func TestARepeatedToolCallIDDoesNotAnswerAnEarlierCall(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "first prompt"),
 		// The process died here: this call never got a result.
-		callRow("Reading.", RecordToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"a"}`}),
+		callRow("Reading.", record.ToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"a"}`}),
 
 		msg(llm.RoleUser, "second prompt, a later run"),
-		callRow("Reading again.", RecordToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"b"}`}),
+		callRow("Reading again.", record.ToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"b"}`}),
 		resultRow("call_1", "b (1 line)"),
 		msg(llm.RoleAssistant, "Done."),
 	}
@@ -338,11 +340,11 @@ func TestARepeatedToolCallIDDoesNotAnswerAnEarlierCall(t *testing.T) {
 
 // One result cannot answer two calls, for the same reason.
 func TestOneResultAnswersOneCall(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		msg(llm.RoleUser, "go"),
 		callRow("Reading both.",
-			RecordToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"a"}`},
-			RecordToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"b"}`}),
+			record.ToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"a"}`},
+			record.ToolCall{ID: "call_1", Name: "read", Arguments: `{"path":"b"}`}),
 		resultRow("call_1", "a (1 line)"),
 	}
 	got, _ := MessagesFromRecords(records)
@@ -356,9 +358,9 @@ func TestOneResultAnswersOneCall(t *testing.T) {
 // the call it belongs to, and the call itself stays valid JSON.
 func TestRestoredCallWithPrunedArgumentsIsLabelled(t *testing.T) {
 	note := "[strument] This call's arguments are no longer stored. They were 3031 bytes."
-	msgs, stats := MessagesFromRecords([]Record{
+	msgs, stats := MessagesFromRecords([]record.Record{
 		{Type: "message", Role: llm.RoleUser, Text: "write it"},
-		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []RecordToolCall{
+		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []record.ToolCall{
 			{ID: "c1", Name: "write", Arguments: "{}", Pruned: note},
 			{ID: "c2", Name: "read", Arguments: `{"path":"a"}`},
 		}},

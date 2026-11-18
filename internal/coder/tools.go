@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"mvdan.cc/sh/v3/syntax"
 
 	"dbohdan.com/strument/internal/config"
@@ -1311,7 +1313,7 @@ func (c *Coder) applyToolEdits(edits []plannedEdit, results toolResults, matchFa
 	// byte-exact replay of every edit. It records the match, not the write: a
 	// batch that later fails to write is reported in the tool results.
 	recordEdit := func(e plannedEdit, outcome, note string) {
-		c.record(Record{Type: "edit", ToolCallID: e.callID, Path: e.path, Outcome: outcome, Summary: note})
+		c.record(record.Record{Type: record.KindEdit, ToolCallID: e.callID, Path: e.path, Outcome: outcome, Summary: note})
 	}
 
 	for _, e := range edits {

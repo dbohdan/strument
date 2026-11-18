@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -47,9 +49,9 @@ func TestRecordWithCharacterStream(t *testing.T) {
 
 	c.runOne(context.Background(), "do the thing")
 
-	var answers []Record
+	var answers []record.Record
 	for _, r := range rec.recs {
-		if r.Type == "message" && r.Role == llm.RoleAssistant {
+		if r.Type == record.KindMessage && r.Role == llm.RoleAssistant {
 			answers = append(answers, r)
 		}
 	}

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -157,18 +159,18 @@ func (e recallEntry) inScope(from string) bool {
 // Earlier recall results are left out. They are copies of the record, so a
 // search would find its own previous answers, and each repetition would make a
 // fact look better attested than it is.
-func recallEntries(records []Record) ([]recallEntry, int) {
+func recallEntries(records []record.Record) ([]recallEntry, int) {
 	var out []recallEntry
 	turn, index := 1, 0
 	toolNames := map[string]string{}
 	for _, r := range records {
 		switch r.Type {
-		case "turn":
+		case record.KindTurn:
 			if index > 0 {
 				turn++
 				index = 0
 			}
-		case "message":
+		case record.KindMessage:
 			index++
 			for _, tc := range r.ToolCalls {
 				toolNames[tc.ID] = tc.Name

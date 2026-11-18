@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"dbohdan.com/strument/internal/record"
 )
 
 // touchLater rewrites a file with content that both differs in size and lands
@@ -352,9 +354,9 @@ func TestLooseEditIsExplainedAndRecorded(t *testing.T) {
 		t.Errorf("file = %q; want the loose edit at the file's own indentation", b)
 	}
 
-	outcomes := map[string]Record{}
+	outcomes := map[string]record.Record{}
 	for _, r := range rec.recs {
-		if r.Type == "edit" {
+		if r.Type == record.KindEdit {
 			outcomes[r.ToolCallID] = r
 		}
 	}

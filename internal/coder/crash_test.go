@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/fixture"
 )
 
@@ -29,7 +31,7 @@ var crashingTurn = fixture.Turn{Events: []fixture.Event{
 
 // crashRecord runs a turn that ends in a panic and returns the turn row it
 // left behind.
-func crashRecord(t *testing.T, c *Coder, turns ...fixture.Turn) Record {
+func crashRecord(t *testing.T, c *Coder, turns ...fixture.Turn) record.Record {
 	t.Helper()
 	rec := &capture{}
 	c.Recorder = rec
@@ -45,12 +47,12 @@ func crashRecord(t *testing.T, c *Coder, turns ...fixture.Turn) Record {
 	}()
 
 	for _, r := range rec.recs {
-		if r.Type == "turn" {
+		if r.Type == record.KindTurn {
 			return r
 		}
 	}
 	t.Fatal("a turn that crashed left no turn record")
-	return Record{}
+	return record.Record{}
 }
 
 // The crash contract: what the turn had produced reaches the record, marked as
@@ -58,8 +60,8 @@ func crashRecord(t *testing.T, c *Coder, turns ...fixture.Turn) Record {
 func TestACrashedTurnIsRecordedWithItsPartialAnswer(t *testing.T) {
 	r := crashRecord(t, testCoder(t))
 
-	if r.Outcome != OutcomeCrashed {
-		t.Errorf("outcome = %q, want %q", r.Outcome, OutcomeCrashed)
+	if r.Outcome != record.OutcomeCrashed {
+		t.Errorf("outcome = %q, want %q", r.Outcome, record.OutcomeCrashed)
 	}
 	if r.Answer != "halfway through the work" {
 		t.Errorf("answer = %q, want the streamed prefix", r.Answer)
@@ -80,7 +82,7 @@ func TestANormalTurnIsNotMarkedCrashed(t *testing.T) {
 	c.runOne(context.Background(), "do the thing")
 
 	for _, r := range rec.recs {
-		if r.Type == "turn" && r.Outcome == OutcomeCrashed {
+		if r.Type == record.KindTurn && r.Outcome == record.OutcomeCrashed {
 			t.Error("a turn that returned normally was recorded as a crash")
 		}
 	}

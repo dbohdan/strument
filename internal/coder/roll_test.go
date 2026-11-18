@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/prompts"
 )
@@ -166,9 +168,9 @@ func TestCompactionIsRecordedWithItsText(t *testing.T) {
 	if !c.rollHistory(1200) {
 		t.Fatal("nothing was folded")
 	}
-	var got []Record
+	var got []record.Record
 	for _, r := range rec.recs {
-		if r.Type == "compaction" {
+		if r.Type == record.KindCompaction {
 			got = append(got, r)
 		}
 	}

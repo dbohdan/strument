@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -33,10 +34,10 @@ import (
 // A record that is not a turn is skipped rather than examined: everything the
 // transcript shows is on the turn row. The message and reasoning rows are the
 // conversation, which is a different question and has its own readers.
-func TurnsFromRecords(records []coder.Record) []Turn {
+func TurnsFromRecords(records []record.Record) []Turn {
 	turns := make([]Turn, 0, len(records)/8)
 	for _, r := range records {
-		if r.Type != "turn" {
+		if r.Type != record.KindTurn {
 			continue
 		}
 		t := Turn{
@@ -49,7 +50,7 @@ func TurnsFromRecords(records []coder.Record) []Turn {
 			Assistant:      r.Answer,
 			Files:          r.Files,
 			Tools:          r.Tools,
-			Crashed:        r.Outcome == coder.OutcomeCrashed,
+			Crashed:        r.Outcome == record.OutcomeCrashed,
 		}
 		// A row written before the record carried a clock, or by a build that
 		// failed to format one, renders at the time it is read — which is what
@@ -69,7 +70,7 @@ func TurnsFromRecords(records []coder.Record) []Turn {
 // writer flushes per record, so the only malformed line a real segment holds
 // is a last one cut off when the process died — and a session that ended that
 // way is exactly the one whose history someone wants to read.
-func ReadRecords(path string) ([]coder.Record, error) {
+func ReadRecords(path string) ([]record.Record, error) {
 	out, _, err := readRecords(path)
 	return out, err
 }
@@ -81,7 +82,7 @@ func ReadRecords(path string) ([]coder.Record, error) {
 // only shows history can take a prefix; the strip sweep cannot, because it
 // infers "nothing refers to this payload" from what it did not see, and a
 // reference past an unreadable line is one it did not see.
-func readRecords(path string) (out []coder.Record, complete bool, err error) {
+func readRecords(path string) (out []record.Record, complete bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, false, err
@@ -102,7 +103,7 @@ func readRecords(path string) (out []coder.Record, complete bool, err error) {
 			// A row after the undecodable one: that was damage, not a tail.
 			return out, false, nil
 		}
-		var r coder.Record
+		var r record.Record
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
 			stopped = true
 			continue
@@ -132,7 +133,7 @@ const maxRecordLine = 16 << 20
 // The hash stays on the record either way. A payload that comes back later —
 // restored from a backup, or written again by a tool that read the same
 // unchanged file — is found by the same name.
-func Resolve(projectRoot string, r coder.Record) (coder.Record, bool) {
+func Resolve(projectRoot string, r record.Record) (record.Record, bool) {
 	whole := true
 	// found reports the payload, or false when the blob is gone; blob empty
 	// means the payload was inline all along and there is nothing to do.
@@ -244,7 +245,7 @@ func Runs(projectRoot, session string) ([]string, error) {
 			continue
 		}
 		for _, r := range records {
-			if r.Type != "session" {
+			if r.Type != record.KindSession {
 				out = append(out, seg)
 				break
 			}
@@ -284,9 +285,9 @@ func RunSummaries(projectRoot, session string) ([]RunSummary, error) {
 		s.Started, _ = time.Parse(logSegmentStamp, strings.TrimSuffix(filepath.Base(seg), ".jsonl"))
 		for _, r := range records {
 			switch {
-			case r.Type == "session" && s.Model == "":
+			case r.Type == record.KindSession && s.Model == "":
 				s.Model = r.Model
-			case r.Type == "turn":
+			case r.Type == record.KindTurn:
 				s.Turns++
 				s.Model = r.Model
 				s.Cost += r.Cost
@@ -294,7 +295,7 @@ func RunSummaries(projectRoot, session string) ([]RunSummary, error) {
 				if s.Prompt == "" {
 					s.Prompt = r.Prompt
 				}
-			case r.Type == "message" && r.Role == "user" && s.Prompt == "" && s.Turns == 0 &&
+			case r.Type == record.KindMessage && r.Role == "user" && s.Prompt == "" && s.Turns == 0 &&
 				!strings.HasPrefix(r.Text, llm.HarnessMarker) && r.ToolCallID == "":
 				// A run killed mid-turn has no turn row, but its prompt is
 				// still the first message.
@@ -318,12 +319,12 @@ func RunSummaries(projectRoot, session string) ([]RunSummary, error) {
 // Segments are concatenated for the same reason ReadTurns concatenates them:
 // LogSegments sorts by the timestamp in the name, one process wrote each, and
 // the project lock keeps two from overlapping.
-func ReadSessionRecords(projectRoot, session string) ([]coder.Record, int, error) {
+func ReadSessionRecords(projectRoot, session string) ([]record.Record, int, error) {
 	segments, err := LogSegments(projectRoot, session)
 	if err != nil {
 		return nil, 0, err
 	}
-	var out []coder.Record
+	var out []record.Record
 	missing := 0
 	for _, seg := range segments {
 		records, err := ReadRecords(seg)

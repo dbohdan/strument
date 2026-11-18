@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -82,14 +84,14 @@ func TestCalibratedBudgetFolds(t *testing.T) {
 // made, recorded with both counts.
 func TestRestoreSeedsTheTokenScale(t *testing.T) {
 	c := testCoder(t)
-	var recs []Record
+	var recs []record.Record
 	for range 6 {
 		recs = append(recs, msg(llm.RoleUser, strings.Repeat("x", 1600)), msg(llm.RoleAssistant, strings.Repeat("y", 1600)))
-		recs = append(recs, Record{Type: "turn"})
+		recs = append(recs, record.Record{Type: record.KindTurn})
 	}
 	recs = append(recs,
-		Record{Type: "request", Call: "turn", Model: "elsewhere/other", Sent: 300, Estimated: 100},
-		Record{Type: "request", Call: "turn", Model: c.Model.QualifiedSlug(), Sent: 140, Estimated: 100})
+		record.Record{Type: record.KindRequest, Call: "turn", Model: "elsewhere/other", Sent: 300, Estimated: 100},
+		record.Record{Type: record.KindRequest, Call: "turn", Model: c.Model.QualifiedSlug(), Sent: 140, Estimated: 100})
 	msgs, stats := MessagesFromRecords(recs)
 	est := c.historyTokens(msgs)
 	c.Model.Context = 2*est + 2000 // fits by the estimate, not by the provider's count

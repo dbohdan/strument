@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"dbohdan.com/strument/internal/record"
 )
 
 // TestParseSystemOne covers the shapes real endpoints return. The answers are
@@ -209,9 +211,9 @@ func TestApproveModelStandsInForThePromptOnly(t *testing.T) {
 			if tc.wantPrompt && len(rc.got) > 0 && rc.got[0].Note != tc.note {
 				t.Errorf("prompt note = %q, want %q", rc.got[0].Note, tc.note)
 			}
-			var dec []Record
+			var dec []record.Record
 			for _, r := range rec.recs {
-				if r.Type == "decision" {
+				if r.Type == record.KindDecision {
 					dec = append(dec, r)
 				}
 			}

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -74,7 +76,7 @@ func userTurns(c *Coder) int {
 
 func hasTurnRecord(rec *capture) bool {
 	for _, r := range rec.recs {
-		if r.Type == "turn" {
+		if r.Type == record.KindTurn {
 			return true
 		}
 	}

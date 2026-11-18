@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/llm"
 )
 
@@ -111,11 +113,11 @@ func bigFileCoder(t *testing.T) (*Coder, *capture) {
 }
 
 // toolResultRecord returns the last tool-result row in a capture.
-func toolResultRecord(t *testing.T, rec *capture) Record {
+func toolResultRecord(t *testing.T, rec *capture) record.Record {
 	t.Helper()
-	var out Record
+	var out record.Record
 	for _, r := range rec.recs {
-		if r.Type == "message" && r.ToolCallID != "" {
+		if r.Type == record.KindMessage && r.ToolCallID != "" {
 			out = r
 		}
 	}
@@ -175,7 +177,7 @@ func TestWithoutAStoreEveryPayloadStaysInline(t *testing.T) {
 		if r.Blob != "" {
 			t.Errorf("a payload was offloaded with no store wired: %+v", r)
 		}
-		if r.Type == "message" && r.ToolCallID != "" && r.Text == "" {
+		if r.Type == record.KindMessage && r.ToolCallID != "" && r.Text == "" {
 			t.Error("a tool result was recorded with neither text nor a blob")
 		}
 	}
@@ -211,7 +213,7 @@ func TestTheConversationStaysInline(t *testing.T) {
 
 	var roles []string
 	for _, r := range rec.recs {
-		if r.Type != "message" {
+		if r.Type != record.KindMessage {
 			continue
 		}
 		roles = append(roles, r.Role)

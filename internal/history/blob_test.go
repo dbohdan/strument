@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"dbohdan.com/strument/internal/coder"
+	"dbohdan.com/strument/internal/record"
 )
 
 func TestPutBlobIsContentAddressed(t *testing.T) {
@@ -165,10 +165,10 @@ func TestResolvePutsPayloadsBackAndDegradesWhenTheyAreGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec := coder.Record{
-		Type: "message", Role: "tool", ToolCallID: "call_1",
+	rec := record.Record{
+		Type: record.KindMessage, Role: "tool", ToolCallID: "call_1",
 		Blob: resultHash, Bytes: len(result), Summary: "a line of output",
-		ToolCalls: []coder.RecordToolCall{{
+		ToolCalls: []record.ToolCall{{
 			ID: "call_1", Name: "read",
 			Blob: argsHash, Bytes: len(args), Summary: `{"path":"big.txt"}`,
 		}},
@@ -215,7 +215,7 @@ func TestResolveLeavesAnInlineRecordAlone(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	project := t.TempDir()
 
-	rec := coder.Record{Type: "message", Role: "tool", ToolCallID: "c", Text: "small enough"}
+	rec := record.Record{Type: record.KindMessage, Role: "tool", ToolCallID: "c", Text: "small enough"}
 	got, whole := Resolve(project, rec)
 	if !whole {
 		t.Error("a record with nothing to resolve was reported incomplete")
@@ -241,7 +241,7 @@ func TestResolveMarksPrunedArgumentsAndKeepsThemJSON(t *testing.T) {
 	if err := DeleteBlob(project, hash); err != nil {
 		t.Fatal(err)
 	}
-	rec := coder.Record{Type: "message", Role: "assistant", ToolCalls: []coder.RecordToolCall{{
+	rec := record.Record{Type: record.KindMessage, Role: "assistant", ToolCalls: []record.ToolCall{{
 		ID: "call_1", Name: "write", Blob: hash, Bytes: len(args), Summary: `{"path":"big.txt",…`,
 	}}}
 
@@ -265,7 +265,7 @@ func TestResolveMarksPrunedArgumentsAndKeepsThemJSON(t *testing.T) {
 	// An assistant message's own text is a message, not a result.
 	textHash, _ := PutBlob(project, []byte("a long answer"))
 	_ = DeleteBlob(project, textHash)
-	got, _ = Resolve(project, coder.Record{Type: "message", Role: "assistant", Blob: textHash, Bytes: 13})
+	got, _ = Resolve(project, record.Record{Type: record.KindMessage, Role: "assistant", Blob: textHash, Bytes: 13})
 	if !strings.HasPrefix(got.Text, "[strument] This message is no longer stored.") {
 		t.Errorf("Text = %q, want it called a message", got.Text)
 	}

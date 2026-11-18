@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/coder"
 )
 
@@ -15,16 +17,16 @@ import (
 // the test reads the slice after Run returns; -race objects otherwise.
 type records struct {
 	mu   sync.Mutex
-	recs []coder.Record
+	recs []record.Record
 }
 
-func (r *records) Record(rec coder.Record) {
+func (r *records) Record(rec record.Record) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.recs = append(r.recs, rec)
 }
 
-func (r *records) turn() (coder.Record, bool) {
+func (r *records) turn() (record.Record, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, rec := range r.recs {
@@ -32,7 +34,7 @@ func (r *records) turn() (coder.Record, bool) {
 			return rec, true
 		}
 	}
-	return coder.Record{}, false
+	return record.Record{}, false
 }
 
 // A turn run from the REPL reaches the session record.

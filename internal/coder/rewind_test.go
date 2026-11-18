@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"dbohdan.com/strument/internal/record"
+
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
 )
@@ -69,9 +71,9 @@ func TestRewindAgreesWithRestore(t *testing.T) {
 // calls and results stay together, and a rewound turn's model is no longer
 // attributed.
 func TestRewindKeepsToolCallsPaired(t *testing.T) {
-	records := []Record{
+	records := []record.Record{
 		{Type: "message", Role: llm.RoleUser, Text: "look"},
-		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []RecordToolCall{{ID: "x", Name: "read", Arguments: `{"path":"a"}`}}},
+		{Type: "message", Role: llm.RoleAssistant, ToolCalls: []record.ToolCall{{ID: "x", Name: "read", Arguments: `{"path":"a"}`}}},
 		{Type: "message", Role: llm.RoleTool, ToolCallID: "x", Text: "contents"},
 		{Type: "message", Role: llm.RoleAssistant, Text: "seen"},
 		{Type: "turn", Model: "mimo", Files: nil},
