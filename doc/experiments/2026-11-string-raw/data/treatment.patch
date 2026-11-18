@@ -1,0 +1,30 @@
+diff --git a/internal/coder/codetool.go b/internal/coder/codetool.go
+index 1ff47d2..a597197 100644
+--- a/internal/coder/codetool.go
++++ b/internal/coder/codetool.go
+@@ -131,7 +131,11 @@ func codeTool(callable []string, shell bool, data []codeFuncDef) llm.ToolDef {
+ 		"fetch, timers and network access do not exist, so use glob({pattern: \"**/*.py\"}) " +
+ 		"to walk the tree and read() to open a file; " + codeCommandsClause(shell) +
+ 		" A missing name raises an error naming it — simplify and rerun; a failed " +
+-		"program costs one cheap retry.")
++		"program costs one cheap retry.\n\n" +
++		"In a string or template literal a backslash starts an escape, so source text " +
++		"passed to edit or write changes on the way in: \"\\n\" in a C string becomes a " +
++		"newline and \"\\033\" is refused. Put source text in String.raw`...` to pass it " +
++		"as written.")
+ 
+ 	// The bridged names come from the caller, which builds one list for the
+ 	// description, the registration, and the bridge's allow check — so the
+diff --git a/internal/coder/testdata/model-facing.golden b/internal/coder/testdata/model-facing.golden
+index 2a53a70..0a153c0 100644
+--- a/internal/coder/testdata/model-facing.golden
++++ b/internal/coder/testdata/model-facing.golden
+@@ -431,6 +431,8 @@ Only the program's last evaluated value comes back to you, so end it with what y
+ 
+ The interpreter is goja, a JavaScript engine embedded in the harness. Standard JavaScript works: let and const, arrow functions, classes, template literals, destructuring, spread, try/catch, Map and Set, and JSON, Math, RegExp and Date. This is not Node or a browser: require, import, fs, path, process, child_process, fetch, timers and network access do not exist, so use glob({pattern: "**/*.py"}) to walk the tree and read() to open a file; the interpreter cannot import or run the project's own code, and bash() or the bash tool can: its tests, a probe script, git. A missing name raises an error naming it — simplify and rerun; a failed program costs one cheap retry.
+ 
++In a string or template literal a backslash starts an escape, so source text passed to edit or write changes on the way in: "\n" in a C string becomes a newline and "\033" is refused. Put source text in String.raw`...` to pass it as written.
++
+ The callable functions are exactly: read, grep, glob, ls, about, recall, symbol, webfetch, websearch, skill, edit, write, bash, check, commit.
+ 
+ Inside a program, glob, grep, ls, recall and bash return data rather than the tools' prose, and read, about, symbol, webfetch, websearch, skill, edit, write, check and commit return the same text they return to you, as strings:
