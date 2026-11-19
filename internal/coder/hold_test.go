@@ -135,7 +135,7 @@ func TestHoldDeliversAQueuedMessageAtTheBoundary(t *testing.T) {
 	if prev := msgs[len(msgs)-2]; prev.Role != llm.RoleTool {
 		t.Errorf("the queued message should follow the tool results, got %s before it", prev.Role)
 	}
-	if !strings.Contains(strings.Join(out.lines, "\n"), "‹queued› also add a test") {
+	if !strings.Contains(strings.Join(out.lines, "\n"), "‹delivered› also add a test") {
 		t.Errorf("the delivery was not shown:\n%s", strings.Join(out.lines, "\n"))
 	}
 	if q := c.TakeQueued(); q != "" {

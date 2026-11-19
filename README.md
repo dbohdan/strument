@@ -182,7 +182,7 @@ Enter to resume, s to stop this turn, or type a message to send before the next 
  > Use the existing token helper instead
 Queued for the model's next step.
 ...
-‹queued› Use the existing token helper instead
+‹delivered› Use the existing token helper instead
 ```
 
 Edits made before you stop remain undoable with `/undo`.
