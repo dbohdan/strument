@@ -124,6 +124,18 @@ identifier", which does not name the cause. Tool functions are synchronous, so
 either an error hint naming `await`, or accepting it, would turn a retry into
 a working first program.
 
+## Follow-up: `await` accepted
+
+`adb92bb` compiles a program that fails to compile and says `await` as the body
+of an async function, with its last expression statement as its return. A live
+check with MiMo on the three block tasks, 18 sessions at `adb92bb`: 18 of 18
+files correct; 1 of 18 programs used `await`, and it ran first time. That
+confirms the path works on a real program, not that it changes a rate: MiMo
+wrote `await` far less often here than in the pilots (1 of 18 programs against
+5 of 35). Records:
+[`dbohdan/experimental-data` at `2f55612`](https://github.com/dbohdan/experimental-data/tree/2f55612/strument/2026-11-string-raw),
+`await-check.tar.xz`.
+
 ## Files
 
 - `data/tasks.py`: fixtures, prompts, outcome, and the fixtures' own checks.
