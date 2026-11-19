@@ -1,0 +1,39 @@
+== 2026-11-featherweight_runs
+sessions 320, reads 1962
+  reread_clean: 1 (0.1% of reads)
+  reread_bash: 3 (0.2% of reads)
+  reread_edited: 18 (0.9% of reads)
+  clean re-read bytes: 701 of 1810951 tool-result bytes (0.0%)
+by model:
+  deepseek: sessions 160, reads 737, clean 1, after bash 1, after edit 5
+  mimo: sessions 160, reads 1225, clean 0, after bash 2, after edit 13
+{'programs': 193, 'program_reads': 54, 'contained_clean': 1}
+== 2026-11-pared-down_follow-up-runs
+sessions 80, reads 193
+  reread_clean: 0 (0.0% of reads)
+  reread_bash: 6 (3.1% of reads)
+  reread_edited: 2 (1.0% of reads)
+  clean re-read bytes: 0 of 73297 tool-result bytes (0.0%)
+by model:
+  deepseek: sessions 40, reads 116, clean 0, after bash 6, after edit 0
+  mimo: sessions 40, reads 77, clean 0, after bash 0, after edit 2
+{'programs': 22, 'program_reads': 31, 'program_reread_clean': 1}
+== 2026-11-pared-down_runs
+sessions 560, reads 2904
+  reread_clean: 0 (0.0% of reads)
+  reread_bash: 8 (0.3% of reads)
+  reread_edited: 32 (1.1% of reads)
+  clean re-read bytes: 0 of 2578590 tool-result bytes (0.0%)
+by model:
+  deepseek: sessions 280, reads 1238, clean 0, after bash 5, after edit 18
+  mimo: sessions 280, reads 1666, clean 0, after bash 3, after edit 14
+{'programs': 274, 'program_reads': 113}
+== 2026-11-consult_trial-runs
+sessions 91, reads 892
+  reread_clean: 0 (0.0% of reads)
+  reread_bash: 0 (0.0% of reads)
+  reread_edited: 16 (1.8% of reads)
+  clean re-read bytes: 0 of 15830476 tool-result bytes (0.0%)
+by model:
+  ?: sessions 91, reads 892, clean 0, after bash 0, after edit 16
+{'programs': 306, 'program_reads': 62, 'overlapping_clean': 16, 'program_reread_clean': 10}
