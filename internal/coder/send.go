@@ -1056,19 +1056,27 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 }
 
 // messageUsageReport builds the accounting line from the message-scoped totals
-// — the token breakdown, the cost, and the estimated marker — for a whole turn.
-func (c *Coder) messageUsageReport(label, prefix string) string {
+// — the token breakdown, the cost or allowance, and the estimated marker — for
+// a whole turn.
+func (c *Coder) messageUsageReport(label, prefix, allowance string) string {
 	return usageReport(label, prefix, c.usage.sent, c.usage.cacheWrite,
 		c.usage.cacheRead, c.usage.received, c.usage.modelTime, c.usage.cost,
-		c.usage.costKnown, c.totalCost, c.usage.estimated)
+		c.usage.costKnown, c.totalCost, c.usage.estimated, allowance)
 }
 
+// usageReport is the accounting line. An allowance line, when given, stands
+// in for a cost of zero, which is what a subscription reports and which says
+// nothing; beside a real cost it follows it.
 func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int,
 	modelTime time.Duration, cost float64, costKnown bool, totalCost float64, estimated bool,
+	allowance string,
 ) string {
 	report := prefix + formatTokenLine(sent, cacheWrite, cacheRead, received, modelTime)
-	if costKnown {
+	if costKnown && (allowance == "" || cost != 0) {
 		report += fmt.Sprintf(" Cost: $%s %s, $%s run.", formatCost(cost), label, formatCost(totalCost))
+	}
+	if allowance != "" {
+		report += " " + allowance
 	}
 	if estimated {
 		report += " (estimated)"
@@ -1169,7 +1177,7 @@ func (c *Coder) flushTurnUsage() {
 	}
 	c.usage.sends = 0 // idempotent: never report the same turn twice
 
-	report := c.messageUsageReport("turn", "") + c.turnSummary()
+	report := c.messageUsageReport("turn", "", c.allowanceLine()) + c.turnSummary()
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)

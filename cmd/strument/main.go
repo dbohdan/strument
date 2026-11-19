@@ -168,6 +168,12 @@ func (c *chatCmd) Run() error {
 	cdr.DryRun = c.DryRun
 	cdr.Client = client.ForProvider(model.Provider)
 	cdr.ConsultClient = func(m *config.Model) llm.ModelClient { return client.ForProvider(m.Provider) }
+	cdr.Allowance = func(m *config.Model) coder.AllowanceReader {
+		if read := client.GoAllowance(m.Provider); read != nil {
+			return read
+		}
+		return nil
+	}
 	// Every config-to-coder assignment lives in ApplyConfig, which /reload also
 	// calls. Adding one here instead is the bug that made three reloads look
 	// like they had worked; internal/repl's reload test guards against it.

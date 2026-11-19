@@ -109,6 +109,11 @@ type Coder struct {
 	// Client, which is right when both models share a provider and is what a
 	// test's stub relies on.
 	ConsultClient func(*config.Model) llm.ModelClient
+	// Allowance gives the reader of a model's subscription allowance, which
+	// the turn's usage line shows where a per-request cost means nothing:
+	// opencode Go reports a cost of zero on every response. Nil, or a nil
+	// reader, shows the cost alone.
+	Allowance func(*config.Model) AllowanceReader
 	// Approve is nil unless approve_model is configured (approve.go).
 	Approve *ApproveModel
 	// approvalNote is approve_model's line for the command about to run,
@@ -120,6 +125,10 @@ type Coder struct {
 	// them, for sendMessage to frame.
 	hold          turnHold
 	framingQueued bool
+
+	// allow is the allowance readings the usage line measures turns by
+	// (allowance.go).
+	allow allowanceState
 
 	// turns are the settled history's turns, oldest first, for /rewind
 	// (rewind.go). compactedTurns says a compaction absorbed earlier ones, so
@@ -650,6 +659,7 @@ func declined(res ConfirmResult, what, grant string) string {
 // returned never reached it. Recording from inside the defer has no such gap.
 func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
 	c.resetHold()
+	c.startAllowance()
 	c.runOne(ctx, withMessage)
 	return c.turnAnswer()
 }

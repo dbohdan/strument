@@ -109,6 +109,6 @@ func (c *Coder) closeSide(frame sideFrame, before messageUsage) {
 	}
 	d := c.usage.minus(before)
 	report := strings.TrimPrefix(usageReport(frame.tag, "", d.sent, d.cacheWrite, d.cacheRead, d.received,
-		d.modelTime, d.cost, d.costKnown, c.totalCost, d.estimated), "Tokens: ")
+		d.modelTime, d.cost, d.costKnown, c.totalCost, d.estimated, ""), "Tokens: ")
 	c.Out.Toolf("\u2039/%s\u203a %s: %s", frame.tag, who, report)
 }

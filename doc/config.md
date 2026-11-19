@@ -1595,6 +1595,24 @@ Requests to this adapter carry an `x-opencode-session` header: one random id per
 Strument process, which opencode uses to group a session and keep its prompt
 cache warm. Set `cache = True` on the model as well.
 
+**The usage line shows the allowance, not a cost.** Go reports a cost of `0` on
+every response, whatever the model, because the subscription is not billed per
+request. What it limits is spending in three windows, five hours, a week and a
+month, which it serves as percentages at `<base_url>/usage`. Strument reads
+that at the end of each turn and shows it where the cost would be:
+
+```none
+Tokens: 58.0k sent (6.9k cache write, 50.2k cache hit), 7.4k received, 114 t/s. Go: 5h 23.4% used (+0.8%), resets in 3h 12m. 6 steps, 1 file changed.
+```
+
+The figure in parentheses is the turn's share: the change since the reading
+before it, the first time from one taken as the turn began. It is left out when
+usage aged out of the rolling window during the turn. The week and the month
+are added once either is 75% used or exhausted. The reading waits at most three
+seconds; past that, or on any other failure, the line goes without it. An
+opencode endpoint that has no allowance, such as Zen's pay-per-token one, keeps
+the cost it reports, and is not asked again in the session.
+
 #### The Anthropic dialect
 
 `provider("anthropic", …)` speaks Anthropic's Messages API. It reaches
