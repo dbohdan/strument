@@ -308,6 +308,9 @@ type Usage struct {
 	CacheWriteTokens int      `json:"cache_write_tokens,omitempty"`
 	CacheReadTokens  int      `json:"cache_read_tokens,omitempty"`
 	Cost             *float64 `json:"cost,omitempty"` // in-band cost (OpenRouter); nil => unknown
+	// Opencode is opencode's own account of the request, which it sends
+	// beside a cost of 0 on its subscription; nil from any other endpoint.
+	Opencode *OpencodeBilling `json:"opencode,omitempty"`
 	// ReasoningTokens is the part of CompletionTokens the provider reports as
 	// reasoning, 0 where it does not say. Anthropic's dialect never does: its
 	// output_tokens include thinking with no split.
@@ -399,4 +402,15 @@ func (e *StreamError) Retryable() bool {
 	default:
 		return false
 	}
+}
+
+// OpencodeBilling is usage.opencode, the same in all three of opencode's
+// dialects. Allowance is what the request took from a subscription's
+// allowance, in dollars, and ListCost its list price; Go charges each model at
+// its own multiple of the list price (measured: GLM-5.3 at 0.12, MiniMax M3.1
+// Flash at 3, MiMo at 1, a free model at 0), so the two differ.
+type OpencodeBilling struct {
+	Source    string  `json:"billing_source"` // "go" on the subscription
+	ListCost  float64 `json:"list_cost"`
+	Allowance float64 `json:"allowance"`
 }

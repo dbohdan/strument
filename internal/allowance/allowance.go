@@ -1,12 +1,11 @@
-// Package allowance reads opencode Go's subscription allowance and words it
-// for the turn's usage line.
+// Package allowance reads opencode Go's subscription meter and words it for
+// the turn's usage line.
 //
-// Go reports "cost":"0" on every response, at any model's price — Kimi K3.1
-// Pro's 58k-token turn included — because the subscription is not billed per
-// request. What it does meter is three dollar-denominated windows (5 hours, a
-// week, a month), served as percentages at <base_url>/usage, which a plain API
-// key may read. Shown where the cost would be, that is the number a Go user
-// spends: how much of the plan a turn took, and when it comes back.
+// Go limits spending in three dollar-denominated windows (5 hours, a week, a
+// month) and serves them as whole percentages at <base_url>/usage, which a
+// plain API key may read. What a request spent comes with the request
+// (llm.OpencodeBilling); this is the other half, how much of each window is
+// left and when it comes back.
 package allowance
 
 import (
@@ -133,22 +132,18 @@ func epoch(n float64) time.Time {
 // five-hour window binds first and is the only one worth a reader's glance.
 const longWindowShown = 75
 
-// Line words cur for the usage line, with the change since prev when there is
-// one: "Go: 5h 23% used (+0.8%), resets in 3h 12m." The week and the month
-// follow when they are nearly spent or exhausted.
-func Line(prev *Reading, cur Reading, now time.Time) string {
+// Line words a reading for the usage line: "5h 23% used, resets in 3h 12m",
+// with the week and the month after it when they are nearly spent or
+// exhausted. What a turn took is not read from here: the meter moves in whole
+// percents, which a turn rarely fills, and each response says what it cost the
+// allowance to the cent.
+func Line(cur Reading, now time.Time) string {
 	var b strings.Builder
-	b.WriteString("Go: 5h ")
 	r := cur.Rolling
 	if r.Limited {
-		b.WriteString("limit reached")
+		b.WriteString("5h limit reached")
 	} else {
-		b.WriteString(percent(r.Percent) + " used")
-		if prev != nil && prev.Rolling.Known {
-			if d := r.Percent - prev.Rolling.Percent; d >= 0 {
-				b.WriteString(" (" + delta(d, whole(r.Percent) && whole(prev.Rolling.Percent)) + ")")
-			}
-		}
+		b.WriteString("5h " + percent(r.Percent) + " used")
 	}
 	if in := until(r.ResetsAt, now); in != "" {
 		b.WriteString(", resets in " + in)
@@ -168,7 +163,6 @@ func Line(prev *Reading, cur Reading, now time.Time) string {
 			b.WriteString("; " + w.name + " " + percent(w.w.Percent) + " used")
 		}
 	}
-	b.WriteString(".")
 	return b.String()
 }
 
@@ -176,24 +170,6 @@ func Line(prev *Reading, cur Reading, now time.Time) string {
 func percent(p float64) string {
 	return strings.TrimSuffix(strconv.FormatFloat(math.Round(p*10)/10, 'f', 1, 64), ".0") + "%"
 }
-
-// delta is a turn's share of the window. A share too small to show is said to
-// be under the smallest step the meter has, never none: Go's meter moves in
-// whole percents, so +0% was what a turn on a free model and a turn using 0.6%
-// of the window both read, and only one of them was free. "Under 1%" is true of
-// both.
-func delta(d float64, wholeSteps bool) string {
-	switch {
-	case wholeSteps && d < 0.5:
-		return "+<1%"
-	case d < 0.05:
-		return "+<0.1%"
-	}
-	return "+" + percent(d)
-}
-
-// whole reports whether a reading is a whole percent.
-func whole(p float64) bool { return p == math.Trunc(p) }
 
 // until is the time left to t as the largest two units, or "" when t is
 // unknown or past.

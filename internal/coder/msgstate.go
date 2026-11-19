@@ -23,7 +23,8 @@ type streamState struct {
 // side call's.
 type messageUsage struct {
 	cost      float64
-	costKnown bool // in-band or priced cost seen in this message
+	costKnown bool    // in-band or priced cost seen in this message
+	goSpend   goSpend // what opencode Go charged the subscription
 	sent      int
 	received  int
 	cacheRead int
@@ -44,7 +45,7 @@ type messageUsage struct {
 // runs on top of a message's totals instead of from zero.
 func (u messageUsage) minus(before messageUsage) messageUsage {
 	return messageUsage{
-		cost: u.cost - before.cost, costKnown: u.costKnown,
+		cost: u.cost - before.cost, costKnown: u.costKnown, goSpend: u.goSpend.minus(before.goSpend),
 		sent: u.sent - before.sent, received: u.received - before.received,
 		cacheRead: u.cacheRead - before.cacheRead, cacheWrite: u.cacheWrite - before.cacheWrite,
 		estimated: u.estimated, sends: u.sends - before.sends,

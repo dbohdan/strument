@@ -109,6 +109,14 @@ func (c *Coder) closeSide(frame sideFrame, before messageUsage) {
 	}
 	d := c.usage.minus(before)
 	report := strings.TrimPrefix(usageReport(frame.tag, "", d.sent, d.cacheWrite, d.cacheRead, d.received,
-		d.modelTime, d.cost, d.costKnown, c.totalCost, d.estimated, ""), "Tokens: ")
+		d.modelTime, d.cost, d.costKnown, c.totalCost, d.estimated, sideGo(d.goSpend.text(frame.tag, c.totalGoSpend))), "Tokens: ")
 	c.Out.Toolf("\u2039/%s\u203a %s: %s", frame.tag, who, report)
+}
+
+// sideGo ends a side call's Go spend as a sentence, or leaves it empty.
+func sideGo(text string) string {
+	if text == "" {
+		return ""
+	}
+	return text + "."
 }

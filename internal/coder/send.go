@@ -103,6 +103,7 @@ type sendUsage struct {
 	prompt, completion, cacheWrite, cacheRead int
 	cost                                      float64
 	costKnown                                 bool
+	goSpend                                   goSpend
 	finalized                                 bool
 	// estSent is the pre-send token estimate, the fallback when the turn is
 	// aborted before the provider's usage arrives.
@@ -130,6 +131,7 @@ func (u *sendUsage) add(usage *llm.Usage) {
 		u.cost += *usage.Cost
 		u.costKnown = true
 	}
+	u.goSpend.add(usage.Opencode)
 }
 
 // streamResult classifies how one streamOnce call ended.
@@ -1041,6 +1043,10 @@ func (c *Coder) finalizeUsage(u *sendUsage) {
 		known = true
 	}
 
+	if u.goSpend.known {
+		c.usage.goSpend.plus(u.goSpend)
+		c.totalGoSpend.plus(u.goSpend)
+	}
 	if known {
 		c.usage.cost += cost
 		c.totalCost += cost
@@ -1064,9 +1070,9 @@ func (c *Coder) messageUsageReport(label, prefix, allowance string) string {
 		c.usage.costKnown, c.totalCost, c.usage.estimated, allowance)
 }
 
-// usageReport is the accounting line. An allowance line, when given, stands
-// in for a cost of zero, which is what a subscription reports and which says
-// nothing; beside a real cost it follows it.
+// usageReport is the accounting line. A subscription's line, when given,
+// stands in for a cost of zero, which is what the subscription reports and
+// which says nothing; beside a real cost it follows it.
 func usageReport(label, prefix string, sent, cacheWrite, cacheRead, received int,
 	modelTime time.Duration, cost float64, costKnown bool, totalCost float64, estimated bool,
 	allowance string,
@@ -1177,7 +1183,8 @@ func (c *Coder) flushTurnUsage() {
 	}
 	c.usage.sends = 0 // idempotent: never report the same turn twice
 
-	report := c.messageUsageReport("turn", "", c.allowanceLine()) + c.turnSummary()
+	meter, haveMeter := c.readAllowance()
+	report := c.messageUsageReport("turn", "", c.goLine(meter, haveMeter)) + c.turnSummary()
 
 	c.Out.Printf("")
 	c.Out.Printf("%s", report)
@@ -1197,13 +1204,17 @@ func (c *Coder) flushTurnUsage() {
 		// The slug on its own, which is what decides whether a later model is
 		// the same one: the qualified form carries the provider's configured
 		// name, and renaming a provider is not changing models.
-		Slug:      c.Model.Slug,
-		Outcome:   c.turnOutcome(),
-		Steps:     c.turnSteps,
-		Sent:      c.usage.sent,
-		Received:  c.usage.received,
-		Cost:      c.usage.cost,
-		CostKnown: c.usage.costKnown,
+		Slug:        c.Model.Slug,
+		Outcome:     c.turnOutcome(),
+		Steps:       c.turnSteps,
+		Sent:        c.usage.sent,
+		Received:    c.usage.received,
+		Cost:        c.usage.cost,
+		CostKnown:   c.usage.costKnown,
+		GoAllowance: c.usage.goSpend.allowance,
+		GoListCost:  c.usage.goSpend.list,
+		GoKnown:     c.usage.goSpend.known,
+		GoMeter:     goMeterRecord(meter, haveMeter),
 		// From the same two numbers the usage line above divides, so the row
 		// and the screen cannot disagree.
 		TokensPerSecond: tokenRateValue(c.usage.received, c.usage.modelTime),

@@ -104,6 +104,15 @@ type Record struct {
 	Received  int     `json:"received,omitempty"`
 	Cost      float64 `json:"cost,omitempty"`
 	CostKnown bool    `json:"cost_known,omitempty"`
+	// GoAllowance is what opencode Go charged the turn against its
+	// subscription, in dollars, and GoListCost the same requests at list
+	// price; GoKnown says the turn was charged to Go at all, so that a free
+	// model's zero is not read as an absence. Cost is 0 on these turns.
+	GoAllowance float64 `json:"go_allowance,omitempty"`
+	GoListCost  float64 `json:"go_list_cost,omitempty"`
+	GoKnown     bool    `json:"go_known,omitempty"`
+	// GoMeter is the subscription's meter as the turn ended, when it was read.
+	GoMeter *GoMeter `json:"go_meter,omitempty"`
 	// TokensPerSecond is the turn's throughput, the same measurement the
 	// closing usage line renders as "161 t/s". Absent when there is none —
 	// nothing received, or too little elapsed time to divide by — which is why
@@ -301,3 +310,18 @@ const (
 // not a coder.SendOutcome: no send produced it, and by the time it is known
 // the sends are over.
 const OutcomeCrashed = "Crashed"
+
+// GoMeter is opencode Go's three spending windows, as read from its usage
+// endpoint: whole percentages of each window's limit.
+type GoMeter struct {
+	Rolling GoWindow `json:"rolling"`
+	Weekly  GoWindow `json:"weekly"`
+	Monthly GoWindow `json:"monthly"`
+}
+
+// GoWindow is one window of a GoMeter.
+type GoWindow struct {
+	Percent  float64 `json:"percent"`
+	Limited  bool    `json:"limited,omitempty"`
+	ResetsAt string  `json:"resets_at,omitempty"`
+}

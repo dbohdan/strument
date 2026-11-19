@@ -322,6 +322,7 @@ type Coder struct {
 	// line labels it "run" for that reason, since a session continued across
 	// processes starts it from zero each time.
 	totalCost           float64
+	totalGoSpend        goSpend // the run's, like totalCost
 	runKnown            bool
 	totalTokensSent     int
 	totalTokensReceived int
@@ -659,7 +660,6 @@ func declined(res ConfirmResult, what, grant string) string {
 // returned never reached it. Recording from inside the defer has no such gap.
 func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
 	c.resetHold()
-	c.startAllowance()
 	c.runOne(ctx, withMessage)
 	return c.turnAnswer()
 }

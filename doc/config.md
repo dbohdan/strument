@@ -1595,25 +1595,32 @@ Requests to this adapter carry an `x-opencode-session` header: one random id per
 Strument process, which opencode uses to group a session and keep its prompt
 cache warm. Set `cache = True` on the model as well.
 
-**The usage line shows the allowance, not a cost.** Go reports a cost of `0` on
-every response, whatever the model, because the subscription is not billed per
-request. What it limits is spending in three windows, five hours, a week and a
-month, which it serves as percentages at `<base_url>/usage`. Strument reads
-that at the end of each turn and shows it where the cost would be:
+**The usage line shows what Go charged, not a cost.** Go reports a cost of `0`
+on every response, whatever the model, because the subscription is not billed
+per request. Beside it, in all three dialects, it sends its own account of the
+request (`usage.opencode`): the dollars taken from your allowance and the
+request's list price. Strument shows the first where the cost would be, with
+the subscription's meter after it:
 
 ```none
-Tokens: 72.6k sent (9.5k cache write, 62.7k cache hit), 1.9k received, 62 t/s. Go: 5h 9% used (+2%), resets in 2h 37m. 6 steps.
+Tokens: 72.6k sent (9.5k cache write, 62.7k cache hit), 1.9k received, 62 t/s. Go: $0.24 turn, $1.87 run; 5h 9% used, resets in 2h 37m. 6 steps.
 ```
 
-The figure in parentheses is the turn's share: the change since the reading
-before it, the first time from one taken as the turn began. Go's meter moves in
-whole percents, so a turn that used less than one shows `+<1%`, which is also
-what a free model's turn shows. It is left out when usage aged out of the
-rolling window during the turn. The week and the month
-are added once either is 75% used or exhausted. The reading waits at most three
-seconds; past that, or on any other failure, the line goes without it. An
-opencode endpoint that has no allowance, such as Zen's pay-per-token one, keeps
-the cost it reports, and is not asked again in the session.
+The two prices differ because Go charges each model at its own multiple of list
+price. Measured on 2026-11-19: GLM-5.3 at about 0.12, MiMo at 1, MiniMax M3.1
+Flash at 3, and a free model at 0, which the line shows as `$0.00` rather than
+leaving out.
+
+The meter comes from `<base_url>/usage`, read once at the end of a turn Go
+charged: how much of the five-hour window is used, as whole percents, and when
+it resets. The week and the month are added once either is 75% used or
+exhausted. The read waits at most three seconds; past that, or on any other
+failure, the line goes without it. A response without Go's account, from Zen's
+pay-per-token endpoint or any other, keeps the cost it reports.
+
+Each turn's record keeps the allowance spent (`go_allowance`), the list price
+(`go_list_cost`), `go_known` to tell a free model's zero from a turn not on Go,
+and the meter as the turn ended (`go_meter`).
 
 #### The Anthropic dialect
 

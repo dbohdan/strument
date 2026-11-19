@@ -73,35 +73,21 @@ func TestLine(t *testing.T) {
 	win := func(p float64, in time.Duration) Window {
 		return Window{Percent: p, ResetsAt: now.Add(in), Known: true}
 	}
-	prev := Reading{Rolling: win(22.6, 4*time.Hour)}
 	for _, tc := range []struct {
 		name string
-		prev *Reading
 		cur  Reading
 		want string
 	}{
-		{"first reading", nil, Reading{Rolling: win(23.4, 3*time.Hour+12*time.Minute)},
-			"Go: 5h 23.4% used, resets in 3h 12m."},
-		{"with the turn's share", &prev, Reading{Rolling: win(23.4, 3*time.Hour+12*time.Minute)},
-			"Go: 5h 23.4% used (+0.8%), resets in 3h 12m."},
-		{"a share too small for a decimal", &prev, Reading{Rolling: win(22.62, 40*time.Second)},
-			"Go: 5h 22.6% used (+<0.1%), resets in 1m."},
-		{"no change", &prev, Reading{Rolling: win(22.6, time.Hour)},
-			"Go: 5h 22.6% used (+<0.1%), resets in 1h 0m."},
-		{"no change on a meter in whole percents", &Reading{Rolling: win(9, time.Hour)}, Reading{Rolling: win(9, time.Hour)},
-			"Go: 5h 9% used (+<1%), resets in 1h 0m."},
-		{"a whole-percent step", &Reading{Rolling: win(7, time.Hour)}, Reading{Rolling: win(9, 2*time.Hour+37*time.Minute)},
-			"Go: 5h 9% used (+2%), resets in 2h 37m."},
-		{"usage aged out of the window", &prev, Reading{Rolling: win(20, time.Hour)},
-			"Go: 5h 20% used, resets in 1h 0m."},
-		{"long windows nearly spent", nil, Reading{Rolling: win(10, time.Hour), Weekly: win(80, 50*time.Hour), Monthly: win(30, 0)},
-			"Go: 5h 10% used, resets in 1h 0m; week 80% used."},
-		{"limited", nil, Reading{Rolling: Window{Percent: 100, Limited: true, ResetsAt: now.Add(62 * time.Minute), Known: true},
+		{"whole percents", Reading{Rolling: win(9, 2*time.Hour+37*time.Minute)}, "5h 9% used, resets in 2h 37m"},
+		{"a fraction", Reading{Rolling: win(23.4, 40*time.Second)}, "5h 23.4% used, resets in 1m"},
+		{"long windows nearly spent", Reading{Rolling: win(10, time.Hour), Weekly: win(80, 50*time.Hour), Monthly: win(30, 0)},
+			"5h 10% used, resets in 1h 0m; week 80% used"},
+		{"limited", Reading{Rolling: Window{Percent: 100, Limited: true, ResetsAt: now.Add(62 * time.Minute), Known: true},
 			Monthly: Window{Percent: 100, Limited: true, ResetsAt: now.Add(9 * 24 * time.Hour), Known: true}},
-			"Go: 5h limit reached, resets in 1h 2m; month limit reached, resets in 9d 0h."},
-		{"no reset time", nil, Reading{Rolling: Window{Percent: 5, Known: true}}, "Go: 5h 5% used."},
+			"5h limit reached, resets in 1h 2m; month limit reached, resets in 9d 0h"},
+		{"no reset time", Reading{Rolling: Window{Percent: 5, Known: true}}, "5h 5% used"},
 	} {
-		if got := Line(tc.prev, tc.cur, now); got != tc.want {
+		if got := Line(tc.cur, now); got != tc.want {
 			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
 	}

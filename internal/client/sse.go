@@ -29,9 +29,10 @@ type sseChunk struct {
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
 	Usage *struct {
-		PromptTokens        int       `json:"prompt_tokens"`
-		CompletionTokens    int       `json:"completion_tokens"`
-		Cost                flexFloat `json:"cost"` // in-band cost; providers disagree on its type
+		PromptTokens        int        `json:"prompt_tokens"`
+		CompletionTokens    int        `json:"completion_tokens"`
+		Cost                flexFloat  `json:"cost"` // in-band cost; providers disagree on its type
+		Opencode            *ocBilling `json:"opencode"`
 		PromptTokensDetails *struct {
 			CachedTokens     int `json:"cached_tokens"`
 			CacheWriteTokens int `json:"cache_write_tokens"`
@@ -155,6 +156,7 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 					u.ReasoningTokens = d.ReasoningTokens
 				}
 				u.Cost = chunk.Usage.Cost.ptr()
+				u.Opencode = chunk.Usage.Opencode.toLLM()
 				u.Provider = provider
 				if !yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: u}, nil) {
 					return

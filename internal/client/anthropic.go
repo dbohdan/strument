@@ -326,11 +326,12 @@ type antStreamEvent struct {
 }
 
 type antUsage struct {
-	InputTokens         int       `json:"input_tokens"`
-	OutputTokens        int       `json:"output_tokens"`
-	CacheCreationTokens int       `json:"cache_creation_input_tokens"`
-	CacheReadTokens     int       `json:"cache_read_input_tokens"`
-	Cost                flexFloat `json:"cost"` // gateway extension; absent upstream
+	InputTokens         int        `json:"input_tokens"`
+	OutputTokens        int        `json:"output_tokens"`
+	CacheCreationTokens int        `json:"cache_creation_input_tokens"`
+	CacheReadTokens     int        `json:"cache_read_input_tokens"`
+	Cost                flexFloat  `json:"cost"` // gateway extension; absent upstream
+	Opencode            *ocBilling `json:"opencode"`
 }
 
 func (u antUsage) toLLM() llm.Usage {
@@ -340,6 +341,7 @@ func (u antUsage) toLLM() llm.Usage {
 		CacheWriteTokens: u.CacheCreationTokens,
 		CacheReadTokens:  u.CacheReadTokens,
 		Cost:             u.Cost.ptr(),
+		Opencode:         u.Opencode.toLLM(),
 	}
 }
 

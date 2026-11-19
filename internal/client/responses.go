@@ -261,9 +261,10 @@ type respStreamEvent struct {
 	Response *struct {
 		Status string `json:"status"`
 		Usage  *struct {
-			InputTokens        int       `json:"input_tokens"`
-			OutputTokens       int       `json:"output_tokens"`
-			Cost               flexFloat `json:"cost"`
+			InputTokens        int        `json:"input_tokens"`
+			OutputTokens       int        `json:"output_tokens"`
+			Cost               flexFloat  `json:"cost"`
+			Opencode           *ocBilling `json:"opencode"`
 			InputTokensDetails *struct {
 				CachedTokens     int `json:"cached_tokens"`
 				CacheWriteTokens int `json:"cache_write_tokens"`
@@ -425,6 +426,7 @@ func (c *ResponsesClient) parseStream(body io.Reader, yield func(llm.StreamEvent
 					PromptTokens:     u.InputTokens,
 					CompletionTokens: u.OutputTokens,
 					Cost:             u.Cost.ptr(),
+					Opencode:         u.Opencode.toLLM(),
 				}
 				if d := u.InputTokensDetails; d != nil {
 					usage.CacheReadTokens = d.CachedTokens
