@@ -746,6 +746,7 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 		return coder.ConfirmResult{Unattended: true}
 	}
 
+	r.discardTypeahead()
 	cfg := r.rl.GetConfig()
 	cfg.Prompt = req.Prompt + confirmSuffix(req)
 	cfg.HistoryLimit = -1 // y/n answers stay out of the input history
@@ -772,6 +773,27 @@ func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 // --yes answers permission prompts, and a question is not one.
 func (r *REPL) Asker() coder.Asker { return rlAsker{r} }
 
+// discardTypeahead drops whatever was typed before a question mid-turn, so
+// only keys pressed after it appears can answer it.
+//
+// Between prompts the terminal is in cooked mode and nothing reads it, so a
+// key pressed during a turn waits in the kernel, and the next prompt takes
+// it. For the main prompt that is type-ahead, and harmless. For a question
+// asked mid-turn it is an answer given before the question existed: a stray
+// Enter pressed while the model was still thinking approved the shell
+// command it then proposed, which a live pty run reproduced, with the
+// "Run shell command?" prompt on screen for no one. Anything typed is
+// dropped, then, and the drop is said, so a message typed into the void is
+// not silently lost.
+func (r *REPL) discardTypeahead() {
+	if !r.interactive() {
+		return
+	}
+	if r.rl.DiscardBuffered()+flushTerminalInput(r.opts.Stdin) > 0 {
+		r.out.Warningf("Discarded what was typed before this question appeared, so it could not answer it.")
+	}
+}
+
 // rlAsker asks multiple-choice questions through the REPL's readline so
 // prompt input, confirm input, and question answers share one reader. The
 // question prints as ordinary scroll — no widget, no redraw — and the answer
@@ -783,6 +805,7 @@ type rlAsker struct{ r *REPL }
 // completion.
 func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 	r := rl.r
+	r.discardTypeahead()
 	cfg := r.rl.GetConfig()
 	cfg.Prompt = promptText
 	cfg.HistoryLimit = -1

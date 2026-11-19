@@ -154,6 +154,11 @@ func New(prompt string) (*Instance, error) {
 	return NewFromConfig(&Config{Prompt: prompt})
 }
 
+// DiscardBuffered drops input already read from the terminal and not yet
+// given to a prompt, and reports roughly how many bytes it was. Call it
+// between reads.
+func (i *Instance) DiscardBuffered() int { return i.terminal.DiscardBuffered() }
+
 func (i *Instance) ResetHistory() {
 	i.operation.ResetHistory()
 }

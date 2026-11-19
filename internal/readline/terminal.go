@@ -87,9 +87,12 @@ type terminal struct {
 	outChan    chan readResult
 	kickChan   chan struct{}
 	stopChan   chan struct{}
-	buffer     []rune // actual input that we saw while waiting for the CPR
-	inFlight   bool   // tracks whether we initiated a read and then gave up waiting
-	sleeping   int32
+	// discardChan asks ioloop to drop what its reader has buffered from
+	// stdin and not yet handed out; the reply is the byte count.
+	discardChan chan chan int
+	buffer      []rune // actual input that we saw while waiting for the CPR
+	inFlight    bool   // tracks whether we initiated a read and then gave up waiting
+	sleeping    int32
 
 	// asynchronously receive DSR messages from the terminal,
 	// ensuring at most one query is in flight at a time
@@ -132,9 +135,10 @@ func newTerminal(cfg *Config) (*terminal, error) {
 		}
 	}
 	t := &terminal{
-		kickChan: make(chan struct{}),
-		outChan:  make(chan readResult),
-		stopChan: make(chan struct{}),
+		kickChan:    make(chan struct{}),
+		outChan:     make(chan readResult),
+		stopChan:    make(chan struct{}),
+		discardChan: make(chan chan int),
 	}
 	t.SetConfig(cfg)
 	// Get and cache the current terminal size.
@@ -356,6 +360,11 @@ func (t *terminal) ioloop() {
 	for {
 		select {
 		case <-t.kickChan:
+		case reply := <-t.discardChan:
+			n := buf.Buffered()
+			_, _ = buf.Discard(n)
+			reply <- n
+			continue
 		case <-t.stopChan:
 			return
 		}
@@ -548,6 +557,28 @@ func parseCPRResponse(payload []byte) (cursorPosition, error) {
 		}
 	}
 	return cursorPosition{-1, -1}, invalidCPR
+}
+
+// DiscardBuffered drops input that has been read from stdin and not yet
+// given to a prompt, and reports roughly how much: the reader's buffer, and
+// what was set aside while waiting for a cursor-position report. It is for
+// the caller about to ask a question that typed-ahead input must not answer.
+// Call it between reads, never during one.
+func (t *terminal) DiscardBuffered() int {
+	n := len(t.buffer) + len(t.pasted)
+	t.buffer, t.pasted = nil, nil
+	if t.inFlight {
+		// ioloop is blocked reading stdin for a read that was abandoned; its
+		// rune will reach the next read, and nothing here can stop that.
+		return n
+	}
+	reply := make(chan int, 1)
+	select {
+	case t.discardChan <- reply:
+		return n + <-reply
+	case <-t.stopChan:
+		return n
+	}
 }
 
 func (t *terminal) Bell() {
