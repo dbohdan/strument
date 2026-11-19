@@ -127,6 +127,56 @@ func mustAtoi(t *testing.T, s string) int {
 	return n
 }
 
+// The cases a read used to answer badly: an empty file reported as a line
+// past the end, a request for the tail answered with the head, and a near
+// miss on a name answered with a bare stat error.
+func TestReadSmallCases(t *testing.T) {
+	var fifty strings.Builder
+	for i := 1; i <= 50; i++ {
+		fmt.Fprintf(&fifty, "%d\n", i)
+	}
+	shot := "Screenshot 2026-11-19 at 9.41.07\u202fAM.txt"
+	c, _ := observeEnv(t, map[string]string{
+		"empty.txt":           "",
+		"tail.txt":            fifty.String(),
+		"AGENTS.md":           "# agents\n",
+		"src/util/strings.go": "package util\n",
+		shot:                  "shot\n",
+		"Bob\u2019s notes.md": "notes\n",
+		"caf\u00e9.txt":       "composed\n",
+		"main.go":             "package main\n",
+		"mains.go":            "package main\n",
+	})
+	for _, tc := range []struct{ name, args, want, notWant string }{
+		{"empty", `{"path":"empty.txt"}`, "The file is empty.", "past the end"},
+		{"tail", `{"path":"tail.txt","offset":-3}`, "48→48\n49→49\n50→50\n", "47→"},
+		{"tail longer than the file", `{"path":"tail.txt","offset":-500}`, " 1→1\n", "past the end"},
+		{"past the end", `{"path":"tail.txt","offset":900}`, "Line 900 is past the end of the file, which has 50.", ""},
+		{"near name", `{"path":"AGENT.md"}`, "there is no such file. Did you mean AGENTS.md?", "stat "},
+		{"case", `{"path":"agents.md"}`, "Did you mean AGENTS.md?", ""},
+		{"wrong directory", `{"path":"src/utils/strings.go"}`, "Did you mean src/util/strings.go?", ""},
+		{"two near names", `{"path":"maim.go"}`, "Did you mean one of these?\n- main.go\n- mains.go", ""},
+		{"nothing near", `{"path":"nothing-like-it.txt"}`, "there is no such file.", "Did you mean"},
+		{"narrow no-break space", `{"path":"Screenshot 2026-11-19 at 9.41.07 AM.txt"}`, "1→shot", ""},
+		{"curly quote", `{"path":"Bob's notes.md"}`, "1→notes", ""},
+		{"decomposed accent", `{"path":"cafe\u0301.txt"}`, "1→composed", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := os.Stat(filepath.Join(c.Root, "agents.md")); tc.name == "case" && err == nil {
+				t.Skip("this filesystem ignores case, so agents.md is AGENTS.md")
+			}
+			got := readTool(c, call("read", tc.args))
+			if !strings.Contains(got, tc.want) || (tc.notWant != "" && strings.Contains(got, tc.notWant)) {
+				t.Errorf("got:\n%s\nwant %q, not %q", got, tc.want, tc.notWant)
+			}
+		})
+	}
+	// A respelled name is said, so the model uses the one that exists.
+	if got := readTool(c, call("read", `{"path":"Bob's notes.md"}`)); !strings.Contains(got, "This is \"Bob\u2019s notes.md\"") {
+		t.Errorf("the real name is not given:\n%s", got)
+	}
+}
+
 func TestReadReportsMissingFileToTheModel(t *testing.T) {
 	c, _ := observeEnv(t, nil)
 	got := readTool(c, call("read", `{"path":"nope.txt"}`))

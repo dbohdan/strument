@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/PuerkitoBio/goquery v1.13.0
+	github.com/agnivade/levenshtein v1.2.2
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/alecthomas/kong v1.17.0
 	github.com/creack/pty v1.1.24

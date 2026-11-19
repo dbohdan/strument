@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -97,6 +98,15 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	}
 
 	ft, err := i.Files.Read(a.Path, a.Offset, a.Limit)
+	respelled := ""
+	if errors.Is(err, fs.ErrNotExist) {
+		same, near := i.Files.Suggest(a.Path)
+		if same == "" {
+			return missingFileText(a.Path, near), nil
+		}
+		respelled = same
+		ft, err = i.Files.Read(same, a.Offset, a.Limit)
+	}
 	if err != nil {
 		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
 	}
@@ -110,13 +120,25 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	}
 
 	var b strings.Builder
+	if respelled != "" {
+		// Said, so the model uses the name that exists from here on.
+		fmt.Fprintf(&b, "(No file is named %s. This is %s, whose name differs only in how its characters "+
+			"are written: a different kind of space, quote or accent.)\n\n", quoteToolArg(a.Path), quoteToolArg(respelled))
+	}
+	lines := render.Plural(ft.Total, "line", "lines")
 	if ft.Link != "" {
-		fmt.Fprintf(&b, "%s -> %s (%d lines)\n", ft.Path, ft.Link, ft.Total)
+		fmt.Fprintf(&b, "%s -> %s (%s)\n", ft.Path, ft.Link, lines)
 	} else {
-		fmt.Fprintf(&b, "%s (%d lines)\n", ft.Path, ft.Total)
+		fmt.Fprintf(&b, "%s (%s)\n", ft.Path, lines)
+	}
+	if ft.Total == 0 {
+		// Not "line 1 is past the end", which read as a request for the wrong
+		// line.
+		b.WriteString("\nThe file is empty.\n")
+		return b.String(), nil
 	}
 	if len(ft.Lines) == 0 {
-		fmt.Fprintf(&b, "\nLine %d is past the end of the file.\n", ft.Start)
+		fmt.Fprintf(&b, "\nLine %d is past the end of the file, which has %d.\n", ft.Start, ft.Total)
 		return b.String(), nil
 	}
 	// Line numbers give stable referents for talking about code, which is worth
@@ -149,6 +171,21 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 		fmt.Fprintf(&b, "\n(%s, ending in %q. read_text() in run_code returns the text whole.)\n", what, clipMarker)
 	}
 	return b.String(), nil
+}
+
+// missingFileText answers a read of a path that names nothing, with the
+// names it may have meant. The error alone was "stat /abs/path: no such file
+// or directory", beside an AGENTS.md the model had asked for as AGENT.md.
+func missingFileText(asked string, near []string) string {
+	text := fmt.Sprintf("Could not read %s: there is no such file.", quoteToolArg(asked))
+	switch len(near) {
+	case 0:
+	case 1:
+		text += fmt.Sprintf(" Did you mean %s?", near[0])
+	default:
+		text += " Did you mean one of these?\n" + "- " + strings.Join(near, "\n- ")
+	}
+	return text
 }
 
 // maxReadBytes bounds what one read returns, and maxReadLineBytes one line
@@ -200,6 +237,9 @@ func fitReadWindow(ft *workspace.FileText) (clipped int, byBytes bool) {
 // readSummary is the one-line outcome shown to the user.
 func readSummary(ft workspace.FileText) string {
 	p := quoteToolArg(ft.Path)
+	if ft.Total == 0 {
+		return p + " (empty)"
+	}
 	if len(ft.Lines) == 0 {
 		return fmt.Sprintf("%s (%d lines, nothing at offset %d)", p, ft.Total, ft.Start)
 	}

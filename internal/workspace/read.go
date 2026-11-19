@@ -54,7 +54,8 @@ type FileText struct {
 	EndsWithNewline bool
 }
 
-// Read returns a window of a text file. offset is 1-based; 0 means the start.
+// Read returns a window of a text file. offset is 1-based; 0 means the start,
+// and a negative offset counts back from the end.
 // limit is a line count; 0 means defaultReadLines. An absolute path under the
 // standard temporary directory is also allowed.
 //
@@ -103,6 +104,12 @@ func (w *Workspace) Read(rel string, offset, limit int) (FileText, error) {
 
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := splitLines(text)
+	// A negative offset counts from the end, so -50 is the last 50 lines. It
+	// used to be taken as 1, which answered a request for the tail with the
+	// head of the file: a wrong window, silently.
+	if offset < 0 {
+		offset = max(1, len(lines)+offset+1)
+	}
 	if offset < 1 {
 		offset = 1
 	}
