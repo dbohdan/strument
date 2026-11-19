@@ -31,7 +31,7 @@ func (r *REPL) holdMenu() {
 	r.out.clearWaiting()
 	r.out.showCursor()
 	fmt.Fprintln(r.opts.Stdout)
-	r.out.Toolf("‹paused› The current step will finish with the output hidden. No new steps while paused.")
+	r.out.Toolf("‹paused› The current step will finish with the output held. No new steps while paused.")
 	r.out.Toolf("Enter to resume, s to stop this turn, or type a message to send before the next step. Ctrl-C again to exit.")
 	// A Ctrl-C at the menu that came too late to complete the chord asks
 	// again, so the next one exits: taking it as Enter would carry on the
