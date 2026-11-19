@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -1071,7 +1072,7 @@ func (c *Coder) runShell(ctx context.Context, cmd toolCommand) (string, bool) {
 // A command that did not run has no fence at all.
 func shellResultText(command string, r shellRun, extra string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Command: %s\nExit status: %d\n", quoteToolArg(command), r.exit)
+	fmt.Fprintf(&b, "Command: %s\nExit status: %d%s\n", quoteToolArg(command), r.exit, exitNote(command, r))
 	switch {
 	case r.output == "":
 		b.WriteString("The command printed nothing.\n")
@@ -1087,6 +1088,68 @@ func shellResultText(command string, r shellRun, extra string) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// exitNote reads two statuses a model is known to misread. A status from 129
+// to 192 is how a shell reports a process killed by a signal, and 137 says
+// nothing on its own about an out-of-memory kill. And a search that found
+// nothing exits 1, which reads as a failure to a model that treats every
+// nonzero status as one, and loops on it.
+func exitNote(command string, r shellRun) string {
+	if n := r.exit - 128; n > 0 && n <= 64 {
+		name := fmt.Sprintf("signal %d", n)
+		if s, ok := signalNames[n]; ok {
+			name = fmt.Sprintf("signal %d, %s", n, s)
+		}
+		return fmt.Sprintf(" (128 + %d, which is how a shell reports a process killed by %s)", n, name)
+	}
+	if r.exit == 1 && strings.TrimSpace(r.output) == "" && searchCommands[lastCommandName(command)] {
+		return " (no matches; not an error)"
+	}
+	return ""
+}
+
+// signalNames are the signals a command's status commonly reports, by their
+// POSIX numbers, which Linux and macOS share. Go's own names differ by
+// platform ("killed" on Linux), so they are spelled out.
+var signalNames = map[int]string{
+	1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 4: "SIGILL", 6: "SIGABRT", 8: "SIGFPE",
+	9: "SIGKILL: kill -9, or the kernel's out-of-memory killer", 11: "SIGSEGV", 13: "SIGPIPE",
+	14: "SIGALRM", 15: "SIGTERM",
+}
+
+// searchCommands exit 1 when they find nothing.
+var searchCommands = map[string]bool{"grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true, "ack": true}
+
+// lastCommandName is the name of the command whose status a shell reports for
+// this one: the last stage of the last statement. "git grep" is grep. It is
+// "" when the command does not parse or ends in something other than a plain
+// command.
+func lastCommandName(command string) string {
+	file, err := syntax.NewParser().Parse(strings.NewReader(command), "")
+	if err != nil || len(file.Stmts) == 0 {
+		return ""
+	}
+	cmd := file.Stmts[len(file.Stmts)-1].Cmd
+	for {
+		bin, ok := cmd.(*syntax.BinaryCmd)
+		if !ok || (bin.Op != syntax.Pipe && bin.Op != syntax.PipeAll) {
+			break
+		}
+		cmd = bin.Y.Cmd
+	}
+	call, ok := cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return ""
+	}
+	words := make([]string, 0, 2)
+	for _, w := range call.Args[:min(2, len(call.Args))] {
+		words = append(words, w.Lit())
+	}
+	if words[0] == "git" && len(words) > 1 && words[1] == "grep" {
+		return "grep"
+	}
+	return path.Base(words[0])
 }
 
 // toolResult is one tool call's answer: text, plus any images the tool

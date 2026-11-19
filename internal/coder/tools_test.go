@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -1137,5 +1138,34 @@ func TestAnAppendedFencedBlockKeepsItsFences(t *testing.T) {
 	}
 	if string(got) != "intro\n"+block {
 		t.Errorf("log.md is %q, want the block appended whole", got)
+	}
+}
+
+// Two exit statuses are explained where they are reported: a signal death,
+// which 137 alone does not say, and a search that found nothing, which is
+// not a failure. Each is checked against what the shell really returns.
+func TestShellExitNotes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs sh, grep and POSIX signals")
+	}
+	c, _ := observeEnv(t, map[string]string{"a.txt": "x\n"})
+	c.SuggestShellCommands = true
+	c.Confirm = yesConfirmer{}
+	for _, tc := range []struct{ command, want string }{
+		{"sh -c 'kill -9 $$'", "Exit status: 137 (128 + 9, which is how a shell reports a process killed by signal 9, SIGKILL: kill -9, or the kernel's out-of-memory killer)"},
+		{"sh -c 'kill -15 $$'", "Exit status: 143 (128 + 15, which is how a shell reports a process killed by signal 15, SIGTERM)"},
+		{"grep nomatch a.txt", "Exit status: 1 (no matches; not an error)"},
+		{"cat a.txt | grep nomatch", "Exit status: 1 (no matches; not an error)"},
+		{"grep -q x a.txt; grep nomatch a.txt", "Exit status: 1 (no matches; not an error)"},
+		// Not a search, or a search that printed something: the status stands.
+		{"false", "Exit status: 1\n"},
+		{"grep nomatch a.txt; echo said", "Exit status: 0\n"},
+		{"grep nomatch a.txt | cat", "Exit status: 0\n"},
+		{"grep -c nomatch a.txt", "Exit status: 1\n"},
+	} {
+		out, _ := c.runShell(context.Background(), toolCommand{command: tc.command, purpose: "probe"})
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s:\n%s\nwant %q", tc.command, out, tc.want)
+		}
 	}
 }
