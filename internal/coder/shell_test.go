@@ -102,3 +102,33 @@ func TestShellCancellationKeepsPartialOutput(t *testing.T) {
 		t.Errorf("the command kept running past the cancel: %q", out)
 	}
 }
+
+// kill works for a process ID and refuses a job reference with the reason.
+// The interpreter implements no kill of its own ("unsupported builtin"), and
+// its $! is a goroutine's index, not a process: `kill $!` cannot be honored,
+// so it is answered at once instead of failing as a missing process, and a
+// wait after it does not sit out the timeout.
+func TestShellKill(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a kill command and POSIX signals")
+	}
+	for _, tc := range []struct{ block, want string }{
+		{"sleep 30 & kill $!; echo status=$?", "is not a process with an ID"},
+		{"sleep 30 & kill -TERM %1; echo status=$?", "pkill -f <pattern>"},
+		{"sleep 300 & sleep 0.3; kill $(pgrep -f 'sleep 300'); echo status=$?; sleep 0.3; pgrep -f 'sleep 300' || echo gone",
+			"status=0\ngone"},
+		{"kill -l | head -1", "HUP INT"},
+	} {
+		start := time.Now()
+		_, out, err := PipeRunner{}.Run(context.Background(), tc.block, t.TempDir())
+		if err != nil || !strings.Contains(out, tc.want) || strings.Contains(out, "unsupported builtin") {
+			t.Errorf("%s:\n%s (err %v), want %q", tc.block, out, err, tc.want)
+		}
+		if took := time.Since(start); took > 5*time.Second {
+			t.Errorf("%s took %s", tc.block, took)
+		}
+	}
+	if _, out, _ := (PipeRunner{}).Run(context.Background(), "sleep 30 & kill $!; echo status=$?", t.TempDir()); !strings.Contains(out, "status=1") {
+		t.Errorf("a refused kill must fail:\n%s", out)
+	}
+}
