@@ -284,7 +284,7 @@ func TestConsultAnswerIsFramedOnScreen(t *testing.T) {
 	c.runConsult(context.Background(), consultArgs(t, q, "help.txt"))
 
 	got := out.String()
-	open := "‹consult terra› Draft help text for tally. Keep it to one screen.\n"
+	open := "‹consult› terra: Draft help text for tally. Keep it to one screen.\n"
 	closer := "‹/consult› terra, openrouter/openai/gpt-6.1-terra: "
 	i, j, k := strings.Index(got, open), strings.Index(got, "# Draft"), strings.Index(got, closer)
 	if i < 0 || j < 0 || k < 0 || i >= j || j >= k {

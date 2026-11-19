@@ -231,7 +231,7 @@ func (c *Coder) runConsult(ctx context.Context, cc consultCall) string {
 		client = c.ConsultClient(cm.Model)
 	}
 	answer := c.sideCallWithin(ctx, client, cm.Model, prompt, sideFrame{
-		open: fmt.Sprintf("\u2039consult %s\u203a %s", cc.alias, consultHeadline(cc.question)),
+		open: fmt.Sprintf("\u2039consult\u203a %s: %s", cc.alias, consultHeadline(cc.question)),
 		tag:  toolConsult,
 		who:  cc.alias + ", " + cm.Model.QualifiedSlug(),
 	})
