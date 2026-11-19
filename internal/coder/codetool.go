@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+	"github.com/dop251/goja/ast"
+	"github.com/dop251/goja/parser"
 
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/render"
@@ -344,9 +346,12 @@ func (c *Coder) runCode(ctx context.Context, cc codeCall) string {
 
 	stop := watchProgram(ctx, vm, &prog.clock)
 	var value goja.Value
-	compiled, err := compileProgram(cc.code)
+	compiled, async, err := compileProgram(cc.code)
 	if err == nil {
 		value, err = vm.RunProgram(compiled)
+	}
+	if err == nil && async {
+		value, err = settled(value)
 	}
 	stop()
 
@@ -842,7 +847,8 @@ var jsKeywordCall = regexp.MustCompile(`\b(read|read_text|read_bin|grep|glob|ls|
 // the one that fires exactly when the mistake did, and costs nothing on
 // correct programs; a hint never rides a wall the model could not have
 // avoided.
-// compileProgram compiles a program, accepting a top-level return.
+// compileProgram compiles a program, accepting a top-level return and a
+// top-level await.
 //
 // A program's value is its last expression, and the description says so, but
 // models write `return x` anyway: many code-execution tools run a program as a
@@ -852,17 +858,93 @@ var jsKeywordCall = regexp.MustCompile(`\b(read|read_text|read_bin|grep|glob|ls|
 // compiled again as the body of a function called at once, and its value is
 // what it returns.
 //
+// await is the same habit from tools whose functions return promises: MiMo
+// wrote `await edit(...)` in 5 of its 35 programs in the String.raw trial
+// (doc/experiments/2026-11-string-raw), and goja's refusal, "Unexpected
+// identifier", does not name the word. The functions here return their
+// results, and awaiting a value is the value, so a program that fails to
+// compile and says await is compiled as the body of an async function. Its
+// last expression statement is made its return, so it has the value it would
+// have had; async reports that the value is a promise to settle.
+//
 // The wrapper opens on the program's first line, so every line number an
-// error reports is still the program's own; only columns on line 1 move. A
-// program with a return and another syntax error fails on the other one,
-// which, once return is legal, is the error worth reporting.
-func compileProgram(code string) (*goja.Program, error) {
-	prog, err := goja.Compile("program.js", code, true)
-	if err == nil || !strings.Contains(err.Error(), "Illegal return statement") {
-		return prog, err
+// error reports is still the program's own; only columns on line 1, and on
+// the line given a return, move. A program with a return or an await and
+// another syntax error fails on the other one, which, once those are legal,
+// is the error worth reporting.
+func compileProgram(code string) (prog *goja.Program, async bool, err error) {
+	prog, err = goja.Compile("program.js", code, true)
+	switch {
+	case err == nil:
+		return prog, false, nil
+	case jsAwait.MatchString(code):
+		prog, err = goja.Compile("program.js", asyncBody(code), true)
+		return prog, true, err
+	case strings.Contains(err.Error(), "Illegal return statement"):
+		prog, err = goja.Compile("program.js", "(function () {"+code+"\n})()", true)
+		return prog, false, err
 	}
-	return goja.Compile("program.js", "(function () {"+code+"\n})()", true)
+	return prog, false, err
 }
+
+var jsAwait = regexp.MustCompile(`\bawait\b`)
+
+// asyncBody is code as the body of an async function called at once, with a
+// return before its last statement when that is an expression.
+func asyncBody(code string) string {
+	const open = "(async function () {"
+	src := open + code + "\n})()"
+	file, err := parser.ParseFile(nil, "program.js", src, 0)
+	if err != nil || len(file.Body) != 1 {
+		return src // compiling it reports the error
+	}
+	var fn *ast.FunctionLiteral
+	if es, ok := file.Body[0].(*ast.ExpressionStatement); ok {
+		if call, ok := es.Expression.(*ast.CallExpression); ok {
+			fn, _ = call.Callee.(*ast.FunctionLiteral)
+		}
+	}
+	if fn == nil || fn.Body == nil || len(fn.Body.List) == 0 {
+		return src
+	}
+	last, ok := fn.Body.List[len(fn.Body.List)-1].(*ast.ExpressionStatement)
+	if !ok {
+		return src
+	}
+	at := int(last.Idx0()) - 1
+	return src[:at] + "return " + src[at:]
+}
+
+// settled is the value an async program's promise settled to, or its
+// rejection as an error that names the program line, as a synchronous
+// program's exception does.
+func settled(v goja.Value) (goja.Value, error) {
+	p, ok := v.Export().(*goja.Promise)
+	if !ok {
+		return v, nil
+	}
+	switch p.State() {
+	case goja.PromiseStateFulfilled:
+		return p.Result(), nil
+	case goja.PromiseStateRejected:
+		r := p.Result()
+		msg := r.String()
+		if o, ok := r.(*goja.Object); ok {
+			if stack := o.Get("stack"); stack != nil {
+				if m := jsProgramFrame.FindString(stack.String()); m != "" {
+					msg += " at " + m
+				}
+			}
+		}
+		return nil, errors.New(msg)
+	}
+	// Nothing here can leave a promise pending: there are no timers, and the
+	// functions return their results. A program that builds its own promise
+	// and never resolves it gets this.
+	return nil, errors.New("the program awaited a promise that never settled")
+}
+
+var jsProgramFrame = regexp.MustCompile(`program\.js:\d+:\d+(?:\(\d+\))?`)
 
 // jsEscapeError matches goja's refusals of an escape in a string or template
 // literal.

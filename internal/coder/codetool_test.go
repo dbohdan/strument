@@ -720,6 +720,62 @@ func TestCodeTopLevelReturnIsTheResult(t *testing.T) {
 	}
 }
 
+// await on a tool call is accepted: the functions return their results, and
+// awaiting a value is the value. MiMo wrote `await edit(...)` in 5 of its 35
+// programs in the String.raw trial, each refused with "Unexpected
+// identifier". The program keeps its value, its printed output and its line
+// numbers.
+func TestCodeTopLevelAwaitIsAccepted(t *testing.T) {
+	c, _ := observeEnv(t, map[string]string{"a.txt": "x\ny\n", "b.txt": "z\n"})
+
+	for _, tc := range []struct{ name, code, want string }{
+		{"last expression", "const t = await read_text(\"a.txt\");\nt.split(\"\\n\").length", "3"},
+		{"explicit return", "const files = await glob({pattern: \"*.txt\"});\nreturn files.length", "2"},
+		{"awaited last expression", "await read_text(\"b.txt\")", "z"},
+		{"in a loop, with console.log", "for (const f of await glob({pattern: \"*.txt\"})) {\n  console.log(f);\n}", "a.txt\nb.txt"},
+		{"await in a string only, unchanged", "const s = \"await\";\ns + \"!\"", "await!"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := run(c, tc.code); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// What the rewrite cannot keep: a program that ends in a statement rather
+	// than an expression has its completion value without await ("2" here)
+	// and none with it, and is told so by the note on a value-less program.
+	got := run(c, "const t = await read_text(\"b.txt\");\nif (t) { t.length }")
+	if !strings.HasPrefix(got, "undefined") || !strings.Contains(got, "end it with what you want to see") {
+		t.Errorf("a statement last, under await:\n%s", got)
+	}
+
+	// A runtime error, the program's own or a bridged call's, names the
+	// program's line as it does without await.
+	got = run(c, "const a = await read_text(\"a.txt\");\nconst b = 2;\nmissing.x")
+	if !strings.Contains(got, "The program failed") || !strings.Contains(got, "line 3: missing.x") {
+		t.Errorf("an error under await lost its line:\n%s", got)
+	}
+	got = run(c, "const a = await read_text(\"a.txt\");\nawait read_text(\"nope.txt\")")
+	if !strings.Contains(got, "The program failed") || !strings.Contains(got, "line 2:") {
+		t.Errorf("a failed call under await lost its line:\n%s", got)
+	}
+	got = run(c, "await read_text(\"a.txt\");\nthrow new Error(\"mine\")")
+	if !strings.Contains(got, "Error: mine") || !strings.Contains(got, "line 2:") {
+		t.Errorf("a thrown error under await:\n%s", got)
+	}
+	// Another syntax error is the one reported.
+	got = run(c, "const a = ;\nawait read_text(\"a.txt\")")
+	if !strings.Contains(got, "SyntaxError") || strings.Contains(got, "Unexpected identifier") {
+		t.Errorf("want the remaining syntax error:\n%s", got)
+	}
+	// A promise the program builds and never resolves ends the program.
+	got = run(c, "await new Promise(() => {})")
+	if !strings.Contains(got, "never settled") {
+		t.Errorf("a pending promise:\n%s", got)
+	}
+}
+
 // A failed program shows its error to the user, not only to the model: the
 // person watching MiMo retry saw "Ran 82 lines of code." and nothing about why.
 func TestCodeFailureIsShownToTheUser(t *testing.T) {
