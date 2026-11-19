@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -295,6 +294,7 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 	if err != nil {
 		return -1, "", err
 	}
+	job := markOneJob(file)
 
 	// The allowlist, when one was given. A nil Env inherits the whole process
 	// environment — the caller decides, because the same runner serves
@@ -336,9 +336,9 @@ func (r PipeRunner) Run(ctx context.Context, block string, cwd string) (int, str
 		interp.StdIO(nil, capture, capture),
 		interp.Dir(cwd),
 		interp.Env(expand.ListEnviron(env...)),
-		interp.CallHandler(routeKill),
+		interp.CallHandler(job.route),
 		interp.ExecHandlers(func(interp.ExecHandlerFunc) interp.ExecHandlerFunc {
-			return execWithPWD
+			return func(ctx context.Context, args []string) error { return execWithPWD(ctx, args, job) }
 		}),
 	}
 	runner, err := interp.New(opts...)
@@ -385,53 +385,6 @@ func capMiddle(output string, maxBytes int) string {
 	return fmt.Sprintf("%s… %d bytes of output omitted …\n%s", head, omitted, tail)
 }
 
-// routeKill makes kill work for what it can work for. The interpreter lists
-// kill as a builtin and implements none of it, so every kill answered "kill:
-// unsupported builtin", and a `wait` after it sat out the whole timeout.
-//
-// A process ID goes to the system's kill: `kill 12345`, `kill $(pgrep -f
-// server)`. A job reference cannot: the interpreter runs `cmd &` as a
-// goroutine, `$!` is its index ("g1"), not a process ID, and nothing stops
-// one job without the rest. So `kill $!` and `kill %1` are refused with what
-// does work, rather than handed to the system kill to fail as "no such
-// process", which reads as a bug in the server.
-func routeKill(_ context.Context, args []string) ([]string, error) {
-	if args[0] != "kill" {
-		return args, nil
-	}
-	if slices.ContainsFunc(args[1:], jobRef.MatchString) {
-		return append([]string{killJobCommand}, args[1:]...), nil
-	}
-	if path, err := exec.LookPath("kill"); err == nil {
-		return append([]string{path}, args[1:]...), nil
-	}
-	return append([]string{killMissingCommand}, args[1:]...), nil
-}
-
-// jobRef matches a job as the interpreter names it ($!) and as a shell's job
-// control does (%1, %%, %+, %-).
-var jobRef = regexp.MustCompile(`^(g\d+|%.*)$`)
-
-// The commands routeKill rewrites a kill it cannot run into. Their names
-// cannot be typed as a command: they hold a NUL.
-const (
-	killJobCommand     = "kill\x00job"
-	killMissingCommand = "kill\x00missing"
-)
-
-// killRefusal is what the two say, or "" for any other command.
-func killRefusal(name string) string {
-	switch name {
-	case killJobCommand:
-		return "kill: a job started with & here is not a process with an ID: $! is the shell's own " +
-			"handle for it. Every job a command starts is stopped when the command returns. To stop " +
-			"one sooner, signal its process: pkill -f <pattern>, or kill $(pgrep -f <pattern>)."
-	case killMissingCommand:
-		return "kill: there is no kill command on this system."
-	}
-	return ""
-}
-
 // execKillTimeout is how long a cancelled child gets between the interrupt
 // and the kill: the interpreter's own default.
 const execKillTimeout = 2 * time.Second
@@ -450,11 +403,10 @@ const execKillTimeout = 2 * time.Second
 //
 // The one divergence from a real shell: a block that unexports or unsets PWD
 // still hands its children one. Nothing a model writes does that on purpose.
-func execWithPWD(ctx context.Context, args []string) error {
+func execWithPWD(ctx context.Context, args []string, job *oneJob) error {
 	hc := interp.HandlerCtx(ctx)
-	if msg := killRefusal(args[0]); msg != "" {
-		fmt.Fprintln(hc.Stderr, msg)
-		return interp.ExitStatus(1)
+	if ok, err := job.answer(hc, args[0], args[1:]); ok {
+		return err
 	}
 	path, err := interp.LookPathDir(hc.Dir, hc.Env, args[0])
 	if err != nil {
@@ -472,6 +424,7 @@ func execWithPWD(ctx context.Context, args []string) error {
 	}
 	err = cmd.Start()
 	if err == nil {
+		defer job.start(hc, cmd.Process)()
 		stop := context.AfterFunc(ctx, func() {
 			if runtime.GOOS == "windows" {
 				_ = cmd.Process.Signal(os.Kill)

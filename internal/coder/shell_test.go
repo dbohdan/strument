@@ -103,32 +103,44 @@ func TestShellCancellationKeepsPartialOutput(t *testing.T) {
 	}
 }
 
-// kill works for a process ID and refuses a job reference with the reason.
-// The interpreter implements no kill of its own ("unsupported builtin"), and
-// its $! is a goroutine's index, not a process: `kill $!` cannot be honored,
-// so it is answered at once instead of failing as a missing process, and a
-// wait after it does not sit out the timeout.
+// kill works for a process ID, and for the job of a command that starts
+// exactly one, once: `server & ... ; kill $!` is what models write, and a
+// refusal cost MiMo a second command in three runs of three. With two jobs,
+// or one in a loop, which job $! names is a guess, so it is refused with the
+// reason and what does work.
 func TestShellKill(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("needs a kill command and POSIX signals")
 	}
-	for _, tc := range []struct{ block, want string }{
-		{"sleep 30 & kill $!; echo status=$?", "is not a process with an ID"},
-		{"sleep 30 & kill -TERM %1; echo status=$?", "pkill -f <pattern>"},
-		{"sleep 300 & sleep 0.3; kill $(pgrep -f 'sleep 300'); echo status=$?; sleep 0.3; pgrep -f 'sleep 300' || echo gone",
+	for _, tc := range []struct{ name, block, want string }{
+		{"the job", "sleep 30 & sleep 0.2; kill $!; wait $!; echo status=$?", "status=143"},
+		{"before it started its process", "sleep 30 & kill $!; wait $!; echo status=$?", "status=143"},
+		{"a signal", "sleep 30 & sleep 0.2; kill -9 $!; wait $!; echo status=$?", "status=137"},
+		{"-s", "sleep 30 & sleep 0.2; kill -s KILL %1; wait $!; echo status=$?", "status=137"},
+		{"a pid file", "sleep 30 & echo $! > pid; sleep 0.2; kill $(cat pid); wait $!; echo status=$?", "status=143"},
+		{"a pipeline", "sleep 30 | cat & sleep 0.2; kill %1; wait; echo done", "done"},
+		{"inside a function", "f() { sleep 30; }\nf & sleep 0.2; kill $!; wait $!; echo status=$?", "status=143"},
+		{"already finished", "sleep 0.1 & sleep 0.5; kill $!; echo status=$?", "the job has already finished.\nstatus=1"},
+		{"two jobs", "sleep 30 & sleep 30 & kill $!; echo status=$?", "starts more than one job"},
+		{"in a loop", "for i in 1; do sleep 30 & done; kill $!; echo status=$?", "starts more than one job"},
+		{"another job number", "sleep 30 & kill %2; echo status=$?", "%2: no such job"},
+		{"a job and a process", "sleep 30 & kill $! 12345; echo status=$?", "either the job or process IDs"},
+		{"a process ID", "sleep 300 & sleep 0.3; kill $(pgrep -f 'sleep 300'); echo status=$?; sleep 0.3; pgrep -f 'sleep 300' || echo gone",
 			"status=0\ngone"},
-		{"kill -l | head -1", "HUP INT"},
+		{"kill -l", "kill -l | head -1", "HUP INT"},
+		// The marker that tells the job's processes apart is a shell
+		// variable, not an environment variable.
+		{"no marker in the environment", "{ env | grep -c " + jobMarker + "; } & wait", "0"},
 	} {
-		start := time.Now()
-		_, out, err := PipeRunner{}.Run(context.Background(), tc.block, t.TempDir())
-		if err != nil || !strings.Contains(out, tc.want) || strings.Contains(out, "unsupported builtin") {
-			t.Errorf("%s:\n%s (err %v), want %q", tc.block, out, err, tc.want)
-		}
-		if took := time.Since(start); took > 5*time.Second {
-			t.Errorf("%s took %s", tc.block, took)
-		}
-	}
-	if _, out, _ := (PipeRunner{}).Run(context.Background(), "sleep 30 & kill $!; echo status=$?", t.TempDir()); !strings.Contains(out, "status=1") {
-		t.Errorf("a refused kill must fail:\n%s", out)
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Now()
+			_, out, err := PipeRunner{}.Run(context.Background(), tc.block, t.TempDir())
+			if err != nil || !strings.Contains(out, tc.want) || strings.Contains(out, "unsupported builtin") {
+				t.Errorf("%s:\n%s (err %v), want %q", tc.block, out, err, tc.want)
+			}
+			if took := time.Since(start); took > 5*time.Second {
+				t.Errorf("took %s", took)
+			}
+		})
 	}
 }
