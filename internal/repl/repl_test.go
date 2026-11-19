@@ -956,8 +956,11 @@ func TestTurnCtrlCChord(t *testing.T) {
 
 	<-ready
 	<-cl.started
-	sig <- os.Interrupt // first: cancels the send
-	<-cl.cancelled
+	sig <- os.Interrupt // first: holds the turn and opens the menu
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "‹paused›") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	sig <- os.Interrupt // second within 2s: exits
 
 	select {
@@ -976,7 +979,7 @@ func TestTurnCtrlCChord(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("REPL did not stop after the turn")
 	}
-	if !strings.Contains(out.String(), "Press Ctrl-C again to exit") {
+	if !strings.Contains(out.String(), "Ctrl-C again exits") {
 		t.Errorf("missing chord hint:\n%s", out.String())
 	}
 }

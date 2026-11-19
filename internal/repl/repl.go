@@ -158,6 +158,11 @@ type REPL struct {
 	coder *coder.Coder
 	rl    *readline.Instance
 	out   *termOutput
+	// held is the coder's output, which the Ctrl-C menu holds (held.go).
+	held *heldOutput
+	// askMu is held by the Ctrl-C menu while it is open, and taken by a
+	// prompt the coder asks, so the two never read the terminal at once.
+	askMu sync.Mutex
 
 	// prefill is text the next prompt opens with, for review before it is
 	// sent: what /editor or Ctrl-X Ctrl-E brought back from the editor.
@@ -212,7 +217,8 @@ func New(opts Options) (*REPL, error) {
 	if opts.Config != nil {
 		r.out.Thinking = coder.ThinkingDisplay(opts.Config.ReasoningDisplay)
 	}
-	r.coder.Out = r.out
+	r.held = &heldOutput{inner: r.out}
+	r.coder.Out = r.held
 
 	cfg := &readline.Config{
 		Prompt:          r.prompt(),
@@ -516,6 +522,13 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		r.runTurn(ctx, line)
+		// A message typed at the Ctrl-C menu waits for a step boundary. When
+		// the turn ended before one, it is the next turn, sent as if typed.
+		for q := r.coder.TakeQueued(); q != ""; q = r.coder.TakeQueued() {
+			r.renderPromptHeader()
+			r.printf(" > %s", q)
+			r.runTurn(ctx, q)
+		}
 		r.showInterruptHint()
 		r.showUndoHint()
 	}
@@ -559,6 +572,15 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 	stop := r.opts.Notify(sig)
 	defer stop()
 
+	// menu is held while the Ctrl-C menu is open. The turn can end while
+	// someone is still typing in it, and the main prompt must not read the
+	// terminal alongside it, so the turn waits for it on the way out.
+	var menu sync.Mutex
+	defer func() {
+		menu.Lock()
+		menu.Unlock() //nolint:staticcheck // SA2001: waiting for the menu, not guarding anything
+	}()
+
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -587,6 +609,21 @@ func (r *REPL) withinTurn(ctx context.Context, modelName string, fn func(context
 					r.saveOnExit()
 					r.opts.Exit(130)
 					return
+				}
+				if r.canAsk() {
+					// Hold, not cancel: the reply keeps streaming, into held
+					// output, and nothing new starts until the menu is
+					// answered (holdMenu). On its own goroutine, so this loop
+					// still sees a second SIGINT, which exits above, and
+					// SIGUSR1. A Ctrl-C with the menu already open opens no
+					// second one.
+					if menu.TryLock() {
+						go func() {
+							defer menu.Unlock()
+							r.holdMenu()
+						}()
+					}
+					continue
 				}
 				fmt.Fprintln(r.opts.Stderr, "\nPress Ctrl-C again to exit")
 				// The send, not the turn. Cancelling the turn context here
@@ -676,6 +713,8 @@ type rlConfirmer struct{ r *REPL }
 
 func (cf rlConfirmer) Confirm(req coder.ConfirmRequest) coder.ConfirmResult {
 	r := cf.r
+	r.askMu.Lock()
+	defer r.askMu.Unlock()
 	switch {
 	case req.Command != "":
 		// The purpose is the model's claim about the command, so it sits above
@@ -804,6 +843,14 @@ type rlAsker struct{ r *REPL }
 // y/n confirm uses: no input history (answers are not worth recalling), no
 // completion.
 func (rl rlAsker) readAskLine(promptText string) (string, bool) {
+	line, err := rl.readAsk(promptText)
+	return line, err == nil
+}
+
+// readAsk is readAskLine with the reason a read gave nothing: readline's
+// ErrInterrupt for a Ctrl-C that did not complete the chord, or the read's
+// own error.
+func (rl rlAsker) readAsk(promptText string) (string, error) {
 	r := rl.r
 	r.discardTypeahead()
 	cfg := r.rl.GetConfig()
@@ -836,12 +883,12 @@ func (rl rlAsker) readAskLine(promptText string) (string, bool) {
 			r.opts.Exit(130)
 		}
 		fmt.Fprintln(r.opts.Stderr, "Press Ctrl-C again to exit")
-		return "", false
+		return "", err
 	}
 	if err != nil {
-		return "", false
+		return "", err
 	}
-	return line, true
+	return line, nil
 }
 
 // askHint is the answer line's prompt.
@@ -857,6 +904,8 @@ func askHint(n int, multiSelect bool) string {
 }
 
 func (rl rlAsker) Ask(req coder.AskRequest) []string {
+	rl.r.askMu.Lock()
+	defer rl.r.askMu.Unlock()
 	r := rl.r
 	r.out.Toolf("‹question› %s", req.Question)
 	for i, opt := range req.Options {

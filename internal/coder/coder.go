@@ -115,6 +115,12 @@ type Coder struct {
 	// printed and cleared by runAndShowTail inside the command's block.
 	approvalNote string
 
+	// hold is the gate a Ctrl-C closes in the REPL, and the messages waiting
+	// at it (hold.go). framingQueued marks the next user message as one of
+	// them, for sendMessage to frame.
+	hold          turnHold
+	framingQueued bool
+
 	// turns are the settled history's turns, oldest first, for /rewind
 	// (rewind.go). compactedTurns says a compaction absorbed earlier ones, so
 	// a rewind that cannot reach them can say why.
@@ -643,6 +649,7 @@ func declined(res ConfirmResult, what, grant string) string {
 // because the transcript was appended after Run returned and a turn that never
 // returned never reached it. Recording from inside the defer has no such gap.
 func (c *Coder) Run(ctx context.Context, withMessage string) (answer string) {
+	c.resetHold()
 	c.runOne(ctx, withMessage)
 	return c.turnAnswer()
 }
@@ -728,6 +735,16 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 				return
 			}
 			message = "" // the tool results are the message
+			// The step boundary: a held turn waits here before its next
+			// request, and a message the user typed meanwhile rides it.
+			c.waitHold(ctx)
+			if c.stopRequested() {
+				c.stopAtBoundary()
+				return
+			}
+			if q, ok := c.deliverQueued(); ok {
+				message = q
+			}
 
 		case OutcomeSuccess:
 			// The model has nothing more to call, so it believes it is done.
@@ -752,6 +769,11 @@ func (c *Coder) turnLoop(ctx context.Context, message string) {
 			return
 
 		case OutcomeInterrupted:
+			if c.stopRequested() {
+				// Stopped from the hold menu: the user already said what
+				// they meant, and it was stop.
+				return
+			}
 			next, keepGoing := c.afterInterrupt()
 			if !keepGoing {
 				return

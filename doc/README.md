@@ -672,7 +672,31 @@ still loops. There is one deliberate exception: a failing `check_auto` speaks
 as a *user* message, because the harness is talking unprompted and no tool
 call is waiting for an answer.
 
-**Ctrl-C stops the send, not the turn.** Each send runs under a child context
+**A Ctrl-C in the REPL holds; it does not cancel.** When someone can be asked,
+the first Ctrl-C of a turn opens a menu (`holdMenu`) and holds two things. The
+output: the coder writes through `heldOutput`, which queues every call while
+the menu is up and replays them in order on release, so the reply keeps
+streaming at no cost and the menu does not scroll away under it. And the turn:
+`Coder.Hold` closes a gate that `sendMessage` waits at before a reply's tool
+calls run and `turnLoop` waits at before the next request is sent. Holding the
+output alone would have let the agent carry on behind a transcript no one could
+see, which is the one thing a person pressing Ctrl-C does not want. Enter
+releases both. `s` releases with stop: a reply still streaming is cancelled
+through `InterruptSend` as below, and one held at the gate answers each of its
+tool calls "not run" (`unrunText`) so the history stays well-formed, or, held
+between steps, ends with `stoppedNote`. Either way the outcome is
+`OutcomeInterrupted`, so the "Stopped…" hint shows, and `turnLoop` skips the
+steer question because the user has already answered it. Any other text is
+queued (`Release(message, …)`) and delivered at the next step boundary as a
+user message framed by `queuedNote`, after the step's tool results, which the
+Anthropic adapter merges into the same user turn. With no boundary left, the
+REPL sends it as the next turn (`TakeQueued`). A second Ctrl-C at the menu
+completes the chord and exits; one that arrives too late for the chord asks
+again rather than counting as Enter, since carrying on is the one thing it
+cannot mean. SIGUSR1 and script mode never come here: they are a program's
+interrupt and nobody is at a menu, so they cancel as below.
+
+**Interrupting stops the send, not the turn.** Each send runs under a child context
 of its own (`sendSteerable`), and the REPL's signal handler cancels *that* via
 `InterruptSend` rather than the turn's context. It used to cancel the turn's,
 which meant every later call in it saw `Canceled` and the turn could only end
@@ -776,9 +800,9 @@ session, which is what `tmux new-session <command>` produces if it execs
 Strument directly instead of a shell — POSIX says a `SIGTSTP` delivered to it is
 discarded, and no number of presses will suspend it.
 
-**SIGUSR1 is the same interrupt without a keyboard.** It shares the Ctrl-C
+**SIGUSR1 is the interrupt without a keyboard.** It shares the Ctrl-C
 handler's subscription (the `Notify` seam delivers both to one channel) and
-calls the same `InterruptSend`, so the steer menu, `settleEdits`, and the
+calls `InterruptSend`, where an interactive Ctrl-C holds instead, so the steer menu, `settleEdits`, and the
 "Stopped…" hint all come from the coder noticing the cancelled send and need no
 second path. What it does *not* share is the chord: a chord is a keyboard
 idiom — the second press means "no really, exit" — and a signal arriving from

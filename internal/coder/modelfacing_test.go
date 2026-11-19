@@ -96,8 +96,11 @@ func modelFacingText(t *testing.T) string {
 		{"prompts.RollRecallLabel", prompts.RollRecallLabel},
 		{"prompts.RollRecallTail", prompts.RollRecallTail},
 		{"consultIntro", consultIntro},
+		{"queuedNote", queuedNote},
 		{"seamOther", seamOther},
 		{"seamYours", seamYours},
+		{"stoppedNote", stoppedNote},
+		{"unrunText", unrunText},
 	} {
 		fmt.Fprintf(&b, "\n## %s\n\n%s\n", n.name, n.text)
 	}

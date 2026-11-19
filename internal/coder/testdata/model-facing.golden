@@ -624,6 +624,10 @@ Another AI model, working with a user on a software project, is asking for your 
 
 
 
+## queuedNote
+
+The user sent this while you were working. It arrived after your last step, so take it into account from here on.
+
 ## seamOther
 
 The replies from here on were made by a different model. They are a record of what happened, not decisions you made — where you have reason to disagree with them, say so rather than defending them.
@@ -631,3 +635,11 @@ The replies from here on were made by a different model. They are a record of wh
 ## seamYours
 
 The replies from here on are yours.
+
+## stoppedNote
+
+The user stopped the turn here, after the results above. Nothing after them ran.
+
+## unrunText
+
+Not run: the user stopped the turn before this ran.

@@ -312,6 +312,10 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	} else {
 		var msg llm.Message
 		msg, consumedAttachments = c.userMessage(inp)
+		if c.framingQueued {
+			c.framingQueued = false
+			msg = queuedMessage(msg)
+		}
 		c.curMessages = append(c.curMessages, msg)
 		appendedUser = true
 	}
@@ -564,6 +568,18 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	if interrupted {
 		c.noteInterrupt()
 		return OutcomeInterrupted, ""
+	}
+
+	// A held turn waits here, before the reply's tool calls run: nothing new
+	// starts while the user decides. Stopped, every call is answered as not
+	// run, so the conversation stays well-formed, and the turn ends as any
+	// Ctrl-C ends one, with what was done kept.
+	if len(c.stream.toolCalls) > 0 {
+		c.waitHold(ctx)
+		if c.stopRequested() {
+			c.answerUnrun(unrunText)
+			return OutcomeInterrupted, ""
+		}
 	}
 
 	// Everything a turn does now arrives as tool calls. There is no longer

@@ -162,32 +162,31 @@ What you save in the editor becomes the updated prompt for you to read and send.
 
 ### Interrupting and steering
 
-While the model is responding or a tool is running, press <kbd>Ctrl+C</kbd> once to interrupt it.
-Strument keeps the conversation and any completed work, then asks whether to continue, stop, or enter a correction.
+While the model is responding or a tool is running, press <kbd>Ctrl+C</kbd> once to pause.
+Nothing is cancelled: the reply keeps arriving out of sight, but the turn stops at its next step, before the model's tool calls run and before another request goes out.
+You then choose:
+
+- <kbd>Enter</kbd> continues, and what was held appears.
+- `s` stops the turn. A reply still being written is cut off, and a running command is stopped. Strument keeps the conversation and any completed work.
+- Anything else is a message for the model. It goes in at the next step, beside the results of the step just finished, so you can add to or correct the task without stopping it. If the turn ends first, it is sent as your next message.
+
 Press <kbd>Ctrl+C</kbd> twice within two seconds to exit Strument.
 A script can interrupt a run with `SIGUSR1` instead; see [script mode](doc/config.md#script-mode--m).
-
-You can stop a long response and redirect the model without starting over:
 
 ```none
 ‹thinking› I'll inspect the authentication package first...
 Reading internal/auth/auth.go
 ^C
-Press Ctrl-C again to exit
-
-‹question› You stopped the model. What now?
-1. Continue — Carry on from where it was cut off
-2. Stop — End the turn here
-Answer (1-2, or your own text): Use the existing token helper instead
-
-‹thinking› I'll continue from the interrupted response using the existing token helper.
+‹paused› The model's output is held, and nothing new starts until you answer.
+Enter to continue, s to stop the turn, or type a message for its next step. Ctrl-C again exits.
+ > Use the existing token helper instead
+Queued for the model's next step.
 ...
+‹your message, delivered› Use the existing token helper instead
 ```
 
-"Continue" lets the model resume from the partial response with the context preserved.
-Typing your own answer sends it as a correction, and "Stop" ends the turn.
-Edits made before the interruption remain undoable with `/undo`.
-If you press <kbd>Ctrl+C</kbd> before the model has replied at all, for example while Strument retries a poor connection, there is nothing to ask about: the turn ends as if you had not sent it, and your message is not added to the conversation.
+Edits made before you stop remain undoable with `/undo`.
+If you stop before the model has replied at all, for example while Strument retries a poor connection, the turn ends as if you had not sent it, and your message is not added to the conversation.
 
 Exiting in the middle of a turn — <kbd>Ctrl+C</kbd> twice, closing the terminal, or a `SIGTERM` from `timeout` or a service manager — does not lose the turn.
 Strument saves its edits for `/undo` on the way out.
