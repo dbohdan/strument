@@ -23,7 +23,10 @@ func ShellCommand(command string, full bool) string {
 	command = Sanitize(strings.TrimRight(command, "\r\n"))
 	first, rest, multiline := strings.Cut(command, "\n")
 
-	if !multiline || full {
+	if !multiline {
+		return "$ " + command
+	}
+	if full {
 		return "$ " + command + "\n"
 	}
 
@@ -34,5 +37,5 @@ func ShellCommand(command string, full bool) string {
 		unit = "line"
 	}
 
-	return fmt.Sprintf("$ %s  (+%d more %s)\n", first, more, unit)
+	return fmt.Sprintf("$ %s  (+%d more %s)", first, more, unit)
 }
