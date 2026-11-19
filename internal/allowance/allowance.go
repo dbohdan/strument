@@ -146,7 +146,7 @@ func Line(prev *Reading, cur Reading, now time.Time) string {
 		b.WriteString(percent(r.Percent) + " used")
 		if prev != nil && prev.Rolling.Known {
 			if d := r.Percent - prev.Rolling.Percent; d >= 0 {
-				b.WriteString(" (" + delta(d) + ")")
+				b.WriteString(" (" + delta(d, whole(r.Percent) && whole(prev.Rolling.Percent)) + ")")
 			}
 		}
 	}
@@ -177,14 +177,23 @@ func percent(p float64) string {
 	return strings.TrimSuffix(strconv.FormatFloat(math.Round(p*10)/10, 'f', 1, 64), ".0") + "%"
 }
 
-// delta is a turn's share of the window. A share too small for one decimal is
-// still said to be more than none, so a cheap turn does not read as free.
-func delta(d float64) string {
-	if d > 0 && d < 0.05 {
+// delta is a turn's share of the window. A share too small to show is said to
+// be under the smallest step the meter has, never none: Go's meter moves in
+// whole percents, so +0% was what a turn on a free model and a turn using 0.6%
+// of the window both read, and only one of them was free. "Under 1%" is true of
+// both.
+func delta(d float64, wholeSteps bool) string {
+	switch {
+	case wholeSteps && d < 0.5:
+		return "+<1%"
+	case d < 0.05:
 		return "+<0.1%"
 	}
 	return "+" + percent(d)
 }
+
+// whole reports whether a reading is a whole percent.
+func whole(p float64) bool { return p == math.Trunc(p) }
 
 // until is the time left to t as the largest two units, or "" when t is
 // unknown or past.

@@ -1602,12 +1602,14 @@ month, which it serves as percentages at `<base_url>/usage`. Strument reads
 that at the end of each turn and shows it where the cost would be:
 
 ```none
-Tokens: 58.0k sent (6.9k cache write, 50.2k cache hit), 7.4k received, 114 t/s. Go: 5h 23.4% used (+0.8%), resets in 3h 12m. 6 steps, 1 file changed.
+Tokens: 72.6k sent (9.5k cache write, 62.7k cache hit), 1.9k received, 62 t/s. Go: 5h 9% used (+2%), resets in 2h 37m. 6 steps.
 ```
 
 The figure in parentheses is the turn's share: the change since the reading
-before it, the first time from one taken as the turn began. It is left out when
-usage aged out of the rolling window during the turn. The week and the month
+before it, the first time from one taken as the turn began. Go's meter moves in
+whole percents, so a turn that used less than one shows `+<1%`, which is also
+what a free model's turn shows. It is left out when usage aged out of the
+rolling window during the turn. The week and the month
 are added once either is 75% used or exhausted. The reading waits at most three
 seconds; past that, or on any other failure, the line goes without it. An
 opencode endpoint that has no allowance, such as Zen's pay-per-token one, keeps
