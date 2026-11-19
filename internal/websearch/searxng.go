@@ -47,13 +47,13 @@ type searxResponse struct {
 
 // NewSearxNG returns a Searcher backed by a SearXNG instance.
 func NewSearxNG(baseURL string, transport http.RoundTripper, userAgent string) Searcher {
-	client := &http.Client{Transport: transport, Timeout: searxTimeout}
+	client := &http.Client{Transport: httpx.QuickHandshake(transport)}
 	return func(ctx context.Context, query string) (Results, error) {
 		form := url.Values{"q": {query}, "format": {"json"}}
 		// POST, so a long query never meets a URL length limit in a reverse
 		// proxy, and so the query stays out of the instance's access log the
 		// way a GET's query string would not. SearXNG documents both.
-		reply, err := httpx.Post(ctx, client, baseURL+"/search", "application/x-www-form-urlencoded",
+		reply, err := httpx.PostRetrying(ctx, searxTimeout, client, baseURL+"/search", "application/x-www-form-urlencoded",
 			[]byte(form.Encode()), userAgent, nil, maxBytes)
 		if err != nil {
 			return Results{}, err

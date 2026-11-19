@@ -82,7 +82,7 @@ type exaResponse struct {
 // naming this backend without one, so an empty key here means a bug rather than
 // a user choice.
 func NewExa(baseURL, apiKey string, transport http.RoundTripper, userAgent string) Searcher {
-	client := &http.Client{Transport: transport, Timeout: exaTimeout}
+	client := &http.Client{Transport: httpx.QuickHandshake(transport)}
 	return func(ctx context.Context, query string) (Results, error) {
 		body, err := json.Marshal(map[string]any{
 			"query":      query,
@@ -101,8 +101,8 @@ func NewExa(baseURL, apiKey string, transport http.RoundTripper, userAgent strin
 		// x-api-key rather than Authorization: the endpoint accepts both, and
 		// this is the one the reference leads with. Spelled canonically, since
 		// a header map written out like this is not canonicalized for us.
-		reply, err := httpx.Post(ctx, client, baseURL+"/search", "application/json", body, userAgent,
-			http.Header{"X-Api-Key": {apiKey}}, maxBytes)
+		reply, err := httpx.PostRetrying(ctx, exaTimeout, client, baseURL+"/search", "application/json", body,
+			userAgent, http.Header{"X-Api-Key": {apiKey}}, maxBytes)
 		if err != nil {
 			return Results{}, err
 		}

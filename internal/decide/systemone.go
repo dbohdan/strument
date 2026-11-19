@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"dbohdan.com/strument/internal/httpx"
 )
@@ -110,7 +109,7 @@ type systemOneResponse struct {
 func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, userAgent string) Func {
 	// No client timeout: the caller's context carries the deadline, which is
 	// the configured one.
-	client := &http.Client{Transport: quickHandshake(transport)}
+	client := &http.Client{Transport: httpx.QuickHandshake(transport)}
 	return func(ctx context.Context, in Input) (Decision, error) {
 		body, err := systemOneRequest(slug, in)
 		if err != nil {
@@ -125,83 +124,14 @@ func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, us
 		// more than the User-Agent does. Without them OpenRouter lists the
 		// requests under "Unknown".
 		httpx.SetAppAttribution(header)
-		reply, err := postRetrying(ctx, func() (httpx.Reply, error) {
-			return httpx.Post(ctx, client, endpoint, "application/json", body, userAgent, header, maxBytes)
-		})
+		// A decision is a question, so a stalled handshake or a busy service
+		// is asked again while the deadline allows.
+		reply, err := httpx.PostRetrying(ctx, 0, client, endpoint, "application/json", body, userAgent, header, maxBytes)
 		if err != nil {
 			return Decision{}, err
 		}
 		return parseSystemOne(reply.Status, reply.Body)
 	}
-}
-
-// handshakeTimeout bounds a decision request's TLS handshake. The default
-// transport allows 10 seconds, which is also a decision's default deadline,
-// so one stuck handshake spent the whole budget and the user was asked:
-// "did not answer (... net/http: TLS handshake timeout)". A handshake that
-// stalls rarely stalls twice, so a short one leaves time to try again.
-const handshakeTimeout = 3 * time.Second
-
-// quickHandshake is transport with handshakeTimeout, or the default
-// transport with it when transport is nil. A transport of another kind is
-// used as it is.
-func quickHandshake(transport http.RoundTripper) http.RoundTripper {
-	if transport == nil {
-		transport = http.DefaultTransport
-	}
-	t, ok := transport.(*http.Transport)
-	if !ok {
-		return transport
-	}
-	t = t.Clone()
-	t.TLSHandshakeTimeout = handshakeTimeout
-	return t
-}
-
-// retryDelays are the waits between attempts. The decision's deadline, not
-// the count, is what usually ends the trying.
-var retryDelays = []time.Duration{250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2 * time.Second}
-
-// postRetrying makes a request until it gets an answer worth reading, or the
-// context ends. A failure with no response (a handshake that timed out, a
-// reset connection) and a response saying to come back (429, 502, 503, 504)
-// are tried again; a decision is a classification, so asking twice is
-// harmless. Any other answer, an error included, is returned as it is. The
-// error after the last attempt says how many there were.
-func postRetrying(ctx context.Context, post func() (httpx.Reply, error)) (httpx.Reply, error) {
-	for attempt := 1; ; attempt++ {
-		reply, err := post()
-		if err == nil && !retryStatus(reply.Status) {
-			return reply, nil
-		}
-		if ctx.Err() != nil || attempt > len(retryDelays) {
-			if err == nil {
-				// The last answer was a come-back-later status: the parser
-				// reports it in the service's own words.
-				return reply, nil
-			}
-			if attempt > 1 {
-				err = fmt.Errorf("%d attempts, the last: %w", attempt, err)
-			}
-			return httpx.Reply{}, err
-		}
-		select {
-		case <-ctx.Done():
-			if err == nil {
-				return reply, nil
-			}
-			return httpx.Reply{}, fmt.Errorf("%d attempts, the last: %w", attempt, err)
-		case <-time.After(retryDelays[attempt-1]):
-		}
-	}
-}
-
-func retryStatus(status int) bool {
-	switch status {
-	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return true
-	}
-	return false
 }
 
 // parseSystemOne reads a response, and is strict about it: anything short of

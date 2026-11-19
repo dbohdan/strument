@@ -2,7 +2,6 @@ package decide
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,9 +17,9 @@ const okBody = `{"model":"m","answers":{"decision":{"type":"choice","probabiliti
 
 func quickRetries(t *testing.T) {
 	t.Helper()
-	saved := retryDelays
-	retryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
-	t.Cleanup(func() { retryDelays = saved })
+	saved := httpx.RetryDelays
+	httpx.RetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
+	t.Cleanup(func() { httpx.RetryDelays = saved })
 }
 
 // A service that says to come back, or drops the connection, is asked again;
@@ -75,45 +74,9 @@ func TestDecisionDoesNotRetryAnAnswer(t *testing.T) {
 	}
 }
 
-// The attempts stop with the decision's deadline or after the last delay,
-// and the error says how many there were.
-func TestDecisionRetriesEndAndSaySo(t *testing.T) {
-	quickRetries(t)
-	fail := errors.New("net/http: TLS handshake timeout")
-	n := 0
-	_, err := postRetrying(context.Background(), func() (httpx.Reply, error) { n++; return httpx.Reply{}, fail })
-	if !errors.Is(err, fail) || n != len(retryDelays)+1 || !strings.Contains(err.Error(), "5 attempts") {
-		t.Errorf("err=%v after %d attempts", err, n)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	n = 0
-	_, err = postRetrying(ctx, func() (httpx.Reply, error) { n++; cancel(); return httpx.Reply{}, fail })
-	if !errors.Is(err, fail) || n != 1 {
-		t.Errorf("a cancelled decision: err=%v after %d attempts; want one", err, n)
-	}
-
-	// Still being told to come back at the end: the status goes to the
-	// parser, which says it in the service's words.
-	reply, err := postRetrying(context.Background(), func() (httpx.Reply, error) { return httpx.Reply{Status: 503}, nil })
-	if err != nil || reply.Status != 503 {
-		t.Errorf("reply=%+v err=%v", reply, err)
-	}
-}
-
 // A stuck handshake fails in seconds, leaving time to try again, where the
 // default transport would wait out the whole decision.
 func TestDecisionHandshakeIsShort(t *testing.T) {
-	for _, in := range []http.RoundTripper{nil, http.DefaultTransport, &http.Transport{}} {
-		got, ok := quickHandshake(in).(*http.Transport)
-		if !ok || got.TLSHandshakeTimeout != handshakeTimeout {
-			t.Errorf("quickHandshake(%T) = %+v", in, got)
-		}
-	}
-	if d, ok := http.DefaultTransport.(*http.Transport); !ok || d.TLSHandshakeTimeout == handshakeTimeout {
-		t.Error("the default transport was changed, not cloned")
-	}
-
 	// End to end: a listener that accepts and never speaks TLS. It waits out
 	// one handshake, so it is not in the short run.
 	if testing.Short() {
@@ -133,13 +96,13 @@ func TestDecisionHandshakeIsShort(t *testing.T) {
 			defer c.Close()
 		}
 	}()
-	saved := retryDelays
-	retryDelays = nil
-	defer func() { retryDelays = saved }()
+	saved := httpx.RetryDelays
+	httpx.RetryDelays = nil
+	defer func() { httpx.RetryDelays = saved }()
 	start := time.Now()
 	_, err = NewSystemOne("https://"+ln.Addr().String(), "laya", "", nil, "test")(context.Background(), Input{Command: "ls"})
 	if took := time.Since(start); err == nil || !strings.Contains(err.Error(), "TLS handshake timeout") ||
-		took > handshakeTimeout+2*time.Second {
+		took > httpx.HandshakeTimeout+2*time.Second {
 		t.Errorf("err=%v after %s", err, took)
 	}
 }

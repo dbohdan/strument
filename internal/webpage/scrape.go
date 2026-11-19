@@ -49,8 +49,13 @@ func NewSimple(transport http.RoundTripper, userAgent string) Scraper {
 	if userAgent == "" {
 		userAgent = httpx.DefaultUserAgent
 	}
-	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+	// The handshake is kept short so a stalled one leaves time to try again;
+	// fetchTimeout bounds every attempt together, through the context.
+	transport = httpx.QuickHandshake(transport)
+	client := &http.Client{Transport: transport}
 	return func(ctx context.Context, url string, opts Options) (string, error) {
+		ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+		defer cancel()
 		client := client
 		if opts.Follow != nil || opts.LocalOK != nil {
 			c := *client
@@ -66,17 +71,26 @@ func NewSimple(transport http.RoundTripper, userAgent string) Scraper {
 			}
 			client = &c
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return "", err
-		}
-		// Identify the request: Go's default user-agent reads as a bot and is
-		// widely blocked. HTTP-Referer/X-Title are OpenRouter-specific and have
-		// no business on an arbitrary site, so they are not sent here.
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Accept", scrapeAccept)
-
-		resp, err := client.Do(req)
+		// A fetch is a GET, so a timeout, a dropped connection or a
+		// come-back-later answer is tried again. The refusals below are errors
+		// of the same call and are not: Retry tries only what a second
+		// attempt can change.
+		resp, err := httpx.Retry(ctx, func() (*http.Response, int, error) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			if err != nil {
+				return nil, 0, err
+			}
+			// Identify the request: Go's default user-agent reads as a bot and
+			// is widely blocked. HTTP-Referer/X-Title are OpenRouter-specific
+			// and have no business on an arbitrary site, so they are not sent.
+			req.Header.Set("User-Agent", userAgent)
+			req.Header.Set("Accept", scrapeAccept)
+			resp, err := client.Do(req)
+			if err != nil {
+				return nil, 0, err
+			}
+			return resp, resp.StatusCode, nil
+		}, func(r *http.Response) { _ = r.Body.Close() })
 		if err != nil {
 			var refused *RedirectRefusedError
 			if errors.As(err, &refused) {
@@ -112,6 +126,9 @@ func NewSimple(transport http.RoundTripper, userAgent string) Scraper {
 		return wrap(url, text), nil
 	}
 }
+
+// fetchTimeout bounds a fetch, every attempt and the reading of the page.
+const fetchTimeout = 30 * time.Second
 
 // maxRedirects is net/http's own default, kept when CheckRedirect is replaced:
 // setting the hook drops the built-in limit along with the default policy.

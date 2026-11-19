@@ -58,7 +58,7 @@ type anySearchResponse struct {
 // worth keeping usable — a search tool that demands a signup before it does
 // anything is one most people never turn on.
 func NewAnySearch(baseURL, apiKey string, transport http.RoundTripper, userAgent string) Searcher {
-	client := &http.Client{Transport: transport, Timeout: anySearchTimeout}
+	client := &http.Client{Transport: httpx.QuickHandshake(transport)}
 	return func(ctx context.Context, query string) (Results, error) {
 		body, err := json.Marshal(map[string]any{
 			"query":       query,
@@ -74,8 +74,8 @@ func NewAnySearch(baseURL, apiKey string, transport http.RoundTripper, userAgent
 		if apiKey != "" {
 			header.Set("Authorization", "Bearer "+apiKey)
 		}
-		reply, err := httpx.Post(ctx, client, baseURL+"/v1/search", "application/json", body, userAgent,
-			header, maxBytes)
+		reply, err := httpx.PostRetrying(ctx, anySearchTimeout, client, baseURL+"/v1/search", "application/json",
+			body, userAgent, header, maxBytes)
 		if err != nil {
 			return Results{}, err
 		}
