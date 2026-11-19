@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/envallow"
@@ -99,6 +100,7 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	if err != nil {
 		return fmt.Sprintf("Could not read %s: %v", quoteToolArg(a.Path), err), nil
 	}
+	clipped, byBytes := fitReadWindow(&ft)
 	i.Out.Toolf("Read %s", readSummary(ft))
 	if i.Observe != nil {
 		// Recorded even for a windowed read: the model has seen part of this
@@ -131,10 +133,68 @@ func (i *Inspector) runRead(tc llm.ToolCall) (string, []llm.ImageSource) {
 	}
 	if ft.Truncated {
 		next := ft.Start + len(ft.Lines)
-		fmt.Fprintf(&b, "\n(Lines %d-%d of %d. Read from offset %d for more.)\n",
-			ft.Start, next-1, ft.Total, next)
+		why := ""
+		if byBytes {
+			// Said, so a model does not raise limit expecting more lines.
+			why = fmt.Sprintf(", cut at %d KB", maxReadBytes/1000)
+		}
+		fmt.Fprintf(&b, "\n(Lines %d-%d of %d%s. Read from offset %d for more.)\n",
+			ft.Start, next-1, ft.Total, why, next)
+	}
+	if clipped > 0 {
+		what := fmt.Sprintf("1 line was longer than %d bytes and is shown shortened", maxReadLineBytes)
+		if clipped > 1 {
+			what = fmt.Sprintf("%d lines were longer than %d bytes and are shown shortened", clipped, maxReadLineBytes)
+		}
+		fmt.Fprintf(&b, "\n(%s, ending in %q. read_text() in run_code returns the text whole.)\n", what, clipMarker)
 	}
 	return b.String(), nil
+}
+
+// maxReadBytes bounds what one read returns, and maxReadLineBytes one line
+// of it. read was the one observation tool not held to maxToolOutputBytes:
+// its window was 2,000 lines and nothing else, so a minified bundle came back
+// as one 300 KB line and 2,000 lines of 300 characters as 628 KB, most of a
+// context window from one call. It is held here rather than by
+// truncateResult, because clipping each line first lets the budget fall
+// between whole lines, so the offset to continue from is simply the next one.
+const (
+	maxReadBytes     = maxToolOutputBytes
+	maxReadLineBytes = 2_000
+)
+
+// clipMarker ends a shortened line. It cannot be mistaken for the file's own
+// text by an edit: no file's line ends in it by accident.
+const clipMarker = " …[line shortened]"
+
+// fitReadWindow shortens the lines of ft longer than maxReadLineBytes and
+// drops the lines past maxReadBytes, marking ft truncated if any went. It
+// reports how many lines it shortened and whether the byte budget cut the
+// window.
+func fitReadWindow(ft *workspace.FileText) (clipped int, byBytes bool) {
+	total := 0
+	for n, line := range ft.Lines {
+		long := len(line) > maxReadLineBytes
+		if long {
+			cut := maxReadLineBytes
+			for cut > 0 && !utf8.RuneStart(line[cut]) {
+				cut--
+			}
+			line = line[:cut] + clipMarker
+		}
+		// The number, the arrow and the newline cost about ten bytes more.
+		total += len(line) + 10
+		if total > maxReadBytes && n > 0 {
+			ft.Lines = ft.Lines[:n]
+			ft.Truncated = true
+			return clipped, true
+		}
+		if long {
+			ft.Lines[n] = line
+			clipped++
+		}
+	}
+	return clipped, false
 }
 
 // readSummary is the one-line outcome shown to the user.
@@ -144,7 +204,7 @@ func readSummary(ft workspace.FileText) string {
 		return fmt.Sprintf("%s (%d lines, nothing at offset %d)", p, ft.Total, ft.Start)
 	}
 	if ft.Start == 1 && !ft.Truncated {
-		return fmt.Sprintf("%s (%d lines)", p, ft.Total)
+		return fmt.Sprintf("%s (%s)", p, render.Plural(ft.Total, "line", "lines"))
 	}
 	return fmt.Sprintf("%s (lines %d-%d of %d)", p, ft.Start, ft.Start+len(ft.Lines)-1, ft.Total)
 }
@@ -266,8 +326,9 @@ func (i *Inspector) runGrep(tc llm.ToolCall) string {
 		// plural carries the count itself; passing it again alongside printed
 		// "49 long 49 lines were shortened". Found by the first real use of
 		// `strument tool grep`, which is the argument for the command.
-		fmt.Fprintf(&b, "\n(%s shortened, marked with \"…\". Read the file for the whole line.)\n",
-			render.Plural(res.Shortened, "long line was", "long lines were"))
+		fmt.Fprintf(&b, "\n(%s shortened, marked with \"…\". Read the file for the whole line, or use "+
+			"read_text() in run_code for a line longer than %d bytes.)\n",
+			render.Plural(res.Shortened, "long line was", "long lines were"), maxReadLineBytes)
 	}
 	return truncateResult(b.String())
 }

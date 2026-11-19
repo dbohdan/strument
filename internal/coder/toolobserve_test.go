@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
@@ -65,6 +68,63 @@ func TestReadNumbersLinesAndPages(t *testing.T) {
 	if !strings.Contains(win, "(10 lines)") {
 		t.Errorf("the result must carry the file's real length:\n%s", win)
 	}
+}
+
+// One read is bounded in bytes as well as lines: a minified bundle came back
+// as one 300 KB line, and 2,000 wide lines as 628 KB. A long line is shown
+// shortened, and the byte budget falls between whole lines, so the offset to
+// continue from is the next line and nothing is skipped.
+func TestReadIsBoundedInBytes(t *testing.T) {
+	var wide strings.Builder
+	for i := 1; i <= 2000; i++ {
+		fmt.Fprintf(&wide, "%05d %s\n", i, strings.Repeat("y", 300))
+	}
+	c, _ := observeEnv(t, map[string]string{
+		"min.js":   strings.Repeat("x", 300_000) + "\n",
+		"wide.txt": wide.String(),
+		"utf.txt":  strings.Repeat("é", 1500) + "\n",
+	})
+
+	got := readTool(c, call("read", `{"path":"min.js"}`))
+	if len(got) > 3000 || !strings.Contains(got, clipMarker) || !strings.Contains(got, "1 line was longer") ||
+		!strings.Contains(got, "read_text()") {
+		t.Errorf("a 300 KB line: %d bytes\n%.300s", len(got), got)
+	}
+
+	got = readTool(c, call("read", `{"path":"wide.txt"}`))
+	m := regexp.MustCompile(`\(Lines 1-(\d+) of 2000, cut at 60 KB\. Read from offset (\d+) for more\.\)`).FindStringSubmatch(got)
+	if len(got) > maxReadBytes+500 || m == nil {
+		t.Fatalf("2,000 wide lines: %d bytes, tail %q", len(got), got[max(0, len(got)-200):])
+	}
+	last, next := m[1], m[2]
+	if !strings.Contains(got, last+"→"+fmt.Sprintf("%05s", last)+" ") || strconv.Itoa(mustAtoi(t, last)+1) != next {
+		t.Errorf("the last line shown (%s) and the offset to continue from (%s) disagree", last, next)
+	}
+	// Continuing from there picks up the very next line.
+	more := readTool(c, call("read", fmt.Sprintf(`{"path":"wide.txt","offset":%s}`, next)))
+	if !strings.Contains(more, next+"→"+fmt.Sprintf("%05s", next)+" ") {
+		t.Errorf("continuing from offset %s:\n%.200s", next, more)
+	}
+
+	// A line is never cut inside a character.
+	got = readTool(c, call("read", `{"path":"utf.txt"}`))
+	if !utf8.ValidString(got) || !strings.Contains(got, clipMarker) {
+		t.Errorf("a long line of two-byte characters was cut badly: valid=%v", utf8.ValidString(got))
+	}
+
+	// read_text is not clipped: a program computing over the file needs it whole.
+	if got := run(c, `read_text("min.js").length`); got != "300001" {
+		t.Errorf("read_text of the bundle: %s", got)
+	}
+}
+
+func mustAtoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 func TestReadReportsMissingFileToTheModel(t *testing.T) {
