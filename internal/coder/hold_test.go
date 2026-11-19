@@ -18,8 +18,9 @@ import (
 // while the first reply is still streaming, where a Ctrl-C lands. It keeps
 // every request.
 type holdClient struct {
-	answerOnly bool
-	midStream  func()
+	answerOnly  bool
+	secondWrite bool // the second reply writes then.txt before the answer
+	midStream   func()
 
 	mu       sync.Mutex
 	requests []llm.Request
@@ -48,6 +49,14 @@ func (s *holdClient) Send(_ context.Context, req llm.Request) iter.Seq2[llm.Stre
 				return
 			}
 			yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+			return
+		}
+		if n == 2 && s.secondWrite {
+			if yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: &llm.ToolCallDelta{
+				Index: 0, ID: "call_2", Name: toolWrite, Args: `{"path":"then.txt","content":"y\n"}`,
+			}}, nil) {
+				yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "tool_calls"}, nil)
+			}
 			return
 		}
 		if !yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "Done."}, nil) {
@@ -218,5 +227,22 @@ func TestHoldStopBetweenSteps(t *testing.T) {
 	}
 	if c.LastOutcome() != OutcomeInterrupted {
 		t.Errorf("outcome = %v, want interrupted", c.LastOutcome())
+	}
+}
+
+// A delivered message is a review boundary: the edits before it and after it
+// are two steps for /undo, as they are around the answer to an interrupt.
+func TestHoldDeliverySplitsTheUndo(t *testing.T) {
+	for _, message := range []string{"", "and then.txt too"} {
+		c, cl := holdCoder(t, false, func(c *Coder) { c.Release(message, false) })
+		cl.secondWrite = true
+		c.Run(context.Background(), "make it")
+		want := 1
+		if message != "" {
+			want = 2
+		}
+		if got := len(c.undoStack); got != want {
+			t.Errorf("message %q: %d undo steps, want %d", message, got, want)
+		}
 	}
 }

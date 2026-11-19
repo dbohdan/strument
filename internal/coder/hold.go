@@ -119,6 +119,10 @@ func (c *Coder) deliverQueued() (string, bool) {
 	if q == "" {
 		return "", false
 	}
+	// The user spoke between steps, which makes this a review boundary, as
+	// the answer to an interrupt is: /undo takes back what came after the
+	// message separately from what came before it.
+	c.settleEdits()
 	c.resumeInPlace = false
 	c.framingQueued = true
 	c.Out.Toolf("‹delivered› %s", q)

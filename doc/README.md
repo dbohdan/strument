@@ -689,8 +689,13 @@ between steps, ends with `stoppedNote`. Either way the outcome is
 steer question because the user has already answered it. Any other text is
 queued (`Release(message, …)`) and delivered at the next step boundary as a
 user message framed by `queuedNote`, after the step's tool results, which the
-Anthropic adapter merges into the same user turn. With no boundary left, the
-REPL sends it as the next turn (`TakeQueued`). A second Ctrl-C at the menu
+Anthropic adapter merges into the same user turn. Delivery settles the edits
+so far (`settleEdits`), as the answer to an interrupt does, since the user
+speaking between steps is a review boundary too: `/undo` takes back what came
+after the message separately from what came before. With no boundary left,
+because the turn or a `/btw` ended first, the REPL sends it as the next turn
+(`TakeQueued` at the top of its loop), always as a message even when it starts
+with a slash. A second Ctrl-C at the menu
 completes the chord and exits; one that arrives too late for the chord asks
 again rather than counting as Enter, since carrying on is the one thing it
 cannot mean. SIGUSR1 and script mode never come here: they are a program's

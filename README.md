@@ -186,6 +186,7 @@ Queued for the model's next step.
 ```
 
 Edits made before you stop remain undoable with `/undo`.
+A message delivered mid-turn splits the turn for `/undo`: the first `/undo` takes back what the model did after your message, the next what it did before.
 If you stop before the model has replied at all, for example while Strument retries a poor connection, the turn ends as if you had not sent it, and your message is not added to the conversation.
 
 Exiting in the middle of a turn — <kbd>Ctrl+C</kbd> twice, closing the terminal, or a `SIGTERM` from `timeout` or a service manager — does not lose the turn.
