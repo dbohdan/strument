@@ -121,7 +121,7 @@ func (c *Coder) deliverQueued() (string, bool) {
 	}
 	c.resumeInPlace = false
 	c.framingQueued = true
-	c.Out.Toolf("‹your message, delivered› %s", q)
+	c.Out.Toolf("‹queued› %s", q)
 	return q, true
 }
 

@@ -979,7 +979,7 @@ func TestTurnCtrlCChord(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("REPL did not stop after the turn")
 	}
-	if !strings.Contains(out.String(), "Ctrl-C again exits") {
+	if !strings.Contains(out.String(), "Ctrl-C again to exit") {
 		t.Errorf("missing chord hint:\n%s", out.String())
 	}
 }

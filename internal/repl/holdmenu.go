@@ -31,8 +31,8 @@ func (r *REPL) holdMenu() {
 	r.out.clearWaiting()
 	r.out.showCursor()
 	fmt.Fprintln(r.opts.Stdout)
-	r.out.Toolf("‹paused› The model's output is held, and nothing new starts until you answer.")
-	r.out.Toolf("Enter to continue, s to stop the turn, or type a message for its next step. Ctrl-C again exits.")
+	r.out.Toolf("‹paused› The current step will finish with the output hidden. No new steps while paused.")
+	r.out.Toolf("Enter to resume, s to stop this turn, or type a message to send before the next step. Ctrl-C again to exit.")
 	// A Ctrl-C at the menu that came too late to complete the chord asks
 	// again, so the next one exits: taking it as Enter would carry on the
 	// turn, the one thing a second Ctrl-C does not mean. A read that fails

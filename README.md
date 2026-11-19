@@ -177,12 +177,12 @@ A script can interrupt a run with `SIGUSR1` instead; see [script mode](doc/confi
 ‹thinking› I'll inspect the authentication package first...
 Reading internal/auth/auth.go
 ^C
-‹paused› The model's output is held, and nothing new starts until you answer.
-Enter to continue, s to stop the turn, or type a message for its next step. Ctrl-C again exits.
- > Use the existing token helper instead
+‹paused› The current step will finish with the output hidden. No new steps while paused.
+Enter to resume, s to stop this turn, or type a message to send before the next step. Ctrl-C again to exit.
+> Use the existing token helper instead
 Queued for the model's next step.
 ...
-‹your message, delivered› Use the existing token helper instead
+‹queued› Use the existing token helper instead
 ```
 
 Edits made before you stop remain undoable with `/undo`.
