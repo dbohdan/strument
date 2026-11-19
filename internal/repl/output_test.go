@@ -706,3 +706,26 @@ func TestBothOutputsSeparateCommandOutput(t *testing.T) {
 		t.Errorf("the two outputs space a command differently:\n script   %q\n terminal %q", got, want)
 	}
 }
+
+// Reasoning keeps a single "*" as text, so arithmetic survives; the answer
+// still renders it as the model's emphasis.
+func TestReasoningStarsAreTextAnswerStarsAreEmphasis(t *testing.T) {
+	for _, multiline := range []bool{false, true} {
+		var buf bytes.Buffer
+		o := &termOutput{w: &buf, color: true, theme: render.DefaultTheme(), width: 80}
+		if multiline {
+			o.StreamReasoning("Plan the canvas.\n")
+		}
+		o.StreamReasoning("Set canvas.width = COLS*CELL*dpr and scale.")
+		o.StreamText("This is *really* it.")
+		o.FlushStream()
+		got := buf.String()
+		reasoning, answer, _ := strings.Cut(got, "This is")
+		if !strings.Contains(reasoning, "COLS*CELL*dpr") || strings.Contains(reasoning, "\x1b[3m") {
+			t.Errorf("multiline=%v: reasoning lost its asterisks or went italic:\n%q", multiline, reasoning)
+		}
+		if !strings.Contains(answer, "\x1b[3m") {
+			t.Errorf("multiline=%v: the answer's *really* is not italic:\n%q", multiline, answer)
+		}
+	}
+}

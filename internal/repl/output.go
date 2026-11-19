@@ -345,7 +345,7 @@ func (o *termOutput) StreamReasoning(delta string) {
 				// reasoning delta has streamed nothing, and claiming otherwise
 				// buys a blank line with no content above it.
 				if o.parser == nil {
-					o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width))
+					o.parser = render.NewParser(render.NewANSI(o.w, o.color, o.reasoningTheme(), o.width)).NoStarItalics()
 					o.streamed = true
 					o.sep.Drew()
 				}

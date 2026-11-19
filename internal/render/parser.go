@@ -34,6 +34,9 @@ type Parser struct {
 	hrChars       int
 	tableState    int
 	linkLabel     string // the text after a "[" while it may or may not be a link
+	// literalStar keeps a single "*" literal instead of opening italics; see
+	// NoStarItalics.
+	literalStar bool
 }
 
 const tokenArrayCap = 24
@@ -48,6 +51,16 @@ func NewParser(renderer Renderer) *Parser {
 		token:    Document,
 	}
 	p.tokens[0] = Document
+	return p
+}
+
+// NoStarItalics makes a single "*" text, leaving "**bold**" as it is, and
+// returns p. It is for reasoning, which is working, not prose: models write
+// arithmetic there, and "COLS*CELL*dpr" rendered as COLS, an italic CELL, and
+// dpr, the asterisks gone. Bold stays because reasoning uses it for headings.
+// Answers keep both; there a single "*" is a model's emphasis.
+func (p *Parser) NoStarItalics() *Parser {
+	p.literalStar = true
 	return p
 }
 
@@ -526,6 +539,11 @@ func (p *Parser) tokenChecks(char rune, pendingWithChar string) bool {
 			}
 			//	**Bold*Bold->Em*
 			//	       ^
+			if p.literalStar && symbol == "*" {
+				p.text += symbol
+				p.pending = string(char)
+				return true
+			}
 			p.addToken(italic)
 			p.pending = string(char)
 			return true
@@ -1030,6 +1048,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			//	*Em*
 			//	 ^
 			if char != ' ' && char != '\n' {
+				if p.literalStar {
+					p.text += p.pending
+					p.pending = string(char)
+					return true
+				}
 				p.addText()
 				p.addToken(italic)
 				p.pending = string(char)

@@ -234,3 +234,36 @@ func TestANSILinksStillRender(t *testing.T) {
 		}
 	}
 }
+
+// In reasoning a single "*" is arithmetic as often as emphasis, so it stays
+// text there; bold stays bold, being how reasoning marks its headings. The
+// answer parser is unchanged (TestANSIAsteriskEmphasisStillWorks).
+func TestReasoningKeepsSingleStars(t *testing.T) {
+	for _, tc := range []struct{ doc, text string }{
+		{"set canvas.width = COLS*CELL*dpr etc.\n", "COLS*CELL*dpr"},
+		{"a *b* c\n", "a *b* c"},
+		{"**Planning** the layout\n", "Planning"},
+		{"**bold *inner* bold**\n", "*inner*"},
+	} {
+		for _, byChar := range []bool{false, true} {
+			var sb strings.Builder
+			p := NewParser(NewANSI(&sb, true, DefaultTheme(), testRuleWidth)).NoStarItalics()
+			if byChar {
+				for _, c := range tc.doc {
+					p.Write(string(c))
+				}
+			} else {
+				p.Write(tc.doc)
+			}
+			p.End()
+			got := sb.String()
+			plain := sgrRe.ReplaceAllString(got, "")
+			if strings.Contains(got, "\x1b[3m") || !strings.Contains(plain, tc.text) {
+				t.Errorf("byChar=%v: %q rendered %q, want %q literal and no italics", byChar, tc.doc, got, tc.text)
+			}
+			if strings.HasPrefix(tc.doc, "**") && !strings.Contains(got, "\x1b[1m") {
+				t.Errorf("byChar=%v: %q lost its bold: %q", byChar, tc.doc, got)
+			}
+		}
+	}
+}
