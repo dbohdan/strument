@@ -62,6 +62,12 @@ func (h *heldReplyClient) count() int {
 // answer into, the output, and the channel Run's result arrives on.
 func holdREPL(t *testing.T, cl *heldReplyClient, setup ...func(*REPL)) (*io.PipeWriter, interface{ String() string }, chan error) {
 	t.Helper()
+	return holdREPLOn(t, cl, "hello", setup...)
+}
+
+// holdREPLOn is holdREPL with the first line given.
+func holdREPLOn(t *testing.T, cl *heldReplyClient, first string, setup ...func(*REPL)) (*io.PipeWriter, interface{ String() string }, chan error) {
+	t.Helper()
 	pr, pw := io.Pipe()
 	r, _, out := newTestREPL(t, cl, pr)
 	for _, f := range setup {
@@ -78,7 +84,7 @@ func holdREPL(t *testing.T, cl *heldReplyClient, setup ...func(*REPL)) (*io.Pipe
 		return func() {}
 	}
 	r.opts.Exit = func(code int) { t.Errorf("exited with %d", code) }
-	go func() { _, _ = io.WriteString(pw, "hello\n") }()
+	go func() { _, _ = io.WriteString(pw, first+"\n") }()
 	done := make(chan error, 1)
 	go func() { done <- r.Run(context.Background()) }()
 	<-ready
@@ -183,4 +189,25 @@ func TestHoldMenuLateCtrlCAsksAgain(t *testing.T) {
 	_, _ = io.WriteString(pw, "\n")
 	waitFor(t, out, "Done.")
 	finishRun(t, pw, done)
+}
+
+// A message typed at the menu during a /btw is the next turn once the /btw
+// ends, not something left for a later turn to deliver mid-way.
+func TestHoldMenuDuringBtwQueuesTheNextTurn(t *testing.T) {
+	cl := &heldReplyClient{started: make(chan struct{}), finish: make(chan struct{})}
+	pw, out, done := holdREPLOn(t, cl, "/btw what is a lighthouse?")
+	_, _ = io.WriteString(pw, "and this too\n")
+	waitFor(t, out, "Queued for the model's next step.")
+	close(cl.finish)
+	waitFor(t, out, "Second.")
+	finishRun(t, pw, done)
+	if cl.count() != 2 {
+		t.Fatalf("%d requests, want 2", cl.count())
+	}
+	msgs := cl.requests[1].Messages
+	last := msgs[len(msgs)-1]
+	if last.Role != llm.RoleUser || !strings.Contains(last.Text(), "and this too") ||
+		strings.Contains(last.Text(), "while you were working") {
+		t.Errorf("the turn after the /btw is not the plain queued message: %+v", last)
+	}
 }

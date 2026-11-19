@@ -477,6 +477,17 @@ func (r *REPL) Run(ctx context.Context) error {
 	r.announce()
 	for {
 		r.renderPromptHeader()
+		// A message typed at the Ctrl-C menu waits for a step boundary. When
+		// whatever was running ended before one, a turn or a /btw, it is the
+		// next turn, sent as if typed, and always as a message: a leading
+		// slash typed for the model is not a command.
+		if q := r.coder.TakeQueued(); q != "" {
+			r.printf(" > %s", q)
+			r.runTurn(ctx, q)
+			r.showInterruptHint()
+			r.showUndoHint()
+			continue
+		}
 		var line string
 		var err error
 		if r.prefill != "" {
@@ -522,13 +533,6 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		r.runTurn(ctx, line)
-		// A message typed at the Ctrl-C menu waits for a step boundary. When
-		// the turn ended before one, it is the next turn, sent as if typed.
-		for q := r.coder.TakeQueued(); q != ""; q = r.coder.TakeQueued() {
-			r.renderPromptHeader()
-			r.printf(" > %s", q)
-			r.runTurn(ctx, q)
-		}
 		r.showInterruptHint()
 		r.showUndoHint()
 	}
