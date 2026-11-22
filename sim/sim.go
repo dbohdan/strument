@@ -111,14 +111,13 @@ func (g Garden) WithDressing(d garden.Nutrients) Garden {
 // neighbour. Zero means no spread, the default, and leaves every
 // other output exactly as it was.
 //
-// The chosen default for trade is a modest one: pests and diseases
-// move only a short distance in a season — a few feet to tens of feet
-// for insects, mites and windborne spores — so a single neighbouring
-// bed is the only realistic target, and passing one tenth of a bed's
-// pressure to each side (0.1 per neighbour, so 0.2 per middle bed)
-// is about as much as real pests and soil diseases plausibly transfer
-// in a season. It is not a measurement; it is a plausible reading of
-// what actually moves between beds.
+// 0.5 is not modest — a middle bed gives half its pressure to each
+// side, all of it each season. It is not a measurement either; it is
+// the smallest fraction that actually moves yields in the model
+// (at 0.1, pressure moves by 1 tenth per neighbour but the yield
+// penalty floors to the same whole points, so every output is
+// identical to no spread). It is chosen so the spread is real, not
+// so the model matches any known biology.
 func (g Garden) WithSpread(f float64) Garden {
 	out := clone(g)
 	out.Spread = f
@@ -235,6 +234,8 @@ func spreadPressure(g Garden) {
 	deltas := make([]map[garden.Family]int, n)
 	for i := range g.Beds {
 		deltas[i] = make(map[garden.Family]int, len(g.Beds[i].Pressure))
+	}
+	for i := range g.Beds {
 		for family, p := range g.Beds[i].Pressure {
 			amount := int(float64(p) * g.Spread)
 			if amount <= 0 {
