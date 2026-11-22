@@ -35,6 +35,10 @@ type Garden struct {
 	// Dressing, if set, replaces the committee's spring compost
 	// (garden.Compost) on every bed. Nil means the default.
 	Dressing *garden.Nutrients
+	// Spread, if positive, is the fraction of each bed's pressure
+	// for each family that passes to each touching neighbour at the
+	// end of a season. Zero means no spread between beds.
+	Spread float64
 }
 
 // History is one bed's record of past seasons, oldest first.
@@ -99,6 +103,25 @@ func (g Garden) WithFades(f garden.Fades) Garden {
 func (g Garden) WithDressing(d garden.Nutrients) Garden {
 	out := clone(g)
 	out.Dressing = &d
+	return out
+}
+
+// WithSpread returns a copy of the garden whose beds pass fraction
+// of their pressure for each family each season to each touching
+// neighbour. Zero means no spread, the default, and leaves every
+// other output exactly as it was.
+//
+// The chosen default for trade is a modest one: pests and diseases
+// move only a short distance in a season — a few feet to tens of feet
+// for insects, mites and windborne spores — so a single neighbouring
+// bed is the only realistic target, and passing one tenth of a bed's
+// pressure to each side (0.1 per neighbour, so 0.2 per middle bed)
+// is about as much as real pests and soil diseases plausibly transfer
+// in a season. It is not a measurement; it is a plausible reading of
+// what actually moves between beds.
+func (g Garden) WithSpread(f float64) Garden {
+	out := clone(g)
+	out.Spread = f
 	return out
 }
 
@@ -181,6 +204,8 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 			total += harvest
 		}
 
+		spreadPressure(g)
+
 		res.PerSeason = append(res.PerSeason, total)
 		res.RawPerSeason = append(res.RawPerSeason, raw)
 		res.Total += total
@@ -194,6 +219,59 @@ func Run(g Garden, s Strategy, seasons int, seed int64) Result {
 		}
 	}
 	return res
+}
+
+// spreadPressure moves a fraction of each bed's pressure to the beds
+// touching it on either side, once per season at the end of it. A bed
+// passes the fraction of its pressure for each family to each side it
+// has — a middle bed loses it to both neighbours, an end bed to one —
+// and gains it back from whatever its neighbours pass. Pressure stays
+// in tenths, so each pass floors.
+func spreadPressure(g Garden) {
+	if g.Spread <= 0 {
+		return
+	}
+	n := len(g.Beds)
+	deltas := make([]map[garden.Family]int, n)
+	for i := range g.Beds {
+		deltas[i] = make(map[garden.Family]int, len(g.Beds[i].Pressure))
+		for family, p := range g.Beds[i].Pressure {
+			amount := int(float64(p) * g.Spread)
+			if amount <= 0 {
+				continue
+			}
+			sides := 0
+			if i > 0 {
+				deltas[i-1][family] += amount
+				sides++
+			}
+			if i < n-1 {
+				deltas[i+1][family] += amount
+				sides++
+			}
+			deltas[i][family] -= amount * sides
+		}
+	}
+	for i := range g.Beds {
+		if len(deltas[i]) == 0 {
+			continue
+		}
+		pressure := make(map[garden.Family]int, len(g.Beds[i].Pressure))
+		for f, p := range g.Beds[i].Pressure {
+			np := p + deltas[i][f]
+			if np > 0 {
+				pressure[f] = np
+			}
+		}
+		// A family the bed never had pressure for can land there from a
+		// neighbour.
+		for f, d := range deltas[i] {
+			if _, ok := g.Beds[i].Pressure[f]; !ok && d > 0 {
+				pressure[f] = d
+			}
+		}
+		g.Beds[i].Pressure = pressure
+	}
 }
 
 // drawWeather rolls the season's garden-wide weather in percent of a
@@ -217,6 +295,7 @@ func clone(g Garden) Garden {
 		Beds:     append([]garden.Bed(nil), g.Beds...),
 		History:  make([]History, len(g.History)),
 		Dressing: g.Dressing,
+		Spread:   g.Spread,
 	}
 	for i, h := range g.History {
 		out.History[i] = append(History(nil), h...)

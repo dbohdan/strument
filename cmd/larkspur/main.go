@@ -108,6 +108,8 @@ func main() {
 	potassium := flag.Bool("potassium", false, "sweep the yearly potassium dressing and report what rotation's beds need instead of printing the table")
 	orderK := flag.Int("orderK", 1, "rank the cyclic orders with this potassium dressing (used with -order)")
 	dressK := flag.Int("dressK", 1, "run the default table and -paired with this potassium dressing (compost's is 1)")
+	spread := flag.Float64("spread", 0, "fraction of a bed's per-family pressure passed to each touching neighbour each season")
+	stagger := flag.Bool("stagger", false, "compare rotation with neighbouring beds offset by 0, 1, 2 and 3 places in the order, on shared seeds")
 	flag.Parse()
 
 	if *seasons < 1 {
@@ -122,11 +124,17 @@ func main() {
 	if *dressK < 0 {
 		fatalf("-dressK must be at least 0")
 	}
+	if *spread < 0 || *spread > 1 {
+		fatalf("-spread must be between 0 and 1")
+	}
 
 	// A dressing of nil means the committee's compost; a
 	// non-nil one replaces it, which is how -dressK runs the
 	// table and -paired under a different potassium level.
-	newGarden := gardenAt(*dressK, *beds)
+	baseGarden := gardenAt(*dressK, *beds)
+	newGarden := func() sim.Garden {
+		return baseGarden().WithSpread(*spread)
+	}
 
 	if *sweep {
 		sweepFade(*seasons, *seeds, *beds, *seed)
@@ -156,6 +164,10 @@ func main() {
 	}
 	if *potassium {
 		potassiumNeed(*seasons, *seeds, *beds, *seed)
+		return
+	}
+	if *stagger {
+		staggerCompare(newGarden, *seasons, *seeds, *beds, *seed, *spread)
 		return
 	}
 
@@ -230,6 +242,75 @@ func pairedCompareWith(newGarden func() sim.Garden, seasons, seeds int, first in
 		s := all[j]
 		fmt.Printf("%-*s %*d %*d %*d  %+d (seed %d)\n",
 			nameW, st.name, colW, s.wins, colW, s.ties, colW, s.losses, s.worst, s.worstAt)
+	}
+}
+
+// stagger plants the order so bed i starts offset*i places into it:
+// neighbouring beds grow families that are offset places apart.
+type stagger struct{ offset int }
+
+func (s stagger) Choose(g sim.Garden, bed, season int) sim.Planting {
+	return sim.Use(garden.FamilyOrder[(s.offset*bed+season)%len(garden.FamilyOrder)])
+}
+
+// staggerCompare runs rotation with the neighbouring beds offset by
+// 0, 1, 2 and 3 places in the order, on shared seeds under the given
+// spread rate, and reports each offset's mean total and how often it
+// beats the offset-1 (committee) run.
+func staggerCompare(newGarden func() sim.Garden, seasons, seeds int, beds int, first int64, spread float64) {
+	offsets := []int{0, 1, 2, 3}
+	mean := make([]float64, len(offsets))
+	wins := make([]int, len(offsets)) // wins over the committee (offset 1) on the same seeds
+	committeeTotals := make([]int, seeds)
+	perOff := make([][]int, len(offsets))
+	for i := 0; i < len(offsets); i++ {
+		perOff[i] = make([]int, seeds)
+	}
+	for i := 0; i < seeds; i++ {
+		s := first + int64(i)
+		for j, off := range offsets {
+			total := sim.Run(newGarden(), stagger{offset: off}, seasons, s).Total
+			perOff[j][i] = total
+			mean[j] += float64(total)
+		}
+		committeeTotals[i] = perOff[1][i]
+	}
+	for j := range mean {
+		mean[j] /= float64(seeds)
+	}
+	for j := range offsets {
+		if j == 1 {
+			continue
+		}
+		for i := 0; i < seeds; i++ {
+			if perOff[j][i] > committeeTotals[i] {
+				wins[j]++
+			}
+		}
+	}
+
+	fmt.Printf("rotation with neighbouring beds offset by k places in the order, %d seeds, %d beds, %d seasons", seeds, beds, seasons)
+	if spread > 0 {
+		fmt.Printf(", spread %.2f", spread)
+	} else {
+		fmt.Printf(", no spread")
+	}
+	fmt.Println()
+	fmt.Println("offset places  mean    % of 0    wins vs committee")
+	base := mean[0]
+	for j, off := range offsets {
+		pct := 0.0
+		if base > 0 {
+			pct = 100 * mean[j] / base
+		}
+		name := fmt.Sprintf("%d", off)
+		if off == 1 {
+			name = "1 (committee)"
+		}
+		if off == 0 {
+			name = "0"
+		}
+		fmt.Printf("%-14s %8.0f %8.1f%% %10d\n", name, mean[j], pct, wins[j])
 	}
 }
 
