@@ -359,13 +359,14 @@ nothing, because identical neighbours exchange identical pressure.
   "its reports were better than its conclusions", at a finer grain: the
   judgement was sound and the numbers in the prose were not checked against
   the numbers in the output.
-- **It never used `edit` or `write`.** At both effort levels every one of
-  its 127 tool calls was `bash`, and 41 of them changed files through
-  `python3` heredocs, `cat >` and `sed -i`, so no change appeared as a diff.
+- **It never used `edit` or `write`.** Of its 124 tool calls, at both effort
+  levels, 118 were `bash` and the other six were `read`s at the start of turn
+  20; 44 of the `bash` calls changed files through `python3` heredocs, `cat >` and
+  `sed -i`, so no change appeared as a diff.
   `high` did not move it: reasoning came in fewer, longer blocks (14 against
   40) for about the same output. It is a trait of the model, not of the
   setting.
 - **Strument handled it without a fault.** No retries, no malformed calls, no
-  empty replies; caches hit 97-99% of 12 million tokens sent. Turn 21 ran at
-  309 tokens a second.
+  empty replies; the cache served 97-99% of the 11.5 million tokens sent.
+  Turn 21 ran at 309 tokens a second.
 
