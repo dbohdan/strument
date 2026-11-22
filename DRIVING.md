@@ -35,6 +35,9 @@ trials, never watched it build something from nothing.
 | 17 | does closing the gap change rotation's lead? (Ling 3.1 Flash) | `cc3728b` | 22 | $0.00 |
 | 18 | a consistency pass on the README (Ling 3.1 Flash) | `b29247a` | 8 | $0.00 |
 | 19 | from a compacted history: what is open, and pin the default output (Ling 3.1 Flash) | `aaa1e2a` | 27 | $0.00 |
+| 20 | pests spread to the next bed; does the committee's stagger help or hurt? (Inkling 2 Mini, low) | `cbeadbe`, then amended away | 56 | $0.08 |
+| 21 | put the amended history back, and correct the reasons and the result (Inkling 2 Mini, high) | `91666cd`, `c62a2be` | 57 | $0.13 |
+| 22 | four statements that contradict its own numbers (Inkling 2 Mini, high) | `3cfee0c`, `00b274c`, two more fixed by the driver in `24fdd11` | 14 | $0.03 |
 
 About $0.40 in all, for roughly 1,750 lines of Go with tests by turn 9. Prompt-cache
 hit rates ran 85% on the first turn and 97–99% after.
@@ -308,3 +311,61 @@ was a fresh `--continue` process, as every turn here has been.
   verbatim after it said otherwise, and Ling followed them, but the present
   tense was wrong. That is a sentence for the prompt to fix, tested before it
   ships.
+
+## Turns 20-22: a fourth model, and a constant rewritten after the fact
+
+Turns 20 to 22 ran on Inkling 2 Mini (`thinkingmachines/inkling-2-mini`,
+$0.075 and $0.30 per million tokens in and out), a new small model the
+maintainer had not used. Turn 20 was at `reasoning = "low"`, as before; turns
+21 and 22 at `high`, to see whether its habits came from the effort level. The
+earlier session's history did not survive the container, so turn 20 started
+fresh and read the whole project first: README, every package, every test,
+the one that pins the default output included.
+
+The question came from the same visit: every bed was its own world, so a
+12-bed garden was exactly twelve copies of one bed (rotation totals 201, 403
+and 604 with one, two and three beds). Turn 20 added `-spread`, pressure
+passed to the beds on either side, and asked whether the committee's stagger,
+where neighbours grow consecutive families, helps or hurts once pests move.
+It hurts: at a spread of 0.5 the committee's offset reaches 86.7% of
+unstaggered planting, the worst of four offsets. At offset 0 spread does
+nothing, because identical neighbours exchange identical pressure.
+
+- **The prediction-first habit held where it was asked.** Turn 20 said
+  staggering would help, before running anything, and the README says it did
+  not.
+- **The constant did not.** Turn 20 committed a spread of 0.1, with a reason
+  from what pests do, before any comparison, as asked (`4cfdf38`). The
+  comparison showed 0.1 changed nothing. It moved to 0.5 and amended the
+  first commit so the message and the comment read as if 0.5 had been chosen
+  up front. Its reasoning saw the problem ("I changed the doc to 0.5 after
+  running comparisons — that's somewhat wrong") and amended anyway. Turn 5's
+  fade rate fitted its constant to the result openly; this one rewrote the
+  record of when it was chosen, which is worse, and only the reflog kept the
+  original.
+- **Asked to put it back, it did, and found a bug it did not have to
+  mention.** Turn 21 restored `4cfdf38`'s tree exactly (`cbeadbe`), recorded
+  the move to 0.5 as its own commit, and said there that the original commit
+  panicked on any positive spread, a nil map the amend had quietly fixed. It
+  did.
+- **Its reasons kept losing to its own numbers.** "0.5 is the smallest
+  fraction that moves yields" stood beside its own measurement that 0.4
+  does (2399 to 2172), which the same commit message called "only 8 points".
+  It wrote that spread "sheds nearly half its pressure"; it removes none. Turn
+  22 fixed those four, then caught a contradiction in its own correction. Two
+  more were left for the driver: a seed's total from a debug test quoted as
+  the mean (2396 against 2399), and 13.3 called a share of the committee's
+  mean when it is a share of offset 0's. The pattern is MiMo's from turn 6,
+  "its reports were better than its conclusions", at a finer grain: the
+  judgement was sound and the numbers in the prose were not checked against
+  the numbers in the output.
+- **It never used `edit` or `write`.** At both effort levels every one of
+  its 127 tool calls was `bash`, and 41 of them changed files through
+  `python3` heredocs, `cat >` and `sed -i`, so no change appeared as a diff.
+  `high` did not move it: reasoning came in fewer, longer blocks (14 against
+  40) for about the same output. It is a trait of the model, not of the
+  setting.
+- **Strument handled it without a fault.** No retries, no malformed calls, no
+  empty replies; caches hit 97-99% of 12 million tokens sent. Turn 21 ran at
+  309 tokens a second.
+
