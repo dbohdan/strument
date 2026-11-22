@@ -174,13 +174,18 @@ fraction of a bed's pressure for each family to each touching neighbour
 at the end of a season — `-spread`, default 0, which leaves every
 existing output exactly as it was. The fraction is 0.5 per neighbour:
 pests and diseases move a short distance in a season, so a single
-neighbouring bed is the only realistic target; but 0.5 is not modest
-(a middle bed gives all of its pressure to each side each season)
-and is not measured either — it is the smallest fraction that actually
-moves yields, since at 0.1 pressure does move (1 tenth per neighbour)
-but yield floors to the same whole points, so every output is
-identical to no spread. It is chosen so the feature is real, not so
-the model matches any known biology.
+neighbouring bed is the only realistic target. 0.5 is not modest —
+a middle bed gives half its pressure to each side, a quarter of its
+pressure each season, all of it in total — and it is not measured
+either: it is simply the first value tried that moved yields
+clearly. Smaller fractions do move pressure (at 0.1, 1 tenth per
+neighbour) but not yield, which floors to the same whole points —
+rotation totals 2396 at 0.1 and 0.25, identical to no spread. 0.4
+also moves yields (the committee's mean drops from 2399 to
+2172), but 0.5 was chosen to make the feature decisively real, not
+as a threshold: the smallest fraction that could have moved yields
+was 0.4, and the honest statement is that 0.5 was the first value
+tried that did so emphatically.
 
 The committee's rotation staggers the beds — bed i starts i places
 into the order, so neighbours always grow consecutive families. With
@@ -204,9 +209,10 @@ offset places  mean    % of 0    wins vs committee
 ```
 
 The expectation did not hold. The stagger hurts: offset 0 beats the
-committee by 13.3 points on average (2402 vs 2083) and wins on every
-one of the 200 shared seeds, while offset 1 — the committee's stagger
-— is the worst of the four, 13.3 points behind the best. At offset 0
+committee by 13.3 points relative to the committee's mean (2402 vs
+2083, a drop of 316 in absolute terms) and wins on every one of the
+200 shared seeds, while offset 1 — the committee's stagger — is the
+worst of the four, 316 points behind the best on the mean. At offset 0
 spread has no effect at all: every bed is on the same family each
 season, so pressure passed to a neighbour adds to a bed that is
 growing the same family and fading its pressure at the same rate —
@@ -214,14 +220,18 @@ the transfer is a zero-sum redistribution that leaves the yield each
 bed takes exactly where every bed was before. At offset 1 the next
 family is growing in the next bed, so the pressure that passes on is
 about to be rebuilt by the neighbour the very next season, and the
-committee's total drops 13 points. Offset 2 is the best staggered
-layout (within 0.4% of offset 0) and offset 3 lands midway.
+committee's total drops from 2399 to 2083. Offset 2 (best staggered,
+2392) is within 0.4% of offset 0 and offset 3 (2256) lands midway.
 
 The wins column is not spread's doing alone, either — it is the same
 on the no-spread comparison (`-stagger -spread 0`): offset 0 wins
 200 of 200 either way. At 0.5 the committee's mean drops from 2399 to
-2083 (a 13.3% relative loss), so the gap between offset 0 and the
-committee is what spread creates, not the win count.
+2083 — 316 points of mean total, 13.3 points of percentage-of-offset-0
+— so the gap between offset 0 and the committee is what spread creates,
+not the win count.
+
+At 0.4 the same comparison shows (per the run above) a committee mean
+of 2172 — the loss is real but smaller; 0.5 makes it decisive.
 
 ### Perennials: how long should asparagus stand?
 

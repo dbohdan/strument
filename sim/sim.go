@@ -112,12 +112,15 @@ func (g Garden) WithDressing(d garden.Nutrients) Garden {
 // other output exactly as it was.
 //
 // 0.5 is not modest — a middle bed gives half its pressure to each
-// side, all of it each season. It is not a measurement either; it is
-// the smallest fraction that actually moves yields in the model
-// (at 0.1, pressure moves by 1 tenth per neighbour but the yield
-// penalty floors to the same whole points, so every output is
-// identical to no spread). It is chosen so the spread is real, not
-// so the model matches any known biology.
+// side, all of it in total, each season. It is not a measurement
+// either. It is not the smallest fraction that moves yields; 0.4
+// already does (the committee's mean drops from 2399 to 2172). It
+// is the first value tried that moved yields clearly and decisively.
+// Smaller fractions do move pressure (at 0.1, 1 tenth per neighbour)
+// but not yield, which floors to the same whole points: rotation
+// totals 2396 at 0.1 and 0.25, identical to no spread. Spread moves
+// pressure between beds; it removes none. It is chosen so the
+// feature is real, not so the model matches any known biology.
 func (g Garden) WithSpread(f float64) Garden {
 	out := clone(g)
 	out.Spread = f
