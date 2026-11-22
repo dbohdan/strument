@@ -165,6 +165,64 @@ cannot measure from here. The curve is stepwise rather than smooth
 because the arithmetic is integers: the yield penalty floors to whole
 points.
 
+### Do neighbouring beds need staging?
+
+Every bed was its own world: nothing passed between neighbours, so a
+12-bed garden was exactly twelve copies of one bed. Real pests and
+soil diseases move to the bed next door. The model now passes a
+fraction of a bed's pressure for each family to each touching neighbour
+at the end of a season — `-spread`, default 0, which leaves every
+existing output exactly as it was. The fraction is 0.5 per neighbour:
+pests and diseases move a short distance in a season, so a single
+neighbouring bed is the only realistic target; but 0.5 is not modest
+(a middle bed gives all of its pressure to each side each season)
+and is not measured either — it is the smallest fraction that actually
+moves yields, since at 0.1 pressure does move (1 tenth per neighbour)
+but yield floors to the same whole points, so every output is
+identical to no spread. It is chosen so the feature is real, not so
+the model matches any known biology.
+
+The committee's rotation staggers the beds — bed i starts i places
+into the order, so neighbours always grow consecutive families. With
+spread on, does that stagger help or hurt? Compare `-stagger` with
+offsets 0 (every bed on the same family), 1 (the committee's), 2 and
+3 places in the order, on shared seeds. The expectation, from the
+model's own rules: staggering helps — at offset 0 a bed's pressure
+passes straight to a neighbour growing the same family, where it
+adds to its build-up, while at offsets 1-3 the pressure lands in a bed
+where that family is away and fading. Offsets 1-3 should look similar
+to each other, since adjacency is what passes pressure.
+
+```
+go run ./cmd/larkspur -stagger -spread 0.5
+rotation with neighbouring beds offset by k places in the order, 200 seeds, 12 beds, 20 seasons, spread 0.50
+offset places  mean    % of 0    wins vs committee
+0                  2402    100.0%        200
+1 (committee)      2083     86.7%          0
+2                  2392     99.6%        200
+3                  2256     93.9%        200
+```
+
+The expectation did not hold. The stagger hurts: offset 0 beats the
+committee by 13.3 points on average (2402 vs 2083) and wins on every
+one of the 200 shared seeds, while offset 1 — the committee's stagger
+— is the worst of the four, 13.3 points behind the best. At offset 0
+spread has no effect at all: every bed is on the same family each
+season, so pressure passed to a neighbour adds to a bed that is
+growing the same family and fading its pressure at the same rate —
+the transfer is a zero-sum redistribution that leaves the yield each
+bed takes exactly where every bed was before. At offset 1 the next
+family is growing in the next bed, so the pressure that passes on is
+about to be rebuilt by the neighbour the very next season, and the
+committee's total drops 13 points. Offset 2 is the best staggered
+layout (within 0.4% of offset 0) and offset 3 lands midway.
+
+The wins column is not spread's doing alone, either — it is the same
+on the no-spread comparison (`-stagger -spread 0`): offset 0 wins
+200 of 200 either way. At 0.5 the committee's mean drops from 2399 to
+2083 (a 13.3% relative loss), so the gap between offset 0 and the
+committee is what spread creates, not the win count.
+
 ### Perennials: how long should asparagus stand?
 
 The committee pins perennials, and asparagus is the hard case: two seasons
