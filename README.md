@@ -175,10 +175,9 @@ at the end of a season — `-spread`, default 0, which leaves every
 existing output exactly as it was. The fraction is 0.5 per neighbour:
 pests and diseases move a short distance in a season, so a single
 neighbouring bed is the only realistic target. 0.5 is not modest —
-a middle bed gives half its pressure to each side, a quarter of its
-pressure each season, all of it in total — and it is not measured
-either: it is simply the first value tried that moved yields
-clearly. Smaller fractions do move pressure (at 0.1, 1 tenth per
+a middle bed gives half its pressure to each side, all of it in total
+each season — and it is not measured either: it is simply the first
+value tried that moved yields clearly. Smaller fractions do move pressure (at 0.1, 1 tenth per
 neighbour) but not yield, which floors to the same whole points —
 rotation totals 2396 at 0.1 and 0.25, identical to no spread. 0.4
 also moves yields (the committee's mean drops from 2399 to
