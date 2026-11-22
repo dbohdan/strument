@@ -117,8 +117,8 @@ func (g Garden) WithDressing(d garden.Nutrients) Garden {
 // already does (the committee's mean drops from 2399 to 2172). It
 // is the first value tried that moved yields clearly and decisively.
 // Smaller fractions do move pressure (at 0.1, 1 tenth per neighbour)
-// but not yield, which floors to the same whole points: rotation
-// totals 2396 at 0.1 and 0.25, identical to no spread. Spread moves
+// but not yield, which floors to the same whole points: rotation's
+// mean stays 2399 at 0.1 and 0.25, identical to no spread. Spread moves
 // pressure between beds; it removes none. It is chosen so the
 // feature is real, not so the model matches any known biology.
 func (g Garden) WithSpread(f float64) Garden {

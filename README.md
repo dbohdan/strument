@@ -179,7 +179,7 @@ a middle bed gives half its pressure to each side, all of it in total
 each season — and it is not measured either: it is simply the first
 value tried that moved yields clearly. Smaller fractions do move pressure (at 0.1, 1 tenth per
 neighbour) but not yield, which floors to the same whole points —
-rotation totals 2396 at 0.1 and 0.25, identical to no spread. 0.4
+rotation's mean stays 2399 at 0.1 and 0.25, identical to no spread. 0.4
 also moves yields (the committee's mean drops from 2399 to
 2172), but 0.5 was chosen to make the feature decisively real, not
 as a threshold: the smallest fraction that could have moved yields
@@ -207,11 +207,9 @@ offset places  mean    % of 0    wins vs committee
 3                  2256     93.9%        200
 ```
 
-The expectation did not hold. The stagger hurts: offset 0 beats the
-committee by 13.3 points relative to the committee's mean (2402 vs
-2083, a drop of 316 in absolute terms) and wins on every one of the
-200 shared seeds, while offset 1 — the committee's stagger — is the
-worst of the four, 316 points behind the best on the mean. At offset 0
+The expectation did not hold. The stagger hurts: the committee's
+offset reaches 86.7% of offset 0's mean (2083 against 2402, 319
+lower), the worst of the four. At offset 0
 spread has no effect at all: every bed is on the same family each
 season, so pressure passed to a neighbour adds to a bed that is
 growing the same family and fading its pressure at the same rate —
