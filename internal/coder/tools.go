@@ -214,7 +214,9 @@ func bashTool() llm.ToolDef {
 			"not carry over to the next call, and anything it leaves running in the background is " +
 			"stopped when it returns: start a server and use it in the same command. To read, " +
 			"search, or list files, use the read, grep, glob, and ls tools instead — they are " +
-			"never confirmed.\n\n" +
+			"never confirmed. To change a file's contents yourself, use edit or write rather than a " +
+			"command: the user sees those changes as diffs and can undo them, and a file changed by " +
+			"a command gives them neither.\n\n" +
 			"Commands have a time limit set by the user's configuration. Give timeout (in seconds) to " +
 			"set a shorter limit for a command you know finishes quickly; you cannot extend the limit " +
 			"beyond the configuration.\n\n" +
