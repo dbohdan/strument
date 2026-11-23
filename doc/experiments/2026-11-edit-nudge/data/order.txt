@@ -1,0 +1,16 @@
+inkling base 3
+inkling nudge 2
+mimo base 1
+inkling base 4
+mimo base 0
+inkling nudge 0
+inkling base 0
+mimo nudge 0
+inkling nudge 4
+inkling nudge 1
+mimo base 2
+inkling base 1
+inkling nudge 3
+mimo nudge 1
+inkling base 2
+mimo nudge 2

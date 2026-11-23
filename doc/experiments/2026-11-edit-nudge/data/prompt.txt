@@ -1,0 +1,1 @@
+Add a Median function to stats.go that handles both odd and even lengths (and an empty slice, like Mean does), add a test for it in stats_test.go, and fix the spelling mistake in README.md. Run the tests when you are done.

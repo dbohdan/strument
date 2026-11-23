@@ -1,0 +1,34 @@
+## openrouter
+inkling-base-0   tool_edits=0 shell_writes=4 mentions_tools=no tests=ok readme=ok
+inkling-base-1   tool_edits=0 shell_writes=2 mentions_tools=no tests=ok readme=ok
+inkling-base-2   tool_edits=0 shell_writes=2 mentions_tools=no tests=ok readme=ok
+inkling-base-3   tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-base-4   tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-nudge-0  tool_edits=0 shell_writes=2 mentions_tools=yes tests=ok readme=ok
+inkling-nudge-1  tool_edits=0 shell_writes=1 mentions_tools=yes tests=ok readme=ok
+inkling-nudge-2  tool_edits=0 shell_writes=2 mentions_tools=yes tests=ok readme=ok
+inkling-nudge-3  tool_edits=0 shell_writes=5 mentions_tools=no tests=ok readme=ok
+inkling-nudge-4  tool_edits=0 shell_writes=5 mentions_tools=yes tests=ok readme=ok
+mimo-base-0      tool_edits=4 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-base-1      tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=no
+mimo-base-2      tool_edits=4 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-0     tool_edits=4 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-1     tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-2     tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=ok
+## commandcode
+inkling-base-0   tool_edits=0 shell_writes=2 mentions_tools=no tests=ok readme=ok
+inkling-base-1   tool_edits=0 shell_writes=2 mentions_tools=no tests=ok readme=ok
+inkling-base-2   tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-base-3   tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-base-4   tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-nudge-0  tool_edits=0 shell_writes=1 mentions_tools=no tests=ok readme=ok
+inkling-nudge-1  tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-nudge-2  tool_edits=0 shell_writes=3 mentions_tools=no tests=ok readme=ok
+inkling-nudge-3  tool_edits=0 shell_writes=3 mentions_tools=yes tests=ok readme=ok
+inkling-nudge-4  tool_edits=0 shell_writes=2 mentions_tools=no tests=ok readme=ok
+mimo-base-0      tool_edits=5 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-base-1      tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-base-2      tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-0     tool_edits=4 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-1     tool_edits=4 shell_writes=0 mentions_tools=no tests=ok readme=ok
+mimo-nudge-2     tool_edits=3 shell_writes=0 mentions_tools=no tests=ok readme=ok
