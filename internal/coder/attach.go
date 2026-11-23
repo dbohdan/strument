@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"dbohdan.com/strument/internal/llm"
@@ -80,12 +81,13 @@ func (c *Coder) Attachments() []llm.ImageSource {
 // file that changed in between, but then what the user was shown when they
 // attached it would be a claim about a file nobody had read.
 //
-// Attaching never stages a duplicate. The same bytes again, from any path, are
-// refused with AlreadyAttachedError. The same file with new bytes replaces its
-// staged copy in place, and replaced says so: attaching a screenshot again
-// after retaking it means the new one, not both. Two different files with the
-// same name get labels long enough to tell apart.
-func (c *Coder) AttachFile(path string) (src llm.ImageSource, replaced bool, err error) {
+// Attaching never stages a duplicate: the same bytes again, from any path, are
+// refused with AlreadyAttachedError. The same file with new bytes is a new
+// image, kept beside the old one, since attaching a file again after editing
+// it is as likely to mean "compare these" as "use this instead", and dropping
+// the old copy is one command where recovering it would not be. Labels keep
+// every staged image nameable (see relabel).
+func (c *Coder) AttachFile(path string) (llm.ImageSource, error) {
 	abs := path
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(c.Root, abs)
@@ -93,26 +95,26 @@ func (c *Coder) AttachFile(path string) (src llm.ImageSource, replaced bool, err
 	abs = filepath.Clean(abs)
 	info, err := os.Stat(abs)
 	if err != nil {
-		return llm.ImageSource{}, false, err
+		return llm.ImageSource{}, err
 	}
 	if info.IsDir() {
-		return llm.ImageSource{}, false, errIsADirectory
+		return llm.ImageSource{}, errIsADirectory
 	}
 	if info.Size() > maxAttachBytes {
-		return llm.ImageSource{}, false, fmt.Errorf("it is %s, and the attachment limit is %s",
+		return llm.ImageSource{}, fmt.Errorf("it is %s, and the attachment limit is %s",
 			workspace.HumanBytes(info.Size()), workspace.HumanBytes(maxAttachBytes))
 	}
 
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		return llm.ImageSource{}, false, err
+		return llm.ImageSource{}, err
 	}
 	img, reason := workspace.SniffImage(data)
 	if reason != "" {
-		return llm.ImageSource{}, false, errors.New(reason)
+		return llm.ImageSource{}, errors.New(reason)
 	}
 
-	src = llm.ImageSource{
+	src := llm.ImageSource{
 		MediaType: img.MediaType,
 		Data:      base64.StdEncoding.EncodeToString(data),
 		// The base name, never the path. An attachment is usually from
@@ -130,29 +132,26 @@ func (c *Coder) AttachFile(path string) (src llm.ImageSource, replaced bool, err
 
 	for _, staged := range c.pendingAttachments {
 		if staged.sum == a.sum {
-			return llm.ImageSource{}, false, AlreadyAttachedError{Label: staged.Label}
+			return llm.ImageSource{}, AlreadyAttachedError{Label: staged.Label}
 		}
 	}
-	if i := slices.IndexFunc(c.pendingAttachments, func(s attachment) bool { return s.path == abs }); i >= 0 {
-		c.pendingAttachments[i] = a
-		c.relabel()
-		return c.pendingAttachments[i].ImageSource, true, nil
-	}
 	if len(c.pendingAttachments) >= maxAttachments {
-		return llm.ImageSource{}, false, fmt.Errorf(
+		return llm.ImageSource{}, fmt.Errorf(
 			"%d images are already attached, which is the limit for one message", maxAttachments)
 	}
 	c.pendingAttachments = append(c.pendingAttachments, a)
 	c.relabel()
-	return c.pendingAttachments[len(c.pendingAttachments)-1].ImageSource, false, nil
+	return c.pendingAttachments[len(c.pendingAttachments)-1].ImageSource, nil
 }
 
-// relabel gives every staged image the shortest label that tells it apart:
-// its file name, and where two different files share one, as many of their
-// parent directories as it takes. It runs after every change, so a label
-// lengthened for a twin shortens again once the twin is dropped. Only the
-// directories that differ are added, never the whole path, for the reason
-// the label is a base name to begin with.
+// relabel gives every staged image the shortest label that names it alone.
+// The start is the file name. Where two different files share one, each gets
+// as many of its parent directories as it takes to differ, and only those,
+// for the reason the label is a file name to begin with. Where one file was
+// attached in several versions, each gets "#n" in the order attached, with no
+// space, because /attach drop splits its arguments on spaces. It runs after
+// every change, so a label lengthened for a twin shortens again once the twin
+// is dropped.
 func (c *Coder) relabel() {
 	for i := range c.pendingAttachments {
 		mine := c.pendingAttachments[i].path
@@ -165,7 +164,20 @@ func (c *Coder) relabel() {
 				break
 			}
 		}
-		c.pendingAttachments[i].Label = pathTail(mine, depth)
+		label := pathTail(mine, depth)
+		version, versions := 0, 0
+		for j, o := range c.pendingAttachments {
+			if o.path == mine {
+				versions++
+				if j <= i {
+					version = versions
+				}
+			}
+		}
+		if versions > 1 {
+			label += "#" + strconv.Itoa(version)
+		}
+		c.pendingAttachments[i].Label = label
 	}
 }
 
@@ -180,7 +192,8 @@ func pathTail(path string, n int) string {
 
 // DropAttachments unstages images by name, or all of them when given no names.
 // A name matches an image by its label, its file name, or the end of its path,
-// so "shot.png" drops every staged shot.png and "b/shot.png" only that one. It
+// so "shot.png" drops every staged shot.png, every version of it included,
+// "b/shot.png" only those from b, and "shot.png#2" one version. It
 // returns how many were removed, so the caller can say "no such attachment"
 // rather than reporting a silent no-op, and say how many when there were
 // several.

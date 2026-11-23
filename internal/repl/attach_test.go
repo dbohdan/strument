@@ -150,9 +150,9 @@ func TestAttachIsNotResumeState(t *testing.T) {
 	}
 }
 
-// The messages around duplicates: a second copy is refused by name, a changed
-// file is replaced, a twin's arrival renames the first, and a drop that takes
-// several says how many.
+// The messages around duplicates: a second copy is refused by name, an edited
+// file becomes a second version, a twin's arrival renames the first, and a
+// drop that takes several says how many.
 func TestAttachDuplicatesAndTwins(t *testing.T) {
 	r, cdr, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
 	cdr.Model = &config.Model{InputModalities: []string{llm.BlockText, llm.BlockImage}}
@@ -171,15 +171,19 @@ func TestAttachDuplicatesAndTwins(t *testing.T) {
 	}
 	writePNG(t, filepath.Join(cdr.Root, "a", "foo.png"), 9, 9)
 	r.dispatch(ctx, "/attach a/foo.png")
-	if !strings.Contains(out.String(), "Replaced foo.png with the changed file") || len(cdr.Attachments()) != 1 {
-		t.Errorf("a changed file was not replaced:\n%s", out.String())
+	if !strings.Contains(out.String(), "Attached [image: foo.png#2") ||
+		!strings.Contains(out.String(), "The earlier copy of foo.png is now foo.png#1.") || len(cdr.Attachments()) != 2 {
+		t.Errorf("an edited file was not kept as a second version:\n%s", out.String())
 	}
 	r.dispatch(ctx, "/attach b/foo.png")
-	if !strings.Contains(out.String(), "Attached [image: b/foo.png") || !strings.Contains(out.String(), "The other foo.png is now a/foo.png.") {
+	if !strings.Contains(out.String(), "Attached [image: b/foo.png") ||
+		!strings.Contains(out.String(), "The other foo.png is now a/foo.png#1.") ||
+		!strings.Contains(out.String(), "The other foo.png is now a/foo.png#2.") ||
+		strings.Count(out.String(), "earlier copy") != 1 {
 		t.Errorf("the twin and the renaming were not reported:\n%s", out.String())
 	}
 	r.dispatch(ctx, "/attach drop foo.png")
-	if !strings.Contains(out.String(), "Removed 2 images matching foo.png") || len(cdr.Attachments()) != 0 {
+	if !strings.Contains(out.String(), "Removed 3 images matching foo.png") || len(cdr.Attachments()) != 0 {
 		t.Errorf("a drop of two did not say so:\n%s", out.String())
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/llm"
@@ -38,7 +39,7 @@ func cmdAttach(_ context.Context, r *REPL, args string) string {
 
 	for _, path := range fields {
 		before := labels(r.coder.Attachments())
-		src, replaced, err := r.coder.AttachFile(path)
+		src, err := r.coder.AttachFile(path)
 		var dup coder.AlreadyAttachedError
 		switch {
 		case errors.As(err, &dup):
@@ -51,16 +52,23 @@ func cmdAttach(_ context.Context, r *REPL, args string) string {
 		case err != nil:
 			r.out.Errorf("Could not attach %s: %v", path, err)
 			continue
-		case replaced:
-			r.printf("Replaced %s with the changed file: %s.", src.Label, src.String())
 		default:
 			r.printf("Attached %s.", src.String())
 		}
 		// A twin's arrival lengthens the earlier label; say so, or a later
 		// /attach drop by the old name would match both.
 		for _, l := range labels(r.coder.Attachments()) {
-			if l != src.Label && !slices.Contains(before, l) {
-				r.printf("The other %s is now %s.", filepath.Base(l), l)
+			if l == src.Label || slices.Contains(before, l) {
+				continue
+			}
+			// Which word fits is decided by what just arrived: a new version
+			// of the same file numbers the earlier one, a different file with
+			// the same name lengthens the other's label.
+			name, _, _ := strings.Cut(filepath.Base(l), "#")
+			if strings.Contains(src.Label, "#") && !strings.Contains(l, "/") {
+				r.printf("The earlier copy of %s is now %s.", name, l)
+			} else {
+				r.printf("The other %s is now %s.", name, l)
 			}
 		}
 	}

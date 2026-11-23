@@ -81,7 +81,7 @@ func TestTokensReportShowsAttachments(t *testing.T) {
 func TestTokensReportCountsStagedAttachments(t *testing.T) {
 	c := testCoder(t)
 	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 640, 480)
-	if _, _, err := c.AttachFile("shot.png"); err != nil {
+	if _, err := c.AttachFile("shot.png"); err != nil {
 		t.Fatal(err)
 	}
 
