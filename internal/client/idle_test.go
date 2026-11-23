@@ -203,3 +203,107 @@ func TestSendReportsAnExpiredContextReadably(t *testing.T) {
 		t.Errorf("%v no longer identifies as a deadline to callers that check", got)
 	}
 }
+
+// keepaliveServer answers like OpenRouter in front of a provider that never
+// starts: headers, then ": OPENROUTER PROCESSING" comment lines, forever. Each
+// line is bytes, so the idle timer alone never fired; three ladder sessions
+// waited thirty minutes each. With data, it sends a content chunk every few
+// keepalives instead, which must keep the stream open.
+func keepaliveServer(t *testing.T, release <-chan struct{}, withData bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for i := 0; ; i++ {
+			select {
+			case <-release:
+				return
+			case <-time.After(20 * time.Millisecond):
+			}
+			fmt.Fprint(w, ": OPENROUTER PROCESSING\n\n")
+			if withData && i%3 == 2 {
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n")
+			}
+			if withData && i == 40 {
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+				flush(t, w)
+				<-release
+				return
+			}
+			flush(t, w)
+		}
+	}))
+}
+
+func sendAll(c *Client) <-chan error {
+	done := make(chan error, 1)
+	go func() {
+		var last error
+		for _, err := range c.Send(context.Background(), llm.Request{Model: "m"}) {
+			if err != nil {
+				last = err
+				break
+			}
+		}
+		done <- last
+	}()
+	return done
+}
+
+func TestKeepalivesAloneEndTheStream(t *testing.T) {
+	release := make(chan struct{})
+	srv := keepaliveServer(t, release, false)
+	defer srv.Close()
+	defer close(release)
+	c := &Client{Provider: config.Provider{BaseURL: srv.URL, APIKey: "k"},
+		StreamIdleTimeout: 5 * time.Second, StreamQuietTimeout: 200 * time.Millisecond}
+	select {
+	case err := <-sendAll(c):
+		var se *llm.StreamError
+		if !errors.As(err, &se) || se.Class != llm.ErrNetwork || !strings.Contains(se.Message, "only keepalives") {
+			t.Fatalf("err = %v, want a network error saying only keepalives arrived", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the send hung on a keepalive-only stream")
+	}
+}
+
+// Keepalives between content are normal and do not count against the stream.
+func TestKeepalivesBetweenContentAreFine(t *testing.T) {
+	release := make(chan struct{})
+	srv := keepaliveServer(t, release, true)
+	defer srv.Close()
+	defer close(release)
+	c := &Client{Provider: config.Provider{BaseURL: srv.URL, APIKey: "k"},
+		StreamIdleTimeout: 5 * time.Second, StreamQuietTimeout: 200 * time.Millisecond}
+	select {
+	case err := <-sendAll(c):
+		if err != nil {
+			t.Fatalf("a stream with content between keepalives failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the send did not finish")
+	}
+}
+
+// Line starts are tracked across reads, so a data line split over two reads,
+// or a comment's colon arriving alone, is classified by its first byte.
+func TestContentLinesAcrossReads(t *testing.T) {
+	ir := &idleReader{atLineStart: true}
+	for _, tc := range []struct {
+		chunk string
+		want  bool
+	}{
+		{": OPENROUTER", false},
+		{" PROCESSING\n\n", false},
+		{":", false},
+		{" ping\n", false},
+		{"da", true},
+		{"ta: {}\n", false},
+		{"\nevent: x\n", true},
+	} {
+		if got := ir.content([]byte(tc.chunk)); got != tc.want {
+			t.Errorf("content(%q) = %v, want %v", tc.chunk, got, tc.want)
+		}
+	}
+}

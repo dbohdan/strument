@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -22,6 +23,27 @@ import (
 // reset the clock. A gap this long is a stall, not slow thinking.
 const defaultStreamIdleTimeout = 3 * time.Minute
 
+// defaultStreamQuietTimeout bounds how long a stream may send nothing but
+// keepalives: SSE comment lines, the ones starting with ":".
+//
+// The idle timeout cannot catch a provider that accepted the request and
+// never started, because the gateway in front of it keeps the connection busy.
+// OpenRouter sent ": OPENROUTER PROCESSING" for thirty minutes, three sessions
+// running, for a model whose only provider had stopped answering, and every
+// one of those lines reset the idle clock. Longer than the idle timeout,
+// because a provider that does not stream its reasoning sends only keepalives
+// while the model thinks, and a long think is minutes; ten minutes of nothing
+// else is a provider that is not going to answer.
+const defaultStreamQuietTimeout = 10 * time.Minute
+
+// orDefault is d, or def when d is not set.
+func orDefault(d, def time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return def
+}
+
 // idleReader fails a read stream that stops producing bytes.
 //
 // The bug it closes: the chat send built its request with no deadline of any
@@ -38,29 +60,34 @@ const defaultStreamIdleTimeout = 3 * time.Minute
 // stalled stream is exactly the transient it already knows how to answer.
 type idleReader struct {
 	r       io.ReadCloser
-	timeout time.Duration
+	timeout time.Duration // any bytes reset it
+	quiet   time.Duration // only bytes of a line that is not a comment reset it
 
-	mu    sync.Mutex
-	timer *time.Timer
-	fired bool
+	mu          sync.Mutex
+	timer       *time.Timer
+	quietTimer  *time.Timer
+	fired       bool // the stream went silent
+	firedQuiet  bool // the stream sent only keepalives
+	atLineStart bool
 }
 
-// newIdleReader wraps body so that a gap longer than timeout closes it. Closing
-// the body is what unblocks the read: cancelling the request context would also
-// work, but the body is what this layer holds, and closing it needs no
-// cooperation from the caller.
-func newIdleReader(body io.ReadCloser, timeout time.Duration) *idleReader {
-	ir := &idleReader{r: body, timeout: timeout}
-	ir.timer = time.AfterFunc(timeout, ir.onIdle)
+// newIdleReader wraps body so that a gap longer than timeout, or keepalives
+// alone for longer than quiet, closes it. Closing the body is what unblocks the
+// read: cancelling the request context would also work, but the body is what
+// this layer holds, and closing it needs no cooperation from the caller.
+func newIdleReader(body io.ReadCloser, timeout, quiet time.Duration) *idleReader {
+	ir := &idleReader{r: body, timeout: timeout, quiet: quiet, atLineStart: true}
+	ir.timer = time.AfterFunc(timeout, func() { ir.stop(&ir.fired) })
+	ir.quietTimer = time.AfterFunc(quiet, func() { ir.stop(&ir.firedQuiet) })
 	return ir
 }
 
-func (ir *idleReader) onIdle() {
+func (ir *idleReader) stop(flag *bool) {
 	ir.mu.Lock()
-	ir.fired = true
+	*flag = true
 	ir.mu.Unlock()
 	// Unblocks the in-flight Read. The error it surfaces is replaced by
-	// Stalled() at the call site, which knows what actually happened.
+	// StallError at the call site, which knows what actually happened.
 	_ = ir.r.Close()
 }
 
@@ -68,27 +95,57 @@ func (ir *idleReader) Read(p []byte) (int, error) {
 	n, err := ir.r.Read(p)
 	if n > 0 {
 		ir.mu.Lock()
-		if !ir.fired {
+		if !ir.fired && !ir.firedQuiet {
 			ir.timer.Reset(ir.timeout)
+			if ir.content(p[:n]) {
+				ir.quietTimer.Reset(ir.quiet)
+			}
 		}
 		ir.mu.Unlock()
 	}
 	return n, err
 }
 
-// Stalled reports whether the stream was closed by the idle timer rather than
-// by the server or the caller. The distinction matters: "the provider stopped
+// content reports whether chunk starts a line that is not an SSE comment, and
+// keeps track of where lines start across reads. A data or event line is the
+// provider answering; a line starting with ":" is a keepalive.
+func (ir *idleReader) content(chunk []byte) bool {
+	seen := false
+	for _, b := range chunk {
+		if ir.atLineStart && b != ':' && b != '\n' && b != '\r' {
+			seen = true
+		}
+		ir.atLineStart = b == '\n'
+	}
+	return seen
+}
+
+// Stalled reports whether the stream was closed by a timer rather than by the
+// server or the caller. The distinction matters: "the provider stopped
 // sending" and "the connection dropped" read the same at the io layer and mean
 // different things to a user.
 func (ir *idleReader) Stalled() bool {
 	ir.mu.Lock()
 	defer ir.mu.Unlock()
-	return ir.fired
+	return ir.fired || ir.firedQuiet
+}
+
+// StallError says which timer closed the stream. It is a network error, so the
+// retry path answers it as the transient it usually is.
+func (ir *idleReader) StallError() *llm.StreamError {
+	ir.mu.Lock()
+	defer ir.mu.Unlock()
+	msg := fmt.Sprintf("the provider stopped sending for %s mid-response", ir.timeout)
+	if ir.firedQuiet && !ir.fired {
+		msg = fmt.Sprintf("the provider sent only keepalives for %s and no response", ir.quiet)
+	}
+	return &llm.StreamError{Class: llm.ErrNetwork, Message: msg}
 }
 
 func (ir *idleReader) Close() error {
 	ir.mu.Lock()
 	ir.timer.Stop()
+	ir.quietTimer.Stop()
 	ir.mu.Unlock()
 	return ir.r.Close()
 }

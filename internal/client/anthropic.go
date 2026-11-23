@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"iter"
 	"maps"
@@ -47,16 +46,9 @@ type AnthropicClient struct {
 	Provider  config.Provider
 	Transport http.RoundTripper
 
-	// StreamIdleTimeout bounds the gap between bytes on a started stream.
-	StreamIdleTimeout time.Duration
-}
-
-// idleTimeout is how long a started stream may go silent before it is failed.
-func (c *AnthropicClient) idleTimeout() time.Duration {
-	if c.StreamIdleTimeout > 0 {
-		return c.StreamIdleTimeout
-	}
-	return defaultStreamIdleTimeout
+	// StreamIdleTimeout and StreamQuietTimeout are as on Client.
+	StreamIdleTimeout  time.Duration
+	StreamQuietTimeout time.Duration
 }
 
 // ForProvider builds the client for a provider's dialect. It is the one place
@@ -413,16 +405,13 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		// Same stall guard as the OpenAI path: a started stream that goes
 		// silent must fail rather than hang, and a stream cut off before its
 		// message_stop is a failure rather than a short answer.
-		idle := c.idleTimeout()
-		body := newIdleReader(resp.Body, idle)
+		body := newIdleReader(resp.Body, orDefault(c.StreamIdleTimeout, defaultStreamIdleTimeout),
+			orDefault(c.StreamQuietTimeout, defaultStreamQuietTimeout))
 		defer body.Close()
 
 		stalled := func() bool {
 			if body.Stalled() {
-				yield(llm.StreamEvent{}, &llm.StreamError{
-					Class:   llm.ErrNetwork,
-					Message: fmt.Sprintf("the provider stopped sending for %s mid-response", idle),
-				})
+				yield(llm.StreamEvent{}, body.StallError())
 				return true
 			}
 			return false

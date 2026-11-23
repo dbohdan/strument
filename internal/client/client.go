@@ -66,9 +66,11 @@ type Client struct {
 	Provider  config.Provider
 	Transport http.RoundTripper
 
-	// StreamIdleTimeout bounds the gap between bytes on a started stream.
-	// Zero uses defaultStreamIdleTimeout. Tests set it small.
-	StreamIdleTimeout time.Duration
+	// StreamIdleTimeout bounds the gap between bytes on a started stream,
+	// and StreamQuietTimeout the time it may send only keepalives. Zero uses
+	// the defaults in idle.go. Tests set them small.
+	StreamIdleTimeout  time.Duration
+	StreamQuietTimeout time.Duration
 }
 
 // New builds a client for a provider endpoint. A resolved provider proxy
@@ -422,18 +424,14 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		// A started stream that goes silent used to hang here forever: there is
 		// no client timeout, no context deadline on a send, and a bare scan over
 		// the body. See idle.go.
-		idle := c.idleTimeout()
-		body := newIdleReader(resp.Body, idle)
+		body := newIdleReader(resp.Body, orDefault(c.StreamIdleTimeout, defaultStreamIdleTimeout),
+			orDefault(c.StreamQuietTimeout, defaultStreamQuietTimeout))
 		defer body.Close()
 
 		for ev, err := range ParseSSE(body) {
 			if err != nil {
 				if body.Stalled() {
-					yield(llm.StreamEvent{}, &llm.StreamError{
-						Class: llm.ErrNetwork,
-						Message: fmt.Sprintf("the provider stopped sending for %s "+
-							"mid-response", idle),
-					})
+					yield(llm.StreamEvent{}, body.StallError())
 					return
 				}
 				if ctx.Err() != nil {
@@ -451,21 +449,9 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		// reported here as well as inside the loop: a stream cut off before
 		// [DONE] is a failure, not a short answer.
 		if body.Stalled() {
-			yield(llm.StreamEvent{}, &llm.StreamError{
-				Class:   llm.ErrNetwork,
-				Message: fmt.Sprintf("the provider stopped sending for %s mid-response", idle),
-			})
+			yield(llm.StreamEvent{}, body.StallError())
 		}
 	}
-}
-
-// idleTimeout is how long a started stream may go silent before it is failed.
-// Zero means the default; a provider can raise it for a slow endpoint.
-func (c *Client) idleTimeout() time.Duration {
-	if c.StreamIdleTimeout > 0 {
-		return c.StreamIdleTimeout
-	}
-	return defaultStreamIdleTimeout
 }
 
 // classifyHTTPError maps a non-200 response onto the error classes.

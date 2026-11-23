@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"iter"
 	"maps"
@@ -34,8 +33,9 @@ type ResponsesClient struct {
 	Provider  config.Provider
 	Transport http.RoundTripper
 
-	// StreamIdleTimeout bounds the gap between bytes on a started stream.
-	StreamIdleTimeout time.Duration
+	// StreamIdleTimeout and StreamQuietTimeout are as on Client.
+	StreamIdleTimeout  time.Duration
+	StreamQuietTimeout time.Duration
 }
 
 // NewResponses builds a client for a provider endpoint.
@@ -45,13 +45,6 @@ func NewResponses(p config.Provider) *ResponsesClient {
 		c.Transport = t
 	}
 	return c
-}
-
-func (c *ResponsesClient) idleTimeout() time.Duration {
-	if c.StreamIdleTimeout > 0 {
-		return c.StreamIdleTimeout
-	}
-	return defaultStreamIdleTimeout
 }
 
 func (c *ResponsesClient) baseURL() string {
@@ -335,18 +328,15 @@ func (c *ResponsesClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 			return
 		}
 
-		idle := c.idleTimeout()
-		body := newIdleReader(resp.Body, idle)
+		body := newIdleReader(resp.Body, orDefault(c.StreamIdleTimeout, defaultStreamIdleTimeout),
+			orDefault(c.StreamQuietTimeout, defaultStreamQuietTimeout))
 		defer body.Close()
 
 		if !c.parseStream(body, yield) {
 			return
 		}
 		if body.Stalled() {
-			yield(llm.StreamEvent{}, &llm.StreamError{
-				Class:   llm.ErrNetwork,
-				Message: fmt.Sprintf("the provider stopped sending for %s mid-response", idle),
-			})
+			yield(llm.StreamEvent{}, body.StallError())
 			return
 		}
 		if ctx.Err() != nil {
