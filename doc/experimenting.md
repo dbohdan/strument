@@ -1246,9 +1246,12 @@ is a judgment about a different, shorter input. So:
   Identical answers are the signature of a cut.
 - **Where it matters, guard on length in the harness,** below the smallest
   window you rely on.
-  - Strument asks about any command plus purpose over 800 characters instead
-    of sending it (`MaxInput` in `internal/decide/systemone.go`).
-  - The cap costs nothing on the natural corpus, where nothing comes near it.
+  - Strument asks about any command plus purpose over `max_input` characters
+    instead of sending it (`DecisionDefaultMaxInput` in
+    `internal/config/types.go`, 4000 by default).
+  - A cap that costs nothing on a trial corpus can cost a lot in use: at 800
+    it sent no trial command to the user, but 9 of 118 from one model writing
+    edits as heredocs.
 - **Put a long item in the corpus.** Otherwise a pass says nothing about
   length, whatever it says about everything else.
 

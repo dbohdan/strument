@@ -1019,14 +1019,18 @@ p(safe) 0.97.` below the `Running` line, or `Not approved by …, p(safe) 0.42 <
   answer came from a classifier, not a person. If it sends the identical
   command again in the same turn, Strument declines it without asking the
   model again and says the answer cannot change.
-- **Only for commands that fit the model's input window.** A command plus
-  purpose longer than 800 characters is always asked about, because decision
-  models cut long input without saying so. Ollaya's Laya reads 512 tokens,
-  and a harmless prefix followed by a destructive command scored exactly what
-  the prefix alone scored. (Ollaya fixed this after a report on 2026-09-26: a
-  release after 0.7.1 answers such a request with `422 STATE_TRUNCATED`, which
-  Strument treats as a failure and asks. The cap stays, for servers that
-  still truncate silently.)
+- **Only for commands that fit `max_input`.** A command plus purpose longer
+  than `max_input` characters, 4000 by default, is always asked about without
+  being sent. The cap exists because a decision model may cut long input
+  without saying so: Ollaya's Laya read 512 tokens, and a harmless prefix
+  followed by a destructive command scored exactly what the prefix alone
+  scored. Ollaya fixed this after a report on 2026-09-26 (a release after
+  0.7.1 answers `422 STATE_TRUNCATED`), and Jev 1.13 and 1.14 read 64k tokens
+  and answer `400 max_tokens_exceeded` beyond them. Strument treats both as a
+  failure and asks. The cap was 800 until heredoc edits, about one command in
+  thirteen from one model, kept going to the prompt unread. For a server that
+  still truncates silently, set `max_input` below its window: 800 suits a
+  512-token one.
 
 It never overrides a refusal, a disabled shell, or a "no" at the prompt.
 
@@ -1466,7 +1470,7 @@ A search backend for `websearch`. `backend` is `"searxng"`, `"anysearch"`, or
 
 These parameters are keyword-only.
 
-### `decision_model(dialect, slug, *, url, api_key=None, proxy=None, threshold=0.9, timeout=10)`
+### `decision_model(dialect, slug, *, url, api_key=None, proxy=None, threshold=0.9, timeout=10, max_input=4000)`
 
 A decision model for `approve_model`. It is its own type, not a `model()`:
 - A chat model's parameters don't apply to it.
@@ -1494,6 +1498,10 @@ A decision model for `approve_model`. It is its own type, not a `model()`:
   Jev 1.13.
 - **`timeout`** — seconds one decision may take before the prompt is shown
   instead. Above 0 and at most 120.
+- **`max_input`** — the longest command plus purpose, in characters, sent to
+  the model; a longer one is asked about unread. 4000 by default; at least 1
+  and at most 200000. Set it below the window of a server that truncates
+  silently.
 
 These parameters, apart from `dialect` and `slug`, are keyword-only.
 

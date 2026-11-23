@@ -21,6 +21,9 @@ func TestDecisionModelRefusedAtLoad(t *testing.T) {
 		{`approve_model = decision_model("systemone", "laya", "http://h/x")`, "positional"},
 		{`approve_model = decision_model("systemone", "laya", url="http://h/x", timeout=0)`, "timeout"},
 		{`approve_model = decision_model("systemone", "laya", url="http://h/x", timeout=600)`, "at most 120"},
+		{`approve_model = decision_model("systemone", "laya", url="http://h/x", max_input=0)`, "max_input"},
+		{`approve_model = decision_model("systemone", "laya", url="http://h/x", max_input=1000000)`, "at most 200000"},
+		{`approve_model = decision_model("systemone", "laya", url="http://h/x", max_input="long")`, "max_input"},
 		{`approve_model = "laya"`, "decision_model() value"},
 	} {
 		_, err := loadBudget(t, tc.src)
@@ -44,8 +47,12 @@ func TestDecisionModelParsed(t *testing.T) {
 	}
 	if am.Dialect != DecisionSystemOne || am.Slug != "laya" || am.URL != "http://localhost:11435/v1/systemone" ||
 		am.APIKey != "local" || am.Proxy != "" || am.Threshold != DecisionDefaultThreshold ||
-		am.Timeout != DecisionDefaultTimeout {
+		am.Timeout != DecisionDefaultTimeout || am.MaxInput != DecisionDefaultMaxInput {
 		t.Errorf("approve_model = %+v", *am)
+	}
+	cfg, err = loadBudget(t, `approve_model = decision_model("systemone", "laya", url="http://h/x", max_input=800)`)
+	if err != nil || cfg.ApproveModel.MaxInput != 800 {
+		t.Errorf("max_input=800: %v, %+v", err, cfg.ApproveModel)
 	}
 	if s := (&decisionModelValue{d: *am}).String(); strings.Contains(s, am.APIKey) {
 		t.Errorf("the value's String shows the key: %s", s)

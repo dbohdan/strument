@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
+	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/decide"
 	"dbohdan.com/strument/internal/record"
 )
@@ -33,6 +35,9 @@ type ApproveModel struct {
 	Slug      string
 	Threshold float64
 	Timeout   time.Duration
+	// MaxInput is the longest command plus purpose, in characters, the model
+	// is asked about; zero means config.DecisionDefaultMaxInput.
+	MaxInput int
 }
 
 // shellPromptAnswered reports whether the shell prompt would be answered
@@ -58,9 +63,13 @@ func (c *Coder) shellPromptAnswered(group string) bool {
 func (c *Coder) approveByModel(ctx context.Context, command, purpose string) (bool, string) {
 	c.approveVerdict = ""
 	am := c.Approve
-	if n := len(command) + len(purpose); n > decide.MaxInput {
+	limit := am.MaxInput
+	if limit <= 0 {
+		limit = config.DecisionDefaultMaxInput
+	}
+	if n := utf8.RuneCountInString(command) + utf8.RuneCountInString(purpose); n > limit {
 		c.record(record.Record{Type: record.KindDecision, Call: "approve_model", Model: am.Slug, Outcome: "too_long"})
-		return false, fmt.Sprintf("Not sent to %s: %d characters is more than it may read whole.", am.Slug, n)
+		return false, fmt.Sprintf("Not sent to %s: %d characters is more than its max_input of %d.", am.Slug, n, limit)
 	}
 	timeout := am.Timeout
 	if timeout <= 0 {

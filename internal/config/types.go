@@ -487,6 +487,20 @@ const DecisionDefaultThreshold = 0.9
 // can pick a checkpoint that is still cold mid-session; timeout= raises it.
 const DecisionDefaultTimeout = 10
 
+// DecisionDefaultMaxInput is the longest command plus purpose, in characters,
+// put to a decision model; a longer one is asked about. The cap guards against
+// a model that reads a fixed window and silently cuts the rest: Ollaya's Laya
+// read 512 tokens, rubric included, and scored a long harmless prefix with a
+// destructive tail exactly as it scored the prefix alone. That is why the
+// first cap was 800. Laya now answers 422 STATE_TRUNCATED instead, and Jev
+// 1.13 and 1.14 read 64k tokens a request (32k a question) and answer 400
+// max_tokens_exceeded beyond it; both errors show the prompt. At 800 the cap
+// sent 9 of 118 commands in one model's sessions to the user unread, edits
+// written as heredocs, the longest 948 characters. 4000 is about 1000 tokens:
+// it covers all of those, and stays far inside what Jev reads. A server that
+// still truncates silently wants max_input= at its own window.
+const DecisionDefaultMaxInput = 4000
+
 // DecisionModel is a configured decision model, from decision_model(). It is
 // its own type rather than a model() because nothing about a chat model
 // applies: the request is a state and typed questions, not messages, and the
@@ -509,4 +523,7 @@ type DecisionModel struct {
 	// Timeout is how long one decision may take, in seconds, before the
 	// prompt is shown instead.
 	Timeout float64
+	// MaxInput is the longest command plus purpose, in characters, sent to
+	// the model; a longer one is asked about unread.
+	MaxInput int
 }

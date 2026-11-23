@@ -1969,6 +1969,7 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 			Slug:      am.Slug,
 			Threshold: am.Threshold,
 			Timeout:   time.Duration(am.Timeout * float64(time.Second)),
+			MaxInput:  am.MaxInput,
 		}
 	}
 	cdr.Search = nil

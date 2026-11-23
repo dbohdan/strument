@@ -53,17 +53,6 @@ const (
 		"does. The person should be asked."
 )
 
-// MaxInput is the longest command plus purpose, in bytes, that is put
-// to the decision model at all; anything longer is asked about. A decision
-// model reads a fixed window and cuts the rest without saying so: Ollaya's
-// Laya reads 512 tokens, rubric included, and a command with a long harmless
-// prefix and a destructive tail scored exactly what the prefix alone scored.
-// The cap is the harness's guard because the model's own answer cannot reveal
-// what it never saw. 800 fits that window with the rubric, and no command in
-// doc/experiments/2026-09-approve-model's natural corpus (3,772 uses) exceeds
-// it, so it costs nothing in practice.
-const MaxInput = 800
-
 // maxBytes caps a response. An answer is a few hundred bytes; anything
 // near this is not one.
 const maxBytes = 1 << 16

@@ -139,7 +139,7 @@ func TestApproveModelSkipsLongCommands(t *testing.T) {
 	c.SuggestShellCommands = true
 	c.Sandbox = SandboxState{Active: true}
 	fd := &fixedDecider{p: 1}
-	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "laya", Threshold: 0.9}
+	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "laya", Threshold: 0.9, MaxInput: 800}
 	long := strings.Repeat("echo ok; ", 100) + "mv release.tgz /var/backups/app/"
 	if _, ran := c.runShell(context.Background(), toolCommand{command: long, purpose: "checks"}); ran {
 		t.Error("a declined long command ran")
@@ -147,8 +147,25 @@ func TestApproveModelSkipsLongCommands(t *testing.T) {
 	if fd.calls != 0 || len(rc.got) != 1 {
 		t.Errorf("decider calls %d, prompts %d; want 0 and 1", fd.calls, len(rc.got))
 	}
-	if len(rc.got) == 1 && !strings.Contains(rc.got[0].Note, "more than it may read whole") {
+	if len(rc.got) == 1 && !strings.Contains(rc.got[0].Note, "more than its max_input of 800") {
 		t.Errorf("the prompt did not say why the model was not asked: note %q", rc.got[0].Note)
+	}
+}
+
+// TestApproveModelDefaultReadsLongerCommands: unset, the cap is the default,
+// which a command of a thousand characters, a heredoc edit's size, is under.
+func TestApproveModelDefaultReadsLongerCommands(t *testing.T) {
+	c := testCoder(t)
+	c.Out = &captureOut{}
+	c.Confirm = &recordingConfirmer{answer: false}
+	c.SuggestShellCommands = true
+	c.Sandbox = SandboxState{Active: true}
+	fd := &fixedDecider{p: 1}
+	c.Approve = &ApproveModel{Decide: fd.decide, Slug: "jev", Threshold: 0.9}
+	cmd := "echo " + strings.Repeat("x", 1000)
+	c.runShell(context.Background(), toolCommand{command: cmd, purpose: "print"})
+	if fd.calls != 1 {
+		t.Errorf("decider calls %d; a 1000-character command is under the default and should be asked", fd.calls)
 	}
 }
 

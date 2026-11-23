@@ -506,7 +506,7 @@ func (v *decisionModelValue) Hash() (uint32, error) {
 }
 
 // builtinDecisionModel implements decision_model(dialect, slug, *, url,
-// api_key=None, proxy=None, threshold=0.9, timeout=10).
+// api_key=None, proxy=None, threshold=0.9, timeout=10, max_input=4000).
 //
 // Patterned on search() rather than on model(): a decision model is a service
 // with a URL, a key and a proxy, and it shares none of a chat model's
@@ -523,6 +523,7 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 	}
 	var dialect, slug, rawURL, apiKey, proxy string
 	var threshold, timeout starlark.Value
+	maxInput := DecisionDefaultMaxInput
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"dialect", &dialect,
 		"slug", &slug,
@@ -531,6 +532,7 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 		"proxy?", &proxy,
 		"threshold?", &threshold,
 		"timeout?", &timeout,
+		"max_input?", &maxInput,
 	); err != nil {
 		return nil, err
 	}
@@ -589,8 +591,14 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 	if secs <= 0 || secs > 120 {
 		return nil, fmt.Errorf("decision_model: timeout %v must be above 0 and at most 120 seconds", secs)
 	}
+	// At most 200,000 characters, about 50,000 tokens: more than any decision
+	// model's window, so a larger number could only mean a typo.
+	if maxInput < 1 || maxInput > 200_000 {
+		return nil, fmt.Errorf("decision_model: max_input %d must be at least 1 and at most 200000 characters", maxInput)
+	}
 	return &decisionModelValue{d: DecisionModel{
 		Dialect: dialect, Slug: slug, URL: u.String(), APIKey: apiKey, Proxy: proxy, Threshold: t, Timeout: secs,
+		MaxInput: maxInput,
 	}}, nil
 }
 
