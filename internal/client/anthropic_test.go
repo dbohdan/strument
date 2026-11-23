@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -543,6 +544,32 @@ func TestOpenCodeRoutingHint(t *testing.T) {
 		if !strings.Contains(got, "may be") {
 			t.Errorf("%s %d: hint = %q, want it hedged — a 401 can still be a bad key",
 				tc.adapter, tc.status, got)
+		}
+	}
+}
+
+// OpenRouter's refusal names max_tokens, which the user's config calls
+// max_output; without the hint nothing connects the two. The body is the one
+// a nearly spent key got, with the key's link shortened.
+func TestMaxOutputHintOnCreditRefusal(t *testing.T) {
+	const or402 = `{"error":{"message":"This request requires more credits, or fewer max_tokens. ` +
+		`You requested up to 131072 tokens, but can only afford 127000. To increase, visit ` +
+		`https://openrouter.ai/workspaces/default/keys/x and adjust the key's total limit","code":402}}`
+	for _, tc := range []struct {
+		status int
+		body   string
+		want   bool
+	}{
+		{402, or402, true},
+		// Out of credit for a reason no cap would fix.
+		{402, `{"error":{"message":"Insufficient credits"}}`, false},
+		// max_tokens in a request error is a different mistake.
+		{400, `{"error":{"message":"max_tokens must be at least 1"}}`, false},
+	} {
+		resp := &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body))}
+		got := classifyHTTPError(resp, config.AdapterOpenRouter).Message
+		if has := strings.Contains(got, "max_output"); has != tc.want {
+			t.Errorf("%d %s: message = %q, want hint %v", tc.status, tc.body, got, tc.want)
 		}
 	}
 }

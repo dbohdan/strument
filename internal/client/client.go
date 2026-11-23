@@ -490,6 +490,19 @@ func opencodeRoutingHint(adapter string, status int) string {
 	return ""
 }
 
+// maxOutputHint is appended when a provider refuses a request for credit and
+// blames max_tokens. OpenRouter checks that a key can pay for the longest
+// answer a request allows, and with max_output unset that is the model's own
+// cap — 131072 tokens on some — so an expense-capped key can be refused on
+// every request while holding enough for the turn. The provider's message
+// names max_tokens, which is not a word the user's config uses.
+func maxOutputHint(status int, msg string) string {
+	if status != http.StatusPaymentRequired || !strings.Contains(strings.ToLower(msg), "max_tokens") {
+		return ""
+	}
+	return "\nmax_tokens is this model's max_output setting; a smaller one asks the provider to reserve less credit for each request."
+}
+
 func classifyHTTPError(resp *http.Response, adapter string) *llm.StreamError {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	msg := extractErrorMessage(body)
@@ -520,7 +533,7 @@ func classifyHTTPError(resp *http.Response, adapter string) *llm.StreamError {
 			class = llm.ErrRequest
 		}
 	}
-	msg += opencodeRoutingHint(adapter, resp.StatusCode)
+	msg += maxOutputHint(resp.StatusCode, msg) + opencodeRoutingHint(adapter, resp.StatusCode)
 	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg)}
 }
 

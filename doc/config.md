@@ -1737,6 +1737,13 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   Anthropic's, whose API requires the field and therefore gets a built-in
   default.
 
+  Leaving the cap to the provider can cost credit you have. OpenRouter checks
+  that a key can pay for the longest answer a request allows, which unset is
+  the model's own cap (131072 tokens on some), and refuses with `HTTP 402 …
+  fewer max_tokens` when it cannot. On an expense-capped key with an
+  expensive model that can be every request. A `max_output` such as 32768
+  lowers the reservation; the 402 says so.
+
   Do not set it through `extra_params`: the key is reserved, because every
   dialect writes the cap after the passthrough and a passthrough entry could
   only be ignored.
