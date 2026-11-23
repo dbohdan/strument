@@ -2,7 +2,11 @@ package repl
 
 import (
 	"context"
+	"errors"
+	"path/filepath"
+	"slices"
 
+	"dbohdan.com/strument/internal/coder"
 	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/render"
 )
@@ -33,12 +37,32 @@ func cmdAttach(_ context.Context, r *REPL, args string) string {
 	}
 
 	for _, path := range fields {
-		src, err := r.coder.AttachFile(path)
-		if err != nil {
+		before := labels(r.coder.Attachments())
+		src, replaced, err := r.coder.AttachFile(path)
+		var dup coder.AlreadyAttachedError
+		switch {
+		case errors.As(err, &dup):
+			if filepath.Base(path) == filepath.Base(dup.Label) {
+				r.printf("%s is already attached.", dup.Label)
+			} else {
+				r.printf("%s is the same image as %s, which is already attached.", path, dup.Label)
+			}
+			continue
+		case err != nil:
 			r.out.Errorf("Could not attach %s: %v", path, err)
 			continue
+		case replaced:
+			r.printf("Replaced %s with the changed file: %s.", src.Label, src.String())
+		default:
+			r.printf("Attached %s.", src.String())
 		}
-		r.printf("Attached %s.", src.String())
+		// A twin's arrival lengthens the earlier label; say so, or a later
+		// /attach drop by the old name would match both.
+		for _, l := range labels(r.coder.Attachments()) {
+			if l != src.Label && !slices.Contains(before, l) {
+				r.printf("The other %s is now %s.", filepath.Base(l), l)
+			}
+		}
 	}
 	r.warnIfModelCannotSee()
 	return ""
@@ -54,11 +78,14 @@ func attachDrop(r *REPL, names []string) string {
 		return ""
 	}
 	for _, name := range names {
-		if r.coder.DropAttachments(name) == 0 {
+		switch n := r.coder.DropAttachments(name); n {
+		case 0:
 			r.out.Warningf("No attachment matched %q.", name)
-			continue
+		case 1:
+			r.printf("Removed %s from your next message.", name)
+		default:
+			r.printf("Removed %d images matching %s from your next message.", n, name)
 		}
-		r.printf("Removed %s from your next message.", name)
 	}
 	return ""
 }
@@ -101,4 +128,13 @@ func (r *REPL) warnIfModelCannotSee() {
 	}
 	r.out.Warningf("%s does not accept images, so it will be told the image is there but unavailable.", name)
 	r.printf("  Switch with /model, or set input_modalities = [\"text\", \"image\"] if it does accept them.")
+}
+
+// labels lists the staged images' labels.
+func labels(staged []llm.ImageSource) []string {
+	out := make([]string, len(staged))
+	for i, s := range staged {
+		out[i] = s.Label
+	}
+	return out
 }

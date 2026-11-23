@@ -308,7 +308,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	// results, or an interrupted reply the user chose to continue — so it adds
 	// no user turn; inp is unused on that path.
 	appendedUser := false
-	var consumedAttachments []llm.ImageSource
+	var consumedAttachments []attachment
 	if c.resumeInPlace {
 		c.resumeInPlace = false
 	} else {

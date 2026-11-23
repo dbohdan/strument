@@ -229,7 +229,7 @@ type Coder struct {
 	// pendingAttachments are images staged by /attach, consumed by the next
 	// user message and gone after it. Not session state and not in the resume
 	// file: see userMessage in attach.go.
-	pendingAttachments []llm.ImageSource
+	pendingAttachments []attachment
 	curMessages        []llm.Message
 	turnEditedFiles    map[string]bool
 	// toolLog tees Toolf into a per-turn record, so the transcript can say what

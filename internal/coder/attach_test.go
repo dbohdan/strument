@@ -2,11 +2,14 @@ package coder
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,7 +46,7 @@ func TestAttachmentRidesOnTheNextRequestAndIsConsumed(t *testing.T) {
 		c.Model.InputModalities = []string{llm.BlockText, llm.BlockImage}
 	})
 	writeTestPNG(t, filepath.Join(env.coder.Root, "shot.png"), 20, 10)
-	if _, err := env.coder.AttachFile("shot.png"); err != nil {
+	if _, _, err := env.coder.AttachFile("shot.png"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,7 +90,7 @@ func TestAttachmentWithNoTextIsStillValid(t *testing.T) {
 		InputModalities: []string{llm.BlockText, llm.BlockImage},
 	})
 	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 4, 4)
-	if _, err := c.AttachFile("shot.png"); err != nil {
+	if _, _, err := c.AttachFile("shot.png"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +120,7 @@ func TestAttachRefusalsStageNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"notes.txt", "pics", "nope.png"} {
-		if _, err := c.AttachFile(path); err == nil {
+		if _, _, err := c.AttachFile(path); err == nil {
 			t.Errorf("%s was accepted", path)
 		}
 	}
@@ -130,14 +133,15 @@ func TestAttachRefusalsStageNothing(t *testing.T) {
 // than silently keeping the first eight.
 func TestAttachmentCountIsCapped(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{Slug: "m"})
-	path := filepath.Join(c.Root, "shot.png")
-	writeTestPNG(t, path, 4, 4)
+	for i := range maxAttachments + 1 {
+		writeTestPNG(t, filepath.Join(c.Root, fmt.Sprintf("shot%d.png", i)), i+1, 4)
+	}
 	for i := range maxAttachments {
-		if _, err := c.AttachFile("shot.png"); err != nil {
+		if _, _, err := c.AttachFile(fmt.Sprintf("shot%d.png", i)); err != nil {
 			t.Fatalf("attachment %d refused: %v", i, err)
 		}
 	}
-	if _, err := c.AttachFile("shot.png"); err == nil {
+	if _, _, err := c.AttachFile(fmt.Sprintf("shot%d.png", maxAttachments)); err == nil {
 		t.Error("the cap did not hold")
 	}
 	if len(c.Attachments()) != maxAttachments {
@@ -150,7 +154,7 @@ func TestAttachmentCountIsCapped(t *testing.T) {
 func TestAttachmentsAreNotAliased(t *testing.T) {
 	c := New(t.TempDir(), &config.Model{Slug: "m"})
 	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 4, 4)
-	if _, err := c.AttachFile("shot.png"); err != nil {
+	if _, _, err := c.AttachFile("shot.png"); err != nil {
 		t.Fatal(err)
 	}
 	got := c.Attachments()
@@ -176,9 +180,9 @@ func TestAttachmentLabelIsJustTheFileName(t *testing.T) {
 
 	// Through the project, and from an absolute path outside it.
 	outside := filepath.Join(t.TempDir(), "elsewhere.png")
-	writeTestPNG(t, outside, 4, 4)
+	writeTestPNG(t, outside, 5, 4)
 	for _, path := range []string{filepath.Join("deep", "nested", "shot.png"), outside} {
-		src, err := c.AttachFile(path)
+		src, _, err := c.AttachFile(path)
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
@@ -189,4 +193,87 @@ func TestAttachmentLabelIsJustTheFileName(t *testing.T) {
 	if got := c.Attachments(); got[0].Label != "shot.png" || got[1].Label != "elsewhere.png" {
 		t.Errorf("labels = %q, %q", got[0].Label, got[1].Label)
 	}
+}
+
+// Attaching the same image twice stages it once: the second is refused, from
+// the same path or another, so the model never sees one picture twice.
+func TestAttachRefusesTheSameImageTwice(t *testing.T) {
+	c := New(t.TempDir(), &config.Model{Slug: "m"})
+	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 4, 4)
+	writeTestPNG(t, filepath.Join(c.Root, "copy.png"), 4, 4)
+	if _, _, err := c.AttachFile("shot.png"); err != nil {
+		t.Fatal(err)
+	}
+	for _, again := range []string{"shot.png", "./shot.png", "copy.png"} {
+		_, _, err := c.AttachFile(again)
+		var dup AlreadyAttachedError
+		if !errors.As(err, &dup) || dup.Label != "shot.png" {
+			t.Errorf("attaching %s again: err = %v, want it refused as already attached as shot.png", again, err)
+		}
+	}
+	if n := len(c.Attachments()); n != 1 {
+		t.Errorf("%d staged, want 1", n)
+	}
+}
+
+// The same file with new contents replaces its staged copy, in place: what
+// attaching a retaken screenshot means.
+func TestAttachReplacesAChangedFile(t *testing.T) {
+	c := New(t.TempDir(), &config.Model{Slug: "m"})
+	writeTestPNG(t, filepath.Join(c.Root, "a.png"), 4, 4)
+	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 4, 4+1)
+	for _, p := range []string{"shot.png", "a.png"} {
+		if _, _, err := c.AttachFile(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestPNG(t, filepath.Join(c.Root, "shot.png"), 9, 9)
+	src, replaced, err := c.AttachFile("shot.png")
+	if err != nil || !replaced || src.Width != 9 {
+		t.Fatalf("re-attach after a change: replaced=%v width=%d err=%v", replaced, src.Width, err)
+	}
+	got := c.Attachments()
+	if len(got) != 2 || got[0].Label != "shot.png" || got[0].Width != 9 || got[1].Label != "a.png" {
+		t.Errorf("staged %+v, want the new shot.png first, in its old place, then a.png", got)
+	}
+}
+
+// Two different files with one name get labels long enough to tell apart, so
+// the model can, and /attach drop can name one; dropping one shortens the
+// other's label again. A bare name still drops every match, and says how many.
+func TestAttachNamesTwinsApart(t *testing.T) {
+	c := New(t.TempDir(), &config.Model{Slug: "m"})
+	for i, dir := range []string{"a", "b"} {
+		if err := os.MkdirAll(filepath.Join(c.Root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestPNG(t, filepath.Join(c.Root, dir, "shot.png"), 4+i, 4)
+		if _, _, err := c.AttachFile(filepath.Join(dir, "shot.png")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := labelsOf(c.Attachments()); !slices.Equal(got, []string{"a/shot.png", "b/shot.png"}) {
+		t.Fatalf("labels %v, want a/shot.png and b/shot.png", got)
+	}
+	if n := c.DropAttachments("b/shot.png"); n != 1 {
+		t.Fatalf("dropping b/shot.png removed %d", n)
+	}
+	if got := labelsOf(c.Attachments()); !slices.Equal(got, []string{"shot.png"}) {
+		t.Errorf("after the twin left: %v, want shot.png", got)
+	}
+	writeTestPNG(t, filepath.Join(c.Root, "b", "shot.png"), 7, 4)
+	if _, _, err := c.AttachFile(filepath.Join("b", "shot.png")); err != nil {
+		t.Fatal(err)
+	}
+	if n := c.DropAttachments("shot.png"); n != 2 {
+		t.Errorf("a bare name dropped %d, want both", n)
+	}
+}
+
+func labelsOf(srcs []llm.ImageSource) []string {
+	out := make([]string, len(srcs))
+	for i, s := range srcs {
+		out[i] = s.Label
+	}
+	return out
 }

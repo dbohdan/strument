@@ -72,8 +72,8 @@ func TestBareAttachReportsAndChangesNothing(t *testing.T) {
 func TestAttachDrop(t *testing.T) {
 	r, cdr, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
 	cdr.Model = &config.Model{InputModalities: []string{llm.BlockText, llm.BlockImage}}
-	for _, name := range []string{"a.png", "b.png"} {
-		writePNG(t, filepath.Join(cdr.Root, name), 4, 4)
+	for i, name := range []string{"a.png", "b.png"} {
+		writePNG(t, filepath.Join(cdr.Root, name), 4+i, 4)
 		r.dispatch(context.Background(), "/attach "+name)
 	}
 
@@ -147,5 +147,39 @@ func TestAttachIsNotResumeState(t *testing.T) {
 	r.dispatch(context.Background(), "/attach shot.png")
 	if r.resumeState() != before {
 		t.Error("/attach changed resume state; attachments do not survive a restart and must not claim to")
+	}
+}
+
+// The messages around duplicates: a second copy is refused by name, a changed
+// file is replaced, a twin's arrival renames the first, and a drop that takes
+// several says how many.
+func TestAttachDuplicatesAndTwins(t *testing.T) {
+	r, cdr, out := newTestREPL(t, answerStub("hi"), strings.NewReader(""))
+	cdr.Model = &config.Model{InputModalities: []string{llm.BlockText, llm.BlockImage}}
+	ctx := context.Background()
+	for i, dir := range []string{"a", "b"} {
+		if err := os.MkdirAll(filepath.Join(cdr.Root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writePNG(t, filepath.Join(cdr.Root, dir, "foo.png"), 4+i, 4)
+	}
+
+	r.dispatch(ctx, "/attach a/foo.png")
+	r.dispatch(ctx, "/attach a/foo.png")
+	if !strings.Contains(out.String(), "foo.png is already attached.") || len(cdr.Attachments()) != 1 {
+		t.Errorf("a second copy was not refused:\n%s", out.String())
+	}
+	writePNG(t, filepath.Join(cdr.Root, "a", "foo.png"), 9, 9)
+	r.dispatch(ctx, "/attach a/foo.png")
+	if !strings.Contains(out.String(), "Replaced foo.png with the changed file") || len(cdr.Attachments()) != 1 {
+		t.Errorf("a changed file was not replaced:\n%s", out.String())
+	}
+	r.dispatch(ctx, "/attach b/foo.png")
+	if !strings.Contains(out.String(), "Attached [image: b/foo.png") || !strings.Contains(out.String(), "The other foo.png is now a/foo.png.") {
+		t.Errorf("the twin and the renaming were not reported:\n%s", out.String())
+	}
+	r.dispatch(ctx, "/attach drop foo.png")
+	if !strings.Contains(out.String(), "Removed 2 images matching foo.png") || len(cdr.Attachments()) != 0 {
+		t.Errorf("a drop of two did not say so:\n%s", out.String())
 	}
 }

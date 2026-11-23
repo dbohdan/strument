@@ -93,7 +93,7 @@ func (c *Coder) countPending() int {
 	}
 	n := 0
 	for _, img := range c.pendingAttachments {
-		n += imageTokens(img, adapter)
+		n += imageTokens(img.ImageSource, adapter)
 	}
 	return n
 }

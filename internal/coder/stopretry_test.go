@@ -88,7 +88,7 @@ func hasTurnRecord(rec *capture) bool {
 func TestStopBeforeReplyEndsTheTurnQuietly(t *testing.T) {
 	c, rec, out, asker := stopCoder(t, &hangingClient{})
 	img := llm.ImageSource{MediaType: "image/png", Data: "iVBORw0KGgo=", Label: "shot.png"}
-	c.pendingAttachments = []llm.ImageSource{img}
+	c.pendingAttachments = []attachment{{ImageSource: img}}
 
 	c.runOne(context.Background(), "do the thing")
 
