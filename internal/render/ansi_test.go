@@ -267,3 +267,35 @@ func TestReasoningKeepsSingleStars(t *testing.T) {
 		}
 	}
 }
+
+// A "$" is text: shell variables, prices and PIDs, not TeX. A lone
+// "$DISPLAY" used to open an inline equation that nothing closed, eating the
+// "$" and dimming the rest of the answer. Math is \( \) and \[ \] only.
+func TestDollarIsText(t *testing.T) {
+	for _, doc := range []string{
+		"dies with \"no display name and no $DISPLAY\" instead of printing `aGk=`. The rest.\n",
+		"set $HOME and $PATH first\n",
+		"it costs $5, not $10\n",
+		"the PID is $$\nnext line\n",
+		"inline $x^2$ stays as written\n",
+		"$$\nE = mc^2\n$$\n",
+	} {
+		for _, byChar := range []bool{false, true} {
+			got := renderANSI(doc, true, byChar)
+			plain := sgrRe.ReplaceAllString(got, "")
+			want := strings.ReplaceAll(strings.TrimRight(doc, "\n"), "`", "")
+			if strings.Contains(got, "\x1b[2m") || !strings.Contains(plain, strings.Split(want, "\n")[0]) {
+				t.Errorf("byChar=%v: %q rendered %q, want the dollars literal and nothing dimmed", byChar, doc, got)
+			}
+		}
+	}
+}
+
+// The backslash forms are still math.
+func TestBackslashMathStillDims(t *testing.T) {
+	for _, doc := range []string{"so \\(x^2\\) holds\n", "\\[\nE = mc^2\n\\]\n"} {
+		if got := renderANSI(doc, true, false); !strings.Contains(got, "\x1b[2m") {
+			t.Errorf("%q rendered %q, want it dimmed as math", doc, got)
+		}
+	}
+}

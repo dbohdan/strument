@@ -217,17 +217,6 @@ func (p *Parser) clearRootPending() {
 
 func isDigit(c rune) bool { return c >= '0' && c <= '9' }
 
-func isDelimiter(c rune) bool {
-	switch c {
-	case ' ', ':', ';', ')', ',', '!', '.', '?', ']', '\n':
-		return true
-	default:
-		return false
-	}
-}
-
-func isDelimiterOrNumber(c rune) bool { return isDigit(c) || isDelimiter(c) }
-
 func isAlnum(c rune) bool {
 	return isDigit(c) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 }
@@ -602,25 +591,21 @@ func (p *Parser) tokenChecks(char rune, pendingWithChar string) bool {
 		}
 		return false
 	case tokMaybeEqBlk:
-		//	\[?  or  $$?
-		//	  ^        ^
+		//	\[?
+		//	  ^
 		if char == '\n' {
 			p.addText()
 			p.addToken(EquationBlock)
 			p.pending = ""
 		} else {
 			p.token = p.tokens[p.depth]
-			if p.pending[0] == '\\' {
-				p.text += "["
-			} else {
-				p.text += "$$"
-			}
+			p.text += "["
 			p.pending = ""
 			p.Write(string(char))
 		}
 		return true
 	case EquationBlock:
-		if pendingWithChar == "\\]" || pendingWithChar == "$$" {
+		if pendingWithChar == "\\]" {
 			p.addText()
 			p.endToken()
 			p.pending = ""
@@ -628,14 +613,10 @@ func (p *Parser) tokenChecks(char rune, pendingWithChar string) bool {
 		}
 		return false
 	case EquationInline:
-		if pendingWithChar == "\\)" || (len(p.pending) > 0 && p.pending[0] == '$') {
+		if pendingWithChar == "\\)" {
 			p.addText()
 			p.endToken()
-			if char == ')' {
-				p.pending = ""
-			} else {
-				p.pending = string(char)
-			}
+			p.pending = ""
 			return true
 		}
 		return false
@@ -954,6 +935,11 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 			return false
 		}
 
+		// Math is \( \) and \[ \] only; "$" is always text. In a coding
+		// assistant's answer a dollar sign is a shell variable, a price or a
+		// PID far more often than TeX, and as math a lone "$DISPLAY" opened an
+		// equation nothing closed, ate the "$", and dimmed the rest of the
+		// answer. The terminal shows math only as dim text anyway.
 		switch char {
 		case '(':
 			p.addText()
@@ -1095,28 +1081,6 @@ func (p *Parser) commonChecks(char rune, pendingWithChar string) bool {
 				p.pending = string(char)
 				return true
 			}
-		}
-		return false
-	case '$': // $eq$ | $$eq$$
-		if p.token != Image && p.token != Strike && p.pending == "$" {
-			//	$$EQUATION_BLOCK$$
-			//	 ^
-			if char == '$' {
-				p.token = tokMaybeEqBlk
-				p.pending = pendingWithChar
-				return true
-			}
-			//	$123
-			//	 ^
-			if isDelimiterOrNumber(char) {
-				return false
-			}
-			//	$EQUATION_INLINE$
-			//	 ^
-			p.addText()
-			p.addToken(EquationInline)
-			p.pending = string(char)
-			return true
 		}
 		return false
 	case '[': // [Link](url)

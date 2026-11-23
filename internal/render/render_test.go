@@ -209,20 +209,27 @@ func runCase(t *testing.T, tc smdCase, byChar bool) {
 
 // departures are the smd.js cases Strument renders differently on purpose.
 // An underscore is never emphasis: in a model's answer it is an identifier's
-// (TestANSIUnderscoreIsNeverEmphasis has why).
+// (TestANSIUnderscoreIsNeverEmphasis has why). A "$" is never math: it is a
+// shell variable, a price or a PID (TestDollarIsText).
 var departures = map[string]bool{
-	"Italic & Bold \"__bold_bold>em___'": true,
-	"Italic & Bold \"___bold>em_bold__'": true,
-	"Italic & Bold \"_em__em>bold___'":   true,
-	"Italic & Bold \"___bold>em__em_'":   true,
-	"Italic_Und":                         true,
-	"Italic_Und with Code":               true,
-	"Italic_Und new Paragraph":           true,
-	"Escape Italic_Und End":              true,
-	"Strong_Und":                         true,
-	"Strong_Und with Code":               true,
-	"Strong_Und new Paragraph":           true,
-	"Escape Strong_Und End":              true,
+	"Inline Equation $":                       true,
+	"Block Equation $$":                       true,
+	"Equation in text":                        true,
+	"Equation in text $ no closing":           true,
+	"Mixed currency and equation usage":       true,
+	"Valid equation after text without space": true,
+	"Italic & Bold \"__bold_bold>em___'":      true,
+	"Italic & Bold \"___bold>em_bold__'":      true,
+	"Italic & Bold \"_em__em>bold___'":        true,
+	"Italic & Bold \"___bold>em__em_'":        true,
+	"Italic_Und":                              true,
+	"Italic_Und with Code":                    true,
+	"Italic_Und new Paragraph":                true,
+	"Escape Italic_Und End":                   true,
+	"Strong_Und":                              true,
+	"Strong_Und with Code":                    true,
+	"Strong_Und new Paragraph":                true,
+	"Escape Strong_Und End":                   true,
 }
 
 func TestSMDSuite(t *testing.T) {
