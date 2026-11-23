@@ -20,7 +20,7 @@ type Resume struct {
 	Version int    `json:"version"`
 	Updated string `json:"updated"`
 
-	// Model is recorded only when the alias was *chosen* — -M or /model — and
+	// Model is recorded only when the alias was *chosen* — -m or /model — and
 	// never when it fell back to the config's default. Recording the fallback
 	// would silently pin a project to whatever the default was the first time
 	// it was opened, so that later editing `default` in config.star would

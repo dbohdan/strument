@@ -220,7 +220,7 @@ See the [`run_code` tool](doc/config.md#the-run_code-tool).
 
 ### Script mode
 
-`strument -m '<request>'` runs a single turn and exits.
+`strument -p '<request>'` runs a single turn and exits.
 The option `--dry-run` shows the edits without writing them.
 With no terminal, every confirmation prompt is declined unless `--yes <name>` approves it;
 `--unattended` does the same for a script driving a terminal.
@@ -281,7 +281,7 @@ source <(strument shell bash)
 strument shell fish | source
 ```
 
-With the completions loaded, the `-M`/`--model` option completes model aliases from the effective config (it runs `strument config models`), and `-s`/`--session` completes session names.
+With the completions loaded, the `-m`/`--model` option completes model aliases from the effective config (it runs `strument config models`), and `-s`/`--session` completes session names.
 Subcommands, their flags, and enumerable option values (`--yes`, `--mode`) are completed, too.
 Paths are completed where a command takes one.
 

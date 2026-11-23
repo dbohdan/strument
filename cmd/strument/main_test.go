@@ -558,7 +558,7 @@ func TestDiscoverSkillsGatesOnTrust(t *testing.T) {
 	}
 }
 
-// stubEndpoint runs `chat -m hello` through the built binary against handler,
+// stubEndpoint runs `chat -p hello` through the built binary against handler,
 // in a fresh project with a fresh config directory pointed at it. It returns
 // what the process printed, the paths the endpoint was asked for, and the
 // error from waiting on it (nil means exit 0).
@@ -611,7 +611,7 @@ func stubEndpoint(t *testing.T, handler http.HandlerFunc) (out string, paths []s
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command(builtBinary, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-m", "hello")
+	cmd := exec.Command(builtBinary, "chat", "--no-git", "--no-history", "--no-color", "--yes", "steps", "-p", "hello")
 	cmd.Dir = proj
 	cmd.Env = append(os.Environ(),
 		"XDG_CONFIG_HOME="+filepath.Join(root, "cfg"),
@@ -657,7 +657,7 @@ func answerOK(w http.ResponseWriter, _ *http.Request) {
 // TestChatNoHistoryStillSends pins the call order in chatCmd.Run: cdr.Run is
 // unconditional, and only the transcript append is gated on the history
 // writer existing. The crash-recording commit nested Run inside
-// `if hist != nil`, which turned every `chat --no-history -m …` run into a
+// `if hist != nil`, which turned every `chat --no-history -p …` run into a
 // silent no-op that exited 0 — no request, no output, no error. Nothing
 // failed loudly: the process succeeded at doing nothing, which is why the
 // wire check that caught it (running a probe through the built binary) is a
@@ -678,7 +678,7 @@ func TestChatNoHistoryStillSends(t *testing.T) {
 }
 
 // TestChatExitStatusFollowsTheOutcome: a scripted run that got no answer must
-// not report success. `strument -m …` used to exit 0 after a refused key —
+// not report success. `strument -p …` used to exit 0 after a refused key —
 // the diagnostic went to stderr and the status said everything was fine, so a
 // script driving it could not tell a rejected request from an empty reply the
 // model meant.
@@ -748,7 +748,7 @@ func TestFlagPlaceholdersUseAngleBrackets(t *testing.T) {
 }
 
 // /dev/null is a character device and not a terminal, and every prompt in this
-// command tree used to test for the first: `strument -m … < /dev/null`, the
+// command tree used to test for the first: `strument -p … < /dev/null`, the
 // usual way to run it from a script, printed confirmations and read EOF.
 func TestDevNullIsNotATerminal(t *testing.T) {
 	f, err := os.Open(os.DevNull)
@@ -845,7 +845,7 @@ func TestAgentsLocalIsExcludedOnce(t *testing.T) {
 	}
 }
 
-// TestScriptMessage pins how -m reads a leading slash: the one-shot format
+// TestScriptMessage pins how -p reads a leading slash: the one-shot format
 // commands work, other commands are refused rather than sent as text, and a
 // slash that begins a path is sent as written.
 func TestScriptMessage(t *testing.T) {
@@ -894,7 +894,7 @@ func TestTerminalConfirmerUnattendedDeclines(t *testing.T) {
 
 // Script mode's confirmer shows what the REPL's shows, in the same order:
 // purpose, command, then approve_model's note. The note reached the REPL first
-// and not this surface, which only a pty run through -m showed.
+// and not this surface, which only a pty run through -p showed.
 func TestTerminalConfirmerShowsTheNoteAfterTheCommand(t *testing.T) {
 	out, _ := captureStdout(t, func() error {
 		terminalConfirmer{}.Confirm(coder.ConfirmRequest{

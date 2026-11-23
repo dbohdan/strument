@@ -157,7 +157,7 @@ run_case() { # name, model, prompt, check-function
   # --no-shell: the bash tool is absent, not refused. stdin from /dev/null so
   # any other prompt reads EOF and declines rather than waiting.
   ( cd "$dir" && XDG_CONFIG_HOME="$ROOT/cfg" $RUN "$STRUMENT" chat --model "$model" \
-      -m "$prompt" --no-git --no-history --no-color --no-shell --yes steps < /dev/null ) > "$log" 2>&1
+      -p "$prompt" --no-git --no-history --no-color --no-shell --yes steps < /dev/null ) > "$log" 2>&1
   status=$?
   [ "$status" -eq 124 ] && echo "    (timed out after ${LIMIT}s)" >> "$log"
 

@@ -52,14 +52,14 @@ var version = devVersion
 // Enum flags are left alone: kong prints their default instead of a
 // placeholder (--mode="files"), which already shows the shape of the value.
 type chatCmd struct {
-	Message    string   `help:"Send one message, apply the edits, and exit (script mode)."                                                                                                 placeholder:"<text>"  short:"m"`
-	Session    string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"  short:"s"`
-	Continue   bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"       short:"c"`
-	Model      string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>" short:"M"`
+	Prompt     string   `aliases:"message"                                                                                                                                                 help:"Send one message, apply the edits, and exit (script mode)." placeholder:"<text>" short:"p"`
+	Session    string   `help:"Session to work in; created if it does not exist (default: the last one used)."                                                                             placeholder:"<name>"                                              short:"s"`
+	Continue   bool     `help:"Continue the session's previous conversation."                                                                                                              name:"continue"                                                   short:"c"`
+	Model      string   `help:"Model alias to use; defaults to the alias set in the config."                                                                                               placeholder:"<alias>"                                             short:"m"`
 	NoGit      bool     `help:"Disable git integration even inside a repository."                                                                                                          name:"no-git"`
 	NoColor    bool     `help:"Disable ANSI color and styling."                                                                                                                            name:"no-color"`
-	DarkMode   bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"      xor:"palette"`
-	LightMode  bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"     xor:"palette"`
+	DarkMode   bool     `help:"Use colors suited to a dark terminal background."                                                                                                           name:"dark-mode"                                                  xor:"palette"`
+	LightMode  bool     `help:"Use colors suited to a light terminal background."                                                                                                          name:"light-mode"                                                 xor:"palette"`
 	NoCommits  bool     `help:"Keep git integration but never commit edits."                                                                                                               name:"no-commits"`
 	NoHistory  bool     `help:"Do not save this session's history, undo record, or resume state."                                                                                          name:"no-history"`
 	DryRun     bool     `help:"Show edits without writing files or committing them."                                                                                                       name:"dry-run"`
@@ -141,7 +141,7 @@ func (c *chatCmd) Run() error {
 		res = history.LoadResume(projectRoot, session)
 	}
 
-	// -M beats a remembered alias beats the config's default.
+	// -m beats a remembered alias beats the config's default.
 	alias := c.Model
 	fromResume := false
 	if alias == "" && res.Model != "" {
@@ -456,9 +456,9 @@ func (c *chatCmd) Run() error {
 		recoverExitedTurn(cdr, projectRoot, session)
 	}
 
-	if c.Message == "" {
+	if c.Prompt == "" {
 		// Restoring only in the REPL keeps a scripted run reproducible from its
-		// own arguments: `strument -m ...` should send what it was told to.
+		// own arguments: `strument -p ...` should send what it was told to.
 		note := restoreNote
 		if rootErr == nil {
 			note = strings.TrimSpace(note + "\n" + restoreSession(cdr, projectRoot, session))
@@ -477,12 +477,12 @@ func (c *chatCmd) Run() error {
 	defer stop()
 	defer watchExitSignals(cdr, nil)()
 
-	msg, err := scriptMessage(c.Message)
+	msg, err := scriptMessage(c.Prompt)
 	if err != nil {
 		return err
 	}
 	cdr.Run(ctx, msg)
-	// A scripted run that got no answer must not exit 0. `strument -m …` used
+	// A scripted run that got no answer must not exit 0. `strument -p …` used
 	// to report success after a refused key or a dead endpoint: the diagnostic
 	// went to stderr and the status said everything was fine, so a script
 	// driving it could not tell a rejected request from an empty reply the
@@ -2057,8 +2057,8 @@ func discoverSkills(root string) []skill.Skill {
 	return skills
 }
 
-// scriptMessage reads -m's text the way the REPL reads a line, as far as script
-// mode can follow it. A command is refused rather than sent: -m once passed
+// scriptMessage reads -p's text the way the REPL reads a line, as far as script
+// mode can follow it. A command is refused rather than sent: -p once passed
 // "/ask ..." to the model as plain text, and nothing said so. A slash that
 // begins something other than a command name, such as a path, is sent as
 // written — except /ask and /code, which were commands until the modes went and
@@ -2071,17 +2071,17 @@ func scriptMessage(text string) (string, error) {
 	}
 	name, _, _ := strings.Cut(strings.TrimPrefix(trimmed, "/"), " ")
 	if name == "ask" || name == "code" {
-		return "", fmt.Errorf("-m /%s: /ask and /code have been removed; send the message on its own", name)
+		return "", fmt.Errorf("-p /%s: /ask and /code have been removed; send the message on its own", name)
 	}
 	// Pinning went with these; an old script that still pins would otherwise
 	// send "/add main.go" to the model as a message.
 	if slices.Contains([]string{"add", "drop", "ls", "read-only"}, name) {
-		return "", fmt.Errorf("-m /%s: pinned files have been removed; the model reads what it needs", name)
+		return "", fmt.Errorf("-p /%s: pinned files have been removed; the model reads what it needs", name)
 	}
 	if !repl.IsCommand(name) {
 		return text, nil
 	}
-	return "", fmt.Errorf("-m does not run /%s: script mode sends one message. "+
+	return "", fmt.Errorf("-p does not run /%s: script mode sends one message. "+
 		"Use the REPL for commands", name)
 }
 

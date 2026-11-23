@@ -238,7 +238,7 @@ func (c *toolCmd) print(name string, args map[string]any, result string) error {
 //
 // It asks the terminal driver rather than checking for a character device,
 // which is what it did: /dev/null is a character device too, so
-// `strument -m … < /dev/null` — the ordinary way to run it from a script or CI
+// `strument -p … < /dev/null` — the ordinary way to run it from a script or CI
 // — was taken for a person at a keyboard. Confirmations were printed and then
 // read EOF, and nothing said they had been declined.
 func isTerminal(f *os.File) bool {

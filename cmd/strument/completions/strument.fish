@@ -11,7 +11,7 @@
 #     every subcommand — including in the middle of `tool grep --mode `.
 #   - An option that takes a value needs -r, or -x for -r plus no files.
 #     Without it fish does not know there is an argument to complete and never
-#     reaches the option's own -a candidates: that is why -M offered the command
+#     reaches the option's own -a candidates: that is why --model offered the command
 #     list instead of model aliases.
 #
 # cmd/strument/completions_test.go holds the command and flag names here to the
@@ -62,10 +62,10 @@ complete -c strument -n __fish_use_subcommand -a shell -d "Generate shell comple
 # Chat: the default command, so its flags stand until another command is named.
 # It takes no positional arguments, so it offers no files.
 set -l chat_cmd "not __fish_seen_subcommand_from $subcommands"
-complete -c strument -n $chat_cmd -s m -l message -d "Send one message, apply the edits, and exit" -x
+complete -c strument -n $chat_cmd -s p -l prompt -d "Send one message, apply the edits, and exit" -x
 complete -c strument -n $chat_cmd -s s -l session -d "Conversation to work in, created if new" -x -a "(__strument_sessions)"
 complete -c strument -n $chat_cmd -s c -l continue -d "Resume this session: restore its conversation from the record"
-complete -c strument -n $chat_cmd -s M -l model -d "Model alias to use" -x -a "(__strument_models)"
+complete -c strument -n $chat_cmd -s m -l model -d "Model alias to use" -x -a "(__strument_models)"
 complete -c strument -n $chat_cmd -l no-git -d "Disable git integration even inside a repository"
 complete -c strument -n $chat_cmd -l no-color -d "Disable ANSI color and styling"
 complete -c strument -n $chat_cmd -l dark-mode -d "Use colors suited to a dark terminal background"

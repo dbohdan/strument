@@ -1171,7 +1171,7 @@ func (o *StdOutput) StreamText(delta string) {
 
 // StreamReasoning renders the model's thinking, plain.
 //
-// It used to be an empty function, so `strument -m … > transcript.txt` dropped
+// It used to be an empty function, so `strument -p … > transcript.txt` dropped
 // the whole reasoning trace without saying so, while the same session run
 // interactively showed it. Which mode you happened to use decided whether the
 // thinking existed — a decision nobody made, and one that cost several live

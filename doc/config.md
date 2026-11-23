@@ -395,7 +395,7 @@ regenerated notes as the way to resume, see [`sessions.md`](sessions.md).
 ### `reasoning_display`
 
 How much of the model's thinking to show, in both the interactive REPL and
-`--message` script mode:
+`--prompt` script mode:
 
 ```python
 reasoning_display = "full"   # the default: all of it
@@ -1252,15 +1252,15 @@ machine that has no zone files of its own.
 
 `env_set` changes need a restart; `/reload` does not re-apply them.
 
-### Script mode (`-m`)
+### Script mode (`-p`)
 
-For scripts and one-offs, `-m` runs a single turn and exits:
+For scripts and one-offs, `-p` (`--prompt`) runs a single turn and exits:
 
 ```sh
-strument -m 'Add a --version flag to cmd/pollctl.'
-strument --dry-run -m 'Fix the race in internal/poll.'  # Show the edits; write nothing.
-strument --yes steps -m 'Update the changelog for v0.3.0.'  # Do not stop at the step limit; grants no tools.
-strument --yes bash,steps -m 'Run the tests and fix what fails.'  # Also run shell commands unattended.
+strument -p 'Add a --version flag to cmd/pollctl.'
+strument --dry-run -p 'Fix the race in internal/poll.'  # Show the edits; write nothing.
+strument --yes steps -p 'Update the changelog for v0.3.0.'  # Do not stop at the step limit; grants no tools.
+strument --yes bash,steps -p 'Run the tests and fix what fails.'  # Also run shell commands unattended.
 ```
 
 A message that begins with a command, such as `/undo`, is refused with a nonzero exit, because
@@ -1280,7 +1280,7 @@ stops the turn without the follow-up question an interactive session asks.
 when a script drives Strument through a pty: every prompt `--yes` does not
 approve is declined, a question to the user goes unanswered, and nothing is
 read from the terminal until the turn ends. It works in the REPL as well as
-with `-m`. There is deliberately no environment variable for it: a setting
+with `-p`. There is deliberately no environment variable for it: a setting
 that silently declines every prompt is one to see on the command line.
 `SIGUSR1` cuts off the current send at once, where a Ctrl-C at a terminal
 pauses the turn and asks; it does not count toward the double-Ctrl-C exit, and
@@ -1288,7 +1288,7 @@ does nothing between turns. That is how a
 script or a remote assistant stops a run whose keyboard it cannot reach:
 `pkill -USR1 strument`.
 
-`--yes bash` lets the model run shell commands unattended. Combined with `-m`,
+`--yes bash` lets the model run shell commands unattended. Combined with `-p`,
 that is up to `max_steps` unattended steps (25 by default), including
 arbitrary shell commands, and `--yes steps` removes even that bound. Strument
 is not designed for long-running autonomous use: these options are meant for a
