@@ -324,7 +324,7 @@ func (c *ResponsesClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter))
+			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter, req.MaxTokens))
 			return
 		}
 

@@ -1206,3 +1206,19 @@ default = "m"
 		t.Error("a trusted project's language_parser = True did not win over the user's False")
 	}
 }
+
+// Messages that send the user to the config name the model by its key in
+// `models`. One model() value under two keys is two models, each with its own
+// alias, or the second key would rename the first.
+func TestModelsCarryTheirAlias(t *testing.T) {
+	src := userConfig + "\nmodels[\"twin\"] = flash\n"
+	cfg, err := Load(harness(t, src, "", testEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, alias := range []string{"flash", "pro", "twin"} {
+		if got := cfg.Models[alias].Alias; got != alias {
+			t.Errorf("models[%q].Alias = %q", alias, got)
+		}
+	}
+}

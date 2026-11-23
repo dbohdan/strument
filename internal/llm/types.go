@@ -383,6 +383,20 @@ type StreamError struct {
 	// its own deadline is reported in the user's terms and is still
 	// context.DeadlineExceeded to anything that asks.
 	Err error
+	// OutputCap is set when a provider refused the request for credit and
+	// blamed its output cap. The caller, which knows the model's config, says
+	// what the cap was and where to change it.
+	OutputCap *OutputCapRefusal
+}
+
+// OutputCapRefusal describes the output cap a refused request carried.
+type OutputCapRefusal struct {
+	// Field is the request field the provider named: max_tokens, or
+	// max_output_tokens on the Responses dialect.
+	Field string
+	// Sent is the cap the request carried; zero means none was sent and the
+	// provider chose its own.
+	Sent int
 }
 
 // Unwrap exposes Err, so errors.Is and errors.As see through the

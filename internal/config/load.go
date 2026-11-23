@@ -882,7 +882,10 @@ func execConfigThread(path string, src []byte, env envResolver, root string,
 			if !ok {
 				return nil, fmt.Errorf("%s: models[%q] is not a model value (got %s)", path, alias, v.Type())
 			}
-			out.models[alias] = mv.m
+			// A copy, so one model() value under two keys keeps both aliases.
+			m := *mv.m
+			m.Alias = alias
+			out.models[alias] = &m
 		}
 	}
 

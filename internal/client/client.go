@@ -417,7 +417,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter))
+			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter, req.MaxTokens))
 			return
 		}
 
@@ -454,7 +454,6 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 	}
 }
 
-// classifyHTTPError maps a non-200 response onto the error classes.
 // opencodeRoutingHint is appended when an opencode request fails in one of the
 // ways a slug on the wrong adapter fails.
 //
@@ -490,20 +489,29 @@ func opencodeRoutingHint(adapter string, status int) string {
 	return ""
 }
 
-// maxOutputHint is appended when a provider refuses a request for credit and
-// blames max_tokens. OpenRouter checks that a key can pay for the longest
+// outputCapRefusal recognizes a provider refusing a request for credit and
+// blaming its output cap. OpenRouter checks that a key can pay for the longest
 // answer a request allows, and with max_output unset that is the model's own
 // cap — 131072 tokens on some — so an expense-capped key can be refused on
-// every request while holding enough for the turn. The provider's message
-// names max_tokens, which is not a word the user's config uses.
-func maxOutputHint(status int, msg string) string {
-	if status != http.StatusPaymentRequired || !strings.Contains(strings.ToLower(msg), "max_tokens") {
-		return ""
+// every request while holding enough for the turn. The message names
+// max_tokens, which is not a word the user's config uses, so the refusal is
+// marked for the coder to explain. sent is the cap the request carried.
+func outputCapRefusal(status int, msg string, sent int) *llm.OutputCapRefusal {
+	if status != http.StatusPaymentRequired {
+		return nil
 	}
-	return "\nmax_tokens is this model's max_output setting; a smaller one asks the provider to reserve less credit for each request."
+	m := strings.ToLower(msg)
+	for _, field := range []string{"max_output_tokens", "max_tokens"} {
+		if strings.Contains(m, field) {
+			return &llm.OutputCapRefusal{Field: field, Sent: sent}
+		}
+	}
+	return nil
 }
 
-func classifyHTTPError(resp *http.Response, adapter string) *llm.StreamError {
+// classifyHTTPError maps a non-200 response onto the error classes. sent is
+// the output cap the request carried, zero for none.
+func classifyHTTPError(resp *http.Response, adapter string, sent int) *llm.StreamError {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	msg := extractErrorMessage(body)
 	if msg == "" {
@@ -533,8 +541,10 @@ func classifyHTTPError(resp *http.Response, adapter string) *llm.StreamError {
 			class = llm.ErrRequest
 		}
 	}
-	msg += maxOutputHint(resp.StatusCode, msg) + opencodeRoutingHint(adapter, resp.StatusCode)
-	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg)}
+	capRefusal := outputCapRefusal(resp.StatusCode, msg, sent)
+	msg += opencodeRoutingHint(adapter, resp.StatusCode)
+	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg),
+		OutputCap: capRefusal}
 }
 
 // isContextWindowMessage spots provider phrasing for over-long prompts.

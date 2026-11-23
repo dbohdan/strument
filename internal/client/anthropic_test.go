@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -549,27 +550,40 @@ func TestOpenCodeRoutingHint(t *testing.T) {
 }
 
 // OpenRouter's refusal names max_tokens, which the user's config calls
-// max_output; without the hint nothing connects the two. The body is the one
-// a nearly spent key got, with the key's link shortened.
-func TestMaxOutputHintOnCreditRefusal(t *testing.T) {
+// max_output. The client marks it, with the cap the request carried, so the
+// coder can say which setting that is. The body is the one a nearly spent key
+// got, with the key's link shortened.
+func TestOutputCapRefusalIsMarked(t *testing.T) {
 	const or402 = `{"error":{"message":"This request requires more credits, or fewer max_tokens. ` +
 		`You requested up to 131072 tokens, but can only afford 127000. To increase, visit ` +
 		`https://openrouter.ai/workspaces/default/keys/x and adjust the key's total limit","code":402}}`
 	for _, tc := range []struct {
-		status int
-		body   string
-		want   bool
+		status    int
+		body      string
+		sent      int
+		wantField string // "" means not marked
 	}{
-		{402, or402, true},
+		{402, or402, 0, "max_tokens"},
+		{402, or402, 65536, "max_tokens"},
+		{402, `{"error":{"message":"Lower max_output_tokens or add credits"}}`, 0, "max_output_tokens"},
 		// Out of credit for a reason no cap would fix.
-		{402, `{"error":{"message":"Insufficient credits"}}`, false},
+		{402, `{"error":{"message":"Insufficient credits"}}`, 0, ""},
 		// max_tokens in a request error is a different mistake.
-		{400, `{"error":{"message":"max_tokens must be at least 1"}}`, false},
+		{400, `{"error":{"message":"max_tokens must be at least 1"}}`, 0, ""},
 	} {
 		resp := &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body))}
-		got := classifyHTTPError(resp, config.AdapterOpenRouter).Message
-		if has := strings.Contains(got, "max_output"); has != tc.want {
-			t.Errorf("%d %s: message = %q, want hint %v", tc.status, tc.body, got, tc.want)
+		se := classifyHTTPError(resp, config.AdapterOpenRouter, tc.sent)
+		switch {
+		case tc.wantField == "" && se.OutputCap != nil:
+			t.Errorf("%d %s: marked %+v, want unmarked", tc.status, tc.body, *se.OutputCap)
+		case tc.wantField != "" && se.OutputCap == nil:
+			t.Errorf("%d %s: unmarked, want field %s", tc.status, tc.body, tc.wantField)
+		case tc.wantField != "" && (se.OutputCap.Field != tc.wantField || se.OutputCap.Sent != tc.sent):
+			t.Errorf("%d %s: marked %+v, want field %s sent %d", tc.status, tc.body, *se.OutputCap, tc.wantField, tc.sent)
+		}
+		// The provider's text is kept as it came.
+		if !strings.Contains(se.Message, "HTTP "+strconv.Itoa(tc.status)) {
+			t.Errorf("message = %q", se.Message)
 		}
 	}
 }

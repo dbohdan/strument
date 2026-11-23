@@ -190,6 +190,9 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 					usage.rejected = false
 					return resContextExhausted, nil
 				}
+				if se.OutputCap != nil {
+					se.Message += "\n" + outputCapHint(c.Model, se.OutputCap)
+				}
 				if se.Retryable() {
 					return resFailed, se // maybe retried by the caller
 				}
@@ -239,6 +242,29 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 		return resContinuation, nil
 	}
 	return resDone, nil
+}
+
+// outputCapHint explains a refusal for credit that blamed the output cap. The
+// provider's message gives a number the user never wrote under a field name
+// their config does not use, so this says where the number came from, why a
+// token cap decides a payment, and which setting changes it.
+func outputCapHint(m *config.Model, r *llm.OutputCapRefusal) string {
+	name := m.Alias
+	if name == "" {
+		name = m.Slug
+	}
+	const why = "The provider checks that the key can pay for a reply that long; "
+	switch {
+	case m.MaxOutput > 0:
+		return fmt.Sprintf("%q has max_output = %d, which was sent as %s.\n", name, m.MaxOutput, r.Field) +
+			why + "lower max_output in its model() call."
+	case r.Sent > 0:
+		return fmt.Sprintf("%q has no max_output, so %s = %d was sent.\n", name, r.Field, r.Sent) +
+			why + "set a smaller max_output in its model() call."
+	default:
+		return fmt.Sprintf("%q has no max_output, so no %s was sent and the provider chose its own.\n", name, r.Field) +
+			why + "set a smaller max_output, such as 32768, in its model() call."
+	}
 }
 
 // retryBackoff carries the doubling delay for transient stream errors across a

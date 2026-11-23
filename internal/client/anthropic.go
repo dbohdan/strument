@@ -41,6 +41,14 @@ const anthropicVersion = "2023-06-01"
 // low, because a too-small cap truncates an answer mid-tool-call.
 const defaultMaxTokens = 32768
 
+// maxTokens is the cap an Anthropic request carries.
+func maxTokens(req llm.Request) int {
+	if req.MaxTokens > 0 {
+		return req.MaxTokens
+	}
+	return defaultMaxTokens
+}
+
 // AnthropicClient speaks Anthropic Messages to one endpoint.
 type AnthropicClient struct {
 	Provider  config.Provider
@@ -136,11 +144,7 @@ func (c *AnthropicClient) BuildBody(req llm.Request) map[string]any {
 		body["system"] = system
 	}
 	// Required, unlike chat-completions.
-	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
-	} else {
-		body["max_tokens"] = defaultMaxTokens
-	}
+	body["max_tokens"] = maxTokens(req)
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
@@ -398,7 +402,7 @@ func (c *AnthropicClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter))
+			yield(llm.StreamEvent{}, classifyHTTPError(resp, c.Provider.Adapter, maxTokens(req)))
 			return
 		}
 

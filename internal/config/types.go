@@ -76,6 +76,9 @@ func (p Provider) GroupKey() string {
 
 // Model is one usable model declaration.
 type Model struct {
+	// Alias is the model's key in `models`, set at load. Messages that send
+	// the user to the config name the model by it.
+	Alias        string
 	Provider     Provider
 	Slug         string
 	DisplayName  string // human-readable label; "" => derived from Slug
