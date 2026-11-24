@@ -65,6 +65,9 @@ Before spending on a run, ask these questions in order:
 - **Will the run survive the container going idle?** Run it under a
   supervisor and hold the container with a background task ([supervise long
   runs](#supervise-long-runs)).
+- **Would the runner notice if the backend went away?** Size
+  `retry_timeout` to what a lost run costs, and probe the server's health
+  separately ([gone or busy](#gone-or-busy)).
 - **Has the resume path been exercised deliberately?** Run it with a stub before
   the batch needs it ([the resume path runs last](#resume-path)).
 - **Does each planted change alter the answer, not only the source?** Run
@@ -90,6 +93,7 @@ Before spending on a run, ask these questions in order:
 | Treatment was not reached, or the fixture never contained the phenomenon | [a clean null has many causes](#clean-null), [a fixture that cannot contain it](#fixture-cannot-contain-it) |
 | Runner stopped reporting, timed out, or cannot resume | [a runner that dies quietly](#runner-dies-quietly), [the resume path runs last](#resume-path), [supervise long runs](#supervise-long-runs) |
 | A capable model scores zero in sessions the runner called complete | [a cut-short turn ends like any other](#cut-short-turn) |
+| A run retried until its timeout, or a partial run was scored | [gone or busy](#gone-or-busy) |
 | A bug report names the wrong subsystem | [a report infers the subsystem](#report-infers-subsystem) |
 | A check passed and the bug was real anyway | [your validator can carry the same bug](#validator-shares-the-bug), [a check that cannot fail](#check-that-cannot-fail) |
 | A diff shows two artifacts that look the same | [two documents can render identically](#identical-renderings) |
@@ -1346,6 +1350,68 @@ three strata.
   next stratum's first session talked to it. One request, key included, went
   to the cancelled run's upstream, a different server. A proxy that fails to
   bind now fails the session.
+
+<a id="gone-or-busy"></a>
+
+## 31. A server that is gone and a server that is busy fail the same way
+
+Strument retries every transient failure the same way: rate limits, network
+errors and server errors. It cannot tell a provider asking for a pause from a
+backend that no longer exists, so a long `retry_timeout` waits out either one.
+
+The November 2026 small-model ladder ran Qwen3.5 4B on a borrowed RTX 3050.
+The path was llama.cpp on a Windows machine, a tunnel to a VPS, and Caddy on
+the VPS terminating TLS. The ladder config had `retry_timeout = 3600`, chosen
+for local inference slow enough to look like an outage. About two minutes into
+a 60-minute run, the tunnel failed. The stream reset mid-reasoning (`stream
+ID 13; INTERNAL_ERROR`), and from then on Caddy answered every request with
+`HTTP 502: 502 Bad Gateway`. Strument backed off to a minute per wait and kept
+asking until the run's timeout. The next run in the batch got no response at
+all, and waited its hour too. That was two hours with no data, while the person
+who could fix the tunnel was awake and waiting. The grader then scored the
+half-written program from the first run 0/69, which is the score the model
+had earned on every finished run. Nothing in the score file showed that this
+one was different.
+
+Llama.cpp never crashed. From the client, a dead tunnel, a stopped server and
+a busy one look the same until you ask which hop answered.
+
+- **Do:** size `retry_timeout` to what a lost run costs, not to the longest
+  outage you might sit out. With one local server behind one link, five to
+  ten minutes is enough: an outage longer than that needs a person anyway. Keep
+  the long budget for a hosted provider's 429s
+  ([`retry_timeout`](config.md#retry_timeout)).
+- **Do:** make each hop's failures look different. A 429, or a 503 with
+  `Retry-After`, comes from a live server asking for a pause. A 502 or 504
+  comes from a gateway that could not reach what is behind it. Give the gateway
+  its own error body, so that the transcript names the hop that failed.
+  In Caddy:
+
+  ```caddyfile
+  handle_errors 502 504 {
+      respond "gateway: upstream unreachable ({err.status_code})" {err.status_code}
+  }
+  ```
+
+- **Do:** for a run too long to watch, probe the backend separately from the
+  session. Poll the server's own health endpoint (`/health` on llama.cpp)
+  through the same gateway the session uses. After five minutes of
+  consecutive failures, stop the run and write `INTERRUPTED` beside its
+  output, so that the grader skips it instead of scoring a partial file. Run
+  the same probe as a preflight before each run, and read the server's
+  context size (`n_ctx` in llama.cpp's `/props`) against the configured
+  `context`. The ladder lost a run to that mismatch the same evening.
+- **Check:** if the backend went away right now, how long until the runner
+  noticed, and what would the score file say?
+- **Tell:** a run that ends at exactly its timeout, with no `Tokens:` line
+  after the last one that made progress. Or a transcript whose tail is a single
+  status code repeated at the backoff ceiling (`Retrying in 60.0 seconds...`).
+  A stream reset followed by gateway errors on every retry means the link went
+  down, not that the server was overloaded.
+
+This is the same failure as [a cut-short turn](#cut-short-turn), from the
+other side. There, a turn that gave up looked like a finished one. Here, a
+run that never stopped waiting looked like a slow one.
 
 ---
 
