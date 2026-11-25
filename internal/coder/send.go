@@ -980,16 +980,6 @@ func (c *Coder) maybeCompact() {
 	}
 }
 
-// foldForOverflow compacts the settled history so that a request over the
-// context limit can be sent again, and reports whether it did. The history is
-// folded to half its size, or to the usual budget if that is smaller, whether
-// or not it had reached the budget: the request is over the limit either way,
-// and the history is the part of it that can give.
-//
-// Five of the six harnesses surveyed in doc/experiments/2026-10-compaction-survey
-// fold and retry when a provider refuses a request as too long; Strument
-// classified the refusal and ended the turn. With compaction moved late in the
-// window, this is the backstop it relies on.
 // adoptServerContext takes the context size a refusal stated as the session's
 // limit, when it is smaller than the configured one. A self-hosted server's
 // context is whatever it was started with, and nothing in the config can see
@@ -1019,6 +1009,16 @@ func (c *Coder) adoptServerContext(n int) {
 	c.Model = &m
 }
 
+// foldForOverflow compacts the settled history so that a request over the
+// context limit can be sent again, and reports whether it did. The history is
+// folded to half its size, or to the usual budget if that is smaller, whether
+// or not it had reached the budget: the request is over the limit either way,
+// and the history is the part of it that can give.
+//
+// Five of the six harnesses surveyed in doc/experiments/2026-10-compaction-survey
+// fold and retry when a provider refuses a request as too long; Strument
+// classified the refusal and ended the turn. With compaction moved late in the
+// window, this is the backstop it relies on.
 func (c *Coder) foldForOverflow() bool {
 	if c.Tokens == nil || len(c.doneMessages) == 0 {
 		return false
