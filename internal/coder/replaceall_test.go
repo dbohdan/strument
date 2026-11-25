@@ -176,3 +176,17 @@ func TestOverlappingMatchesAreAmbiguous(t *testing.T) {
 		t.Errorf("result = %q, want the one replacement ReplaceAll made", got)
 	}
 }
+
+// An edit whose two strings are the same is refused before it is matched,
+// as the whole panel does, rather than reported as applied.
+func TestIdenticalEditIsRefused(t *testing.T) {
+	_, msg := parseEditArgs(editToolCall("c1",
+		`{"path":"a.txt","old_string":"x = 1","new_string":"x = 1"}`))
+	if !strings.HasPrefix(msg, "Nothing changed: old_string and new_string are identical.") {
+		t.Errorf("msg = %q, want the identical-strings refusal", msg)
+	}
+	if _, msg := parseEditArgs(editToolCall("c2",
+		`{"path":"a.txt","old_string":"x = 1","new_string":"x = 2"}`)); msg != "" {
+		t.Errorf("a real edit was refused: %q", msg)
+	}
+}

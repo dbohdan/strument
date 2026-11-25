@@ -554,6 +554,15 @@ func parseEditArgs(tc llm.ToolCall) (plannedEdit, string) {
 	case toolWrite:
 		return plannedEdit{callID: tc.ID, path: a.Path, replace: a.Content, create: true}, ""
 	default: // toolEdit
+		// Applied, an edit like this succeeded and changed nothing, so the
+		// model was told it had made a change it had not. Ministral 14B made
+		// 1,091 such edits of 1,101 in three sessions and kept going until the
+		// context filled (doc/experiments/2026-11-small-model-ladder). Refused,
+		// it counts as an error round and the turn stops at the limit.
+		if a.OldString == a.NewString {
+			return plannedEdit{}, "Nothing changed: old_string and new_string are identical. " +
+				"new_string is the text as it should read after the edit."
+		}
 		return plannedEdit{callID: tc.ID, path: a.Path, search: a.OldString,
 			replace: a.NewString, replaceAll: a.ReplaceAll}, ""
 	}
