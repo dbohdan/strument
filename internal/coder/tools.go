@@ -468,6 +468,15 @@ func (c *Coder) accumulateToolCall(d *llm.ToolCallDelta) {
 	tc.Arguments += d.Args
 }
 
+// streamedToolName is the name of the tool call streaming at a wire index,
+// or "tool" before its name has arrived.
+func (c *Coder) streamedToolName(index int) string {
+	if pos, ok := c.stream.toolCallIndex[index]; ok && c.stream.toolCalls[pos].Name != "" {
+		return c.stream.toolCalls[pos].Name
+	}
+	return "tool"
+}
+
 // unnamedToolCall stands in for the name of a tool call that arrived without
 // one. No tool has the name, so the call is answered as not offered, with a
 // result saying what happened (notOfferedText).

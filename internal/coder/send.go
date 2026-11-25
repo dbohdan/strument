@@ -216,6 +216,10 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 			c.accumulateToolCall(ev.ToolCall)
 			if ev.ToolCall != nil {
 				c.Out.StreamToolCall(ev.ToolCall.Index, ev.ToolCall.Name, ev.ToolCall.Args)
+				if f := loops.FeedArgs(ev.ToolCall.Index, ev.ToolCall.Args); f != nil {
+					f.Tool = c.streamedToolName(ev.ToolCall.Index)
+					return resLooping, nil
+				}
 			}
 		case llm.EventFinish:
 			finishReason = ev.FinishReason
@@ -650,6 +654,11 @@ func (c *Coder) warnLoop(f *loopdetect.Finding) {
 		c.Out.Warningf("Stopped the model's reply because it was repeating itself.")
 		return
 	}
+	if f.Kind == loopdetect.Arguments {
+		c.Out.Warningf("Stopped the model's %s call because its arguments were repeating (%q, %d times).",
+			f.Tool, f.Sample, f.Count)
+		return
+	}
 	c.Out.Warningf("Stopped the model's %s because it was repeating itself (%q, %d times).",
 		f.Kind, f.Sample, f.Count)
 }
@@ -670,6 +679,9 @@ func (c *Coder) noteLoop(f *loopdetect.Finding) {
 		where = "reasoning"
 	}
 	note := "Strument stopped your " + where + " because it had begun repeating itself"
+	if f != nil && f.Kind == loopdetect.Arguments {
+		note = "Strument stopped your " + f.Tool + " call because its arguments had begun repeating themselves"
+	}
 	if f != nil {
 		note += fmt.Sprintf(" — %q appeared %d times", f.Sample, f.Count)
 	}

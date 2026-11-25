@@ -726,6 +726,11 @@ reply when a fifty-character window has recurred ten times at close spacing, or
 when one word has repeated thirty times running. The answer and the reasoning
 are watched separately; in practice it is nearly always the reasoning.
 
+A tool call's arguments are watched too, more narrowly, since code repeats on
+purpose: the call is stopped only when its last 16 KB are one block of text
+repeated verbatim at least ten times. A model that has lost its place inside a
+`write` does that until the output limit or a timeout ends it.
+
 Generated tables or fixture data can trigger the detector. Disable it if ordinary
 model output produces false positives.
 

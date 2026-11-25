@@ -5,6 +5,8 @@ package coder
 import (
 	"context"
 	"iter"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -199,5 +201,74 @@ func TestStoppedTurnReturnsInterruptedContent(t *testing.T) {
 	}
 	if c.turnHistory != "" {
 		t.Errorf("turnHistory = %q after Stop, want empty", c.turnHistory)
+	}
+}
+
+// argLoopClient streams one write call whose content repeats three lines
+// forever, then answers normally. The shape is Qwen3-VL 8B's on the ladder.
+type argLoopClient struct {
+	sends    int
+	requests [][]llm.Message
+}
+
+func (c *argLoopClient) Send(_ context.Context, req llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	c.sends++
+	c.requests = append(c.requests, req.Messages)
+	n := c.sends
+	return func(yield func(llm.StreamEvent, error) bool) {
+		if n > 1 {
+			if yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "All done."}, nil) {
+				yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+			}
+			return
+		}
+		first := &llm.ToolCallDelta{Index: 0, ID: "w1", Name: "write", Args: `{"path": "loop.py", "content": "`}
+		if !yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: first}, nil) {
+			return
+		}
+		for range 5000 {
+			d := &llm.ToolCallDelta{Index: 0, Args: `        self.x = 0\n        self.piece = self.types[t]\n`}
+			if !yield(llm.StreamEvent{Kind: llm.EventToolCall, ToolCall: d}, nil) {
+				return
+			}
+		}
+		yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "tool_calls"}, nil)
+	}
+}
+
+// A write whose content is looping is stopped mid-stream, never runs, and
+// the model is told which call it was and what repeated.
+func TestLoopingToolArgumentsStopTheSend(t *testing.T) {
+	dir := t.TempDir()
+	c := toolCoder(t, dir)
+	client := &argLoopClient{}
+	c.Client = client
+	c.Asker = &stubAsker{answer: "2"} // "Try again"
+	out := &captureOut{}
+	c.Out = out
+
+	c.runOne(context.Background(), "write loop.py")
+
+	if _, err := os.Stat(filepath.Join(dir, "loop.py")); err == nil {
+		t.Error("the looping write ran")
+	}
+	if !strings.Contains(out.String(), "Stopped the model's write call because its arguments were repeating") {
+		t.Errorf("no warning naming the call:\n%s", out.String())
+	}
+	if client.sends != 2 {
+		t.Fatalf("sends = %d, want 2", client.sends)
+	}
+	var note string
+	for _, m := range client.requests[1] {
+		if m.Role == llm.RoleUser && strings.HasPrefix(m.Text(), llm.HarnessMarker) {
+			note = m.Text()
+		}
+		for _, tc := range m.ToolCalls {
+			t.Errorf("the stopped call was left in the history: %s", tc.Name)
+		}
+	}
+	if !strings.Contains(note, "stopped your write call because its arguments") ||
+		!strings.Contains(note, "self.x = 0") {
+		t.Errorf("note = %q, want the call named and the repeat quoted", note)
 	}
 }

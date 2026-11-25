@@ -89,9 +89,13 @@ type Finding struct {
 	Sample string
 	// Count is how many times it occurred.
 	Count int
-	// Kind is "answer" or "reasoning" — worth reporting, because a model that
-	// loops while thinking and then answers cleanly is a different animal.
+	// Kind is "answer", "reasoning" or "arguments" — worth reporting, because
+	// a model that loops while thinking and then answers cleanly is a
+	// different animal.
 	Kind string
+	// Tool names the call whose arguments repeated, for Kind "arguments".
+	// The caller fills it in: the detector sees argument text, not names.
+	Tool string
 }
 
 // Detector watches one send's streamed text.
@@ -109,6 +113,7 @@ type Detector struct {
 	Found *Finding
 
 	answer, reasoning loopStream
+	args              map[int]*argStream
 }
 
 // loopStream is one side's buffer plus the state needed to strip quoted
