@@ -1,6 +1,7 @@
 # Preserved reasoning: does it reach the model, and does it help?
 
-**Status: characterization, run 2026-11-25.** It follows the
+**Status: characterization, run 2026-11-25. The replay patch is retired by
+phase 3's committed rule, and kept as a patch.** It follows the
 [panel survey](../2026-11-reasoning-survey/), which found every open-source
 harness sending reasoning back and Strument sending none. In short:
 - **Phase 1:** the channel works through Command Code for four of five
@@ -17,6 +18,15 @@ harness sending reasoning back and Strument sending none. In short:
   all four against all four, and 37k output tokens against 23k. DeepSeek and
   Kimi went the other way, with 28% and 14% less output. MiMo is Strument's
   default, so this counter-metric matters more than the others.
+- **Phase 3, across turns with history folded, found no benefit.** Kimi
+  re-derived the rule as often with replay as without (18 against 18 calls, 8/8
+  correct in both). MiMo re-derived more with replay (32 against 22), guessed
+  as often (5/8 in both, editing config files that do not exist), and wrote 64%
+  more. Neither model cleared the rule committed before the run.
+- **What decides whether replay can matter is narration.** Told to reply with
+  one word, DeepSeek still stated its conclusion between tool calls in 5 of 5
+  sessions, Kimi in 3 of 5, MiMo in 2 of 5. Narration survives a fold, so most
+  of what replay would carry is already in the history.
 
 Phase 1 in short:
 - Through Command Code's provider API, reasoning replayed on an earlier
@@ -376,3 +386,85 @@ a model that cannot show the effect.
   primary one.
 - DeepSeek's 5 of 5 is itself a result. Whether replaying reasoning can matter
   depends on how much a model says out loud, and DeepSeek says it all.
+
+### Results
+
+32 sessions, every one finishing both turns, for $2.98 by the credit balance
+(`data/p3-main-scores.tsv`). Every session left production at 30 and dev at 5.
+
+| model | arm | staging fixed | turn-2 re-derivation calls (sum, median) | guessed edits | turn-2 output tokens (median) | turn-2 seconds (median) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kimi K3 | base | 8/8 | 18, 2 | 0/8 | 684 | 24.8 |
+| Kimi K3 | replay | 8/8 | 18, 2.5 | 1/8 | 771 | 25.6 |
+| MiMo V2.6 Flash | base | 7/8 | 22, 3 | 5/8 | 1,882 | 105 |
+| MiMo V2.6 Flash | replay | 7/8 | 32, 4.5 | 5/8 | 3,093 | 129 |
+
+Exact two-sided rank tests, base against replay: Kimi re-derivation p = 1.0,
+seconds 0.51, output 0.28. MiMo re-derivation p = 0.25, seconds 0.72, output
+1.0. Within the sessions whose turn-1 text did not state the rule, the picture
+is the same. Kimi had only one such session in base and two in replay. MiMo
+had five and six: 14 re-derivation calls against 24, 3 guessed edits against
+4.
+
+**The decision rule.** Kimi: no cut in re-derivation or guessed edits, so no
+setting. MiMo: re-derivation rose, guessed edits did not fall, and output rose
+64%, past the 25% limit, so no setting. Neither model clears it, so the patch
+is retired, as written before the run. It stays in `data/` (`replay.patch`
+for phase 2, `replay-phase3.patch` and `hook.patch` for this phase) so the
+question can be reopened without rebuilding it.
+
+**Did replay arrive?** The fake server showed that the build sends turn 1's
+reasoning after the fold. Per session, the provider-minus-estimate gap at
+turn 2's first request (`data/p3fired.py`, `data/p3-main-fired.tsv`) is
+noisier than in phase 2, because it also grows with how much turn 1 did,
+replay or not. Between arms, Kimi's replay sessions sit about 96 tokens above
+base, with about 110 tokens of turn-1 reasoning, which is consistent with
+full delivery. MiMo's sit about 120 above base, with about 490 of reasoning,
+which is the partial delivery phase 2 saw. So for MiMo this phase tested a
+replay that may reach the model only in part. That is the replay Strument
+would ship through this route.
+
+**MiMo's guesses are phase 1's confabulation, in practice.** With turn 1's
+results cleared, MiMo edited files that do not exist before reading anything
+in turn 2: `overrides/staging.conf`, `deploy/staging.conf`,
+`overrides/us-east-small.conf`, `overrides/us-west-staging.conf`,
+`config/regions/us.conf`. It did so in both arms, and usually went on to find
+the right file afterwards. Replay did not prevent it.
+
+### What phase 3 shows
+
+- Within this fixture, replaying reasoning across turns did not help either
+  model that could have shown it. The third model never needed it.
+- How much a model says out loud decides whether replay can matter. Narration
+  is assistant text, kept in history and untouched by folds. DeepSeek
+  narrated its conclusion every time, Kimi mostly, MiMo less than half the
+  time.
+- MiMo's cost under replay repeated across phases 2 and 3, on different tasks.
+  That is the most consistent result here.
+- The broader decision matches
+  [`2026-08-transcript-depth`](../2026-08-transcript-depth/): reasoning carries
+  facts, its cost is measurable, and its benefit has not been shown on a
+  fixture that could contain it.
+
+### What it does not settle
+
+- Eight sessions a cell, one fixture, two models. A small effect would not
+  show at this size. The committed rule asked for a practical one.
+- Whether a provider that delivers MiMo's reasoning in full would change
+  MiMo's result.
+- Anthropic's and the Responses API's own preserved-thinking behavior, which
+  are server-side and were not tested.
+- Models that need reasoning sent back to work correctly at all, which some
+  vendors require. The panel survey lists them. That is a correctness
+  requirement of those APIs, not something this measured.
+
+## Files, phase 3
+
+- `data/cfghunt.py`: the fixture, its self-check and the grader.
+- `data/p3run.py`, `data/p3drive.py`, `data/p3-order.txt`: the two-turn pty
+  runner, the driver and the order.
+- `data/hook.patch`, `data/replay-phase3.patch`: the trial builds.
+- `data/p3score.py`, `data/p3-pilot-scores.tsv`, `data/p3-main-scores.tsv`:
+  the counts. `data/p3fired.py`, `data/p3-main-fired.tsv`: delivery.
+- Raw sessions: `dbohdan/experimental-data`,
+  `strument/2026-11-preserved-reasoning/phase3-runs.tar.xz` at `df05923`.
