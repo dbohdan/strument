@@ -210,3 +210,124 @@ is the difference:
   counts. `data/fired.py`, `data/bh-fired.tsv`: the check that replay fired.
 - Raw sessions: `dbohdan/experimental-data`,
   `strument/2026-11-preserved-reasoning/runs.tar.xz` at `4c5a7f6`.
+
+## Earlier evidence: reasoning in the transcript
+
+[`2026-08-transcript-depth`](../2026-08-transcript-depth/) put the turn's
+reasoning into the transcript that session notes are built from. That is a
+different path from this one, but the outcome has the same shape. Reasoning
+carried a fact nothing else carried: the wanted value, 19/26 against 2/26.
+It never carried the rationale: 0 of 62, because "reasoning summarizes what it
+reads rather than transcribing it". It also cost reach: the notes window
+covered 23 turns instead of 43. It was not shipped without "a fixture where a
+rationale the code cannot supply demonstrably reaches the reasoning trace
+intact." Phases 1 and 2 repeat it: the channel carries a planted fact, the
+benefit that would matter is unmeasured, and the cost (MiMo's) is measured.
+
+## Phase 3: design, not yet run — across turns
+
+### The question
+
+When a later turn needs something the model *concluded* in an earlier turn,
+but wrote down neither in its answer nor in a tool call, does replaying its
+reasoning let it act on that conclusion without re-deriving it? And does
+lacking it lead to an edit made on a guess?
+
+This is the half of the mechanism a person's session exercises, and the one
+phases 1 and 2 left out. Two lessons shape the design:
+- **From transcript-depth:** reasoning keeps conclusions and drops
+  justifications. So the thing that has to carry over is a conclusion, a rule
+  the model worked out, and not a reason it was given.
+- **The leak to avoid:** tool *calls* stay in history even when their results
+  are cleared. A follow-up that only needs "the file I edited last time" can
+  be answered from the earlier `edit` call's path, so replay could not matter.
+  The follow-up has to need the rule, applied somewhere new.
+
+### The fixture
+
+A small service whose live configuration is chosen by a rule spread over
+three places:
+- the deploy env files set `APP_PROFILE` per environment;
+- the loader maps a profile to a base YAML file and applies an override
+  directory in a fixed precedence;
+- one override silently wins for production.
+
+Several config files hold a timeout, and only one is live per environment.
+`bughunt.py`-style generation and self-check, with a hidden check that runs
+the loader per environment.
+
+- **Turn 1:** "Requests time out too early in production. Find where the
+  production request timeout is actually set, and raise it to 30 seconds. When
+  you are done, reply with one word." The one-word reply keeps the rule out of
+  the answer (transcript-depth's device). Working out which file is live means
+  reading the env files and the loader, and that conclusion lives only in the
+  reasoning.
+- **Turn 2:** "Staging has the same problem: raise its timeout to 30 seconds
+  too." Staging's live file is a *different* file, reached by the same rule.
+  Turn 1's `edit` call names production's file, which is the wrong one to
+  copy.
+
+### Arms: 2 × 2, crossed
+
+| | history kept | history folded before turn 2 |
+| --- | --- | --- |
+| **no replay** | turn 1's tool results still in history | results cleared, calls kept |
+| **replay** | plus turn 1's reasoning | reasoning kept, results cleared |
+
+The fold is forced with the compaction trials' hook
+(`STRUMENT_TRIAL_HISTORY_BUDGET`, `2026-10-compaction-roll/data/trial.diff`),
+set low enough that turn 1's results are cleared when turn 2 starts. It goes in
+both binaries, and the pilot confirms it fired with the "Cleared N old tool
+results" line. Folded history is the case a long session reaches, and the one
+where replay should matter most. With history kept, the raw evidence is still
+there to re-read, so a smaller effect or none is the expected result in that
+column.
+
+Models: MiMo V2.6 Flash, DeepSeek V4 Flash, Kimi K3, through Command Code, at
+`reasoning = "low"`. Four sessions a cell gives 48 sessions, in a seeded
+shuffle, driven through a pty in one process per session, as
+`2026-10-compaction-roll`'s runner does. Estimated cost $4–6.
+
+### Counts
+
+- **Primary: re-derivation in turn 2.** Reads, greps or commands in turn 2 on
+  the files that establish the rule: the loader and the deploy env files.
+- **Correctness:** staging's live timeout is 30 (the hidden check), and the
+  production change from turn 1 is still in place.
+- **Edits made on a guess:** a turn-2 edit to a config file that is not
+  staging's live one, made before any turn-2 read of the loader or the env
+  files. This is the confabulation phase 1 saw, in its practical form.
+- **Counter-metrics:** turn-2 requests, output tokens, uncached input and
+  seconds. Phase 2 showed MiMo slowing under replay, so these are reported as
+  prominently as the primary count.
+
+Mechanism, before scoring: the provider-minus-estimate gap from phase 2,
+checked per session, so a replay session whose reasoning did not arrive is
+known before it is counted.
+
+### What would count as a result
+
+The decision rule is written here, before any run. Replay earns a per-model
+setting if, in the folded column, for at least two of the three models, it
+cuts turn-2 re-derivation or guessed edits without lowering correctness, and
+without turn-2 seconds or output rising by more than a quarter for that
+model. A model that only slows down under replay does not get it, which is
+where MiMo stands after phase 2. If no model clears the bar in the folded
+column, the replay patch is retired, as transcript-depth's arm C was, and kept
+as a patch so the question can be reopened.
+
+### Before the main run
+
+1. Build and self-check the fixture: the reference resolves each environment
+   correctly, and a model that copies turn 1's path into turn 2 gets staging
+   wrong.
+2. Port the history-budget hook into both binaries, and confirm with a fake
+   server that a fold before turn 2 clears the results and, in the replay
+   build, keeps the reasoning.
+3. Pilot one session per model per column, without replay, and read the
+   transcripts:
+   - Does turn 1 actually need the env files and the loader?
+   - Does the one-word reply hold?
+   - Does turn 2 re-derive when folded? If every model re-reads everything
+     either way, or none needs to, the fixture cannot contain the effect, and
+     it is redesigned before any replay session runs.
