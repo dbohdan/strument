@@ -1,0 +1,84 @@
+run	score	program	end	failing_tests	provider	cost_usd	seconds	equipment
+bonsai-9b-0	0/69	no file	leak caught	-	Darkbloomx2	0.0012	11	
+bonsai-9b-1	0/69	no file	leak caught	-	Darkbloomx2	0.0010	9	
+bonsai-9b-2	0/69	no file	leak caught	-	Darkbloomx3	0.0015	19	
+gemma3-12b-0	0/69	no file	answered	-	DeepInfrax1	0.0004	11	
+gemma3-12b-1	0/69	no file	answered	-	DeepInfrax1	0.0004	12	
+gemma3-12b-2	0/69	no file	answered	-	DeepInfrax1	0.0004	3	
+gemma4-26b-0	46/69	parses	loop	output_differs=23	Darkbloomx5	0.0042	613	
+gemma4-26b-1	0/69	no file	loop	-	Darkbloomx7	0.0062	1151	
+gemma4-26b-bf16-0	69/69	parses	answered	-	PrimeIntellectx17	0.0336	678	
+gemma4-26b-fp4-0	0/69	no file	loop	-	NextBitx4	0.0025	98	
+gemma4-26b-fp4-1	0/69	parses	loop	output_differs=69	NextBitx5	0.0046	125	
+gptoss-20b-0	0/69	no file	no answer	-	Darkbloomx1	0.0001	4	
+gptoss-20b-1	0/69	no file	answered	-	Darkbloomx2	0.0002	5	
+gptoss-20b-2	0/69	no file	no answer	-	Darkbloomx1	0.0001	4	
+granite-8b-0	50/69	parses	leak, closers only	output_differs=19	DeepInfrax25	0.0389	796	
+granite-8b-1	49/69	parses	leak, closers only	exit_1=13 output_differs=7	DeepInfrax24	0.0284	608	
+granite-8b-2	61/69	parses	leak, closers only	output_differs=8	DeepInfrax13	0.0197	546	
+granite-8b-cw-0	0/69	parses	leak, closers only	exit_1=69	CoreWeavex21	0.0134	657	
+granite-8b-cw-1	54/69	parses	leak caught	output_differs=15	CoreWeavex36	0.0246	1145	
+granite-8b-cw-2	2/69	parses	leak, closers only	output_differs=67	CoreWeavex23	0.0166	857	
+granite-8b-high-0	8/69	parses	leak, closers only	output_differs=61	DeepInfrax10	0.0167	506	
+granite-8b-high-1	43/69	parses	leak, closers only	output_differs=26	DeepInfrax10	0.0195	615	
+granite-8b-high-2	0/69	parses	leak, closers only	exit_1=4 output_differs=65	DeepInfrax8 CoreWeavex1	0.0158	364	
+inkling-mini-0	69/69	parses	answered	-	PrimeIntellectx7	0.0000	13	
+inkling-mini-1	68/69	parses	answered	output_differs=1	PrimeIntellectx13	0.0000	36	
+lfm25-24b-0	0/69	no file	output cap	-	Liquidx5	0.0079	17	
+lfm25-24b-1	0/69	no file	output cap	-	Liquidx10	0.0093	18	
+lfm25-24b-2	0/69	no file	output cap	-	Liquidx10	0.0103	20	
+lfm3-1.7b-0	0/69	no file	output cap	-	Liquidx5	0.0032	30	
+lfm3-1.7b-1	0/69	no file	output cap	-	Liquidx5	0.0040	38	
+lfm3-1.7b-2	0/69	no file	output cap	-	Liquidx5	0.0041	37	
+ling-local-0	0/69	parses	output cap	output_differs=69	local	0.0000	1933	
+ling-local-1	0/69	parses	output cap	exit_1=68 output_differs=1	local	0.0000	591	
+ling-local-2	0/69	parses	output cap	exit_1=1 output_differs=68	local	0.0000	629	
+ling-tiny-0	0/69	no file	timeout	-	local	0.0000	1800	provider accepted requests and never answered
+ling-tiny-1	0/69	no file	timeout	-	local	0.0000	1800	provider accepted requests and never answered
+ling-tiny-2	0/69	no file	timeout	-	local	0.0000	1800	provider accepted requests and never answered
+ling-tiny-3	0/69	no file	killed	-	local	0.0000	388	provider accepted requests and never answered
+ling-tiny-4	0/69	no file	killed	-	local	0.0000	388	provider accepted requests and never answered
+ling-tiny-5	0/69	no file	killed	-	local	0.0000	388	provider accepted requests and never answered
+llama31-8b-0	0/69	syntax error	answered	exit_1=69	Groqx4	0.0018	11	
+llama31-8b-1	0/69	no file	answered	-	Groqx7	0.0019	11	
+llama31-8b-2	0/69	parses	answered	exit_1=69	Groqx22	0.0082	36	
+ministral-14b-0	45/69	parses	context full	output_differs=24	Mistralx409	0.5994	1533	
+ministral-14b-1	4/69	parses	context full	exit_1=4 output_differs=61	Mistralx371	0.5500	1630	
+ministral-14b-2	0/69	parses	context full	output_differs=69	Mistralx398	0.5910	1642	
+ministral-3b-0	0/69	parses	recovery limit	output_differs=69	Mistralx21	0.0054	56	
+ministral-3b-1	0/69	parses	recovery limit	exit_1=69	Mistralx53	0.0183	173	
+ministral-3b-2	0/69	parses	answered	exit_1=69	Mistralx30	0.0147	213	
+ministral-8b-0	0/69	parses	context full	output_differs=69	Mistralx284	0.3160	1656	
+ministral-8b-1	0/69	syntax error	recovery limit	exit_1=69	Mistralx24	0.0081	118	
+ministral-8b-2	0/69	parses	context full	output_differs=69	Mistralx86	0.0963	1594	
+mistral-small-24b-0	0/69	parses	timeout	exit_1=69	DeepInfrax104	0.0000	1800	
+mistral-small-24b-1	0/69	syntax error	recovery limit	exit_1=69	DeepInfrax13	0.0171	136	
+mistral-small-24b-2	0/69	parses	timeout	exit_1=17 output_differs=52	DeepInfrax289	0.0000	1800	
+qwen3-14b-0	0/69	no file	no answer	-	DeepInfrax9	0.0114	114	
+qwen3-14b-1	0/69	no file	no answer	-	DeepInfrax4	0.0052	82	
+qwen3-14b-2	56/69	parses	loop	output_differs=13	DeepInfrax6	0.0107	246	
+qwen35-4b-local-0	0/69	parses	no answer	exit_1=69	local	0.0000	2220	configured context 131072 against the server's 65536 (HTTP 400)
+qwen35-4b-local-1	0/69	syntax error	output cap	exit_1=69	local	0.0000	923	
+qwen35-4b-local-2	0/69	parses	loop	output_differs=69	local	0.0000	748	
+qwen35-4b-local-think-0	0/69	parses	loop	exit_1=69	local	0.0000	1117	
+qwen35-4b-local-think-1	0/69	parses	timeout	output_differs=69	local	0.0000	3600	tunnel to the GPU machine failed after about 2 minutes
+qwen35-4b-local-think-2	-	no file	other	-	local	0.0000	-	tunnel down for the whole run
+qwen35-9b-0	0/69	parses	leak, closers only	timeout=69	Darkbloomx8 Togetherx1	0.0111	270	
+qwen35-9b-1	0/69	no file	leak caught	-	Togetherx1 Darkbloomx1 SiliconFlowx1	0.0027	10	
+qwen35-9b-2	0/69	parses	leak, closers only	output_differs=69	Darkbloomx17 PrimeIntellectx1	0.0387	359	
+qwen35-9b-fp4-0	0/69	parses	recovery limit	exit_1=69	Darkbloomx59	0.1502	864	
+qwen35-9b-fp4-1	0/69	parses	answered	exit_1=69	Darkbloomx25	0.0451	420	
+qwen3vl-8b-0	0/69	parses	recovery limit	output_differs=69	Parasailx26	0.0461	87	
+qwen3vl-8b-1	0/69	no file	loop	-	Parasailx2	0.0029	488	
+qwen3vl-8b-2	0/69	no file	timeout	-	Parasailx10	0.0000	1800	
+sharp-q6-64k-0	0/69	no file	output cap	-	local	0.0000	1909	
+sharp-q6-64k-off-0	0/69	parses	timeout	output_differs=69	local	0.0000	3600	
+spark-4b-0	0/69	no file	no answer	-	local	0.0000	1988	server behind the VM's proxy stopped answering (502)
+spark-4b-1	0/69	no file	killed	-	local	0.0000	1793	ended by hand to give run 0 the whole server
+spark-4b-2	0/69	no file	killed	-	local	0.0000	1793	ended by hand to give run 0 the whole server
+spark-4b-3	0/69	no file	killed	-	local	0.0000	72	detached launch killed with the container
+spark-4b-4	-	no file	other	-	local	0.0000	-	launched after a container restart against a dead egress proxy
+spark-4b-64k-0	0/69	no file	output cap	-	local	0.0000	1639	
+spark-4b-gpu-0	0/69	no file	output cap	-	local	0.0000	877	
+spark-4b-gpu-1	0/69	parses	output cap	output_differs=69	local	0.0000	1396	
+spark-4b-gpu-2	0/69	no file	output cap	-	local	0.0000	628	

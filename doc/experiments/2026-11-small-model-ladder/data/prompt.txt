@@ -1,0 +1,1 @@
+Write tetris.py as SPEC.md describes. Before you finish, check that its output for every example in samples/ matches the expected output exactly.

@@ -1,0 +1,21 @@
+lfm3-1.7b          liquid/lfm-3-1.7b                          total=1.7  active=1.7  reasoning=low  quant=any
+ministral-3b       mistralai/ministral-3b-2512                total=3    active=3    reasoning=-    quant=any
+granite-8b         ibm-granite/granite-4.2-8b                 total=8    active=8    reasoning=low  quant=any
+ministral-8b       mistralai/ministral-8b-2512                total=8    active=8    reasoning=-    quant=any
+qwen3vl-8b         qwen/qwen3-vl-8b-instruct                  total=8    active=8    reasoning=-    quant=any
+llama31-8b         meta-llama/llama-3.1-8b-instruct           total=8    active=8    reasoning=-    quant=any
+ling-tiny          inclusionai/ling-3.0-tiny                  total=8    active=1    reasoning=low  quant=any
+qwen35-9b          qwen/qwen3.5-9b                            total=9    active=9    reasoning=low  quant=['fp4', 'int4']
+bonsai-9b          prism-ml/ternary-bonsai-2-9b               total=9    active=9    reasoning=low  quant=['int4']
+gemma3-12b         google/gemma-3-12b-it                      total=12   active=12   reasoning=-    quant=any
+ministral-14b      mistralai/ministral-14b-2512               total=14   active=14   reasoning=-    quant=any
+qwen3-14b          qwen/qwen3-14b                             total=14   active=14   reasoning=low  quant=any
+gptoss-20b         openai/gpt-oss-20b                         total=20   active=3.6  reasoning=low  quant=['fp4', 'int4']
+mistral-small-24b  mistralai/mistral-small-3.2-24b-instruct   total=24   active=24   reasoning=-    quant=any
+lfm25-24b          liquid/lfm-2.5-24b-a2b                     total=24   active=2    reasoning=low  quant=any
+gemma4-26b         google/gemma-4-26b-a4b-it                  total=26   active=4    reasoning=low  quant=['int4', 'fp4']
+inkling-mini       thinkingmachines/inkling-2-mini            total=26   active=3.4  reasoning=low  quant=any
+spark-4b total=4.45 active=4.45 reasoning=low quant=Q4_K_M (user's VM, llama.cpp b1-3d94ffe45)
+spark-4b-gpu total=4.45 active=4.45 reasoning=low quant=Q4_K_M ctx=32768 (RTX 3050, llama.cpp router)
+ling-local total=7.9 active=~1 reasoning=low(=off in template) quant=Q4_K_M ctx=131072 (RTX 3050 6 GB, llama.cpp b12652)
+qwen35-4b-local total=4.2 active=4.2 thinking=off(enable_thinking) quant=Q4_K_M ctx=131072 (RTX 3050 6 GB, Vulkan)
