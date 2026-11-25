@@ -339,6 +339,8 @@ func TestErrorClassification(t *testing.T) {
 		// worth trying again.
 		{408, `{"error":{"message":"request timeout"}}`, llm.ErrServer, true},
 		{400, `{"error":{"message":"This model's maximum context length is 8192 tokens"}}`, llm.ErrContextWindow, false},
+		// llama.cpp's wording. It used to fall through to ErrRequest.
+		{400, `{"error":{"message":"request (65905 tokens) exceeds the available context size (65536 tokens), try increasing it"}}`, llm.ErrContextWindow, false},
 		// The rest of 4xx is the request being wrong; a retry gets the same
 		// answer, so it must fail at once and say why.
 		{400, `{"error":{"message":"invalid request"}}`, llm.ErrRequest, false},
@@ -758,6 +760,20 @@ func TestParseSSEStreamCutOffIsRetryable(t *testing.T) {
 			t.Errorf("%s: err = %v, want a retryable stream error", tc.name, got)
 		case !tc.cut && got != nil:
 			t.Errorf("%s: err = %v, want none", tc.name, got)
+		}
+	}
+}
+
+// A refusal that states its limit carries it, so the coder can use the
+// server's number rather than the configured one.
+func TestContextLimitIsStated(t *testing.T) {
+	for msg, want := range map[string]int{
+		"request (65905 tokens) exceeds the available context size (65536 tokens), try increasing it": 65536,
+		"This model's maximum context length is 8192 tokens. However, you requested 9000 tokens":      8192,
+		"prompt is too long": 0,
+	} {
+		if got := statedContextLimit(msg); got != want {
+			t.Errorf("%q: limit = %d, want %d", msg, got, want)
 		}
 	}
 }

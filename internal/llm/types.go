@@ -387,6 +387,10 @@ type StreamError struct {
 	// blamed its output cap. The caller, which knows the model's config, says
 	// what the cap was and where to change it.
 	OutputCap *OutputCapRefusal
+	// ContextLimit is the context size a provider gave when it refused a
+	// request as too long, or 0 if it gave none. A self-hosted server's limit
+	// is whatever it was started with, which the config cannot see.
+	ContextLimit int
 }
 
 // OutputCapRefusal describes the output cap a refused request carried.

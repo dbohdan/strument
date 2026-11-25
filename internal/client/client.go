@@ -15,6 +15,8 @@ import (
 	"iter"
 	"maps"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -542,19 +544,50 @@ func classifyHTTPError(resp *http.Response, adapter string, sent int) *llm.Strea
 		}
 	}
 	capRefusal := outputCapRefusal(resp.StatusCode, msg, sent)
+	limit := 0
+	if class == llm.ErrContextWindow {
+		limit = statedContextLimit(msg)
+	}
 	msg += opencodeRoutingHint(adapter, resp.StatusCode)
 	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg),
-		OutputCap: capRefusal}
+		OutputCap: capRefusal, ContextLimit: limit}
 }
 
 // isContextWindowMessage spots provider phrasing for over-long prompts.
+//
+// "context size" is llama.cpp's: "request (65905 tokens) exceeds the available
+// context size (65536 tokens), try increasing it". Unmatched, it was an
+// ordinary bad request: a session on the small-model ladder ended on it with
+// no word that the context was the problem
+// (doc/experiments/2026-11-small-model-ladder).
 func isContextWindowMessage(msg string) bool {
 	m := strings.ToLower(msg)
 	return strings.Contains(m, "context length") ||
 		strings.Contains(m, "context window") ||
+		strings.Contains(m, "context size") ||
 		strings.Contains(m, "maximum context") ||
 		strings.Contains(m, "too many tokens") ||
 		strings.Contains(m, "prompt is too long")
+}
+
+// contextLimitPatterns find the limit in a refusal that states one: llama.cpp's
+// "available context size (65536 tokens)", and the "maximum context length is
+// 8192 tokens" of OpenAI and vLLM.
+var contextLimitPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)context size \((\d+) tokens\)`),
+	regexp.MustCompile(`(?i)maximum context length is (\d+) tokens`),
+}
+
+// statedContextLimit returns the context size a refusal states, or 0.
+func statedContextLimit(msg string) int {
+	for _, re := range contextLimitPatterns {
+		if m := re.FindStringSubmatch(msg); m != nil {
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				return n
+			}
+		}
+	}
+	return 0
 }
 
 func extractErrorMessage(body []byte) string {

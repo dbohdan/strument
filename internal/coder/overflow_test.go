@@ -120,3 +120,66 @@ func TestOverflowWithNothingToFold(t *testing.T) {
 		t.Errorf("sends = %d, outcome = %v; want 1 and context exhausted", client.sends, outcome)
 	}
 }
+
+// statingClient refuses once as llama.cpp does, giving its context size.
+type statingClient struct {
+	limit, sends int
+}
+
+func (r *statingClient) Send(_ context.Context, _ llm.Request) iter.Seq2[llm.StreamEvent, error] {
+	r.sends++
+	first := r.sends == 1
+	return func(yield func(llm.StreamEvent, error) bool) {
+		if first {
+			yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrContextWindow, ContextLimit: r.limit,
+				Message: "HTTP 400: request exceeds the available context size"})
+			return
+		}
+		if yield(llm.StreamEvent{Kind: llm.EventAnswer, Text: "Done."}, nil) {
+			yield(llm.StreamEvent{Kind: llm.EventFinish, FinishReason: "stop"}, nil)
+		}
+	}
+}
+
+// A server started with a smaller context than the config says: its number
+// is used for the rest of the session, the user is told which setting to
+// change, and the fold that follows rescues the turn.
+func TestServerContextIsAdopted(t *testing.T) {
+	client := &statingClient{limit: 65536}
+	c := overflowCoder(t, client)
+	c.Model.Alias = "local"
+	c.Model.Context = 131072
+	out := &captureOut{}
+	c.Out = out
+
+	outcome, _ := c.sendMessage(context.Background(), "carry on")
+
+	if c.Model.Context != 65536 {
+		t.Errorf("context = %d, want the server's 65536", c.Model.Context)
+	}
+	want := `The server's context is 65536 tokens, smaller than the 131072 configured for "local".`
+	if !strings.Contains(out.String(), want) || !strings.Contains(out.String(), "set context = 65536") {
+		t.Errorf("output = %q, want the warning naming both numbers and the setting", out.String())
+	}
+	if outcome == OutcomeContextExhausted || client.sends != 2 {
+		t.Errorf("outcome = %v after %d requests, want the fold to rescue the turn", outcome, client.sends)
+	}
+}
+
+// A stated limit at or above the configured one changes nothing: the config
+// is already the smaller number, and the refusal is about this request.
+func TestLargerServerContextIsIgnored(t *testing.T) {
+	c := overflowCoder(t, &statingClient{limit: 200000})
+	c.Model.Context = 131072
+	out := &captureOut{}
+	c.Out = out
+
+	c.sendMessage(context.Background(), "carry on")
+
+	if c.Model.Context != 131072 {
+		t.Errorf("context = %d, want the configured 131072 kept", c.Model.Context)
+	}
+	if strings.Contains(out.String(), "The server's context") {
+		t.Errorf("warned about a larger server context: %q", out.String())
+	}
+}

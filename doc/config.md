@@ -1735,6 +1735,11 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   refuses the request. Both are silent when
   it is unset — there is nothing to warn about a limit you have not stated — so
   set it on every model you use for real work.
+
+  A self-hosted server's window is whatever it was started with (llama.cpp's
+  `-c`), and the config cannot see it. When a refusal states a smaller window
+  than `context`, Strument uses the server's number for the rest of the
+  session, says so, and names the value to set.
 - **`max_output`** — the maximum output tokens. It is sent as the request's
   output cap (`max_tokens`, or `max_output_tokens` on the Responses dialect),
   so a model that reaches it stops with a length finish — see `prefill` for

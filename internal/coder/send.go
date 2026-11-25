@@ -188,6 +188,7 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 			if errors.As(err, &se) {
 				if se.Class == llm.ErrContextWindow {
 					usage.rejected = false
+					c.adoptServerContext(se.ContextLimit)
 					return resContextExhausted, nil
 				}
 				if se.OutputCap != nil {
@@ -989,6 +990,35 @@ func (c *Coder) maybeCompact() {
 // fold and retry when a provider refuses a request as too long; Strument
 // classified the refusal and ended the turn. With compaction moved late in the
 // window, this is the backstop it relies on.
+// adoptServerContext takes the context size a refusal stated as the session's
+// limit, when it is smaller than the configured one. A self-hosted server's
+// context is whatever it was started with, and nothing in the config can see
+// it: on the small-model ladder a session configured for 131,072 tokens ran
+// against a llama.cpp server started with 65,536, budgeted its history for the
+// larger number, and ended on the refusal. Taking the server's number lets the
+// fold that follows aim at a size the server accepts, and every later request
+// is budgeted against it. A fold needs settled history, though: one long turn
+// has none, and still ends here. The user is told once, with the setting that
+// fixes it for good; /model and /reload go back to the config's number.
+func (c *Coder) adoptServerContext(n int) {
+	if n <= 0 || c.Model == nil || (c.Model.Context > 0 && n >= c.Model.Context) {
+		return
+	}
+	name := c.Model.Alias
+	if name == "" {
+		name = c.Model.Slug
+	}
+	configured := fmt.Sprintf("the %d configured for %q", c.Model.Context, name)
+	if c.Model.Context <= 0 {
+		configured = fmt.Sprintf("%q, which has no context set", name)
+	}
+	c.Out.Warningf("The server's context is %d tokens, smaller than %s. Using %d for the rest of "+
+		"this session; set context = %d in its model() call.", n, configured, n, n)
+	m := *c.Model
+	m.Context = n
+	c.Model = &m
+}
+
 func (c *Coder) foldForOverflow() bool {
 	if c.Tokens == nil || len(c.doneMessages) == 0 {
 		return false
