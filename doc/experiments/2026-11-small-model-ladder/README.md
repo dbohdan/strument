@@ -189,7 +189,8 @@ Two fixes came out of the ladder while it ran:
   came from and which `max_output` changes it. Two Qwen3-VL sessions died on
   that refusal with a nearly empty key.
 
-These are open, and none of them is started:
+The ladder exposed four more gaps. All four were fixed after this write-up, in
+the commits named at the end of each item:
 
 1. **A tool call in the reasoning, with only its closing tags.** Ten sessions
    (8 Granite, 2 Qwen3.5 9B) ended on reasoning whose tail was
@@ -199,23 +200,37 @@ These are open, and none of them is started:
    but no answer and no tool call". Five other sessions had the opening tag,
    and the existing diagnosis caught them. Recognizing the closers fixes the
    message. Telling the model that its call did not run, and continuing the
-   turn, is the change that could move a score. It is a design change to how a
-   turn ends.
+   turn, is the change that could move a score. **Fixed in `898cd37`:** both.
+   Each leak is an error round, so a model that keeps leaking stops at the
+   limit.
 2. **Edits that change nothing are reported as applied.** In
    `data/noop_edits.tsv`, Ministral 14B made 1,091 of its 1,101 edits with
    `old_string` identical to `new_string`, and Ministral 8B 162 of 223.
    Strument answered "Applied edit" to each. Refused with an error, each 14B
    run would have stopped at the error-recovery limit after three of them,
-   not after $0.60 and a full context.
+   not after $0.60 and a full context. **Fixed in `c7709fc`:** refused before
+   matching, as OpenCode, Kimi Code and DeepSeek Harness do; Pi refuses an
+   edit whose result equals the file, and Codex an empty patch (read
+   2026-11-25 at `0220248`, `50ec3c3`, `2e39e704`, `ff8721f`, `a05444b`).
 3. **The loop detector does not see tool-call arguments.** It is fed the
    answer and the reasoning (`internal/coder/send.go:206`, `:212`). Qwen3-VL
    repeated the same three lines 1,045 times inside a `write` argument until
    the 30-minute timeout. Ling's 32k `write` of planning comments ended only
-   on the output cap.
+   on the output cap. **Fixed in `0df28ca`:** a call whose last 16 KB of
+   arguments repeat one block verbatim at least ten times is stopped. Replayed
+   over the ladder's 3,141 recorded tool calls, it flags two, both cut-off
+   `write`s in Qwen3-VL's looping session, and it stops the runaway call at
+   18 KB of 257 KB. Ling's comments were not verbatim and are not caught.
 4. **A configured context larger than the server's.** One Qwen3.5 4B session
    was configured for 131,072 tokens against a server at 65,536 and ended on
    HTTP 400. llama.cpp reports `n_ctx` in `/props`, so Strument could warn at
-   startup.
+   startup. **Fixed in `49734d0`, differently:** llama.cpp's refusal now counts
+   as a context-window refusal, and the limit it states becomes the session's,
+   with a warning naming the value to set. That needs no extra request and
+   covers any server that states its limit. It does not rescue that session:
+   one long turn has no settled history to fold, so the turn still ends, now
+   with the right diagnosis. Ministral's "context full" endings are the same
+   wall. Compacting inside a turn is a separate, open question.
 
 The ladder also cost two hours of retries against a dead tunnel. That lesson
 is in the handbook, as
@@ -223,12 +238,15 @@ is in the handbook, as
 
 ## Follow-up, written down before the fix
 
-If item 1 is built as "tell the model that its call did not run, and continue
-the turn", Granite 4.2 8B is the case that tests it. The design is set here,
-before the fix exists:
+Item 1 was built as "tell the model that its call did not run, and continue
+the turn", and Granite 4.2 8B is the case that tests it. The design was set
+here before the fix existed:
 - Granite 4.2 8B at `reasoning = "low"`, pinned to DeepInfra, which served
-  its best cell. Three runs on the current build, three on the build with the
-  change, in shuffled order, on this fixture and grader.
+  its best cell. Three runs at `72dec37`, before the change, and three at
+  `898cd37`, which has it, in shuffled order, on this fixture and grader.
+  The builds also differ by the no-op refusal and the argument-loop stop,
+  which barely touch Granite: 2 no-op edits in its 20 recorded edits, and no
+  argument loops.
 - **Primary:** hidden-test score, against the same bar of 63 in two of three.
 - **Counted alongside:** leak events per session, and sessions whose turn ends
   on a leak.
