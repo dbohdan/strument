@@ -1,0 +1,4 @@
+run	arm	model	score	visible	tests_changed	requests	sent	cache	received	reasoning	spec	seconds	end
+base-deepseek-0	base	deepseek	66	-	-	8	159016	133376	23758	16778	1	81	answered
+base-kimi-0	base	kimi	69	-	-	5	43246	32256	2569	249	1	47	answered
+base-mimo-0	base	mimo	69	-	-	10	111748	85376	17859	10993	1	896	answered

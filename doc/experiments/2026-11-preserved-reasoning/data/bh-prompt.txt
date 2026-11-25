@@ -1,0 +1,1 @@
+Several tests in tests/ fail. Fix the code in shop/ so that the whole suite passes (python3 -m unittest), without changing the tests. SPEC.md describes the intended behavior.
