@@ -572,10 +572,13 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	}
 
 	if !interrupted && answer == "" && len(c.stream.toolCalls) == 0 {
-		dropUserTurn()
 		// "Empty" is the wrong word when the model filled its whole budget and
 		// the reply went out through the wrong channel; see reasoningLeak.
-		switch marker, leaked := reasoningLeak(answer, c.stream.reasoning, len(c.stream.toolCalls)); {
+		marker, leaked := reasoningLeak(answer, c.stream.reasoning, len(c.stream.toolCalls))
+		if !leaked {
+			dropUserTurn()
+		}
+		switch {
 		case leaked:
 			// Neither half of this is the harness's to adjudicate, and an
 			// earlier version tried: it told the user the parser was at fault
@@ -589,6 +592,19 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 			c.Out.Warningf("  A chat template that opens `<think>` for the model leaves it to close " +
 				"the block before acting, and smaller models close it late more often. With " +
 				"llama.cpp, check the template's thinking option.")
+			// The turn goes on. Ended here, a model that was mid-task loses it
+			// to a formatting slip: every Granite run on the ladder ended this
+			// way while it was still fixing failures. Told, it gets another
+			// try, and an error round each time bounds a model that cannot
+			// stop doing it. Nothing from the reasoning is run or quoted back:
+			// what reaches the reasoning is a draft, and with the openers gone
+			// it is a fragment of one.
+			c.curMessages = append(c.curMessages, llm.HarnessNote(
+				"Nothing ran: your last reply ended inside your reasoning with a tool call ("+marker+
+					"), so it reached Strument as part of a thought, not as a call. "+
+					"Finish your reasoning first, then make the call."))
+			c.resumeInPlace = true
+			return OutcomeReflect, ""
 		case strings.TrimSpace(c.stream.reasoning) != "":
 			c.Out.Warningf("The model returned reasoning but no answer and no tool call.")
 		default:

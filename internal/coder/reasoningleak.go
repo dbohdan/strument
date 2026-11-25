@@ -12,7 +12,7 @@ import "strings"
 // what we find there would run the rejected branch, and would put the harness
 // in the business of implementing a second, per-family tool-call protocol that
 // belongs to the inference server. So this list exists to explain a failed
-// turn, and for nothing else.
+// send, to the user and to the model, and never to run anything.
 var toolCallOpeners = []string{
 	"<tool_call>",          // Qwen, GLM, Ling/Bailing
 	"<function_call>",      // several
@@ -21,6 +21,23 @@ var toolCallOpeners = []string{
 	"<|tool▁calls▁begin|>", // DeepSeek, with its private-use separators
 	"[TOOL_CALLS]",         // Mistral
 	"<|python_tag|>",       // Llama 3.x built-ins
+}
+
+// toolCallClosers end a tool call in the same native syntaxes. A server that
+// takes the opening markers as special tokens drops them from the reasoning
+// text and leaves only these. On the small-model ladder
+// (doc/experiments/2026-11-small-model-ladder), ten sessions of Granite 4.2 8B
+// and Qwen3.5 9B ended on reasoning whose last line was
+// `</parameter></function></tool_call>`, with no opener anywhere and much of
+// the call's body gone with it. Only a closer that *ends* the reasoning counts:
+// one in the middle is a model discussing the syntax, not a call cut short.
+var toolCallClosers = []string{
+	"</tool_call>",
+	"</function_call>",
+	"</function>",
+	"<|tool_calls_end|>",
+	"<|tool▁calls▁end|>",
+	"<|tool_call_end|>",
 }
 
 // reasoningLeak reports the marker a reply's reasoning holds, if the reply said
@@ -45,6 +62,12 @@ func reasoningLeak(answer, reasoning string, toolCalls int) (marker string, leak
 	}
 	for _, m := range toolCallOpeners {
 		if strings.Contains(reasoning, m) {
+			return m, true
+		}
+	}
+	tail := strings.TrimSpace(reasoning)
+	for _, m := range toolCallClosers {
+		if strings.HasSuffix(tail, m) {
 			return m, true
 		}
 	}
