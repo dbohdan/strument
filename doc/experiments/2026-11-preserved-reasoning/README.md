@@ -331,3 +331,48 @@ as a patch so the question can be reopened.
    - Does turn 2 re-derive when folded? If every model re-reads everything
      either way, or none needs to, the fixture cannot contain the effect, and
      it is redesigned before any replay session runs.
+
+### Pilot, and an amendment made before any replay session ran
+
+Fifteen sessions without replay, all through Command Code (`data/p3-pilot-scores.tsv`).
+Every session got both turns right, so correctness is at the ceiling again,
+and the counts carry the result.
+
+**The fold.** The budget hook did not clear turn 1's results reliably. Turn-1
+histories were only 750–1,650 tokens, so no single budget clears results
+without sometimes rolling whole turns away, which drops the reasoning too.
+The fold was replaced with a trial hook (`STRUMENT_TRIAL_CLEAR_RESULTS`) that
+clears every settled tool result at the end of each turn and keeps every
+message. A fake server confirmed that turn 2's request carries only
+placeholders for turn 1's reads, plus, in the replay build, turn 1's
+reasoning.
+
+**Where the conclusion lives.** Told to reply with one word, models still
+narrated between tool calls, and narration is assistant text, which no fold
+clears. Turn 1's visible text stated the rule (the profile, the layer order,
+or the override path):
+
+| model | rule in visible text | rule only in reasoning |
+| --- | --- | --- |
+| DeepSeek V4 Flash | 5/5 | 0/5 |
+| Kimi K3 | 3/5 | 2/5 |
+| MiMo V2.6 Flash | 2/5 | 3/5 |
+
+Replay can only add what the visible text lacks. For DeepSeek that is nothing
+on this fixture, and the "two of three models" rule would have been decided by
+a model that cannot show the effect.
+
+**Amended design, fixed before the main run:**
+- MiMo and Kimi only, folded column only, base against replay, 8 sessions a
+  cell: 32 sessions, in a seeded shuffle (`data/p3-order.txt`).
+- The decision rule applies to each model on its own. Replay earns a setting
+  for a model if it cuts turn-2 re-derivation or guessed edits, without
+  lowering correctness, and without turn-2 seconds or output rising by more
+  than a quarter. If neither model clears that bar, the patch is retired and
+  kept as `data/replay.patch`.
+- Reported alongside: the same comparison within the sessions whose turn-1
+  text did not state the rule. Silence is measured in turn 1, which replay
+  can already affect within that turn, so it is a secondary view and not the
+  primary one.
+- DeepSeek's 5 of 5 is itself a result. Whether replaying reasoning can matter
+  depends on how much a model says out loud, and DeepSeek says it all.

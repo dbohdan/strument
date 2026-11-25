@@ -1,0 +1,16 @@
+run	arm	column	model	t1_status	t2_status	prod	staging	dev	rederive	guessed	t2_edits	t2_paths	t1_words	t1_visible	t1_rule	t2_req	t2_sent	t2_uncached	t2_out	t2_reasoning	t2_secs	cleared
+base-folded-deepseek-0	base	folded	deepseek	ok	ok	30	30	5	4	0	1	config/sizes/small.conf	38	71	1	8	146514	8530	5462	3930	27.4	1
+base-folded-kimi-0	base	folded	kimi	ok	ok	30	30	5	0	1	1	overrides/eu-small.conf	1	38	1	3	21991	743	272	110	10.9	0
+base-folded-mimo-0	base	folded	mimo	ok	ok	30	30	5	1	0	1	config/sizes/small.conf	1	1	0	4	36024	1208	721	553	44.8	0
+base-kept-deepseek-0	base	kept	deepseek	ok	ok	30	30	5	0	1	1	overrides/eu-small.conf	15	139	1	3	55378	1106	1284	736	9.2	0
+base-kept-deepseek-1	base	kept	deepseek	ok	ok	30	30	5	1	1	1	config/sizes/small.conf	58	90	1	4	70842	1722	3404	2680	16.9	0
+base-kept-deepseek-2	base	kept	deepseek	ok	ok	30	30	5	2	0	1	overrides/eu-small.conf	53	83	1	5	93050	2938	7400	6394	31.7	0
+base-kept-deepseek-3	base	kept	deepseek	ok	ok	30	30	5	2	0	1	config/sizes/small.conf	47	78	1	5	93936	2544	2716	1650	15.8	0
+base-kept-kimi-0	base	kept	kimi	ok	ok	30	30	5	2	0	1	overrides/eu-small.conf	25	25	1	5	36766	1182	448	197	17.9	0
+base-kept-kimi-1	base	kept	kimi	ok	ok	30	30	5	3	0	1	overrides/eu-small.conf	1	1	0	5	38852	1476	381	65	11.6	0
+base-kept-kimi-2	base	kept	kimi	ok	ok	30	30	5	1	0	1	overrides/eu-small.conf	1	29	1	4	30823	871	347	134	9.9	0
+base-kept-kimi-3	base	kept	kimi	ok	ok	30	30	5	0	1	1	config/sizes/small.conf	1	1	0	2	15509	405	208	110	7.4	0
+base-kept-mimo-0	base	kept	mimo	ok	ok	30	30	5	3	0	1	config/sizes/small.conf	1	17	1	7	57608	1736	1027	861	64.0	0
+base-kept-mimo-1	base	kept	mimo	ok	ok	30	30	5	2	0	1	config/sizes/small.conf	1	1	0	5	41688	1624	1180	1090	58.7	0
+base-kept-mimo-2	base	kept	mimo	ok	ok	30	30	5	2	0	1	config/sizes/small.conf	1	24	1	5	39058	594	307	168	28.8	0
+base-kept-mimo-3	base	kept	mimo	ok	ok	30	30	5	3	0	1	config/sizes/small.conf	1	1	0	7	67562	2410	1709	1549	80.7	0

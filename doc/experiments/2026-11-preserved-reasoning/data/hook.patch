@@ -1,0 +1,49 @@
+diff --git a/internal/coder/send.go b/internal/coder/send.go
+index cd87d78..c31c7ed 100644
+--- a/internal/coder/send.go
++++ b/internal/coder/send.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"math"
++	"os"
+ 	"strconv"
+ 	"strings"
+ 	"time"
+@@ -953,6 +954,12 @@ const minChatHistoryTokens = 2048
+ // maxChatHistoryTokens is the settled-history budget: context/historyShare,
+ // with a floor for small windows.
+ func maxChatHistoryTokens(context int) int {
++	// Trial build only (doc/experiments/2026-11-preserved-reasoning, phase 3).
++	if v := os.Getenv("STRUMENT_TRIAL_HISTORY_BUDGET"); v != "" {
++		if n, err := strconv.Atoi(v); err == nil && n > 0 {
++			return n
++		}
++	}
+ 	return max(context/historyShare, minChatHistoryTokens)
+ }
+ 
+@@ -961,6 +968,23 @@ func maxChatHistoryTokens(context int) int {
+ // model's window is known (Context > 0) — mirroring checkTokens, which treats an
+ // unknown window as "no limit to enforce".
+ func (c *Coder) maybeCompact() {
++	// Trial build only (doc/experiments/2026-11-preserved-reasoning, phase 3):
++	// clear every settled tool result at the end of each turn, keeping every
++	// message, so the fold is the same in every session.
++	if os.Getenv("STRUMENT_TRIAL_CLEAR_RESULTS") != "" {
++		n := 0
++		for i := range c.doneMessages {
++			m := &c.doneMessages[i]
++			if m.Role == llm.RoleTool && !strings.HasPrefix(m.Text(), clearedPrefix) {
++				m.Content = llm.TextContent(c.clearedPlaceholder())
++				n++
++			}
++		}
++		if n > 0 {
++			c.Out.Printf("Cleared %d old tool results from the chat history (trial); the calls are kept.", n)
++		}
++		return
++	}
+ 	if c.Model == nil || c.Model.Context <= 0 || c.Tokens == nil {
+ 		return
+ 	}
