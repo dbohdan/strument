@@ -818,3 +818,5 @@ every task, and the return comes only on tasks long enough to need a plan.
   runner, the pool and the order.
 - `data/p4-hook.patch`, `data/p4-replay.patch`: the trial builds.
 - `data/p4score.py`: the counts; `data/p4-scores.tsv`, the trial's.
+- Raw sessions, both pilots and the trial: `dbohdan/experimental-data`,
+  `strument/2026-11-preserved-reasoning/phase4-runs.tar.xz` at `958e907`.
