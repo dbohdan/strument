@@ -399,6 +399,59 @@ data: [DONE]
 	}
 }
 
+// A route that puts a running total on every chunk must yield one usage
+// event with the final total: the coder adds each event it gets.
+func TestParseSSERunningUsageYieldsLastTotal(t *testing.T) {
+	sse := `data: {"choices":[{"delta":{"content":"one"}}],"usage":{"prompt_tokens":39,"completion_tokens":1}}
+
+data: {"choices":[{"delta":{"content":" two"}}],"usage":{"prompt_tokens":39,"completion_tokens":8}}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":39,"completion_tokens":61}}
+
+data: [DONE]
+`
+	var got []llm.Usage
+	var answer strings.Builder
+	for ev, err := range ParseSSE(strings.NewReader(sse)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch ev.Kind {
+		case llm.EventUsage:
+			got = append(got, *ev.Usage)
+		case llm.EventAnswer:
+			answer.WriteString(ev.Text)
+		}
+	}
+	if len(got) != 1 || got[0].PromptTokens != 39 || got[0].CompletionTokens != 61 {
+		t.Errorf("usage events = %+v, want one with 39 prompt and 61 completion tokens", got)
+	}
+	if answer.String() != "one two" {
+		t.Errorf("answer = %q", answer.String())
+	}
+}
+
+// Usage that arrived before a mid-stream error is still reported, ahead of
+// the error, so the failed attempt's tokens are recorded.
+func TestParseSSEUsageBeforeErrorIsKept(t *testing.T) {
+	sse := `data: {"choices":[{"delta":{"content":"partial"}}],"usage":{"prompt_tokens":50,"completion_tokens":3}}
+
+data: {"error":{"message":"upstream failed","code":502}}
+`
+	var kinds []string
+	for ev, err := range ParseSSE(strings.NewReader(sse)) {
+		switch {
+		case err != nil:
+			kinds = append(kinds, "error")
+		case ev.Kind == llm.EventUsage:
+			kinds = append(kinds, fmt.Sprintf("usage %d", ev.Usage.PromptTokens))
+		}
+	}
+	if strings.Join(kinds, ",") != "usage 50,error" {
+		t.Errorf("events = %v, want usage then error", kinds)
+	}
+}
+
 func TestMidStreamErrorObject(t *testing.T) {
 	sse := `data: {"choices":[{"delta":{"content":"partial"}}]}
 

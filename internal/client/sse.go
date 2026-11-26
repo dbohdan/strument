@@ -92,14 +92,32 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 		// Kept across chunks: the usage chunk is not guaranteed to carry it.
 		var provider string
 		var done, finished bool
+		// Usage is held and yielded once, when the stream ends. Some routes
+		// put a running total on every chunk (DeepSeek V4 Flash through
+		// Command Code: 32 of 32 chunks), and each one passed on was summed
+		// downstream, so a session's tokens read as tens of times too many.
+		// The last total covers the whole response either way.
+		var pending *llm.Usage
+		flush := func() bool {
+			if pending == nil {
+				return true
+			}
+			u := pending
+			pending = nil
+			return yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: u}, nil)
+		}
 		for payload, err := range scanSSEData(r, &done) {
 			if err != nil {
-				yield(llm.StreamEvent{}, err)
+				if flush() {
+					yield(llm.StreamEvent{}, err)
+				}
 				return
 			}
 			var chunk sseChunk
 			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-				yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: "bad SSE chunk: " + err.Error()})
+				if flush() {
+					yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: "bad SSE chunk: " + err.Error()})
+				}
 				return
 			}
 			if chunk.Provider != "" {
@@ -107,7 +125,9 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 			}
 			// Providers can surface errors mid-stream as an error object.
 			if chunk.Error != nil {
-				yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: chunk.Error.Message})
+				if flush() {
+					yield(llm.StreamEvent{}, &llm.StreamError{Class: llm.ErrServer, Message: chunk.Error.Message})
+				}
 				return
 			}
 			for _, choice := range chunk.Choices {
@@ -158,10 +178,11 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 				u.Cost = chunk.Usage.Cost.ptr()
 				u.Opencode = chunk.Usage.Opencode.toLLM()
 				u.Provider = provider
-				if !yield(llm.StreamEvent{Kind: llm.EventUsage, Usage: u}, nil) {
-					return
-				}
+				pending = u
 			}
+		}
+		if !flush() {
+			return
 		}
 		// A stream that closed with neither a finish reason nor the [DONE]
 		// sentinel was cut off upstream. Read as finished, it became an answer:
