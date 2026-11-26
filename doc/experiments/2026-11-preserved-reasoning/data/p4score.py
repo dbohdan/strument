@@ -10,7 +10,7 @@ rereads     reads of a note already read
 bad_exits   go to an exit that does not exist here
 locked      go into a locked door
 wrong       denied codes; stale = 4759, the code read before note D's correction
-burst       commands less than 0.5 s after the previous one (a script, not a step)
+burst       commands less than 0.5 s after the previous one (parallel calls in one step, or a script)
 notes       distinct notes read, of 4
 rejected    requests to the robot server without the session's token
 end         battery (watcher stopped it), timeout, or exited

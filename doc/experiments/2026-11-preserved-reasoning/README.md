@@ -1,11 +1,17 @@
 # Preserved reasoning: does it reach the model, and does it help?
 
-**Status: characterization, run 2026-11-25. The replay patch is retired by
-phase 3's committed rule, and kept as a patch. A check on 2026-11-26 found
-that Command Code's MiMo route preserves reasoning on the server, so MiMo's
-results in phases 2 and 3 compare two kinds of preservation, not preservation
-against none; see [the MiMo route](#mimo-route). Phase 4, a long-horizon
-trial, is designed and preregistered below and not yet run.** It follows the
+**Status: trial, phases 1–3 run 2026-11-25, phase 4 on 2026-11-26.
+[Phase 4](#phase-4-the-long-horizon), a long task of 110–300 commands, found
+that reasoning reaching the model helps: MiMo solved 7 of 8 with its
+reasoning from either source against 1 of 8 without (p = 0.0007), and
+DeepSeek needed a median 134 commands with replay against 178 (p = 0.049),
+both faster per command. By the rule written before that run, Strument keeps
+the call IDs that MiMo's route uses to preserve reasoning on the server, and
+the replay patch, retired after phase 3 for short tasks, earns a per-model
+setting. A check on 2026-11-26 found that the MiMo route's server-side
+preservation means MiMo's results in phases 2 and 3 compare two kinds of
+preservation, not preservation against none; see
+[the MiMo route](#mimo-route).** It follows the
 [panel survey](../2026-11-reasoning-survey/), which found every open-source
 harness sending reasoning back and Strument sending none. In short:
 - **Phase 1:** the channel works through Command Code for four of five
@@ -238,7 +244,7 @@ rationale the code cannot supply demonstrably reaches the reasoning trace
 intact." Phases 1 and 2 repeat it: the channel carries a planted fact, the
 benefit that would matter is unmeasured, and the cost (MiMo's) is measured.
 
-## Phase 3: design, not yet run — across turns
+## Phase 3: across turns
 
 ### The question
 
@@ -538,7 +544,7 @@ the labs' practice. Stripping templates belong to an earlier generation
 explanation is the horizon: every task here finished in 5–14 requests, and
 the labs' claims are about hundreds.
 
-## Phase 4: design, not yet run — the long horizon
+## Phase 4: the long horizon
 
 ### The question
 
@@ -680,10 +686,135 @@ cached input. At that rate, 40 paid sessions cost about $4–8, inside the
 week's remaining Command Code allowance and under its five-hour cap at any
 concurrency used here. Flint costs nothing.
 
+### Results
+
+Run 2026-11-26, scored by `data/p4score.py` (`data/p4-scores.tsv`). Commands
+to ACCESS GRANTED, unsolved ranked last; one-sided exact Mann–Whitney against
+none:
+
+| model | arm | solved | commands, solved sessions | U | p |
+| --- | --- | --- | --- | --- | --- |
+| MiMo | none | 1/8 | 223 | | |
+| MiMo | route | 7/8 | 119, 125, 152, 156, 158, 169, 214 | 59.5/64 | 0.0007 |
+| MiMo | replay | 7/8 | 127, 152, 169, 171, 178, 182, 213 | 59.5/64 | 0.0007 |
+| DeepSeek | none | 8/8 | 110, 113, 174, 176, 180, 193, 201, 251 | | |
+| DeepSeek | replay | 8/8 | 116, 126, 131, 131, 136, 146, 148, 154 | 48/64 | 0.049 |
+
+Route against replay on MiMo: U = 41.5/64 in route's favor, p = 0.17, which
+decides nothing, as written.
+
+How the unsolved sessions ended:
+
+| model | arm | battery | timeout | loop detector | model stopped |
+| --- | --- | --- | --- | --- | --- |
+| MiMo | none | 2 | 3 | 1 | 1 |
+| MiMo | route | 0 | 0 | 1 | 0 |
+| MiMo | replay | 1 | 0 | 0 | 0 |
+
+No provider ended a paid session, so nothing was rerun under the provider rule.
+The "model stopped" session (none-mimo-2) wrote, at command 57, "This is the
+200th message … the prompt says 'Please write your final message to the user
+now.'" Nothing in the prompt or in Strument says that, so the model invented
+the instruction it obeyed. It counts as unsolved, like a loop-detector ending.
+
+Counter-metrics and wandering, totals per cell of eight:
+
+| model | arm | s/command | median s | requests | output | reasoning / request | uncached | revisits / session | all 4 notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| MiMo | none | 19.4 | 4,183 | 1,398 | 1.10M | 686 | 258k | 107 | 5/8 |
+| MiMo | route | 9.5 | 1,482 | 1,313 | 0.23M | 131 | 334k | 84 | 8/8 |
+| MiMo | replay | 12.2 | 2,161 | 1,523 | 0.33M | 171 | 458k | 99 | 8/8 |
+| DeepSeek | none | 6.2 | 1,007 | 1,446 | — | — | — | 78 | 8/8 |
+| DeepSeek | replay | 4.2 | 459 | 1,113 | — | — | — | 59 | 8/8 |
+
+The stale code 4759 was entered by no session in either model, so the
+correction was never the trap it was built to be. Of the 38 paid sessions that
+read note C, 36 had already read note D, five rooms from the start, and the
+other two never entered the stale code.
+
+**DeepSeek's token counts are unusable.** Command Code's DeepSeek route sends
+a running usage total on every stream chunk, and Strument summed them, so the
+recorded totals run tens to hundreds of times too high (fixed in `c2646e6`,
+after these builds were made). Commands, seconds and the robot's log do not
+depend on it, and no session came near a fold. For the same reason the
+delivery count (the provider-minus-estimate gap's growth) was not computed
+for DeepSeek; it was not computed for MiMo either. Delivery on both routes was
+checked directly the same day instead: a planted replay raised the prompt
+count by its own length mid-turn and after a new user message.
+
+**Flint is left out of the decision, a change made after seeing its data.**
+Its free quota of 1,000 requests a day ran out during the first window: ten of
+its sixteen sessions started, three of those ran (103, 105 and 118 commands,
+none solved, cut off by rate limiting), and seven got no reply at all. Running
+the rest at the quota's pace would have taken two more days. In the sessions it
+had, Flint read one or two notes and solved nothing, as in both pilots, so it
+was at the floor in both arms. The decision does not hinge on it: MiMo and
+DeepSeek both cleared the bar, which is two of three whatever Flint did.
+
+**Cost by credit balance:** the first window, mostly DeepSeek, $10.08, against
+the pilot's estimate of $4–8 for everything, because DeepSeek's route reported
+no cache and billed nearly cold. The five MiMo reruns cost $1.15. The MiMo
+window that the restart cut short was not metered on its own.
+
+### What phase 4 shows
+
+**Reasoning reaching the model helps over a long task, on both models that
+could do the task.** The committed rule is met:
+- **MiMo, without its reasoning, mostly fails.** One session of eight solved
+  it, against seven of eight with reasoning from either source. Ranked on
+  commands to the goal, all but a few pairings favor reasoning, p = 0.0007 for
+  both route and replay.
+- **DeepSeek solves it either way, in fewer commands with replay:** median 134
+  against 178, p = 0.049, with the spread cut from 110–251 to 116–154 and a
+  quarter fewer revisits.
+- **The counter-metric moved the other way.** Seconds per command fell 37% for
+  MiMo and 32% for DeepSeek, where the rule allowed a rise of a quarter.
+
+**The mechanism is visible in the reasoning counts.** Without its earlier
+reasoning, MiMo spent 686 reasoning tokens a request against 131–171 with it,
+and wrote 1.10M output tokens against 0.23–0.33M: it worked the plan out again
+at every step, from tool results that say only where the robot is. Two of its
+none sessions did the opposite, issuing moves in parallel batches without
+reading the replies (170 and 175 commands under half a second apart) and
+running down the battery. Both look like a model that has lost its place.
+This reverses MiMo's direction in phase 2, where replay made it slower and
+wordier on tasks of 5–14 requests: the cost of carrying reasoning is paid on
+every task, and the return comes only on tasks long enough to need a plan.
+
+**What it means for Strument:**
+- **Keep the call IDs as MiMo generated them.** Route alone carried the whole
+  benefit on MiMo's route, and Strument already does this. Nothing should
+  rewrite or drop them.
+- **The replay patch earns a per-model setting,** by the rule written before
+  the run, reversing phase 3's retirement for long tasks. On MiMo's route it
+  adds nothing measurable over the server's copy. It matters where the route
+  keeps nothing, which here is DeepSeek.
+
+### What it does not settle
+
+- **The none arm on MiMo ran partly later.** A container restart killed five
+  none sessions mid-run; they were rerun from scratch at the same indexes after
+  the other cells had finished. Four of them ran slower per request (25–33 s,
+  against 18–21 s for the two first-window none sessions that ran to the
+  battery) and reasoned more (806–1,062 tokens a request against 454–512), so
+  the provider or the hour may have drifted. But the three first-window none
+  sessions were unsolved too (two battery, one loop), and those two spent more
+  reasoning per request than any route or replay session (at most 313). The
+  effect is not the restart.
+- **Three none sessions on MiMo hit the timeout** at 203–256 commands. Counting
+  each as solved at its next command, the best case for none, leaves p = 0.003
+  for both route and replay.
+- **One task, one world.** Its long horizon comes from navigation and a lock
+  chain. A task whose state lives in files the model can reread would test
+  something else, and phase 3 found no benefit when narration survives.
+- **Eight sessions a cell.** DeepSeek's p = 0.049 sits at the bar; the
+  direction is clear, the size less so.
+- **Flint** says nothing either way, at the floor and short of quota.
+
 ## Files, phase 4
 
 - `data/facility.py`: the world, its self-check and the robot client.
 - `data/p4run.py`, `data/p4pool.py`, `data/p4-order.txt`: the namespaced
   runner, the pool and the order.
 - `data/p4-hook.patch`, `data/p4-replay.patch`: the trial builds.
-- `data/p4score.py`: the counts.
+- `data/p4score.py`: the counts; `data/p4-scores.tsv`, the trial's.
