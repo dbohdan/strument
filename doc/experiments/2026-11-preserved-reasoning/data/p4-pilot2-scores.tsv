@@ -1,0 +1,4 @@
+run	arm	model	solved	commands	first_win	revisits	rereads	bad_exits	locked	wrong	stale	burst	notes	rejected	end	requests	sent	uncached	out	reasoning	seconds
+none-deepseek-0	none	deepseek	1	212	212	127	0	0	0	0	0	0	4	0	exited	214	7764846	83054	165738	136496	806
+none-flint-0	none	flint	0	120	-	84	2	4	0	0	0	0	1	0	exited	121	1143267	25699	5654	2700	470
+none-mimo-0	none	mimo	1	237	237	117	0	3	0	0	0	0	4	0	exited	243	3943802	40826	110826	95776	5811

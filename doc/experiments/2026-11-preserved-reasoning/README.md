@@ -567,8 +567,8 @@ the world's state lives only in the server process:
 The shortest solution is 43 commands, and the battery allows 300. Each reply
 is short and says nothing about earlier ones, so whatever the model knows
 about the facility it has to keep itself: in the tool results, which stay in
-the history (the first pilot's contained sessions peaked at 20–50k tokens of
-a 262k context, so nothing is folded), in its visible text, or in its reasoning. `facility.py
+the history (the contained pilot sessions peaked at 13–61k tokens of a 262k
+context, so nothing is folded), in its visible text, or in its reasoning. `facility.py
 check` solves the world by search and verifies the locks and the correction
 are on every solution path.
 
@@ -589,7 +589,7 @@ Models: MiMo V2.6 Flash and DeepSeek V4 Flash through Command Code, and
 Flint v1.0 (`recursive/flint-v1.0:free`, free through the same API), at
 `reasoning = "low"` with `context = 262144` (`data/configs/*-p4.star`). Eight
 sessions per cell, 56 in all, in a seeded shuffle (`data/p4-order.txt`), run
-several at a time by `data/p4pool.py`. Session timeouts: MiMo 6,600 s, Flint
+several at a time by `data/p4pool.py`. Session timeouts: MiMo 6,900 s, Flint
 5,400 s, DeepSeek 3,000 s.
 
 ### Containment
@@ -649,6 +649,29 @@ sessions ranked last, by a one-sided Mann–Whitney test.
   Replay against route is reported but decides nothing.
 - **If nothing clears the bar,** hypothesis 3 is not supported at 150–300
   requests on these models, and the patch stays retired.
+
+### Second pilot, contained, and one amendment
+
+One `none` session per model, in the namespaced runner (`data/p4-pilot2-scores.tsv`):
+
+| model | solved | commands | revisits | notes read | seconds | sent | uncached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| DeepSeek | yes | 212 | 127 | 4 | 806 | 7.76M | 83k |
+| MiMo | yes | 237 | 117 | 4 | 5,811 | 3.94M | 41k |
+| Flint | no | 120 | 84 | 1 | 470 | 1.14M | 26k |
+
+No session ran anything but `./robot`, and the server refused nothing. Both
+solvers used about five times the shortest path and half their battery, so
+the task sits between the floor and the ceiling. MiMo's 5,811 s is close to
+its first timeout of 6,600 s, which is raised to 6,900 s.
+
+Flint ended at command 120 when Strument's loop detector stopped its
+reasoning, which was repeating "I'm going to stop wandering and just be
+systematic." The design above did not say how such an ending counts.
+**Amendment, made before any trial session:** an ending by Strument's loop
+detector is the model failing the task, so it counts as unsolved and is not
+rerun. Only endings by the provider (a refusal, an HTTP error, rate limiting)
+are rerun.
 
 ### Cost
 

@@ -9,7 +9,7 @@ the job that runs it.
 """
 import os, subprocess, sys, threading, time
 P = os.path.dirname(os.path.abspath(__file__))
-TIMEOUT = {"mimo": 6600, "deepseek": 3000, "flint": 5400}
+TIMEOUT = {"mimo": 6900, "deepseek": 3000, "flint": 5400}
 
 order, workers, deadline = sys.argv[1], int(sys.argv[2]), time.time() + int(sys.argv[3])
 runs = os.environ.get("P4_RUNS", "p4-runs")
